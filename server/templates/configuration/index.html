@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>{{ probes|length }} Probe{{ probes|length|pluralize }}</h2>
+<table class="table">
+  <thead>
+    <th>Name</th>
+  </thead>
+  <tbody>
+    {% for k, probe in probes %}
+    <tr>
+      <td><a href="{% url 'configuration:probe' k %}">{{ probe.name }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Last distributed queries</h2>
+<p>
+  <a href="{% url 'osquery:distributed_index' %}" class="btn btn-default">View all</a>
+</p>
+<table class="table">
+  <thead>
+    <th>Name</th>
+  </thead>
+  <tbody>
+    {% for dq in last_dq %}
+    <tr>
+      <td><pre>{{ dq.query }}</pre></td>
+      <td><a href="{% url 'osquery:distributed' dq.id %}" class="btn btn-default">View</a>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

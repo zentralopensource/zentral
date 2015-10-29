@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>{{ machine.name }} / {{ machine.serial_number }}</h1>
+<h2>Details</h2>
+<dl class="dl-horizontal">
+  <dt>Make</dt>
+  <dd>{{ machine.make }}</dd>
+  <dt>Model</dt>
+  <dd>{{ machine.model }}</dd>
+  <dt>OS Name</dt>
+  <dd>{{ machine.os_name }}</dd>
+  <dt>OS Version</dt>
+  <dd>{{ machine.os_version }}</dd>
+  <dt>OS Build</dt>
+  <dd>{{ machine.os_build }}</dd>
+  <dt>Processor type</dt>
+  <dd>{{ machine.processor_type }}</dd>
+  <dt>Processor speed</dt>
+  <dd>{{ machine.processor_speed }}</dd>
+  <dt>Total RAM</dt>
+  <dd>{{ machine.ram_total|filesizeformat }}</dd>
+  <dt>HD Number</dt>
+  <dd>{{ machine.hd_number }}</dd>
+  <dt>HD Space</dt>
+  <dd>{{ machine.hd_space|filesizeformat }}  Usage: {{ machine.hd_usage|default:'0' }}% Encrypted: {{ machine.encryption_status|default:'0' }}%</dd>
+  <dt>Public IP Address</dt>
+  <dd>{{ machine.public_ip_address }}</dd>
+  <dt>Last contact</dt>
+  <dd>{{ machine.last_contact_at|date:'r'|default:'-' }}</dd>
+  <dt>Last report</dt>
+  <dd>{{ machine.last_report_at|date:'r'|default:'-' }}</dd>
+</dt>
+<hr>
+<dt>
+  <dt class="small" style="opacity:0.5">Created at</dt>
+  <dd class="small" style="opacity:0.5">{{ machine.created_at|date:'r'|default:'-' }}</dd>
+  <dt class="small" style="opacity:0.5">Synced at</dt>
+  <dd class="small" style="opacity:0.5">{{ machine.synced_at|date:'r'|default:'-' }}</dd>
+</dl>
+<p>
+{% if links.inventory %}
+  <a class="btn btn-default" href="{{ links.inventory.link }}">View in {{ links.inventory.name }}</a>
+{% endif %}
+  <a class="btn btn-default" href="{% url 'inventory:machine_events' machine.serial_number %}">View events</a>
+</p>
+<h2>OSX Apps</h2>
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Version</th>
+  </thead>
+  <tbody>
+    {% for app_name, app_version in machine.osx_apps %}
+    <tr><td>{{ app_name }}</td><td>{{ app_version }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<h2>Groups</h2>
+<table class="table">
+  <thead>
+    <th>Key</th>
+    <th>Name</th>
+  </thead>
+  <tbody>
+    {% for group in machine.groups %}
+    <tr><td>{{ group.key }}</td><td>{{ group.name }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<h2>OSQuery Nodes</h2>
+{% if nodes %}
+<table class="table">
+  <thead>
+    <th>Enroll secret</th>
+    <th>Created at</th>
+    <th>Last seen</th>
+  </thead>
+  <tbody>
+    {% for node in nodes %}
+    <tr>
+      <td>{{ node.enroll_secret }}</td>
+      <td>{{ node.created_at }}</td>
+      <td>{{ node.last_seen }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="alert alert-warning">
+  <strong>Warning!</strong> No osquery instance linked to this machine.
+</div>
+{% endif %}
+{% endblock %}

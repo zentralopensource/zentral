@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Distributed query</h1>
+<pre>
+ {{ object.query }}
+</pre>
+<h2>Results</h2>
+<a href="{% url 'osquery:distributed_download' object.id %}" class="btn btn-default">
+  <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span>
+  Download
+</a>
+<table class="table">
+  <thead>
+    <th>Machine</th>
+    <th>Result</th>
+  </thead>
+  <tbody>
+    {% for dqn in object.distributedquerynode_set.all %}
+    <tr>
+      <td>{{ dqn.machine_serial_number }}</td>
+      <td>{% if not dqn.result == None %}<pre>{{ dqn.result|pprint }}</pre>{% else %}pending…{% endif %}<td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p>
+  <a href="{% url 'osquery:distributed_delete' object.id %}" class="btn btn-warning">Delete</a>
+  {% if object.can_be_updated %}
+  <a href="{% url 'osquery:distributed_update' object.id %}" class="btn btn-default">Update</a>
+  {% endif %}
+</p>
+{% endblock %}

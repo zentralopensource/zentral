@@ -1,0 +1,49 @@
+{
+  "queues": {
+    "backend": "zentral.core.queues.backends.redisq"
+  },
+  "stores": {
+    "postgres": {
+      "frontend": true,
+      "backend": "zentral.core.stores.backends.postgres",
+      "db_name": "zentral_events",
+      "user": "zentral"
+    },
+    "elasticsearch": {
+      "backend": "zentral.core.stores.backends.elasticsearch",
+      "servers": ["http://localhost:9200"],
+      "index": "zentral-events",
+      "kibana_base_url": "https://zentral/kibana/"
+    }
+  },
+  "processor_workers": {
+    "number": 1,
+    "prometheus_server_base_port": "8100"
+  },
+  "metric_services": {
+    "prometheus": {
+      "backend": "zentral.core.metric_services.backends.prometheus",
+      "gateway_host": "localhost:9091"
+    }
+  },
+  "actions": {
+    "debug": {
+      "backend": "zentral.core.actions.backends.json_file",
+      "local_dir": "/tmp/zentral_notifications/"
+    },
+    "push_metrics": {
+      "backend": "zentral.contrib.osquery.actions.push_metrics"
+    }
+  },
+  "apps": {
+    "zentral.contrib.inventory": {
+      "backend": "zentral.contrib.inventory.backends.dummy"
+    },
+    "zentral.contrib.osquery": {
+      "enroll_secret_secret": "BLABLA"
+    }
+  },
+  "middlewares": [
+    "zentral.contrib.inventory.events.middlewares.MachineMiddleware"
+  ]
+}

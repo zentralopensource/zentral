@@ -1,0 +1,6 @@
+*.pyc
+*.sw[op]
+venv/*
+wheels/*
+server/server/settings.py
+__pycache__

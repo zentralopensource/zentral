@@ -1,0 +1,16 @@
+pip
+setuptools
+django
+requests
+ipython
+psycopg2
+django-pgjson
+django-bootstrap-form
+fabric
+gunicorn
+python-dateutil
+redis
+prometheus_client
+jinja2
+elasticsearch
+pyyaml

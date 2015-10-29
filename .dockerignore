@@ -1,0 +1,11 @@
+ansible/*
+server/server/settings*
+docs/*
+conf/*
+docs/*
+tests/*
+venv/*
+fabfile.*
+.gitignore
+.git/*
+*/__pycache__*

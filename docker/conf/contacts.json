@@ -1,0 +1,13 @@
+[{"first_name":"Jane",
+  "last_name":"Doe",
+  "email":"jane.doe@example.com",
+  "phone":"0123456789",
+  "groups":["admin"]
+ },
+ {"first_name":"John",
+  "last_name":"Doe",
+  "email":"john.doe@example.com",
+  "phone":"9876543210",
+  "groups":["nonadmin"]
+ }
+]

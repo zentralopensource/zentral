@@ -1,0 +1,9 @@
+name: usb
+osquery:
+  schedule:
+    - query: select vendor, vendor_id, model, vendor in ('C-Media Electronics, Inc.', 'Realtek') as _alert from usb_devices;
+      interval: 30
+action_filter_field: _alert
+actions:
+  debug:
+    sub_dir: usb

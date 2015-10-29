@@ -1,0 +1,19 @@
+{% if machine %}
+Name: {{ machine.name }}
+Serial number: {{ machine.serial_number }}
+
+Model: {{ machine.make }}, {{ machine.model }}
+Processor: {{ machine.processor_type }} {{ machine.processor_speed/1000 }}GHZ
+Total RAM: {{ machine.ram_total|filesizeformat(binary=True) }}
+FileVault 2: {% if machine.hd_encrypted == 100 %}encrypted{% else %}{% if machine.hd_encrypted == 0 %}not encrypted{% else %}partially encrypted{% endif %}{% endif %}
+
+{% for type, link_d in machine._links|dictsort %}
+View in {{ link_d.name }}: {{ link_d.link }}
+{% endfor %}
+{% if event_id %}
+Zentral event id: {{ event_id }}
+{% endif %}
+{% endif %}
+
+{% block extra %}
+{% endblock %}

@@ -1,0 +1,8 @@
+name: dropbox_alert
+osquery:
+  schedule:
+    - query: SELECT DISTINCT process.name, listening.port, process.pid FROM processes AS process JOIN listening_ports AS listening ON process.pid = listening.pid WHERE listening.address = '0.0.0.0' and process.name = 'Dropbox';
+      interval: 30
+actions:
+  debug:
+    sub_dir: dropbox_alert

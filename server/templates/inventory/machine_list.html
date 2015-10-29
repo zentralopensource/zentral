@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>{{ object_list|length }} Machine{{ object_list|length|pluralize }}</h1>
+<table class="table">
+  <thead>
+    <th>Serial Number</th>
+    <th>Name</th>
+  </thead>
+  <tbody>
+    {% for machine in object_list %}
+    <tr>
+      <td><a href="{% url 'inventory:machine' machine.serial_number %}">{{ machine.serial_number }}</a></td>
+      <td>{{ machine.name }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

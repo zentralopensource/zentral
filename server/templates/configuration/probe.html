@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Probe <i>{{ probe.name }}</i></h1>
+{% if probe_links %}
+<div class="btn-group" role="group">
+  {% for store_name, store_url in probe_links %}
+  <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if osquery_schedule %}
+<h2>Osquery</h2>
+<h3>Schedule</h3>
+<table class="table">
+  <thead>
+    <th>Configuration</th>
+    <th>Links</th>
+  </thead>
+  <tbody>
+    {% for conf, links in osquery_schedule %}
+    <tr>
+      <td><pre>{{ conf|pprint }}</pre></td>
+      <td>
+        {% if links %}
+        <div class="btn-group-vertical" role="group">
+          {% for store_name, store_url in links %}
+          <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if osquery_file_paths %}
+<h3>File Paths</h3>
+<table class="table">
+  <thead>
+    <th>Configuration</th>
+    <th>Paths</th>
+  </thead>
+  <tbody>
+    {% for conf, paths in osquery_file_paths.items %}
+    <tr>
+      <td><pre>{{ conf }}</pre></td>
+      <td>
+	<pre>{{ paths|pprint }}</pre>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+
+{% if probe.actions %}
+<h2>Actions</h2>
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Configuration</th>
+  </thead>
+  <tbody>
+    {% for name, configuration in probe.actions.items %}
+    <tr>
+      <td>{{ name }}</td>
+      <td><pre>{{ configuration|pprint }}</pre></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

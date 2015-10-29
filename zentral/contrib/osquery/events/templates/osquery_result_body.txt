@@ -1,0 +1,18 @@
+{% extends "base_body.txt" %}
+
+{% block extra %}
+{% if action %}
+action: {{ action }}
+{% endif %}
+{% if query.description %}
+query description: {{ query.description }}
+{% endif %}
+{% if query.value %}
+query value: {{ query.value }}
+{% endif %}
+{% if columns %}
+{% for key, val in columns|dictsort %}
+{{ key }}: {{ val }}
+{% endfor %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Delete query</h1>
+<p>Do you really want to delete this query ?</p>
+<form method="POST">{% csrf_token %}
+  <a class="btn btn-default" href="{% url 'osquery:distributed' object.id %}">No</a>
+  <button class="btn btn-danger" type="submit">Yes</button>
+</form>
+{% endblock %}

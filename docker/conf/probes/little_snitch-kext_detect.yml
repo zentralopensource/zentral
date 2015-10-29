@@ -1,0 +1,8 @@
+name: little_snitch-kext_alert
+osquery:
+  schedule:
+    - query: SELECT * FROM kernel_extensions WHERE name LIKE '%LittleSnitch%';
+      interval: 30
+actions:
+  debug:
+    sub_dir: little_snitch

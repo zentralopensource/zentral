@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Machine <a href="{% url 'inventory:machine' machine.serial_number %}">{{ machine.serial_number }}</a> Events</h1>
+<form class="form-inline" method="GET">
+    <div class="form-group">
+        <label for="eventType">Event type</label>
+        <select class="form-control" id="eventType" name="event_type">
+          {% for value, selected, label in event_types %}
+          <option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn btn-default">OK</button>
+</form>
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Older <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Newer</a></li>
+    {% endif %}
+  </ul>
+</nav>
+<table class="table">
+  <thead>
+    <th>Type</th>
+    <th>Created at</th>
+    <th>Data</th>
+  </thead>
+  <tbody>
+    {% for event in object_list %}
+    <tr>
+      <td>{{ event.event_type }}</td>
+      <td>{{ event.metadata.created_at }}</td>
+      <td><pre>{{ event.payload|pprint }}</pre></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Older <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Newer</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endblock %}
