@@ -42,6 +42,7 @@ INSTALLED_APPS = (
     'configuration',
     'zentral.contrib.inventory',
     'zentral.contrib.osquery',
+    'zentral.contrib.santa',
 )
 
 MIDDLEWARE_CLASSES = (
