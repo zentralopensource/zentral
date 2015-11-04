@@ -71,8 +71,9 @@ def load_probes(settings, conf_dir):
     if not os.path.isdir(probes_dir):
         return probes
     for filename in os.listdir(probes_dir):
-        probe_d = load_config_file(os.path.join(probes_dir, filename))
-        probes[probe_d['name']] = probe_d
+        if filename.endswith('.json') or filename.endswith('.yml'):
+            probe_d = load_config_file(os.path.join(probes_dir, filename))
+            probes[probe_d['name']] = probe_d
     return probes
 
 probes = load_probes(settings, conf_dir)

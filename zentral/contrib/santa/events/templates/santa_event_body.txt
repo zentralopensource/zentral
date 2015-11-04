@@ -1,0 +1,13 @@
+{% extends "base_body.txt" %}
+
+{% block extra %}
+{% if decision %}
+decision: {{ decision }}
+{% endif %}
+{% if file_path %}
+file path: {{ file_path }}
+{% endif %}
+{% if file_name %}
+file name: {{ file_name }}
+{% endif %}
+{% endblock %}
