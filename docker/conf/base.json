@@ -41,6 +41,9 @@
     },
     "zentral.contrib.osquery": {
       "enroll_secret_secret": "BLABLA"
+    },
+    "zentral.contrib.santa": {
+      "machine_id_secret": "TOTO"
     }
   },
   "middlewares": [
