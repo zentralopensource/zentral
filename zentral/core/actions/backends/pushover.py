@@ -1,4 +1,3 @@
-import json
 import requests
 from .base import BaseAction
 from zentral.conf import contact_groups

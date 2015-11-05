@@ -3,9 +3,7 @@ import logging
 import zlib
 from django.core.urlresolvers import reverse
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
-from django.views.generic import View, DetailView, ListView
-from django.views.generic.edit import CreateView, UpdateView, DeleteView
+from django.views.generic import View
 from . import machine_id_secret, santa_conf
 from .events import post_santa_events, post_santa_preflight
 

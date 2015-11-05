@@ -1,5 +1,5 @@
 import logging
-from zentral.conf import probes
+from zentral.contrib.santa import probes_lookup_dict
 from zentral.core.events import BaseEvent, EventMetadata, EventRequest, register_event_type
 
 logger = logging.getLogger('zentral.contrib.santa.events')
@@ -25,13 +25,28 @@ class SantaEventEvent(SantaBaseEvent):
         self.probe = self._get_probe()
 
     def _get_probe(self):
-        # TODO: unique sha in whole config ? FASTER ???!!! CERTIFICATE ?
-        sha256 = self.payload.get('file_sha256', None)
-        if sha256:
-            for probe_name, probe_d in probes.items():
-                for santa_rule_d in  probe_d.get('santa', []):
-                    if santa_rule_d.get('sha256', None) == sha256:
-                        return probe_d
+        # TODO: what if we find more than one matching probe ?
+        # TODO: the whole zentral contrib app works only with sha256
+
+        # We build a list of sha256 that can be use to find the probe.
+        sha256_l = []
+        file_sha256 = self.payload.get('file_sha256', None)
+        if file_sha256:
+            sha256_l.append(file_sha256)
+        for cert_d in self.payload.get('signing_chain', []):
+            cert_sha256 = cert_d.get('sha256', None)
+            if cert_sha256:
+                sha256_l.append(cert_sha256)
+        # We look for the probe.
+        found_probes = []
+        for sha256 in sha256_l:
+            for probe in probes_lookup_dict.get(sha256, []):
+                found_probes.append(probe)
+        if found_probes:
+            found_probes_count = len(found_probes)
+            if found_probes_count > 1:
+                logger.warning("Found %d matching santa probes for sha %s." % (found_probes_count, sha256))
+            return found_probes[0]
 
     def _get_extra_context(self):
         ctx = {}
