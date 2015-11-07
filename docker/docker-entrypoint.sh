@@ -10,4 +10,8 @@ then
     python3 /home/zentral/server/manage.py migrate
 fi
 
+if [ ! -z "$DB_PORT_5432_TCP_ADDR" ] ; then
+	sed -i 's/pghostaddress/'"$DB_PORT_5432_TCP_ADDR"'/g' /home/zentral/conf/base.json
+fi
+
 exec "$@"

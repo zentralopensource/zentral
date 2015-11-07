@@ -7,7 +7,10 @@
       "frontend": true,
       "backend": "zentral.core.stores.backends.postgres",
       "db_name": "zentral_events",
-      "user": "zentral"
+      "user": "zentral",
+      "host": "pghostaddress",
+      "port": "5432",
+      "pass": "password"
     },
     "elasticsearch": {
       "backend": "zentral.core.stores.backends.elasticsearch",
