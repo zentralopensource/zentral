@@ -18,8 +18,6 @@ COPY docker/conf /home/zentral/conf
 COPY docker/version.py /home/zentral/server/server/
 COPY docker/settings.py /home/zentral/server/server/
 
-RUN python3 /home/zentral/server/manage.py collectstatic -v0 --noinput
-
 COPY docker/docker-entrypoint.sh /
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["python3", "/home/zentral/server/manage.py", "runserver", "0.0.0.0:8000"]
