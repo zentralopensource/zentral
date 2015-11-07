@@ -24,7 +24,7 @@ class EventStore(BaseEventStore):
 
     def __init__(self, config_d):
         super(EventStore, self).__init__(config_d)
-        self._conn = psycopg2.connect("dbname=%(db_name)s user=%(user)s" % config_d)
+        self._conn = psycopg2.connect("dbname=%(db_name)s user=%(user)s host=%(host)s port=%(port)s password=%(pass)s" % config_d)
         self._test_table()
 
     def _test_table(self):
