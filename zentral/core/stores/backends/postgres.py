@@ -1,7 +1,10 @@
+import logging
 import psycopg2
 from psycopg2.extras import Json
 from zentral.core.events import event_cls_from_type, EventMetadata, EventRequest, event_handler
 from zentral.core.stores.backends.base import BaseEventStore
+
+logger = logging.getLogger('zentral.core.stores.backends.postgres')
 
 psycopg2.extras.register_uuid()
 
@@ -24,7 +27,18 @@ class EventStore(BaseEventStore):
 
     def __init__(self, config_d):
         super(EventStore, self).__init__(config_d)
-        self._conn = psycopg2.connect("dbname=%(db_name)s user=%(user)s" % config_d)
+        kwargs = {}
+        for conn_arg in ('database', 'user', 'password', 'host', 'port'):
+            val = config_d.get(conn_arg, None)
+            if val:
+                kwargs[conn_arg] = val
+        # TODO: deprecate !
+        if not 'database' in kwargs and 'db_name' in config_d:
+            logger.warning("the 'db_name' configuration attribute for the "
+                           "postgres event store is deprecated. Please use the "
+                           "'database' attribute.")
+            kwargs['database'] = config_d['db_name']
+        self._conn = psycopg2.connect(**kwargs)
         self._test_table()
 
     def _test_table(self):

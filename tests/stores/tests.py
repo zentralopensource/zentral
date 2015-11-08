@@ -87,7 +87,7 @@ class TestPostgresEventStore(unittest.TestCase, BaseTestEventStore):
         with self._conn:
             with self._conn.cursor() as cur:
                 cur.execute('CREATE DATABASE zentral_testing')
-        self.event_store = PostgresEventStore({'db_name': 'zentral_testing',
+        self.event_store = PostgresEventStore({'database': 'zentral_testing',
                                                'user': 'zentral',
                                                'store_name': 'postgres_test'})
 
