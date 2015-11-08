@@ -6,7 +6,7 @@
     "postgres": {
       "frontend": true,
       "backend": "zentral.core.stores.backends.postgres",
-      "db_name": "zentral_events",
+      "database": "zentral_events",
       "user": "zentral"
     },
     "elasticsearch": {
