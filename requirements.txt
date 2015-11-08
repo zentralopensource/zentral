@@ -4,7 +4,6 @@ django
 requests
 ipython
 psycopg2
-django-pgjson
 django-bootstrap-form
 fabric
 gunicorn

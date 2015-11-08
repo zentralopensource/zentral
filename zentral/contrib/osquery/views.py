@@ -128,8 +128,7 @@ class DistributedWriteView(BaseNodeView):
             except DistributedQueryNode.DoesNotExist:
                 logger.error("Unknown distributed query node query %s sn %s", dq_id, sn)
             else:
-                dqn.result = val
-                dqn.save()
+                dqn.set_json_result(val)
         return JsonResponse({})
 
 

@@ -19,7 +19,7 @@
     {% for dqn in object.distributedquerynode_set.all %}
     <tr>
       <td>{{ dqn.machine_serial_number }}</td>
-      <td>{% if not dqn.result == None %}<pre>{{ dqn.result|pprint }}</pre>{% else %}pending…{% endif %}<td>
+      <td>{% if not dqn.result == None %}<pre>{{ dqn.get_json_result|pprint }}</pre>{% else %}pending…{% endif %}<td>
     </tr>
     {% endfor %}
   </tbody>

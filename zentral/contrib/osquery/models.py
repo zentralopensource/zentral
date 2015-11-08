@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
+import json
 from django.core.urlresolvers import reverse
 from django.db import models, transaction, IntegrityError
 from django.utils import timezone
 from django.utils.crypto import get_random_string
-from django_pgjson.fields import JsonField
 from . import enroll_secret_secret
 
 
@@ -91,7 +91,7 @@ class DistributedQuery(models.Model):
              'created_at': self.created_at.isoformat(),
              'results': {}}
         for dqn in self.distributedquerynode_set.filter(result__isnull=False):
-            d['results'][dqn.machine_serial_number] = {'result': dqn.result,
+            d['results'][dqn.machine_serial_number] = {'result': dqn.get_json_result(),
                                                        'created_at': dqn.created_at}
         return d
 
@@ -108,8 +108,16 @@ class DistributedQueryNodeManager(models.Manager):
 class DistributedQueryNode(models.Model):
     distributed_query = models.ForeignKey(DistributedQuery)
     machine_serial_number = models.CharField(max_length=255, db_index=True)
-    result = JsonField(null=True, blank=True)
+    result = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     objects = DistributedQueryNodeManager()
+
+    def get_json_result(self):
+        if self.result:
+            return json.loads(self.result)
+
+    def set_json_result(self, result_d):
+        self.result = json.dumps(result_d)
+        self.save()
