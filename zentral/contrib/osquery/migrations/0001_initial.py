@@ -2,7 +2,6 @@
 from __future__ import unicode_literals
 
 from django.db import migrations, models
-import django_pgjson.fields
 
 
 class Migration(migrations.Migration):
@@ -27,7 +26,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(verbose_name='ID', primary_key=True, serialize=False, auto_created=True)),
                 ('machine_serial_number', models.CharField(max_length=255, db_index=True)),
-                ('result', django_pgjson.fields.JsonField(blank=True, null=True)),
+                ('result', models.TextField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('distributed_query', models.ForeignKey(to='osquery.DistributedQuery')),
