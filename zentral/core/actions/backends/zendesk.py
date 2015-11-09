@@ -5,13 +5,14 @@ from .base import BaseAction
 
 logger = logging.getLogger('zentral.core.actions.backends.zendesk')
 
-API_ENDPOINT = "https://apfelwerksupport.zendesk.com/api/v2/tickets.json"
+API_ENDPOINT = "https://{subdomain}.zendesk.com/api/v2/tickets.json"
 
 ​
 class Action(BaseAction):
     def __init__(self, config_d):
         super(Action, self).__init__(config_d)
         self.auth = ('{email}/token'.format(config_d), config_d['token'])
+        self.url = API_ENDPOINT.format(config_d)
 
     def trigger(self, event, action_config_d):
         action_config_d = action_config_d or {}
@@ -30,5 +31,5 @@ class Action(BaseAction):
         if tags:
             args['tags'] = tags
 
-        requests.post(API_ENDPOINT, headers={'Content-Type': 'application/json'},
+        requests.post(self.url, headers={'Content-Type': 'application/json'},
                      data=json.dumps(args), auth=self.auth)
