@@ -15,10 +15,11 @@ class Action(BaseAction):
 
     def trigger(self, event, action_config_d):
         action_config_d = action_config_d or {}
-        args = {'Body': '\n\n'.join([event.get_notification_subject(), event.get_notification_body()])}
+        args = {'Body': '\n\n'.join([event.get_notification_subject(), event.get_notification_body()]),
+                'From': self.config_d['from_number']}
         for group_name in action_config_d['groups']:
             for contact_d in contact_groups[group_name]:
                 cell_number = contact_d.get('cell', None)
                 if cell_number:
                     args['To'] =  cell_number
-                    requests.post(self.url, data=args, auth=self.auth)
+                    r = requests.post(self.url, data=args, auth=self.auth)
