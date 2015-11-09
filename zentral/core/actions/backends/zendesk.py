@@ -7,12 +7,12 @@ logger = logging.getLogger('zentral.core.actions.backends.zendesk')
 
 API_ENDPOINT = "https://{subdomain}.zendesk.com/api/v2/tickets.json"
 
-​
+
 class Action(BaseAction):
     def __init__(self, config_d):
         super(Action, self).__init__(config_d)
-        self.auth = ('{email}/token'.format(config_d), config_d['token'])
-        self.url = API_ENDPOINT.format(config_d)
+        self.auth = ('{email}/token'.format(**config_d), config_d['token'])
+        self.url = API_ENDPOINT.format(**config_d)
 
     def trigger(self, event, action_config_d):
         action_config_d = action_config_d or {}
@@ -24,12 +24,12 @@ class Action(BaseAction):
         if priority not in ('urgent', 'high', 'normal', 'low'):
             logger.warning('Invalid priority level %s', priority)
             priority = 'normal'
-        args['priority'] = priority
+        args['ticket']['priority'] = priority
 
         # tags
         tags = action_config_d.get('tags', None)
         if tags:
-            args['tags'] = tags
+            args['ticket']['tags'] = tags
 
         requests.post(self.url, headers={'Content-Type': 'application/json'},
                      data=json.dumps(args), auth=self.auth)
