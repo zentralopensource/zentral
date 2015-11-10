@@ -112,7 +112,7 @@ STATICFILES_DIRS = (
     os.path.join(BASE_DIR, 'static'),
 )
 
-# default django 1.8.3 logging + slack
+# everything in the console.
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -127,40 +127,21 @@ LOGGING = {
     'handlers': {
         'console': {
             'level': 'INFO',
-            'filters': ['require_debug_true'],
             'class': 'logging.StreamHandler',
-        },
-        'null': {
-            'class': 'logging.NullHandler',
-        },
-        'mail_admins': {
-            'level': 'ERROR',
-            'filters': ['require_debug_false'],
-            'class': 'django.utils.log.AdminEmailHandler'
         },
     },
     'loggers': {
         'django': {
             'handlers': ['console'],
         },
-        'django.request': {
-            'handlers': ['mail_admins'],
-            'level': 'ERROR',
-            'propagate': False,
-        },
-        'django.security': {
-            'handlers': ['mail_admins'],
-            'level': 'ERROR',
-            'propagate': False,
-        },
         'py.warnings': {
             'handlers': ['console'],
         },
         'server': {
-            'handlers': ['console', 'mail_admins'],
+            'handlers': ['console'],
         },
         'zentral': {
-            'handlers': ['console', 'mail_admins'],
+            'handlers': ['console'],
         }
     }
 }
