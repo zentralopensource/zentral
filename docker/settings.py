@@ -39,7 +39,7 @@ INSTALLED_APPS = (
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'bootstrapform',
-    'configuration',
+    'base',
     'zentral.contrib.inventory',
     'zentral.contrib.osquery',
     'zentral.contrib.santa',
