@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>{{ probes|length }} Santa probe{{ probes|length|pluralize }}</h2>
+<table class="table">
+  <thead>
+    <th>Name</th>
+  </thead>
+  <tbody>
+    {% for k, probe in probes %}
+    <tr>
+      <td><a href="{% url 'santa:probe' k %}">{{ probe.name }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

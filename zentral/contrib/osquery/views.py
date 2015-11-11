@@ -1,15 +1,73 @@
 import json
 import logging
 from django.core.urlresolvers import reverse_lazy
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.shortcuts import get_object_or_404
-from django.views.generic import View, DetailView, ListView
+from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
-from . import osquery_conf
+from zentral.core.stores import stores
+from . import osquery_conf, probes
 from .events import post_enrollment_event, post_events_from_osquery_log
 from .models import Node, EnrollError, DistributedQuery, DistributedQueryNode
 
-logger = logging.getLogger('django_zentral.osquery.views')
+logger = logging.getLogger('zentral.contrib.osquery.views')
+
+
+class IndexView(TemplateView):
+    template_name = "osquery/index.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(IndexView, self).get_context_data(**kwargs)
+        context['osquery'] = True
+        context['probes'] = probes
+        context['last_dq'] = DistributedQuery.objects.all()[:10]
+        return context
+
+
+class ProbeView(TemplateView):
+    template_name = "osquery/probe.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(ProbeView, self).get_context_data(**kwargs)
+        context['osquery'] = True
+
+        # find probe
+        #TODO log(1)
+        probe = None
+        for probe_name, probe_d in probes:
+            if probe_name == kwargs['probe_key']:
+                probe = probe_d
+                break
+        if not probe:
+            raise Http404
+        context['probe'] = probe
+
+        # queries
+        schedule = []
+        file_paths = {}
+        for idx, osquery in enumerate(probe['osquery']['schedule']):
+            # query links. match query_name.
+            query_links = []
+            query_name = "{}_{}".format(probe['name'], idx)
+            for store in stores:
+                url = store.get_visu_url({'name': [query_name]})
+                if url:
+                    query_links.append((store.name, url))
+            query_links.sort()
+            schedule.append((osquery, query_links))
+        file_paths = probe['osquery'].get('file_paths', {})
+        context['osquery_schedule'] = schedule
+        context['osquery_file_paths'] = file_paths
+
+        # probe links. query name starts with probe name.
+        probe_links = []
+        for store in stores:
+            url = store.get_visu_url({'name__startswith': [probe['name']]})
+            if url:
+                probe_links.append((store.name, url))
+        probe_links.sort()
+        context['probe_links'] = probe_links
+        return context
 
 
 class DistributedIndexView(ListView):
@@ -17,7 +75,7 @@ class DistributedIndexView(ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super(DistributedIndexView, self).get_context_data(**kwargs)
-        ctx['configuration'] = True
+        ctx['osquery'] = True
         return ctx
 
 
@@ -27,7 +85,7 @@ class CreateDistributedView(CreateView):
 
     def get_context_data(self, **kwargs):
         ctx = super(CreateDistributedView, self).get_context_data(**kwargs)
-        ctx['configuration'] = True
+        ctx['osquery'] = True
         return ctx
 
 
@@ -36,7 +94,7 @@ class DistributedView(DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super(DistributedView, self).get_context_data(**kwargs)
-        ctx['configuration'] = True
+        ctx['osquery'] = True
         return ctx
 
 
@@ -46,7 +104,7 @@ class UpdateDistributedView(UpdateView):
 
     def get_context_data(self, **kwargs):
         ctx = super(UpdateDistributedView, self).get_context_data(**kwargs)
-        ctx['configuration'] = True
+        ctx['osquery'] = True
         return ctx
 
 
@@ -56,7 +114,7 @@ class DeleteDistributedView(DeleteView):
 
     def get_context_data(self, **kwargs):
         ctx = super(DeleteDistributedView, self).get_context_data(**kwargs)
-        ctx['configuration'] = True
+        ctx['osquery'] = True
         return ctx
 
 

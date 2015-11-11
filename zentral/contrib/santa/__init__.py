@@ -1,7 +1,7 @@
-from zentral.conf import settings, probes
+from zentral.conf import settings, probes as all_probes
 from zentral.core.exceptions import ImproperlyConfigured
 
-__all__ = ['machine_id_secret', 'santa_conf', 'probes_lookup_dict']
+__all__ = ['machine_id_secret', 'santa_conf', 'probes', 'probes_lookup_dict']
 
 # MachineID: MachineIDSecret$Key$Val
 # MachineIDSecret to test if it is a valid request.
@@ -19,9 +19,9 @@ def get_machine_id_secret(settings):
 machine_id_secret = get_machine_id_secret(settings)
 
 
-def build_santa_conf_and_lookup_dict(probes):
+def build_santa_conf(all_probes):
     """
-    Build the santa conf and the probe lookup dict.
+    Build the santa conf, the probe lookup dict and the list of santa probes.
 
     The santa conf is the source of the json document that is sent to the santa
     client when it connects to zentral. It is a list of all the rules found in
@@ -31,16 +31,21 @@ def build_santa_conf_and_lookup_dict(probes):
     that, because of the set of santa rules they contain, are responsible for
     its processing. Once we have the probes, we can trigger all the configured
     actions.
+
+    The list of santa probes is a list of (probe_name, probe_d) tupes.
     """
     rules = []
     lookup_d = {}
-    for probe_name, probe_d in probes.items():
+    probes = []
+    for probe_name, probe_d in all_probes.items():
         santa_l = probe_d.get('santa', None)
         if not santa_l:
             continue
+        probes.append((probe_name, probe_d))
         rules.extend(santa_l)
         for santa_r in santa_l:
             lookup_d.setdefault(santa_r["sha256"], []).append(probe_d.copy())
-    return {'rules': rules}, lookup_d
+    probes.sort()
+    return {'rules': rules}, lookup_d, probes
 
-santa_conf, probes_lookup_dict = build_santa_conf_and_lookup_dict(probes)
+santa_conf, probes_lookup_dict, probes = build_santa_conf(all_probes)

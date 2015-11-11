@@ -12,6 +12,11 @@ class IndexView(generic.ListView):
         machines.sort(key=lambda d: d['name'].upper())
         return machines
 
+    def get_context_data(self, **kwargs):
+        context = super(IndexView, self).get_context_data(**kwargs)
+        context['inventory'] = True
+        return context
+
 
 class MachineView(generic.TemplateView):
     template_name = "inventory/machine_detail.html"
@@ -19,6 +24,7 @@ class MachineView(generic.TemplateView):
     def get_context_data(self, **kwargs):
         context = super(MachineView, self).get_context_data(**kwargs)
         md = inventory.machine(context['serial_number'])
+        context['inventory'] = True
         context['machine'] = md
         context['links'] = md['_links']
         context['nodes'] = Node.objects.filter(enroll_secret__icontains=context['serial_number'])
@@ -50,6 +56,7 @@ class MachineEventsView(generic.ListView):
 
     def get_context_data(self, **kwargs):
         context = super(MachineEventsView, self).get_context_data(**kwargs)
+        context['inventory'] = True
         context['machine'] = self.machine
         page = context['page_obj']
         if page.has_next():

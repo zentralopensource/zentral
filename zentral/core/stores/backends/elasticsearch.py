@@ -74,14 +74,18 @@ class EventStore(BaseEventStore):
             if hasattr(connection, 'pool'):
                 connection.pool.close()
 
-    def get_osquery_probe_visu_url(self, probe_name):
+    def get_visu_url(self, search_dict):
+        # TODO: doc, better args, ...
+        search_atoms = []
+        for key, val in search_dict.items():
+            wildcard = ""
+            if key.endswith('__startswith'):
+                key = key.replace('__startswith', '')
+                wildcard = "*"
+            atom = " OR ".join("%s:%s%s" % (key, elm, wildcard) for elm in val)
+            search_atoms.append("(%s)" % atom)
+        query = " OR ".join(search_atoms)
         if self.kibana_base_url:
             return BASE_VISU_URL.format(kibana_base_url=self.kibana_base_url,
                                         index=self.index,
-                                        query="name:{}*".format(probe_name))
-
-    def get_osquery_query_visu_url(self, query_name):
-        if self.kibana_base_url:
-            return BASE_VISU_URL.format(kibana_base_url=self.kibana_base_url,
-                                        index=self.index,
-                                        query="name:{}".format(query_name))
+                                        query=query)

@@ -1,4 +1,4 @@
-from zentral.conf import settings, probes
+from zentral.conf import settings, probes as all_probes
 from zentral.core.exceptions import ImproperlyConfigured
 
 # Enroll_secret structure : EnrollSecretSecret$Key$Val
@@ -19,13 +19,15 @@ enroll_secret_secret = get_enroll_secret_secret(settings)
 # The osquery conf for the connected daemons.
 
 
-def build_osquery_conf(probes):
+def build_osquery_conf(all_probes):
     schedule = {}
     file_paths = {}
-    for probe_name, probe_d in probes.items():
+    probes = []
+    for probe_name, probe_d in all_probes.items():
         osquery_d = probe_d.get('osquery', None)
         if not osquery_d:
             continue
+        probes.append((probe_name, probe_d))
         for idx, osquery_query in enumerate(osquery_d.get('schedule', [])):
             osquery_query_key = '%s_%d' % (probe_name, idx)
             osquery_query = osquery_query.copy()
@@ -35,7 +37,9 @@ def build_osquery_conf(probes):
             if category in file_paths:
                 raise ImproperlyConfigured('File path category %s not unique', category)
             file_paths[category] = paths
-    return {'schedule': schedule,
-            'file_paths': file_paths}
+    osquery_conf = {'schedule': schedule,
+                    'file_paths': file_paths}
+    probes.sort()
+    return osquery_conf, probes
 
-osquery_conf = build_osquery_conf(probes)
+osquery_conf, probes = build_osquery_conf(all_probes)
