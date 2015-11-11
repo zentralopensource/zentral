@@ -23,13 +23,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = 'QeYDqhF4Iyfm5WnsdTrmygYDFvYWfXseGAfo1HvS5EjN8JmsfNNoHeLTw8pI'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ADMINS = (('Admin', 'admin@example.com'),)
 DEFAULT_FROM_EMAIL = "admin@example.com"
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -103,10 +103,10 @@ USE_TZ = False
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
-from .version import GIT_REF
 
-STATIC_URL = '/static/%s/' % GIT_REF
-STATIC_ROOT = '%s/static/%s' % (BASE_DIR, GIT_REF)
+STATIC_URL = '/static/'
+STATIC_ROOT = '/home/zentral/static/'
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
 
 STATICFILES_DIRS = (
     os.path.join(BASE_DIR, 'static'),

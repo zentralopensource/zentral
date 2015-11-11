@@ -85,7 +85,6 @@ ADD requirements.txt /home/zentral/requirements.txt
 RUN pip3 install --upgrade -r /home/zentral/requirements.txt --use-wheel --no-index --find-links=/home/zentral/wheels
 
 ADD docker/conf /home/zentral/conf
-ADD docker/version.py /home/zentral/server/server/
 ADD docker/settings.py /home/zentral/server/server/
 
 USER postgres
