@@ -7,7 +7,7 @@ from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from zentral.core.stores import stores
 from . import osquery_conf, probes
-from .events import post_enrollment_event, post_events_from_osquery_log
+from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
 from .models import Node, EnrollError, DistributedQuery, DistributedQueryNode
 
 logger = logging.getLogger('zentral.contrib.osquery.views')
@@ -127,6 +127,11 @@ class DownloadDistributedView(View):
 
 
 class BaseView(View):
+    def dispatch(self, request, *args, **kwargs):
+        self.user_agent = request.META.get("HTTP_USER_AGENT", "")
+        self.ip = request.META.get("HTTP_X_REAL_IP", "")
+        return super(BaseView, self).dispatch(request, *args, **kwargs)
+
     def post(self, request):
         data = json.loads(request.body.decode('utf-8'))
         return self.do_post(data)
@@ -156,15 +161,23 @@ class BaseNodeView(BaseView):
         except (KeyError, Node.DoesNotExist):
             return JsonResponse({'node_invalid': True})
         else:
+            post_request_event(node.machine_serial_number(),
+                               self.user_agent,
+                               self.ip,
+                               self.request_type)
             return self.do_post_with_node(node, data)
 
 
 class ConfigView(BaseNodeView):
+    request_type = "config"
+
     def do_post_with_node(self, node, data):
         return JsonResponse(osquery_conf)
 
 
 class DistributedReadView(BaseNodeView):
+    request_type = "distributed_read"
+
     def do_post_with_node(self, node, data):
         machine_serial_number = node.machine_serial_number()
         queries = {}
@@ -176,6 +189,8 @@ class DistributedReadView(BaseNodeView):
 
 
 class DistributedWriteView(BaseNodeView):
+    request_type = "distributed_write"
+
     def do_post_with_node(self, node, data):
         for key, val in data.get('queries').items():
             dq_id = int(key.rsplit('_', 1)[-1])
@@ -191,9 +206,9 @@ class DistributedWriteView(BaseNodeView):
 
 
 class LogView(BaseNodeView):
+    request_type = "log"
+
     def do_post_with_node(self, node, data):
-        user_agent = self.request.META.get("HTTP_USER_AGENT", "")
-        ip = self.request.META.get("HTTP_X_REAL_IP", "")
         post_events_from_osquery_log(node.machine_serial_number(),
-                                     user_agent, ip, data)
+                                     self.user_agent, self.ip, data)
         return JsonResponse({})

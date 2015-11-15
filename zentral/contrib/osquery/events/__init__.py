@@ -18,6 +18,12 @@ class OsqueryEnrollmentEvent(OsqueryEvent):
 register_event_type(OsqueryEnrollmentEvent)
 
 
+class OsqueryRequestEvent(OsqueryEvent):
+    event_type = "osquery_request"
+
+register_event_type(OsqueryRequestEvent)
+
+
 def _get_probe_and_query_from_payload(payload):
     """Fetch the corresponding probe and query dict from the config."""
     probe, query = None, None
@@ -146,4 +152,12 @@ def post_enrollment_event(msn, user_agent, ip, data):
                              machine_serial_number=msn,
                              request=EventRequest(user_agent, ip))
     event = event_cls(metadata, data)
+    event.post()
+
+def post_request_event(msn, user_agent, ip, request_type):
+    event_cls = OsqueryRequestEvent
+    metadata = EventMetadata(event_cls.event_type,
+                             machine_serial_number=msn,
+                             request=EventRequest(user_agent, ip))
+    event = event_cls(metadata, {'request_type': request_type})
     event.post()
