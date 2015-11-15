@@ -63,7 +63,7 @@ class EventStore(BaseEventStore):
                'uuid': metadata.uuid,
                'index': metadata.index,
                'created_at': metadata.created_at}
-        if metadata.request:
+        if metadata.request is not None:
             doc['user_agent'] = metadata.request.user_agent
             doc['ip'] = metadata.request.ip
         doc['payload'] = Json(event.payload)
@@ -89,9 +89,9 @@ class EventStore(BaseEventStore):
             doc = self._serialize_event(event_d)
             with self._conn.cursor() as cur:
                 cur.execute("insert into events (machine_serial_number, "
-                            "event_type, uuid, index, payload, created_at) values "
-                            "(%(machine_serial_number)s, %(event_type)s, "
-                            "%(uuid)s, %(index)s, %(payload)s, %(created_at)s)",
+                            "event_type, uuid, index, user_agent, ip, payload, created_at) "
+                            "values (%(machine_serial_number)s, %(event_type)s, "
+                            "%(uuid)s, %(index)s, %(user_agent)s, %(ip)s, %(payload)s, %(created_at)s)",
                             doc)
 
     def count(self, machine_serial_number, event_type=None):

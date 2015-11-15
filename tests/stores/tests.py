@@ -43,7 +43,7 @@ class BaseTestEventStore(object):
         l = list(self.event_store.fetch(event.metadata.machine_serial_number))
         self.assertEqual(len(l), 1)
         e = l[0]
-        self.assertEqual(e, event)
+        self.assertEqual(e.serialize(), event.serialize())
 
     def test_pagination(self):
         for i in range(100):
