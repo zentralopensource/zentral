@@ -18,7 +18,7 @@
   <tbody>
     {% for dqn in object.distributedquerynode_set.all %}
     <tr>
-      <td>{{ dqn.machine_serial_number }}</td>
+      <td><a href="{% url 'inventory:machine' dqn.machine_serial_number %}">{{ dqn.machine_serial_number }}</a></td>
       <td>{% if not dqn.result == None %}<pre>{{ dqn.get_json_result|pprint }}</pre>{% else %}pending…{% endif %}<td>
     </tr>
     {% endfor %}
