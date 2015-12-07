@@ -19,15 +19,19 @@ class TestEvent2(BaseEvent):
 register_event_type(TestEvent2)
 
 
-def make_event(idx=0, first_type=True):
+def make_event(idx=0, first_type=True, with_request=True):
     if first_type:
         event_cls = TestEvent1
     else:
         event_cls = TestEvent2
+    if with_request:
+        request = EventRequest("python_unittest_useragent",
+                               "10.0.0.1")
+    else:
+        request = None
     return event_cls(EventMetadata(event_cls.event_type,
                                    machine_serial_number='012356789',
-                                   request=EventRequest("python_unittest_useragent",
-                                                        "10.0.0.1")),
+                                   request=request),
                      {'idx': idx})
 
 
@@ -37,8 +41,16 @@ class BaseTestEventStore(object):
     def test_table_creation(self):
         self.assertEqual(self.event_store.count("not_so_random_machine_serial_number"), 0)
 
-    def test_store(self):
+    def test_store_event_with_request(self):
         event = make_event()
+        self.event_store.store(event)
+        l = list(self.event_store.fetch(event.metadata.machine_serial_number))
+        self.assertEqual(len(l), 1)
+        e = l[0]
+        self.assertEqual(e.serialize(), event.serialize())
+
+    def test_store_event_without_request(self):
+        event = make_event(with_request=False)
         self.event_store.store(event)
         l = list(self.event_store.fetch(event.metadata.machine_serial_number))
         self.assertEqual(len(l), 1)

@@ -66,6 +66,9 @@ class EventStore(BaseEventStore):
         if metadata.request is not None:
             doc['user_agent'] = metadata.request.user_agent
             doc['ip'] = metadata.request.ip
+        else:
+            doc['user_agent'] = None
+            doc['ip'] = None
         doc['payload'] = Json(event.payload)
         return doc
 
