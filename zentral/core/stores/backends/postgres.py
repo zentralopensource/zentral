@@ -114,7 +114,7 @@ class EventStore(BaseEventStore):
         if event_type:
             query = "{} and event_type = %s".format(query)
             args.append(event_type)
-        query = "{} order by stored_at desc".format(query)
+        query = "{} order by created_at desc".format(query)
         if offset:
             query = "{} offset %s".format(query)
             args.append(offset)
