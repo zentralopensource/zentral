@@ -44,6 +44,7 @@
 {% endif %}
   <a class="btn btn-default" href="{% url 'inventory:machine_events' machine.serial_number %}">View events</a>
 </p>
+
 <h2>OSX Apps</h2>
 <table class="table">
   <thead>
@@ -56,6 +57,7 @@
     {% endfor %}
   </tbody>
 </table>
+
 <h2>Groups</h2>
 <table class="table">
   <thead>
@@ -68,6 +70,7 @@
     {% endfor %}
   </tbody>
 </table>
+
 <h2>OSQuery Nodes</h2>
 {% if nodes %}
 <table class="table">
@@ -89,6 +92,32 @@
 {% else %}
 <div class="alert alert-warning">
   <strong>Warning!</strong> No osquery instance linked to this machine.
+</div>
+{% endif %}
+
+<h2>Last Munki Report</h2>
+{% if last_report %}
+<table class="table">
+  <thead>
+    <th>Start time</th>
+    <th>End time</th>
+    <th>Munki version</th>
+    <th>Run type</th>
+    <th>Last seen</th>
+  </thead>
+  <tbody>
+    <tr>
+      <td>{{ last_report.start_time }}</td>
+      <td>{{ last_report.end_time }}</td>
+      <td>{{ last_report.munki_version|default:"" }}</td>
+      <td>{{ last_report.run_type }}</td>
+      <td>{{ last_report.last_seen }}</td>
+    </tr>
+  </tbody>
+</table>
+{% else %}
+<div class="alert alert-warning">
+  <strong>Warning!</strong> No munki reports received for this machine.
 </div>
 {% endif %}
 {% endblock %}

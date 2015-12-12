@@ -5,6 +5,7 @@ urlpatterns = [
     url(r'^', include('base.urls', namespace='base')),
     url(r'^inventory/', include('zentral.contrib.inventory.urls', namespace='inventory')),
     url(r'^jss/', include('zentral.contrib.jss.urls', namespace='jss')),
+    url(r'^munki/', include('zentral.contrib.munki.urls', namespace='munki')),
     url(r'^osquery/', include('zentral.contrib.osquery.urls', namespace='osquery')),
     url(r'^santa/', include('zentral.contrib.santa.urls', namespace='santa')),
 ] + staticfiles_urlpatterns()
