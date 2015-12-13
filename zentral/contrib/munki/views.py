@@ -38,25 +38,25 @@ class PostJobView(BaseView):
         msn = self.data['machine']['serial_number']
         reports = [(parser.parse(r.pop('start_time')),
                     parser.parse(r.pop('end_time')),
-                    r) for r in self.data['reports']]
+                    r) for r in self.data.pop('reports')]
         # Events
         post_munki_events(msn,
                           self.user_agent,
                           self.ip,
                           (r for _, _, r in reports))
         # MunkiState
-        reports.sort()
+        update_dict = {'user_agent': self.user_agent,
+                       'ip': self.ip}
+        if self.data.get('santa_binaryinfo_included', False):
+            update_dict['binaryinfo_last_seen'] = timezone.now()
         if reports:
+            reports.sort()
             start_time, end_time, report = reports[-1]
-            update_dict = {'munki_version': report.get('munki_version', None),
-                           'user_agent': self.user_agent,
-                           'ip': self.ip,
-                           'sha1sum': report['sha1sum'],
-                           'run_type': report['run_type'],
-                           'start_time': start_time,
-                           'end_time': end_time}
-            if self.data.get('santa_binaryinfo_included', False):
-                update_dict['binaryinfo_last_seen'] = timezone.now()
-            MunkiState.objects.update_or_create(machine_serial_number=msn,
+            update_dict.update({'munki_version': report.get('munki_version', None),
+                                'sha1sum': report['sha1sum'],
+                                'run_type': report['run_type'],
+                                'start_time': start_time,
+                                'end_time': end_time})
+        MunkiState.objects.update_or_create(machine_serial_number=msn,
                                                 defaults=update_dict)
         return JsonResponse({})

@@ -97,30 +97,39 @@
 
 <h2>Munki State</h2>
 {% if munki_state %}
-<table class="table">
-  <thead>
-    <th>Start time</th>
-    <th>End time</th>
-    <th>Munki version</th>
-    <th>Run type</th>
-    <th>Last seen</th>
-  </thead>
-  <tbody>
-    <tr>
-      <td>{{ munki_state.start_time }}</td>
-      <td>{{ munki_state.end_time }}</td>
-      <td>{{ munki_state.munki_version|default:"" }}</td>
-      <td>{{ munki_state.run_type }}</td>
-      <td>
-        {{ munki_state.last_seen }}
-        <br><b>binaryinfo:</b> {{ munki_state.binaryinfo_last_seen|default:"-" }}
-      </td>
-    </tr>
-  </tbody>
-</table>
+{% if munki_state.sha1sum %}
+<h3>Last received report</h3>
+<dl class="dl-horizontal">
+  <dt>Sha1sum</dt>
+  <dd>{{ munki_state.sha1sum }}</dd>
+  <dt>Start time</dt>
+  <dd>{{ munki_state.start_time }}</dd>
+  <dt>End time</dt>
+  <dd>{{ munki_state.end_time }}</dd>
+  <dt>Run type</dt>
+  <dd>{{ munki_state.run_type }}</dd>
+  <dt>Munki version</dt>
+  <dd>{{ munki_state.munki_version|default:"" }}</dd>
+<dl>
 {% else %}
 <div class="alert alert-warning">
-  <strong>Warning!</strong> No munki reports received for this machine.
+  <strong>Warning!</strong> No report received.
+</div>
+{% endif %}
+<hr>
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">User agent</dt>
+  <dd class="small" style="opacity:0.5">{{ munki_state.user_agent }}</dd>
+  <dt class="small" style="opacity:0.5">IP</dt>
+  <dd class="small" style="opacity:0.5">{{ munki_state.ip }}</dd>
+  <dt class="small" style="opacity:0.5">Last seen</dt>
+  <dd class="small" style="opacity:0.5">{{ munki_state.last_seen|date:'r'|default:'-' }}</dd>
+  <dt class="small" style="opacity:0.5">Last binaryinfo</dt>
+  <dd class="small" style="opacity:0.5">{{ munki_state.binaryinfo_last_seen|date:'r'|default:'-' }}</dd>
+</dl>
+{% else %}
+<div class="alert alert-warning">
+  <strong>Warning!</strong> No Munki postflight request received
 </div>
 {% endif %}
 {% endblock %}
