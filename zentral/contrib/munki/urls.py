@@ -4,6 +4,6 @@ from . import views
 
 urlpatterns = [
     # API
-    url(r'^last_seen_report/(?P<machine_serial_number>\S+)/$', views.LastSeenReportView.as_view()),
-    url(r'^post_reports/$', csrf_exempt(views.PostReportsView.as_view()))
+    url(r'^job_details/(?P<machine_serial_number>\S+)/$', views.JobDetailsView.as_view()),
+    url(r'^post_job/$', csrf_exempt(views.PostJobView.as_view()))
 ]

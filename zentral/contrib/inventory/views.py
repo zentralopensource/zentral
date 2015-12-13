@@ -29,8 +29,8 @@ class MachineView(generic.TemplateView):
         context['links'] = md['_links']
         context['nodes'] = Node.objects.filter(enroll_secret__icontains=context['serial_number'])
         try:
-            from zentral.contrib.munki.models import LastReport
-            context['last_report'] = LastReport.objects.get(machine_serial_number=context['serial_number'])
+            from zentral.contrib.munki.models import MunkiState
+            context['munki_state'] = MunkiState.objects.get(machine_serial_number=context['serial_number'])
         except:
             pass
         return context

@@ -17,7 +17,7 @@ class PostEventView(CheckAPISecretView):
         try:
             msn = self.data['eventType']['eventObject']['serialNumber']
         except KeyError:
-            logger.error('JSS event w/o serial number\n%s', pprint.pformat(self.data))
+            logger.debug('JSS event w/o serial number\n%s', pprint.pformat(self.data))
         else:
             post_jss_event(msn,
                            self.user_agent,

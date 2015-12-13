@@ -29,7 +29,7 @@
   <dt>Last contact</dt>
   <dd>{{ machine.last_contact_at|date:'r'|default:'-' }}</dd>
   <dt>Last report</dt>
-  <dd>{{ machine.last_report_at|date:'r'|default:'-' }}</dd>
+  <dd>{{ machine.munki_state_at|date:'r'|default:'-' }}</dd>
 </dt>
 <hr>
 <dt>
@@ -95,8 +95,8 @@
 </div>
 {% endif %}
 
-<h2>Last Munki Report</h2>
-{% if last_report %}
+<h2>Munki State</h2>
+{% if munki_state %}
 <table class="table">
   <thead>
     <th>Start time</th>
@@ -107,11 +107,14 @@
   </thead>
   <tbody>
     <tr>
-      <td>{{ last_report.start_time }}</td>
-      <td>{{ last_report.end_time }}</td>
-      <td>{{ last_report.munki_version|default:"" }}</td>
-      <td>{{ last_report.run_type }}</td>
-      <td>{{ last_report.last_seen }}</td>
+      <td>{{ munki_state.start_time }}</td>
+      <td>{{ munki_state.end_time }}</td>
+      <td>{{ munki_state.munki_version|default:"" }}</td>
+      <td>{{ munki_state.run_type }}</td>
+      <td>
+        {{ munki_state.last_seen }}
+        <br><b>binaryinfo:</b> {{ munki_state.binaryinfo_last_seen|default:"-" }}
+      </td>
     </tr>
   </tbody>
 </table>

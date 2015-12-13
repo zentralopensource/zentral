@@ -1,4 +1,5 @@
 import json
+import zlib
 from django.views.generic import View
 from django.http import HttpResponseForbidden
 from zentral.core.exceptions import ImproperlyConfigured
@@ -26,7 +27,10 @@ class CheckAPISecretView(View):
         self.user_agent = request.META.get("HTTP_USER_AGENT", "")
         self.ip = request.META.get("HTTP_X_REAL_IP", "")
         if request.method == 'POST':
-            self.data = json.loads(request.body.decode('utf-8'))
+            payload = request.body
+            if request.META.get('HTTP_CONTENT_ENCODING', None) in ['zlib', 'gzip']:
+                payload = zlib.decompress(payload)
+            self.data = json.loads(payload.decode('utf-8'))
         else:
             self.data = None
         return super(CheckAPISecretView, self).dispatch(request, *args, **kwargs)
