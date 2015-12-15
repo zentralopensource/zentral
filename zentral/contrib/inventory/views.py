@@ -8,9 +8,7 @@ class IndexView(generic.ListView):
     template_name = "inventory/machine_list.html"
 
     def get_queryset(self):
-        machines = inventory.machines()
-        machines.sort(key=lambda d: d['name'].upper())
-        return machines
+        return inventory.machines().order_by('system_info__computer_name')
 
     def get_context_data(self, **kwargs):
         context = super(IndexView, self).get_context_data(**kwargs)
@@ -23,10 +21,14 @@ class MachineView(generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super(MachineView, self).get_context_data(**kwargs)
-        md = inventory.machine(context['serial_number'])
+        ms = inventory.machine(context['serial_number'])
         context['inventory'] = True
-        context['machine'] = md
-        context['links'] = md['_links']
+        context['machine_snapshot'] = ms
+        context['business_unit'] = ms.business_unit
+        context['machine'] = ms.machine
+        context['system_info'] = ms.system_info
+        context['os_version'] = ms.os_version
+        context['links'] = []
         context['nodes'] = Node.objects.filter(enroll_secret__icontains=context['serial_number'])
         try:
             from zentral.contrib.munki.models import MunkiState
@@ -62,7 +64,11 @@ class MachineEventsView(generic.ListView):
     def get_context_data(self, **kwargs):
         context = super(MachineEventsView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['machine'] = self.machine
+        context['machine_snapshot'] = self.machine_snapshot
+        context['business_unit'] = self.machine_snapshot.business_unit
+        context['machine'] = self.machine_snapshot.machine
+        context['system_info'] = self.machine_snapshot.system_info
+        context['os_version'] = self.machine_snapshot.os_version
         page = context['page_obj']
         if page.has_next():
             qd = self.request.GET.copy()
@@ -75,7 +81,8 @@ class MachineEventsView(generic.ListView):
         event_types = []
         total_events = 0
         request_event_type = self.request.GET.get('event_type')
-        for event_type, count in frontend_store.event_types_with_usage(self.machine['serial_number']).items():
+        for event_type, count in frontend_store.event_types_with_usage(
+                self.machine_snapshot.machine.serial_number).items():
             total_events += count
             event_types.append((event_type,
                                 request_event_type == event_type,
@@ -88,6 +95,6 @@ class MachineEventsView(generic.ListView):
         return context
 
     def get_queryset(self):
-        self.machine = inventory.machine(self.kwargs['serial_number'])
+        self.machine_snapshot = inventory.machine(self.kwargs['serial_number'])
         et = self.request.GET.get('event_type')
-        return MachineEventSet(self.machine['serial_number'], et)
+        return MachineEventSet(self.machine_snapshot.machine.serial_number, et)

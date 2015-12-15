@@ -4,13 +4,12 @@ from zentral.utils.mt_models import AbstractMTObject, MTObjectManager
 
 class BusinessUnit(AbstractMTObject):
     name = models.TextField()
-    reference = models.TextField(unique=True)
+    reference = models.TextField()
 
 
 class MachineGroup(AbstractMTObject):
-    business_unit = models.ForeignKey(BusinessUnit, blank=True, null=True)
     name = models.TextField()
-    reference = models.TextField(unique=True)
+    reference = models.TextField()
 
 
 class Machine(AbstractMTObject):
@@ -50,19 +49,19 @@ class Certificate(AbstractMTObject):
 
 
 class OSXApp(AbstractMTObject):
-    bundle_id = models.TextField(db_index=True)
-    bundle_name = models.TextField(db_index=True)
-    version = models.TextField()
-    version_str = models.TextField()
+    bundle_id = models.TextField(db_index=True, blank=True, null=True)
+    bundle_name = models.TextField(db_index=True, blank=True, null=True)
+    version = models.TextField(blank=True, null=True)
+    version_str = models.TextField(blank=True, null=True)
 
 
 class OSXAppInstance(AbstractMTObject):
     app = models.ForeignKey(OSXApp)
-    bundle_path = models.TextField()
-    path = models.TextField()
-    sha1 = models.CharField(max_length=40)
-    sha256 = models.CharField(max_length=64, db_index=True)
-    type = models.TextField()
+    bundle_path = models.TextField(blank=True, null=True)
+    path = models.TextField(blank=True, null=True)
+    sha1 = models.CharField(max_length=40, blank=True, null=True)
+    sha256 = models.CharField(max_length=64, db_index=True, blank=True, null=True)
+    type = models.TextField(blank=True, null=True)
     signed_by = models.ForeignKey(Certificate, blank=True, null=True)
 
 
@@ -72,18 +71,28 @@ class MachineSnapshotManager(MTObjectManager):
         if created:
             self.filter(source=obj.source,
                         machine__serial_number=obj.machine.serial_number,
-                        next_snapshot__isnull=True).exclude(pk=obj.id).update(next_snapshot=obj)
+                        mt_next__isnull=True).exclude(pk=obj.id).update(mt_next=obj)
         return obj, created
 
 
 class MachineSnapshot(AbstractMTObject):
     source = models.TextField(db_index=True)  # zentral.contrib.munki.postflight
+    reference = models.TextField(blank=True, null=True)
     machine = models.ForeignKey(Machine)
+    business_unit = models.ForeignKey(BusinessUnit, blank=True, null=True)
     groups = models.ManyToManyField(MachineGroup)
     os_version = models.ForeignKey(OSVersion, blank=True, null=True)
     system_info = models.ForeignKey(SystemInfo, blank=True, null=True)
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
-    next_snapshot = models.ForeignKey('self', blank=True, null=True)
+    mt_next = models.OneToOneField('self', blank=True, null=True, related_name="mt_previous")
 
     objects = MachineSnapshotManager()
-    mt_excluded_fields = ('next_snapshot',)
+    mt_excluded_fields = ('mt_next',)
+
+    def update_diff(self):
+        try:
+            previous_snapshot = self.mt_previous
+        except MachineSnapshot.DoesNotExist:
+            return None
+        else:
+            return self.diff(previous_snapshot)

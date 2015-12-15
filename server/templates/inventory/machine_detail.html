@@ -1,42 +1,39 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1>{{ machine.name }} / {{ machine.serial_number }}</h1>
-<h2>Details</h2>
+<h1>{{ system_info.computer_name }} / {{ machine.serial_number }}</h1>
+
+{% if business_unit %}
+<h3>Business unit</h3>
 <dl class="dl-horizontal">
-  <dt>Make</dt>
-  <dd>{{ machine.make }}</dd>
-  <dt>Model</dt>
-  <dd>{{ machine.model }}</dd>
-  <dt>OS Name</dt>
-  <dd>{{ machine.os_name }}</dd>
+  <dt>Name</dt>
+  <dd>{{ business_unit.name }}</dd>
+</dl>
+{% endif %}
+
+<h3>System info</h3>
+<dl class="dl-horizontal">
+  <dt>Hardware model</dt>
+  <dd>{{ system_info.hardware_model }}</dd>
+  <dt>CPU type</dt>
+  <dd>{{ system_info.cpu_type }}</dd>
+  <dt>CPU physical cores</dt>
+  <dd>{{ system_info.cpu_physical_cores }}</dd>
+  <dt>Physical memory</dt>
+  <dd>{{ system_info.physical_memory|filesizeformat }}</dd>
+</dl>
+<h3>OS</h3>
+<dl class="dl-horizontal">
+  <dt>Name</dt>
+  <dd>{{ os_version.name }}</dd>
   <dt>OS Version</dt>
-  <dd>{{ machine.os_version }}</dd>
+  <dd>{{ os_version.major }}.{{ os_version.minor }}.{{ os_version.patch }}</dd>
   <dt>OS Build</dt>
-  <dd>{{ machine.os_build }}</dd>
-  <dt>Processor type</dt>
-  <dd>{{ machine.processor_type }}</dd>
-  <dt>Processor speed</dt>
-  <dd>{{ machine.processor_speed }}</dd>
-  <dt>Total RAM</dt>
-  <dd>{{ machine.ram_total|filesizeformat }}</dd>
-  <dt>HD Number</dt>
-  <dd>{{ machine.hd_number }}</dd>
-  <dt>HD Space</dt>
-  <dd>{{ machine.hd_space|filesizeformat }}  Usage: {{ machine.hd_usage|default:'0' }}% Encrypted: {{ machine.encryption_status|default:'0' }}%</dd>
-  <dt>Public IP Address</dt>
-  <dd>{{ machine.public_ip_address }}</dd>
-  <dt>Last contact</dt>
-  <dd>{{ machine.last_contact_at|date:'r'|default:'-' }}</dd>
-  <dt>Last report</dt>
-  <dd>{{ machine.munki_state_at|date:'r'|default:'-' }}</dd>
-</dt>
-<hr>
-<dt>
-  <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ machine.created_at|date:'r'|default:'-' }}</dd>
-  <dt class="small" style="opacity:0.5">Synced at</dt>
-  <dd class="small" style="opacity:0.5">{{ machine.synced_at|date:'r'|default:'-' }}</dd>
+  <dd>{{ os_version.build }}</dd>
+</dl>
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">Last update</dt>
+  <dd class="small" style="opacity:0.5">{{ machine_snapshot.mt_created_at|date:'r'|default:'-' }}</dd>
 </dl>
 <p>
 {% if links.inventory %}
@@ -45,28 +42,37 @@
   <a class="btn btn-default" href="{% url 'inventory:machine_events' machine.serial_number %}">View events</a>
 </p>
 
-<h2>OSX Apps</h2>
+<h2>Groups</h2>
 <table class="table">
   <thead>
+    <th>Reference</th>
     <th>Name</th>
-    <th>Version</th>
   </thead>
   <tbody>
-    {% for app_name, app_version in machine.osx_apps %}
-    <tr><td>{{ app_name }}</td><td>{{ app_version }}</td></tr>
+    {% for group in machine_snapshot.groups.all %}
+    <tr><td>{{ group.reference }}</td><td>{{ group.name }}</td></tr>
     {% endfor %}
   </tbody>
 </table>
 
-<h2>Groups</h2>
+<h2>OSX Apps</h2>
 <table class="table">
   <thead>
-    <th>Key</th>
-    <th>Name</th>
+    <th>Bundle ID</th>
+    <th>Bundle Name</th>
+    <th>Version String</th>
+    <th>Bundle Path</th>
   </thead>
   <tbody>
-    {% for group in machine.groups %}
-    <tr><td>{{ group.key }}</td><td>{{ group.name }}</td></tr>
+    {% for osx_app_instance in machine_snapshot.osx_app_instances.all %}
+    {% with osx_app_instance.app as app %}
+    <tr>
+      <td>{{ app.bundle_id|default:"" }}</td>
+      <td>{{ app.bundle_name }}</td>
+      <td>{{ app.version_str }}</td>
+      <td>{{ osx_app_instance.bundle_path }}</td>
+    </tr>
+    {% endwith %}
     {% endfor %}
   </tbody>
 </table>

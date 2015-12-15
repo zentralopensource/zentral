@@ -8,10 +8,10 @@
     <th>Name</th>
   </thead>
   <tbody>
-    {% for machine in object_list %}
+    {% for machine_snapshot in object_list %}
     <tr>
-      <td><a href="{% url 'inventory:machine' machine.serial_number %}">{{ machine.serial_number }}</a></td>
-      <td>{{ machine.name }}</td>
+      <td><a href="{% url 'inventory:machine' machine_snapshot.machine.serial_number %}">{{ machine_snapshot.machine.serial_number }}</a></td>
+      <td>{{ machine_snapshot.system_info.computer_name }}</td>
     </tr>
     {% endfor %}
   </tbody>

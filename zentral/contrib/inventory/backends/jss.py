@@ -1,4 +1,3 @@
-from dateutil import parser
 import logging
 import requests
 from .base import BaseInventory, InventoryError
@@ -9,10 +8,10 @@ logger = logging.getLogger('zentral.contrib.inventory.backends.jss')
 class InventoryClient(BaseInventory):
     def __init__(self, config_d):
         super(InventoryClient, self).__init__(config_d)
-        base_url = 'https://%(host)s:%(port)s' % config_d
-        self.api_base_url = '%s%s' % (base_url, config_d['path'])
+        self.base_url = 'https://%(host)s:%(port)s' % config_d
+        self.api_base_url = '%s%s' % (self.base_url, config_d['path'])
         self.auth = (config_d['user'], config_d['password'])
-        self.inv_url_tmpl = "%s/computers.html?id=%%s&o=r" % base_url
+        self.inv_url_tmpl = "%s/computers.html?id=%%s&o=r" % self.base_url
 
     def _make_get_query(self, path):
         url = "%s%s" % (self.api_base_url, path)
@@ -32,23 +31,35 @@ class InventoryClient(BaseInventory):
     def _computer(self, jss_id):
         return self._make_get_query('/computers/id/{}'.format(jss_id))['computer']
 
-    def _get_machines(self):
+    def _make_reference(self, reference):
+        if reference is None:
+            raise TypeError
+        reference = str(reference)
+        if not reference:
+            raise ValueError
+        return "{}${}${}".format(self.__module__,
+                                 self.base_url,
+                                 reference)
+
+    def get_machines(self):
         reverse_computer_groups = {}
         for computer_group in self._computergroups():
             reverse_computer_groups[computer_group['name']] = computer_group['id']
         for machine in self._computers():
             inv_reference = machine.pop('id')
             computer = self._computer(inv_reference)
-            machine[self._inv_reference_key()] = inv_reference
-            machine['serial_number'] = computer['general']['serial_number']
-            machine['last_contact_at'] = parser.parse(computer['general']['last_contact_time_utc'])
-            machine['last_report_at'] = parser.parse(computer['general']['report_date_utc'])
-            machine['groups'] = []
-            machine['public_ip_address'] = computer['general']['ip_address']
+            # serial number, reference
+            ct = {'reference': self._make_reference(inv_reference),
+                  'machine': {'serial_number': computer['general']['serial_number']}}
+
+            # business unit
             site_id = computer['general']['site']['id']
             if site_id >= 0:
-                machine['groups'].append({'key': 'site_{}'.format(site_id),
-                                          'name': computer['general']['site']['name']})
+                ct['business_unit'] = {'name': computer['general']['site']['name'],
+                                       'reference': self._make_reference(site_id)}
+
+            # groups
+            groups = []
             for computer_group_name in computer['groups_accounts']['computer_group_memberships']:
                 try:
                     computer_group_id = reverse_computer_groups[computer_group_name]
@@ -56,39 +67,41 @@ class InventoryClient(BaseInventory):
                     # TODO: Race ?
                     continue
                 else:
-                    machine['groups'].append({'key': 'computer_group_{}'.format(computer_group_id),
-                                              'name': computer_group_name})
-            for hw_attr in ['make', 'model', 'os_name', 'os_version', 'os_build', 'processor_type', 'processor_speed']:
-                machine[hw_attr] = computer['hardware'][hw_attr]
-            machine['ram_total'] = computer['hardware']['total_ram'] * 2**20
-            machine['hd_number'] = 0
-            machine['hd_space'] = 0
-            machine['hd_total'] = 0
-            machine['hd_encrypted'] = 0
-            for disk in computer['hardware']['storage']:
-                machine['hd_number'] += 1
-                try:
-                    partition = disk['partition']
-                except KeyError:
-                    # TODO: Why ?
-                    continue
-                machine['hd_space'] += partition['size'] * 2**20
-                machine['hd_total'] += partition['size'] * 2**20 * partition['percentage_full'] // 100
-                machine['hd_encrypted'] += partition['size'] * 2**20 * partition['filevault2_percent'] // 100
-            if machine['hd_space']:
-                machine['hd_usage'] = machine['hd_total'] * 100 // machine['hd_space']
-                machine['encryption_status'] = machine['hd_encrypted'] * 100 // machine['hd_space']
-            else:
-                machine['hd_usage'] = 0
-                machine['encryption_status'] = 0
-            apps = []
+                    groups.append({'reference': self._make_reference(computer_group_id),
+                                   'name': computer_group_name})
+            if groups:
+                ct['groups'] = groups
+
+            hardware = computer['hardware']
+            # os_version
+            os_version = {'name': hardware['os_name'],
+                          'build': hardware['os_build']}
+            os_version_version = hardware['os_version'].split('.')
+            if len(os_version_version) > 0:
+                os_version['major'] = os_version_version[0]
+                if len(os_version_version) > 1:
+                    os_version['minor'] = os_version_version[1]
+                    if len(os_version_version) > 2:
+                        os_version['patch'] = os_version_version[2]
+            ct['os_version'] = os_version
+
+            # system_info
+            system_info = {'computer_name': computer['general']['name'],
+                           'hardware_model': hardware['model_identifier'],
+                           'cpu_type': ("{} @{}MHZ".format(hardware['processor_type'],
+                                                           hardware['processor_speed_mhz'])).strip(),
+                           'cpu_physical_cores': hardware['number_processors'],
+                           'physical_memory': computer['hardware']['total_ram'] * 2**20}
+            ct['system_info'] = system_info
+
+            # osx apps
+            osx_app_instances = []
             for app_d in computer['software']['applications']:
-                # list and not tuple because of json serialization comparison for update.
-                # TODO verify
-                apps.append([app_d['name'], app_d['version']])
-            apps.sort(key=lambda t: (t[0].upper(), t[1]))
-            machine['osx_apps'] = apps
-            yield machine
+                osx_app_instances.append({'bundle_path': app_d['path'],
+                                          'app': {'bundle_name': app_d['name'],
+                                                  'version_str': app_d['version']}})
+            ct['osx_app_instances'] = osx_app_instances
+            yield ct
 
     def _get_inv_link(self, md):
         return self.inv_url_tmpl % md[self._inv_reference_key()]

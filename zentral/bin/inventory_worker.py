@@ -1,11 +1,13 @@
 import os
 import sys
-ROOT_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), "../../"))
+ROOT_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), "../../server"))
 sys.path.insert(0, ROOT_DIR)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings')
+import django
+django.setup()
 import time
 import uuid
-import zentral
-zentral.setup()
+from django.db import transaction
 from zentral.contrib.inventory import inventory
 from zentral.contrib.inventory.events import post_inventory_event
 from zentral.core.metric_services import metric_services
@@ -15,8 +17,11 @@ SLEEP = 20
 
 def sync_inventory():
     pk = uuid.uuid4()
-    for index, (machine_d, payload) in enumerate(inventory.sync()):
-        post_inventory_event(machine_d['serial_number'], payload, pk, index)
+    for index, (machine_snapshot, diff) in enumerate(inventory.sync()):
+        if machine_snapshot.machine and machine_snapshot.machine.serial_number:
+            post_inventory_event(machine_snapshot.machine.serial_number, diff, pk, index)
+        else:
+            print("Machine w/o serial number")
 
 
 def push_inventory_metrics():
@@ -26,6 +31,7 @@ def push_inventory_metrics():
 
 if __name__ == '__main__':
     while True:
-        sync_inventory()
+        with transaction.atomic():
+            sync_inventory()
         push_inventory_metrics()
         time.sleep(SLEEP)
