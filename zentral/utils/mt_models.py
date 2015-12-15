@@ -99,7 +99,7 @@ class MTObjectManager(models.Manager):
             obj.save()
             for k, l in m2m_fields:
                 setattr(obj, k, l)
-            if not obj.compute_mt_hash(recursive=False) == obj.mt_hash:
+            if not obj.hash(recursive=False) == obj.mt_hash:
                 raise MTOError('Hash missmatch!!!')
             created = True
         return obj, created
@@ -156,17 +156,17 @@ class AbstractMTObject(models.Model):
                     v = v.all()
                 yield f, v
 
-    def compute_mt_hash(self, recursive=True):
+    def hash(self, recursive=True):
         h = Hasher()
         for f, v in self._iter_mto_fields():
             if f.many_to_one and v:
                 if recursive:
-                    v = v.compute_mt_hash()
+                    v = v.hash()
                 else:
                     v = v.mt_hash
             elif f.many_to_many:
                 if recursive:
-                    v = [mto.compute_mt_hash() for mto in v]
+                    v = [mto.hash() for mto in v]
                 else:
                     v = [mto.mt_hash for mto in v]
             h.add_field(f.name, v)
@@ -189,3 +189,31 @@ class AbstractMTObject(models.Model):
             else:
                 d[f.name] = v
         return d
+
+    def diff(self, mto):
+        if mto._meta.model != self._meta.model:
+            raise MTOError("Can only compare to an object of the same model")
+        diff = {}
+        for f, v in self._iter_mto_fields():
+            fdiff = {}
+            if f.many_to_many:
+                mto_v_qs = getattr(mto, f.name).all()
+                # TODO: better
+                for o in v.exclude(pk__in=[o.id for o in mto_v_qs]):
+                    fdiff.setdefault('added', []).append(o.serialize())
+                for o in mto_v_qs.exclude(pk__in=[o.id for o in v]):
+                    fdiff.setdefault('removed', []).append(o.serialize())
+            else:
+                mto_v = getattr(mto, f.name)
+                if v != mto_v:
+                    if isinstance(v, AbstractMTObject):
+                        v = v.serialize()
+                    if isinstance(mto_v, AbstractMTObject):
+                        mto_v = mto_v.serialize()
+                    if mto_v:
+                        fdiff['removed'] = mto_v
+                    if v:
+                        fdiff['added'] = v
+            if fdiff:
+                diff[f.name] = fdiff
+        return diff
