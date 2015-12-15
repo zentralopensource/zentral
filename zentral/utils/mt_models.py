@@ -42,7 +42,7 @@ class Hasher(object):
             elif isinstance(v, str):
                 h.update(v.encode('utf-8'))
             elif isinstance(v, list):
-                for e in v:
+                for e in sorted(v):
                     h.update(e.encode('utf-8'))
         return h.hexdigest()
 
