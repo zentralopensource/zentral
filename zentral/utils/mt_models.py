@@ -36,6 +36,7 @@ class Hasher(object):
     def hexdigest(self):
         h = hashlib.sha1()
         for k in sorted(self.fields.keys()):
+            h.update(k.encode('utf-8'))
             v = self.fields[k]
             if isinstance(v, bytes):
                 h.update(v)
