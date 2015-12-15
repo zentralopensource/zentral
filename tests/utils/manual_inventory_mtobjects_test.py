@@ -9,6 +9,15 @@ django.setup()
 
 from zentral.contrib.inventory.models import MachineSnapshot
 
+
+def test_machine_snapshot(d):
+    obj, created = MachineSnapshot.objects.commit(d)
+    print(created and "CREATED" or "FOUND",
+          obj._meta.object_name, obj.mt_hash)
+    import pprint
+    pprint.pprint(obj.serialize())
+    print("")
+
 if __name__ == "__main__":
     osx_app_d = {'bundle_id': 'io.zentral.baller',
                  'bundle_name': 'Ballard',
@@ -25,8 +34,8 @@ if __name__ == "__main__":
     machine_snapshot_d = {'source': 'io.zentral.tests',
                           'machine': machine_d,
                           'osx_app_instances': [osx_app_instance_d]}
-    obj, created = MachineSnapshot.objects.commit(machine_snapshot_d)
-    print('OBJ', obj, obj.mt_hash)
-    print('CREATED', created)
-    if not created:
-        print('CMTH', obj.compute_mt_hash())
+    machine_snapshot_d2 = {'source': 'io.zentral.tests',
+                           'machine': machine_d,
+                           'osx_app_instances': []}
+    test_machine_snapshot(machine_snapshot_d2)
+    test_machine_snapshot(machine_snapshot_d)
