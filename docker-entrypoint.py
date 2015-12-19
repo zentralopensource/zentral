@@ -26,7 +26,7 @@ def wait_for_db():
     connection = (os.environ.get('POSTGRES_HOST', 'localhost'),
                   os.environ.get('POSTGRES_PORT', '5432'))
     while not check_db_connection(connection):
-        reconnect_delay = 1000 / random.randint(500, 3000) 
+        reconnect_delay = 1000 / random.randint(500, 3000)
         warnings.warn("Can't connect to DB! Sleep {:.2f}s…".format(reconnect_delay))
         time.sleep(reconnect_delay)
     print("DB connection OK")
@@ -40,15 +40,15 @@ def django_migrate_db():
     else:
         return True
 
+
 def wait_for_db_migration():
     wait_for_db()
     while not django_migrate_db():
-        retry_delay = 1000 / random.randint(500, 3000) 
+        retry_delay = 1000 / random.randint(500, 3000)
         warnings.warn("Can't migrate DB! Sleep {:.2f}s…".format(retry_delay))
         time.sleep(retry_delay)
     print("DB migration OK")
-    
-        
+
 
 KNOWN_COMMANDS = {
     "runserver": ['server/manage.py', 'runserver', '0.0.0.0:8000'],
@@ -60,7 +60,7 @@ KNOWN_COMMANDS = {
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        warning.warn("Not enough arguments.")
+        warnings.warn("Not enough arguments.")
         sys.exit(2)
     cmd = sys.argv[1]
     args = KNOWN_COMMANDS.get(cmd, None)
