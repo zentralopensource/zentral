@@ -17,6 +17,7 @@ nginx:
     - ./examples/docker/tls:/etc/nginx/tls
 app:
   build: .
+  entrypoint: /zentral/docker-entrypoint.py
   environment:
     ZENTRAL_CONF_DIR: /zentral/examples/conf/
     POSTGRES_HOST: db
@@ -24,29 +25,30 @@ app:
     - ./examples/docker/postgres.env
   volumes:
     - .:/zentral
+  restart: onfailure:10
 web:
   extends: app
-  command: python server/manage.py runserver 0.0.0.0:8000
+  command: runserver
   links:
   - db
   - elastic
   - redis
 inventory_worker:
   extends: app
-  command: python zentral/bin/inventory_worker.py
+  command: inventory_worker
   links:
   - db
   - redis
 store_worker:
   extends: app
-  command: python zentral/bin/store_worker.py
+  command: store_worker
   links:
   - db
   - elastic
   - redis
 processor_worker:
   extends: app
-  command: python zentral/bin/processor_worker.py
+  command: processor_worker
   links:
   - db
   - redis
