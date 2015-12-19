@@ -50,8 +50,11 @@
   },
   "apps": {
     "zentral.contrib.inventory": {
-      "backend": "zentral.contrib.inventory.backends.dummy",
-      "redis_host": "redis"
+      "clients": [
+        {
+          "backend": "zentral.contrib.inventory.clients.dummy"
+        }
+      ]
     },
     "zentral.contrib.osquery": {
       "enroll_secret_secret": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"

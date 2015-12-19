@@ -1,10 +1,11 @@
-from multiprocessing import Process
 import os
 import sys
-ROOT_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), "../../"))
+ROOT_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), "../../server"))
 sys.path.insert(0, ROOT_DIR)
-import zentral
-zentral.setup()
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings')
+import django
+django.setup()
+from multiprocessing import Process
 from zentral.conf import settings
 from zentral.core.events.processor import EventProcessor
 from zentral.core.queues import queues

@@ -8,7 +8,7 @@ class IndexView(generic.ListView):
     template_name = "inventory/machine_list.html"
 
     def get_queryset(self):
-        return inventory.machines().order_by('system_info__computer_name')
+        return MachineSnapshot.objects.filter(mt_next__isnull=True).order_by('system_info__computer_name')
 
     def get_context_data(self, **kwargs):
         context = super(IndexView, self).get_context_data(**kwargs)
@@ -21,7 +21,7 @@ class MachineView(generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super(MachineView, self).get_context_data(**kwargs)
-        ms = inventory.machine(context['serial_number'])
+        ms = MachineSnapshot.objects.filter(mt_next__isnull=True).get(machine__serial_number=context['serial_number'])
         context['inventory'] = True
         context['machine_snapshot'] = ms
         context['business_unit'] = ms.business_unit
@@ -101,6 +101,6 @@ class MachineEventsView(generic.ListView):
         return context
 
     def get_queryset(self):
-        self.machine_snapshot = inventory.machine(self.kwargs['serial_number'])
+        self.machine_snapshot = MachineSnapshot.objects.filter(mt_next__isnull=True).get(machine__serial_number=self.kwargs['serial_number'])
         et = self.request.GET.get('event_type')
-        return MachineEventSet(self.machine_snapshot.machine.serial_number, et)
+        return MachineEventSet(self.kwargs['serial_number'], et)

@@ -35,15 +35,18 @@ inventory_worker:
   extends: app
   command: python zentral/bin/inventory_worker.py
   links:
+  - db
   - redis
 store_worker:
   extends: app
   command: python zentral/bin/store_worker.py
   links:
+  - db
   - elastic
   - redis
 processor_worker:
   extends: app
   command: python zentral/bin/processor_worker.py
   links:
+  - db
   - redis

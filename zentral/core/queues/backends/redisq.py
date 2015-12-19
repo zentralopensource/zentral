@@ -1,7 +1,18 @@
+from functools import wraps
 import hashlib
 import json
 import redis
+from zentral.core.queues.exceptions import TemporaryQueueError
 
+
+def redis_connection_error_decorator(m):
+    @wraps(m)
+    def wrapper(*args, **kwargs):
+        try:
+            return m(*args, **kwargs)
+        except redis.connection.ConnectionError:
+            raise TemporaryQueueError('Could not connect to redis server')
+    return wrapper
 
 class EventQueues(object):
     def __init__(self, config_d):
@@ -53,6 +64,7 @@ class EventQueues(object):
         p.delete(event_id)
         p.execute()
 
+    @redis_connection_error_decorator
     def post_event(self, event):
         event_payload = json.dumps(event.serialize()).encode('utf-8')
         s = hashlib.sha1(event_payload)
@@ -68,22 +80,26 @@ class EventQueues(object):
         p.execute()
         return event_id
 
+    @redis_connection_error_decorator
     def get_store_event_job(self, store, worker_id):
         job_q = self._store_job_queue(store)
         worker_q = self._store_worker_queue(store, worker_id)
         return self._get_job(job_q, worker_q)
 
+    @redis_connection_error_decorator
     def ack_store_event_job(self, store, worker_id, event_id):
         worker_q = self._store_worker_queue(store, worker_id)
         event_job_num = self._ack_job(worker_q, event_id)
         if event_job_num <= 0:
             self._process_event(event_id)
 
+    @redis_connection_error_decorator
     def get_process_event_job(self, worker_id):
         job_q = self._processor_job_queue()
         worker_q = self._processor_worker_queue(worker_id)
         return self._get_job(job_q, worker_q)
 
+    @redis_connection_error_decorator
     def ack_process_event_job(self, worker_id, event_id):
         worker_q = self._processor_worker_queue(worker_id)
         event_job_num = self._ack_job(worker_q, event_id)

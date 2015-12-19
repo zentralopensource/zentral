@@ -5,33 +5,46 @@ sys.path.insert(0, ROOT_DIR)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings')
 import django
 django.setup()
+import logging
 import time
+from multiprocessing import Process
 import uuid
 from django.db import transaction
-from zentral.contrib.inventory import inventory
+from zentral.contrib.inventory.clients import clients
 from zentral.contrib.inventory.events import post_inventory_event
-from zentral.core.metric_services import metric_services
+from zentral.core.queues.exceptions import TemporaryQueueError
+
+logger = logging.getLogger('zentral.bin.inventory_worker')
 
 SLEEP = 20
 
 
-def sync_inventory():
-    pk = uuid.uuid4()
-    for index, (machine_snapshot, diff) in enumerate(inventory.sync()):
-        if machine_snapshot.machine and machine_snapshot.machine.serial_number:
-            post_inventory_event(machine_snapshot.machine.serial_number, diff, pk, index)
-        else:
-            print("Machine w/o serial number")
-
-
-def push_inventory_metrics():
-    metrics = inventory.metrics()
-    for ms in metric_services.values():
-        ms.push_metrics("zentral_inventory", metrics)
-
-if __name__ == '__main__':
+def sync_inventory(client_name, worker_id):
+    for client in clients:
+        if client.name == client_name:
+            break
+    else:
+        return
     while True:
         with transaction.atomic():
-            sync_inventory()
-        push_inventory_metrics()
+            pk = uuid.uuid4()
+            for index, (machine_snapshot, diff) in enumerate(client.sync()):
+                if machine_snapshot.machine and machine_snapshot.machine.serial_number:
+                    try:
+                        post_inventory_event(machine_snapshot.machine.serial_number, diff, pk, index)
+                    except TemporaryQueueError:
+                        logger.exception('Could not post inventory event')
+                else:
+                    logger.error('Machine w/o serial number')
         time.sleep(SLEEP)
+
+
+if __name__ == '__main__':
+    p_l = []
+    for client in clients:
+        p = Process(target=sync_inventory, args=(client.name, 0))
+        p.daemon = 1
+        p.start()
+        p_l.append(p)
+    for p in p_l:
+        p.join()
