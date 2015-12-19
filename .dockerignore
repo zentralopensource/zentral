@@ -1,5 +1,4 @@
 ansible/*
-server/server/settings*
 docs/*
 conf/*
 docs/*

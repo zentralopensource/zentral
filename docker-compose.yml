@@ -1,0 +1,49 @@
+db:
+  image: postgres:9.4
+  env_file:
+    - ./docker/dev/postgres.env
+elastic:
+  image: elasticsearch:1
+redis:
+  image: redis
+nginx:
+  image: nginx
+  ports:
+    - "443:443"
+  links:
+    - web
+  volumes:
+    - ./docker/dev/nginx/conf.d/:/etc/nginx/conf.d/
+    - ./docker/dev/tls:/etc/nginx/tls
+app:
+  build: .
+  environment:
+    ZENTRAL_CONF_DIR: /zentral/docker/conf/
+    POSTGRES_HOST: db
+  env_file:
+    - ./docker/dev/postgres.env
+  volumes:
+    - .:/zentral
+web:
+  extends: app
+  command: python server/manage.py runserver 0.0.0.0:8000
+  links:
+  - db
+  - elastic
+  - redis
+inventory_worker:
+  extends: app
+  command: python zentral/bin/inventory_worker.py
+  links:
+  - redis
+store_worker:
+  extends: app
+  command: python zentral/bin/store_worker.py
+  links:
+  - elastic
+  - redis
+processor_worker:
+  extends: app
+  command: python zentral/bin/processor_worker.py
+  links:
+  - redis

@@ -1,11 +1,17 @@
 from django.conf.urls import include, url
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+from zentral.conf import settings
 
+# base
 urlpatterns = [
     url(r'^', include('base.urls', namespace='base')),
-    url(r'^inventory/', include('zentral.contrib.inventory.urls', namespace='inventory')),
-    url(r'^jss/', include('zentral.contrib.jss.urls', namespace='jss')),
-    url(r'^munki/', include('zentral.contrib.munki.urls', namespace='munki')),
-    url(r'^osquery/', include('zentral.contrib.osquery.urls', namespace='osquery')),
-    url(r'^santa/', include('zentral.contrib.santa.urls', namespace='santa')),
-] + staticfiles_urlpatterns()
+]
+
+# zentral apps
+for app_name in settings.get('apps', []):
+    app_shortname = app_name.rsplit('.', 1)[-1]
+    url_module = "{}.urls".format(app_name)
+    urlpatterns.append(url(r'^{}/'.format(app_shortname), include(url_module, namespace=app_shortname)))
+
+# static files
+urlpatterns += staticfiles_urlpatterns()
