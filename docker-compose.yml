@@ -1,7 +1,7 @@
 db:
   image: postgres:9.4
   env_file:
-    - ./docker/dev/postgres.env
+    - ./examples/docker/postgres.env
 elastic:
   image: elasticsearch:1
 redis:
@@ -13,15 +13,15 @@ nginx:
   links:
     - web
   volumes:
-    - ./docker/dev/nginx/conf.d/:/etc/nginx/conf.d/
-    - ./docker/dev/tls:/etc/nginx/tls
+    - ./examples/docker/nginx/conf.d/:/etc/nginx/conf.d/
+    - ./examples/docker/tls:/etc/nginx/tls
 app:
   build: .
   environment:
-    ZENTRAL_CONF_DIR: /zentral/docker/conf/
+    ZENTRAL_CONF_DIR: /zentral/examples/conf/
     POSTGRES_HOST: db
   env_file:
-    - ./docker/dev/postgres.env
+    - ./examples/docker/postgres.env
   volumes:
     - .:/zentral
 web:

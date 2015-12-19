@@ -49,3 +49,7 @@ def build_santa_conf(all_probes):
     return {'rules': rules}, lookup_d, probes
 
 santa_conf, probes_lookup_dict, probes = build_santa_conf(all_probes)
+
+
+# django
+default_app_config = "zentral.contrib.santa.apps.ZentralSantaAppConfig"

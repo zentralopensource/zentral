@@ -9,4 +9,4 @@ WORKDIR /zentral
 ADD requirements.txt /zentral
 RUN pip install -r requirements.txt
 ADD . /zentral
-ADD docker/conf /zentral
+ADD examples/conf /zentral

@@ -5,7 +5,7 @@ from .utils import GatewayClient
 
 class MetricService(BaseMetricService):
     def __init__(self, config_d):
-        self.config_d = config_d
+        super().__init__(config_d)
         self._gw_host = config_d['gateway_host']
         self._gw_client = GatewayClient(self._gw_host)
 

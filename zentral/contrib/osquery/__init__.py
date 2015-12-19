@@ -43,3 +43,7 @@ def build_osquery_conf(all_probes):
     return osquery_conf, probes
 
 osquery_conf, probes = build_osquery_conf(all_probes)
+
+
+# django
+default_app_config = "zentral.contrib.osquery.apps.ZentralOSQueryAppConfig"

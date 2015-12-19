@@ -4,10 +4,9 @@ import logging
 import os.path
 import uuid
 from dateutil import parser
-from zentral.apps import apps
 from zentral.conf import settings
 from zentral.core.queues import queues
-from zentral.core.templates import TemplateLoader
+from .template_loader import TemplateLoader
 
 logger = logging.getLogger('zentral.core.events')
 
@@ -36,21 +35,35 @@ event_handler = EventHandler()
 
 # Event deserializer
 
+# The event_types are populated by "register_event_type"
+# "register_event_type" is called after an event class definition in an zentral contrib app events module.
+# the events modules of the different contrib apps are loaded during the Django setup.
+# Zentral contrib apps have ZentralAppConfig instances that try to load an app's event module
+# when they are ready (thus triggering the "register_event_type" calls present in these modules).
+#
+# see zentral.utils.apps.ZentralAppConfig
+
+event_types = {}
+
 
 def register_event_type(event_cls):
-    """Register event class for an event type.
+    """
+    Register event class for an event type.
 
     event_type must be unique in the zentral configuration.
     """
     event_type = event_cls.event_type
-    apps.register_event(event_type, event_cls)
+    if event_type in event_types:
+        raise ImproperlyConfigured('Event type {} already registered'.format(event_type))
+    logger.debug('Event type "%s" registered', event_type)
+    event_types[event_type] = event_cls
 
 
 def event_cls_from_type(event_type):
     try:
-        return apps.all_events[event_type]
+        return event_types[event_type]
     except KeyError:
-        logger.error('Unknown event type %s' % event_type)
+        logger.error('Unknown event type "%s"', event_type)
         return BaseEvent
 
 

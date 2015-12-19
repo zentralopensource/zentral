@@ -1,9 +1,8 @@
-*.pyc
 *.sw[op]
+__pycache__
+*.pyc
 venv/
 wheels/
-server/server/settings.py
-__pycache__
 docs/_build/
 docs/_static/
 docs/_templates/

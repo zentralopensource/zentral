@@ -9,3 +9,7 @@ def get_api_secret(settings):
         raise ImproperlyConfigured("Missing attribute 'api_secret' in jss app settings")
 
 api_secret = get_api_secret(settings)
+
+
+# django
+default_app_config = "zentral.contrib.jss.apps.ZentralJSSAppConfig"

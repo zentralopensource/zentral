@@ -1,17 +1,30 @@
 {
+  "django": {
+    "SECRET_KEY": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
+    "DEBUG": true,
+    "ADMINS": [
+      [
+        "Admin",
+        "changethis@example.com"
+      ]
+    ],
+    "SERVER_EMAIL": "changethis@example.com",
+    "DEFAULT_EMAIL": "changethis@example.com",
+    "ALLOWED_HOSTS": [
+      "*"
+    ]
+  },
   "queues": {
-    "backend": "zentral.core.queues.backends.redisq"
+    "backend": "zentral.core.queues.backends.redisq",
+    "host": "redis"
   },
   "stores": {
-    "postgres": {
-      "frontend": true,
-      "backend": "zentral.core.stores.backends.postgres",
-      "database": "zentral_events",
-      "user": "zentral"
-    },
     "elasticsearch": {
+      "frontend": true,
       "backend": "zentral.core.stores.backends.elasticsearch",
-      "servers": ["http://localhost:9200"],
+      "servers": [
+        "http://elastic:9200"
+      ],
       "index": "zentral-events",
       "kibana_base_url": "https://zentral/kibana/"
     }
@@ -37,13 +50,20 @@
   },
   "apps": {
     "zentral.contrib.inventory": {
-      "backend": "zentral.contrib.inventory.backends.dummy"
+      "backend": "zentral.contrib.inventory.backends.dummy",
+      "redis_host": "redis"
     },
     "zentral.contrib.osquery": {
-      "enroll_secret_secret": "BLABLA"
+      "enroll_secret_secret": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
+    },
+    "zentral.contrib.jss": {
+      "api_secret": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
+    },
+    "zentral.contrib.munki": {
+      "api_secret": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
     },
     "zentral.contrib.santa": {
-      "machine_id_secret": "TOTO"
+      "machine_id_secret": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
     }
   },
   "middlewares": [

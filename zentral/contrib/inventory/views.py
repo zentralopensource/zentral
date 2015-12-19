@@ -1,7 +1,7 @@
 from django.views import generic
 from zentral.contrib.osquery.models import Node
 from zentral.core.stores import frontend_store
-from . import inventory
+from .models import MachineSnapshot
 
 
 class IndexView(generic.ListView):
