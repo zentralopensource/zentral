@@ -5,6 +5,3 @@ class BaseEventStore(object):
 
     def get_visu_url(self, search_dict):
         return None
-
-    def get_visu_url(self, search_dict):
-        return None

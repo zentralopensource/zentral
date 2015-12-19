@@ -32,4 +32,4 @@ class Action(BaseAction):
             args['ticket']['tags'] = tags
 
         requests.post(self.url, headers={'Content-Type': 'application/json'},
-                     data=json.dumps(args), auth=self.auth)
+                      data=json.dumps(args), auth=self.auth)

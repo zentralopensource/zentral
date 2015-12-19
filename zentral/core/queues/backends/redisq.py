@@ -14,6 +14,7 @@ def redis_connection_error_decorator(m):
             raise TemporaryQueueError('Could not connect to redis server')
     return wrapper
 
+
 class EventQueues(object):
     def __init__(self, config_d):
         self._r = redis.Redis(host=config_d.get('host', 'localhost'),

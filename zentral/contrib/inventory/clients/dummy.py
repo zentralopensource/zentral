@@ -1,6 +1,4 @@
-from datetime import datetime, timedelta
 import logging
-import random
 from .base import BaseInventory
 
 logger = logging.getLogger('zentral.contrib.inventory.backends.dummy')
@@ -19,8 +17,8 @@ DUMMY_MACHINES = [
                      'cpu_type': "Intel Core M @ 1.3GHz",
                      'cpu_physical_cores': 2,
                      'physical_memory': 8 * 2**30},
-     'osx_app_instances': [{'app':{'bundle_name':'Dummy.app', 'version_str':'1.0'}}],
-    },
+     'osx_app_instances': [{'app': {'bundle_name': 'Dummy.app', 'version_str': '1.0'}}],
+     },
     {'machine': {'serial_number': '9876543210'},
      'groups': [{'reference': 'dummy_group_2',
                  'name': 'Dummy Group 2'}],
@@ -34,8 +32,8 @@ DUMMY_MACHINES = [
                      'cpu_type': "Intel Core M @ 1.3GHz",
                      'cpu_physical_cores': 2,
                      'physical_memory': 8 * 2**30},
-     'osx_app_instances': [{'app':{'bundle_name':'Dummy.app', 'version_str':'2.0'}}],
-    }
+     'osx_app_instances': [{'app': {'bundle_name': 'Dummy.app', 'version_str': '2.0'}}],
+     }
 ]
 
 

@@ -18,6 +18,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='machinesnapshot',
             name='mt_next',
-            field=models.OneToOneField(related_name='mt_previous', blank=True, null=True, to='inventory.MachineSnapshot'),
+            field=models.OneToOneField(related_name='mt_previous',
+                                       blank=True, null=True,
+                                       to='inventory.MachineSnapshot'),
         ),
     ]

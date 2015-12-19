@@ -1,6 +1,7 @@
 from importlib import import_module
 from zentral.conf import settings
 
+
 def get_clients(settings):
     inventory_settings = settings['apps']['zentral.contrib.inventory']
     for inv_cli_settings in inventory_settings.get('clients', []):

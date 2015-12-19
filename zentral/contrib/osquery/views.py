@@ -32,7 +32,7 @@ class ProbeView(TemplateView):
         context['osquery'] = True
 
         # find probe
-        #TODO log(1)
+        # TODO log(1)
         probe = None
         for probe_name, probe_d in probes:
             if probe_name == kwargs['probe_key']:

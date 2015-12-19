@@ -5,6 +5,7 @@ import os.path
 import uuid
 from dateutil import parser
 from zentral.conf import settings
+from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.queues import queues
 from .template_loader import TemplateLoader
 

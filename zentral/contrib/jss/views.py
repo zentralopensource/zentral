@@ -1,8 +1,6 @@
-import json
 import logging
 import pprint
-from django.http import JsonResponse, HttpResponseForbidden
-from django.views.generic import View
+from django.http import JsonResponse
 from zentral.utils.api_views import CheckAPISecretView
 from . import api_secret
 from .events import post_jss_event

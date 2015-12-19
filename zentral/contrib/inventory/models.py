@@ -74,6 +74,9 @@ class MachineSnapshotManager(MTObjectManager):
                         mt_next__isnull=True).exclude(pk=obj.id).update(mt_next=obj)
         return obj, created
 
+    def current(self):
+        return self.filter(mt_next__isnull=True)
+
 
 class MachineSnapshot(AbstractMTObject):
     source = models.TextField(db_index=True)  # zentral.contrib.munki.postflight

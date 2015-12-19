@@ -33,7 +33,7 @@ class EventStore(BaseEventStore):
             if val:
                 kwargs[conn_arg] = val
         # TODO: deprecate !
-        if not 'database' in kwargs and 'db_name' in config_d:
+        if 'database' not in kwargs and 'db_name' in config_d:
             logger.warning("the 'db_name' configuration attribute for the "
                            "postgres event store is deprecated. Please use the "
                            "'database' attribute.")

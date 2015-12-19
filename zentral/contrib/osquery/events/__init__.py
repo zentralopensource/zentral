@@ -154,6 +154,7 @@ def post_enrollment_event(msn, user_agent, ip, data):
     event = event_cls(metadata, data)
     event.post()
 
+
 def post_request_event(msn, user_agent, ip, request_type):
     event_cls = OsqueryRequestEvent
     metadata = EventMetadata(event_cls.event_type,

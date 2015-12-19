@@ -1,5 +1,4 @@
 import logging
-import os.path
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
 from django.apps import apps
 from zentral.conf import user_templates_dir

@@ -1,4 +1,3 @@
-import json
 import requests
 from .base import BaseAction
 from zentral.conf import contact_groups
@@ -21,5 +20,5 @@ class Action(BaseAction):
             for contact_d in contact_groups[group_name]:
                 cell_number = contact_d.get('cell', None)
                 if cell_number:
-                    args['To'] =  cell_number
-                    r = requests.post(self.url, data=args, auth=self.auth)
+                    args['To'] = cell_number
+                    requests.post(self.url, data=args, auth=self.auth)
