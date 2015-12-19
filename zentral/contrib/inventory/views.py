@@ -43,9 +43,15 @@ class MachineEventSet(object):
         self.machine_serial_number = machine_serial_number
         self.event_type = event_type
         self.store = frontend_store
+        self._count = None
 
     def count(self):
-        return self.store.count(self.machine_serial_number, self.event_type)
+        if self._count is None:
+            self._count = self.store.count(self.machine_serial_number, self.event_type)
+        return self._count
+
+    def __len__(self):
+        return self.count()
 
     def __getitem__(self, k):
         if isinstance(k, slice):

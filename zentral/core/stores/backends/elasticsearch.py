@@ -37,15 +37,21 @@ class EventStore(BaseEventStore):
         except:
             logger.exception('Could not add event to elasticsearch index')
 
-    def count(self, machine_serial_number):
+    def count(self, machine_serial_number, event_type=None):
         # TODO: count could work from first fetch with elasticsearch.
-        r = self._es.count(index=self.index, q='zzzentral.machine_serial_number:{}'.format(machine_serial_number))
+        q = "zzzentral.machine_serial_number:{}".format(machine_serial_number)
+        if event_type:
+            q = "{} AND _type:{}".format(q, event_type)
+        r = self._es.count(index=self.index, q=q)
         return r['count']
 
-    def fetch(self, machine_serial_number, offset=0, limit=0):
+    def fetch(self, machine_serial_number, offset=0, limit=0, event_type=None):
         # TODO: count could work from first fetch with elasticsearch.
+        q = "zzzentral.machine_serial_number:{}".format(machine_serial_number)
+        if event_type:
+            q = "{} AND _type:{}".format(q, event_type)
         kwargs = {'index': self.index,
-                  'q': 'zzzentral.machine_serial_number:{}'.format(machine_serial_number),
+                  'q': q,
                   'sort': 'zzzentral.created_at:desc'}
         if limit:
             kwargs['size'] = limit
