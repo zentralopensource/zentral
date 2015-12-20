@@ -1,4 +1,7 @@
 {
+  "api": {
+    "tls_server_certs": "/zentral/examples/start/docker/tls/zentral_fullchain.crt"
+  },
   "django": {
     "SECRET_KEY": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
     "DEBUG": true,

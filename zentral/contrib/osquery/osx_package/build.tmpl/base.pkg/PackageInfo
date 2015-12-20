@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
-<pkg-info postinstall-action="none" format-version="2" identifier="io.zentral.osquery_enroll" version="1.0" generator-version="InstallCmds-554 (15B42)" install-location="/" auth="root">
-    <payload numberOfFiles="7" installKBytes="%INSTALL_KB%"/>
+<pkg-info postinstall-action="none" format-version="2" identifier="io.zentral.osquery_enroll" version="1.0" generator-version="Zentral 0.1" install-location="/" auth="root">
+    <payload numberOfFiles="%NUMBER_OF_FILES" installKBytes="%INSTALL_KBYTES%"/>
     <bundle-version/>
     <upgrade-bundle/>
     <update-bundle/>

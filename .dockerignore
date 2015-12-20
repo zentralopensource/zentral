@@ -1,10 +1,8 @@
-ansible/*
 docs/*
-conf/*
-docs/*
+examples/*
+fabfile.*
 tests/*
 venv/*
-fabfile.*
 .gitignore
 .git/*
 */__pycache__*

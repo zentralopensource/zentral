@@ -1,6 +1,10 @@
 #!/bin/sh
 ## Preinstall script
 
+ZENTRAL_OSQUERY_ROOT="/usr/local/zentral/osquery"
+OSQUERY_ROCKDB_PATH="$ZENTRAL_OSQUERY_ROOT/db"
+OSQUERY_ENROLL_SECRET_PATH="$ZENTRAL_OSQUERY_ROOT/enroll_secret.txt"
+
 ## unload com.facebook.osqueryd
 sudo /bin/launchctl unload -w "/Library/LaunchDaemons/com.facebook.osqueryd.plist" > /dev/null
 
@@ -8,13 +12,14 @@ sudo /bin/launchctl unload -w "/Library/LaunchDaemons/com.facebook.osqueryd.plis
 CLIENT_ID=$(/usr/sbin/system_profiler SPHardwareDataType | awk '/Serial/ {print $4}')
 
 # create directory for osquery and rocksDB
-/bin/mkdir -p "/usr/local/zentral/osquery"
-/usr/sbin/chown -R root:admin "/usr/local/zentral"
+/bin/mkdir -p "$OSQUERY_ROCKDB_PATH"
+/usr/sbin/chown -R root:admin "$ZENTRAL_OSQUERY_ROOT"
 
-# create osquery enrollment file from a secret, with osquery key "", insert clients serial_number as ID
-echo "%OSQUERY_SECRET_SECRET%\$SERIAL\$${CLIENT_ID}" > /usr/local/zentral/enroll_secret.txt
+# create enrollment file from a secret, insert clients serial_number as ID
+echo "%ENROLL_SECRET_SECRET%\$SERIAL\$${CLIENT_ID}" > "$OSQUERY_ENROLL_SECRET_PATH"
 
-/bin/chmod 400 /usr/local/zentral/enroll_secret.txt
-/usr/sbin/chown root:admin "/usr/local/zentral/enroll_secret.txt"
+# lock down enrollment secret file
+/bin/chmod 400 "$OSQUERY_ENROLL_SECRET_PATH"
+/usr/sbin/chown root:admin "$OSQUERY_ENROLL_SECRET_PATH"
 
 exit 0

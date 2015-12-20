@@ -9,10 +9,10 @@
   <key>ProgramArguments</key>
   <array>
     <string>/usr/local/bin/osqueryd</string>
-    <string>--database_path=/usr/local/zentral/osquery</string>
+    <string>--database_path=/usr/local/zentral/osquery/db</string>
     <string>--tls_hostname=%TLS_HOSTNAME%</string>
     <string>--enroll_tls_endpoint=/osquery/enroll</string>
-    <string>--enroll_secret_path=/usr/local/zentral/enroll_secret.txt</string>
+    <string>--enroll_secret_path=/usr/local/zentral/osquery/enroll_secret.txt</string>
     <string>--config_plugin=tls</string>
     <string>--config_tls_endpoint=/osquery/config</string>
     <string>--config_tls_refresh</string>
@@ -30,5 +30,7 @@
   </array>
   <key>RunAtLoad</key>
   <true/>
+  <key>StandardErrorPath</key>
+  <string>/var/log/zentral_osqueryd_stderr.log</string>
 </dict>
 </plist>
