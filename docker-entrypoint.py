@@ -54,7 +54,9 @@ KNOWN_COMMANDS = {
     "runserver": ['server/manage.py', 'runserver', '0.0.0.0:8000'],
     "inventory_worker": ['zentral/bin/inventory_worker.py'],
     "store_worker": ['zentral/bin/store_worker.py'],
-    "processor_worker": ['zentral/bin/processor_worker.py']
+    "processor_worker": ['zentral/bin/processor_worker.py'],
+    # extras
+    "shell": ['server/manage.py', 'shell'],
 }
 
 
