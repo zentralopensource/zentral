@@ -1,17 +1,33 @@
 from django.views import generic
 from zentral.core.stores import frontend_store
-from .models import MachineSnapshot
+from zentral.utils.text import str_to_ascii
+from .models import Machine, MachineSnapshot
 
 
-class IndexView(generic.ListView):
+class IndexView(generic.TemplateView):
     template_name = "inventory/machine_list.html"
 
-    def get_queryset(self):
-        return MachineSnapshot.objects.current().order_by('system_info__computer_name')
+    @staticmethod
+    def ms_dict_sorting_key(ms_list):
+        key = None
+        if not ms_list:
+            return key
+        ms = ms_list[0]
+        key = str_to_ascii(ms.get_machine_str()).lower()
+        return key
 
     def get_context_data(self, **kwargs):
         context = super(IndexView, self).get_context_data(**kwargs)
         context['inventory'] = True
+        # group by machine serial number
+        ms_dict = {}
+        for ms in MachineSnapshot.objects.current().order_by('system_info__computer_name'):
+            ms_dict.setdefault(ms.machine.serial_number, []).append(ms)
+        # sorted
+        context['object_list'] = [(l[0].machine.serial_number,
+                                   l[0].get_machine_str(),
+                                   l) for l in sorted(ms_dict.values(),
+                                                      key=self.ms_dict_sorting_key)]
         return context
 
 
@@ -20,19 +36,17 @@ class MachineView(generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super(MachineView, self).get_context_data(**kwargs)
-        ms = MachineSnapshot.objects.current().get(machine__serial_number=context['serial_number'])
         context['inventory'] = True
-        context['machine_snapshot'] = ms
-        context['business_unit'] = ms.business_unit
-        context['machine'] = ms.machine
-        context['system_info'] = ms.system_info
-        context['os_version'] = ms.os_version
-        context['links'] = []
-        try:
-            from zentral.contrib.munki.models import MunkiState
-            context['munki_state'] = MunkiState.objects.get(machine_serial_number=context['serial_number'])
-        except:
-            pass
+        # all current machine snapshots for this serial number
+        ms_list = list(MachineSnapshot.objects.current().filter(machine__serial_number=context['serial_number']))
+        # only the one with osx app infos
+        osx_app_ms_list = [ms for ms in ms_list if ms.osx_app_instances.count()]
+        for ms in ms_list:
+            if ms.system_info and ms.system_info.computer_name:
+                context['computer_name'] =  ms.system_info.computer_name
+                break
+        context['ms_list'] = ms_list
+        context['osx_app_ms_list'] = osx_app_ms_list
         return context
 
 
@@ -67,12 +81,13 @@ class MachineEventsView(generic.ListView):
 
     def get_context_data(self, **kwargs):
         context = super(MachineEventsView, self).get_context_data(**kwargs)
-        context['inventory'] = True
-        context['machine_snapshot'] = self.machine_snapshot
-        context['business_unit'] = self.machine_snapshot.business_unit
-        context['machine'] = self.machine_snapshot.machine
-        context['system_info'] = self.machine_snapshot.system_info
-        context['os_version'] = self.machine_snapshot.os_version
+        for ms in self.ms_list:
+            context['serial_number'] = ms.machine.serial_number
+            if ms.system_info and ms.system_info.computer_name:
+                context['computer_name'] =  ms.system_info.computer_name
+                break
+
+        # pagination
         page = context['page_obj']
         if page.has_next():
             qd = self.request.GET.copy()
@@ -84,9 +99,11 @@ class MachineEventsView(generic.ListView):
             context['previous_url'] = "?{}".format(qd.urlencode())
         event_types = []
         total_events = 0
+
+        # event types selection
         request_event_type = self.request.GET.get('event_type')
         for event_type, count in frontend_store.event_types_with_usage(
-                self.machine_snapshot.machine.serial_number).items():
+                context['serial_number']).items():
             total_events += count
             event_types.append((event_type,
                                 request_event_type == event_type,
@@ -99,6 +116,7 @@ class MachineEventsView(generic.ListView):
         return context
 
     def get_queryset(self):
-        self.machine_snapshot = MachineSnapshot.objects.current().get(machine__serial_number=self.kwargs['serial_number'])
+        serial_number = self.kwargs['serial_number']
+        self.ms_list = list(MachineSnapshot.objects.current().filter(machine__serial_number=serial_number))
         et = self.request.GET.get('event_type')
-        return MachineEventSet(self.kwargs['serial_number'], et)
+        return MachineEventSet(serial_number, et)

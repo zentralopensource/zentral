@@ -1,62 +1,96 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1>{{ system_info.computer_name }} / {{ machine.serial_number }}</h1>
+<h1>
+  {% if computer_name %}{{ computer_name }} / {% endif %}{{ serial_number }}
+  <a class="btn btn-default" href="{% url 'inventory:machine_events' serial_number %}">View events</a>
+</h1>
 
-{% if business_unit %}
+<ul class="nav nav-tabs">
+  {% for ms in ms_list %}
+  <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
+    <a href="#" data-tabclass="detailstab" data-tabid="details-{{ ms.id }}">{{ ms.source }}</a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% for ms in ms_list %}
+<div class="detailstab" id="details-{{ ms.id }}"{% if not forloop.first %}style="display:none;"{% endif %}>
+{% if ms.business_unit %}
 <h3>Business unit</h3>
 <dl class="dl-horizontal">
   <dt>Name</dt>
-  <dd>{{ business_unit.name }}</dd>
+  <dd>{{ ms.business_unit.name }}</dd>
 </dl>
 {% endif %}
 
+{% if ms.system_info %}
 <h3>System info</h3>
 <dl class="dl-horizontal">
   <dt>Hardware model</dt>
-  <dd>{{ system_info.hardware_model }}</dd>
+  <dd>{{ ms.system_info.hardware_model }}</dd>
   <dt>CPU type</dt>
-  <dd>{{ system_info.cpu_type }}</dd>
+  <dd>{{ ms.system_info.cpu_type }}</dd>
   <dt>CPU physical cores</dt>
-  <dd>{{ system_info.cpu_physical_cores }}</dd>
+  <dd>{{ ms.system_info.cpu_physical_cores|default:"-" }}</dd>
   <dt>Physical memory</dt>
-  <dd>{{ system_info.physical_memory|filesizeformat }}</dd>
+  <dd>{{ ms.system_info.physical_memory|filesizeformat }}</dd>
 </dl>
+{% endif %}
+
+{% if ms.os_version %}
 <h3>OS</h3>
 <dl class="dl-horizontal">
   <dt>Name</dt>
-  <dd>{{ os_version.name }}</dd>
+  <dd>{{ ms.os_version.name }}</dd>
   <dt>OS Version</dt>
-  <dd>{{ os_version.major }}.{{ os_version.minor }}.{{ os_version.patch }}</dd>
+  <dd>{{ ms.os_version.major }}.{{ ms.os_version.minor }}.{{ ms.os_version.patch }}</dd>
   <dt>OS Build</dt>
-  <dd>{{ os_version.build }}</dd>
+  <dd>{{ ms.os_version.build|default:"-" }}</dd>
 </dl>
-<dl class="dl-horizontal">
-  <dt class="small" style="opacity:0.5">Last update</dt>
-  <dd class="small" style="opacity:0.5">{{ machine_snapshot.mt_created_at|date:'r'|default:'-' }}</dd>
-</dl>
-<p>
-{% for name, link in links %}
-  <a class="btn btn-default" href="{{ link }}">View in {{ name }}</a>
-{% endfor %}
-  <a class="btn btn-default" href="{% url 'inventory:machine_events' machine.serial_number %}">View events</a>
-</p>
+{% endif %}
 
-<h2>Groups</h2>
-<table class="table">
+{% if ms.groups.count %}
+<h3>Groups</h3>
+<table class="table table-condensed">
   <thead>
     <th>Reference</th>
     <th>Name</th>
   </thead>
   <tbody>
-    {% for group in machine_snapshot.groups.all %}
+    {% for group in ms.groups.all %}
     <tr><td>{{ group.reference }}</td><td>{{ group.name }}</td></tr>
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">Last update</dt>
+  <dd class="small" style="opacity:0.5">{{ ms.mt_created_at|date:'r'|default:'-' }}</dd>
+</dl>
+
+{% if ms.link in links %}
+<p><a class="btn btn-default" href="{{ link }}">View in {{ name }}</a></p>
+{% endif %}
+</div>
+{% endfor %}
+
+
+{% if osx_app_ms_list %}
 <h2>OSX Apps</h2>
-<table class="table">
+
+<ul class="nav nav-tabs">
+  {% for ms in osx_app_ms_list %}
+  <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
+    <a href="#" data-tabclass="appstab" data-tabid="apps-{{ ms.id }}">{{ ms.source }}</a></li>
+  </li>
+  {% endfor %}
+</ul>
+
+{% for ms in osx_app_ms_list %}
+<table class="table table-condensed appstab" id="apps-{{ ms.id }}"
+  {% if not forloop.first %}style="display:none;"{% endif %}>
   <thead>
     <th>Bundle ID</th>
     <th>Bundle Name</th>
@@ -64,7 +98,7 @@
     <th>Bundle Path</th>
   </thead>
   <tbody>
-    {% for osx_app_instance in machine_snapshot.osx_app_instances.all %}
+    {% for osx_app_instance in ms.osx_app_instances.all %}
     {% with osx_app_instance.app as app %}
     <tr>
       <td>{{ app.bundle_id|default:"" }}</td>
@@ -76,42 +110,27 @@
     {% endfor %}
   </tbody>
 </table>
+{% endfor %}
+{% endif %}
 
-<h2>Munki State</h2>
-{% if munki_state %}
-{% if munki_state.sha1sum %}
-<h3>Last received report</h3>
-<dl class="dl-horizontal">
-  <dt>Sha1sum</dt>
-  <dd>{{ munki_state.sha1sum }}</dd>
-  <dt>Start time</dt>
-  <dd>{{ munki_state.start_time }}</dd>
-  <dt>End time</dt>
-  <dd>{{ munki_state.end_time }}</dd>
-  <dt>Run type</dt>
-  <dd>{{ munki_state.run_type }}</dd>
-  <dt>Munki version</dt>
-  <dd>{{ munki_state.munki_version|default:"" }}</dd>
-<dl>
-{% else %}
-<div class="alert alert-warning">
-  <strong>Warning!</strong> No report received.
-</div>
-{% endif %}
-<hr>
-<dl class="dl-horizontal">
-  <dt class="small" style="opacity:0.5">User agent</dt>
-  <dd class="small" style="opacity:0.5">{{ munki_state.user_agent }}</dd>
-  <dt class="small" style="opacity:0.5">IP</dt>
-  <dd class="small" style="opacity:0.5">{{ munki_state.ip }}</dd>
-  <dt class="small" style="opacity:0.5">Last seen</dt>
-  <dd class="small" style="opacity:0.5">{{ munki_state.last_seen|date:'r'|default:'-' }}</dd>
-  <dt class="small" style="opacity:0.5">Last binaryinfo</dt>
-  <dd class="small" style="opacity:0.5">{{ munki_state.binaryinfo_last_seen|date:'r'|default:'-' }}</dd>
-</dl>
-{% else %}
-<div class="alert alert-warning">
-  <strong>Warning!</strong> No Munki postflight request received
-</div>
-{% endif %}
+{% endblock %}
+
+{% block extrajs %}
+<script>
+  function switchTabs(link) {
+    var tabclass = link.data('tabclass'),
+        tabid = link.data('tabid');
+    $("." + tabclass).hide();
+    $("#" + tabid).show();
+    link.parent().siblings().removeClass('active');
+    link.parent().addClass('active');
+  }
+
+  $(document).ready(function(){
+    $("li[role=presentation] a").click(function(event){
+      event.preventDefault();
+      switchTabs($(this));
+    });
+  });
+</script>
 {% endblock %}

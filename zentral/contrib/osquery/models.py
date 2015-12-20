@@ -52,7 +52,7 @@ class DistributedQuery(models.Model):
 
     def save(self, *args, **kwargs):
         super(DistributedQuery, self).save(*args, **kwargs)
-        for ms in MachineSnapshot.objects.current().select_related('machine').filter(source="zentral.contrib.osquery"):
+        for ms in MachineSnapshot.objects.current().filter(source="zentral.contrib.osquery"):
             DistributedQueryNode.objects.get_or_create(distributed_query=self,
                                                        machine_serial_number=ms.machine.serial_number)
 

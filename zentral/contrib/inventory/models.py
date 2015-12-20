@@ -75,7 +75,10 @@ class MachineSnapshotManager(MTObjectManager):
         return obj, created
 
     def current(self):
-        return self.filter(mt_next__isnull=True)
+        return self.select_related('machine',
+                                   'business_unit',
+                                   'os_version',
+                                   'system_info').filter(mt_next__isnull=True)
 
 
 class MachineSnapshot(AbstractMTObject):
@@ -99,3 +102,13 @@ class MachineSnapshot(AbstractMTObject):
             return None
         else:
             return self.diff(previous_snapshot)
+
+    def get_machine_str(self):
+        if self.system_info and self.system_info.computer_name:
+            return self.system_info.computer_name
+        elif self.machine:
+            return self.machine.serial_number
+        elif self.reference:
+            return self.reference
+        else:
+            return "{} #{}".format(self.source, self.id)

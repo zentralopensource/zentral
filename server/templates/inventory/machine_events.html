@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1>Machine <a href="{% url 'inventory:machine' machine.serial_number %}">{{ machine.serial_number }}</a> Events</h1>
+<h1>{% if computer_name %}{{ computer_name }} / {% endif %}<a href="{% url 'inventory:machine' serial_number %}">{{ serial_number }}</a> Events</h1>
 <form class="form-inline" method="GET">
     <div class="form-group">
         <label for="eventType">Event type</label>
