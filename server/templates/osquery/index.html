@@ -15,6 +15,10 @@
   </tbody>
 </table>
 
+<form action="{% url 'osquery:installer_package' %}" method="POST">{% csrf_token %}
+  <button class="btn btn-default" type="submit">Download enrollment pkg</button>
+</form>
+
 <h2>Last distributed queries</h2>
 <p>
   <a href="{% url 'osquery:distributed_index' %}" class="btn btn-default">View all</a>

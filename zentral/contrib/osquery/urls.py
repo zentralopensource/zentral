@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     # django admin
     url(r'^$', views.IndexView.as_view(), name='index'),
+    url(r'^installer_package/$', views.InstallerPackageView.as_view(), name='installer_package'),
     url(r'^probes/(?P<probe_key>[\S ]+)/$', views.ProbeView.as_view(), name='probe'),
     # django admin distributed queries
     url(r'^distributed/$',

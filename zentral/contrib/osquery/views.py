@@ -1,17 +1,23 @@
 import json
 import logging
+import os
+import shlex
+from subprocess import check_output
 from django.core.urlresolvers import reverse_lazy
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.core.stores import stores
-from . import osquery_conf, probes
+from . import enroll_secret_secret, osquery_conf, probes
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
 from .models import EnrollError, enroll, DistributedQuery, DistributedQueryNode
 
 logger = logging.getLogger('zentral.contrib.osquery.views')
+
+PKG_BUILD_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "osx_package/build.sh")
 
 
 class IndexView(TemplateView):
@@ -23,6 +29,23 @@ class IndexView(TemplateView):
         context['probes'] = probes
         context['last_dq'] = DistributedQuery.objects.all()[:10]
         return context
+
+
+class InstallerPackageView(View):
+    def post(self, request):
+        installer_file = check_output([PKG_BUILD_SCRIPT,
+                                       shlex.quote(request.get_host()),
+                                       shlex.quote(enroll_secret_secret)])
+        installer_file = installer_file.strip()
+        # TODO: Memory.
+        with open(installer_file, 'rb') as f:
+            content = f.read()
+        response = HttpResponse(content, "application/octet-stream")
+        response['Content-Length'] = os.path.getsize(installer_file)
+        response['Content-Disposition'] = 'attachment; filename="zentral_osquery_enroll.pkg"'
+        os.unlink(installer_file)
+        os.rmdir(os.path.dirname(installer_file))
+        return response
 
 
 class ProbeView(TemplateView):

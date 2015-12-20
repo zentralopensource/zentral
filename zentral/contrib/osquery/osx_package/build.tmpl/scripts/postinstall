@@ -1,0 +1,12 @@
+#!/bin/sh
+## postinstall
+
+## load com.facebook.osqueryd
+sudo /bin/launchctl load -w "/Library/LaunchDaemons/com.facebook.osqueryd.plist"  >/dev/null 2>&1
+
+## on jamf managed clients, run recon
+if [[ -e /usr/local/bin/jamf ]]; then
+  /usr/local/bin/jamf recon
+fi
+
+exit 0

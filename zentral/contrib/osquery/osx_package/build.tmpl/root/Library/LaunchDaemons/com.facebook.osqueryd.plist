@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>KeepAlive</key>
+  <true/>
+  <key>Label</key>
+  <string>com.facebook.osqueryd</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/osqueryd</string>
+    <string>--database_path=/usr/local/zentral/osquery</string>
+    <string>--tls_hostname=%TLS_HOSTNAME%</string>
+    <string>--enroll_tls_endpoint=/osquery/enroll</string>
+    <string>--enroll_secret_path=/usr/local/zentral/enroll_secret.txt</string>
+    <string>--config_plugin=tls</string>
+    <string>--config_tls_endpoint=/osquery/config</string>
+    <string>--config_tls_refresh</string>
+    <string>120</string>
+    <string>--logger_plugin=tls</string>
+    <string>--logger_tls_endpoint=/osquery/log</string>
+    <string>--logger_tls_period</string>
+    <string>60</string>
+    <string>--disable_distributed=false</string>
+    <string>--distributed_plugin=tls</string>
+    <string>--distributed_tls_read_endpoint=/osquery/distributed/read</string>
+    <string>--distributed_tls_write_endpoint=/osquery/distributed/write</string>
+    <string>--distributed_interval</string>
+    <string>60</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>
