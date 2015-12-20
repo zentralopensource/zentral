@@ -10,8 +10,9 @@ class InventoryError(Exception):
 
 class BaseInventory(object):
     def __init__(self, config_d):
+        self.source = self.__module__
         if not hasattr(self, 'name'):
-            self.name = self.__module__.split('.')[-1]
+            self.name = self.source.split('.')[-1]
 
     def get_machines(self):
         raise NotImplementedError
@@ -19,7 +20,7 @@ class BaseInventory(object):
     # inventory API
     def sync(self):
         for machine_d in self.get_machines():
-            machine_d['source'] = self.__module__
+            machine_d['source'] = self.source
             machine_snapshot, created = MachineSnapshot.objects.commit(machine_d)
             if created:
                 update_diff = machine_snapshot.update_diff()
@@ -38,7 +39,7 @@ class BaseInventory(object):
         qs = qs.prefetch_related('groups',
                                  'osx_app_instances__app',
                                  'osx_app_instances__signed_by')
-        return qs.filter(source=self.__module__,
+        return qs.filter(source=self.source,
                          mt_next__isnull=True)
 
     def machine(self, msn):

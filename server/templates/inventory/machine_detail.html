@@ -36,9 +36,9 @@
   <dd class="small" style="opacity:0.5">{{ machine_snapshot.mt_created_at|date:'r'|default:'-' }}</dd>
 </dl>
 <p>
-{% if links.inventory %}
-  <a class="btn btn-default" href="{{ links.inventory.link }}">View in {{ links.inventory.name }}</a>
-{% endif %}
+{% for name, link in links %}
+  <a class="btn btn-default" href="{{ link }}">View in {{ name }}</a>
+{% endfor %}
   <a class="btn btn-default" href="{% url 'inventory:machine_events' machine.serial_number %}">View events</a>
 </p>
 

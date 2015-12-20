@@ -5,10 +5,9 @@ from zentral.contrib.inventory.models import MachineSnapshot
 def get_machine(event):
     if not hasattr(event, '_cached_machine'):
         msn = event.metadata.machine_serial_number
-        ms_d = {}
+        event._cached_machine = {}
         for ms in MachineSnapshot.objects.current().filter(machine__serial_number=msn):
-            ms_d[ms.source] = ms.serialize()
-        event._cached_machine = ms_d
+            event._cached_machine[ms.source] = ms
     return event._cached_machine
 
 
