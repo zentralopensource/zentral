@@ -77,30 +77,6 @@
   </tbody>
 </table>
 
-<h2>OSQuery Nodes</h2>
-{% if nodes %}
-<table class="table">
-  <thead>
-    <th>Enroll secret</th>
-    <th>Created at</th>
-    <th>Last seen</th>
-  </thead>
-  <tbody>
-    {% for node in nodes %}
-    <tr>
-      <td>{{ node.enroll_secret }}</td>
-      <td>{{ node.created_at }}</td>
-      <td>{{ node.last_seen }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<div class="alert alert-warning">
-  <strong>Warning!</strong> No osquery instance linked to this machine.
-</div>
-{% endif %}
-
 <h2>Munki State</h2>
 {% if munki_state %}
 {% if munki_state.sha1sum %}

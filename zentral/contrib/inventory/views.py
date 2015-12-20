@@ -1,5 +1,4 @@
 from django.views import generic
-from zentral.contrib.osquery.models import Node
 from zentral.core.stores import frontend_store
 from .models import MachineSnapshot
 
@@ -8,7 +7,7 @@ class IndexView(generic.ListView):
     template_name = "inventory/machine_list.html"
 
     def get_queryset(self):
-        return MachineSnapshot.current().order_by('system_info__computer_name')
+        return MachineSnapshot.objects.current().order_by('system_info__computer_name')
 
     def get_context_data(self, **kwargs):
         context = super(IndexView, self).get_context_data(**kwargs)
@@ -21,7 +20,7 @@ class MachineView(generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super(MachineView, self).get_context_data(**kwargs)
-        ms = MachineSnapshot.objects.filter(mt_next__isnull=True).get(machine__serial_number=context['serial_number'])
+        ms = MachineSnapshot.objects.current().get(machine__serial_number=context['serial_number'])
         context['inventory'] = True
         context['machine_snapshot'] = ms
         context['business_unit'] = ms.business_unit
@@ -29,7 +28,6 @@ class MachineView(generic.TemplateView):
         context['system_info'] = ms.system_info
         context['os_version'] = ms.os_version
         context['links'] = []
-        context['nodes'] = Node.objects.filter(enroll_secret__icontains=context['serial_number'])
         try:
             from zentral.contrib.munki.models import MunkiState
             context['munki_state'] = MunkiState.objects.get(machine_serial_number=context['serial_number'])
