@@ -148,10 +148,12 @@ class EnrollView(BaseView):
             response_data = {'node_invalid': True}
         else:
             response_data = {'node_key': ms.reference}
+            data = {'action': action,
+                    'machine_snapshot': ms.serialize()}
             post_enrollment_event(ms.machine.serial_number,
                                   self.request.META.get("HTTP_USER_AGENT", ""),
                                   self.request.META.get("HTTP_X_REAL_IP", ""),
-                                  ms.serialize())
+                                  data)
         return JsonResponse(response_data)
 
 
