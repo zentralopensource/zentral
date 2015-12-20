@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 import json
 from django.core.urlresolvers import reverse
-from django.db import models, transaction, IntegrityError
+from django.db import models
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+from zentral.contrib.inventory.models import MachineSnapshot
 from . import enroll_secret_secret
 
 
@@ -11,61 +12,32 @@ class EnrollError(Exception):
     pass
 
 
-class NodeManager(models.Manager):
-    def enroll(self, enroll_secret):
-        try:
-            node = self.get(enroll_secret=enroll_secret)
-        except Node.DoesNotExist:
-            pass
-        else:
-            # Re-enrollment
-            return node, 're-enrollment'
-        try:
-            secret, method, value = enroll_secret.split('$', 2)
-        except ValueError:
-            raise EnrollError('Malformed enroll secret')
-        if not secret == enroll_secret_secret:
-            raise EnrollError('Invalid enroll secret secret')
-        if not method == 'SERIAL':
-            raise EnrollError('Unknown enroll secret method %s' % method)
-        node = Node(enroll_secret=enroll_secret)
-        for i in range(10):
-            node.key = get_random_string(64)
-            try:
-                with transaction.atomic():
-                    node.save()
-            except IntegrityError:
-                pass
-            else:
-                return node, 'enrollment'
-        else:
-            raise ValueError("10 key collisions")
+def enroll(enroll_secret):
+    # checks
+    try:
+        secret, method, value = enroll_secret.split('$', 2)
+    except ValueError:
+        raise EnrollError('Malformed enroll secret')
+    if not secret == enroll_secret_secret:
+        raise EnrollError('Invalid enroll secret secret')
+    if not method == 'SERIAL':
+        raise EnrollError('Unknown enroll secret method %s' % method)
 
-
-class Node(models.Model):
-    enroll_secret = models.CharField(max_length=100, unique=True)
-    key = models.CharField(max_length=100, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    last_seen = models.DateTimeField(auto_now_add=True)
-    objects = NodeManager()
-
-    def machine_serial_number(self):
-        secret, field, value = self.enroll_secret.split('$')
-        if field == 'SERIAL':
-            return value
-
-    def serialize(self):
-        node_d = {}
-        for f in self._meta.get_fields():
-            if f.concrete and (not f.is_relation or f.one_to_one or (f.many_to_one and f.related_model)):
-                val = getattr(self, f.name)
-                if isinstance(val, datetime):
-                    val = val.isoformat()
-                node_d[f.name] = val
-        msn = self.machine_serial_number()
-        if msn:
-            node_d['machine_serial_number'] = msn
-        return node_d
+    # enroll == create MachineSnapshot for this serial number and this source
+    serial_number = value
+    tree = {'source': 'zentral.contrib.osquery',
+            'reference': get_random_string(64),
+            'machine': {'serial_number': serial_number}}
+    ms, _ = MachineSnapshot.objects.commit(tree)
+    # TODO: check, but _ must be always true (because of the random reference)
+    try:
+        previous_ms = ms.mt_previous
+    except MachineSnapshot.DoesNotExist:
+        previous_ms = None
+    if previous_ms:
+        # ms with same source for same serial number existed
+        return ms, 're-enrollment'
+    return ms, 'enrollment'
 
 
 class DistributedQuery(models.Model):
@@ -80,8 +52,9 @@ class DistributedQuery(models.Model):
 
     def save(self, *args, **kwargs):
         super(DistributedQuery, self).save(*args, **kwargs)
-        for sn in set((n.machine_serial_number() for n in Node.objects.all())):
-            dqn, created = DistributedQueryNode.objects.get_or_create(distributed_query=self, machine_serial_number=sn)
+        for ms in MachineSnapshot.objects.current().select_related('machine').filter(source="zentral.contrib.osquery"):
+            DistributedQueryNode.objects.get_or_create(distributed_query=self,
+                                                       machine_serial_number=ms.machine.serial_number)
 
     def can_be_updated(self):
         return self.distributedquerynode_set.count() == 0

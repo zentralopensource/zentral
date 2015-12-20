@@ -5,10 +5,11 @@ from django.http import JsonResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
+from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.core.stores import stores
 from . import osquery_conf, probes
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
-from .models import Node, EnrollError, DistributedQuery, DistributedQueryNode
+from .models import EnrollError, enroll, DistributedQuery, DistributedQueryNode
 
 logger = logging.getLogger('zentral.contrib.osquery.views')
 
@@ -140,46 +141,47 @@ class BaseView(View):
 class EnrollView(BaseView):
     def do_post(self, data):
         try:
-            node, action = Node.objects.enroll(data['enroll_secret'])
+            ms, action = enroll(data['enroll_secret'])
         except (KeyError, EnrollError):
             logger.exception("Could not enroll node",
                              extra={'request': self.request})
             response_data = {'node_invalid': True}
         else:
-            response_data = {'node_key': node.key}
-            post_enrollment_event(node.machine_serial_number(),
+            response_data = {'node_key': ms.reference}
+            post_enrollment_event(ms.machine.serial_number,
                                   self.request.META.get("HTTP_USER_AGENT", ""),
                                   self.request.META.get("HTTP_X_REAL_IP", ""),
-                                  node.serialize())
+                                  ms.serialize())
         return JsonResponse(response_data)
 
 
 class BaseNodeView(BaseView):
     def do_post(self, data):
         try:
-            node = Node.objects.get(key=data['node_key'])
-        except (KeyError, Node.DoesNotExist):
+            ms = MachineSnapshot.objects.current().get(source="zentral.contrib.osquery",
+                                                       reference=data['node_key'])
+        except (KeyError, MachineSnapshot.DoesNotExist):
             return JsonResponse({'node_invalid': True})
         else:
-            post_request_event(node.machine_serial_number(),
+            post_request_event(ms.machine.serial_number,
                                self.user_agent,
                                self.ip,
                                self.request_type)
-            return self.do_post_with_node(node, data)
+            return self.do_post_with_ms(ms, data)
 
 
 class ConfigView(BaseNodeView):
     request_type = "config"
 
-    def do_post_with_node(self, node, data):
+    def do_post_with_ms(self, ms, data):
         return JsonResponse(osquery_conf)
 
 
 class DistributedReadView(BaseNodeView):
     request_type = "distributed_read"
 
-    def do_post_with_node(self, node, data):
-        machine_serial_number = node.machine_serial_number()
+    def do_post_with_ms(self, ms, data):
+        machine_serial_number = ms.machine.serial_number
         queries = {}
         if machine_serial_number:
             for dqn in DistributedQueryNode.objects.new_queries_with_serial_number(machine_serial_number):
@@ -191,10 +193,10 @@ class DistributedReadView(BaseNodeView):
 class DistributedWriteView(BaseNodeView):
     request_type = "distributed_write"
 
-    def do_post_with_node(self, node, data):
+    def do_post_with_ms(self, ms, data):
         for key, val in data.get('queries').items():
             dq_id = int(key.rsplit('_', 1)[-1])
-            sn = node.machine_serial_number()
+            sn = ms.machine.serial_number
             try:
                 dqn = DistributedQueryNode.objects.get(distributed_query__id=dq_id,
                                                        machine_serial_number=sn)
@@ -208,7 +210,7 @@ class DistributedWriteView(BaseNodeView):
 class LogView(BaseNodeView):
     request_type = "log"
 
-    def do_post_with_node(self, node, data):
-        post_events_from_osquery_log(node.machine_serial_number(),
+    def do_post_with_ms(self, ms, data):
+        post_events_from_osquery_log(ms.machine.serial_number,
                                      self.user_agent, self.ip, data)
         return JsonResponse({})
