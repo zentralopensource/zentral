@@ -1,3 +1,4 @@
+import copy
 import json
 from zentral.contrib.inventory.models import MachineSnapshot
 
@@ -12,6 +13,8 @@ class BaseInventory(object):
     def __init__(self, config_d):
         if not hasattr(self, 'name'):
             self.name = self.__module__.split('.')[-1]
+        config_d = copy.deepcopy(config_d)
+        config_d.pop('backend')
         self.source = {'module': self.__module__,
                        'name': self.name,
                        'config': config_d}
