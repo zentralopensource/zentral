@@ -25,7 +25,8 @@ def enroll(enroll_secret):
 
     # enroll == create MachineSnapshot for this serial number and this source
     serial_number = value
-    tree = {'source': 'zentral.contrib.osquery',
+    tree = {'source': {'module': 'zentral.contrib.osquery',
+                       'name': 'OSQuery'},
             'reference': get_random_string(64),
             'machine': {'serial_number': serial_number}}
     ms, _ = MachineSnapshot.objects.commit(tree)

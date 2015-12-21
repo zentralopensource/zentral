@@ -7,7 +7,6 @@ from zentral.core.exceptions import ImproperlyConfigured
 # If no machine found, not a problem.
 # Enroll_secret example : BLABLA$SERIAL$AZLKJZAENEAZLKJ13098
 
-
 def get_enroll_secret_secret(settings):
     try:
         return settings['apps']['zentral.contrib.osquery']['enroll_secret_secret']

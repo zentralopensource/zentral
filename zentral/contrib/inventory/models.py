@@ -1,15 +1,31 @@
+from django.contrib.postgres.fields import JSONField
 from django.db import models
 from zentral.utils.mt_models import AbstractMTObject, MTObjectManager
 
 
-class BusinessUnit(AbstractMTObject):
+class Source(AbstractMTObject):
+    module = models.TextField()
     name = models.TextField()
+    config = JSONField(blank=True, null=True)
+
+
+class Link(AbstractMTObject):
+    anchor_text = models.TextField()
+    url = models.URLField()
+
+
+class BusinessUnit(AbstractMTObject):
+    source = models.ForeignKey(Source)
     reference = models.TextField()
+    name = models.TextField()
+    links = models.ManyToManyField(Link)
 
 
 class MachineGroup(AbstractMTObject):
-    name = models.TextField()
+    source = models.ForeignKey(Source)
     reference = models.TextField()
+    name = models.TextField()
+    links = models.ManyToManyField(Link)
 
 
 class Machine(AbstractMTObject):
@@ -82,9 +98,10 @@ class MachineSnapshotManager(MTObjectManager):
 
 
 class MachineSnapshot(AbstractMTObject):
-    source = models.TextField(db_index=True)  # zentral.contrib.munki.postflight
+    source = models.ForeignKey(Source)
     reference = models.TextField(blank=True, null=True)
     machine = models.ForeignKey(Machine)
+    links = models.ManyToManyField(Link)
     business_unit = models.ForeignKey(BusinessUnit, blank=True, null=True)
     groups = models.ManyToManyField(MachineGroup)
     os_version = models.ForeignKey(OSVersion, blank=True, null=True)

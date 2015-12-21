@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<div class="row">
 <h1>
   {% if computer_name %}{{ computer_name }} / {% endif %}{{ serial_number }}
   <a class="btn btn-default" href="{% url 'inventory:machine_events' serial_number %}">View events</a>
@@ -9,19 +10,30 @@
 <ul class="nav nav-tabs">
   {% for ms in ms_list %}
   <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
-    <a href="#" data-tabclass="detailstab" data-tabid="details-{{ ms.id }}">{{ ms.source }}</a>
+    <a href="#" data-tabclass="detailstab" data-tabid="details-{{ ms.id }}">
+      {{ ms.source.name }}
+    </a>
   </li>
   {% endfor %}
 </ul>
+</div>
 
 {% for ms in ms_list %}
-<div class="detailstab" id="details-{{ ms.id }}"{% if not forloop.first %}style="display:none;"{% endif %}>
+<div class="row detailstab" id="details-{{ ms.id }}"{% if not forloop.first %}style="display:none;"{% endif %}>
+<div class="col-md-6">
 {% if ms.business_unit %}
 <h3>Business unit</h3>
 <dl class="dl-horizontal">
   <dt>Name</dt>
   <dd>{{ ms.business_unit.name }}</dd>
 </dl>
+<p>
+{% for link in ms.business_unit.links.all %}
+  <a href="{{ link.url }}" class="btn btn-default">
+    {{ ms.source.name }} - {{ link.anchor_text }}
+  </a>
+{% endfor %}
+</p>
 {% endif %}
 
 {% if ms.system_info %}
@@ -49,30 +61,46 @@
   <dd>{{ ms.os_version.build|default:"-" }}</dd>
 </dl>
 {% endif %}
-
+</div>
+<div class="col-md-6">
 {% if ms.groups.count %}
+<h3>Links</h3>
+<p>
+  {% for link in ms.links.all %}
+  <a href="{{ link.url }}" class="btn btn-default">{{ ms.source.name }} - {{ link.anchor_text }}</a>
+  {% endfor %}
+</p>
 <h3>Groups</h3>
 <table class="table table-condensed">
   <thead>
-    <th>Reference</th>
     <th>Name</th>
+    <th>Links</th>
   </thead>
   <tbody>
     {% for group in ms.groups.all %}
-    <tr><td>{{ group.reference }}</td><td>{{ group.name }}</td></tr>
+    <tr>
+      <td>{{ group.name }}</td>
+      <td>
+        {% for link in group.links.all %}
+        <a href="{{ link.url }}" class="btn btn-default">
+          {{ ms.source.name }} - {{ link.anchor_text }}
+        </a>
+        {% endfor %}
+      </td>
+    </tr>
     {% endfor %}
   </tbody>
 </table>
 {% endif %}
+</div>
 
+<div class="col-md-12">
 <dl class="dl-horizontal">
   <dt class="small" style="opacity:0.5">Last update</dt>
   <dd class="small" style="opacity:0.5">{{ ms.mt_created_at|date:'r'|default:'-' }}</dd>
 </dl>
+</div>
 
-{% if ms.link in links %}
-<p><a class="btn btn-default" href="{{ link }}">View in {{ name }}</a></p>
-{% endif %}
 </div>
 {% endfor %}
 
@@ -83,7 +111,9 @@
 <ul class="nav nav-tabs">
   {% for ms in osx_app_ms_list %}
   <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
-    <a href="#" data-tabclass="appstab" data-tabid="apps-{{ ms.id }}">{{ ms.source }}</a></li>
+    <a href="#" data-tabclass="appstab" data-tabid="apps-{{ ms.id }}">
+      {{ ms.source.name }}
+    </a>
   </li>
   {% endfor %}
 </ul>

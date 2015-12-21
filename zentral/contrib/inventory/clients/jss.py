@@ -30,52 +30,53 @@ class InventoryClient(BaseInventory):
     def _computer(self, jss_id):
         return self._make_get_query('/computers/id/{}'.format(jss_id))['computer']
 
-    def _reference_from_id(self, machine_id):
-        if machine_id is None:
-            raise TypeError
-        machine_id = str(machine_id)
-        if not machine_id:
-            raise ValueError
-        return "{}${}${}".format(self.source,
-                                 self.base_url,
-                                 machine_id)
+    def _machine_links_from_id(self, machine_id):
+        ll = []
+        for anchor_text, url_tmpl in (('Inventory', "{}/computers.html?id={}&o=r"),
+                                      ('Management', "{}/computers.html?id={}&o=r&v=management")):
+            ll.append({'anchor_text': anchor_text,
+                       'url': url_tmpl.format(self.base_url, machine_id)})
+        return ll
 
-    def _machine_id_from_reference(self, reference):
-        return int(reference.rsplit('$', 1)[-1])
-
-    def get_machine_link_from_reference(self, reference):
-        source, base_url, machine_id = reference.split('$')
-        assert(source == self.source)
-        return "{}/computers.html?id={}&o=r".format(base_url, machine_id)
+    def _group_links_from_id(self, group_id, is_smart):
+        if is_smart:
+            url_tmpl = "{}/smartComputerGroups.html?id={}&o=r&nav=c"
+        else:
+            url_tmpl = "{}/staticComputerGroups.html?id={}&o=r&nav=c"
+        return [{'anchor_text': 'Group',
+                 'url': url_tmpl.format(self.base_url, group_id)}]
 
     def get_machines(self):
         reverse_computer_groups = {}
         for computer_group in self._computergroups():
-            reverse_computer_groups[computer_group['name']] = computer_group['id']
+            reverse_computer_groups[computer_group['name']] = (computer_group['id'],
+                                                               computer_group['is_smart'])
         for machine in self._computers():
             machine_id = machine.pop('id')
             computer = self._computer(machine_id)
             # serial number, reference
-            ct = {'reference': self._reference_from_id(machine_id),
+            ct = {'reference': str(machine_id),
+                  'links': self._machine_links_from_id(machine_id),
                   'machine': {'serial_number': computer['general']['serial_number']}}
 
             # business unit
             site_id = computer['general']['site']['id']
             if site_id >= 0:
-                ct['business_unit'] = {'name': computer['general']['site']['name'],
-                                       'reference': self._reference_from_id(site_id)}
+                ct['business_unit'] = {'reference': str(site_id),
+                                       'name': computer['general']['site']['name']}
 
             # groups
             groups = []
             for computer_group_name in computer['groups_accounts']['computer_group_memberships']:
                 try:
-                    computer_group_id = reverse_computer_groups[computer_group_name]
+                    group_id, is_smart = reverse_computer_groups[computer_group_name]
                 except KeyError:
                     # TODO: Race ?
                     continue
                 else:
-                    groups.append({'reference': self._reference_from_id(computer_group_id),
-                                   'name': computer_group_name})
+                    groups.append({'reference': str(group_id),
+                                   'name': computer_group_name,
+                                   'links': self._group_links_from_id(group_id, is_smart)})
             if groups:
                 ct['groups'] = groups
 
@@ -112,16 +113,11 @@ class InventoryClient(BaseInventory):
 
     def add_machine_to_group(self, machine_snapshot, group_name):
         if isinstance(machine_snapshot, dict):
-            source, reference = machine_snapshot['source'], machine_snapshot['reference']
+            source, machine_id = machine_snapshot['source'], machine_snapshot['reference']
         else:
-            source, reference = machine_snapshot.source, machine_snapshot.reference
+            source, machine_id = machine_snapshot.source, machine_snapshot.reference
         assert(source == self.source)
-        machine_id = self._machine_id_from_reference(reference)
-        inv_ref_key = self._inv_reference_key()
-        if inv_ref_key not in md:
-            logger.error('Missing inventory reference')
-            return
-        machine_id = int(md[inv_ref_key])
+        machine_id = int(machine_id)
         machine_id_l = []
         try:
             group_d = self._make_get_query('/computergroups/name/{}'.format(group_name))

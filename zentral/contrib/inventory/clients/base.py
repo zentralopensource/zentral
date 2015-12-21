@@ -10,9 +10,11 @@ class InventoryError(Exception):
 
 class BaseInventory(object):
     def __init__(self, config_d):
-        self.source = self.__module__
         if not hasattr(self, 'name'):
-            self.name = self.source.split('.')[-1]
+            self.name = self.__module__.split('.')[-1]
+        self.source = {'module': self.__module__,
+                       'name': self.name,
+                       'config': config_d}
 
     def get_machines(self):
         raise NotImplementedError
@@ -21,6 +23,11 @@ class BaseInventory(object):
     def sync(self):
         for machine_d in self.get_machines():
             machine_d['source'] = self.source
+            for group_d in machine_d.get('groups', []):
+                group_d['source'] = self.source
+            business_unit_d = machine_d.get('business_unit', None)
+            if business_unit_d:
+                business_unit_d['source'] = self.source
             machine_snapshot, created = MachineSnapshot.objects.commit(machine_d)
             if created:
                 update_diff = machine_snapshot.update_diff()
@@ -31,29 +38,9 @@ class BaseInventory(object):
                     yield machine_snapshot, {'action': 'changed',
                                              'diff': update_diff}
 
-    def machines(self):
-        qs = MachineSnapshot.objects.select_related('machine',
-                                                    'business_unit',
-                                                    'os_version',
-                                                    'system_info')
-        qs = qs.prefetch_related('groups',
-                                 'osx_app_instances__app',
-                                 'osx_app_instances__signed_by')
-        return qs.filter(source=self.source,
-                         mt_next__isnull=True)
-
-    def machine(self, msn):
-        try:
-            return self.machines().get(machine__serial_number=msn)
-        except MachineSnapshot.DoesNotExist:
-            pass
-
-    def serializable_machine(self, msn):
-        machine = self.machine(msn)
-        return json.dumps(machine.serialize())
-
     # Metrics
     def _osx_apps_gauges(self):
+        raise NotImplementedError
         c = {}
         for ms in self.machines():
             for osx_app_instance in ms.osx_app_instances.all():
@@ -62,6 +49,7 @@ class BaseInventory(object):
         return c
 
     def _os_gauges(self):
+        raise NotImplementedError
         c = {}
         for ms in self.machines().filter(os_version__isnull=False):
             key = frozenset(ms.os_version.serialize().items())
@@ -69,6 +57,7 @@ class BaseInventory(object):
         return c
 
     def metrics(self):
+        raise NotImplementedError
         return [{'name': 'zentral_inventory_osx_apps_sum',
                  'help_text': 'Zentral inventory OSX apps versions',
                  'gauges': self._osx_apps_gauges()},

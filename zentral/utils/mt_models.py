@@ -1,6 +1,8 @@
+import copy
 from datetime import datetime
 import hashlib
 from django.core.exceptions import FieldDoesNotExist
+from django.contrib.postgres.fields import JSONField
 from django.db import models
 
 
@@ -71,6 +73,16 @@ def prepare_commit_tree(tree):
     tree['mt_hash'] = h.hexdigest()
 
 
+def cleanup_commit_tree(tree):
+    tree.pop('mt_hash', None)
+    for k, v in tree.items():
+        if isinstance(v, dict):
+            cleanup_commit_tree(v)
+        elif isinstance(v, list):
+            for subtree in v:
+                cleanup_commit_tree(subtree)
+
+
 class MTObjectManager(models.Manager):
     def commit(self, tree):
         prepare_commit_tree(tree)
@@ -84,9 +96,20 @@ class MTObjectManager(models.Manager):
                 if k == 'mt_hash':  # special excluded field
                     obj.mt_hash = v
                 elif isinstance(v, dict):
-                    f = obj.get_mt_field(k, many_to_one=True)
-                    fk_obj, _ = f.related_model.objects.commit(v)
-                    setattr(obj, k, fk_obj)
+                    try:
+                        f = obj.get_mt_field(k, many_to_one=True)
+                    except MTOError:
+                        # JSONField ???
+                        f = obj.get_mt_field(k)
+                        if isinstance(f, JSONField):
+                            t = copy.deepcopy(v)
+                            cleanup_commit_tree(t)
+                            setattr(obj, k, t)
+                        else:
+                            raise MTOError('Cannot set field "{}" to dict value'.format(k))
+                    else:
+                        fk_obj, _ = f.related_model.objects.commit(v)
+                        setattr(obj, k, fk_obj)
                 elif isinstance(v, list):
                     f = obj.get_mt_field(k, many_to_many=True)
                     l = []
@@ -170,6 +193,10 @@ class AbstractMTObject(models.Model):
                     v = [mto.hash() for mto in v]
                 else:
                     v = [mto.mt_hash for mto in v]
+            elif isinstance(f, JSONField) and v:
+                t = copy.deepcopy(v)
+                prepare_commit_tree(t)
+                v = t['mt_hash']
             h.add_field(f.name, v)
         return h.hexdigest()
 
@@ -182,7 +209,7 @@ class AbstractMTObject(models.Model):
                 v = [mto.serialize() for mto in v]
             elif isinstance(v, datetime):
                 v = v.isoformat()
-            elif v and not isinstance(v, (str, int)):
+            elif v and not isinstance(v, (str, int, dict)):
                 raise ValueError("Can't serialize {}.{} value of type {}".format(self._meta.object_name,
                                                                                  f.name, type(v)))
             if Hasher.is_empty_value(v):

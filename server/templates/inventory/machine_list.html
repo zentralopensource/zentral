@@ -2,20 +2,21 @@
 
 {% block content %}
 <h1>{{ object_list|length }} Machine{{ object_list|length|pluralize }}</h1>
-{% for serial_number, machine_str, ms_list in object_list %}
-<p>
-  <a href="{% url 'inventory:machine' serial_number %}">
-    {{ serial_number }}
-  </a>
-  - {{ machine_str }}
-</p>
 <table class="table">
-  {% for machine_snapshot in ms_list %}
+  {% for serial_number, machine_str, ms_list in object_list %}
   <tr>
-    <td>{{ machine_snapshot.source }}</td>
-    <td>{{ machine_snapshot.reference }}</td>
+    <td>
+      <a href="{% url 'inventory:machine' serial_number %}">
+        {{ serial_number }}
+      </a>
+    </td>
+    <td>{{ machine_str }}</td>
+    <td>
+      {% for machine_snapshot in ms_list %}
+      {{ machine_snapshot.source.name }}
+      {% endfor %}
+    </td>
   </tr>
   {% endfor %}
 </table>
-{% endfor %}
 {% endblock %}
