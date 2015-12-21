@@ -17,10 +17,11 @@ def get_api_secret(settings):
         secret = settings['api']['secret']
     except KeyError:
         err_msg = "Missing api.secret key in conf"
-    if not isinstance(secret, str):
-        err_msg = "api.secret must be a str"
-    if len(secret) < API_SECRET_MIN_LENGTH:
-        warnings.warn("Your api.secret has less than {} characters.".format(API_SECRET_MIN_LENGTH))
+    else:
+        if not isinstance(secret, str):
+            err_msg = "api.secret must be a str"
+        elif len(secret) < API_SECRET_MIN_LENGTH:
+            warnings.warn("Your api.secret has less than {} characters.".format(API_SECRET_MIN_LENGTH))
     if err_msg:
         raise ImproperlyConfigured(err_msg)
     return secret
