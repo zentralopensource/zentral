@@ -57,5 +57,8 @@ class EventProcessor(object):
                 action = actions[action_name]
             except KeyError:
                 logger.error('Unknown action %s', action_name)
-            else:
+                continue
+            try:
                 action.trigger(event, action_config_d)
+            except:
+                logger.exception("Could not trigger action %s", action_name)
