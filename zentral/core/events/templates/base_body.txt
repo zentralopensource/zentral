@@ -1,6 +1,6 @@
-{% for source, machine_snapshot in machine.items %}
-Source: {{ source }}
-Name: {{ machine_snapshot.get_machine_str }}
+{% for source, machine_snapshot in machine.items() %}
+Source: {{ source.name }}
+Name: {{ machine_snapshot.get_machine_str() }}
 {% endfor %}
 
 {% if event_id %}
