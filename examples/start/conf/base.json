@@ -1,9 +1,10 @@
 {
   "api": {
-    "tls_server_certs": "/zentral/examples/start/docker/tls/zentral_fullchain.crt"
+    "tls_server_certs": "/zentral/examples/start/docker/tls/zentral_fullchain.crt",
+    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
   },
   "django": {
-    "SECRET_KEY": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
+    "SECRET_KEY": "DJANGO SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
     "DEBUG": true,
     "ADMINS": [
       [
@@ -59,18 +60,10 @@
         }
       ]
     },
-    "zentral.contrib.osquery": {
-      "enroll_secret_secret": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
-    },
-    "zentral.contrib.jss": {
-      "api_secret": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
-    },
-    "zentral.contrib.munki": {
-      "api_secret": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
-    },
-    "zentral.contrib.santa": {
-      "machine_id_secret": "CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
-    }
+    "zentral.contrib.jss": {},
+    "zentral.contrib.munki": {},
+    "zentral.contrib.osquery": {},
+    "zentral.contrib.santa": {}
   },
   "middlewares": [
     "zentral.contrib.inventory.events.middlewares.MachineMiddleware"

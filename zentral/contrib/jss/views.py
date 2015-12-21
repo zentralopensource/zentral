@@ -1,24 +1,22 @@
 import logging
 import pprint
-from django.http import JsonResponse
-from zentral.utils.api_views import CheckAPISecretView
-from . import api_secret
+from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView
 from .events import post_jss_event
 
 logger = logging.getLogger('zentral.contrib.jss.views')
 
 
-class PostEventView(CheckAPISecretView):
-    api_secret = api_secret
+class PostEventView(SignedRequestHeaderJSONPostAPIView):
+    verify_module = "zentral.contrib.jss"
 
-    def post(self, request, *args, **kwargs):
+    def do_post(self, data):
         try:
-            msn = self.data['eventType']['eventObject']['serialNumber']
+            msn = data['eventType']['eventObject']['serialNumber']
         except KeyError:
-            logger.debug('JSS event w/o serial number\n%s', pprint.pformat(self.data))
+            logger.debug('JSS event w/o serial number\n%s', pprint.pformat(data))
         else:
             post_jss_event(msn,
                            self.user_agent,
                            self.ip,
-                           self.data)
-        return JsonResponse({})
+                           data)
+        return {}

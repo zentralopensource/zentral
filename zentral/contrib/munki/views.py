@@ -1,18 +1,16 @@
 import logging
 from datetime import timedelta
 from dateutil import parser
-from django.http import JsonResponse
 from django.utils import timezone
-from zentral.utils.api_views import CheckAPISecretView
-from . import api_secret
+from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView
 from .events import post_munki_events
 from .models import MunkiState
 
 logger = logging.getLogger('zentral.contrib.munki.views')
 
 
-class BaseView(CheckAPISecretView):
-    api_secret = api_secret
+class BaseView(SignedRequestHeaderJSONPostAPIView):
+    verify_module = "zentral.contrib.munki"
 
 
 class JobDetailsView(BaseView):
@@ -30,7 +28,7 @@ class JobDetailsView(BaseView):
             if munki_state.binaryinfo_last_seen:
                 last_binaryinfo_age = timezone.now() - munki_state.binaryinfo_last_seen
                 response_d['include_santa_binaryinfo'] = last_binaryinfo_age >= self.max_binaryinfo_age
-        return JsonResponse(response_d)
+        return response_d
 
 
 class PostJobView(BaseView):
@@ -59,4 +57,4 @@ class PostJobView(BaseView):
                                 'end_time': end_time})
         MunkiState.objects.update_or_create(machine_serial_number=msn,
                                             defaults=update_dict)
-        return JsonResponse({})
+        return {}

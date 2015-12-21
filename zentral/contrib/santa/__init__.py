@@ -1,22 +1,4 @@
-from zentral.conf import settings, probes as all_probes
-from zentral.core.exceptions import ImproperlyConfigured
-
-__all__ = ['machine_id_secret', 'santa_conf', 'probes', 'probes_lookup_dict']
-
-# MachineID: MachineIDSecret$Key$Val
-# MachineIDSecret to test if it is a valid request.
-# Key / Val to try to link with the machine.
-# If no machine found, not a problem.
-# MachineID example: TOTO$SERIAL$0123456789
-
-
-def get_machine_id_secret(settings):
-    try:
-        return settings['apps']['zentral.contrib.santa']['machine_id_secret']
-    except KeyError:
-        raise ImproperlyConfigured("Missing attribute 'machine_id_secret' in santa app settings")
-
-machine_id_secret = get_machine_id_secret(settings)
+from zentral.conf import probes as all_probes
 
 
 def build_santa_conf(all_probes):

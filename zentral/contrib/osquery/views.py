@@ -1,4 +1,3 @@
-import json
 import logging
 from django.core.urlresolvers import reverse_lazy
 from django.http import JsonResponse, Http404, HttpResponse
@@ -8,9 +7,10 @@ from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.core.stores import stores
-from . import enroll_secret_secret, osquery_conf, probes
+from zentral.utils.api_views import JSONPostAPIView, verify_secret, APIAuthError, make_secret
+from . import osquery_conf, probes
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
-from .models import EnrollError, enroll, DistributedQuery, DistributedQueryNode
+from .models import enroll, DistributedQuery, DistributedQueryNode
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 
 logger = logging.getLogger('zentral.contrib.osquery.views')
@@ -33,7 +33,9 @@ class InstallerPackageView(View):
             tls_server_certs = settings['api']['tls_server_certs']
         except KeyError:
             tls_server_certs = None
-        builder = OsqueryZentralEnrollPkgBuilder(request.get_host(), enroll_secret_secret, tls_server_certs)
+        builder = OsqueryZentralEnrollPkgBuilder(request.get_host(),
+                                                 make_secret("zentral.contrib.osquery"),
+                                                 tls_server_certs)
         filename, content, content_length = builder.build()
         response = HttpResponse(content, "application/octet-stream")
         response['Content-Length'] = content_length
@@ -140,81 +142,68 @@ class DownloadDistributedView(View):
         dq = get_object_or_404(DistributedQuery, pk=kwargs['pk'])
         return JsonResponse(dq.serialize())
 
+
 # API
 
 
-class BaseView(View):
-    def dispatch(self, request, *args, **kwargs):
-        self.user_agent = request.META.get("HTTP_USER_AGENT", "")
-        self.ip = request.META.get("HTTP_X_REAL_IP", "")
-        return super(BaseView, self).dispatch(request, *args, **kwargs)
+class EnrollView(JSONPostAPIView):
+    def check_data_secret(self, data):
+        data = verify_secret(data['enroll_secret'], "zentral.contrib.osquery")
+        self.machine_serial_number = data['machine_serial_number']
 
-    def post(self, request):
-        data = json.loads(request.body.decode('utf-8'))
-        return self.do_post(data)
-
-
-class EnrollView(BaseView):
     def do_post(self, data):
+        ms, action = enroll(self.machine_serial_number)
+        post_enrollment_event(ms.machine.serial_number,
+                              self.user_agent, self.ip,
+                              {'action': action})
+        return {'node_key': ms.reference}
+
+
+class BaseNodeView(JSONPostAPIView):
+    def check_data_secret(self, data):
         try:
-            ms, action = enroll(data['enroll_secret'])
-        except (KeyError, EnrollError):
-            logger.exception("Could not enroll node",
-                             extra={'request': self.request})
-            response_data = {'node_invalid': True}
-        else:
-            response_data = {'node_key': ms.reference}
-            data = {'action': action,
-                    'machine_snapshot': ms.serialize()}
-            post_enrollment_event(ms.machine.serial_number,
-                                  self.request.META.get("HTTP_USER_AGENT", ""),
-                                  self.request.META.get("HTTP_X_REAL_IP", ""),
-                                  data)
-        return JsonResponse(response_data)
+            self.ms = MachineSnapshot.objects.current().get(source__module='zentral.contrib.osquery',
+                                                            reference=data['node_key'])
+        except KeyError:
+            raise APIAuthError("Missing node_key")
+        except MachineSnapshot.DoesNotExist:
+            raise APIAuthError("Wrong node_key")
+        # TODO: Better verification ?
+        self.machine_serial_number = self.ms.machine.serial_number
 
-
-class BaseNodeView(BaseView):
     def do_post(self, data):
-        try:
-            ms = MachineSnapshot.objects.current().get(source="zentral.contrib.osquery",
-                                                       reference=data['node_key'])
-        except (KeyError, MachineSnapshot.DoesNotExist):
-            return JsonResponse({'node_invalid': True})
-        else:
-            post_request_event(ms.machine.serial_number,
-                               self.user_agent,
-                               self.ip,
-                               self.request_type)
-            return self.do_post_with_ms(ms, data)
+        post_request_event(self.machine_serial_number,
+                           self.user_agent, self.ip,
+                           self.request_type)
+        return self.do_node_post(data)
 
 
 class ConfigView(BaseNodeView):
     request_type = "config"
 
-    def do_post_with_ms(self, ms, data):
-        return JsonResponse(osquery_conf)
+    def do_node_post(self, data):
+        return osquery_conf
 
 
 class DistributedReadView(BaseNodeView):
     request_type = "distributed_read"
 
-    def do_post_with_ms(self, ms, data):
-        machine_serial_number = ms.machine.serial_number
+    def do_node_post(self, data):
         queries = {}
-        if machine_serial_number:
-            for dqn in DistributedQueryNode.objects.new_queries_with_serial_number(machine_serial_number):
+        if self.machine_serial_number:
+            for dqn in DistributedQueryNode.objects.new_queries_with_serial_number(self.machine_serial_number):
                 dq = dqn.distributed_query
                 queries['q_{}'.format(dq.id)] = dq.query
-        return JsonResponse({'queries': queries})
+        return {'queries': queries}
 
 
 class DistributedWriteView(BaseNodeView):
     request_type = "distributed_write"
 
-    def do_post_with_ms(self, ms, data):
+    def do_node_post(self, data):
         for key, val in data.get('queries').items():
             dq_id = int(key.rsplit('_', 1)[-1])
-            sn = ms.machine.serial_number
+            sn = self.machine_serial_number
             try:
                 dqn = DistributedQueryNode.objects.get(distributed_query__id=dq_id,
                                                        machine_serial_number=sn)
@@ -222,13 +211,13 @@ class DistributedWriteView(BaseNodeView):
                 logger.error("Unknown distributed query node query %s sn %s", dq_id, sn)
             else:
                 dqn.set_json_result(val)
-        return JsonResponse({})
+        return {}
 
 
 class LogView(BaseNodeView):
     request_type = "log"
 
-    def do_post_with_ms(self, ms, data):
-        post_events_from_osquery_log(ms.machine.serial_number,
+    def do_node_post(self, data):
+        post_events_from_osquery_log(self.machine_serial_number,
                                      self.user_agent, self.ip, data)
-        return JsonResponse({})
+        return {}

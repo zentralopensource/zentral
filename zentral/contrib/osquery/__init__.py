@@ -1,21 +1,5 @@
-from zentral.conf import settings, probes as all_probes
+from zentral.conf import probes as all_probes
 from zentral.core.exceptions import ImproperlyConfigured
-
-# Enroll_secret structure : EnrollSecretSecret$Key$Val
-# EnrollSecretSecret to test if it is a good request.
-# Key / Val to try to link with the machine.
-# If no machine found, not a problem.
-# Enroll_secret example : BLABLA$SERIAL$AZLKJZAENEAZLKJ13098
-
-def get_enroll_secret_secret(settings):
-    try:
-        return settings['apps']['zentral.contrib.osquery']['enroll_secret_secret']
-    except KeyError:
-        raise ImproperlyConfigured("Missing attribute 'enroll_secret_secret' in osquery app settings")
-
-enroll_secret_secret = get_enroll_secret_secret(settings)
-
-# The osquery conf for the connected daemons.
 
 
 def build_osquery_conf(all_probes):

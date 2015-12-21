@@ -5,26 +5,9 @@ from django.db import models
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineSnapshot
-from . import enroll_secret_secret
 
 
-class EnrollError(Exception):
-    pass
-
-
-def enroll(enroll_secret):
-    # checks
-    try:
-        secret, method, value = enroll_secret.split('$', 2)
-    except ValueError:
-        raise EnrollError('Malformed enroll secret')
-    if not secret == enroll_secret_secret:
-        raise EnrollError('Invalid enroll secret secret')
-    if not method == 'SERIAL':
-        raise EnrollError('Unknown enroll secret method %s' % method)
-
-    # enroll == create MachineSnapshot for this serial number and this source
-    serial_number = value
+def enroll(serial_number):
     tree = {'source': {'module': 'zentral.contrib.osquery',
                        'name': 'OSQuery'},
             'reference': get_random_string(64),
@@ -53,7 +36,7 @@ class DistributedQuery(models.Model):
 
     def save(self, *args, **kwargs):
         super(DistributedQuery, self).save(*args, **kwargs)
-        for ms in MachineSnapshot.objects.current().filter(source="zentral.contrib.osquery"):
+        for ms in MachineSnapshot.objects.current().filter(source__module="zentral.contrib.osquery"):
             DistributedQueryNode.objects.get_or_create(distributed_query=self,
                                                        machine_serial_number=ms.machine.serial_number)
 
