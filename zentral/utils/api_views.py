@@ -1,4 +1,5 @@
 import json
+import logging
 import warnings
 import zlib
 from django.core import signing
@@ -6,6 +7,8 @@ from django.http import HttpResponseForbidden, JsonResponse
 from django.views.generic import View
 from zentral.conf import settings
 from zentral.core.exceptions import ImproperlyConfigured
+
+logger = logging.getLogger('zentral.utils.api_views')
 
 
 API_SECRET_MIN_LENGTH = 32
@@ -102,6 +105,7 @@ class JSONPostAPIView(View):
         try:
             self.check_data_secret(data)
         except APIAuthError as auth_err:
+            logger.error("APIAuthError %s", auth_err, extra={'request': request})
             return HttpResponseForbidden(str(auth_err))
         response_data = self.do_post(data)
         return JsonResponse(response_data)

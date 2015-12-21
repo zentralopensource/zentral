@@ -161,13 +161,17 @@ class EnrollView(JSONPostAPIView):
 
 class BaseNodeView(JSONPostAPIView):
     def check_data_secret(self, data):
+        auth_err = None
         try:
             self.ms = MachineSnapshot.objects.current().get(source__module='zentral.contrib.osquery',
                                                             reference=data['node_key'])
         except KeyError:
-            raise APIAuthError("Missing node_key")
+            auth_err = "Missing node_key"
         except MachineSnapshot.DoesNotExist:
-            raise APIAuthError("Wrong node_key")
+            auth_err = "Wrong node_key"
+        if auth_err:
+            logger.error("APIAuthError %s", auth_err, extra=data)
+            raise APIAuthError(auth_err)
         # TODO: Better verification ?
         self.machine_serial_number = self.ms.machine.serial_number
 
