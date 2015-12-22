@@ -1,8 +1,13 @@
 #!/bin/sh
 ## postinstall
 
+POSTFLIGHT_SCRIPT=/usr/local/zentral/munki/postflight
+
 if [[ -d /usr/local/munki/postflight.d ]]; then
-  ln -s /usr/local/zentral/munki/postflight /usr/local/munki/postflight.d/zentral
+  ln -s $POSTFLIGHT_SCRIPT /usr/local/munki/postflight.d/zentral
 fi
+
+# call the postflight to send fresh and complete infos to zentral
+$POSTFLIGHT_SCRIPT auto
 
 exit 0
