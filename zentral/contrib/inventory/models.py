@@ -33,7 +33,7 @@ class Machine(AbstractMTObject):
 
 
 class OSVersion(AbstractMTObject):
-    name = models.TextField()
+    name = models.TextField(blank=True, null=True)
     major = models.PositiveIntegerField()
     minor = models.PositiveIntegerField()
     patch = models.PositiveIntegerField(blank=True, null=True)
@@ -41,7 +41,7 @@ class OSVersion(AbstractMTObject):
 
 
 class SystemInfo(AbstractMTObject):
-    computer_name = models.TextField()
+    computer_name = models.TextField(blank=True, null=True)
     hostname = models.TextField(blank=True, null=True)
     hardware_model = models.TextField(blank=True, null=True)
     hardware_serial = models.TextField(blank=True, null=True)
@@ -50,7 +50,7 @@ class SystemInfo(AbstractMTObject):
     cpu_brand = models.TextField(blank=True, null=True)
     cpu_physical_cores = models.PositiveIntegerField(blank=True, null=True)
     cpu_logical_cores = models.PositiveIntegerField(blank=True, null=True)
-    physical_memory = models.BigIntegerField()
+    physical_memory = models.BigIntegerField(blank=True, null=True)
 
 
 class Certificate(AbstractMTObject):
