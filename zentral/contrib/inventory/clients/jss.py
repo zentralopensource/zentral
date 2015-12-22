@@ -107,7 +107,7 @@ class InventoryClient(BaseInventory):
             for app_d in computer['software']['applications']:
                 osx_app_instances.append({'bundle_path': app_d['path'],
                                           'app': {'bundle_name': app_d['name'],
-                                                  'version_str': app_d['version']}})
+                                                  'bundle_version_str': app_d['version']}})
             ct['osx_app_instances'] = osx_app_instances
             yield ct
 
