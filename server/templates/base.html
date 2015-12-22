@@ -32,6 +32,7 @@
             <li {% if inventory %}class="active"{% endif %}><a href="{% url 'inventory:index' %}">Inventory{% if inventory %} <span class="sr-only">(current)</span>{% endif %}</a></li>
 	    <li {% if osquery %}class="active"{% endif %}><a href="{% url 'osquery:index' %}">Osquery{% if osquery %} <span class="sr-only">(current)</span>{% endif %}</a></li>
 	    <li {% if santa %}class="active"{% endif %}><a href="{% url 'santa:index' %}">Santa{% if santa %} <span class="sr-only">(current)</span>{% endif %}</a></li>
+	    <li {% if munki %}class="active"{% endif %}><a href="{% url 'munki:index' %}">Munki{% if munki %} <span class="sr-only">(current)</span>{% endif %}</a></li>
           </ul>
         </div><!-- /.navbar-collapse -->
       </div><!-- /.container -->

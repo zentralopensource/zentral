@@ -2,11 +2,36 @@ import logging
 from datetime import timedelta
 from dateutil import parser
 from django.utils import timezone
-from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView
+from django.views.generic import View, TemplateView
+from zentral.conf import settings
+from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView, make_secret
 from .events import post_munki_events
 from .models import MunkiState
+from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 
 logger = logging.getLogger('zentral.contrib.munki.views')
+
+
+
+class IndexView(TemplateView):
+    template_name = "munki/index.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(IndexView, self).get_context_data(**kwargs)
+        context['munki'] = True
+        return context
+
+
+class InstallerPackageView(View):
+    def post(self, request):
+        try:
+            tls_server_certs = settings['api']['tls_server_certs']
+        except KeyError:
+            tls_server_certs = None
+        builder = MunkiZentralEnrollPkgBuilder()
+        return builder.build_and_make_response(request.get_host(),
+                                               make_secret("zentral.contrib.munki"),
+                                               tls_server_certs)
 
 
 class BaseView(SignedRequestHeaderJSONPostAPIView):
@@ -14,11 +39,11 @@ class BaseView(SignedRequestHeaderJSONPostAPIView):
 
 
 class JobDetailsView(BaseView):
-    max_binaryinfo_age = timedelta(hours=1)
+    max_fileinfo_age = timedelta(hours=1)
 
-    def get(self, request, *args, **kwargs):
-        msn = kwargs['machine_serial_number']
-        response_d = {'include_santa_binaryinfo': True}
+    def do_post(self, data):
+        msn = data['machine_serial_number']
+        response_d = {'include_santa_fileinfo': True}
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=msn)
         except MunkiState.DoesNotExist:
@@ -26,17 +51,17 @@ class JobDetailsView(BaseView):
         else:
             response_d['last_seen_sha1sum'] = munki_state.sha1sum
             if munki_state.binaryinfo_last_seen:
-                last_binaryinfo_age = timezone.now() - munki_state.binaryinfo_last_seen
-                response_d['include_santa_binaryinfo'] = last_binaryinfo_age >= self.max_binaryinfo_age
+                last_fileinfo_age = timezone.now() - munki_state.binaryinfo_last_seen
+                response_d['include_santa_fileinfo'] = last_fileinfo_age >= self.max_fileinfo_age
         return response_d
 
 
 class PostJobView(BaseView):
-    def post(self, request, *args, **kwargs):
-        msn = self.data['machine']['serial_number']
+    def do_post(self, data):
+        msn = data['machine']['serial_number']
         reports = [(parser.parse(r.pop('start_time')),
                     parser.parse(r.pop('end_time')),
-                    r) for r in self.data.pop('reports')]
+                    r) for r in data.pop('reports')]
         # Events
         post_munki_events(msn,
                           self.user_agent,
@@ -45,7 +70,7 @@ class PostJobView(BaseView):
         # MunkiState
         update_dict = {'user_agent': self.user_agent,
                        'ip': self.ip}
-        if self.data.get('santa_binaryinfo_included', False):
+        if data.get('santa_fileinfo_included', False):
             update_dict['binaryinfo_last_seen'] = timezone.now()
         if reports:
             reports.sort()

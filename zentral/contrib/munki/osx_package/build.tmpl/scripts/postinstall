@@ -1,0 +1,8 @@
+#!/bin/sh
+## postinstall
+
+if [[ -d /usr/local/munki/postflight.d ]]; then
+  ln -s /usr/local/zentral/munki/postflight /usr/local/munki/postflight.d/zentral
+fi
+
+exit 0

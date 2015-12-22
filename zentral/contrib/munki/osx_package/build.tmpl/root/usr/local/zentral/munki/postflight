@@ -1,0 +1,353 @@
+#!/usr/bin/python
+import hashlib
+import json
+import os
+import plistlib
+import ssl
+import subprocess
+import sys
+import urllib2
+import zlib
+
+MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
+ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
+
+SAL_BUNDLE_ID = "com.salsoftware.sal"
+SAL_KEY_PREFERENCE = "enrolment_key"
+SAL_SERVER_PREFERENCE = "ServerURL"
+
+USER_AGENT = "Zentral/mnkpf 0.1"
+ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"
+ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"
+ZENTRAL_API_SECRET_HEADER = "Zentral-API-Secret"
+ZENTRAL_API_SECRET = "%API_SECRET%"
+
+SANTACTL = "/usr/local/bin/santactl"
+SYSTEM_PROFILER = "/usr/sbin/system_profiler"
+
+# SAL infos
+
+
+def get_sal_infos():
+    try:
+        from Foundation import (CFPreferencesCopyKeyList,
+                                kCFPreferencesAnyUser,
+                                kCFPreferencesCurrentHost,
+                                CFPreferencesCopyAppValue)
+        infos = {}
+        for key in CFPreferencesCopyKeyList(SAL_BUNDLE_ID, kCFPreferencesAnyUser, kCFPreferencesCurrentHost):
+            val = CFPreferencesCopyAppValue(key, SAL_BUNDLE_ID)
+            if val is not None:
+                infos[key] = val
+        return infos
+    except ImportError:
+        print "Could not import CFPreferencesCopyAppValue. Not on OSX ?"
+
+# OSX apps
+
+
+def get_santa_versions():
+    versions = {}
+    try:
+        stdout = subprocess.check_output([SANTACTL, "version"])
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        for line in stdout.splitlines():
+            component, version = (s.strip() for s in line.split('|'))
+            versions[component] = version
+    return versions
+
+
+def parse_santa_fileinfo_output(stdout, fileinfo):
+    signing_chain = None
+    current_issued_cert = None
+    current_cert = None
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        key, val = (s.strip() for s in line.split(':', 1))
+        # adapt key and val
+        key = key.lower().replace(' ', '_').replace('-', '_')
+        if val == 'Yes':
+            val = True
+        elif val == 'No':
+            val = False
+        # process lines
+        if key == 'signing_chain':
+            current_cert = {}
+        elif current_cert is None:
+            # the bundle infos
+            fileinfo[key] = val
+        else:
+            # the signing chain
+            if '.' in key:
+                if current_cert:
+                    if signing_chain is None:
+                        signing_chain = current_cert
+                    if current_issued_cert is not None:
+                        current_issued_cert['signed_by'] = current_cert
+                    current_issued_cert = current_cert
+                    current_cert = {}
+                key = key.split('_', 1)[-1]
+            current_cert[key] = val
+    if current_cert:
+        if signing_chain is None:
+            signing_chain = current_cert
+        if current_issued_cert is not None:
+            current_issued_cert['signed_by'] = current_cert
+    if signing_chain:
+        fileinfo['signing_chain'] = signing_chain
+
+
+def get_santa_fileinfo(bundle_path):
+    fileinfo = {}
+    try:
+        stdout = subprocess.check_output([SANTACTL, "fileinfo", bundle_path])
+    except subprocess.CalledProcessError:
+        pass
+    else:
+        parse_santa_fileinfo_output(stdout, fileinfo)
+    return fileinfo
+
+
+class ApplicationInventory(object):
+    APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
+
+    def __init__(self):
+        self.data = plistlib.readPlist(self.APPLICATION_INVENTORY)
+
+    def get_installed_apps(self, include_santa_fileinfo=False):
+        apps = []
+        if include_santa_fileinfo and not get_santa_versions():
+            # asked a full report but santa is not installed
+            include_santa_fileinfo = False
+        for app_d in self.data:
+            d = {'bundle_name': app_d['CFBundleName'],
+                 'bundle_id': app_d['bundleid'],
+                 'bundle_path': app_d['path'],
+                 'bundle_name': app_d['name'],
+                 'bundle_version_str': app_d['version']}
+            if include_santa_fileinfo:
+                d.update(get_santa_fileinfo(d['bundle_path']))
+            apps.append(d)
+        return include_santa_fileinfo, apps
+
+# Munki run reports
+
+
+class ManagedInstallReport(object):
+    def __init__(self, filename):
+        self.basename = os.path.basename(filename)
+        self.sha1sum = self._get_sha1_sum(filename)
+        self.data = plistlib.readPlist(filename)
+        self.start_time = self.data['StartTime']
+        self.end_time = self.data['EndTime']
+        try:
+            self.munki_version = self.data['MachineInfo']['munki_version']
+        except KeyError:
+            self.munki_version = None
+
+    @staticmethod
+    def _get_sha1_sum(filename):
+        sha1 = hashlib.sha1()
+        with open(filename, 'rb') as f:
+            # TODO: chunking if the file is big
+            sha1.update(f.read())
+        return sha1.hexdigest()
+
+    def _events(self):
+        events = [(self.start_time, {'type': 'start'})]
+        for ir in self.data['InstallResults']:
+            events.append((ir.pop('time').strftime('%Y-%m-%d %H:%M:%S +0000'),
+                           dict(ir, type='install')))
+        for rr in self.data['RemovalResults']:
+            events.append((rr.pop('time').strftime('%Y-%m-%d %H:%M:%S +0000'),
+                           dict(rr, type='removal')))
+        for err in self.data['Errors']:
+            events.append((self.end_time, {'type': 'error', 'message': err}))
+        for warn in self.data['Warnings']:
+            events.append((self.end_time, {'type': 'warning', 'message': warn}))
+        events.sort()
+        return events
+
+    def serialize(self):
+        d = {'basename': self.basename,
+             'sha1sum': self.sha1sum,
+             'run_type': self.data['RunType'],
+             'start_time': self.start_time,
+             'end_time': self.end_time,
+             'events': self._events()}
+        if self.munki_version:
+            d['munki_version'] = self.munki_version
+        return d
+
+
+def iter_manage_install_reports():
+    last_report = os.path.join(MANAGED_INSTALLS_DIR, 'ManagedInstallReport.plist')
+    if os.path.exists(last_report):
+        yield last_report
+    if os.path.isdir(ARCHIVES_DIR):
+        for filename in sorted(os.listdir(ARCHIVES_DIR), reverse=True):
+            yield os.path.join(ARCHIVES_DIR, filename)
+
+
+def build_reports_payload(last_seen=None):
+    payload = []
+    for filepath in iter_manage_install_reports():
+        mir = ManagedInstallReport(filepath)
+        if last_seen is not None and mir.sha1sum == last_seen:
+            break
+        payload.append(mir.serialize())
+    return payload
+
+# Machine infos
+
+
+class SystemProfilerReport(object):
+    def __init__(self):
+        p = subprocess.Popen([SYSTEM_PROFILER, '-xml',
+                              'SPHardwareDataType',
+                              'SPSoftwareDataType',
+                              'SPStorageDataType'],
+                             stdout=subprocess.PIPE)
+        stdoutdata, _ = p.communicate()
+        self.data = plistlib.readPlistFromString(stdoutdata)
+
+    def _get_data_type(self, data_type):
+        for subdata in self.data:
+            if subdata['_dataType'] == data_type:
+                return subdata
+
+    def _get_hd(self):
+        data = self._get_data_type('SPStorageDataType')
+        hd_number = hd_space = hd_total = hd_encrypted = hd_usage = encryption_status = 0
+        for item_d in data['_items']:
+            if item_d.get('physical_drive', {}).get('is_internal_disk', None) == 'no':
+                # skip dmg, ... TODO: TEST !
+                continue
+            hd_number += 1
+            hd_space += item_d['size_in_bytes']
+            hd_total += item_d['size_in_bytes'] - item_d['free_space_in_bytes']
+            lv_info_d = item_d.get('com.apple.corestorage.lv', None)
+            if lv_info_d:
+                if lv_info_d.get('com.apple.corestorage.lv.encrypted', None) == 'yes' and\
+                   lv_info_d.get('com.apple.corestorage.lv.conversionState', None) == 'Complete':
+                    # approximation. could use 'com.apple.corestorage.lv.bytesConverted'
+                    # but it seems it is always less than size_in_bytes and could lead to 99%
+                    # encryption status.
+                    # TODO: better !
+                    hd_encrypted += item_d['size_in_bytes']
+        if hd_space:
+            hd_usage = hd_total * 100 / hd_space
+            encryption_status = hd_encrypted * 100 / hd_space
+        return {'hd_number': hd_number,
+                'hd_space': hd_space,
+                'hd_total': hd_total,
+                'hd_encrypted': hd_encrypted,
+                'hd_usage': hd_usage,
+                'encryption_status': encryption_status}
+
+    def _get_hw(self):
+        data = self._get_data_type('SPHardwareDataType')
+        if len(data['_items']) != 1:
+            raise ValueError('0 or more than one item in a SPHardwareDataType output!')
+        item_d = data['_items'][0]
+        hw_d = {'make': 'Apple',  # TODO: always ???
+                'model': item_d['machine_model'],
+                'name': item_d['machine_name'],
+                'serial_number': item_d['serial_number'],
+                'processor_type': item_d['cpu_type']}
+        # RAM
+        ram_amount, ram_amount_unit = item_d['physical_memory'].split()
+        if ram_amount_unit == 'GB':
+            ram_multiplicator = 2**30
+        elif ram_amount_unit == 'MB':
+            ram_multiplicator = 2**20
+        else:
+            raise ValueError('Unknown ram amount unit %s' % ram_amount_unit)
+        hw_d['ram_total'] = int(ram_amount) * ram_multiplicator
+        # CPU SPEED
+        cpu_speed, cpu_speed_unit = item_d['current_processor_speed'].split()
+        if cpu_speed_unit == 'GHz':
+            cpu_speed_multiplicator = 10**3
+        elif cpu_speed_unit == 'MHz':
+            cpu_speed_multiplicator = 10**0
+        else:
+            raise ValueError('Unknown cpu speed unit %s' % cpu_speed_unit)
+        hw_d['processor_speed'] = int(float(cpu_speed.replace(',', '.')) * cpu_speed_multiplicator)
+        return hw_d
+
+    def _get_soft(self):
+        data = self._get_data_type('SPSoftwareDataType')
+        if len(data['_items']) != 1:
+            raise ValueError('0 or more than one item in a SPSoftwareDataType output!')
+        item_d = data['_items'][0]
+        os_version = item_d['os_version']
+        os_name, os_version, os_build = os_version.rsplit(' ', 2)
+        os_build = os_build.strip('(').strip(')')
+        return {'os_name': os_name,
+                'os_version': os_version,
+                'os_build': os_build}
+
+    def get_machine_d(self):
+        machine_d = self._get_hd()
+        machine_d.update(self._get_hw())
+        machine_d.update(self._get_soft())
+        return machine_d
+
+# Zentral Munki API calls
+
+
+def make_api_request(url, data=None):
+    req = urllib2.Request(url)
+    req.add_header('User-Agent', USER_AGENT)
+    req.add_header(ZENTRAL_API_SECRET_HEADER, ZENTRAL_API_SECRET)
+    if data:
+        data = json.dumps(data)
+        req.add_header('Content-Type', 'application/json')
+        data = zlib.compress(data, 9)
+        req.add_header('Content-Encoding', 'gzip')
+    if ZENTRAL_API_SERVER_CERTIFICATE:
+        ctx = ssl.create_default_context(cafile=ZENTRAL_API_SERVER_CERTIFICATE)
+    else:
+        ctx = ssl.create_default_context()
+    response = urllib2.urlopen(req, data=data, context=ctx)
+    return json.load(response)
+
+
+def get_job_details(machine_serial_number):
+    url = "{}/job_details/".format(ZENTRAL_API_ENDPOINT.strip('/'))
+    return make_api_request(url, {'machine_serial_number': machine_serial_number})
+
+
+def post_job(data, compress=True):
+    url = "{}/post_job/".format(ZENTRAL_API_ENDPOINT.strip('/'))
+    return make_api_request(url, data)
+
+# Main
+
+if __name__ == '__main__':
+    run_type = None
+    try:
+        run_type = sys.argv[1]
+    except IndexError:
+        pass
+    spr = SystemProfilerReport()
+    data = {'machine': spr.get_machine_d()}
+    sal_infos = get_sal_infos()
+    if sal_infos is not None:
+        data['sal_infos'] = sal_infos
+    msn = data['machine']['serial_number']
+    job_details = get_job_details(msn)
+    ai = ApplicationInventory()
+    include_santa_fileinfo = run_type == 'auto' and job_details['include_santa_fileinfo']
+    data['santa_fileinfo_included'], data['osx_apps'] = ai.get_installed_apps(include_santa_fileinfo)
+    last_seen_sha1sum = job_details.get('last_seen_sha1sum', None)
+    data['reports'] = build_reports_payload(last_seen_sha1sum)
+    post_job(data)
+    print ('Zentral postflight job OK - '
+           'run type %s, fileinfo %s, last sha1sum %s') % (run_type or "-",
+                                                           include_santa_fileinfo,
+                                                           (last_seen_sha1sum or "-")[:7])

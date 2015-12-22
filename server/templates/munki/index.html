@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<form action="{% url 'munki:installer_package' %}" method="POST">{% csrf_token %}
+  <button class="btn btn-default" type="submit">Download enrollment pkg</button>
+</form>
+{% endblock %}
