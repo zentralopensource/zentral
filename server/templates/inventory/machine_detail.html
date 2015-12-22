@@ -41,11 +41,23 @@
 <h3>System info</h3>
 <dl class="dl-horizontal">
   <dt>Hardware model</dt>
-  <dd>{{ ms.system_info.hardware_model }}</dd>
+  <dd>{{ system_info.hardware_model }}</dd>
+  {% if system_info.cpu_brand %}
+  <dt>CPU brand</dt>
+  <dd>{{ system_info.cpu_brand }}</dd>
+  {% endif %}
+  {% if system_info.cpu_type %}
   <dt>CPU type</dt>
-  <dd>{{ ms.system_info.cpu_type }}</dd>
+  <dd>{{ system_info.cpu_type }}</dd>
+  {% endif %}
+  {% if system_info.cpu_physical_cores %}
   <dt>CPU physical cores</dt>
-  <dd>{{ ms.system_info.cpu_physical_cores|default:"-" }}</dd>
+  <dd>{{ system_info.cpu_physical_cores }}</dd>
+  {% endif %}
+  {% if system_info.cpu_physical_cores %}
+  <dt>CPU logical cores</dt>
+  <dd>{{ system_info.cpu_logical_cores }}</dd>
+  {% endif %}
   <dt>Physical memory</dt>
   <dd>{{ ms.system_info.physical_memory|filesizeformat }}</dd>
 </dl>

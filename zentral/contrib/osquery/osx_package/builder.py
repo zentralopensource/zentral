@@ -5,6 +5,7 @@ from zentral.utils.osx_package import PackageBuilder
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
 class OsqueryZentralEnrollPkgBuilder(PackageBuilder):
     package_name = "zentral_osquery_enroll.pkg"
     build_tmpl_dir = os.path.join(BASE_DIR, "build.tmpl")

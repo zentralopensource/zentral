@@ -1,4 +1,5 @@
 import logging
+from dateutil import parser
 from django.core.urlresolvers import reverse_lazy
 from django.http import JsonResponse, Http404
 from django.shortcuts import get_object_or_404
@@ -8,7 +9,7 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.core.stores import stores
 from zentral.utils.api_views import JSONPostAPIView, verify_secret, APIAuthError, make_secret
-from . import osquery_conf, probes
+from . import osquery_conf, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
 from .models import enroll, DistributedQuery, DistributedQueryNode
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
@@ -218,6 +219,29 @@ class LogView(BaseNodeView):
     request_type = "log"
 
     def do_node_post(self, data):
+        inventory_results = []
+        other_results = []
+        for r in data.pop('data'):
+            if r.get('name', None) == DEFAULT_ZENTRAL_INVENTORY_QUERY:
+                inventory_results.append((parser.parse(r['calendarTime']), r['snapshot']))
+            else:
+                other_results.append(r)
+        data['data'] = other_results
+        if inventory_results:
+            inventory_results.sort(reverse=True)
+            last_snapshot = inventory_results[0][1]
+            tree = {'source': {'module': self.ms.source.module,
+                               'name': self.ms.source.name},
+                    'machine': {'serial_number': self.ms.machine.serial_number},
+                    'reference': self.ms.reference}
+            for t in last_snapshot:
+                table_name = t.pop('table_name')
+                if table_name == 'os_version':
+                    tree['os_version'] = t
+                elif table_name == 'system_info':
+                    t.pop('uuid')
+                    tree['system_info'] = t
+            MachineSnapshot.objects.commit(tree)
         post_events_from_osquery_log(self.machine_serial_number,
                                      self.user_agent, self.ip, data)
         return {}
