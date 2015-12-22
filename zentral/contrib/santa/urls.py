@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     # django admin
     url(r'^$', views.IndexView.as_view(), name='index'),
+    url(r'^installer_package/$', views.InstallerPackageView.as_view(), name='installer_package'),
     url(r'^probes/(?P<probe_key>[\S ]+)/$', views.ProbeView.as_view(), name='probe'),
     # API
     url(r'^preflight/(?P<machine_id>\S+)$', csrf_exempt(views.PreflightView.as_view()), name='preflight'),

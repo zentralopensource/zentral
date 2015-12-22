@@ -1,11 +1,14 @@
 import logging
 from django.core.urlresolvers import reverse
 from django.http import Http404
-from django.views.generic import TemplateView
+from django.views.generic import View, TemplateView
+from zentral.conf import settings
+from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.core.stores import stores
-from zentral.utils.api_views import SignedRequestJSONPostAPIView
+from zentral.utils.api_views import SignedRequestJSONPostAPIView, make_secret
 from . import santa_conf, probes
 from .events import post_santa_events, post_santa_preflight
+from .osx_package.builder import SantaZentralEnrollPkgBuilder
 
 logger = logging.getLogger('zentral.contrib.santa.views')
 
@@ -18,6 +21,18 @@ class IndexView(TemplateView):
         context['santa'] = True
         context['probes'] = probes
         return context
+
+
+class InstallerPackageView(View):
+    def post(self, request):
+        try:
+            tls_server_certs = settings['api']['tls_server_certs']
+        except KeyError:
+            tls_server_certs = None
+        builder = SantaZentralEnrollPkgBuilder()
+        return builder.build_and_make_response(request.get_host(),
+                                               make_secret("zentral.contrib.santa"),
+                                               tls_server_certs)
 
 
 class ProbeView(TemplateView):
@@ -84,18 +99,32 @@ class BaseView(SignedRequestJSONPostAPIView):
     verify_module = "zentral.contrib.santa"
 
     def get_request_secret(self, request, *args, **kwargs):
-        return kwargs['machine_id']
+        self.machine_id = kwargs['machine_id']
+        return self.machine_id
 
 
 class PreflightView(BaseView):
     def do_post(self, data):
-        if self.machine_serial_number != data['serial_num']:
-            raise ValueError('Machine serial numbers do not match %s %s' % (self.machine_serial_number,
-                                                                            data['serial_num']))
-        post_santa_preflight(self.machine_serial_number,
+        machine_serial_number = data['serial_num']
+        post_santa_preflight(machine_serial_number,
                              self.user_agent,
                              self.ip,
                              data)
+        major, minor, patch = (int(s) for s in data['os_version'].split('.'))
+        tree = {'source': {'module': 'zentral.contrib.santa',
+                           'name': 'Santa',
+                           },
+                'reference': self.machine_id,
+                'machine': {'serial_number': machine_serial_number},
+                'os_version': {'name': 'Mac OS X',
+                               'major': major,
+                               'minor': minor,
+                               'patch': patch,
+                               'build': data['os_build'],
+                               },
+                'system_info': {'computer_name': data['hostname']},
+                }
+        ms, created = MachineSnapshot.objects.commit(tree)
         return {'BatchSize': 20,  # TODO: ???
                 'UploadLogsUrl': 'https://{host}{path}'.format(host=self.request.get_host(),
                                                                path=reverse('santa:logupload',
@@ -109,7 +138,15 @@ class RuleDownloadView(BaseView):
 
 class EventUploadView(BaseView):
     def do_post(self, data):
-        post_santa_events(self.machine_serial_number,
+        try:
+            ms = MachineSnapshot.objects.current().get(source__module='zentral.contrib.santa',
+                                                       reference=self.machine_id)
+        except MachineSnapshot.DoesNotExist:
+            machine_serial_number = "UNKNOWN"
+            logger.error("Machine ID not found", extra={'request': self.request})
+        else:
+            machine_serial_number = ms.machine.serial_number
+        post_santa_events(machine_serial_number,
                           self.user_agent,
                           self.ip,
                           data)

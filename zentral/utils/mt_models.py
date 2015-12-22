@@ -124,7 +124,7 @@ class MTObjectManager(models.Manager):
             for k, l in m2m_fields:
                 setattr(obj, k, l)
             if not obj.hash(recursive=False) == obj.mt_hash:
-                raise MTOError('Hash missmatch!!!')
+                raise MTOError('Obj {} Hash missmatch!!!'.format(obj))
             created = True
         return obj, created
 

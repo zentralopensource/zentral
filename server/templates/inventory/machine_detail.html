@@ -36,7 +36,8 @@
 </p>
 {% endif %}
 
-{% if ms.system_info %}
+{% with ms.system_info as system_info %}
+{% if system_info.hardware_model or system_info.cpu_type or system_info.cpu_physical_cores or system_info.physical_memory %}
 <h3>System info</h3>
 <dl class="dl-horizontal">
   <dt>Hardware model</dt>
@@ -49,6 +50,7 @@
   <dd>{{ ms.system_info.physical_memory|filesizeformat }}</dd>
 </dl>
 {% endif %}
+{% endwith %}
 
 {% if ms.os_version %}
 <h3>OS</h3>
