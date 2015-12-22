@@ -4,6 +4,7 @@ from dateutil import parser
 from django.utils import timezone
 from django.views.generic import View, TemplateView
 from zentral.conf import settings
+from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView, make_secret
 from .events import post_munki_events
 from .models import MunkiState
@@ -56,9 +57,29 @@ class JobDetailsView(BaseView):
         return response_d
 
 
+def clean_certs_datetime(tree):
+    for k, v in tree.items():
+        if k == 'valid_from' or k == 'valid_until':
+            tree[k] = parser.parse(v)
+        elif isinstance(v, list):
+            for d in v:
+                clean_certs_datetime(d)
+        elif isinstance(v, dict):
+            clean_certs_datetime(v)
+
+
 class PostJobView(BaseView):
     def do_post(self, data):
-        msn = data['machine']['serial_number']
+        ms_tree = data['machine_snapshot']
+        ms_tree['source'] = {'module': 'zentral.contrib.munki',
+                             'name': 'Munki'}
+        ms_tree['reference'] = ms_tree['machine']['serial_number']
+        if data['santa_fileinfo_included']:
+            clean_certs_datetime(ms_tree)
+            ms, created = MachineSnapshot.objects.commit(ms_tree)
+            msn = ms.machine.serial_number
+        else:
+            msn = ms_tree['reference']
         reports = [(parser.parse(r.pop('start_time')),
                     parser.parse(r.pop('end_time')),
                     r) for r in data.pop('reports')]

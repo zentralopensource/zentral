@@ -55,10 +55,10 @@ class SystemInfo(AbstractMTObject):
 
 class Certificate(AbstractMTObject):
     common_name = models.TextField()
-    organization = models.TextField()
-    organizational_unit = models.TextField()
-    sha1 = models.CharField(max_length=40)
-    sha256 = models.CharField(max_length=64, db_index=True)
+    organization = models.TextField(blank=True, null=True)
+    organizational_unit = models.TextField(blank=True, null=True)
+    sha_1 = models.CharField(max_length=40)
+    sha_256 = models.CharField(max_length=64, db_index=True)
     valid_from = models.DateTimeField()
     valid_until = models.DateTimeField()
     signed_by = models.ForeignKey('self', blank=True, null=True)
@@ -67,16 +67,16 @@ class Certificate(AbstractMTObject):
 class OSXApp(AbstractMTObject):
     bundle_id = models.TextField(db_index=True, blank=True, null=True)
     bundle_name = models.TextField(db_index=True, blank=True, null=True)
-    version = models.TextField(blank=True, null=True)
-    version_str = models.TextField(blank=True, null=True)
+    bundle_version = models.TextField(blank=True, null=True)
+    bundle_version_str = models.TextField(blank=True, null=True)
 
 
 class OSXAppInstance(AbstractMTObject):
     app = models.ForeignKey(OSXApp)
     bundle_path = models.TextField(blank=True, null=True)
     path = models.TextField(blank=True, null=True)
-    sha1 = models.CharField(max_length=40, blank=True, null=True)
-    sha256 = models.CharField(max_length=64, db_index=True, blank=True, null=True)
+    sha_1 = models.CharField(max_length=40, blank=True, null=True)
+    sha_256 = models.CharField(max_length=64, db_index=True, blank=True, null=True)
     type = models.TextField(blank=True, null=True)
     signed_by = models.ForeignKey(Certificate, blank=True, null=True)
 

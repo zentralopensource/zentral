@@ -126,7 +126,7 @@
   <thead>
     <th>Bundle ID</th>
     <th>Bundle Name</th>
-    <th>Version String</th>
+    <th>Bundle Version Str</th>
     <th>Bundle Path</th>
   </thead>
   <tbody>
@@ -135,7 +135,7 @@
     <tr>
       <td>{{ app.bundle_id|default:"" }}</td>
       <td>{{ app.bundle_name }}</td>
-      <td>{{ app.version_str }}</td>
+      <td>{{ app.bundle_version_str }}</td>
       <td>{{ osx_app_instance.bundle_path }}</td>
     </tr>
     {% endwith %}
