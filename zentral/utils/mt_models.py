@@ -28,7 +28,7 @@ class Hasher(object):
         elif isinstance(v, int):
             v = str(v)
         elif isinstance(v, datetime):
-            v = datetime.isoformat()
+            v = v.isoformat()
         elif isinstance(v, list):
             assert(all([isinstance(e, str) and len(e) == 40 for e in v]))
         elif not isinstance(v, str):
