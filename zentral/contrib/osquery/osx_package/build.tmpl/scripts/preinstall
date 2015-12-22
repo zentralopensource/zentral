@@ -8,12 +8,17 @@ OSQUERY_ENROLL_SECRET_PATH="$ZENTRAL_OSQUERY_ROOT/enroll_secret.txt"
 ## unload com.facebook.osqueryd
 sudo /bin/launchctl unload -w "/Library/LaunchDaemons/com.facebook.osqueryd.plist" > /dev/null
 
-# detect client device serial_number
-CLIENT_ID=$(/usr/sbin/system_profiler SPHardwareDataType | awk '/Serial/ {print $4}')
+# delete existing osquery DB to force enrollment
+if [[ -d "$OSQUERY_ROCKDB_PATH" ]]; then
+  rm -rf "$OSQUERY_ROCKDB_PATH"
+fi
 
 # create directory for osquery and rocksDB
 /bin/mkdir -p "$OSQUERY_ROCKDB_PATH"
 /usr/sbin/chown -R root:admin "$ZENTRAL_OSQUERY_ROOT"
+
+# detect client device serial_number
+CLIENT_ID=$(/usr/sbin/system_profiler SPHardwareDataType | awk '/Serial/ {print $4}')
 
 # create enrollment file from a secret, insert clients serial_number as ID
 echo "%ENROLL_SECRET_SECRET%\$SERIAL\$${CLIENT_ID}" > "$OSQUERY_ENROLL_SECRET_PATH"
