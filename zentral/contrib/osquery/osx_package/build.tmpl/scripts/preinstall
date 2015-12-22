@@ -2,19 +2,19 @@
 ## Preinstall script
 
 ZENTRAL_OSQUERY_ROOT="/usr/local/zentral/osquery"
-OSQUERY_ROCKDB_PATH="$ZENTRAL_OSQUERY_ROOT/db"
+OSQUERY_ROCKSDB_PATH="$ZENTRAL_OSQUERY_ROOT/db"
 OSQUERY_ENROLL_SECRET_PATH="$ZENTRAL_OSQUERY_ROOT/enroll_secret.txt"
 
 ## unload com.facebook.osqueryd
 sudo /bin/launchctl unload -w "/Library/LaunchDaemons/com.facebook.osqueryd.plist" > /dev/null
 
 # delete existing osquery DB to force enrollment
-if [[ -d "$OSQUERY_ROCKDB_PATH" ]]; then
-  rm -rf "$OSQUERY_ROCKDB_PATH"
+if [[ -d "$OSQUERY_ROCKSDB_PATH" ]]; then
+  rm -rf "$OSQUERY_ROCKSDB_PATH"
 fi
 
 # create directory for osquery and rocksDB
-/bin/mkdir -p "$OSQUERY_ROCKDB_PATH"
+/bin/mkdir -p "$OSQUERY_ROCKSDB_PATH"
 /usr/sbin/chown -R root:admin "$ZENTRAL_OSQUERY_ROOT"
 
 # detect client device serial_number
