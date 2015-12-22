@@ -1,6 +1,6 @@
 import logging
 from django.core.urlresolvers import reverse_lazy
-from django.http import JsonResponse, Http404, HttpResponse
+from django.http import JsonResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
@@ -33,14 +33,10 @@ class InstallerPackageView(View):
             tls_server_certs = settings['api']['tls_server_certs']
         except KeyError:
             tls_server_certs = None
-        builder = OsqueryZentralEnrollPkgBuilder(request.get_host(),
-                                                 make_secret("zentral.contrib.osquery"),
-                                                 tls_server_certs)
-        filename, content, content_length = builder.build()
-        response = HttpResponse(content, "application/octet-stream")
-        response['Content-Length'] = content_length
-        response['Content-Disposition'] = 'attachment; filename="{}"'.format(filename)
-        return response
+        builder = OsqueryZentralEnrollPkgBuilder()
+        return builder.build_and_make_response(request.get_host(),
+                                               make_secret("zentral.contrib.osquery"),
+                                               tls_server_certs)
 
 
 class ProbeView(TemplateView):
