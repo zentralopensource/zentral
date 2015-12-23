@@ -81,6 +81,12 @@ class OSXAppInstance(AbstractMTObject):
     signed_by = models.ForeignKey(Certificate, blank=True, null=True)
 
 
+class TeamViewer(AbstractMTObject):
+    teamviewer_id = models.TextField(blank=False, null=False)
+    release = models.TextField(blank=True, null=True)
+    unattended = models.NullBooleanField(blank=True, null=True)
+
+
 class MachineSnapshotManager(MTObjectManager):
     def commit(self, tree):
         obj, created = super().commit(tree)
@@ -107,6 +113,7 @@ class MachineSnapshot(AbstractMTObject):
     os_version = models.ForeignKey(OSVersion, blank=True, null=True)
     system_info = models.ForeignKey(SystemInfo, blank=True, null=True)
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
+    teamviewer = models.ForeignKey(TeamViewer, blank=True, null=True)
     mt_next = models.OneToOneField('self', blank=True, null=True, related_name="mt_previous")
 
     objects = MachineSnapshotManager()

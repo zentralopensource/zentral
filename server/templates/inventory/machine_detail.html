@@ -84,6 +84,17 @@
   <a href="{{ link.url }}" class="btn btn-default">{{ ms.source.name }} - {{ link.anchor_text }}</a>
   {% endfor %}
 </p>
+{% if ms.teamviewer %}
+<h3>TeamViewer</h3>
+<dl class="dl-horizontal">
+  <dt>ID</dt>
+  <dd><a href="http://start.teamviewer.com/{{ ms.teamviewer.teamviewer_id }}">{{ ms.teamviewer.teamviewer_id }}</a></dd>
+  <dt>Release</dt>
+  <dd>{{ ms.teamviewer.release }}</dd>
+  <dt>Unattended</dt>
+  <dd>{{ ms.teamviewer|yesno }}</dd>
+</dl>
+{% endif %}
 <h3>Groups</h3>
 <table class="table table-condensed">
   <thead>
