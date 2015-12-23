@@ -37,19 +37,10 @@
     "number": 1,
     "prometheus_server_base_port": "8100"
   },
-  "metric_services": {
-    "prometheus": {
-      "backend": "zentral.core.metric_services.backends.prometheus",
-      "gateway_host": "prompg:9091"
-    }
-  },
   "actions": {
     "debug": {
       "backend": "zentral.core.actions.backends.json_file",
       "local_dir": "/tmp/zentral_notifications/"
-    },
-    "push_metrics": {
-      "backend": "zentral.contrib.osquery.actions.push_metrics"
     }
   },
   "apps": {
@@ -58,7 +49,8 @@
         {
           "backend": "zentral.contrib.inventory.clients.dummy"
         }
-      ]
+      ],
+      "prometheus_push_gateway": "prompg:9091"
     },
     "zentral.contrib.jss": {},
     "zentral.contrib.munki": {},

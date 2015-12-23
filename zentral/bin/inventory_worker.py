@@ -12,6 +12,7 @@ import uuid
 from django.db import transaction
 from zentral.contrib.inventory.clients import clients
 from zentral.contrib.inventory.events import post_inventory_event
+from zentral.contrib.inventory.utils import push_inventory_metrics
 from zentral.core.queues.exceptions import TemporaryQueueError
 
 logger = logging.getLogger('zentral.bin.inventory_worker')
@@ -36,6 +37,7 @@ def sync_inventory(client_name, worker_id):
                         logger.exception('Could not post inventory event')
                 else:
                     logger.error('Machine w/o serial number')
+        push_inventory_metrics()
         time.sleep(SLEEP)
 
 

@@ -40,30 +40,3 @@ class BaseInventory(object):
                 elif update_diff:
                     yield machine_snapshot, {'action': 'changed',
                                              'diff': update_diff}
-
-    # Metrics
-    def _osx_apps_gauges(self):
-        raise NotImplementedError
-        c = {}
-        for ms in self.machines():
-            for osx_app_instance in ms.osx_app_instances.all():
-                key = frozenset(osx_app_instance.app.serialize().items())
-                c[key] = c.setdefault(key, 0) + 1
-        return c
-
-    def _os_gauges(self):
-        raise NotImplementedError
-        c = {}
-        for ms in self.machines().filter(os_version__isnull=False):
-            key = frozenset(ms.os_version.serialize().items())
-            c[key] = c.setdefault(key, 0) + 1
-        return c
-
-    def metrics(self):
-        raise NotImplementedError
-        return [{'name': 'zentral_inventory_osx_apps_sum',
-                 'help_text': 'Zentral inventory OSX apps versions',
-                 'gauges': self._osx_apps_gauges()},
-                {'name': 'zentral_inventory_os_versions_sum',
-                 'help_text': 'Zentral inventory OS versions',
-                 'gauges': self._os_gauges()}]
