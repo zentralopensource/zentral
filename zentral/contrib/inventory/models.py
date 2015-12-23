@@ -25,7 +25,8 @@ class MachineGroup(AbstractMTObject):
     source = models.ForeignKey(Source)
     reference = models.TextField()
     name = models.TextField()
-    links = models.ManyToManyField(Link)
+    links = models.ManyToManyField(Link, related_name="+")
+    machine_links = models.ManyToManyField(Link, related_name="+") # tmpl for links to machine in a group
 
 
 class Machine(AbstractMTObject):
@@ -136,3 +137,14 @@ class MachineSnapshot(AbstractMTObject):
             return self.reference
         else:
             return "{} #{}".format(self.source, self.id)
+
+    def groups_with_links(self):
+        for group in self.groups.prefetch_related('links', 'machine_links').all():
+            ll = []
+            for link in group.links.all():
+                ll.append((link.url, link.anchor_text))
+            for link in group.machine_links.all():
+                url = link.url
+                url = url.replace('%MACHINE_SNAPSHOT_REFERENCE%', self.reference)
+                ll.append((url, link.anchor_text))
+            yield group, ll

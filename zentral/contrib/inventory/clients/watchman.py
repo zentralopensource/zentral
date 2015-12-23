@@ -42,7 +42,8 @@ class InventoryClient(BaseInventory):
                 break
 
     def _computers(self):
-        return self._make_paginated_get_query('/computers')
+        return self._make_paginated_get_query('/computers',
+                                              **{'expand[]': 'computer.plugin_results'})
 
     def _groups(self):
         return self._make_paginated_get_query('/groups')
@@ -54,11 +55,19 @@ class InventoryClient(BaseInventory):
                        'url': url_tmpl.format(self.base_url, machine_id)})
         return ll
 
-    def _group_links_from_d(self, group_d):
+    def _business_unit_links_from_group_d(self, group_d):
         ll = []
         for anchor_text, url_tmpl in (('Group', "{}/groups/{}"),):
             ll.append({'anchor_text': anchor_text,
                        'url': url_tmpl.format(self.base_url, group_d['slug'])})
+        return ll
+
+    def _group_machine_links_from_plugin_id(self, pid):
+        ll = []
+        for anchor_text, url_tmpl in (('Plugin History',
+                                       '{}/computers/%MACHINE_SNAPSHOT_REFERENCE%/{}/history'),):
+            ll.append({'anchor_text': anchor_text,
+                       'url': url_tmpl.format(self.base_url, pid)})
         return ll
 
     def get_machines(self):
@@ -75,14 +84,25 @@ class InventoryClient(BaseInventory):
                   'links': self._machine_links_from_id(machine_id),
                   'machine': {'serial_number': serial_number}}
 
-            # groups
+            # the unique group is a business unit in zentral
             gid = c['group']
             if gid:
                 g = group_cache.get(gid, None)
                 if g:
-                    ct['groups'] = [{'name': g['name'],
-                                     'reference': gid,
-                                     'links': self._group_links_from_d(g)}]
+                    ct['business_unit'] = {'name': g['name'],
+                                           'reference': gid,
+                                           'links': self._business_unit_links_from_group_d(g)}
+
+            # the plugins in status "warning" are used to form groups
+            groups = []
+            for plugin_result in c.get('plugin_results', []):
+                if plugin_result['status'] == 'warning':
+                    pid = plugin_result['id']
+                    groups.append({'name': "{} - Warning".format(plugin_result['name']),
+                                   'reference': pid,
+                                   'machine_links': self._group_machine_links_from_plugin_id(pid)})
+            if groups:
+                ct['groups'] = groups
 
             # os version
             m = OS_VERSION_RE.match(c['os_version'])

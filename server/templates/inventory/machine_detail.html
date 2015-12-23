@@ -102,13 +102,13 @@
     <th>Links</th>
   </thead>
   <tbody>
-    {% for group in ms.groups.all %}
+    {% for group, links in ms.groups_with_links %}
     <tr>
       <td>{{ group.name }}</td>
       <td>
-        {% for link in group.links.all %}
-        <a href="{{ link.url }}" class="btn btn-default">
-          {{ ms.source.name }} - {{ link.anchor_text }}
+        {% for link_url, anchor_text in links %}
+        <a href="{{ link_url }}" class="btn btn-default">
+          {{ ms.source.name }} - {{ anchor_text }}
         </a>
         {% endfor %}
       </td>
