@@ -40,7 +40,7 @@
   "metric_services": {
     "prometheus": {
       "backend": "zentral.core.metric_services.backends.prometheus",
-      "gateway_host": "localhost:9091"
+      "gateway_host": "prompg:9091"
     }
   },
   "actions": {

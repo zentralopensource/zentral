@@ -6,12 +6,22 @@ elastic:
   image: elasticsearch:1
 redis:
   image: redis
+prompg:
+  image: prom/pushgateway
+promsrv:
+  build: ./examples/docker/prometheus/
+  links:
+    - prompg
+    - inventory_worker
+    - store_worker
+    - processor_worker
 nginx:
   image: nginx
   ports:
     - "443:443"
   links:
     - web
+    - promsrv
   volumes:
     - ./examples/docker/nginx/conf.d/:/etc/nginx/conf.d/
     - ./examples/docker/tls:/etc/nginx/tls
@@ -38,6 +48,7 @@ inventory_worker:
   command: inventory_worker
   links:
   - db
+  - prompg
   - redis
 store_worker:
   extends: app
@@ -45,10 +56,12 @@ store_worker:
   links:
   - db
   - elastic
+  - prompg
   - redis
 processor_worker:
   extends: app
   command: processor_worker
   links:
   - db
+  - prompg
   - redis
