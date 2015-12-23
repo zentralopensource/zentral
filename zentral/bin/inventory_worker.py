@@ -44,6 +44,7 @@ def sync_inventory(client_name, worker_id):
 if __name__ == '__main__':
     p_l = []
     for client in clients:
+        logger.error("Inventory worker %s", client.name)
         p = Process(target=sync_inventory, args=(client.name, 0))
         p.daemon = 1
         p.start()

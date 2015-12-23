@@ -1,7 +1,7 @@
 from django.views import generic
 from zentral.core.stores import frontend_store
 from zentral.utils.text import str_to_ascii
-from .models import Machine, MachineSnapshot
+from .models import MachineSnapshot
 
 
 class IndexView(generic.TemplateView):
@@ -43,7 +43,7 @@ class MachineView(generic.TemplateView):
         osx_app_ms_list = [ms for ms in ms_list if ms.osx_app_instances.count()]
         for ms in ms_list:
             if ms.system_info and ms.system_info.computer_name:
-                context['computer_name'] =  ms.system_info.computer_name
+                context['computer_name'] = ms.system_info.computer_name
                 break
         context['ms_list'] = ms_list
         context['osx_app_ms_list'] = osx_app_ms_list
@@ -84,7 +84,7 @@ class MachineEventsView(generic.ListView):
         for ms in self.ms_list:
             context['serial_number'] = ms.machine.serial_number
             if ms.system_info and ms.system_info.computer_name:
-                context['computer_name'] =  ms.system_info.computer_name
+                context['computer_name'] = ms.system_info.computer_name
                 break
 
         # pagination

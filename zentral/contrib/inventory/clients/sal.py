@@ -1,4 +1,3 @@
-from dateutil import parser
 import logging
 import requests
 from .base import BaseInventory, InventoryError
@@ -57,17 +56,20 @@ class InventoryClient(BaseInventory):
             # os version
             os_version = {'name': sal_machine['os_family']}
             try:
-                os_version['major'], os_version['minor'], os_version['patch'] = (int(p) for p in sal_machine['operating_system'].split("."))
+                (os_version['major'],
+                 os_version['minor'],
+                 os_version['patch']) = (int(p) for p in sal_machine['operating_system'].split("."))
             except:
                 raise
             else:
                 ct['os_version'] = os_version
 
             # system info
-            cpu_speed = sal_machine.get('cpu_speed', None)
             ct['system_info'] = {'computer_name': sal_machine['hostname'].strip(),
                                  'hardware_model': sal_machine['machine_model'],
-                                 'cpu_type': " @".join((s for s in (sal_machine.get(k) for k in ('cpu_type', 'cpu_speed')) if s)),
+                                 'cpu_type': " @".join((s for s in (sal_machine.get(k)
+                                                                    for k in ('cpu_type', 'cpu_speed'))
+                                                        if s)),
                                  'physical_memory': sal_machine['memory_kb'] * 2**10}
 
             yield ct

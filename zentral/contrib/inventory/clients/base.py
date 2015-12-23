@@ -1,5 +1,4 @@
 import copy
-import json
 from zentral.contrib.inventory.models import MachineSnapshot
 
 __all__ = ['BaseInventory', 'InventoryError']

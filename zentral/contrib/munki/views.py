@@ -13,7 +13,6 @@ from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 logger = logging.getLogger('zentral.contrib.munki.views')
 
 
-
 class IndexView(TemplateView):
     template_name = "munki/index.html"
 
