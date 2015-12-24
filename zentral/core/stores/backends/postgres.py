@@ -39,9 +39,9 @@ class EventStore(BaseEventStore):
                            "'database' attribute.")
             kwargs['database'] = config_d['db_name']
         self._conn = psycopg2.connect(**kwargs)
-        self._test_table()
 
-    def _test_table(self):
+    def wait_and_configure(self):
+        # TODO: WAIT !
         table_count = 0
         with self._conn:
             with self._conn.cursor() as cur:

@@ -3,7 +3,7 @@ db:
   env_file:
     - ./examples/docker/postgres.env
 elastic:
-  image: elasticsearch:1
+  image: elasticsearch:2
 redis:
   image: redis
 prompg:

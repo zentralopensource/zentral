@@ -1,23 +1,100 @@
 import logging
+import random
+import time
 from elasticsearch import Elasticsearch
+from elasticsearch.exceptions import ConnectionError, RequestError
 from zentral.core.events import event_from_event_d
 from zentral.core.stores.backends.base import BaseEventStore
 
 logger = logging.getLogger('zentral.core.stores.backends.elasticsearch')
+
+try:
+    random = random.SystemRandom()
+except NotImplementedError:
+    logger.warning('No secure pseudo random number generator available.')
 
 BASE_VISU_URL = ("{kibana_base_url}#/discover?_g=()&"
                  "_a=(columns:!(_source),index:{index},interval:auto,"
                  "query:(query_string:(analyze_wildcard:!t,query:'{query}')),"
                  "sort:!(zzzentral.created_at,desc))")
 
+INDEX_CONF = """
+{
+  "mappings" : {
+    "_default_" : {
+      "properties": {
+        "zzzentral": {
+          "properties": {
+            "request": {
+              "properties": {
+                "ip": {
+                  "type": "ip",
+                  "index": "not_analyzed"
+                }
+              }
+            }
+          }
+        }
+      },
+      "dynamic_templates" : [
+        {
+          "zentral_ip_address" : {
+            "match" : "*ip_address",
+            "mapping" : {
+              "type" : "ip",
+              "index" : "not_analyzed"
+            }
+          }
+        },
+        {
+          "zentral_string_default" : {
+            "match" : "*",
+            "match_mapping_type" : "string",
+            "mapping" : {
+              "type" : "string",
+              "index" : "not_analyzed"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+"""
+
 
 class EventStore(BaseEventStore):
+    MAX_CONNECTION_ATTEMPTS = 10
+
     def __init__(self, config_d, test=False):
         super(EventStore, self).__init__(config_d)
         self._es = Elasticsearch(config_d['servers'])
         self.index = config_d['index']
         self.kibana_base_url = config_d.get('kibana_base_url', None)
         self.test = test
+
+    def wait_and_configure(self):
+        for i in range(self.MAX_CONNECTION_ATTEMPTS):
+            try:
+                if not self._es.indices.exists(self.index):
+                    self._es.indices.create(self.index, body=INDEX_CONF)
+            except ConnectionError as e:
+                s = 1000 / random.randint(300, 1000)
+                logger.warning('Could not connect to server %d/%d. Sleep %ss',
+                               i + 1, self.MAX_CONNECTION_ATTEMPTS, s)
+                time.sleep(s)
+                continue
+            except RequestError as e:
+                if (e.info['status'] == 400 and
+                    # Race
+                    "IndexAlreadyExists".upper() in e.info['error']):
+                    logger.info('Index %s exists', self.index)
+                else:
+                    raise
+            logger.info('Index %s created', self.index)
+            break
+        else:
+            raise Exception('Could not connect to server')
 
     def _serialize_event(self, event):
         event_d = event.serialize()

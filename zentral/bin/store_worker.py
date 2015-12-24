@@ -50,6 +50,7 @@ def store_events(store_name, worker_id):
 if __name__ == '__main__':
     p_l = []
     for store in stores:
+        store.wait_and_configure()
         p = Process(target=store_events, args=(store.name, 0))
         p.daemon = 1
         p.start()
