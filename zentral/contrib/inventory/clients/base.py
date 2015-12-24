@@ -35,7 +35,7 @@ class BaseInventory(object):
                 update_diff = machine_snapshot.update_diff()
                 if update_diff is None:
                     yield machine_snapshot, {'action': 'added',
-                                             'diff': machine_snapshot.serialize()}
+                                             'added': machine_snapshot.serialize()}
                 elif update_diff:
                     yield machine_snapshot, {'action': 'changed',
                                              'diff': update_diff}
