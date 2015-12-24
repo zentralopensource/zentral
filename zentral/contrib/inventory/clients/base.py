@@ -1,4 +1,5 @@
 import copy
+from django.db import transaction
 from zentral.contrib.inventory.models import MachineSnapshot
 
 __all__ = ['BaseInventory', 'InventoryError']
@@ -30,7 +31,8 @@ class BaseInventory(object):
             business_unit_d = machine_d.get('business_unit', None)
             if business_unit_d:
                 business_unit_d['source'] = self.source
-            machine_snapshot, created = MachineSnapshot.objects.commit(machine_d)
+            with transaction.atomic():
+                machine_snapshot, created = MachineSnapshot.objects.commit(machine_d)
             if created:
                 update_diff = machine_snapshot.update_diff()
                 if update_diff is None:

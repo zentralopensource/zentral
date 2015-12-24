@@ -9,7 +9,6 @@ import logging
 import time
 from multiprocessing import Process
 import uuid
-from django.db import transaction
 from zentral.contrib.inventory.clients import clients
 from zentral.contrib.inventory.events import post_inventory_event
 from zentral.contrib.inventory.utils import push_inventory_metrics
@@ -27,16 +26,15 @@ def sync_inventory(client_name, worker_id):
     else:
         return
     while True:
-        with transaction.atomic():
-            pk = uuid.uuid4()
-            for index, (machine_snapshot, diff) in enumerate(client.sync()):
-                if machine_snapshot.machine and machine_snapshot.machine.serial_number:
-                    try:
-                        post_inventory_event(machine_snapshot.machine.serial_number, diff, pk, index)
-                    except TemporaryQueueError:
-                        logger.exception('Could not post inventory event')
-                else:
-                    logger.error('Machine w/o serial number')
+        pk = uuid.uuid4()
+        for index, (machine_snapshot, diff) in enumerate(client.sync()):
+            if machine_snapshot.machine and machine_snapshot.machine.serial_number:
+                try:
+                    post_inventory_event(machine_snapshot.machine.serial_number, diff, pk, index)
+                except TemporaryQueueError:
+                    logger.exception('Could not post inventory event')
+            else:
+                logger.error('Machine w/o serial number')
         push_inventory_metrics()
         time.sleep(SLEEP)
 
