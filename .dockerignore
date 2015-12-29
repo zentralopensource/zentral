@@ -1,8 +1,9 @@
-docs/*
-examples/*
-fabfile.*
-tests/*
-venv/*
-.gitignore
-.git/*
 */__pycache__*
+.git/*
+.gitignore
+/conf/*
+/docs/*
+/fabfile.*
+/tests/*
+/venv/*
+/wheels/*

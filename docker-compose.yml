@@ -1,7 +1,7 @@
 db:
   image: postgres:9.4
   env_file:
-    - ./examples/docker/postgres.env
+    - ./conf/start/docker/postgres.env
 elastic:
   image: elasticsearch:2
 redis:
@@ -9,7 +9,7 @@ redis:
 prompg:
   image: prom/pushgateway
 promsrv:
-  build: ./examples/docker/prometheus/
+  build: ./conf/start/docker/prometheus/
   links:
     - prompg
     - inventory_worker
@@ -23,16 +23,16 @@ nginx:
     - web
     - promsrv
   volumes:
-    - ./examples/docker/nginx/conf.d/:/etc/nginx/conf.d/
-    - ./examples/docker/tls:/etc/nginx/tls
+    - ./conf/start/docker/nginx/conf.d/:/etc/nginx/conf.d/
+    - ./conf/start/docker/tls:/etc/nginx/tls
 app:
   build: .
   entrypoint: /zentral/docker-entrypoint.py
   environment:
-    ZENTRAL_CONF_DIR: /zentral/examples/conf/
+    ZENTRAL_CONF_DIR: /zentral/conf/start/zentral/
     POSTGRES_HOST: db
   env_file:
-    - ./examples/docker/postgres.env
+    - ./conf/start/docker/postgres.env
   volumes:
     - .:/zentral
   restart: onfailure:10
@@ -40,28 +40,28 @@ web:
   extends: app
   command: runserver
   links:
-  - db
-  - elastic
-  - redis
+    - db
+    - elastic
+    - redis
 inventory_worker:
   extends: app
   command: inventory_worker
   links:
-  - db
-  - prompg
-  - redis
+    - db
+    - prompg
+    - redis
 store_worker:
   extends: app
   command: store_worker
   links:
-  - db
-  - elastic
-  - prompg
-  - redis
+    - db
+    - elastic
+    - prompg
+    - redis
 processor_worker:
   extends: app
   command: processor_worker
   links:
-  - db
-  - prompg
-  - redis
+    - db
+    - prompg
+    - redis
