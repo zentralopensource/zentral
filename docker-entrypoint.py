@@ -57,6 +57,7 @@ KNOWN_COMMANDS = {
     "processor_worker": ['zentral/bin/processor_worker.py'],
     # extras
     "shell": ['server/manage.py', 'shell'],
+    "tests": ['server/manage.py', 'test', 'tests/'],
 }
 
 

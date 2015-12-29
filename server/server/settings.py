@@ -138,7 +138,7 @@ LOGGING = {
     },
     'handlers': {
         'console': {
-            'level': 'INFO',
+            'level': 'DEBUG',
             'class': 'logging.StreamHandler',
         },
     },
@@ -153,6 +153,10 @@ LOGGING = {
             'handlers': ['console'],
         },
         'zentral': {
+            'handlers': ['console'],
+        },
+        'elasticsearch': {
+            'level': 'ERROR',
             'handlers': ['console'],
         }
     }

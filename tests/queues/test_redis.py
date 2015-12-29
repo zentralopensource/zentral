@@ -5,23 +5,24 @@ from zentral.core.events import EventMetadata, EventRequest, BaseEvent, register
 from zentral.core.queues.backends.redisq import EventQueues
 
 
-class TestEvent1(BaseEvent):
-    event_type = "event_type_1"
+class TestQueueEvent(BaseEvent):
+    event_type = "event_test_queue"
 
-register_event_type(TestEvent1)
+register_event_type(TestQueueEvent)
 
 
 class TestEventQueues(unittest.TestCase):
     CONFIG = {'db': 1,
+              'host': 'redis',
               'stores': ['postgres']}
-    EVENT = TestEvent1(EventMetadata(TestEvent1.event_type,
-                                     machine_serial_number='012356789',
-                                     request=EventRequest("python_unittest_useragent",
-                                                          "10.0.0.1")),
-                       {'payload': 'ok'})
+    EVENT = TestQueueEvent(EventMetadata(TestQueueEvent.event_type,
+                                         machine_serial_number='012356789',
+                                         request=EventRequest("python_unittest_useragent",
+                                                              "10.0.0.1")),
+                           {'payload': 'ok'})
 
     def setUp(self):
-        self.r = redis.Redis(host='localhost', port=6379, db=self.CONFIG['db'])
+        self.r = redis.Redis(host='redis', port=6379, db=self.CONFIG['db'])
         self.rq = EventQueues(self.CONFIG)
 
     def test_post_event(self):
