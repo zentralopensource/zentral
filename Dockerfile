@@ -16,10 +16,14 @@ RUN curl -fsSL https://github.com/mackyle/xar/archive/xar-1.6.1.tar.gz | tar xvz
     make && make install && \
     cd ../.. && rm -rf xar-*
 
+# zentral user and group
+RUN groupadd -r zentral --gid=999 && useradd -r -s /bin/false -g zentral --uid=999 zentral
+
 # app
 RUN mkdir /zentral
 WORKDIR /zentral
 ADD requirements.txt /zentral
 RUN pip install -r requirements.txt
 ADD . /zentral
+USER zentral
 ENTRYPOINT ["/zentral/docker-entrypoint.py"]
