@@ -1,20 +1,12 @@
 from django.views import generic
 from zentral.core.stores import frontend_store
 from zentral.utils.text import str_to_ascii
+from .forms import BusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm
 from .models import BusinessUnit, MachineGroup, MachineSnapshot
 
 
 class MachineListView(generic.TemplateView):
     template_name = "inventory/machine_list.html"
-
-    @staticmethod
-    def ms_dict_sorting_key(ms_list):
-        key = None
-        if not ms_list:
-            return key
-        ms = ms_list[0]
-        key = str_to_ascii(ms.get_machine_str()).lower()
-        return key
 
     def get_list_qs(self, **kwargs):
         return MachineSnapshot.objects.current()
@@ -22,19 +14,46 @@ class MachineListView(generic.TemplateView):
     def get_list_title(self, **kwargs):
         return ""
 
+    def get(self, request, *args, **kwargs):
+        self.search_form = MachineSearchForm(request.GET)
+        return super(MachineListView, self).get(request, *args, **kwargs)
+
+    @staticmethod
+    def _ms_dict_sorting_key(ms_list):
+        key = None
+        if not ms_list:
+            return key
+        ms = ms_list[0]
+        key = str_to_ascii(ms.get_machine_str()).lower()
+        return key
+
+    def _get_filtered_qs(self, **kwargs):
+        qs = self.get_list_qs(**kwargs)
+        if self.search_form.is_valid():
+            cleaned_data = self.search_form.cleaned_data
+            serial_number = cleaned_data['serial_number']
+            if serial_number:
+                qs = qs.filter(machine__serial_number__icontains=serial_number)
+            name = cleaned_data['name']
+            if name:
+                qs = qs.filter(system_info__computer_name__icontains=name)
+        return qs
+
+
     def get_context_data(self, **kwargs):
         context = super(MachineListView, self).get_context_data(**kwargs)
         context['inventory'] = True
         # group by machine serial number
         ms_dict = {}
-        for ms in self.get_list_qs(**kwargs).order_by('system_info__computer_name'):
+        for ms in self._get_filtered_qs(**kwargs).order_by('system_info__computer_name'):
             ms_dict.setdefault(ms.machine.serial_number, []).append(ms)
         # sorted
         context['object_list'] = [(l[0].machine.serial_number,
                                    l[0].get_machine_str(),
                                    l) for l in sorted(ms_dict.values(),
-                                                      key=self.ms_dict_sorting_key)]
+                                                      key=self._ms_dict_sorting_key)]
         context['object_list_title'] = self.get_list_title(**kwargs)
+        context['search_form'] = self.search_form
         return context
 
 
@@ -45,10 +64,20 @@ class IndexView(MachineListView):
 class GroupsView(generic.TemplateView):
     template_name = "inventory/group_list.html"
 
+    def get(self, request, *args, **kwargs):
+        self.search_form = MachineGroupSearchForm(request.GET)
+        return super(GroupsView, self).get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super(GroupsView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['object_list'] = MachineGroup.objects.current()
+        qs = MachineGroup.objects.current()
+        if self.search_form.is_valid():
+            name = self.search_form.cleaned_data['name']
+            if name:
+                qs = qs.filter(name__icontains=name)
+        context['object_list'] = qs
+        context['search_form'] = self.search_form
         return context
 
 
@@ -64,10 +93,20 @@ class GroupMachinesView(MachineListView):
 class BUView(generic.TemplateView):
     template_name = "inventory/bu_list.html"
 
+    def get(self, request, *args, **kwargs):
+        self.search_form = BusinessUnitSearchForm(request.GET)
+        return super(BUView, self).get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super(BUView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['object_list'] = BusinessUnit.objects.current()
+        qs = BusinessUnit.objects.current()
+        if self.search_form.is_valid():
+            name = self.search_form.cleaned_data['name']
+            if name:
+                qs = qs.filter(name__icontains=name)
+        context['object_list'] = qs
+        context['search_form'] = self.search_form
         return context
 
 
