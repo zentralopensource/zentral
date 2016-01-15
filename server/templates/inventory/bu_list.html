@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>{{ object_list|length }} Business unit{{ object_list|length|pluralize }}</h1>
+<table class="table">
+  {% for bu in object_list %}
+  <tr>
+    <td>
+        {{ bu.source.name }}
+    </td>
+    <td>
+        <a href="{% url 'inventory:bu_machines' bu.id %}">{{ bu.name }}</a>
+    </td>
+    <td>
+      {% for link in bu.links.all %}
+      <a href="{{ link.url }}" class="btn btn-default">
+        {{ bu.source.name }} - {{ link.anchor_text }}
+      </a>
+      {% endfor %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

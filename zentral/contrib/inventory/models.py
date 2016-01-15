@@ -14,12 +14,22 @@ class Link(AbstractMTObject):
     url = models.URLField()
 
 
+class BusinessUnitManager(MTObjectManager):
+    def current(self):
+        return self.filter(machinesnapshot__mt_next__isnull=True).distinct().select_related('source').order_by('source__module', 'name')
+
 class BusinessUnit(AbstractMTObject):
     source = models.ForeignKey(Source)
     reference = models.TextField()
     name = models.TextField()
     links = models.ManyToManyField(Link)
 
+    objects = BusinessUnitManager()
+
+
+class MachineGroupManager(MTObjectManager):
+    def current(self):
+        return self.filter(machinesnapshot__mt_next__isnull=True).distinct().select_related('source').order_by('source__module', 'name')
 
 class MachineGroup(AbstractMTObject):
     source = models.ForeignKey(Source)
@@ -27,6 +37,8 @@ class MachineGroup(AbstractMTObject):
     name = models.TextField()
     links = models.ManyToManyField(Link, related_name="+")
     machine_links = models.ManyToManyField(Link, related_name="+") # tmpl for links to machine in a group
+
+    objects = MachineGroupManager()
 
 
 class Machine(AbstractMTObject):

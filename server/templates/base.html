@@ -29,7 +29,14 @@
         <!-- Collect the nav links, forms, and other content for toggling -->
         <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
           <ul class="nav navbar-nav">
-            <li {% if inventory %}class="active"{% endif %}><a href="{% url 'inventory:index' %}">Inventory{% if inventory %} <span class="sr-only">(current)</span>{% endif %}</a></li>
+            <li class="dropdown{% if inventory %} active{% endif %}">
+              <a href="{% url 'inventory:index' %}" class="dropdown-toggle" data-toggle="dropdown" role="button">Inventory <span class="caret"></span></a>
+              <ul class="dropdown-menu">
+                <li><a href="{% url 'inventory:index' %}">Machines</a></li>
+                <li><a href="{% url 'inventory:groups' %}">Groups</a></li>
+                <li><a href="{% url 'inventory:bu' %}">Business units</a></li>
+              </ul>
+            </li>
 	    <li {% if osquery %}class="active"{% endif %}><a href="{% url 'osquery:index' %}">Osquery{% if osquery %} <span class="sr-only">(current)</span>{% endif %}</a></li>
 	    <li {% if santa %}class="active"{% endif %}><a href="{% url 'santa:index' %}">Santa{% if santa %} <span class="sr-only">(current)</span>{% endif %}</a></li>
 	    <li {% if munki %}class="active"{% endif %}><a href="{% url 'munki:index' %}">Munki{% if munki %} <span class="sr-only">(current)</span>{% endif %}</a></li>

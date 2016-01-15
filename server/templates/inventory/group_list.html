@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>{{ object_list|length }} Group{{ object_list|length|pluralize }}</h1>
+<table class="table">
+  {% for group in object_list %}
+  <tr>
+    <td>
+        {{ group.source.name }}
+    </td>
+    <td>
+        <a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a>
+    </td>
+    <td>
+      {% for link in group.links.all %}
+      <a href="{{ link.url }}" class="btn btn-default">
+        {{ group.source.name }} - {{ link.anchor_text }}
+      </a>
+      {% endfor %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,7 +1,10 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1>{{ object_list|length }} Machine{{ object_list|length|pluralize }}</h1>
+{% if object_list_title %}
+<h1>{{ object_list_title }}</h1>
+{% endif %}
+<h2>{{ object_list|length }} Machine{{ object_list|length|pluralize }}</h2>
 <table class="table">
   {% for serial_number, machine_str, ms_list in object_list %}
   <tr>

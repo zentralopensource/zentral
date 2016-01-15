@@ -1,10 +1,10 @@
 from django.views import generic
 from zentral.core.stores import frontend_store
 from zentral.utils.text import str_to_ascii
-from .models import MachineSnapshot
+from .models import BusinessUnit, MachineGroup, MachineSnapshot
 
 
-class IndexView(generic.TemplateView):
+class MachineListView(generic.TemplateView):
     template_name = "inventory/machine_list.html"
 
     @staticmethod
@@ -16,19 +16,68 @@ class IndexView(generic.TemplateView):
         key = str_to_ascii(ms.get_machine_str()).lower()
         return key
 
+    def get_list_qs(self, **kwargs):
+        return MachineSnapshot.objects.current()
+
+    def get_list_title(self, **kwargs):
+        return ""
+
     def get_context_data(self, **kwargs):
-        context = super(IndexView, self).get_context_data(**kwargs)
+        context = super(MachineListView, self).get_context_data(**kwargs)
         context['inventory'] = True
         # group by machine serial number
         ms_dict = {}
-        for ms in MachineSnapshot.objects.current().order_by('system_info__computer_name'):
+        for ms in self.get_list_qs(**kwargs).order_by('system_info__computer_name'):
             ms_dict.setdefault(ms.machine.serial_number, []).append(ms)
         # sorted
         context['object_list'] = [(l[0].machine.serial_number,
                                    l[0].get_machine_str(),
                                    l) for l in sorted(ms_dict.values(),
                                                       key=self.ms_dict_sorting_key)]
+        context['object_list_title'] = self.get_list_title(**kwargs)
         return context
+
+
+class IndexView(MachineListView):
+    pass
+
+
+class GroupsView(generic.TemplateView):
+    template_name = "inventory/group_list.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(GroupsView, self).get_context_data(**kwargs)
+        context['inventory'] = True
+        context['object_list'] = MachineGroup.objects.current()
+        return context
+
+
+class GroupMachinesView(MachineListView):
+    def get_list_qs(self, **kwargs):
+        return MachineSnapshot.objects.current().filter(groups__id=kwargs['group_id'])
+
+    def get_list_title(self, **kwargs):
+        mg = MachineGroup.objects.select_related('source').get(pk=kwargs['group_id'])
+        return "Group: {} - {}".format(mg.source.name, mg.name)
+
+
+class BUView(generic.TemplateView):
+    template_name = "inventory/bu_list.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(BUView, self).get_context_data(**kwargs)
+        context['inventory'] = True
+        context['object_list'] = BusinessUnit.objects.current()
+        return context
+
+
+class BUMachinesView(MachineListView):
+    def get_list_qs(self, **kwargs):
+        return MachineSnapshot.objects.current().filter(business_unit__id=kwargs['bu_id'])
+
+    def get_list_title(self, **kwargs):
+        bu = BusinessUnit.objects.select_related('source').get(pk=kwargs['bu_id'])
+        return "BU: {} - {}".format(bu.source.name, bu.name)
 
 
 class MachineView(generic.TemplateView):
