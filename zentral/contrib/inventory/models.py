@@ -1,12 +1,38 @@
 from django.contrib.postgres.fields import JSONField
 from django.db import models
+from django.db.models import Count
 from zentral.utils.mt_models import AbstractMTObject, MTObjectManager
+
+
+class SourceManager(MTObjectManager):
+    def current_machine_group_sources(self):
+        qs = self.filter(machinegroup__isnull=False,
+                         machinegroup__machinesnapshot__mt_next__isnull=True)
+        qs = qs.annotate(num_machine_groups=Count('machinegroup'))
+        return qs.order_by('module', 'name')
+
+    def current_business_unit_sources(self):
+        qs = self.filter(businessunit__isnull=False,
+                         businessunit__machinesnapshot__mt_next__isnull=True)
+        qs = qs.annotate(num_business_units=Count('businessunit'))
+        return qs.order_by('module', 'name')
+
+    def current_machine_snapshot_sources(self):
+        qs = self.filter(machinesnapshot__isnull=False,
+                         machinesnapshot__mt_next__isnull=True)
+        qs = qs.annotate(num_machine_snapshots=Count('machinesnapshot'))
+        return qs.order_by('module', 'name')
 
 
 class Source(AbstractMTObject):
     module = models.TextField()
     name = models.TextField()
     config = JSONField(blank=True, null=True)
+
+    objects = SourceManager()
+
+    def __str__(self):
+        return self.name
 
 
 class Link(AbstractMTObject):
@@ -16,7 +42,9 @@ class Link(AbstractMTObject):
 
 class BusinessUnitManager(MTObjectManager):
     def current(self):
-        return self.filter(machinesnapshot__mt_next__isnull=True).distinct().select_related('source').order_by('source__module', 'name')
+        qs = self.filter(machinesnapshot__mt_next__isnull=True)
+        return qs.distinct().select_related('source').order_by('source__module', 'name')
+
 
 class BusinessUnit(AbstractMTObject):
     source = models.ForeignKey(Source)
@@ -29,14 +57,16 @@ class BusinessUnit(AbstractMTObject):
 
 class MachineGroupManager(MTObjectManager):
     def current(self):
-        return self.filter(machinesnapshot__mt_next__isnull=True).distinct().select_related('source').order_by('source__module', 'name')
+        qs = self.filter(machinesnapshot__mt_next__isnull=True)
+        return qs.distinct().select_related('source').order_by('source__module', 'name')
+
 
 class MachineGroup(AbstractMTObject):
     source = models.ForeignKey(Source)
     reference = models.TextField()
     name = models.TextField()
     links = models.ManyToManyField(Link, related_name="+")
-    machine_links = models.ManyToManyField(Link, related_name="+") # tmpl for links to machine in a group
+    machine_links = models.ManyToManyField(Link, related_name="+")  # tmpl for links to machine in a group
 
     objects = MachineGroupManager()
 

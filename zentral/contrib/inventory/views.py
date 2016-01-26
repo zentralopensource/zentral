@@ -37,8 +37,10 @@ class MachineListView(generic.TemplateView):
             name = cleaned_data['name']
             if name:
                 qs = qs.filter(system_info__computer_name__icontains=name)
+            source = cleaned_data['source']
+            if source:
+                qs = qs.filter(source=source)
         return qs
-
 
     def get_context_data(self, **kwargs):
         context = super(MachineListView, self).get_context_data(**kwargs)
@@ -76,6 +78,9 @@ class GroupsView(generic.TemplateView):
             name = self.search_form.cleaned_data['name']
             if name:
                 qs = qs.filter(name__icontains=name)
+            source = self.search_form.cleaned_data['source']
+            if source:
+                qs = qs.filter(source=source)
         context['object_list'] = qs
         context['search_form'] = self.search_form
         return context
@@ -105,6 +110,9 @@ class BUView(generic.TemplateView):
             name = self.search_form.cleaned_data['name']
             if name:
                 qs = qs.filter(name__icontains=name)
+            source = self.search_form.cleaned_data['source']
+            if source:
+                qs = qs.filter(source=source)
         context['object_list'] = qs
         context['search_form'] = self.search_form
         return context

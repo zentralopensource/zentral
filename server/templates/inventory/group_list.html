@@ -7,6 +7,10 @@
     <label for="id_name">{{ search_form.name.label|title }}</label>
     <input type="text" id="id_name"{% if search_form.name.value %} value="{{ search_form.name.value }}"{% endif %} name="name" class="form-control" placeholder="{{ search_form.name.label }}">
   </div>
+  <div class="form-group">
+    <label for="id_source">{{ search_form.source.label|title }}</label>
+    {{ search_form.source }}
+  </div>
   <button type="submit" class="btn btn-default">Search</button>
 </form>
 <table class="table">
