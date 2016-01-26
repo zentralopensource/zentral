@@ -11,14 +11,14 @@ class MachineSearchForm(forms.Form):
 
 
 class MachineGroupSearchForm(forms.Form):
-    name = forms.CharField(label="name", max_length=64, required=True)
+    name = forms.CharField(label="name", max_length=64, required=False)
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_group_sources(),
                                     required=False,
                                     widget=forms.Select(attrs={'class': 'form-control'}))
 
 
 class BusinessUnitSearchForm(forms.Form):
-    name = forms.CharField(label="name", max_length=64, required=True)
+    name = forms.CharField(label="name", max_length=64, required=False)
     source = forms.ModelChoiceField(queryset=Source.objects.current_business_unit_sources(),
                                     required=False,
                                     widget=forms.Select(attrs={'class': 'form-control'}))
