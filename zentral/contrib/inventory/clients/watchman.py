@@ -5,9 +5,12 @@ from .base import BaseInventory, InventoryError
 
 logger = logging.getLogger('zentral.contrib.inventory.backends.watchman')
 
-OS_VERSION_RE = re.compile(r'^(?P<name>.*) (?P<major>[0-9]{1,3})\.'
-                           '(?P<minor>[0-9]{1,3})(?:\.'
-                           '(?P<patch>[0-9]{1,3}))?(?: \((?P<build>.*)\))?$')
+MAC_VERSION_RE = re.compile(r'^(?P<name>.*) (?P<major>[0-9]{1,3})\.'
+                            '(?P<minor>[0-9]{1,3})(?:\.'
+                            '(?P<patch>[0-9]{1,3}))?(?: \((?P<build>.*)\))?$')
+LINUX_VERSION_RE = re.compile(r'^(?P<name>[^0-9]*) (?P<major>[0-9]{1,3})\.'
+                              '(?P<minor>[0-9]{1,3})(?:\.'
+                              '(?P<patch>[0-9]{1,3}))?.*$')
 INSTALLED_RAM_RE = re.compile(r'^(?P<val>[0-9\.]+) (?P<unit>(?:GB|kB))$')
 PROCESSOR_RE = re.compile(r'(?P<brand>.*) \((?P<cpu_logical_cores>[0-9]+) core '
                           '(?P<cpu_physical_cores>[0-9]+) processor\)$')
@@ -73,10 +76,18 @@ class InventoryClient(BaseInventory):
     def get_machines(self):
         group_cache = {g.pop('id'): g for g in self._groups()}
         for c in self._computers():
+            platform = c.pop('platform')
             machine_id = c.pop('watchman_id')
             serial_number = c.pop('serial_number')
-            if " " in serial_number.strip():
-                logger.info("Computer %s w/o valid serial number", machine_id)
+            if platform == 'linux':
+                # TODO better!
+                serial_number = machine_id
+            elif platform == 'mac':
+                if " " in serial_number.strip():
+                    logger.error("Computer %s w/o valid serial number", machine_id)
+                    continue
+            else:
+                logger.warning("Unknown platform %s for computer %s", platform, machine_id)
                 continue
 
             # serial number, reference
@@ -105,7 +116,11 @@ class InventoryClient(BaseInventory):
                 ct['groups'] = groups
 
             # os version
-            m = OS_VERSION_RE.match(c['os_version'])
+            m = None
+            if platform == 'mac':
+                m = MAC_VERSION_RE.match(c['os_version'])
+            elif platform == 'linux':
+                m = LINUX_VERSION_RE.match(c['os_version'])
             if m:
                 os_version = m.groupdict()
                 for k in ('major', 'minor', 'patch'):

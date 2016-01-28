@@ -70,7 +70,7 @@
   <dt>Name</dt>
   <dd>{{ ms.os_version.name }}</dd>
   <dt>OS Version</dt>
-  <dd>{{ ms.os_version.major }}.{{ ms.os_version.minor }}.{{ ms.os_version.patch }}</dd>
+  <dd>{{ ms.os_version.major }}.{{ ms.os_version.minor }}{% if patch %}.{{ ms.os_version.patch }}{% endif %}</dd>
   <dt>OS Build</dt>
   <dd>{{ ms.os_version.build|default:"-" }}</dd>
 </dl>
