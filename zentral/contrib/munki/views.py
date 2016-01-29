@@ -73,7 +73,7 @@ class PostJobView(BaseView):
         ms_tree['source'] = {'module': 'zentral.contrib.munki',
                              'name': 'Munki'}
         ms_tree['reference'] = ms_tree['machine']['serial_number']
-        if data['santa_fileinfo_included']:
+        if data.get('include_santa_fileinfo', False):
             clean_certs_datetime(ms_tree)
             ms, created = MachineSnapshot.objects.commit(ms_tree)
             msn = ms.machine.serial_number

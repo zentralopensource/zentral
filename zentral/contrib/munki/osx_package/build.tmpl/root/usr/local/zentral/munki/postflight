@@ -317,12 +317,12 @@ if __name__ == '__main__':
     msn = data['machine_snapshot']['machine']['serial_number']
     job_details = get_job_details(msn)
     ai = ApplicationInventory()
-    include_santa_fileinfo = run_type == 'auto' and job_details['include_santa_fileinfo']
-    data['santa_fileinfo_included'], data['machine_snapshot']['osx_app_instances'] = ai.get_osx_app_instances(include_santa_fileinfo)
+    data['include_santa_fileinfo'] = run_type == 'auto' and job_details['include_santa_fileinfo']
+    data['santa_fileinfo_included'], data['machine_snapshot']['osx_app_instances'] = ai.get_osx_app_instances(data['include_santa_fileinfo'])
     last_seen_sha1sum = job_details.get('last_seen_sha1sum', None)
     data['reports'] = build_reports_payload(last_seen_sha1sum)
     post_job(data)
     print ('Zentral postflight job OK - '
            'run type %s, fileinfo %s, last sha1sum %s') % (run_type or "-",
-                                                           include_santa_fileinfo,
+                                                           data['include_santa_fileinfo'],
                                                            (last_seen_sha1sum or "-")[:7])
