@@ -51,7 +51,7 @@ def get_santa_versions():
     versions = {}
     try:
         stdout = subprocess.check_output([SANTACTL, "version"])
-    except subprocess.CalledProcessError:
+    except (OSError, subprocess.CalledProcessError):
         pass
     else:
         for line in stdout.splitlines():
