@@ -125,11 +125,11 @@ class ApplicationInventory(object):
             # asked a full report but santa is not installed
             include_santa_fileinfo = False
         for app_d in self.data:
-            osx_app_instance  = {'app': {'bundle_id': app_d['bundleid'],
-                                         'bundle_name': app_d['CFBundleName'],
-                                         'bundle_version_str': app_d['version']},
-                                 'bundle_path': app_d['path'],
-                                 }
+            osx_app_instance = {'app': {'bundle_id': app_d['bundleid'],
+                                        'bundle_name': app_d['CFBundleName'],
+                                        'bundle_version_str': app_d['version']},
+                                'bundle_path': app_d['path'],
+                                }
             if include_santa_fileinfo:
                 fileinfo = get_santa_fileinfo(osx_app_instance['bundle_path'])
                 if not fileinfo:
@@ -231,14 +231,15 @@ class SystemProfilerReport(object):
             if subdata['_dataType'] == data_type:
                 return subdata
 
-    def _get_hw(self):
+    def get_machine_snapshot(self):
+        # Hardware
         data = self._get_data_type('SPHardwareDataType')
         if len(data['_items']) != 1:
             raise ValueError('0 or more than one item in a SPHardwareDataType output!')
         item_d = data['_items'][0]
+
         machine = {'serial_number': item_d['serial_number']}
-        system_info = {'computer_name': item_d['machine_name'],
-                       'hardware_model': item_d['machine_model'],
+        system_info = {'hardware_model': item_d['machine_model'],
                        'cpu_type': item_d['cpu_type']}
         # RAM
         ram_multiplicator = None
@@ -251,26 +252,25 @@ class SystemProfilerReport(object):
             warnings.warn('Unknown ram amount unit {}'.format(ram_amount_unit))
         if ram_multiplicator:
             system_info['physical_memory'] = int(ram_amount) * ram_multiplicator
-        return {'machine': machine,
-                'system_info': system_info}
 
-    def _get_soft(self):
+        # Software
         data = self._get_data_type('SPSoftwareDataType')
         if len(data['_items']) != 1:
             raise ValueError('0 or more than one item in a SPSoftwareDataType output!')
         item_d = data['_items'][0]
+
+        system_info['computer_name'] = item_d['local_host_name']
+
         os_version = item_d['os_version']
         os_name, os_version_str, os_build = os_version.rsplit(' ', 2)
         os_build = os_build.strip('(').strip(')')
         os_version = {'name': os_name,
                       'build': os_build}
         os_version['major'], os_version['minor'], os_version['patch'] = (int(s) for s in os_version_str.split('.'))
-        return os_version
 
-    def get_machine_snapshot(self):
-        machine_snapshot = self._get_hw()
-        machine_snapshot['os_version'] = self._get_soft()
-        return machine_snapshot
+        return {'machine': machine,
+                'system_info': system_info,
+                'os_version': os_version}
 
 # Zentral Munki API calls
 
