@@ -118,6 +118,7 @@ class EventMetadata(object):
             self.created_at = parser.parse(self.created_at)
         self.machine_serial_number = kwargs.pop('machine_serial_number')
         self.request = kwargs.pop('request', None)
+        self.tags = kwargs.pop('tags', [])
 
     @classmethod
     def deserialize(cls, event_d_metadata):
@@ -134,9 +135,12 @@ class EventMetadata(object):
              'id': str(self.uuid),
              'index': self.index,
              'type': self.event_type,
-             'machine_serial_number': self.machine_serial_number}
+             'machine_serial_number': self.machine_serial_number,
+             }
         if self.request:
             d['request'] = self.request.serialize()
+        if self.tags:
+            d['tags'] = self.tags
         return d
 
 

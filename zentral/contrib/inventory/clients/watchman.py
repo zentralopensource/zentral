@@ -17,6 +17,8 @@ PROCESSOR_RE = re.compile(r'(?P<brand>.*) \((?P<cpu_logical_cores>[0-9]+) core '
 
 
 class InventoryClient(BaseInventory):
+    source_config_secret_attributes = ['api_key']
+
     def __init__(self, config_d):
         super(InventoryClient, self).__init__(config_d)
         self.base_url = 'https://%(account)s.monitoringclient.com' % config_d

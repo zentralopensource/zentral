@@ -32,6 +32,10 @@ INDEX_CONF = """
                   "index": "not_analyzed"
                 }
               }
+            },
+            "tags": {
+              "type": "string",
+              "index": "not_analyzed"
             }
           }
         }

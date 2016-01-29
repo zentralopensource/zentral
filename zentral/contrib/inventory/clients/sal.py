@@ -6,6 +6,8 @@ logger = logging.getLogger('zentral.contrib.inventory.backends.sal')
 
 
 class InventoryClient(BaseInventory):
+    source_config_secret_attributes = ['private_key']
+
     def __init__(self, config_d):
         super(InventoryClient, self).__init__(config_d)
         self.base_url = 'http{}://{}'.format(config_d.get('secure', True) * 's', config_d['host'])

@@ -6,6 +6,8 @@ logger = logging.getLogger('zentral.contrib.inventory.backends.jss')
 
 
 class InventoryClient(BaseInventory):
+    source_config_secret_attributes = ['user', 'password']
+
     def __init__(self, config_d):
         super(InventoryClient, self).__init__(config_d)
         self.base_url = 'https://%(host)s:%(port)s' % config_d
