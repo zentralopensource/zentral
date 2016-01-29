@@ -69,7 +69,13 @@ class InventoryClient(BaseInventory):
 
             # groups
             groups = []
-            for computer_group_name in computer['groups_accounts']['computer_group_memberships']:
+            cg_names = computer['groups_accounts']['computer_group_memberships']
+            org_cg_num = len(cg_names)
+            cg_names = set(cg_names)
+            if len(cg_names) < org_cg_num:
+                logger.warning('Dupplicated group. source %s, machine %s',
+                               self.name, machine_id)
+            for computer_group_name in cg_names:
                 try:
                     group_id, is_smart = reverse_computer_groups[computer_group_name]
                 except KeyError:
