@@ -1,3 +1,4 @@
+import json
 import logging
 from dateutil import parser
 from django.core.urlresolvers import reverse_lazy
@@ -221,7 +222,11 @@ class LogView(BaseNodeView):
     def do_node_post(self, data):
         inventory_results = []
         other_results = []
-        for r in data.pop('data'):
+        data_data = data.pop('data')
+        if not isinstance(data_data, list):
+            # TODO verify. New since osquery 1.6.4 ?
+            data_data = [json.loads(data_data)]
+        for r in data_data:
             if r.get('name', None) == DEFAULT_ZENTRAL_INVENTORY_QUERY:
                 inventory_results.append((parser.parse(r['calendarTime']), r['snapshot']))
             else:
