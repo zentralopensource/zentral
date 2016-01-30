@@ -5,8 +5,12 @@ DEFAULT_ZENTRAL_INVENTORY_QUERY = "__default_zentral_inventory_query__"
 
 
 def build_osquery_conf(all_probes):
-    schedule = {DEFAULT_ZENTRAL_INVENTORY_QUERY: {'query': "SELECT 'os_version' as table_name, * from os_version;"
-                                                           "Select 'system_info' as table_name, * from system_info",
+    schedule = {DEFAULT_ZENTRAL_INVENTORY_QUERY: {'query': "SELECT 'os_version' as table_name, name, major, minor, "
+                                                           "patch, build from os_version;"
+                                                           "SELECT 'system_info' as table_name, "
+                                                           "computer_name, hostname, hardware_model, hardware_serial, "
+                                                           "cpu_type, cpu_subtype, cpu_brand, cpu_physical_cores, "
+                                                           "cpu_logical_cores, physical_memory from system_info",
                                                   'snapshot': True,
                                                   'interval': 600}}
     file_paths = {}
