@@ -244,7 +244,6 @@ class LogView(BaseNodeView):
                 if table_name == 'os_version':
                     tree['os_version'] = t
                 elif table_name == 'system_info':
-                    t.pop('uuid')
                     tree['system_info'] = t
             try:
                 MachineSnapshot.objects.commit(tree)
