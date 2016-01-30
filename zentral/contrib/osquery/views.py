@@ -246,7 +246,10 @@ class LogView(BaseNodeView):
                 elif table_name == 'system_info':
                     t.pop('uuid')
                     tree['system_info'] = t
-            MachineSnapshot.objects.commit(tree)
+            try:
+                MachineSnapshot.objects.commit(tree)
+            except:
+                logger.exception('Cannot save machine snapshot')
         post_events_from_osquery_log(self.machine_serial_number,
                                      self.user_agent, self.ip, data)
         return {}
