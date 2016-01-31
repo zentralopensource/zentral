@@ -40,12 +40,12 @@ class SantaEventEvent(SantaBaseEvent):
         # We look for the probe.
         found_probes = []
         for sha256 in sha256_l:
-            for probe, rule in probes_lookup_dict.get(sha256, []):
-                found_probes.append((probe, rule))
+            for probe in probes_lookup_dict.get(sha256, []):
+                found_probes.append(probe)
         if found_probes:
             found_probes_count = len(found_probes)
             if found_probes_count > 1:
-                logger.warning("Found %d matching santa probes and rules for sha256 %s." % (found_probes_count, sha256))
+                logger.warning("Found %d matching santa probes for sha256 %s." % (found_probes_count, sha256))
         return found_probes
 
     def _get_extra_context(self):
