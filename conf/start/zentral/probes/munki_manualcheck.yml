@@ -1,4 +1,4 @@
-name: Munki errors
+name: Munki manual checks
 metadata_filters:
   - type: munki_event
 payload_filters:
