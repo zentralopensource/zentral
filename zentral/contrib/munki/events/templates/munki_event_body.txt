@@ -1,0 +1,7 @@
+{% extends "base_body.txt" %}
+
+{% block extra %}
+{% for key, val in payload|dictsort %}
+{{ key }}: {{ val }}
+{% endfor %}
+{% endblock %}

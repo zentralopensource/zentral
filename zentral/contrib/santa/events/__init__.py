@@ -21,11 +21,10 @@ class SantaEventEvent(SantaBaseEvent):
     event_type = "santa_event"
 
     def __init__(self, *args, **kwargs):
-        super(SantaEventEvent, self).__init__(*args, **kwargs)
-        self.probe = self._get_probe()
+        super(SantaBaseEvent, self).__init__(*args, **kwargs)
+        self.probes = set(self._get_probes())
 
-    def _get_probe(self):
-        # TODO: what if we find more than one matching probe ?
+    def _get_probes(self):
         # TODO: the whole zentral contrib app works only with sha256
 
         # We build a list of sha256 that can be use to find the probe.
@@ -37,23 +36,22 @@ class SantaEventEvent(SantaBaseEvent):
             cert_sha256 = cert_d.get('sha256', None)
             if cert_sha256:
                 sha256_l.append(cert_sha256)
+
         # We look for the probe.
         found_probes = []
         for sha256 in sha256_l:
-            for probe in probes_lookup_dict.get(sha256, []):
-                found_probes.append(probe)
+            for probe, rule in probes_lookup_dict.get(sha256, []):
+                found_probes.append((probe, rule))
         if found_probes:
             found_probes_count = len(found_probes)
             if found_probes_count > 1:
-                logger.warning("Found %d matching santa probes for sha %s." % (found_probes_count, sha256))
-            return found_probes[0]
+                logger.warning("Found %d matching santa probes and rules for sha256 %s." % (found_probes_count, sha256))
+        return found_probes
 
     def _get_extra_context(self):
         ctx = {}
-        if self.machine:
-            ctx['machine'] = self.machine
-        if self.probe:
-            ctx['probe'] = self.probe
+        if probes:
+            ctx['probes'] = probes
         if 'decision' in self.payload:
             ctx['decision'] = self.payload['decision']
         if 'file_name' in self.payload:
@@ -61,6 +59,13 @@ class SantaEventEvent(SantaBaseEvent):
         if 'file_path' in self.payload:
             ctx['file_path'] = self.payload['file_path']
         return ctx
+
+    def extra_probe_checks(self, probe):
+        """Exclude santa probes if not connected to event."""
+        if "santa" in probe and not probe in self.probes:
+            return False
+        else:
+            return True
 
 register_event_type(SantaEventEvent)
 

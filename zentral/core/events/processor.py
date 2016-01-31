@@ -11,8 +11,7 @@ class EventProcessor(object):
                                'zentral events processed',
                                ['type', 'machine_serial_number',
                                 'user_agent', 'ip',
-                                'probe', 'query',
-                                'processed', 'filtered_out'])
+                                'processed', 'error'])
         self.worker_id = worker_id
         self.prometheus_server_base_port = prometheus_server_base_port
         self._start_prometheus_server()
@@ -31,34 +30,25 @@ class EventProcessor(object):
                         'machine_serial_number': metadata.machine_serial_number,
                         'user_agent': '_',
                         'ip': '_',
-                        'probe': '_',
-                        'query': '_',
                         'processed': 'N',
-                        'filtered_out': 'N'}
+                        'error': 'N',
+                        }
         request = metadata.request
         if request:
             counter_dict['user_agent'] = request.user_agent
             counter_dict['ip'] = request.ip
-        if hasattr(event, 'probe') and event.probe:
-            counter_dict['probe'] = event.probe['name']
-            if hasattr(event, 'query') and event.query:
-                counter_dict['query'] = event.query['name']
-        else:
-            self.counter.labels(counter_dict).inc()
-            return
-        if event.is_filtered_out():
-            counter_dict['filtered_out'] = 'Y'
-            self.counter.labels(counter_dict).inc()
-            return
-        counter_dict['processed'] = 'Y'
+        for probe in event.get_probes():
+            counter_dict['processed'] = 'Y'
+            for action_name, action_config_d in probe['actions'].items():
+                try:
+                    action = actions[action_name]
+                except KeyError:
+                    logger.error('Unknown action %s', action_name)
+                    counter_dict['error'] = 'Y'
+                    continue
+                try:
+                    action.trigger(event, action_config_d)
+                except:
+                    logger.exception("Could not trigger action %s", action_name)
+                    counter_dict['error'] = 'Y'
         self.counter.labels(counter_dict).inc()
-        for action_name, action_config_d in event.probe['actions'].items():
-            try:
-                action = actions[action_name]
-            except KeyError:
-                logger.error('Unknown action %s', action_name)
-                continue
-            try:
-                action.trigger(event, action_config_d)
-            except:
-                logger.exception("Could not trigger action %s", action_name)

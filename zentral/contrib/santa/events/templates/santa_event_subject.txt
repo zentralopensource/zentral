@@ -1,1 +1,1 @@
-Zentral notification{% if probe %} - {{ probe.name|default('unnamed probe') }}{% endif %}
+Zentral notification - Santa

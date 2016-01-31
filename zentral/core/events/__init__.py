@@ -4,7 +4,7 @@ import logging
 import os.path
 import uuid
 from dateutil import parser
-from zentral.conf import settings
+from zentral.conf import probes, settings
 from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.queues import queues
 from .template_loader import TemplateLoader
@@ -144,6 +144,24 @@ class EventMetadata(object):
         return d
 
 
+def _check_filter(f, d):
+    for attr, val in f.items():
+        if not d.get(attr, None) == val:
+            return False
+    return True
+
+
+def _check_filters(probe, filter_attr, d):
+    filters = probe.get(filter_attr, None)
+    if not filters:
+        return True
+    else:
+        for f in filters:
+             if _check_filter(f, d):
+                return True
+        return False
+
+
 class BaseEvent(object):
     event_type = "base"
 
@@ -174,8 +192,20 @@ class BaseEvent(object):
     def post(self):
         queues.post_event(self)
 
-    def is_filtered_out(self):
-        return False
+    def extra_probe_checks(self, probe):
+        return True
+
+    def get_probes(self):
+        l = []
+        metadata = self.metadata.serialize()
+        for probe in probes.values():
+            if not self.extra_probe_checks(probe):
+                continue
+            if not _check_filters(probe, 'metadata_filters', metadata):
+                continue
+            if _check_filters(probe, 'payload_filters', self.payload):
+                l.append(probe)
+        return l
 
     # notification methods
 
@@ -186,7 +216,11 @@ class BaseEvent(object):
     def get_notification_context(self):
         if self._notification_context is None:
             ctx = {'event_id': self.metadata.uuid,
-                   'machine': {'serial_number': self.metadata.machine_serial_number}}
+                   'payload': self.payload}
+            if self.machine:
+                ctx['machine'] = self.machine
+            else:
+                ctx['machine_serial_number'] = self.metadata.machine_serial_number
             ctx.update(self._get_extra_context())
             self._notification_context = ctx
         return self._notification_context

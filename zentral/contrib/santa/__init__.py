@@ -1,4 +1,5 @@
 from zentral.conf import probes as all_probes
+from zentral.core.exceptions import ImproperlyConfigured
 
 
 def build_santa_conf(all_probes):
@@ -23,6 +24,15 @@ def build_santa_conf(all_probes):
         santa_l = probe_d.get('santa', None)
         if not santa_l:
             continue
+        # check and fix existing metadata_filters
+        metadata_filters = probe_d.get('metadata_filters', None)
+        if not metadata_filters:
+            probe_d['metadata_filters'] = [{'type': 'santa_event'}]
+        else:
+            for metadata_filter in metadata_filters:
+                if metadata_filter.setdefault('type', "santa_event") != "santa_event":
+                    #problem
+                    ImproperlyConfigured("Santa probe %s with wrong type metadata_filter %s" % (probe_d.get('name', '?'), metadata_filter['type']))
         probes.append((probe_name, probe_d))
         rules.extend(santa_l)
         for santa_r in santa_l:

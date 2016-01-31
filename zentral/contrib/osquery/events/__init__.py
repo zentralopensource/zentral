@@ -56,8 +56,6 @@ class OsqueryResultEvent(OsqueryEvent):
 
     def _get_extra_context(self):
         ctx = {}
-        if self.machine:
-            ctx['machine'] = self.machine
         if self.probe:
             ctx['probe'] = self.probe
         if self.query:
@@ -68,20 +66,12 @@ class OsqueryResultEvent(OsqueryEvent):
             ctx['columns'] = self.payload['columns']
         return ctx
 
-    def is_filtered_out(self):
-        try:
-            action_filter_field = self.probe['action_filter_field']
-        except (AttributeError, KeyError):
+    def extra_probe_checks(self, probe):
+        """Exclude osquery probes if not connected to event."""
+        if "osquery" in probe and probe != self.probe:
             return False
-        try:
-            filter_val = int(self.payload['columns'][action_filter_field])
-        except (KeyError, ValueError):
-            logger.error('Wrong filter')
-            return False
-        if not filter_val:
+        else:
             return True
-        return False
-
 
 register_event_type(OsqueryResultEvent)
 

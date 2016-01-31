@@ -19,6 +19,15 @@ def build_osquery_conf(all_probes):
         osquery_d = probe_d.get('osquery', None)
         if not osquery_d:
             continue
+        # check and fix existing metadata_filters
+        metadata_filters = probe_d.get('metadata_filters', None)
+        if not metadata_filters:
+            probe_d['metadata_filters'] = [{'type': 'osquery_result'}]
+        else:
+            for metadata_filter in metadata_filters:
+                if metadata_filter.setdefault('type', "osquery_result") != "osquery_result":
+                    #problem
+                    ImproperlyConfigured("Osquery probe %s with wrong type metadata_filter %s" % (probe_d.get('name', '?'), metadata_filter['type']))
         probes.append((probe_name, probe_d))
         for idx, osquery_query in enumerate(osquery_d.get('schedule', [])):
             osquery_query_key = '%s_%d' % (probe_name, idx)
