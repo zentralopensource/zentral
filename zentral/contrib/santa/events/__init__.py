@@ -50,8 +50,8 @@ class SantaEventEvent(SantaBaseEvent):
 
     def _get_extra_context(self):
         ctx = {}
-        if probes:
-            ctx['probes'] = probes
+        if self.probes:
+            ctx['probes'] = self.probes
         if 'decision' in self.payload:
             ctx['decision'] = self.payload['decision']
         if 'file_name' in self.payload:
