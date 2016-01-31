@@ -1,9 +1,8 @@
 name: usb
 osquery:
   schedule:
-    - query: select vendor, vendor_id, model, vendor in ('C-Media Electronics, Inc.', 'Realtek') as _alert from usb_devices;
+    - query: select vendor, vendor_id, model from usb_devices where vendor like '%C-Media%' or vendor like '%Realtek%' or model like '%C-Media%' or model like '%Realtek%';
       interval: 30
-action_filter_field: _alert
 actions:
   debug:
     sub_dir: usb
