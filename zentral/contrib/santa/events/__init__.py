@@ -22,7 +22,7 @@ class SantaEventEvent(SantaBaseEvent):
 
     def __init__(self, *args, **kwargs):
         super(SantaBaseEvent, self).__init__(*args, **kwargs)
-        self.probes = set(self._get_probes())
+        self.probes = self._get_probes()
 
     def _get_probes(self):
         # TODO: the whole zentral contrib app works only with sha256
