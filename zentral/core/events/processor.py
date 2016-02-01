@@ -39,7 +39,7 @@ class EventProcessor(object):
             counter_dict['ip'] = request.ip
         for probe in event.get_probes():
             counter_dict['processed'] = 'Y'
-            for action_name, action_config_d in probe['actions'].items():
+            for action_name, action_config_d in probe.get('actions', {}).items():
                 try:
                     action = actions[action_name]
                 except KeyError:
