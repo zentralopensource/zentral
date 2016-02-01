@@ -1,5 +1,6 @@
 {
   "api": {
+    "tls_hostname": "https://zentral",
     "tls_server_certs": "/zentral/conf/start/docker/tls/zentral_fullchain.crt",
     "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
   },

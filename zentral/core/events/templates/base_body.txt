@@ -1,6 +1,8 @@
-{% for source, machine_snapshot in machine.items() %}
-Source: {{ source.name }}
-Name: {{ machine_snapshot.get_machine_str() }}
+Serial number: {{ machine_serial_number }}
+{% if machine_url %}Zentral URL: {{ machine_url }}{% endif %}
+
+{% for name, source_names in machine_names.items() %}
+Name: {{ name }}, ({{ source_names|sort|join(', ') }})
 {% endfor %}
 
 {% if event_id %}

@@ -219,11 +219,20 @@ class BaseEvent(object):
         if self._notification_context is None:
             ctx = {'event_id': self.metadata.uuid,
                    'payload': self.payload,
-                   'probe': probe}
-            if self.machine:
+                   'probe': probe,
+                   'machine_serial_number': self.metadata.machine_serial_number}
+            if hasattr(self, 'machine'):
                 ctx['machine'] = self.machine
             else:
-                ctx['machine_serial_number'] = self.metadata.machine_serial_number
+                ctx['machine'] = {}
+            machine_names = {}
+            for source, ms in ctx['machine'].items():
+                machine_names.setdefault(ms.get_machine_str(), []).append(source.name)
+            ctx['machine_names'] = machine_names
+            if hasattr(self, 'machine_url'):
+                ctx['machine_url'] = self.machine_url
+            else:
+                ctx['machine_url'] = None
             ctx.update(self._get_extra_context())
             self._notification_context = ctx
         return self._notification_context
