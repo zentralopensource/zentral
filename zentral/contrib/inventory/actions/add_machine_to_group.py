@@ -8,7 +8,7 @@ class Action(object):
     def __init__(self, config_d):
         self.config_d = config_d
 
-    def trigger(self, event, action_config_d):
+    def trigger(self, event, probe, action_config_d):
         group_name = action_config_d['group_name']
         for client in clients:
             try:

@@ -1,5 +1,6 @@
 import logging
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader
+from jinja2.exceptions import TemplateNotFound
 from django.apps import apps
 from zentral.conf import user_templates_dir
 
@@ -24,6 +25,11 @@ class TemplateLoader(object):
             logger.debug('Jinja2 env loaded')
         return self._j2env
 
-    def load(self, template_name):
+    def load(self, event_type, part):
         j2env = self._get_j2env()
-        return j2env.get_template(template_name)
+        for prefix in (event_type, 'default'):
+            template_name = "{}_{}.txt".format(prefix, part)
+            try:
+                return j2env.get_template(template_name)
+            except TemplateNotFound:
+                pass

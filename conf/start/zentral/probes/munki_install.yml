@@ -1,0 +1,8 @@
+name: Munki install
+metadata_filters:
+  - type: munki_event
+payload_filters:
+  - type: install
+actions:
+  debug:
+    sub_dir: munki_install

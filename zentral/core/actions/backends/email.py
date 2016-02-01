@@ -30,7 +30,7 @@ class Action(BaseAction):
         finally:
             self.conn = None
 
-    def trigger(self, event, action_config_d):
+    def trigger(self, event, probe, action_config_d):
         email_from = self.config_d['email_from']
         recipients = []
         for group_name in action_config_d['groups']:
@@ -40,8 +40,8 @@ class Action(BaseAction):
                     recipients.append(contact_email)
         if not recipients:
             return
-        msg = MIMEText(event.get_notification_body())
-        msg['Subject'] = ' - '.join(event.get_notification_subject().splitlines())
+        msg = MIMEText(event.get_notification_body(probe))
+        msg['Subject'] = ' - '.join(event.get_notification_subject(probe).splitlines())
         msg['From'] = email_from
         msg['To'] = ",".join(recipients)
         try:

@@ -84,11 +84,14 @@ def cleanup_commit_tree(tree):
 
 
 class MTObjectManager(models.Manager):
-    def commit(self, tree):
+    def commit(self, tree, current=False):
         prepare_commit_tree(tree)
         created = False
         try:
-            obj = self.get(mt_hash=tree['mt_hash'])
+            search_dict = {'mt_hash': tree['mt_hash']}
+            if current:
+                search_dict['mt_next__isnull'] = True
+            obj = self.get(**search_dict)
         except self.model.DoesNotExist:
             obj = self.model()
             m2m_fields = []
@@ -130,7 +133,7 @@ class MTObjectManager(models.Manager):
 
 
 class AbstractMTObject(models.Model):
-    mt_hash = models.CharField(max_length=40, unique=True)
+    mt_hash = models.CharField(max_length=40, db_index=True)
     mt_created_at = models.DateTimeField(auto_now_add=True)
 
     mt_excluded_fields = None

@@ -22,12 +22,15 @@ class SantaEventEvent(SantaBaseEvent):
 
     def __init__(self, *args, **kwargs):
         super(SantaBaseEvent, self).__init__(*args, **kwargs)
-        self.probes = self._get_probes()
+        self.rule_probes = self._get_rule_probes()
 
-    def _get_probes(self):
+    def _get_rule_probes(self):
+        """Find the probes that could have triggered the event."""
         # TODO: the whole zentral contrib app works only with sha256
+        # TODO: we could do a better job and try to match the policy
+        #       with the santa event "decision" attr and remove some extra matching probes
 
-        # We build a list of sha256 that can be use to find the probe.
+        # We build a list of sha256 that can be use to find the probes.
         sha256_l = []
         file_sha256 = self.payload.get('file_sha256', None)
         if file_sha256:
@@ -37,7 +40,7 @@ class SantaEventEvent(SantaBaseEvent):
             if cert_sha256:
                 sha256_l.append(cert_sha256)
 
-        # We look for the probe.
+        # We look for the probes.
         found_probes = []
         for sha256 in sha256_l:
             for probe in probes_lookup_dict.get(sha256, []):
@@ -50,8 +53,8 @@ class SantaEventEvent(SantaBaseEvent):
 
     def _get_extra_context(self):
         ctx = {}
-        if self.probes:
-            ctx['probes'] = self.probes
+        if self.rule_probes:
+            ctx['rule_probes'] = self.rule_probes
         if 'decision' in self.payload:
             ctx['decision'] = self.payload['decision']
         if 'file_name' in self.payload:
@@ -62,7 +65,7 @@ class SantaEventEvent(SantaBaseEvent):
 
     def extra_probe_checks(self, probe):
         """Exclude santa probes if not connected to event."""
-        if "santa" in probe and not probe in self.probes:
+        if "santa" in probe and not probe in self.rule_probes:
             return False
         else:
             return True

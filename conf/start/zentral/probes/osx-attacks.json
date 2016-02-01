@@ -1,188 +1,197 @@
 {
   "name": "osx-attacks",
+  "actions": {
+    "debug": {"sub_dir": "osx-attacks"}
+  },
   "osquery": {
     "schedule": [
       {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'apple.launchd.plist' or name = 'com.apple.launchport.plist';",
-        "description": "(http://securelist.com/blog/research/57331/the-icefog-apt-a-tale-of-cloak-and-three-daggers/)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.apple.FolderActionsxl.plist';",
-        "description": "(https://www.f-secure.com/v-descs/backdoor_osx_mackontrol_a.shtml)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.vsearch.agent.plist' or name = 'com.vsearch.daemon.plist' or name = 'com.vsearch.helper.plist' or name = 'Jack.plist';",
-        "description": "(http://www.thesafemac.com/arg-downlite/)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from startup_items where path like '%iWorkServices%';",
-        "description": "(https://www.f-secure.com/v-descs/backdoor_osx_iworkserv_a.shtml)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where path like '%UserEvent.System.plist';",
-        "description": "(http://www.intego.com/mac-security-blog/new-mac-trojan-discovered-related-to-syria/)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.BT.BPK.plist';",
-        "description": "(http://www.blazingtools.com/mac_keylogger.html)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.genieo.completer.download.plist' or name = 'com.genieo.completer.update.plist' or name = 'com.genieo.completer.ltvbit.plist' or name = 'com.installer.completer.download.plist' or name = 'com.installer.completer.update.plist' or name = 'com.installer.completer.ltvbit.plist' or name = 'com.genieoinnovation.macextension.plist' or name = 'com.genieoinnovation.macextension.client.plist' or name = 'com.genieo.engine.plist';",
-        "description": "(http://www.thesafemac.com/arg-genieo/)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.webhelper.plist' or name = 'com.webtools.update.agent.plist' or name = 'com.webtools.uninstaller.plist';",
-        "description": "(http://www.thesafemac.com/arg-buca-apps/)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from apps where bundle_identifier = 'com.ht.RCSMac' or bundle_package_type like 'OSAX';",
-        "description": "Detect RAT used by Hacking Team",
-        "interval": "86400"
-      },
-      {
-        "value": "Potential information stealing/leakage.",
-        "query": "select label, description, authorizations, path, count(path) as collisions from keychain_acls where label != '' and path != '' group by label having collisions > 1;",
-        "description": "Detect OS X keychain items with ACLs permitting multiple application access.",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
         "query": "select * from launchd where name = 'com.whitesmoke.uploader.plist';",
+        "interval": "86400",
         "description": "(http://www.thesafemac.com/osxfkcodec-a-in-action/ )",
-        "interval": "86400"
+        "value": "Whitesmoke: Artifact used by this malware"
       },
       {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.apple.DockActions.plist' or name like '%www. google.com.tstart.plist%';",
-        "description": "(https://www.f-secure.com/v-descs/backdoor_osx_olyx_c.shtml)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.pwned.plist' or name = 'com.openbundle.plist' or name = 'com.adobe.reader.plist';",
-        "description": "(https://www.f-secure.com/v-descs/inqtana_a.shtml)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where path like '%com.conduit.loader.agent.plist' or name = 'com.conduit.loader.agent.plist' or path like '%com.perion.searchprotectd.plist' or name = 'com.perion.searchprotectd.plist';",
-        "description": "(http://www.thesafemac.com/arg-conduit/)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.apple.PubSabAgent.plist';",
-        "description": "(https://www.f-secure.com/v-descs/backdoor_osx_sabpab_a.shtml)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where label = 'com.ht.RCSMac' or label like 'com.yourcompany.%' or name = 'com.apple.loginStoreagent.plist' or name = 'com.apple.mdworker.plist' or name = 'com.apple.UIServerLogin.plist';",
-        "description": "Detect RAT used by Hacking Team",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
         "query": "select * from launchd where name = 'com.apple.legion.plist' or name = 'com.apple.pixel.plist';",
+        "interval": "86400",
         "description": "(https://www.f-secure.com/v-descs/backdoor_osx_devilrobber_a.shtml)",
-        "interval": "86400"
+        "value": "DevilRobber: Artifact used by this malware"
       },
       {
-        "value": "Artifact used by this malware",
+        "query": "select * from xprotect_reports;",
+        "removed": false,
+        "interval": 1200,
+        "description": "Report on Apple/OS X XProtect 'report' generation. Reports are generated when OS X matches an item in xprotect_entries.",
+        "value": "xprotect_reports: Although XProtect reports are rare, they may be worth collecting and aggregating internally."
+      },
+      {
         "query": "select * from launchd where name = 'com.apple.machook_damon.plist' or name = 'com.apple.globalupdate.plist' or name = 'com.apple.appstore.plughelper.plist' or name = 'com.apple.MailServiceAgentHelper.plist' or name = 'com.apple.systemkeychain-helper.plist' or name = 'com.apple.periodic-dd-mm-yy.plist';",
+        "interval": "86400",
         "description": "(https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)",
-        "interval": "86400"
+        "value": "WireLurker: Artifact used by this malware"
       },
       {
-        "value": "Artifact used by this malware",
-        "query": "select * from file where path = '/Users/Shared/UserEvent.app';",
-        "description": "(http://www.intego.com/mac-security-blog/new-mac-trojan-discovered-related-to-syria/)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.apple.mdworker.plist';",
-        "description": "(http://www.trendmicro.com/vinfo/us/threat-encyclopedia/malware/osx_morcut.a)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
         "query": "select * from launchd where name = 'com.apple.service.clipboardd.plist';",
+        "interval": "86400",
         "description": "(https://www.fireeye.com/blog/threat-research/2014/09/forced-to-adapt-xslcmd-backdoor-now-on-os-x.html)",
-        "interval": "86400"
+        "value": "XSLCmd: Artifact used by this malware"
       },
       {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'realPlayerUpdate.plist';",
-        "description": "(https://www.f-secure.com/weblog/archives/00002546.html)",
-        "interval": "86400"
+        "query": "select * from launchd where name = 'com.apple.DockActions.plist' or name like '%www. google.com.tstart.plist%';",
+        "interval": "86400",
+        "description": "(https://www.f-secure.com/v-descs/backdoor_osx_olyx_c.shtml)",
+        "value": "Olyx: Artifact used by this malware"
       },
       {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where path like '%com.apple.AudioService.plist';",
-        "description": "(http://www.intego.com/mac-security-blog/os-x-malware-tibet-variant-found/)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'checkflr.plist';",
-        "description": "(https://www.f-secure.com/v-descs/backdoor_osx_imuler_a.shtml)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'mac.Dockset.deman.plist';",
-        "description": "(http://www.trendmicro.com/vinfo/us/threat-encyclopedia/malware/osx_dockster.a)",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
-        "query": "select * from file where path = '/dev/ptmx0';",
-        "description": "Detect RAT used by Hacking Team",
-        "interval": "86400"
-      },
-      {
-        "value": "Artifact used by this malware",
         "query": "select * from launchd where name = 'com.rxs.syslogagent.plist';",
+        "interval": "86400",
         "description": "(http://www.symantec.com/security_response/writeup.jsp?docid=2010-081606-4034-99&tabid=2)",
-        "interval": "86400"
+        "value": "SniperSpy: Artifact used by this malware"
       },
       {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.codecm.uploader.plist';",
-        "description": "(http://www.thesafemac.com/osxfkcodec-a-in-action/)",
-        "interval": "86400"
+        "query": "select * from launchd where name = 'com.BT.BPK.plist';",
+        "interval": "86400",
+        "description": "(http://www.blazingtools.com/mac_keylogger.html)",
+        "value": "BlazingKeylogger: Artifact used by this malware"
       },
       {
-        "value": "Artifact used by this malware",
-        "query": "select * from launchd where name = 'com.JavaW.plist';",
-        "description": "(https://www.virusbtn.com/virusbulletin/archive/2014/10/vb201410-iWorm)",
-        "interval": "86400"
+        "query": "select * from launchd where path like '%com.apple.AudioService.plist';",
+        "interval": "86400",
+        "description": "(http://www.intego.com/mac-security-blog/os-x-malware-tibet-variant-found/)",
+        "value": "Tibet.D: Artifact used by this malware"
       },
       {
-        "value": "Artifact used by this malware",
+        "query": "select * from launchd where path like '%com.conduit.loader.agent.plist' or name = 'com.conduit.loader.agent.plist' or path like '%com.perion.searchprotectd.plist' or name = 'com.perion.searchprotectd.plist';",
+        "interval": "86400",
+        "description": "(http://www.thesafemac.com/arg-conduit/)",
+        "value": "Conduit: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'com.pwned.plist' or name = 'com.openbundle.plist' or name = 'com.adobe.reader.plist';",
+        "interval": "86400",
+        "description": "(https://www.f-secure.com/v-descs/inqtana_a.shtml)",
+        "value": "Inqtana: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'mac.Dockset.deman.plist';",
+        "interval": "86400",
+        "description": "(http://www.trendmicro.com/vinfo/us/threat-encyclopedia/malware/osx_dockster.a)",
+        "value": "Dockster: Artifact used by this malware"
+      },
+      {
         "query": "select * from launchd where path like '%com.apple.launchport.plist';",
+        "interval": "86400",
         "description": "(http://blog.kaspersky.com/the-mask-unveiling-the-worlds-most-sophisticated-apt-campaign/)",
-        "interval": "86400"
+        "value": "Careto: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'com.codecm.uploader.plist';",
+        "interval": "86400",
+        "description": "(http://www.thesafemac.com/osxfkcodec-a-in-action/)",
+        "value": "Codecm: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'checkflr.plist';",
+        "interval": "86400",
+        "description": "(https://www.f-secure.com/v-descs/backdoor_osx_imuler_a.shtml)",
+        "value": "Imuler: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'com.apple.PubSabAgent.plist';",
+        "interval": "86400",
+        "description": "(https://www.f-secure.com/v-descs/backdoor_osx_sabpab_a.shtml)",
+        "value": "PubSab: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where program_arguments like '/Users/%/Library/Application Support/%/%.app/Contents/MacOS/App% -trigger download -isDev % -installVersion % -firstAppId % -identity %';",
+        "interval": "86400",
+        "description": "New version of Genieo",
+        "value": "GenieoPart2: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'com.webhelper.plist' or name = 'com.webtools.update.agent.plist' or name = 'com.webtools.uninstaller.plist';",
+        "interval": "86400",
+        "description": "(http://www.thesafemac.com/arg-buca-apps/)",
+        "value": "Buca: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'com.apple.FolderActionsxl.plist';",
+        "interval": "86400",
+        "description": "(https://www.f-secure.com/v-descs/backdoor_osx_mackontrol_a.shtml)",
+        "value": "MacKontrol: Artifact used by this malware"
+      },
+      {
+        "query": "select * from apps where bundle_identifier = 'com.ht.RCSMac';",
+        "interval": "86400",
+        "description": "Detect RAT used by Hacking Team",
+        "value": "HackingTeam_Mac_RAT2: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where label = 'com.ht.RCSMac' or name = 'com.apple.loginStoreagent.plist' or name = 'com.apple.mdworker.plist' or name = 'com.apple.UIServerLogin.plist';",
+        "interval": "86400",
+        "description": "Detect RAT used by Hacking Team",
+        "value": "HackingTeam_Mac_RAT3: Artifact used by this malware"
+      },
+      {
+        "query": "select * from file where path = '/dev/ptmx0';",
+        "interval": "86400",
+        "description": "Detect RAT used by Hacking Team",
+        "value": "HackingTeam_Mac_RAT1: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'com.apple.mdworker.plist';",
+        "interval": "86400",
+        "description": "(http://www.trendmicro.com/vinfo/us/threat-encyclopedia/malware/osx_morcut.a)",
+        "value": "Morcut: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'com.vsearch.agent.plist' or name = 'com.vsearch.daemon.plist' or name = 'com.vsearch.helper.plist' or name = 'Jack.plist';",
+        "interval": "86400",
+        "description": "(http://www.thesafemac.com/arg-downlite/)",
+        "value": "Vsearch: Artifact used by this malware"
+      },
+      {
+        "query": "select * from startup_items where path like '%iWorkServices%';",
+        "interval": "86400",
+        "description": "(https://www.f-secure.com/v-descs/backdoor_osx_iworkserv_a.shtml)",
+        "value": "iWorkServ: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'apple.launchd.plist' or name = 'com.apple.launchport.plist';",
+        "interval": "86400",
+        "description": "(http://securelist.com/blog/research/57331/the-icefog-apt-a-tale-of-cloak-and-three-daggers/)",
+        "value": "Icefog: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'com.JavaW.plist';",
+        "interval": "86400",
+        "description": "(https://www.virusbtn.com/virusbulletin/archive/2014/10/vb201410-iWorm)",
+        "value": "iWorm: Artifact used by this malware"
+      },
+      {
+        "query": "select * from file where path = '/Users/Shared/UserEvent.app';",
+        "interval": "86400",
+        "description": "(http://www.intego.com/mac-security-blog/new-mac-trojan-discovered-related-to-syria/)",
+        "value": "Leverage-A_2: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'realPlayerUpdate.plist';",
+        "interval": "86400",
+        "description": "(https://www.f-secure.com/weblog/archives/00002546.html)",
+        "value": "CallMe: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where path like '%UserEvent.System.plist';",
+        "interval": "86400",
+        "description": "(http://www.intego.com/mac-security-blog/new-mac-trojan-discovered-related-to-syria/)",
+        "value": "Leverage-A_1: Artifact used by this malware"
+      },
+      {
+        "query": "select * from launchd where name = 'com.genieo.completer.download.plist' or name = 'com.genieo.completer.update.plist' or name = 'com.genieo.completer.ltvbit.plist' or name = 'com.installer.completer.download.plist' or name = 'com.installer.completer.update.plist' or name = 'com.installer.completer.ltvbit.plist' or name = 'com.genieoinnovation.macextension.plist' or name = 'com.genieoinnovation.macextension.client.plist' or name = 'com.genieo.engine.plist';",
+        "interval": "86400",
+        "description": "(http://www.thesafemac.com/arg-genieo/)",
+        "value": "Genieo: Artifact used by this malware"
       }
     ]
-  },
-  "actions": {"debug": {"sub_dir": "osx-attacks"}}
+  }
 }

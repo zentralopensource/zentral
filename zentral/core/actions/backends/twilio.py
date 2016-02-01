@@ -12,9 +12,10 @@ class Action(BaseAction):
         self.url = "{api_endpoint}Accounts/{account_sid}/Messages".format(api_endpoint=API_ENDPOINT,
                                                                           account_sid=config_d['account_sid'])
 
-    def trigger(self, event, action_config_d):
+    def trigger(self, event, probe, action_config_d):
         action_config_d = action_config_d or {}
-        args = {'Body': '\n\n'.join([event.get_notification_subject(), event.get_notification_body()]),
+        args = {'Body': '\n\n'.join([event.get_notification_subject(probe),
+                                     event.get_notification_body(probe)]),
                 'From': self.config_d['from_number']}
         for group_name in action_config_d['groups']:
             for contact_d in contact_groups[group_name]:

@@ -5,7 +5,7 @@ from .base import BaseAction
 
 
 class Action(BaseAction):
-    def trigger(self, event, action_config_d):
+    def trigger(self, event, probe, action_config_d):
         action_config_d = action_config_d or {}
         local_dir = self.config_d['local_dir']
         sub_dir = action_config_d.get('sub_dir', None)
@@ -15,6 +15,6 @@ class Action(BaseAction):
             os.makedirs(local_dir)
         file_path = os.path.join(local_dir, datetime.now().isoformat())
         with open(file_path, 'w') as f:
-            json.dump({'subject': event.get_notification_subject(),
-                       'body': event.get_notification_body()},
+            json.dump({'subject': event.get_notification_subject(probe),
+                       'body': event.get_notification_body(probe)},
                       f, sort_keys=True, indent=4)

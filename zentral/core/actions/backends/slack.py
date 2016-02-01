@@ -6,9 +6,10 @@ API_ENDPOINT = "https://slack.com/api/chat.postMessage"
 
 
 class Action(BaseAction):
-    def trigger(self, event, action_config_d):
+    def trigger(self, event, probe, action_config_d):
         action_config_d = action_config_d or {}
-        args = {'text': '\n\n'.join([event.get_notification_subject(), event.get_notification_body()])}
+        args = {'text': '\n\n'.join([event.get_notification_subject(probe),
+                                     event.get_notification_body(probe)])}
         if 'webhook' not in self.config_d:
             args.update({'token': self.config_d['token'],
                          'username': self.config_d['username'],

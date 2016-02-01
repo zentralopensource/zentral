@@ -132,7 +132,7 @@ class TeamViewer(AbstractMTObject):
 
 class MachineSnapshotManager(MTObjectManager):
     def commit(self, tree):
-        obj, created = super().commit(tree)
+        obj, created = super().commit(tree, current=True)
         if created:
             self.filter(source=obj.source,
                         machine__serial_number=obj.machine.serial_number,

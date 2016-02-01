@@ -47,7 +47,7 @@ class EventProcessor(object):
                     counter_dict['error'] = 'Y'
                     continue
                 try:
-                    action.trigger(event, action_config_d)
+                    action.trigger(event, probe, action_config_d)
                 except:
                     logger.exception("Could not trigger action %s", action_name)
                     counter_dict['error'] = 'Y'

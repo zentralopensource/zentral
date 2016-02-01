@@ -1,8 +1,0 @@
-name: Munki manual checks
-metadata_filters:
-  - type: munki_event
-payload_filters:
-  - run_type: manualcheck
-actions:
-  debug:
-    sub_dir: munki_errors

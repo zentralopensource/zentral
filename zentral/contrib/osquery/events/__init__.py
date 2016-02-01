@@ -52,12 +52,12 @@ class OsqueryResultEvent(OsqueryEvent):
 
     def __init__(self, *args, **kwargs):
         super(OsqueryResultEvent, self).__init__(*args, **kwargs)
-        self.probe, self.query = _get_probe_and_query_from_payload(self.payload)
+        self.query_probe, self.query = _get_probe_and_query_from_payload(self.payload)
 
     def _get_extra_context(self):
         ctx = {}
-        if self.probe:
-            ctx['probe'] = self.probe
+        if self.query_probe:
+            ctx['query_probe'] = self.query_probe
         if self.query:
             ctx['query'] = self.query
         if 'action' in self.payload:
@@ -68,7 +68,7 @@ class OsqueryResultEvent(OsqueryEvent):
 
     def extra_probe_checks(self, probe):
         """Exclude osquery probes if not connected to event."""
-        if "osquery" in probe and probe != self.probe:
+        if "osquery" in probe and probe != self.query_probe:
             return False
         else:
             return True

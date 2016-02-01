@@ -14,10 +14,10 @@ class Action(BaseAction):
         self.auth = ('{email}/token'.format(**config_d), config_d['token'])
         self.url = API_ENDPOINT.format(**config_d)
 
-    def trigger(self, event, action_config_d):
+    def trigger(self, event, probe, action_config_d):
         action_config_d = action_config_d or {}
-        args = {'ticket': {'comment': {'body': event.get_notification_body()},
-                'subject': event.get_notification_subject()}}
+        args = {'ticket': {'comment': {'body': event.get_notification_body(probe)},
+                'subject': event.get_notification_subject(probe)}}
 
         # priority
         priority = action_config_d.get('priority', 'normal')

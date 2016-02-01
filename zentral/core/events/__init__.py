@@ -84,12 +84,11 @@ template_loader = TemplateLoader([os.path.join(os.path.dirname(__file__), 'templ
 
 
 def render_notification_part(ctx, event_type, part):
-    template_name = "{}_{}.txt".format(event_type, part)
-    template = template_loader.load(template_name)
+    template = template_loader.load(event_type, part)
     if template:
         return template.render(ctx)
     else:
-        msg = 'Missing template {}'.format(template_name)
+        msg = 'Missing template event_type: {} part: {}'.format(event_type, part)
         logger.error(msg)
         return msg
 
@@ -146,7 +145,10 @@ class EventMetadata(object):
 
 def _check_filter(f, d):
     for attr, val in f.items():
-        if not d.get(attr, None) == val:
+        event_val = d.get(attr, None)
+        if isinstance(val, list) and isinstance(event_val, list):
+            return all([elm in event_val for elm in val])
+        elif val != event_val:
             return False
     return True
 
@@ -213,10 +215,11 @@ class BaseEvent(object):
         # to be implemented in the sub classes
         return {}
 
-    def get_notification_context(self):
+    def get_notification_context(self, probe):
         if self._notification_context is None:
             ctx = {'event_id': self.metadata.uuid,
-                   'payload': self.payload}
+                   'payload': self.payload,
+                   'probe': probe}
             if self.machine:
                 ctx['machine'] = self.machine
             else:
@@ -225,14 +228,14 @@ class BaseEvent(object):
             self._notification_context = ctx
         return self._notification_context
 
-    def get_notification_subject(self):
+    def get_notification_subject(self, probe):
         if self._notification_subject is None:
-            ctx = self.get_notification_context()
+            ctx = self.get_notification_context(probe)
             self._notification_subject = render_notification_part(ctx, self.event_type, 'subject')
         return self._notification_subject
 
-    def get_notification_body(self):
+    def get_notification_body(self, probe):
         if self._notification_body is None:
-            ctx = self.get_notification_context()
+            ctx = self.get_notification_context(probe)
             self._notification_body = render_notification_part(ctx, self.event_type, 'body')
         return self._notification_body
