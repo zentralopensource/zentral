@@ -7,6 +7,7 @@ Name: {{ name }}, ({{ source_names|sort|join(', ') }})
 
 {% if event_id %}
 Zentral event id: {{ event_id }}
+Event created at: {{ created_at }}
 {% endif %}
 
 {% block extra %}

@@ -218,6 +218,7 @@ class BaseEvent(object):
     def get_notification_context(self, probe):
         if self._notification_context is None:
             ctx = {'event_id': self.metadata.uuid,
+                   'created_at': self.metadata.created_at,
                    'payload': self.payload,
                    'probe': probe,
                    'machine_serial_number': self.metadata.machine_serial_number}
