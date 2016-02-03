@@ -18,14 +18,22 @@ from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 logger = logging.getLogger('zentral.contrib.osquery.views')
 
 
-class IndexView(TemplateView):
-    template_name = "osquery/index.html"
+class ProbesView(TemplateView):
+    template_name = "osquery/probes.html"
 
     def get_context_data(self, **kwargs):
-        context = super(IndexView, self).get_context_data(**kwargs)
+        context = super(ProbesView, self).get_context_data(**kwargs)
         context['osquery'] = True
         context['probes'] = probes
-        context['last_dq'] = DistributedQuery.objects.all()[:10]
+        return context
+
+
+class EnrollmentView(TemplateView):
+    template_name = "osquery/enrollment.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(EnrollmentView, self).get_context_data(**kwargs)
+        context['osquery'] = True
         return context
 
 

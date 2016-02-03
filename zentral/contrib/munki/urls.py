@@ -4,7 +4,8 @@ from . import views
 
 urlpatterns = [
     # django admin
-    url(r'^$', views.IndexView.as_view(), name='index'),
+    url(r'^probes/$', views.ProbesView.as_view(), name='probes'),
+    url(r'^enrollment/$', views.EnrollmentView.as_view(), name='enrollment'),
     url(r'^installer_package/$', views.InstallerPackageView.as_view(), name='installer_package'),
     # API
     url(r'^job_details/$', csrf_exempt(views.JobDetailsView.as_view())),

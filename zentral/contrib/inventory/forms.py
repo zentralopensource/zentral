@@ -1,5 +1,6 @@
 from django import forms
-from .models import Source
+from django.utils.crypto import get_random_string
+from .models import BusinessUnit, Source
 
 
 class MachineSearchForm(forms.Form):
@@ -22,3 +23,23 @@ class BusinessUnitSearchForm(forms.Form):
     source = forms.ModelChoiceField(queryset=Source.objects.current_business_unit_sources(),
                                     required=False,
                                     widget=forms.Select(attrs={'class': 'form-control'}))
+
+
+class BusinessUnitForm(forms.ModelForm):
+    class Meta:
+        fields = ('name',)
+        model = BusinessUnit
+
+    def save(self):
+        name = self.cleaned_data['name']
+        if self.instance.reference:
+            self.instance.name = name
+            self.instance.mt_hash = self.instance.hash()
+            self.instance.save()
+        else:
+            tree = {'source': {'module': 'zentral.contrib.inventory',
+                               'name': 'Inventory'},
+                    'reference': get_random_string(64),
+                    'name': name}
+            self.instance, _ = BusinessUnit.objects.commit(tree)
+        return self.instance

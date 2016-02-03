@@ -37,10 +37,28 @@
                 <li><a href="{% url 'inventory:bu' %}">Business units</a></li>
               </ul>
             </li>
-	    <li {% if osquery %}class="active"{% endif %}><a href="{% url 'osquery:index' %}">Osquery{% if osquery %} <span class="sr-only">(current)</span>{% endif %}</a></li>
-	    <li {% if santa %}class="active"{% endif %}><a href="{% url 'santa:index' %}">Santa{% if santa %} <span class="sr-only">(current)</span>{% endif %}</a></li>
-	    <li {% if munki %}class="active"{% endif %}><a href="{% url 'munki:index' %}">Munki{% if munki %} <span class="sr-only">(current)</span>{% endif %}</a></li>
-	    <li><a href="/prometheus/">Prometheus</a></li>
+	    <li class="dropdown{% if osquery %} active{% endif %}">
+              <a href="{% url 'osquery:probes' %}" class="dropdown-toggle" data-toggle="dropdown" role="button">Osquery <span class="caret"></span></a>
+              <ul class="dropdown-menu">
+                <li><a href="{% url 'osquery:probes' %}">Probes</a></li>
+                <li><a href="{% url 'osquery:distributed_index' %}">Distributed queries</a></li>
+                <li><a href="{% url 'osquery:enrollment' %}">Enrollment</a></li>
+              </ul>
+            </li>
+	    <li class="dropdown{% if santa %} active{% endif %}">
+              <a href="{% url 'santa:probes' %}" class="dropdown-toggle" data-toggle="dropdown" role="button">Santa <span class="caret"></span></a>
+              <ul class="dropdown-menu">
+                <li><a href="{% url 'santa:probes' %}">Probes</a></li>
+                <li><a href="{% url 'santa:enrollment' %}">Enrollment</a></li>
+              </ul>
+            </li>
+	    <li class="dropdown{% if munki %} active{% endif %}">
+              <a href="{% url 'munki:probes' %}" class="dropdown-toggle" data-toggle="dropdown" role="button">Munki <span class="caret"></span></a>
+              <ul class="dropdown-menu">
+                <li><a href="{% url 'munki:probes' %}">Probes</a></li>
+                <li><a href="{% url 'munki:enrollment' %}">Enrollment</a></li>
+              </ul>
+            </li>
           </ul>
         </div><!-- /.navbar-collapse -->
       </div><!-- /.container -->

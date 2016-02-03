@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>{% if object %}Update{% else %}Create{% endif %} Business Unit</h2>
+<form method="POST" class="form">{% csrf_token %}
+  <div class="form-group">
+    <label for="id_name">{{ form.name.label|title }}</label>
+    <input type="text" id="id_name"{% if form.name.value %} value="{{ form.name.value }}"{% endif %} name="name" class="form-control" placeholder="{{ form.name.label }}">
+  </div>
+  <a href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'inventory:bu' %}{% endif %}" class="btn btn-default">Cancel</a>
+  <button type="submit" class="btn btn-default">{% if object %}Update{% else %}Create{% endif %}</button>
+</form>
+{% endblock %}

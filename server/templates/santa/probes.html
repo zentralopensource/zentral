@@ -14,8 +14,4 @@
     {% endfor %}
   </tbody>
 </table>
-
-<form action="{% url 'santa:installer_package' %}" method="POST">{% csrf_token %}
-  <button class="btn btn-default" type="submit">Download enrollment pkg</button>
-</form>
 {% endblock %}

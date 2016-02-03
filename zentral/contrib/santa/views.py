@@ -13,13 +13,22 @@ from .osx_package.builder import SantaZentralEnrollPkgBuilder
 logger = logging.getLogger('zentral.contrib.santa.views')
 
 
-class IndexView(TemplateView):
-    template_name = "santa/index.html"
+class ProbesView(TemplateView):
+    template_name = "santa/probes.html"
 
     def get_context_data(self, **kwargs):
-        context = super(IndexView, self).get_context_data(**kwargs)
+        context = super(ProbesView, self).get_context_data(**kwargs)
         context['santa'] = True
         context['probes'] = probes
+        return context
+
+
+class EnrollmentView(TemplateView):
+    template_name = "santa/enrollment.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(EnrollmentView, self).get_context_data(**kwargs)
+        context['santa'] = True
         return context
 
 

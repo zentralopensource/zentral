@@ -2,9 +2,12 @@
 
 {% block content %}
 {% if object_list_title %}
-<h1>{{ object_list_title }}</h1>
+<h2>{{ object_list_title }}</h2>
 {% endif %}
-<h2>{{ object_list|length }} Machine{{ object_list|length|pluralize }}</h2>
+{% if update_link %}
+<a href="{{ update_link }}" class="btn btn-default">Update</a>
+{% endif %}
+<h3>{{ object_list|length }} Machine{{ object_list|length|pluralize }}</h3>
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
   <div class="form-group">
     <label for="id_serial_number">{{ search_form.serial_number.label|title }}</label>

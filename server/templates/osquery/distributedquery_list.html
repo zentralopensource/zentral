@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1>Distributed queries</h1>
+<h2>{{ object_list|length }} Osquery distributed queries</h2>
 <p>
   <a href="{% url 'osquery:distributed_create' %}" class="btn btn-default">Create</a>
 </p>

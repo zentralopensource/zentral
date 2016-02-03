@@ -13,11 +13,21 @@ from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 logger = logging.getLogger('zentral.contrib.munki.views')
 
 
-class IndexView(TemplateView):
-    template_name = "munki/index.html"
+class ProbesView(TemplateView):
+    template_name = "munki/probes.html"
 
     def get_context_data(self, **kwargs):
-        context = super(IndexView, self).get_context_data(**kwargs)
+        context = super(ProbesView, self).get_context_data(**kwargs)
+        context['munki'] = True
+        context['probes'] = []  # TODO
+        return context
+
+
+class EnrollmentView(TemplateView):
+    template_name = "munki/enrollment.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(EnrollmentView, self).get_context_data(**kwargs)
         context['munki'] = True
         return context
 

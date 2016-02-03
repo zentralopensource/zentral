@@ -1,12 +1,16 @@
+from django.core.urlresolvers import reverse
 from django.views import generic
 from zentral.core.stores import frontend_store
 from zentral.utils.text import str_to_ascii
-from .forms import BusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm
+from .forms import BusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm, BusinessUnitForm
 from .models import BusinessUnit, MachineGroup, MachineSnapshot
 
 
 class MachineListView(generic.TemplateView):
     template_name = "inventory/machine_list.html"
+
+    def get_object(self, **kwargs):
+        return None
 
     def get_list_qs(self, **kwargs):
         return MachineSnapshot.objects.current()
@@ -44,6 +48,8 @@ class MachineListView(generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super(MachineListView, self).get_context_data(**kwargs)
+        self.object = self.get_object(**kwargs)
+        context['object'] = self.object
         context['inventory'] = True
         # group by machine serial number
         ms_dict = {}
@@ -87,12 +93,14 @@ class GroupsView(generic.TemplateView):
 
 
 class GroupMachinesView(MachineListView):
+    def get_object(self, **kwargs):
+        return MachineGroup.objects.select_related('source').get(pk=kwargs['group_id'])
+
     def get_list_qs(self, **kwargs):
         return MachineSnapshot.objects.current().filter(groups__id=kwargs['group_id'])
 
     def get_list_title(self, **kwargs):
-        mg = MachineGroup.objects.select_related('source').get(pk=kwargs['group_id'])
-        return "Group: {} - {}".format(mg.source.name, mg.name)
+        return "Group: {} - {}".format(self.object.source.name, self.object.name)
 
 
 class BUView(generic.TemplateView):
@@ -118,13 +126,32 @@ class BUView(generic.TemplateView):
         return context
 
 
+class CreateBUView(generic.CreateView):
+    template_name = "inventory/edit_bu.html"
+    form_class = BusinessUnitForm
+
+
+class UpdateBUView(generic.UpdateView):
+    template_name = "inventory/edit_bu.html"
+    queryset = BusinessUnit.objects.filter(source__module="zentral.contrib.inventory")
+    form_class = BusinessUnitForm
+
+
 class BUMachinesView(MachineListView):
+    def get_object(self, **kwargs):
+        return BusinessUnit.objects.select_related('source').get(pk=kwargs['bu_id'])
+
     def get_list_qs(self, **kwargs):
         return MachineSnapshot.objects.current().filter(business_unit__id=kwargs['bu_id'])
 
     def get_list_title(self, **kwargs):
-        bu = BusinessUnit.objects.select_related('source').get(pk=kwargs['bu_id'])
-        return "BU: {} - {}".format(bu.source.name, bu.name)
+        return "BU: {} - {}".format(self.object.source.name, self.object.name)
+
+    def get_context_data(self, **kwargs):
+        ctx = super(BUMachinesView, self).get_context_data(**kwargs)
+        if self.object.source.module == 'zentral.contrib.inventory':
+            ctx['update_link'] = reverse('inventory:update_bu', args=(self.object.id,))
+        return ctx
 
 
 class MachineView(generic.TemplateView):

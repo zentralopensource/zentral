@@ -1,4 +1,5 @@
 from django.contrib.postgres.fields import JSONField
+from django.core.urlresolvers import reverse
 from django.db import models
 from django.db.models import Count
 from zentral.utils.mt_models import prepare_commit_tree, AbstractMTObject, MTObjectManager
@@ -76,7 +77,8 @@ class AbstractMachineGroup(AbstractMTObject):
 
 
 class BusinessUnit(AbstractMachineGroup):
-    pass
+    def get_absolute_url(self):
+        return reverse('inventory:bu_machines', args=(self.id,))
 
 
 class MachineGroup(AbstractMachineGroup):

@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>{{ probes|length }} Munki probe{{ probes|length|pluralize }}</h2>
+<table class="table">
+  <thead>
+    <th>Name</th>
+  </thead>
+  <tbody>
+    {% for k, probe in probes %}
+    <tr>
+      <td><a href="{% url 'munki:probe' k %}">{{ probe.name }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
