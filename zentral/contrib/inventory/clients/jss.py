@@ -156,4 +156,3 @@ class InventoryClient(BaseInventory):
             r = requests.post(url, headers=headers, auth=self.auth, data=data)
         if r.status_code != requests.codes.created:
             raise InventoryError()
-        return r.json()
