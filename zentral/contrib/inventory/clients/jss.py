@@ -120,11 +120,8 @@ class InventoryClient(BaseInventory):
             yield ct
 
     def add_machine_to_group(self, machine_snapshot, group_name):
-        if isinstance(machine_snapshot, dict):
-            source, machine_id = machine_snapshot['source'], machine_snapshot['reference']
-        else:
-            source, machine_id = machine_snapshot.source, machine_snapshot.reference
-        assert(source == self.source)
+        source, machine_id = machine_snapshot.source, machine_snapshot.reference
+        assert(source.module == self.source['module'] and source.config == self.source['config'])
         machine_id = int(machine_id)
         machine_id_l = []
         try:

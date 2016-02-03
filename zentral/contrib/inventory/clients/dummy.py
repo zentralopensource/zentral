@@ -45,6 +45,3 @@ class InventoryClient(BaseInventory):
         for idx, machine_snapshot_d in enumerate(DUMMY_MACHINES):
             machine_snapshot_d['reference'] = '{}${}'.format(self.__module__, idx)
             yield machine_snapshot_d
-
-    def add_machine_to_group(self, md, group_name):
-        raise NotImplementedError

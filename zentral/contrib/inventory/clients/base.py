@@ -49,3 +49,6 @@ class BaseInventory(object):
                     key = "added"
                     data = machine_snapshot.serialize()
                 yield machine_snapshot, {'action': action, 'source': self.source, key: data}
+
+    def add_machine_to_group(self, machine_snapshot, group_name):
+        raise NotImplementedError

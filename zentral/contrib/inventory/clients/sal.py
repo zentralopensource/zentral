@@ -75,6 +75,3 @@ class InventoryClient(BaseInventory):
                                  'physical_memory': sal_machine['memory_kb'] * 2**10}
 
             yield ct
-
-    def add_machine_to_group(self, md, group_name):
-        raise NotImplementedError
