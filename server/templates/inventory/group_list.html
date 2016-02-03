@@ -17,10 +17,14 @@
   {% for group in object_list %}
   <tr>
     <td>
-        {{ group.source.name }}
+      {{ group.source.name }}
     </td>
     <td>
-        <a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a>
+      {{ group.get_short_key }}
+    </td>
+    <td>
+    <td>
+      <a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a>
     </td>
     <td>
       {% for link in group.links.all %}

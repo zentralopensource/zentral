@@ -4,35 +4,16 @@ import logging
 import os.path
 import uuid
 from dateutil import parser
+from django.core.urlresolvers import reverse
+from django.utils.text import slugify
 from zentral.conf import probes, settings
+from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.queues import queues
 from .template_loader import TemplateLoader
 
 logger = logging.getLogger('zentral.core.events')
 
-# Event Middlewares
-
-
-class EventHandler(object):
-    def __init__(self):
-        self.processors = None
-
-    def _load_middlewares(self):
-        self.processors = []
-        for entry in settings.get('middlewares', []):
-            mw_modulename, _, mw_classname = entry.rpartition('.')
-            mw_module = import_module(mw_modulename)
-            mw_class = getattr(mw_module, mw_classname)
-            self.processors.append(mw_class().process_event)
-
-    def apply_middlewares(self, event):
-        if self.processors is None:
-            self._load_middlewares()
-        for processor in self.processors:
-            processor(event)
-
-event_handler = EventHandler()
 
 # Event deserializer
 
@@ -73,7 +54,6 @@ def event_from_event_d(event_d):
     event_type = event_d['_zentral']['type']
     event_cls = event_cls_from_type(event_type)
     event = event_cls.deserialize(event_d)
-    event_handler.apply_middlewares(event)
     return event
 
 # Event Base Classes
@@ -119,6 +99,23 @@ class EventMetadata(object):
         self.request = kwargs.pop('request', None)
         self.tags = kwargs.pop('tags', [])
 
+    def get_machine_url(self):
+        try:
+            tls_hostname = settings['api']['tls_hostname']
+        except KeyError:
+            logger.warning("Missing api.tls_hostname configuration key")
+        else:
+            return "{}{}".format(tls_hostname.rstrip('/'),
+                                 reverse('inventory:machine',
+                                         args=(self.machine_serial_number,)))
+
+    def get_machine_snapshots(self):
+        if not hasattr(self, '_cached_machine_snapshots'):
+            self._cached_machine_snapshots = {}
+            for ms in MachineSnapshot.objects.current().prefetch_related('groups').filter(machine__serial_number=self.machine_serial_number):
+                self._cached_machine_snapshots[ms.source] = ms
+        return self._cached_machine_snapshots
+
     @classmethod
     def deserialize(cls, event_d_metadata):
         kwargs = event_d_metadata.copy()
@@ -140,6 +137,26 @@ class EventMetadata(object):
             d['request'] = self.request.serialize()
         if self.tags:
             d['tags'] = self.tags
+        machine_d = {}
+        for source, ms in self.get_machine_snapshots().items():
+            ms_d = {'name': ms.get_machine_str()}
+            if ms.business_unit:
+                ms_d['business_unit'] = {'key': ms.business_unit.get_short_key(),
+                                         'name': ms.business_unit.name}
+            if ms.os_version:
+                ms_d['os_version'] = str(ms.os_version)
+            groups = list(ms.groups.all())
+            if groups:
+                ms_d['group_keys'] = [g.get_short_key() for g in groups]
+                ms_d['group_names'] = [g.name for g in groups]
+            if ms_d:
+                key = slugify(source.name)
+                if key in ms_d:
+                    # TODO: earlier warning in conf check ?
+                    logger.warning('Inventory source slug %s exists already', key)
+                machine_d[key] = ms_d
+        if machine_d:
+            d['machine'] = machine_d
         return d
 
 
@@ -221,19 +238,13 @@ class BaseEvent(object):
                    'created_at': self.metadata.created_at,
                    'payload': self.payload,
                    'probe': probe,
-                   'machine_serial_number': self.metadata.machine_serial_number}
-            if hasattr(self, 'machine'):
-                ctx['machine'] = self.machine
-            else:
-                ctx['machine'] = {}
+                   'machine_serial_number': self.metadata.machine_serial_number,
+                   'machine_url': self.metadata.get_machine_url(),
+                   'machine': self.metadata.get_machine_snapshots()}
             machine_names = {}
             for source, ms in ctx['machine'].items():
                 machine_names.setdefault(ms.get_machine_str(), []).append(source.name)
             ctx['machine_names'] = machine_names
-            if hasattr(self, 'machine_url'):
-                ctx['machine_url'] = self.machine_url
-            else:
-                ctx['machine_url'] = None
             ctx.update(self._get_extra_context())
             self._notification_context = ctx
         return self._notification_context

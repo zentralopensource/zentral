@@ -1,7 +1,7 @@
 from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.db.models import Count
-from zentral.utils.mt_models import AbstractMTObject, MTObjectManager
+from zentral.utils.mt_models import prepare_commit_tree, AbstractMTObject, MTObjectManager
 
 
 class SourceManager(MTObjectManager):
@@ -40,35 +40,47 @@ class Link(AbstractMTObject):
     url = models.URLField()
 
 
-class BusinessUnitManager(MTObjectManager):
+class AbstractMachineGroupManager(MTObjectManager):
     def current(self):
         qs = self.filter(machinesnapshot__mt_next__isnull=True)
         return qs.distinct().select_related('source').order_by('source__module', 'name')
 
 
-class BusinessUnit(AbstractMTObject):
+class AbstractMachineGroup(AbstractMTObject):
     source = models.ForeignKey(Source)
     reference = models.TextField()
+    key = models.CharField(max_length=40, db_index=True)
     name = models.TextField()
     links = models.ManyToManyField(Link)
 
-    objects = BusinessUnitManager()
+    objects = AbstractMachineGroupManager()
+    mt_excluded_fields = ('key',)
+
+    class Meta:
+        abstract = True
+
+    def generate_key(self):
+        source_dict = self.source.serialize()
+        source_dict.pop('name')
+        data = {'source': source_dict,
+                'reference': self.reference}
+        prepare_commit_tree(data)
+        return data['mt_hash']
+
+    def save(self, *args, **kwargs):
+        self.key = self.generate_key()
+        super(AbstractMachineGroup, self).save()
+
+    def get_short_key(self):
+        return self.key[:8]
 
 
-class MachineGroupManager(MTObjectManager):
-    def current(self):
-        qs = self.filter(machinesnapshot__mt_next__isnull=True)
-        return qs.distinct().select_related('source').order_by('source__module', 'name')
+class BusinessUnit(AbstractMachineGroup):
+    pass
 
 
-class MachineGroup(AbstractMTObject):
-    source = models.ForeignKey(Source)
-    reference = models.TextField()
-    name = models.TextField()
-    links = models.ManyToManyField(Link, related_name="+")
+class MachineGroup(AbstractMachineGroup):
     machine_links = models.ManyToManyField(Link, related_name="+")  # tmpl for links to machine in a group
-
-    objects = MachineGroupManager()
 
 
 class Machine(AbstractMTObject):
@@ -81,6 +93,14 @@ class OSVersion(AbstractMTObject):
     minor = models.PositiveIntegerField()
     patch = models.PositiveIntegerField(blank=True, null=True)
     build = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        l = [".".join((str(i) for i in (self.major, self.minor, self.patch) if i is not None))]
+        if self.name:
+            l.insert(0, self.name)
+        if self.build:
+            l.append("({})".format(self.build))
+        return " ".join(l)
 
 
 class SystemInfo(AbstractMTObject):

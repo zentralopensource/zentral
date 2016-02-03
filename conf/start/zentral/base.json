@@ -57,8 +57,5 @@
     "zentral.contrib.munki": {},
     "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {}
-  },
-  "middlewares": [
-    "zentral.contrib.inventory.events.middlewares.MachineMiddleware"
-  ]
+  }
 }
