@@ -77,6 +77,9 @@ class AbstractMachineGroup(AbstractMTObject):
 
 
 class BusinessUnit(AbstractMachineGroup):
+    def __str__(self):
+        return self.name
+
     def get_absolute_url(self):
         return reverse('inventory:bu_machines', args=(self.id,))
 

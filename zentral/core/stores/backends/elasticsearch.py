@@ -89,9 +89,8 @@ class EventStore(BaseEventStore):
                 time.sleep(s)
                 continue
             except RequestError as e:
-                if (e.info['status'] == 400 and
-                    # Race
-                    "IndexAlreadyExists".upper() in e.info['error']):
+                if e.info['status'] == 400 and \
+                   "IndexAlreadyExists".upper() in e.info['error']:  # Race
                     logger.info('Index %s exists', self.index)
                 else:
                     raise

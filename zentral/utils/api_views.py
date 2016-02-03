@@ -2,10 +2,12 @@ import json
 import logging
 import warnings
 import zlib
+from django import forms
 from django.core import signing
 from django.http import HttpResponseForbidden, JsonResponse
-from django.views.generic import View
+from django.views.generic import TemplateView, View
 from zentral.conf import settings
+from zentral.contrib.inventory.models import BusinessUnit
 from zentral.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger('zentral.utils.api_views')
@@ -65,11 +67,26 @@ def verify_secret(secret, module):
         raise APIAuthError('Bad secret signature')
     if data['module'] != module:
         raise APIAuthError('Invalid module')
+    bu_k = data.pop('bu_k', None)
+    if bu_k:
+        # TODO: cache
+        qs = BusinessUnit.objects.select_related('source')
+        l = list(qs.filter(key__startswith=bu_k,
+                           source__module='zentral.contrib.inventory').order_by('-id'))
+        if not l:
+            logger.error('Unknown BU %s', bu_k)
+        else:
+            if len(l) > 1:
+                logger.error('Found multiple BU for key %s', bu_k)
+            data['business_unit'] = l[0]
     return data
 
 
-def make_secret(module):
-    return signing.dumps({'module': module}, key=API_SECRET)
+def make_secret(module, business_unit=None):
+    data = {'module': module}
+    if business_unit:
+        data['bu_k'] = business_unit.get_short_key()
+    return signing.dumps(data, key=API_SECRET)
 
 
 class JSONPostAPIView(View):
@@ -123,6 +140,7 @@ class SignedRequestJSONPostAPIView(JSONPostAPIView):
             raise ImproperlyConfigured("self.verify_module is null")
         data = verify_secret(req_sec, self.verify_module)
         self.machine_serial_number = data.get('machine_serial_number', None)
+        self.business_unit = data.get('business_unit', None)
 
 
 class SignedRequestHeaderJSONPostAPIView(SignedRequestJSONPostAPIView):
@@ -139,3 +157,35 @@ class SignedRequestHeaderJSONPostAPIView(SignedRequestJSONPostAPIView):
         if auth_err:
             raise APIAuthError(auth_err)
         return req_sec
+
+# Enrollment
+
+
+class EnrollmentForm(forms.Form):
+    business_unit = forms.ModelChoiceField(queryset=BusinessUnit.objects.filter(
+                                           source__module='zentral.contrib.inventory').order_by('name'),
+                                           required=False,
+                                           widget=forms.Select(attrs={'class': 'form-control'}))
+
+
+class BaseEnrollmentView(TemplateView):
+    def get_context_data(self, **kwargs):
+        context = super(BaseEnrollmentView, self).get_context_data(**kwargs)
+        context[self.section] = True
+        context['form'] = EnrollmentForm()
+        return context
+
+
+class BaseInstallerPackageView(View):
+    def post(self, request):
+        form = EnrollmentForm(request.POST)
+        if form.is_valid():
+            try:
+                tls_server_certs = settings['api']['tls_server_certs']
+            except KeyError:
+                tls_server_certs = None
+            builder = self.builder()
+            return builder.build_and_make_response(request.get_host(),
+                                                   make_secret(self.module,
+                                                               form.cleaned_data['business_unit']),
+                                                   tls_server_certs)

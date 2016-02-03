@@ -3,7 +3,11 @@
 {% block content %}
 <h2>Santa enrollment</h2>
 
-<form action="{% url 'santa:installer_package' %}" method="POST">{% csrf_token %}
+<form action="{% url 'santa:installer_package' %}" method="POST" class="form">{% csrf_token %}
+  <div class="form-group">
+    <label for="id_business_unit">{{ form.business_unit.label|title }}</label>
+    {{ form.business_unit }}
+  </div>
   <button class="btn btn-default" type="submit">Download enrollment pkg</button>
 </form>
 {% endblock %}

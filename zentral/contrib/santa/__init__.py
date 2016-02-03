@@ -31,8 +31,9 @@ def build_santa_conf(all_probes):
         else:
             for metadata_filter in metadata_filters:
                 if metadata_filter.setdefault('type', "santa_event") != "santa_event":
-                    #problem
-                    ImproperlyConfigured("Santa probe %s with wrong type metadata_filter %s" % (probe_d.get('name', '?'), metadata_filter['type']))
+                    # problem
+                    ImproperlyConfigured("Santa probe %s with wrong type metadata_filter %s" %
+                                         (probe_d.get('name', '?'), metadata_filter['type']))
         probes.append((probe_name, probe_d))
         rules.extend(santa_l)
         for santa_r in santa_l:

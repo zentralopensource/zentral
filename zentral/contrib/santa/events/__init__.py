@@ -65,7 +65,7 @@ class SantaEventEvent(SantaBaseEvent):
 
     def extra_probe_checks(self, probe):
         """Exclude santa probes if not connected to event."""
-        if "santa" in probe and not probe in self.rule_probes:
+        if "santa" in probe and probe not in self.rule_probes:
             return False
         else:
             return True

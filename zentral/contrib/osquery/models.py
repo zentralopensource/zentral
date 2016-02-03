@@ -7,11 +7,13 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineSnapshot
 
 
-def enroll(serial_number):
+def enroll(serial_number, business_unit):
     tree = {'source': {'module': 'zentral.contrib.osquery',
                        'name': 'OSQuery'},
             'reference': get_random_string(64),
             'machine': {'serial_number': serial_number}}
+    if business_unit:
+        tree['business_unit'] = business_unit.serialize()
     ms, _ = MachineSnapshot.objects.commit(tree)
     # TODO: check, but _ must be always true (because of the random reference)
     try:

@@ -16,7 +16,7 @@ def _inventory_event_tags_from_data(data):
         tags.append('new_machine')
         return tags
     # action == 'changed'
-    if not 'diff' in data:
+    if 'diff' not in data:
         logger.error('Unknown data structure')
         return tags
     diff = data['diff']

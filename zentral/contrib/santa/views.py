@@ -1,11 +1,10 @@
 import logging
 from django.core.urlresolvers import reverse
 from django.http import Http404
-from django.views.generic import View, TemplateView
-from zentral.conf import settings
+from django.views.generic import TemplateView
 from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.core.stores import stores
-from zentral.utils.api_views import SignedRequestJSONPostAPIView, make_secret
+from zentral.utils.api_views import SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
 from . import santa_conf, probes
 from .events import post_santa_events, post_santa_preflight
 from .osx_package.builder import SantaZentralEnrollPkgBuilder
@@ -23,25 +22,14 @@ class ProbesView(TemplateView):
         return context
 
 
-class EnrollmentView(TemplateView):
+class EnrollmentView(BaseEnrollmentView):
     template_name = "santa/enrollment.html"
-
-    def get_context_data(self, **kwargs):
-        context = super(EnrollmentView, self).get_context_data(**kwargs)
-        context['santa'] = True
-        return context
+    section = "santa"
 
 
-class InstallerPackageView(View):
-    def post(self, request):
-        try:
-            tls_server_certs = settings['api']['tls_server_certs']
-        except KeyError:
-            tls_server_certs = None
-        builder = SantaZentralEnrollPkgBuilder()
-        return builder.build_and_make_response(request.get_host(),
-                                               make_secret("zentral.contrib.santa"),
-                                               tls_server_certs)
+class InstallerPackageView(BaseInstallerPackageView):
+    module = "zentral.contrib.santa"
+    builder = SantaZentralEnrollPkgBuilder
 
 
 class ProbeView(TemplateView):
@@ -133,6 +121,8 @@ class PreflightView(BaseView):
                                },
                 'system_info': {'computer_name': data['hostname']},
                 }
+        if self.business_unit:
+            tree['business_unit'] = self.business_unit.serialize()
         ms, created = MachineSnapshot.objects.commit(tree)
         return {'BatchSize': 20,  # TODO: ???
                 'UploadLogsUrl': 'https://{host}{path}'.format(host=self.request.get_host(),

@@ -6,10 +6,10 @@ from django.http import JsonResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
-from zentral.conf import settings
 from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.core.stores import stores
-from zentral.utils.api_views import JSONPostAPIView, verify_secret, APIAuthError, make_secret
+from zentral.utils.api_views import (JSONPostAPIView, verify_secret, APIAuthError,
+                                     BaseEnrollmentView, BaseInstallerPackageView)
 from . import osquery_conf, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
 from .models import enroll, DistributedQuery, DistributedQueryNode
@@ -28,25 +28,14 @@ class ProbesView(TemplateView):
         return context
 
 
-class EnrollmentView(TemplateView):
+class EnrollmentView(BaseEnrollmentView):
     template_name = "osquery/enrollment.html"
-
-    def get_context_data(self, **kwargs):
-        context = super(EnrollmentView, self).get_context_data(**kwargs)
-        context['osquery'] = True
-        return context
+    section = "osquery"
 
 
-class InstallerPackageView(View):
-    def post(self, request):
-        try:
-            tls_server_certs = settings['api']['tls_server_certs']
-        except KeyError:
-            tls_server_certs = None
-        builder = OsqueryZentralEnrollPkgBuilder()
-        return builder.build_and_make_response(request.get_host(),
-                                               make_secret("zentral.contrib.osquery"),
-                                               tls_server_certs)
+class InstallerPackageView(BaseInstallerPackageView):
+    builder = OsqueryZentralEnrollPkgBuilder
+    module = "zentral.contrib.osquery"
 
 
 class ProbeView(TemplateView):
@@ -156,9 +145,11 @@ class EnrollView(JSONPostAPIView):
     def check_data_secret(self, data):
         data = verify_secret(data['enroll_secret'], "zentral.contrib.osquery")
         self.machine_serial_number = data['machine_serial_number']
+        self.business_unit = data.get('business_unit', None)
 
     def do_post(self, data):
-        ms, action = enroll(self.machine_serial_number)
+        ms, action = enroll(self.machine_serial_number,
+                            self.business_unit)
         post_enrollment_event(ms.machine.serial_number,
                               self.user_agent, self.ip,
                               {'action': action})
@@ -180,6 +171,7 @@ class BaseNodeView(JSONPostAPIView):
             raise APIAuthError(auth_err)
         # TODO: Better verification ?
         self.machine_serial_number = self.ms.machine.serial_number
+        self.business_unit = self.ms.business_unit
 
     def do_post(self, data):
         post_request_event(self.machine_serial_number,
@@ -245,8 +237,10 @@ class LogView(BaseNodeView):
             last_snapshot = inventory_results[0][1]
             tree = {'source': {'module': self.ms.source.module,
                                'name': self.ms.source.name},
-                    'machine': {'serial_number': self.ms.machine.serial_number},
+                    'machine': {'serial_number': self.machine_serial_number},
                     'reference': self.ms.reference}
+            if self.business_unit:
+                tree['business_unit'] = self.business_unit.serialize()
             for t in last_snapshot:
                 table_name = t.pop('table_name')
                 if table_name == 'os_version':

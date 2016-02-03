@@ -1,7 +1,6 @@
 import argparse
 import json
 import os
-import sys
 
 
 def build_probe(pack_filepath, probe_filepath, probe_actions):

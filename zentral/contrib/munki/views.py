@@ -2,10 +2,9 @@ import logging
 from datetime import timedelta
 from dateutil import parser
 from django.utils import timezone
-from django.views.generic import View, TemplateView
-from zentral.conf import settings
+from django.views.generic import TemplateView
 from zentral.contrib.inventory.models import MachineSnapshot
-from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView, make_secret
+from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
 from .events import post_munki_events
 from .models import MunkiState
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
@@ -23,25 +22,14 @@ class ProbesView(TemplateView):
         return context
 
 
-class EnrollmentView(TemplateView):
+class EnrollmentView(BaseEnrollmentView):
     template_name = "munki/enrollment.html"
-
-    def get_context_data(self, **kwargs):
-        context = super(EnrollmentView, self).get_context_data(**kwargs)
-        context['munki'] = True
-        return context
+    section = "munki"
 
 
-class InstallerPackageView(View):
-    def post(self, request):
-        try:
-            tls_server_certs = settings['api']['tls_server_certs']
-        except KeyError:
-            tls_server_certs = None
-        builder = MunkiZentralEnrollPkgBuilder()
-        return builder.build_and_make_response(request.get_host(),
-                                               make_secret("zentral.contrib.munki"),
-                                               tls_server_certs)
+class InstallerPackageView(BaseInstallerPackageView):
+    module = "zentral.contrib.munki"
+    builder = MunkiZentralEnrollPkgBuilder
 
 
 class BaseView(SignedRequestHeaderJSONPostAPIView):
@@ -85,6 +73,8 @@ class PostJobView(BaseView):
         ms_tree['reference'] = ms_tree['machine']['serial_number']
         if data.get('include_santa_fileinfo', False):
             clean_certs_datetime(ms_tree)
+            if self.business_unit:
+                ms_tree['business_unit'] = self.business_unit.serialize()
             ms, created = MachineSnapshot.objects.commit(ms_tree)
             msn = ms.machine.serial_number
         else:
