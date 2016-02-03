@@ -1,5 +1,4 @@
 from datetime import datetime
-from importlib import import_module
 import logging
 import os.path
 import uuid
@@ -112,7 +111,8 @@ class EventMetadata(object):
     def get_machine_snapshots(self):
         if not hasattr(self, '_cached_machine_snapshots'):
             self._cached_machine_snapshots = {}
-            for ms in MachineSnapshot.objects.current().prefetch_related('groups').filter(machine__serial_number=self.machine_serial_number):
+            qs = MachineSnapshot.objects.current().prefetch_related('groups')
+            for ms in qs.filter(machine__serial_number=self.machine_serial_number):
                 self._cached_machine_snapshots[ms.source] = ms
         return self._cached_machine_snapshots
 
@@ -149,12 +149,11 @@ class EventMetadata(object):
             if groups:
                 ms_d['group_keys'] = [g.get_short_key() for g in groups]
                 ms_d['group_names'] = [g.name for g in groups]
-            if ms_d:
-                key = slugify(source.name)
-                if key in ms_d:
-                    # TODO: earlier warning in conf check ?
-                    logger.warning('Inventory source slug %s exists already', key)
-                machine_d[key] = ms_d
+            key = slugify(source.name)
+            if key in ms_d:
+                # TODO: earlier warning in conf check ?
+                logger.warning('Inventory source slug %s exists already', key)
+            machine_d[key] = ms_d
         if machine_d:
             d['machine'] = machine_d
         return d
@@ -176,7 +175,7 @@ def _check_filters(probe, filter_attr, d):
         return True
     else:
         for f in filters:
-             if _check_filter(f, d):
+            if _check_filter(f, d):
                 return True
         return False
 
