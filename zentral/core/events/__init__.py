@@ -159,23 +159,42 @@ class EventMetadata(object):
         return d
 
 
-def _check_filter(f, d):
-    for attr, val in f.items():
-        event_val = d.get(attr, None)
-        if isinstance(val, list) and isinstance(event_val, list):
-            return all([elm in event_val for elm in val])
-        elif val != event_val:
+def _test_pass_filter_item(filter_attr, filter_val, val):
+    """Evaluate a value against a filter item."""
+    # TODO: __icontains for partial case insensitive matches (verify that test_probe_event_type is still valid!)
+    if isinstance(filter_val, list) and isinstance(val, list):
+        return all([elm in val for elm in filter_val])
+    elif filter_val != val:
+        return False
+    else:
+        return True
+
+
+def _test_pass_filter(f, d):
+    """Iterate on all the filter items and evaluate the dictionary against them.
+
+       Bookean AND. The dictionary must match all filter items."""
+    for filter_attr, filter_val in f.items():
+        # TODO: . separated filter_attr for deeper level dictionary attributes
+        val = d.get(filter_attr, None)
+        test = _test_pass_filter_item(filter_attr, filter_val, val)
+        if not test:
+            # AND - all items in a filter must match
             return False
     return True
 
 
-def _check_filters(probe, filter_attr, d):
-    filters = probe.get(filter_attr, None)
+def _test_pass_filters(filters, d):
+    """Iterate on all the filters, and evaluate the dictionary against them.
+
+       Boolean OR. The dictionary must match at least one of the filters."""
     if not filters:
+        # No filters, it's always a match
         return True
     else:
         for f in filters:
-            if _check_filter(f, d):
+            if _test_pass_filter(f, d):
+                # OR - one of the filters must match
                 return True
         return False
 
@@ -219,9 +238,9 @@ class BaseEvent(object):
         for probe in probes.values():
             if not self.extra_probe_checks(probe):
                 continue
-            if not _check_filters(probe, 'metadata_filters', metadata):
+            if not _test_pass_filters(probe.get('metadata_filters', None), metadata):
                 continue
-            if _check_filters(probe, 'payload_filters', self.payload):
+            if _test_pass_filters(probe.get('payload_filters', None), self.payload):
                 l.append(probe)
         return l
 

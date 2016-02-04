@@ -1,6 +1,12 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:distributed_index' %}">Osquery distributed queries</a></li>
+  <li class="active">Query {{ object.id }}</li>
+</ol>
+
 <h1>Distributed query</h1>
 <pre>
  {{ object.query }}

@@ -2,11 +2,12 @@ import json
 import logging
 from dateutil import parser
 from django.core.urlresolvers import reverse_lazy
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import stores
 from zentral.utils.api_views import (JSONPostAPIView, verify_secret, APIAuthError,
                                      BaseEnrollmentView, BaseInstallerPackageView)
@@ -38,25 +39,13 @@ class InstallerPackageView(BaseInstallerPackageView):
     module = "zentral.contrib.osquery"
 
 
-class ProbeView(TemplateView):
+class ProbeView(BaseProbeView):
     template_name = "osquery/probe.html"
+    section = "osquery"
 
-    def get_context_data(self, **kwargs):
-        context = super(ProbeView, self).get_context_data(**kwargs)
-        context['osquery'] = True
-
-        # find probe
-        # TODO log(1)
-        probe = None
-        for probe_name, probe_d in probes:
-            if probe_name == kwargs['probe_key']:
-                probe = probe_d
-                break
-        if not probe:
-            raise Http404
-        context['probe'] = probe
-
+    def get_extra_context_data(self, probe):
         # queries
+        context = {}
         schedule = []
         file_paths = {}
         for idx, osquery in enumerate(probe['osquery']['schedule']):

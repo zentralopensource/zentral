@@ -2,20 +2,28 @@
 
 {% block content %}
 <div class="row">
-<h1>
-  {% if computer_name %}{{ computer_name }} / {% endif %}{{ serial_number }}
-  <a class="btn btn-default" href="{% url 'inventory:machine_events' serial_number %}">View events</a>
-</h1>
+  <div class="col-md-12">
+    <ol class="breadcrumb">
+      <li><a href="/">Home</a></li>
+      <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+      <li class="active">{{ serial_number }}</li>
+    </ol>
 
-<ul class="nav nav-tabs">
-  {% for ms in ms_list %}
-  <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
-    <a href="#" data-tabclass="detailstab" data-tabid="details-{{ ms.id }}">
-      {{ ms.source.name }}
-    </a>
-  </li>
-  {% endfor %}
-</ul>
+    <h2>
+      {% if computer_name %}{{ computer_name }} / {% endif %}{{ serial_number }}
+      <a class="btn btn-default" href="{% url 'inventory:machine_events' serial_number %}">View events</a>
+    </h2>
+
+    <ul class="nav nav-tabs">
+      {% for ms in ms_list %}
+      <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
+        <a href="#" data-tabclass="detailstab" data-tabid="details-{{ ms.id }}">
+          {{ ms.source.name }}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
 </div>
 
 {% for ms in ms_list %}
@@ -144,6 +152,7 @@
 </ul>
 
 {% for ms in osx_app_ms_list %}
+<div class="table-reponsive">
 <table class="table table-condensed appstab" id="apps-{{ ms.id }}"
   {% if not forloop.first %}style="display:none;"{% endif %}>
   <thead>
@@ -165,6 +174,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endfor %}
 {% endif %}
 

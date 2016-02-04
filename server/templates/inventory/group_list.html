@@ -1,7 +1,18 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1>{{ object_list|length }} Group{{ object_list|length|pluralize }}</h1>
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  {% for url, anchor_text in breadcrumbs %}
+  {% if url %}
+  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  {% else %}
+  <li class="active">{{ anchor_text }}</li>
+  {% endif %}
+  {% endfor %}
+</ol>
+
+<h2>{{ object_list|length }} Group{{ object_list|length|pluralize }}</h2>
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
   <div class="form-group">
     <label for="id_name">{{ search_form.name.label|title }}</label>
@@ -13,27 +24,25 @@
   </div>
   <button type="submit" class="btn btn-default">Search</button>
 </form>
-<table class="table">
-  {% for group in object_list %}
-  <tr>
-    <td>
-      {{ group.source.name }}
-    </td>
-    <td>
-      {{ group.get_short_key }}
-    </td>
-    <td>
-    <td>
-      <a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a>
-    </td>
-    <td>
-      {% for link in group.links.all %}
-      <a href="{{ link.url }}" class="btn btn-default">
-        {{ group.source.name }} - {{ link.anchor_text }}
-      </a>
-      {% endfor %}
-    </td>
-  </tr>
-  {% endfor %}
-</table>
+
+<div class="table-responsive">
+  <table class="table">
+    {% for group in object_list %}
+    <tr>
+      <td>{{ group.source.name }}</td>
+      <td>{{ group.get_short_key }}</td>
+      <td>
+        <a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a>
+      </td>
+      <td>
+        {% for link in group.links.all %}
+        <a href="{{ link.url }}" class="btn btn-default">
+          {{ group.source.name }} - {{ link.anchor_text }}
+        </a>
+        {% endfor %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
 {% endblock %}

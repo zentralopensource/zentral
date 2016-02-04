@@ -1,16 +1,6 @@
-{% extends 'base.html' %}
+{% extends 'core/probes/probe.html' %}
 
-{% block content %}
-<h2>Osquery probe <i>{{ probe.name }}</i></h2>
-
-{% if probe_links %}
-<div class="btn-group" role="group">
-  {% for store_name, store_url in probe_links %}
-  <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
-  {% endfor %}
-</div>
-{% endif %}
-
+{% block probe_extra %}
 <h3>Schedule</h3>
 <table class="table">
   <thead>
@@ -48,22 +38,6 @@
       <td>
 	<pre>{{ paths|pprint }}</pre>
       </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-<h2>Actions</h2>
-<table class="table">
-  <thead>
-    <th>Name</th>
-    <th>Configuration</th>
-  </thead>
-  <tbody>
-    {% for name, configuration in probe.actions.items %}
-    <tr>
-      <td>{{ name }}</td>
-      <td><pre>{{ configuration|pprint }}</pre></td>
     </tr>
     {% endfor %}
   </tbody>

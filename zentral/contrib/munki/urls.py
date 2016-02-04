@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     # django admin
     url(r'^probes/$', views.ProbesView.as_view(), name='probes'),
+    url(r'^probes/(?P<probe_key>[\S ]+)/$', views.ProbeView.as_view(), name='probe'),
     url(r'^enrollment/$', views.EnrollmentView.as_view(), name='enrollment'),
     url(r'^installer_package/$', views.InstallerPackageView.as_view(), name='installer_package'),
     # API

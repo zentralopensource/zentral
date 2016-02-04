@@ -1,6 +1,11 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Munki enrollment</li>
+</ol>
+
 <h2>Munki enrollment</h2>
 
 <form action="{% url 'munki:installer_package' %}" method="POST">{% csrf_token %}

@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  {% for url, anchor_text in breadcrumbs %}
+  {% if url %}
+  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  {% else %}
+  <li class="active">{{ anchor_text }}</li>
+  {% endif %}
+  {% endfor %}
+</ol>
+
+<h2>Probe <i>{{ probe.name }}</i></h2>
+
+{% if probe_links %}
+<div class="btn-group" role="group">
+  {% for store_name, store_url in probe_links %}
+  <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if probe.metadata_filters %}
+<h3>Metadata Filters</h3>
+<table class="table">
+  <tbody>
+    {% for metadata_filter in probe.metadata_filters %}
+    <tr>
+      <td><pre>{{ metadata_filter|pprint }}</pre></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if probe.payload_filters %}
+<h3>Payload Filters</h3>
+<table class="table">
+  <tbody>
+    {% for payload_filter in probe.payload_filters %}
+    <tr>
+      <td><pre>{{ payload_filter|pprint }}</pre></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% block probe_extra %}
+{% endblock %}
+
+<h3>Actions</h3>
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Configuration</th>
+  </thead>
+  <tbody>
+    {% for name, configuration in probe.actions.items %}
+    <tr>
+      <td>{{ name }}</td>
+      <td><pre>{{ configuration|pprint }}</pre></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

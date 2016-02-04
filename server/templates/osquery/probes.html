@@ -1,6 +1,11 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Osquery probes</li>
+</ol>
+
 <h2>{{ probes|length }} Osquery probe{{ probes|length|pluralize }}</h2>
 <table class="table">
   <thead>

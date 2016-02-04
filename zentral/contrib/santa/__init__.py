@@ -1,4 +1,5 @@
 from zentral.conf import probes as all_probes
+from zentral.core.probes.utils import test_probe_event_type
 from zentral.core.exceptions import ImproperlyConfigured
 
 
@@ -19,10 +20,13 @@ def build_santa_conf(all_probes):
     """
     rules = []
     lookup_d = {}
-    probes = []
+    probes = []  # probes with a santa section
+    event_type_probes = []  # probes without a santa section but with a match on the event type
     for probe_name, probe_d in all_probes.items():
         santa_l = probe_d.get('santa', None)
         if not santa_l:
+            if test_probe_event_type(probe_d, "santa"):
+                event_type_probes.append((probe_name, probe_d))
             continue
         # check and fix existing metadata_filters
         metadata_filters = probe_d.get('metadata_filters', None)
@@ -39,9 +43,9 @@ def build_santa_conf(all_probes):
         for santa_r in santa_l:
             lookup_d.setdefault(santa_r["sha256"], []).append(probe_d.copy())
     probes.sort()
-    return {'rules': rules}, lookup_d, probes
+    return {'rules': rules}, lookup_d, probes, event_type_probes
 
-santa_conf, probes_lookup_dict, probes = build_santa_conf(all_probes)
+santa_conf, probes_lookup_dict, probes, event_type_probes = build_santa_conf(all_probes)
 
 
 # django

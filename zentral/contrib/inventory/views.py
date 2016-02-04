@@ -1,7 +1,9 @@
 from django.core.urlresolvers import reverse
 from django.views import generic
+from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import frontend_store
 from zentral.utils.text import str_to_ascii
+from . import event_type_probes
 from .forms import BusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm, BusinessUnitForm
 from .models import BusinessUnit, MachineGroup, MachineSnapshot
 
@@ -17,6 +19,9 @@ class MachineListView(generic.TemplateView):
 
     def get_list_title(self, **kwargs):
         return ""
+
+    def get_breadcrumbs(self, **kwargs):
+        return []
 
     def get(self, request, *args, **kwargs):
         self.search_form = MachineSearchForm(request.GET)
@@ -62,11 +67,19 @@ class MachineListView(generic.TemplateView):
                                                       key=self._ms_dict_sorting_key)]
         context['object_list_title'] = self.get_list_title(**kwargs)
         context['search_form'] = self.search_form
+        context['breadcrumbs'] = self.get_breadcrumbs(**kwargs)
         return context
 
 
 class IndexView(MachineListView):
-    pass
+    def get_breadcrumbs(self, **kwargs):
+        l = []
+        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
+            l.append((reverse('inventory:index'), "Inventory machines"))
+            l.append((None, "Machine search"))
+        else:
+            l.append((None, "Inventory machines"))
+        return l
 
 
 class GroupsView(generic.TemplateView):
@@ -89,6 +102,13 @@ class GroupsView(generic.TemplateView):
                 qs = qs.filter(source=source)
         context['object_list'] = qs
         context['search_form'] = self.search_form
+        l = []
+        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
+            l.append((reverse('inventory:groups'), 'Inventory groups'))
+            l.append((None, "Search"))
+        else:
+            l.append((None, "Inventory groups"))
+        context['breadcrumbs'] = l
         return context
 
 
@@ -101,6 +121,15 @@ class GroupMachinesView(MachineListView):
 
     def get_list_title(self, **kwargs):
         return "Group: {} - {}".format(self.object.source.name, self.object.name)
+
+    def get_breadcrumbs(self, **kwargs):
+        l = [(reverse('inventory:groups'), 'Inventory groups')]
+        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
+            l.append((reverse('inventory:group_machines', args=(self.object.id,)), self.object.name))
+            l.append((None, "Machine search"))
+        else:
+            l.append((None, self.object.name))
+        return l
 
 
 class BUView(generic.TemplateView):
@@ -123,6 +152,13 @@ class BUView(generic.TemplateView):
                 qs = qs.filter(source=source)
         context['object_list'] = qs
         context['search_form'] = self.search_form
+        l = []
+        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
+            l.append((reverse('inventory:bu'), 'Inventory business units'))
+            l.append((None, "Search"))
+        else:
+            l.append((None, "Inventory business units"))
+        context['breadcrumbs'] = l
         return context
 
 
@@ -152,6 +188,15 @@ class BUMachinesView(MachineListView):
         if self.object.source.module == 'zentral.contrib.inventory':
             ctx['update_link'] = reverse('inventory:update_bu', args=(self.object.id,))
         return ctx
+
+    def get_breadcrumbs(self, **kwargs):
+        l = [(reverse('inventory:bu'), 'Inventory business units')]
+        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
+            l.append((reverse('inventory:bu_machines', args=(self.object.id,)), self.object.name))
+            l.append((None, "Machine search"))
+        else:
+            l.append((None, self.object.name))
+        return l
 
 
 class MachineView(generic.TemplateView):
@@ -243,3 +288,17 @@ class MachineEventsView(generic.ListView):
         self.ms_list = list(MachineSnapshot.objects.current().filter(machine__serial_number=serial_number))
         et = self.request.GET.get('event_type')
         return MachineEventSet(serial_number, et)
+
+
+class ProbesView(generic.TemplateView):
+    template_name = "inventory/probes.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(ProbesView, self).get_context_data(**kwargs)
+        context['inventory'] = True
+        context['probes'] = event_type_probes
+        return context
+
+
+class ProbeView(BaseProbeView):
+    section = "inventory"

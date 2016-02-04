@@ -4,7 +4,9 @@ from dateutil import parser
 from django.utils import timezone
 from django.views.generic import TemplateView
 from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.core.probes.views import BaseProbeView
 from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
+from . import event_type_probes
 from .events import post_munki_events
 from .models import MunkiState
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
@@ -18,8 +20,12 @@ class ProbesView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super(ProbesView, self).get_context_data(**kwargs)
         context['munki'] = True
-        context['probes'] = []  # TODO
+        context['probes'] = event_type_probes
         return context
+
+
+class ProbeView(BaseProbeView):
+    section = "munki"
 
 
 class EnrollmentView(BaseEnrollmentView):

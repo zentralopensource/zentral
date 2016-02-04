@@ -1,6 +1,11 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Osquery distributed queries</li>
+</ol>
+
 <h2>{{ object_list|length }} Osquery distributed queries</h2>
 <p>
   <a href="{% url 'osquery:distributed_create' %}" class="btn btn-default">Create</a>

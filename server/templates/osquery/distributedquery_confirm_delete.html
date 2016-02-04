@@ -1,7 +1,14 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1>Delete query</h1>
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:distributed_index' %}">Osquery distributed queries</a></li>
+  <li><a href="{% url 'osquery:distributed' object.id %}">Query {{ object.id }}</a></li>
+  <li class="active">Confirm delete</li>
+</ol>
+
+<h2>Delete query {{ object.id }}</h2>
 <p>Do you really want to delete this query ?</p>
 <form method="POST">{% csrf_token %}
   <a class="btn btn-default" href="{% url 'osquery:distributed' object.id %}">No</a>

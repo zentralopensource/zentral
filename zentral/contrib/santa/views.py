@@ -1,8 +1,8 @@
 import logging
 from django.core.urlresolvers import reverse
-from django.http import Http404
 from django.views.generic import TemplateView
 from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import stores
 from zentral.utils.api_views import SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
 from . import santa_conf, probes
@@ -22,34 +22,12 @@ class ProbesView(TemplateView):
         return context
 
 
-class EnrollmentView(BaseEnrollmentView):
-    template_name = "santa/enrollment.html"
+class ProbeView(BaseProbeView):
+    template_name = "santa/probe.html"
     section = "santa"
 
-
-class InstallerPackageView(BaseInstallerPackageView):
-    module = "zentral.contrib.santa"
-    builder = SantaZentralEnrollPkgBuilder
-
-
-class ProbeView(TemplateView):
-    template_name = "santa/probe.html"
-
-    def get_context_data(self, **kwargs):
-        context = super(ProbeView, self).get_context_data(**kwargs)
-        context['santa'] = True
-
-        # find probe
-        # TODO log(1)
-        probe = None
-        for probe_name, probe_d in probes:
-            if probe_name == kwargs['probe_key']:
-                probe = probe_d
-                break
-        if not probe:
-            raise Http404
-        context['probe'] = probe
-
+    def get_extra_context_data(self, probe):
+        context = {}
         # policies
         policies = []
         all_file_sha256 = []
@@ -88,6 +66,17 @@ class ProbeView(TemplateView):
         probe_links.sort()
         context['probe_links'] = probe_links
         return context
+
+
+class EnrollmentView(BaseEnrollmentView):
+    template_name = "santa/enrollment.html"
+    section = "santa"
+
+
+class InstallerPackageView(BaseInstallerPackageView):
+    module = "zentral.contrib.santa"
+    builder = SantaZentralEnrollPkgBuilder
+
 
 # API
 

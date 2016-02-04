@@ -1,4 +1,5 @@
 from zentral.conf import probes as all_probes
+from zentral.core.probes.utils import test_probe_event_type
 from zentral.core.exceptions import ImproperlyConfigured
 
 DEFAULT_ZENTRAL_INVENTORY_QUERY = "__default_zentral_inventory_query__"
@@ -14,10 +15,13 @@ def build_osquery_conf(all_probes):
                                                   'snapshot': True,
                                                   'interval': 600}}
     file_paths = {}
-    probes = []
+    probes = []  # probes with an osquery section
+    event_type_probes = []  # probes without an osquery section but with a match on the event type
     for probe_name, probe_d in all_probes.items():
         osquery_d = probe_d.get('osquery', None)
         if not osquery_d:
+            if test_probe_event_type(probe_d, 'osquery'):
+                event_type_probes.append((probe_name, probe_d))
             continue
         # check and fix existing metadata_filters
         metadata_filters = probe_d.get('metadata_filters', None)
@@ -44,9 +48,9 @@ def build_osquery_conf(all_probes):
     osquery_conf = {'schedule': schedule,
                     'file_paths': file_paths}
     probes.sort()
-    return osquery_conf, probes
+    return osquery_conf, probes, event_type_probes
 
-osquery_conf, probes = build_osquery_conf(all_probes)
+osquery_conf, probes, event_type_probes = build_osquery_conf(all_probes)
 
 
 # django

@@ -1,6 +1,17 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'inventory:bu' %}">Inventory business units</a>
+  {% if object %}
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a>
+  <li class="active">Update</li>
+  {% else %}
+  <li class="active">Create</li>
+  {% endif %}
+</ol>
+
 <h2>{% if object %}Update{% else %}Create{% endif %} Business Unit</h2>
 <form method="POST" class="form">{% csrf_token %}
   <div class="form-group">

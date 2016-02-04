@@ -2,11 +2,13 @@
 {% load bootstrap %}
 
 {% block content %}
-{% if object %}
-<h1>Edit distributed queries</h1>
-{% else %}
-<h1>Create distributed query</h1>
-{% endif %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:distributed_index' %}">Osquery distributed queries</a></li>
+  <li class="active">Create</li>
+</ol>
+
+<h2>{% if object %}Edit{% else %}Create{% endif %} distributed queries</h2>
 <form method="POST">{% csrf_token %}
   {{ form|bootstrap }}
   {% if object %}

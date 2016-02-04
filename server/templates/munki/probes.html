@@ -1,7 +1,13 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Munki probes</li>
+</ol>
+
 <h2>{{ probes|length }} Munki probe{{ probes|length|pluralize }}</h2>
+
 <table class="table">
   <thead>
     <th>Name</th>

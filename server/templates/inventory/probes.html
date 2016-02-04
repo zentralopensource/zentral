@@ -3,10 +3,10 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">Santa probes</li>
+  <li class="active">Inventory probes</li>
 </ol>
 
-<h2>{{ probes|length }} Santa probe{{ probes|length|pluralize }}</h2>
+<h2>{{ probes|length }} Inventory probe{{ probes|length|pluralize }}</h2>
 <table class="table">
   <thead>
     <th>Name</th>
@@ -14,7 +14,7 @@
   <tbody>
     {% for k, probe in probes %}
     <tr>
-      <td><a href="{% url 'santa:probe' k %}">{{ probe.name }}</a></td>
+      <td><a href="{% url 'inventory:probe' k %}">{{ probe.name }}</a></td>
     </tr>
     {% endfor %}
   </tbody>

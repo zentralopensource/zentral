@@ -12,4 +12,6 @@ urlpatterns = [
     url(r'^business_units/(?P<bu_id>\d+)/machines/$', views.BUMachinesView.as_view(), name='bu_machines'),
     url(r'^machine/(?P<serial_number>\S+)/events/$', views.MachineEventsView.as_view(), name='machine_events'),
     url(r'^machine/(?P<serial_number>\S+)/$', views.MachineView.as_view(), name='machine'),
+    url(r'^probes/$', views.ProbesView.as_view(), name='probes'),
+    url(r'^probes/(?P<probe_key>[\S ]+)/$', views.ProbeView.as_view(), name='probe'),
 ]
