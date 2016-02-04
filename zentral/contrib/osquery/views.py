@@ -11,7 +11,7 @@ from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import stores
 from zentral.utils.api_views import (JSONPostAPIView, verify_secret, APIAuthError,
                                      BaseEnrollmentView, BaseInstallerPackageView)
-from . import osquery_conf, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
+from . import osquery_conf, event_type_probes, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
 from .models import enroll, DistributedQuery, DistributedQueryNode
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
@@ -26,6 +26,7 @@ class ProbesView(TemplateView):
         context = super(ProbesView, self).get_context_data(**kwargs)
         context['osquery'] = True
         context['probes'] = probes
+        context['event_type_probes'] = event_type_probes
         return context
 
 

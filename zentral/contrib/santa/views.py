@@ -5,7 +5,7 @@ from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import stores
 from zentral.utils.api_views import SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
-from . import santa_conf, probes
+from . import santa_conf, event_type_probes, probes
 from .events import post_santa_events, post_santa_preflight
 from .osx_package.builder import SantaZentralEnrollPkgBuilder
 
@@ -19,6 +19,7 @@ class ProbesView(TemplateView):
         context = super(ProbesView, self).get_context_data(**kwargs)
         context['santa'] = True
         context['probes'] = probes
+        context['event_type_probes'] = event_type_probes
         return context
 
 

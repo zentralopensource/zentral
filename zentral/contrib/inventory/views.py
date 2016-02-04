@@ -296,7 +296,7 @@ class ProbesView(generic.TemplateView):
     def get_context_data(self, **kwargs):
         context = super(ProbesView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['probes'] = event_type_probes
+        context['event_type_probes'] = event_type_probes
         return context
 
 

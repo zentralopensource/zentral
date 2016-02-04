@@ -7,12 +7,28 @@
 </ol>
 
 <h2>{{ probes|length }} Santa probe{{ probes|length|pluralize }}</h2>
+<p class="small text-muted">Probes with santa policies</p>
 <table class="table">
   <thead>
     <th>Name</th>
   </thead>
   <tbody>
     {% for k, probe in probes %}
+    <tr>
+      <td><a href="{% url 'santa:probe' k %}">{{ probe.name }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>{{ event_type_probes|length }} Santa event probe{{ event_type_probes|length|pluralize }}</h2>
+<p class="small text-muted">Probes matching the santa events, without santa policies</p>
+<table class="table">
+  <thead>
+    <th>Name</th>
+  </thead>
+  <tbody>
+    {% for k, probe in event_type_probes %}
     <tr>
       <td><a href="{% url 'santa:probe' k %}">{{ probe.name }}</a></td>
     </tr>

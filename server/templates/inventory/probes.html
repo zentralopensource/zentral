@@ -6,13 +6,14 @@
   <li class="active">Inventory probes</li>
 </ol>
 
-<h2>{{ probes|length }} Inventory probe{{ probes|length|pluralize }}</h2>
+<h2>{{ event_type_probes|length }} Inventory event probe{{ event_type_probes|length|pluralize }}</h2>
+<p class="small text-muted">Probes matching the inventory events</p>
 <table class="table">
   <thead>
     <th>Name</th>
   </thead>
   <tbody>
-    {% for k, probe in probes %}
+    {% for k, probe in event_type_probes %}
     <tr>
       <td><a href="{% url 'inventory:probe' k %}">{{ probe.name }}</a></td>
     </tr>
