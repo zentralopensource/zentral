@@ -13,3 +13,5 @@ prometheus_client
 jinja2
 elasticsearch
 pyyaml
+sqlparse
+pygments

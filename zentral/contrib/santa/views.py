@@ -33,7 +33,7 @@ class ProbeView(BaseProbeView):
         policies = []
         all_file_sha256 = []
         all_certificate_sha256 = []
-        for idx, policy in enumerate(probe['santa']):
+        for idx, policy in enumerate(probe.get('santa', [])):
             # policy links. match policy sha256.
             policy_links = []
             sha256 = policy['sha256']

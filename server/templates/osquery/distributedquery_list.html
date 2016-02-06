@@ -10,22 +10,14 @@
 <p>
   <a href="{% url 'osquery:distributed_create' %}" class="btn btn-default">Create</a>
 </p>
-<table class="table">
-  <thead>
-    <th>Query</th>
-    <th></th>
-  </thead>
-  <tbody>
     {% for dq in object_list %}
-    <tr>
-      <td>
-	<pre>{{ dq.query }}</pre>
-      </td>
-      <td>
+    <div class="panel panel-default">
+      <div class="panel-body">
+	{{ dq.html_query|safe }}
+      </div>
+      <div class="panel-footer">
 	<a href="{% url 'osquery:distributed' dq.id %}" class="btn btn-default">View</a>
-      </td>
-    </tr>
+      </div>
+    </div>
     {% endfor %}
-  </tbody>
-</table>
 {% endblock %}

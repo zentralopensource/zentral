@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -28,7 +29,7 @@
   <tbody>
     {% for metadata_filter in probe.metadata_filters %}
     <tr>
-      <td><pre>{{ metadata_filter|pprint }}</pre></td>
+      <td>{{ metadata_filter|pythonprettyprint }}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -41,7 +42,7 @@
   <tbody>
     {% for payload_filter in probe.payload_filters %}
     <tr>
-      <td><pre>{{ payload_filter|pprint }}</pre></td>
+      <td>{{ payload_filter|pythonprettyprint }}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -61,7 +62,7 @@
     {% for name, configuration in probe.actions.items %}
     <tr>
       <td>{{ name }}</td>
-      <td><pre>{{ configuration|pprint }}</pre></td>
+      <td>{{ configuration|pythonprettyprint }}</td>
     </tr>
     {% endfor %}
   </tbody>

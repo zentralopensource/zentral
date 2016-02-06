@@ -1,27 +1,25 @@
 {% extends 'core/probes/probe.html' %}
+{% load inventory_extras %}
 
 {% block probe_extra %}
+{% if santa_policies %}
 <h3>Policies</h3>
-<table class="table">
-  <thead>
-    <th>Policy</th>
-    <th></th>
-  </thead>
-  <tbody>
-    {% for policy, links in santa_policies %}
-    <tr>
-      <td><pre>{{ policy|pprint }}</pre></td>
-      <td>
-        {% if links %}
-        <div class="btn-group-vertical" role="group">
-          {% for store_name, store_url in links %}
-          <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
-          {% endfor %}
-        </div>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+
+{% for policy, links in santa_policies %}
+<div class="panel panel-default">
+  <div class="panel-body">
+    {{ policy|pythonprettyprint }}
+  </div>
+  {% if links %}
+  <div class="panel-footer">
+    <div class="btn-group-vertical" role="group">
+      {% for store_name, store_url in links %}
+      <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
 {% endblock %}

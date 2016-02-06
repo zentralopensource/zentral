@@ -5,6 +5,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.utils.sql import format_sql
 
 
 def enroll(serial_number, business_unit):
@@ -53,6 +54,9 @@ class DistributedQuery(models.Model):
             d['results'][dqn.machine_serial_number] = {'result': dqn.get_json_result(),
                                                        'created_at': dqn.created_at}
         return d
+
+    def html_query(self):
+        return format_sql(self.query)
 
 
 class DistributedQueryNodeManager(models.Manager):

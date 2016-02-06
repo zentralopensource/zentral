@@ -1,30 +1,39 @@
 {% extends 'core/probes/probe.html' %}
+{% load inventory_extras %}
 
 {% block probe_extra %}
+{% if osquery_schedule %}
 <h3>Schedule</h3>
-<table class="table">
-  <thead>
-    <th>Configuration</th>
-    <th>Links</th>
-  </thead>
-  <tbody>
-    {% for conf, links in osquery_schedule %}
-    <tr>
-      <td><pre>{{ conf|pprint }}</pre></td>
-      <td>
-        {% if links %}
-        <div class="btn-group-vertical" role="group">
-          {% for store_name, store_url in links %}
-          <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
-          {% endfor %}
-        </div>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% for conf in osquery_schedule %}
+<div class="panel panel-default">
+  <div class="panel-body">
+    {{ conf.html_query|safe }}
+    <dl class="dl">
+      <dt>Interval</dt>
+      <dd>{{ conf.interval }}</dd>
+      {% if conf.value %}
+      <dt>Value</dt>
+      <dd>{{ conf.value }}</dd>
+      {% endif %}
+      {% if conf.description %}
+      <dt>Description</dt>
+      <dd>{{ conf.description }}</dd>
+      {% endif %}
+    </dl>
+  </div>
+  {% if conf.links %}
+  <div class="panel-footer">
+    <div class="btn-group-vertical" role="group">
+      {% for store_name, store_url in conf.links %}
+      <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
 
+{% if osquery_file_path %}
 <h3>File Paths</h3>
 <table class="table">
   <thead>
@@ -36,10 +45,12 @@
     <tr>
       <td><pre>{{ conf }}</pre></td>
       <td>
-	<pre>{{ paths|pprint }}</pre>
+	{{ paths|pythonprettyprint }}
       </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
+{% endif %}
 {% endblock %}

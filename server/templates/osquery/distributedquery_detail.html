@@ -8,9 +8,9 @@
 </ol>
 
 <h1>Distributed query</h1>
-<pre>
- {{ object.query }}
-</pre>
+
+{{ object.html_query|safe }}
+
 <h2>Results</h2>
 <a href="{% url 'osquery:distributed_download' object.id %}" class="btn btn-default">
   <span class="glyphicon glyphicon-download-alt" aria-hidden="true"></span>

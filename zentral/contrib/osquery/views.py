@@ -11,6 +11,7 @@ from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import stores
 from zentral.utils.api_views import (JSONPostAPIView, verify_secret, APIAuthError,
                                      BaseEnrollmentView, BaseInstallerPackageView)
+from zentral.utils.sql import format_sql
 from . import osquery_conf, event_type_probes, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
 from .models import enroll, DistributedQuery, DistributedQueryNode
@@ -46,11 +47,10 @@ class ProbeView(BaseProbeView):
 
     def get_extra_context_data(self, probe):
         # queries
-        context = {}
         schedule = []
-        file_paths = {}
-        for idx, osquery in enumerate(probe['osquery']['schedule']):
+        for idx, osquery in enumerate(probe.get('osquery', {}).get('schedule', [])):
             # query links. match query_name.
+            osquery_ctx = {}
             query_links = []
             query_name = "{}_{}".format(probe['name'], idx)
             for store in stores:
@@ -58,10 +58,12 @@ class ProbeView(BaseProbeView):
                 if url:
                     query_links.append((store.name, url))
             query_links.sort()
-            schedule.append((osquery, query_links))
-        file_paths = probe['osquery'].get('file_paths', {})
-        context['osquery_schedule'] = schedule
-        context['osquery_file_paths'] = file_paths
+            osquery_ctx['links'] = query_links
+            osquery_ctx['html_query'] = format_sql(osquery['query'])
+            osquery_ctx['interval'] = osquery['interval']
+            osquery_ctx['value'] = osquery.get('value', None)
+            osquery_ctx['description'] = osquery.get('description', None)
+            schedule.append(osquery_ctx)
 
         # probe links. query name starts with probe name.
         probe_links = []
@@ -70,8 +72,10 @@ class ProbeView(BaseProbeView):
             if url:
                 probe_links.append((store.name, url))
         probe_links.sort()
-        context['probe_links'] = probe_links
-        return context
+
+        return {'osquery_schedule': schedule,
+                'osquery_file_paths': probe.get('osquery', {}).get('file_paths', {}),
+                'probe_links': probe_links}
 
 
 class DistributedIndexView(ListView):
