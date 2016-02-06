@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -25,7 +26,7 @@
     {% for dqn in object.distributedquerynode_set.all %}
     <tr>
       <td><a href="{% url 'inventory:machine' dqn.machine_serial_number %}">{{ dqn.machine_serial_number }}</a></td>
-      <td>{% if not dqn.result == None %}<pre>{{ dqn.get_json_result|pprint }}</pre>{% else %}pending…{% endif %}<td>
+      <td>{% if not dqn.result == None %}{{ dqn.get_json_result|pythonprettyprint }}{% else %}pending…{% endif %}<td>
     </tr>
     {% endfor %}
   </tbody>
