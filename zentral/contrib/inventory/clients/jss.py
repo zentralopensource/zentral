@@ -64,8 +64,13 @@ class InventoryClient(BaseInventory):
             # business unit
             site_id = computer['general']['site']['id']
             if site_id >= 0:
-                ct['business_unit'] = {'reference': str(site_id),
-                                       'name': computer['general']['site']['name']}
+                site_reference = str(site_id)
+                site_name = computer['general']['site']['name']
+            else:
+                site_reference = "DEFAULT"
+                site_name = "Default"
+            ct['business_unit'] = {'reference': site_reference,
+                                   'name': site_name}
 
             # groups
             groups = []
