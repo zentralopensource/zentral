@@ -33,7 +33,9 @@
 <h3>Business unit</h3>
 <dl class="dl-horizontal">
   <dt>Name</dt>
-  <dd>{{ ms.business_unit.name }}</dd>
+  <dd>{{ ms.business_unit.get_name_display }}</dd>
+  <dt>Key</dt>
+  <dd>{{ ms.business_unit.get_short_key }}</dd>
 </dl>
 <p>
 {% for link in ms.business_unit.links.all %}

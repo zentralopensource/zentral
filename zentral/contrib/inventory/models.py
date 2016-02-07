@@ -151,6 +151,12 @@ class BusinessUnit(AbstractMachineGroup):
         self.meta_business_unit = mbu
         super(BusinessUnit, self).save()
 
+    def get_name_display(self):
+        if self.source.module == "zentral.contrib.inventory":
+            return "{} - API enrollment".format(self.meta_business_unit)
+        else:
+            return self.name
+
 
 class MachineGroup(AbstractMachineGroup):
     machine_links = models.ManyToManyField(Link, related_name="+")  # tmpl for links to machine in a group
