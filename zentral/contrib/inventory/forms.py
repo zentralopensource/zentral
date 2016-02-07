@@ -1,6 +1,5 @@
 from django import forms
-from django.utils.crypto import get_random_string
-from .models import BusinessUnit, Source
+from .models import MetaBusinessUnit, Source
 
 
 class MachineSearchForm(forms.Form):
@@ -18,28 +17,34 @@ class MachineGroupSearchForm(forms.Form):
                                     widget=forms.Select(attrs={'class': 'form-control'}))
 
 
-class BusinessUnitSearchForm(forms.Form):
+class MetaBusinessUnitSearchForm(forms.Form):
     name = forms.CharField(label="name", max_length=64, required=False)
     source = forms.ModelChoiceField(queryset=Source.objects.current_business_unit_sources(),
                                     required=False,
                                     widget=forms.Select(attrs={'class': 'form-control'}))
 
 
-class BusinessUnitForm(forms.ModelForm):
-    class Meta:
-        fields = ('name',)
-        model = BusinessUnit
+class MergeMBUForm(forms.Form):
+    mbu = forms.ModelMultipleChoiceField(queryset=MetaBusinessUnit.objects.all())
+    dest_mbu = forms.ModelChoiceField(queryset=MetaBusinessUnit.objects.all())
 
-    def save(self):
-        name = self.cleaned_data['name']
-        if self.instance.reference:
-            self.instance.name = name
-            self.instance.mt_hash = self.instance.hash()
-            self.instance.save()
-        else:
-            tree = {'source': {'module': 'zentral.contrib.inventory',
-                               'name': 'Inventory'},
-                    'reference': get_random_string(64),
-                    'name': name}
-            self.instance, _ = BusinessUnit.objects.commit(tree)
+    def merge(self):
+        dest_mbu = self.cleaned_data['dest_mbu']
+        for mbu in self.cleaned_data['mbu']:
+            if mbu == dest_mbu:
+                continue
+            for bu in mbu.businessunit_set.all():
+                bu.set_meta_business_unit(dest_mbu)
+            mbu.delete()
+        return dest_mbu
+
+
+class MBUAPIEnrollmentForm(forms.ModelForm):
+    class Meta:
+        model = MetaBusinessUnit
+        fields = []
+
+    def enable_api_enrollment(self):
+        if not self.instance.api_enrollment_business_units().count():
+            self.instance.create_enrollment_business_unit()
         return self.instance

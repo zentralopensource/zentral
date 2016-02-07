@@ -5,6 +5,61 @@ from django.db.models import Count
 from zentral.utils.mt_models import prepare_commit_tree, AbstractMTObject, MTObjectManager
 
 
+class MetaBusinessUnitManager(models.Manager):
+    def get_or_create_with_bu_key_and_name(self, key, name):
+        try:
+            mbu = self.get(businessunit__key=key)
+        except MetaBusinessUnit.DoesNotExist:
+            mbu = MetaBusinessUnit(name=name)
+            mbu.save()
+        return mbu
+
+    def available_for_api_enrollment(self):
+        return self.filter(businessunit__source__module='zentral.contrib.inventory')
+
+
+class MetaBusinessUnit(models.Model):
+    """The object to link the different BusinessUnits."""
+    name = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = MetaBusinessUnitManager()
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ('name',)
+
+    def get_absolute_url(self):
+        return reverse('inventory:mbu_machines', args=(self.id,))
+
+    def get_current_business_units(self):
+        # !!! api enrollment business unit excluded !!!
+        return BusinessUnit.objects.current().exclude(
+            source__module='zentral.contrib.inventory').filter(meta_business_unit=self)
+
+    def api_enrollment_business_units(self):
+        return self.businessunit_set.filter(source__module='zentral.contrib.inventory').order_by('-id')
+
+    def api_enrollment_enabled(self):
+        return self.api_enrollment_business_units().count() > 0
+
+    def current_api_enrollment_business_units(self):
+        return BusinessUnit.objects.current().filter(source__module='zentral.contrib.inventory').order_by('-id')
+
+    def create_enrollment_business_unit(self):
+        reference = "MBU{}".format(self.id)
+        b, created = BusinessUnit.objects.commit({'source': {'module': 'zentral.contrib.inventory',
+                                                  'name': 'inventory'},
+                                                  'reference': reference,
+                                                  'name': reference})
+        if created:
+            b.set_meta_business_unit(self)
+        return b
+
+
 class SourceManager(MTObjectManager):
     def current_machine_group_sources(self):
         qs = self.filter(machinegroup__isnull=False,
@@ -77,11 +132,24 @@ class AbstractMachineGroup(AbstractMTObject):
 
 
 class BusinessUnit(AbstractMachineGroup):
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit)
+    mt_excluded_fields = ('key', 'meta_business_unit')
+
     def __str__(self):
         return self.name
 
-    def get_absolute_url(self):
-        return reverse('inventory:bu_machines', args=(self.id,))
+    def save(self, *args, **kwargs):
+        self.key = self.generate_key()
+        # get or create the corresponding MetaBusinessUnit
+        # there must always be a MetaBusinessUnit for every BusinessUnit in the inventory
+        # MetaBusinessUnits can be edited in the UI, not the BusinessUnits directly
+        # Many BusinessUnits can be linked to a single MetaBusinessUnit to show that they are equivalent.
+        self.meta_business_unit = MetaBusinessUnit.objects.get_or_create_with_bu_key_and_name(self.key, self.name)
+        super(BusinessUnit, self).save(*args, **kwargs)
+
+    def set_meta_business_unit(self, mbu):
+        self.meta_business_unit = mbu
+        super(BusinessUnit, self).save()
 
 
 class MachineGroup(AbstractMachineGroup):

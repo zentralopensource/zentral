@@ -1,0 +1,29 @@
+{% extends 'inventory/machine_list.html' %}
+
+{% block objectextras %}
+{% if object.api_enrollment_enabled %}
+<p><span class="label label-success">Available for API Enrollment</span></p>
+{% endif %}
+
+<table class="table">
+  {% for bu in object.get_current_business_units %}
+  <tr>
+    <td>{{ bu.source.name }}</td>
+    <td>{{ bu.name }}</td>
+    <td>
+      {% for link in bu.links.all %}
+      <a href="{{ link.url }}" class="btn btn-default">
+        {{ bu.source.name }} - {{ link.anchor_text }}
+      </a>
+      {% endfor %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+<p>
+  <a href="{% url 'inventory:update_mbu' object.id %}" class="btn btn-default">Update</a>
+  {% if not object.api_enrollment_enabled %}
+  <a href="{% url 'inventory:mbu_api_enrollment' object.id %}" class="btn btn-default">Enable API enrollment</a>
+  {% endif %}
+</p>
+{% endblock %}

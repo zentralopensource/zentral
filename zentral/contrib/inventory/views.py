@@ -4,8 +4,9 @@ from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import frontend_store
 from zentral.utils.text import str_to_ascii
 from . import event_type_probes
-from .forms import BusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm, BusinessUnitForm
-from .models import BusinessUnit, MachineGroup, MachineSnapshot
+from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
+                    MergeMBUForm, MBUAPIEnrollmentForm)
+from .models import MetaBusinessUnit, MachineGroup, MachineSnapshot
 
 
 class MachineListView(generic.TemplateView):
@@ -132,29 +133,29 @@ class GroupMachinesView(MachineListView):
         return l
 
 
-class BUView(generic.TemplateView):
-    template_name = "inventory/bu_list.html"
+class MBUView(generic.TemplateView):
+    template_name = "inventory/mbu_list.html"
 
     def get(self, request, *args, **kwargs):
-        self.search_form = BusinessUnitSearchForm(request.GET)
-        return super(BUView, self).get(request, *args, **kwargs)
+        self.search_form = MetaBusinessUnitSearchForm(request.GET)
+        return super(MBUView, self).get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        context = super(BUView, self).get_context_data(**kwargs)
+        context = super(MBUView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        qs = BusinessUnit.objects.current()
+        qs = MetaBusinessUnit.objects.all()
         if self.search_form.is_valid():
             name = self.search_form.cleaned_data['name']
             if name:
                 qs = qs.filter(name__icontains=name)
             source = self.search_form.cleaned_data['source']
             if source:
-                qs = qs.filter(source=source)
+                qs = qs.filter(businessunit__source=source)
         context['object_list'] = qs
         context['search_form'] = self.search_form
         l = []
         if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
-            l.append((reverse('inventory:bu'), 'Inventory business units'))
+            l.append((reverse('inventory:mbu'), 'Inventory business units'))
             l.append((None, "Search"))
         else:
             l.append((None, "Inventory business units"))
@@ -162,37 +163,68 @@ class BUView(generic.TemplateView):
         return context
 
 
-class CreateBUView(generic.CreateView):
-    template_name = "inventory/edit_bu.html"
-    form_class = BusinessUnitForm
-
-
-class UpdateBUView(generic.UpdateView):
-    template_name = "inventory/edit_bu.html"
-    queryset = BusinessUnit.objects.filter(source__module="zentral.contrib.inventory")
-    form_class = BusinessUnitForm
-
-
-class BUMachinesView(MachineListView):
-    def get_object(self, **kwargs):
-        return BusinessUnit.objects.select_related('source').get(pk=kwargs['bu_id'])
-
-    def get_list_qs(self, **kwargs):
-        return MachineSnapshot.objects.current().filter(business_unit__id=kwargs['bu_id'])
-
-    def get_list_title(self, **kwargs):
-        return "BU: {} - {}".format(self.object.source.name, self.object.name)
+class ReviewMBUMergeView(generic.TemplateView):
+    template_name = "inventory/review_mbu_merge.html"
 
     def get_context_data(self, **kwargs):
-        ctx = super(BUMachinesView, self).get_context_data(**kwargs)
-        if self.object.source.module == 'zentral.contrib.inventory':
-            ctx['update_link'] = reverse('inventory:update_bu', args=(self.object.id,))
+        ctx = super(ReviewMBUMergeView, self).get_context_data(**kwargs)
+        ctx['meta_business_units'] = MetaBusinessUnit.objects.filter(id__in=self.request.GET.getlist('mbu_id'))
         return ctx
 
+
+class MergeMBUView(generic.FormView):
+    template_name = "inventory/merge_mbu.html"
+    form_class = MergeMBUForm
+
+    def form_valid(self, form):
+        self.dest_mbu = form.merge()
+        return super(MergeMBUView, self).form_valid(form)
+
+    def get_success_url(self):
+        return reverse('inventory:mbu_machines', args=(self.dest_mbu.id,))
+
+
+class CreateMBUView(generic.CreateView):
+    template_name = "inventory/edit_mbu.html"
+    model = MetaBusinessUnit
+    fields = ('name',)
+
+
+class UpdateMBUView(generic.UpdateView):
+    template_name = "inventory/edit_mbu.html"
+    model = MetaBusinessUnit
+    fields = ('name',)
+
+
+class MBUAPIEnrollmentView(generic.UpdateView):
+    template_name = "inventory/mbu_api_enrollment.html"
+    form_class = MBUAPIEnrollmentForm
+    queryset = MetaBusinessUnit.objects.all()
+
+    def form_valid(self, form):
+        self.mbu = form.enable_api_enrollment()
+        return super(MBUAPIEnrollmentView, self).form_valid(form)
+
+    def get_success_url(self):
+        return reverse('inventory:mbu_machines', args=(self.mbu.id,))
+
+
+class MBUMachinesView(MachineListView):
+    template_name = "inventory/mbu_machines.html"
+
+    def get_object(self, **kwargs):
+        return MetaBusinessUnit.objects.get(pk=kwargs['pk'])
+
+    def get_list_qs(self, **kwargs):
+        return MachineSnapshot.objects.current().filter(business_unit__meta_business_unit=self.object)
+
+    def get_list_title(self, **kwargs):
+        return "BU: {}".format(self.object.name)
+
     def get_breadcrumbs(self, **kwargs):
-        l = [(reverse('inventory:bu'), 'Inventory business units')]
+        l = [(reverse('inventory:mbu'), 'Inventory business units')]
         if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
-            l.append((reverse('inventory:bu_machines', args=(self.object.id,)), self.object.name))
+            l.append((reverse('inventory:mbu_machines', args=(self.object.id,)), self.object.name))
             l.append((None, "Machine search"))
         else:
             l.append((None, self.object.name))

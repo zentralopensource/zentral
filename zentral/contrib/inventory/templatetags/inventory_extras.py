@@ -6,6 +6,7 @@ from pygments.formatters import HtmlFormatter
 
 register = template.Library()
 
+
 @register.filter()
 def pythonprettyprint(val):
     s = pprint.pformat(val)

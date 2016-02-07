@@ -13,7 +13,7 @@
 </ol>
 
 <h2>{{ object_list|length }} Business unit{{ object_list|length|pluralize }}</h2>
-<a href="{% url 'inventory:create_bu' %}" class="btn btn-default">Create</a>
+<a href="{% url 'inventory:create_mbu' %}" class="btn btn-default">Create</a>
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
   <div class="form-group">
     <label for="id_name">{{ search_form.name.label|title }}</label>
@@ -26,19 +26,23 @@
   <button type="submit" class="btn btn-default">Search</button>
 </form>
 
-<div class="table-reponsive">
+<form method="GET" action="{% url 'inventory:review_mbu_merge' %}">
+  <p id="merge-btn-container" style="display:none"><button type="submit" class="btn btn-warning">Merge business units</button></p>
   <table class="table">
-    {% for bu in object_list %}
+    {% for mbu in object_list %}
     <tr>
-      <td>
-        {{ bu.source.name }}
+      <td colspan="3">
+        <input type="checkbox" name="mbu_id" value="{{ mbu.id }}">
+        <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu.name }}</a>
+        {% if mbu.api_enrollment_enabled %}
+        <span class="label label-success">Available for API enrollment</span>
+        {% endif %}
       </td>
-      <td>
-        {{ bu.get_short_key }}
-      </td>
-      <td>
-        <a href="{% url 'inventory:bu_machines' bu.id %}">{{ bu.name }}</a>
-      </td>
+    </tr>
+    {% for bu in mbu.get_current_business_units %}
+    <tr>
+      <td>{{ bu.source.name }}</td>
+      <td>{{ bu.name }}</td>
       <td>
         {% for link in bu.links.all %}
         <a href="{{ link.url }}" class="btn btn-default">
@@ -48,6 +52,18 @@
       </td>
     </tr>
     {% endfor %}
+    {% endfor %}
   </table>
-</div>
+</form>
+{% endblock %}
+
+{% block extrajs %}
+<script>
+  function test_checkbox() {
+    return $('input[type=checkbox]:checked').length > 1;
+  }
+  $('input[type=checkbox]').change(function() {
+    $('#merge-btn-container').toggle(test_checkbox());
+  });
+</script>
 {% endblock %}

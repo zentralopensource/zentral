@@ -7,7 +7,7 @@ from django.core import signing
 from django.http import HttpResponseForbidden, JsonResponse
 from django.views.generic import TemplateView, View
 from zentral.conf import settings
-from zentral.contrib.inventory.models import BusinessUnit
+from zentral.contrib.inventory.models import MetaBusinessUnit, BusinessUnit
 from zentral.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger('zentral.utils.api_views')
@@ -162,10 +162,9 @@ class SignedRequestHeaderJSONPostAPIView(SignedRequestJSONPostAPIView):
 
 
 class EnrollmentForm(forms.Form):
-    business_unit = forms.ModelChoiceField(queryset=BusinessUnit.objects.filter(
-                                           source__module='zentral.contrib.inventory').order_by('name'),
-                                           required=False,
-                                           widget=forms.Select(attrs={'class': 'form-control'}))
+    meta_business_unit = forms.ModelChoiceField(queryset=MetaBusinessUnit.objects.available_for_api_enrollment(),
+                                                required=False,
+                                                widget=forms.Select(attrs={'class': 'form-control'}))
 
 
 class BaseEnrollmentView(TemplateView):
@@ -185,7 +184,12 @@ class BaseInstallerPackageView(View):
             except KeyError:
                 tls_server_certs = None
             builder = self.builder()
+            business_unit = None
+            meta_business_unit = form.cleaned_data['meta_business_unit']
+            if meta_business_unit:
+                # TODO Race. The meta_business_unit could maybe be without any api BU.
+                # TODO. Better selection if multiple BU ?
+                business_unit = meta_business_unit.api_enrollment_business_units()[0]
             return builder.build_and_make_response(request.get_host(),
-                                                   make_secret(self.module,
-                                                               form.cleaned_data['business_unit']),
+                                                   make_secret(self.module, business_unit),
                                                    tls_server_certs)

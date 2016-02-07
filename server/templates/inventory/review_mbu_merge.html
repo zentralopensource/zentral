@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  {% for url, anchor_text in breadcrumbs %}
+  {% if url %}
+  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  {% else %}
+  <li class="active">{{ anchor_text }}</li>
+  {% endif %}
+  {% endfor %}
+</ol>
+
+<h2>Merge business units</h2>
+<form method="POST" action="{% url 'inventory:merge_mbu' %}">{% csrf_token %}
+  <p>Select the business unit you want to keep.</p>
+  <table class="table">
+  {% for mbu in meta_business_units %}
+    <tr>
+      <td colspan="3">
+        <input type="hidden" name="mbu" value="{{ mbu.id }}">
+        <input type="radio" name="dest_mbu" id="id_dest_mbu_{{ mbu.id }}" value="{{ mbu.id }}" {% if forloop.first %}checked{% endif %}>
+        <label for="id_dest_mbu_{{ mbu.id }}">{{ mbu.name}}</label>
+      </td>
+    </tr>
+    {% for bu in mbu.get_current_business_units %}
+    <tr>
+      <td>{{ bu.source.name }}</td>
+      <td>{{ bu.name }}</td>
+      <td>
+        {% for link in bu.links.all %}
+        <a href="{{ link.url }}" class="btn btn-default">
+          {{ bu.source.name }} - {{ link.anchor_text }}
+        </a>
+        {% endfor %}
+      </td>
+    </tr>
+    {% endfor %}
+  {% endfor %}
+  </table>
+  <p><button type="submit" class="btn btn-default">Merge</button></p>
+</form>
+{% endblock %}

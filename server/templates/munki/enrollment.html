@@ -10,8 +10,8 @@
 
 <form action="{% url 'munki:installer_package' %}" method="POST">{% csrf_token %}
   <div class="form-group">
-    <label for="id_business_unit">{{ form.business_unit.label|title }}</label>
-    {{ form.business_unit }}
+    <label for="id_meta_business_unit">Business unit</label>
+    {{ form.meta_business_unit }}
   </div>
   <button class="btn btn-default" type="submit">Download enrollment pkg</button>
 </form>
