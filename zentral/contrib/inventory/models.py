@@ -59,6 +59,19 @@ class MetaBusinessUnit(models.Model):
             b.set_meta_business_unit(self)
         return b
 
+    def has_machine(self, machine_serial_number):
+        return self.businessunit_set.filter(machinesnapshot__machine__serial_number=machine_serial_number,
+                                            machinesnapshot__mt_next__isnull=True).count() > 0
+
+    def get_machine_count(self):
+        qs = MetaBusinessUnit.objects.filter(pk=self.id)
+        qs = qs.filter(businessunit__machinesnapshot__mt_next__isnull=True)
+        qs = qs.annotate(num_msn=Count('businessunit__machinesnapshot__machine__serial_number', distinct=True))
+        try:
+            return qs[0].num_msn
+        except IndexError:
+            return 0
+
 
 class SourceManager(MTObjectManager):
     def current_machine_group_sources(self):
@@ -243,6 +256,10 @@ class MachineSnapshotManager(MTObjectManager):
                                    'business_unit',
                                    'os_version',
                                    'system_info').filter(mt_next__isnull=True)
+
+    def get_current_count(self):
+        result = self.current().aggregate(Count('machine__serial_number', distinct=True))
+        return result['machine__serial_number__count']
 
 
 class MachineSnapshot(AbstractMTObject):

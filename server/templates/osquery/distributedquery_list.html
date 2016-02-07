@@ -14,6 +14,14 @@
     <div class="panel panel-default">
       <div class="panel-body">
 	{{ dq.html_query|safe }}
+        <dl class="dl">
+        {% if dq.meta_business_unit %}
+        <dt>Business unit</dt>
+        <dd><a href="{% url 'inventory:mbu_machines' dq.meta_business_unit.id %}">{{ dq.meta_business_unit }}</a></dd>
+        {% endif %}
+        <dt>Shard</dt>
+        <dd>{{ dq.shard }}</dd>
+        </dl>
       </div>
       <div class="panel-footer">
 	<a href="{% url 'osquery:distributed' dq.id %}" class="btn btn-default">View</a>

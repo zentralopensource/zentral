@@ -11,6 +11,14 @@
 <h1>Distributed query</h1>
 
 {{ object.html_query|safe }}
+<dl class="dl">
+  {% if object.meta_business_unit %}
+  <dt>Business unit</dt>
+  <dd><a href="{% url 'inventory:mbu_machines' object.meta_business_unit.id %}">{{ object.meta_business_unit }}</a></dd>
+  {% endif %}
+  <dt>Shard</dt>
+  <dd>{{ object.shard }}</dd>
+</dl>
 
 <h2>Results</h2>
 <a href="{% url 'osquery:distributed_download' object.id %}" class="btn btn-default">

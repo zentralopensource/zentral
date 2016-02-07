@@ -14,6 +14,7 @@ from zentral.utils.api_views import (JSONPostAPIView, verify_secret, APIAuthErro
 from zentral.utils.sql import format_sql
 from . import osquery_conf, event_type_probes, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
+from .forms import DistributedQueryForm
 from .models import enroll, DistributedQuery, DistributedQueryNode
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 
@@ -89,7 +90,7 @@ class DistributedIndexView(ListView):
 
 class CreateDistributedView(CreateView):
     model = DistributedQuery
-    fields = ['query']
+    form_class = DistributedQueryForm
 
     def get_context_data(self, **kwargs):
         ctx = super(CreateDistributedView, self).get_context_data(**kwargs)
@@ -108,7 +109,7 @@ class DistributedView(DetailView):
 
 class UpdateDistributedView(UpdateView):
     model = DistributedQuery
-    fields = ['query']
+    form_class = DistributedQueryForm
 
     def get_context_data(self, **kwargs):
         ctx = super(UpdateDistributedView, self).get_context_data(**kwargs)

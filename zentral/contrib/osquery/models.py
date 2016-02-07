@@ -4,8 +4,10 @@ from django.core.urlresolvers import reverse
 from django.db import models
 from django.utils import timezone
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.contrib.inventory.models import MachineSnapshot, MetaBusinessUnit
 from zentral.utils.sql import format_sql
+
+MAX_DISTRIBUTED_QUERY_AGE = timedelta(days=1)
 
 
 def enroll(serial_number, business_unit):
@@ -29,6 +31,8 @@ def enroll(serial_number, business_unit):
 
 class DistributedQuery(models.Model):
     query = models.TextField()
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True, on_delete=models.SET_NULL)
+    shard = models.PositiveIntegerField(default=100)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -37,19 +41,16 @@ class DistributedQuery(models.Model):
     def get_absolute_url(self):
         return reverse('osquery:distributed', args=(self.id,))
 
-    def save(self, *args, **kwargs):
-        super(DistributedQuery, self).save(*args, **kwargs)
-        for ms in MachineSnapshot.objects.current().filter(source__module="zentral.contrib.osquery"):
-            DistributedQueryNode.objects.get_or_create(distributed_query=self,
-                                                       machine_serial_number=ms.machine.serial_number)
-
     def can_be_updated(self):
         return self.distributedquerynode_set.count() == 0
 
     def serialize(self):
         d = {'query': self.query,
              'created_at': self.created_at.isoformat(),
+             'shard': self.shard,
              'results': {}}
+        if self.meta_business_unit:
+            d['business_unit'] = str(self.meta_business_unit)
         for dqn in self.distributedquerynode_set.filter(result__isnull=False):
             d['results'][dqn.machine_serial_number] = {'result': dqn.get_json_result(),
                                                        'created_at': dqn.created_at}
@@ -58,14 +59,35 @@ class DistributedQuery(models.Model):
     def html_query(self):
         return format_sql(self.query)
 
+    def _make_node(self, machine_serial_number):
+        dqn, _ = DistributedQueryNode.objects.get_or_create(distributed_query=self,
+                                                            machine_serial_number=machine_serial_number)
+        return dqn
+
+    def make_node(self, machine_serial_number):
+        if self.created_at < timezone.now() - MAX_DISTRIBUTED_QUERY_AGE or \
+           self.distributedquerynode_set.filter(machine_serial_number=machine_serial_number).count():
+            return
+        existing_dqn_num = self.distributedquerynode_set.count()
+        if self.meta_business_unit is None:
+            max_dqn_num = MachineSnapshot.objects.get_current_count()
+        else:
+            if not self.meta_business_unit.has_machine(machine_serial_number):
+                return
+            max_dqn_num = self.meta_business_unit.get_machine_count()
+        if self.shard / 100 * max_dqn_num > existing_dqn_num:
+            return self._make_node(machine_serial_number)
+
 
 class DistributedQueryNodeManager(models.Manager):
-    MAX_QUERY_AGE = timedelta(days=1)
-
     def new_queries_with_serial_number(self, serial_number):
-        return self.select_related('distributed_query').filter(machine_serial_number=serial_number,
-                                                               result__isnull=True,
-                                                               created_at__gte=timezone.now()-self.MAX_QUERY_AGE)
+        dq_qs = DistributedQuery.objects.exclude(distributedquerynode__machine_serial_number=serial_number)
+        l = []
+        for dq in dq_qs.filter(created_at__gte=timezone.now() - MAX_DISTRIBUTED_QUERY_AGE):
+            dqn = dq.make_node(serial_number)
+            if dqn:
+                l.append(dqn)
+        return l
 
 
 class DistributedQueryNode(models.Model):
