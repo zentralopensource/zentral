@@ -1,7 +1,7 @@
 import logging
 import psycopg2
 from psycopg2.extras import Json
-from zentral.core.events import event_cls_from_type, EventMetadata, EventRequest, event_handler
+from zentral.core.events import event_cls_from_type, EventMetadata, EventRequest
 from zentral.core.stores.backends.base import BaseEventStore
 
 logger = logging.getLogger('zentral.core.stores.backends.postgres')
@@ -84,7 +84,6 @@ class EventStore(BaseEventStore):
         event_cls = event_cls_from_type(event_type)
         event = event_cls(EventMetadata(event_type, **doc),
                           payload)
-        event_handler.apply_middlewares(event)
         return event
 
     def store(self, event_d):
