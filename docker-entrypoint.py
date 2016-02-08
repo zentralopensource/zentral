@@ -51,13 +51,19 @@ def wait_for_db_migration():
 
 
 KNOWN_COMMANDS = {
-    "runserver": ['server/manage.py', 'runserver', '0.0.0.0:8000'],
-    "inventory_worker": ['zentral/bin/inventory_worker.py'],
-    "store_worker": ['zentral/bin/store_worker.py'],
-    "processor_worker": ['zentral/bin/processor_worker.py'],
+    "runserver": ["python", 'server/manage.py', 'runserver', '0.0.0.0:8000'],
+    "gunicorn": ["gunicorn", "--chdir", "/zentral/server",
+                             "-b", "0.0.0.0:8000",
+                             "-w", "4",
+                             "--access-logfile", "-",
+                             "--error-logfile", "-",
+                             "server.wsgi"],
+    "inventory_worker": ["python", 'zentral/bin/inventory_worker.py'],
+    "store_worker": ["python", 'zentral/bin/store_worker.py'],
+    "processor_worker": ["python", 'zentral/bin/processor_worker.py'],
     # extras
-    "shell": ['server/manage.py', 'shell'],
-    "tests": ['server/manage.py', 'test', 'tests/'],
+    "shell": ["python", 'server/manage.py', 'shell'],
+    "tests": ["python", 'server/manage.py', 'test', 'tests/'],
 }
 
 
@@ -68,8 +74,7 @@ if __name__ == '__main__':
     cmd = sys.argv[1]
     args = KNOWN_COMMANDS.get(cmd, None)
     if args:
-        filename = "python"
-        args.insert(0, filename)
+        filename = args[0]
         wait_for_db_migration()
         print('Launch known command "{}"'.format(cmd))
     else:
