@@ -1,8 +1,5 @@
 from django.http import HttpResponse
 from django.views import generic
-from zentral.conf import probes
-from zentral.contrib.osquery.models import DistributedQuery
-from zentral.core.stores import stores
 
 
 class HealthCheckView(generic.View):

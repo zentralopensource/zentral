@@ -20,3 +20,13 @@ urlpatterns = [
     url(r'^probes/$', views.ProbesView.as_view(), name='probes'),
     url(r'^probes/(?P<probe_key>[\S ]+)/$', views.ProbeView.as_view(), name='probe'),
 ]
+
+
+main_menu_cfg = {
+    'items': (
+        ('index', 'Machines'),
+        ('groups', 'Groups'),
+        ('mbu', 'Business units'),
+        ('probes', 'Probes'),
+    )
+}

@@ -34,3 +34,12 @@ urlpatterns = [
     url(r'^distributed/write$', csrf_exempt(views.DistributedWriteView.as_view()), name='distributed_write'),
     url(r'^log$', csrf_exempt(views.LogView.as_view()), name='log'),
 ]
+
+
+main_menu_cfg = {
+    'items': (
+        ('probes', 'Probes'),
+        ('distributed_index', 'Distributed queries'),
+        ('enrollment', 'Enrollment'),
+    )
+}

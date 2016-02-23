@@ -1,4 +1,4 @@
-{% load staticfiles %}
+{% load staticfiles base_extras %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -30,37 +30,7 @@
         <!-- Collect the nav links, forms, and other content for toggling -->
         <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
           <ul class="nav navbar-nav">
-            <li class="dropdown{% if inventory %} active{% endif %}">
-              <a href="{% url 'inventory:index' %}" class="dropdown-toggle" data-toggle="dropdown" role="button">Inventory <span class="caret"></span></a>
-              <ul class="dropdown-menu">
-                <li><a href="{% url 'inventory:index' %}">Machines</a></li>
-                <li><a href="{% url 'inventory:groups' %}">Groups</a></li>
-                <li><a href="{% url 'inventory:mbu' %}">Business units</a></li>
-                <li><a href="{% url 'inventory:probes' %}">Probes</a></li>
-              </ul>
-            </li>
-	    <li class="dropdown{% if osquery %} active{% endif %}">
-              <a href="{% url 'osquery:probes' %}" class="dropdown-toggle" data-toggle="dropdown" role="button">Osquery <span class="caret"></span></a>
-              <ul class="dropdown-menu">
-                <li><a href="{% url 'osquery:probes' %}">Probes</a></li>
-                <li><a href="{% url 'osquery:distributed_index' %}">Distributed queries</a></li>
-                <li><a href="{% url 'osquery:enrollment' %}">Enrollment</a></li>
-              </ul>
-            </li>
-	    <li class="dropdown{% if santa %} active{% endif %}">
-              <a href="{% url 'santa:probes' %}" class="dropdown-toggle" data-toggle="dropdown" role="button">Santa <span class="caret"></span></a>
-              <ul class="dropdown-menu">
-                <li><a href="{% url 'santa:probes' %}">Probes</a></li>
-                <li><a href="{% url 'santa:enrollment' %}">Enrollment</a></li>
-              </ul>
-            </li>
-	    <li class="dropdown{% if munki %} active{% endif %}">
-              <a href="{% url 'munki:probes' %}" class="dropdown-toggle" data-toggle="dropdown" role="button">Munki <span class="caret"></span></a>
-              <ul class="dropdown-menu">
-                <li><a href="{% url 'munki:probes' %}">Probes</a></li>
-                <li><a href="{% url 'munki:enrollment' %}">Enrollment</a></li>
-              </ul>
-            </li>
+            {% main_menu_app_dropdowns %}
           </ul>
           {% if zentral_extra_links %}
           <ul class="nav navbar-nav navbar-right">

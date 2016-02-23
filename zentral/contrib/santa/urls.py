@@ -15,3 +15,11 @@ urlpatterns = [
     url(r'^logupload/(?P<machine_id>\S+)$', csrf_exempt(views.LogUploadView.as_view()), name='logupload'),
     url(r'^postflight/(?P<machine_id>\S+)$', csrf_exempt(views.PostflightView.as_view()), name='postflight'),
 ]
+
+
+main_menu_cfg = {
+    'items': (
+        ('probes', 'Probes'),
+        ('enrollment', 'Enrollment'),
+    )
+}

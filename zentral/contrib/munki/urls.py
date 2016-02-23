@@ -12,3 +12,11 @@ urlpatterns = [
     url(r'^job_details/$', csrf_exempt(views.JobDetailsView.as_view())),
     url(r'^post_job/$', csrf_exempt(views.PostJobView.as_view()))
 ]
+
+
+main_menu_cfg = {
+    'items': (
+        ('probes', 'Probes'),
+        ('enrollment', 'Enrollment'),
+    )
+}

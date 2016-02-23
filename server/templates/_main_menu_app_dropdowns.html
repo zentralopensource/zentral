@@ -1,0 +1,10 @@
+{% for dropdown in dropdown_list %}
+<li class="dropdown{% if dropdown.is_active %} active{% endif %}">
+    <a href="{{ dropdown.main_link }}" class="dropdown-toggle" data-toggle="dropdown" role="button">{{ dropdown.title }} <span class="caret"></span></a>
+    <ul class="dropdown-menu">
+        {% for link, anchor_text in dropdown.link_list %}
+        <li><a href="{{ link }}">{{ anchor_text }}</a></li>
+        {% endfor %}
+    </ul>
+</li>
+{% endfor %}
