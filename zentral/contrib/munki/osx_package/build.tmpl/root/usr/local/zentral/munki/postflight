@@ -154,7 +154,7 @@ class ManagedInstallReport(object):
         self.sha1sum = self._get_sha1_sum(filename)
         self.data = plistlib.readPlist(filename)
         self.start_time = self.data['StartTime']
-        self.end_time = self.data['EndTime']
+        self.end_time = self.data.get('EndTime', self.start_time)
         try:
             self.munki_version = self.data['MachineInfo']['munki_version']
         except KeyError:
