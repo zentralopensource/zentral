@@ -35,7 +35,7 @@ class PackageBuilder(object):
         self.builddir = os.path.join(self.tempdir, "build")
         shutil.copytree(self.build_tmpl_dir, self.builddir)
 
-    def _set_number_of_files_and_install_kbytes(self):
+    def _prepare_package_info(self, package_identifier):
         number_of_files = install_bytes = 0
         for root, dirs, files in os.walk(self.get_root_path()):
             for name in chain(dirs, files):
@@ -45,7 +45,8 @@ class PackageBuilder(object):
         install_kbytes = str(install_bytes // 1024)
         self.replace_in_file(self.get_build_path("base.pkg", "PackageInfo"),
                              (("%NUMBER_OF_FILES%", number_of_files),
-                              ("%INSTALL_KBYTES%", install_kbytes)))
+                              ("%INSTALL_KBYTES%", install_kbytes),
+                              ("%PKG_IDENTIFIER%", package_identifier),))
 
     def _build_gziped_cpio_arch(self, dirname, arch_name):
         input_path = self.get_build_path(dirname)
@@ -94,10 +95,17 @@ class PackageBuilder(object):
     def extra_build_steps(self, *args, **kwargs):
         pass
 
-    def build(self, *args, **kwargs):
+    def get_package_identifier(self, business_unit):
+        package_identifier = self.package_identifier
+        if business_unit:
+            package_identifier = "{}.bu_{}".format(package_identifier,
+                                                   business_unit.get_short_key())
+        return package_identifier
+
+    def build(self, business_unit, *args, **kwargs):
         self._prepare_temporary_build_dir()
         self.extra_build_steps(*args, **kwargs)
-        self._set_number_of_files_and_install_kbytes()
+        self._prepare_package_info(self.get_package_identifier(business_unit))
         self._build_payload()
         self._build_scripts()
         self._build_bom()

@@ -8,6 +8,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class SantaZentralEnrollPkgBuilder(PackageBuilder):
     package_name = "zentral_santa_enroll.pkg"
+    package_identifier = "io.zentral.santa_enroll"
     build_tmpl_dir = os.path.join(BASE_DIR, "build.tmpl")
 
     def include_tls_server_certs(self, config_plist, tls_server_certs):

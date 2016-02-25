@@ -8,6 +8,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class OsqueryZentralEnrollPkgBuilder(PackageBuilder):
     package_name = "zentral_osquery_enroll.pkg"
+    package_identifier = "io.zentral.osquery_enroll"
     build_tmpl_dir = os.path.join(BASE_DIR, "build.tmpl")
 
     def set_tls_hostname(self):

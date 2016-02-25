@@ -190,6 +190,7 @@ class BaseInstallerPackageView(View):
                 # TODO Race. The meta_business_unit could maybe be without any api BU.
                 # TODO. Better selection if multiple BU ?
                 business_unit = meta_business_unit.api_enrollment_business_units()[0]
-            return builder.build_and_make_response(request.get_host(),
+            return builder.build_and_make_response(business_unit,
+                                                   request.get_host(),
                                                    make_secret(self.module, business_unit),
                                                    tls_server_certs)

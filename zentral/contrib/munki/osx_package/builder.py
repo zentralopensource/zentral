@@ -7,6 +7,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class MunkiZentralEnrollPkgBuilder(PackageBuilder):
     package_name = "zentral_munki_enroll.pkg"
+    package_identifier = "io.zentral.munki_enroll"
     build_tmpl_dir = os.path.join(BASE_DIR, "build.tmpl")
 
     def include_tls_server_certs(self, tls_server_certs):
