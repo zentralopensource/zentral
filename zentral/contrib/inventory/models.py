@@ -54,7 +54,8 @@ class MetaBusinessUnit(models.Model):
         b, created = BusinessUnit.objects.commit({'source': {'module': 'zentral.contrib.inventory',
                                                   'name': 'inventory'},
                                                   'reference': reference,
-                                                  'name': reference})
+                                                  'name': reference},
+                                                 meta_business_unit=self)
         if created:
             b.set_meta_business_unit(self)
         return b
@@ -157,7 +158,10 @@ class BusinessUnit(AbstractMachineGroup):
         # there must always be a MetaBusinessUnit for every BusinessUnit in the inventory
         # MetaBusinessUnits can be edited in the UI, not the BusinessUnits directly
         # Many BusinessUnits can be linked to a single MetaBusinessUnit to show that they are equivalent.
-        self.meta_business_unit = MetaBusinessUnit.objects.get_or_create_with_bu_key_and_name(self.key, self.name)
+        mbu = kwargs.get('meta_business_unit', None)
+        if not mbu:
+            mbu = MetaBusinessUnit.objects.get_or_create_with_bu_key_and_name(self.key, self.name)
+        self.meta_business_unit = mbu
         super(BusinessUnit, self).save(*args, **kwargs)
 
     def set_meta_business_unit(self, mbu):

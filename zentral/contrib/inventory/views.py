@@ -1,4 +1,5 @@
 from django.core.urlresolvers import reverse
+from django.http import HttpResponseRedirect
 from django.views import generic
 from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import frontend_store
@@ -203,7 +204,7 @@ class MBUAPIEnrollmentView(generic.UpdateView):
 
     def form_valid(self, form):
         self.mbu = form.enable_api_enrollment()
-        return super(MBUAPIEnrollmentView, self).form_valid(form)
+        return HttpResponseRedirect(self.get_success_url())
 
     def get_success_url(self):
         return reverse('inventory:mbu_machines', args=(self.mbu.id,))

@@ -84,7 +84,7 @@ def cleanup_commit_tree(tree):
 
 
 class MTObjectManager(models.Manager):
-    def commit(self, tree, current=False):
+    def commit(self, tree, current=False, **extra_obj_save_kwargs):
         prepare_commit_tree(tree)
         created = False
         try:
@@ -123,7 +123,7 @@ class MTObjectManager(models.Manager):
                 else:
                     obj.get_mt_field(k)
                     setattr(obj, k, v)
-            obj.save()
+            obj.save(**extra_obj_save_kwargs)
             for k, l in m2m_fields:
                 setattr(obj, k, l)
             if not obj.hash(recursive=False) == obj.mt_hash:
