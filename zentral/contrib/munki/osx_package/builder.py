@@ -27,5 +27,5 @@ class MunkiZentralEnrollPkgBuilder(PackageBuilder):
         else:
             tls_server_certs_install_path = ""
         patterns.append(("%TLS_SERVER_CERTS%", tls_server_certs_install_path))
-        postflight_script = self.get_root_path("usr/local/zentral/munki/postflight")
+        postflight_script = self.get_root_path("usr/local/zentral/munki/zentral_postflight")
         self.replace_in_file(postflight_script, patterns)

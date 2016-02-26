@@ -1,13 +1,25 @@
-#!/bin/sh
-## postinstall
+#!/usr/bin/python
+import os
+import subprocess
 
-POSTFLIGHT_SCRIPT=/usr/local/zentral/munki/postflight
+POSTFLIGHT_SCRIPT = "/usr/local/munki/postflight"
+POSTFLIGHT_DIR = "/usr/local/munki/postflight.d"
 
-if [[ -d /usr/local/munki/postflight.d ]]; then
-  ln -s $POSTFLIGHT_SCRIPT /usr/local/munki/postflight.d/zentral
-fi
+ZENTRAL_PFD_SCRIPT = "/usr/local/zentral/munki/postflight"
+ZENTRAL_PF_SCRIPT = "/usr/local/zentral/munki/zentral_postflight"
+
+# prepare postflight.d dir and save existing postflight script
+if not os.path.isdir(POSTFLIGHT_DIR):
+    os.makedirs(POSTFLIGHT_DIR)
+    if os.path.isfile(POSTFLIGHT_SCRIPT):
+        os.rename(POSTFLIGHT_SCRIPT, os.path.join(POSTFLIGHT_DIR, "postflight.bckp"))
+    os.symlink(ZENTRAL_PFD_SCRIPT, POSTFLIGHT_SCRIPT)
+
+# install zentral postflight script
+zentral_pf_script_install_path = os.path.join(POSTFLIGHT_DIR, "zentral")
+if os.path.exists(zentral_pf_script_install_path):
+    os.unlink(zentral_pf_script_install_path)
+os.symlink(ZENTRAL_PF_SCRIPT, zentral_pf_script_install_path)
 
 # call the postflight to send fresh and complete infos to zentral
-$POSTFLIGHT_SCRIPT auto
-
-exit 0
+subprocess.call([ZENTRAL_PF_SCRIPT, "auto"])
