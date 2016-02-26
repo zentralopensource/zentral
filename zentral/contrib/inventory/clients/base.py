@@ -1,8 +1,11 @@
 import copy
+import logging
 from django.db import transaction
 from zentral.contrib.inventory.models import MachineSnapshot
 
 __all__ = ['BaseInventory', 'InventoryError']
+
+logger = logging.getLogger('zentral.contrib.inventory.clients.base')
 
 
 class InventoryError(Exception):
@@ -31,6 +34,16 @@ class BaseInventory(object):
     def sync(self):
         for machine_d in self.get_machines():
             source = copy.deepcopy(self.source)
+            try:
+                serial_number = machine_d['machine']['serial_number']
+            except KeyError:
+                logger.warning('Machine w/o serial number. Client "%s". Reference "%s"',
+                               self.name, machine_d.get('reference', 'Unknown'))
+                continue
+            if not serial_number:
+                logger.warning('Machine serial number blank. Client "%s". Reference "%s"',
+                               self.name, machine_d.get('reference', 'Unknown'))
+                continue
             # source will be modified by mto
             machine_d['source'] = source
             for group_d in machine_d.get('groups', []):
