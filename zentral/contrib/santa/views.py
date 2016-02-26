@@ -93,6 +93,7 @@ class BaseView(SignedRequestJSONPostAPIView):
 class PreflightView(BaseView):
     def do_post(self, data):
         machine_serial_number = data['serial_num']
+        assert(machine_serial_number == self.machine_serial_number)
         post_santa_preflight(machine_serial_number,
                              self.user_agent,
                              self.ip,
@@ -101,7 +102,7 @@ class PreflightView(BaseView):
         tree = {'source': {'module': 'zentral.contrib.santa',
                            'name': 'Santa',
                            },
-                'reference': self.machine_id,
+                'reference': machine_serial_number,
                 'machine': {'serial_number': machine_serial_number},
                 'os_version': {'name': 'Mac OS X',
                                'major': major,
@@ -129,7 +130,7 @@ class EventUploadView(BaseView):
     def do_post(self, data):
         try:
             ms = MachineSnapshot.objects.current().get(source__module='zentral.contrib.santa',
-                                                       reference=self.machine_id)
+                                                       reference=self.machine_serial_number)
         except MachineSnapshot.DoesNotExist:
             machine_serial_number = "UNKNOWN"
             logger.error("Machine ID not found", extra={'request': self.request})

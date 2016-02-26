@@ -29,7 +29,9 @@ class SantaZentralEnrollPkgBuilder(PackageBuilder):
         # extra steps
         config_plist = self.get_root_path("var/db/santa/config.plist")
         self.replace_in_file(config_plist,
-                             (("%TLS_HOSTNAME%", tls_hostname),
-                              ("%MACHINE_ID%", api_secret)))
+                             (("%TLS_HOSTNAME%", tls_hostname),))
+        postinstall_script = self.get_build_path("scripts", "postinstall")
+        self.replace_in_file(postinstall_script,
+                             (("%API_SECRET%", api_secret),))
         if tls_server_certs:
             self.include_tls_server_certs(config_plist, tls_server_certs)
