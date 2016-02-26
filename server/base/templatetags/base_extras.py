@@ -23,13 +23,15 @@ def main_menu_app_dropdowns(context):
                 continue
             dropdown_cfg = {'app_shortname': app_shortname,
                             'title': main_menu_cfg.get('title', None) or app_shortname.title(),
-                            'link_list': []}
+                            'link_list': [],
+                            'weight': main_menu_cfg.get('weight', 1000)}
             for url_name, anchor_text in main_menu_cfg['items']:
                 dropdown_cfg['link_list'].append((reverse('{}:{}'.format(app_shortname, url_name)),
                                                   anchor_text))
             if dropdown_cfg['link_list']:
                 dropdown_cfg['main_link'] = dropdown_cfg['link_list'][0][0]
             DROPDOWN_LIST.append(dropdown_cfg)
+        DROPDOWN_LIST.sort(key=lambda d: (d['weight'], d['title']))
     for dropdown_cfg in DROPDOWN_LIST:
         dropdown_cfg['is_active'] = context.get(dropdown_cfg['app_shortname'], False) is True
     context['dropdown_list'] = DROPDOWN_LIST

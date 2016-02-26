@@ -23,6 +23,7 @@ urlpatterns = [
 
 
 main_menu_cfg = {
+    'weight': 0,
     'items': (
         ('index', 'Machines'),
         ('groups', 'Groups'),
