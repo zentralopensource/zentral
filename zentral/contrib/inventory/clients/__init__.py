@@ -1,5 +1,6 @@
 from importlib import import_module
 from zentral.conf import settings
+from .base import InventoryError  # NOQA
 
 
 def get_clients(settings):

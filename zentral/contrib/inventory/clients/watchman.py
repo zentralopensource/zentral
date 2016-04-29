@@ -1,6 +1,7 @@
 import logging
 import re
 import requests
+from requests.packages.urllib3.util import Retry
 from .base import BaseInventory, InventoryError
 
 logger = logging.getLogger('zentral.contrib.inventory.backends.watchman')
@@ -23,16 +24,23 @@ class InventoryClient(BaseInventory):
         super(InventoryClient, self).__init__(config_d)
         self.base_url = 'https://%(account)s.monitoringclient.com' % config_d
         self.base_api_url = '{}/v2.2'.format(self.base_url)
-        self.api_key = config_d['api_key']
+        # requests session setup
+        self.session = requests.Session()
+        self.session.headers.update({'user-agent': 'zentral/0.0.1',
+                                     'accept': 'application/json'})
+        self.session.params = {'api_key': config_d['api_key']}
+        max_retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+        self.session.mount(self.base_api_url,
+                           requests.adapters.HTTPAdapter(max_retries=max_retries))
 
     def _make_get_query(self, path, **params):
         url = "%s%s" % (self.base_api_url, path)
-        params['api_key'] = self.api_key
-        headers = {'user-agent': 'zentral/0.0.1',
-                   'accept': 'application/json'}
-        r = requests.get(url, headers=headers, params=params)
+        try:
+            r = self.session.get(url, params=params)
+        except requests.exceptions.RequestException as e:
+            raise InventoryError("Watchman API error: %s" % str(e))
         if r.status_code != requests.codes.ok:
-            raise InventoryError()
+            raise InventoryError("Watchman API HTTP response status code %s" % r.status_code)
         return r.json()
 
     def _make_paginated_get_query(self, path, **params):

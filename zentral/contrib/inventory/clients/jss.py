@@ -1,5 +1,6 @@
 import logging
 import requests
+from requests.packages.urllib3.util import Retry
 from .base import BaseInventory, InventoryError
 
 logger = logging.getLogger('zentral.contrib.inventory.backends.jss')
@@ -12,15 +13,23 @@ class InventoryClient(BaseInventory):
         super(InventoryClient, self).__init__(config_d)
         self.base_url = 'https://%(host)s:%(port)s' % config_d
         self.api_base_url = '%s%s' % (self.base_url, config_d['path'])
-        self.auth = (config_d['user'], config_d['password'])
+        # requests session setup
+        self.session = requests.Session()
+        self.session.headers.update({'user-agent': 'zentral/0.0.1',
+                                     'accept': 'application/json'})
+        self.session.auth = (config_d['user'], config_d['password'])
+        max_retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+        self.session.mount(self.api_base_url,
+                           requests.adapters.HTTPAdapter(max_retries=max_retries))
 
     def _make_get_query(self, path):
         url = "%s%s" % (self.api_base_url, path)
-        headers = {'user-agent': 'zentral/0.0.1',
-                   'accept': 'application/json'}
-        r = requests.get(url, headers=headers, auth=self.auth)
+        try:
+            r = self.session.get(url)
+        except requests.exceptions.RequestException as e:
+            raise InventoryError("JSS API error: %s" % str(e))
         if r.status_code != requests.codes.ok:
-            raise InventoryError()
+            raise InventoryError("JSS API HTTP response status code %s" % r.status_code)
         return r.json()
 
     def _computergroups(self):
@@ -139,9 +148,7 @@ class InventoryClient(BaseInventory):
         if machine_id in machine_id_l:
             logger.debug("Machine {} already in group {}".format(machine_id, group_name))
             return
-        headers = {'user-agent': 'zentral/0.0.1',
-                   'accept': 'application/json',
-                   'content-type': 'text/xml'}
+        headers = {'content-type': 'text/xml'}
         if group_d:
             url = "%s%s" % (self.api_base_url, "/computergroups/id/{}".format(group_d["computer_group"]["id"]))
             data = ("<computer_group>"
@@ -150,7 +157,7 @@ class InventoryClient(BaseInventory):
                     "<computer><id>{}</id></computer>"
                     "</computer_additions>"
                     "</computer_group>").format(group_d["computer_group"]["id"], machine_id)
-            r = requests.put(url, headers=headers, auth=self.auth, data=data)
+            r = self.session.put(url, headers=headers, data=data)
         else:
             url = "%s%s" % (self.api_base_url, "/computergroups/id/0")
             data = ("<computer_group>"
@@ -158,6 +165,6 @@ class InventoryClient(BaseInventory):
                     "<is_smart>false</is_smart>"
                     "<computers><computer><id>{}</id></computer></computers>"
                     "</computer_group>").format(group_name, machine_id)
-            r = requests.post(url, headers=headers, auth=self.auth, data=data)
+            r = self.session.post(url, headers=headers, data=data)
         if r.status_code != requests.codes.created:
             raise InventoryError()

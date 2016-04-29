@@ -1,5 +1,6 @@
 import logging
 import requests
+from requests.packages.urllib3.util import Retry
 from .base import BaseInventory, InventoryError
 
 logger = logging.getLogger('zentral.contrib.inventory.backends.sal')
@@ -13,14 +14,24 @@ class InventoryClient(BaseInventory):
         self.base_url = 'http{}://{}'.format(config_d.get('secure', True) * 's', config_d['host'])
         self.api_base_url = '{}/api'.format(self.base_url)
         self.public_key, self.private_key = config_d['public_key'], config_d['private_key']
+        # requests session setup
+        self.session = requests.Session()
+        self.session.headers.update({'user-agent': 'zentral/0.0.1',
+                                     'accept': 'application/json',
+                                     'privatekey': self.private_key,
+                                     'publickey': self.public_key})
+        max_retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+        self.session.mount(self.api_base_url,
+                           requests.adapters.HTTPAdapter(max_retries=max_retries))
 
     def _make_get_query(self, path):
         url = "%s%s" % (self.api_base_url, path)
-        headers = {'privatekey': self.private_key,
-                   'publickey': self.public_key}
-        r = requests.get(url, headers=headers)
+        try:
+            r = self.session.get(url)
+        except requests.exceptions.RequestException as e:
+            raise InventoryError("Sal API error: %s" % str(e))
         if r.status_code != requests.codes.ok:
-            raise InventoryError()
+            raise InventoryError("Sal API HTTP response status code %s" % r.status_code)
         return r.json()
 
     def _machine_links_from_id(self, machine_id):
