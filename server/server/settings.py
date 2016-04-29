@@ -137,10 +137,16 @@ LOGGING = {
             '()': 'django.utils.log.RequireDebugTrue',
         },
     },
+    'formatters': {
+        'verbose': {
+            'format': '%(asctime)s PID%(process)d %(module)s %(levelname)s %(message)s'
+        },
+    },
     'handlers': {
         'console': {
             'level': 'DEBUG',
             'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
         },
     },
     'loggers': {
