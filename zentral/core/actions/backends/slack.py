@@ -17,4 +17,5 @@ class Action(BaseAction):
             url = API_ENDPOINT
         else:
             url = self.config_d['webhook']
-        requests.post(url, headers={'Accept': 'application/json'}, data=json.dumps(args))
+        r = requests.post(url, headers={'Accept': 'application/json'}, data=json.dumps(args))
+        r.raise_for_status()

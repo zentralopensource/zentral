@@ -22,4 +22,5 @@ class Action(BaseAction):
                 cell_number = contact_d.get('cell', None)
                 if cell_number:
                     args['To'] = cell_number
-                    requests.post(self.url, data=args, auth=self.auth)
+                    r = requests.post(self.url, data=args, auth=self.auth)
+                    r.raise_for_status()
