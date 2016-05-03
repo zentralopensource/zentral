@@ -129,7 +129,8 @@ def post_events_from_osquery_log(msn, user_agent, ip, data):
         raise NotImplementedError("Unknown log type.")
     metadata = EventMetadata(event_cls.event_type,
                              machine_serial_number=msn,
-                             request=EventRequest(user_agent, ip))
+                             request=EventRequest(user_agent, ip),
+                             tags=['osquery'])
     for index, payload in enumerate(payloads):
         metadata.index = index
         event = event_cls(metadata, payload)
@@ -140,7 +141,8 @@ def post_enrollment_event(msn, user_agent, ip, data):
     event_cls = OsqueryEnrollmentEvent
     metadata = EventMetadata(event_cls.event_type,
                              machine_serial_number=msn,
-                             request=EventRequest(user_agent, ip))
+                             request=EventRequest(user_agent, ip),
+                             tags=['osquery'])
     event = event_cls(metadata, data)
     event.post()
 
@@ -149,6 +151,7 @@ def post_request_event(msn, user_agent, ip, request_type):
     event_cls = OsqueryRequestEvent
     metadata = EventMetadata(event_cls.event_type,
                              machine_serial_number=msn,
-                             request=EventRequest(user_agent, ip))
+                             request=EventRequest(user_agent, ip),
+                             tags=['osquery'])
     event = event_cls(metadata, {'request_type': request_type})
     event.post()
