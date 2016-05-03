@@ -31,6 +31,40 @@ class BaseInventory(object):
         raise NotImplementedError
 
     # inventory API
+    def _events_from_diff(self, diff):
+        events = []
+        for m2m_attr, event_type in (('links', 'inventory_link_update'),
+                                     ('osx_app_instances', 'inventory_osx_app_instance_update'),
+                                     ('groups', 'inventory_group_update')):
+            m2m_diff = diff.get(m2m_attr, {})
+            for action in ['added', 'removed']:
+                for obj in m2m_diff.get(action, []):
+                    obj['action'] = action
+                    if 'source' not in obj:
+                        obj['source'] = self.source
+                    events.append((event_type, obj))
+        for fk_attr in ('reference',
+                        'machine',
+                        'business_unit',
+                        'os_version',
+                        'system_info',
+                        'teamviewer'):
+            event_type = 'inventory_{}_update'.format(fk_attr)
+            fk_diff = diff.get(fk_attr, {})
+            for action in ['added', 'removed']:
+                obj = fk_diff.get(action, None)
+                if obj:
+                    if isinstance(obj, dict):
+                        event = obj
+                        if 'source' not in obj:
+                            event['source'] = self.source
+                    else:
+                        event = {'source': self.source,
+                                 fk_attr: obj}
+                    event['action'] = action
+                    events.append((event_type, event))
+        return events
+
     def sync(self):
         for machine_d in self.get_machines():
             source = copy.deepcopy(self.source)
@@ -54,14 +88,14 @@ class BaseInventory(object):
             with transaction.atomic():
                 machine_snapshot, created = MachineSnapshot.objects.commit(machine_d)
             if created:
-                action = "changed"
-                key = "diff"
-                data = machine_snapshot.update_diff()
-                if data is None:
-                    action = "added"
-                    key = "added"
-                    data = machine_snapshot.serialize()
-                yield machine_snapshot, {'action': action, 'source': self.source, key: data}
+                diff = machine_snapshot.update_diff()
+                if diff is None:
+                    events = [('inventory_machine_added',
+                               {'source': self.source,
+                                'machine_snapshot': machine_snapshot.serialize()})]
+                else:
+                    events = self._events_from_diff(diff)
+                yield machine_snapshot, events
 
     def add_machine_to_group(self, machine_snapshot, group_name):
         raise NotImplementedError
