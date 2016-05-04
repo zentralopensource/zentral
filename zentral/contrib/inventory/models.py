@@ -46,9 +46,6 @@ class MetaBusinessUnit(models.Model):
     def api_enrollment_enabled(self):
         return self.api_enrollment_business_units().count() > 0
 
-    def current_api_enrollment_business_units(self):
-        return BusinessUnit.objects.current().filter(source__module='zentral.contrib.inventory').order_by('-id')
-
     def create_enrollment_business_unit(self):
         reference = "MBU{}".format(self.id)
         b, created = BusinessUnit.objects.commit({'source': {'module': 'zentral.contrib.inventory',
@@ -168,8 +165,11 @@ class BusinessUnit(AbstractMachineGroup):
         self.meta_business_unit = mbu
         super(BusinessUnit, self).save()
 
+    def is_api_enrollment_business_unit(self):
+        return self.source.module == "zentral.contrib.inventory"
+
     def get_name_display(self):
-        if self.source.module == "zentral.contrib.inventory":
+        if self.is_api_enrollment_business_unit():
             return "{} - API enrollment".format(self.meta_business_unit)
         else:
             return self.name

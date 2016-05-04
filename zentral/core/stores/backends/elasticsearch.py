@@ -20,47 +20,63 @@ BASE_VISU_URL = ("{kibana_base_url}#/discover?_g=()&"
 
 INDEX_CONF = """
 {
-  "mappings" : {
-    "_default_" : {
+  "mappings": {
+    "_default_": {
+      "dynamic_templates": [
+        {
+          "zentral_ip_address": {
+            "mapping": {
+              "index": "not_analyzed",
+              "type": "ip"
+            },
+            "match": "*ip_address"
+          }
+        },
+        {
+          "zentral_string_default": {
+            "mapping": {
+              "index": "not_analyzed",
+              "type": "string"
+            },
+            "match_mapping_type": "string",
+            "match": "*"
+          }
+        }
+      ],
       "properties": {
         "zzzentral": {
           "properties": {
-            "request": {
+            "machine": {
               "properties": {
-                "ip": {
-                  "type": "ip",
-                  "index": "not_analyzed"
+                "meta_business_units": {
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "index": "not_analyzed",
+                      "type": "string"
+                    }
+                  },
+                  "type": "nested"
                 }
               }
             },
             "tags": {
-              "type": "string",
-              "index": "not_analyzed"
+              "index": "not_analyzed",
+              "type": "string"
+            },
+            "request": {
+              "properties": {
+                "ip": {
+                  "index": "not_analyzed",
+                  "type": "ip"
+                }
+              }
             }
           }
         }
-      },
-      "dynamic_templates" : [
-        {
-          "zentral_ip_address" : {
-            "match" : "*ip_address",
-            "mapping" : {
-              "type" : "ip",
-              "index" : "not_analyzed"
-            }
-          }
-        },
-        {
-          "zentral_string_default" : {
-            "match" : "*",
-            "match_mapping_type" : "string",
-            "mapping" : {
-              "type" : "string",
-              "index" : "not_analyzed"
-            }
-          }
-        }
-      ]
+      }
     }
   }
 }

@@ -138,11 +138,14 @@ class EventMetadata(object):
         if self.tags:
             d['tags'] = self.tags
         machine_d = {}
+        meta_business_units = []
         for source, ms in self.get_machine_snapshots().items():
             ms_d = {'name': ms.get_machine_str()}
             if ms.business_unit:
-                ms_d['business_unit'] = {'key': ms.business_unit.get_short_key(),
-                                         'name': ms.business_unit.name}
+                meta_business_units.append(ms.business_unit.meta_business_unit)
+                if not ms.business_unit.is_api_enrollment_business_unit():
+                    ms_d['business_unit'] = {'key': ms.business_unit.get_short_key(),
+                                             'name': ms.business_unit.name}
             if ms.os_version:
                 ms_d['os_version'] = str(ms.os_version)
             groups = list(ms.groups.all())
@@ -154,6 +157,11 @@ class EventMetadata(object):
                 # TODO: earlier warning in conf check ?
                 logger.warning('Inventory source slug %s exists already', key)
             machine_d[key] = ms_d
+        for meta_business_unit in set(meta_business_units):
+            machine_d.setdefault('meta_business_units', []).append({
+                'name': meta_business_unit.name,
+                'id': meta_business_unit.id
+            })
         if machine_d:
             d['machine'] = machine_d
         return d
@@ -260,8 +268,12 @@ class BaseEvent(object):
                    'machine_url': self.metadata.get_machine_url(),
                    'machine': self.metadata.get_machine_snapshots()}
             machine_names = {}
+            meta_business_units = []
             for source, ms in ctx['machine'].items():
                 machine_names.setdefault(ms.get_machine_str(), []).append(source.name)
+                if ms.business_unit:
+                    meta_business_units.append(ms.business_unit)
+            ctx['meta_business_units'] = set(meta_business_units)
             ctx['machine_names'] = machine_names
             ctx.update(self._get_extra_context())
             self._notification_context = ctx
