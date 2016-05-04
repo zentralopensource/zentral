@@ -76,7 +76,8 @@ register_event_type(SantaEventEvent)
 def _post_santa_events(event_cls, msn, user_agent, ip, payloads):
     metadata = EventMetadata(event_cls.event_type,
                              machine_serial_number=msn,
-                             request=EventRequest(user_agent, ip))
+                             request=EventRequest(user_agent, ip),
+                             tags=['santa'])
     for index, payload in enumerate(payloads):
         metadata.index = index
         event = event_cls(metadata, payload)
