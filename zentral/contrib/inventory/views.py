@@ -1,13 +1,14 @@
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.views import generic
 from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import frontend_store
 from zentral.utils.text import str_to_ascii
 from . import event_type_probes
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
-                    MergeMBUForm, MBUAPIEnrollmentForm)
-from .models import MetaBusinessUnit, MachineGroup, MachineSnapshot
+                    MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm)
+from .models import MetaBusinessUnit, MachineGroup, MachineSnapshot, Machine, MetaBusinessUnitTag, MachineTag
 
 
 class MachineListView(generic.TemplateView):
@@ -65,8 +66,10 @@ class MachineListView(generic.TemplateView):
         # sorted
         context['object_list'] = [(l[0].machine.serial_number,
                                    l[0].get_machine_str(),
-                                   l) for l in sorted(ms_dict.values(),
-                                                      key=self._ms_dict_sorting_key)]
+                                   l,
+                                   Machine(l[0].machine.serial_number, l).tags())
+                                  for l in sorted(ms_dict.values(),
+                                                  key=self._ms_dict_sorting_key)]
         context['object_list_title'] = self.get_list_title(**kwargs)
         context['search_form'] = self.search_form
         context['breadcrumbs'] = self.get_breadcrumbs(**kwargs)
@@ -197,6 +200,40 @@ class UpdateMBUView(generic.UpdateView):
     fields = ('name',)
 
 
+class AddMBUTagView(generic.FormView):
+    template_name = "inventory/add_mbu_tag.html"
+    form_class = AddMBUTagForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.mbu = get_object_or_404(MetaBusinessUnit, pk=kwargs['pk'])
+        return super(AddMBUTagView, self).dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super(AddMBUTagView, self).get_context_data(**kwargs)
+        context['inventory'] = True
+        context['meta_business_unit'] = self.mbu
+        return context
+
+    def get_form_kwargs(self, *args, **kwargs):
+        kwargs = super(AddMBUTagView, self).get_form_kwargs(*args, **kwargs)
+        kwargs['meta_business_unit'] = self.mbu
+        return kwargs
+
+    def form_valid(self, form):
+        form.save()
+        return super(AddMBUTagView, self).form_valid(form)
+
+    def get_success_url(self):
+        return reverse('inventory:mbu_machines', args=(self.mbu.id,))
+
+
+class RemoveMBUTagView(generic.View):
+    def post(self, request, *args, **kwargs):
+        MetaBusinessUnitTag.objects.filter(tag__id=kwargs['tag_id'],
+                                           meta_business_unit__id=kwargs['pk']).delete()
+        return HttpResponseRedirect(reverse('inventory:mbu_machines', args=(kwargs['pk'],)))
+
+
 class MBUAPIEnrollmentView(generic.UpdateView):
     template_name = "inventory/mbu_api_enrollment.html"
     form_class = MBUAPIEnrollmentForm
@@ -238,16 +275,7 @@ class MachineView(generic.TemplateView):
     def get_context_data(self, **kwargs):
         context = super(MachineView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        # all current machine snapshots for this serial number
-        ms_list = list(MachineSnapshot.objects.current().filter(machine__serial_number=context['serial_number']))
-        # only the one with osx app infos
-        osx_app_ms_list = [ms for ms in ms_list if ms.osx_app_instances.count()]
-        for ms in ms_list:
-            if ms.system_info and ms.system_info.computer_name:
-                context['computer_name'] = ms.system_info.computer_name
-                break
-        context['ms_list'] = ms_list
-        context['osx_app_ms_list'] = osx_app_ms_list
+        context['machine'] = Machine(context['serial_number'])
         return context
 
 
@@ -321,6 +349,40 @@ class MachineEventsView(generic.ListView):
         self.ms_list = list(MachineSnapshot.objects.current().filter(machine__serial_number=serial_number))
         et = self.request.GET.get('event_type')
         return MachineEventSet(serial_number, et)
+
+
+class AddMachineTagView(generic.FormView):
+    template_name = "inventory/add_machine_tag.html"
+    form_class = AddMachineTagForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.msn = kwargs['serial_number']
+        return super(AddMachineTagView, self).dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super(AddMachineTagView, self).get_context_data(**kwargs)
+        context['inventory'] = True
+        context['machine'] = Machine(self.msn)
+        return context
+
+    def get_form_kwargs(self, *args, **kwargs):
+        kwargs = super(AddMachineTagView, self).get_form_kwargs(*args, **kwargs)
+        kwargs['machine_serial_number'] = self.msn
+        return kwargs
+
+    def form_valid(self, form):
+        form.save()
+        return super(AddMachineTagView, self).form_valid(form)
+
+    def get_success_url(self):
+        return reverse('inventory:machine', args=(self.msn,))
+
+
+class RemoveMachineTagView(generic.View):
+    def post(self, request, *args, **kwargs):
+        MachineTag.objects.filter(tag__id=kwargs['tag_id'],
+                                  serial_number=kwargs['serial_number']).delete()
+        return HttpResponseRedirect(reverse('inventory:machine', args=(kwargs['serial_number'],)))
 
 
 class ProbesView(generic.TemplateView):

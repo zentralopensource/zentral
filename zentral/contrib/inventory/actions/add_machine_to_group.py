@@ -1,13 +1,11 @@
 import logging
+from zentral.core.actions.backends.base import BaseAction
 from zentral.contrib.inventory.clients import clients
 
 logger = logging.getLogger('zentral.contrib.inventory.actions.add_machine_to_group')
 
 
-class Action(object):
-    def __init__(self, config_d):
-        self.config_d = config_d
-
+class Action(BaseAction):
     def trigger(self, event, probe, action_config_d):
         group_name = action_config_d['group_name']
         machine = event.metadata.get_machine_snapshots()

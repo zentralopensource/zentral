@@ -38,7 +38,7 @@
 
 <div class="table-reponsive">
   <table class="table">
-    {% for serial_number, machine_str, ms_list in object_list %}
+    {% for serial_number, machine_str, ms_list, tags in object_list %}
     <tr>
       <td>
         <a href="{% url 'inventory:machine' serial_number %}">
@@ -46,6 +46,11 @@
         </a>
       </td>
       <td>{{ machine_str }}</td>
+      <td>
+      {% for tag in tags %}
+      <p>{{ tag }}</p>
+      {% endfor %}
+      </td>
       <td>
         {% for machine_snapshot in ms_list %}
         {{ machine_snapshot.source.name }}

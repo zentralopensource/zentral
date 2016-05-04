@@ -10,12 +10,28 @@
     </ol>
 
     <h2>
-      {% if computer_name %}{{ computer_name }} / {% endif %}{{ serial_number }}
+      {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}{{ serial_number }}
       <a class="btn btn-default" href="{% url 'inventory:machine_events' serial_number %}">View events</a>
     </h2>
 
+    <h3>Tags</h3>
+    {% for type, tag in machine.tags_with_types %}
+    {% if type == "machine" %}
+    <form action="{% url 'inventory:remove_machine_tag' machine.serial_number tag.id %}" method="POST">{% csrf_token %}
+      {{ tag }}
+      <button class="btn btn-default">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </button>
+    </form>
+    {% else %}
+    <p>{{ tag }}</p>
+    {% endif %}
+    {% endfor %}
+    <p><a class="btn btn-default" href="{% url 'inventory:add_machine_tag' machine.serial_number %}">Add tag</a></p>
+
+
     <ul class="nav nav-tabs">
-      {% for ms in ms_list %}
+      {% for ms in machine.snapshots %}
       <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
         <a href="#" data-tabclass="detailstab" data-tabid="details-{{ ms.id }}">
           {{ ms.source.name }}
@@ -26,7 +42,7 @@
   </div>
 </div>
 
-{% for ms in ms_list %}
+{% for ms in machine.snapshots %}
 <div class="row detailstab" id="details-{{ ms.id }}"{% if not forloop.first %}style="display:none;"{% endif %}>
 <div class="col-md-6">
 {% if ms.business_unit %}
@@ -87,7 +103,6 @@
 {% endif %}
 </div>
 <div class="col-md-6">
-{% if ms.groups.count %}
 <h3>Links</h3>
 <p>
   {% for link in ms.links.all %}
@@ -105,6 +120,7 @@
   <dd>{{ ms.teamviewer|yesno }}</dd>
 </dl>
 {% endif %}
+{% if ms.groups.count %}
 <h3>Groups</h3>
 <table class="table table-condensed">
   <thead>
@@ -140,11 +156,11 @@
 {% endfor %}
 
 
-{% if osx_app_ms_list %}
+{% if machine.snapshots_with_osx_app_instances %}
 <h2>OSX Apps</h2>
 
 <ul class="nav nav-tabs">
-  {% for ms in osx_app_ms_list %}
+  {% for ms in machine.snapshots_with_osx_app_instances %}
   <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
     <a href="#" data-tabclass="appstab" data-tabid="apps-{{ ms.id }}">
       {{ ms.source.name }}
@@ -153,7 +169,7 @@
   {% endfor %}
 </ul>
 
-{% for ms in osx_app_ms_list %}
+{% for ms in machine.snapshots_with_osx_app_instances %}
 <div class="table-reponsive">
 <table class="table table-condensed appstab" id="apps-{{ ms.id }}"
   {% if not forloop.first %}style="display:none;"{% endif %}>

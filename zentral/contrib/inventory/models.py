@@ -1,7 +1,7 @@
 from django.contrib.postgres.fields import JSONField
 from django.core.urlresolvers import reverse
 from django.db import models
-from django.db.models import Count
+from django.db.models import Count, Q
 from zentral.utils.mt_models import prepare_commit_tree, AbstractMTObject, MTObjectManager
 
 
@@ -69,6 +69,11 @@ class MetaBusinessUnit(models.Model):
             return qs[0].num_msn
         except IndexError:
             return 0
+
+    def tags(self):
+        tags = list(mbut.tag for mbut in self.metabusinessunittag_set.select_related('tag'))
+        tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
+        return tags
 
 
 class SourceManager(MTObjectManager):
@@ -257,9 +262,10 @@ class MachineSnapshotManager(MTObjectManager):
 
     def current(self):
         return self.select_related('machine',
-                                   'business_unit',
+                                   'business_unit__meta_business_unit',
                                    'os_version',
-                                   'system_info').filter(mt_next__isnull=True)
+                                   'system_info',
+                                   'teamviewer').filter(mt_next__isnull=True)
 
     def get_current_count(self):
         result = self.current().aggregate(Count('machine__serial_number', distinct=True))
@@ -310,3 +316,87 @@ class MachineSnapshot(AbstractMTObject):
                 url = url.replace('%MACHINE_SNAPSHOT_REFERENCE%', self.reference)
                 ll.append((url, link.anchor_text))
             yield group, ll
+
+
+class TagManager(models.Manager):
+    def available_for_meta_business_unit(self, meta_business_unit):
+        return self.filter(Q(meta_business_unit=meta_business_unit) | Q(meta_business_unit__isnull=True))
+
+
+class Tag(models.Model):
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True)
+    name = models.TextField()
+    color = models.CharField(max_length=6, default="FFFFFF")
+
+    objects = TagManager()
+
+    def __str__(self):
+        if self.meta_business_unit:
+            return "{}/{}".format(self.meta_business_unit, self.name)
+        else:
+            return self.name
+
+
+class MachineTag(models.Model):
+    serial_number = models.TextField()
+    tag = models.ForeignKey(Tag)
+
+    class Meta:
+        unique_together = (('serial_number', 'tag'),)
+
+
+class MetaBusinessUnitTag(models.Model):
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit)
+    tag = models.ForeignKey(Tag)
+
+
+class Machine(object):
+    """Simplified access to the ms."""
+    def __init__(self, serial_number, snapshots=None):
+        self.serial_number = serial_number
+        if snapshots is None:
+            self.snapshots = list(MachineSnapshot.objects.current().filter(machine__serial_number=serial_number))
+        else:
+            self.snapshots = snapshots
+
+    def computer_name(self):
+        for ms in self.snapshots:
+            if ms.system_info and ms.system_info.computer_name:
+                return ms.system_info.computer_name
+
+    def business_units(self, include_api_enrollment_business_unit=False):
+        bu_l = []
+        for ms in self.snapshots:
+            if include_api_enrollment_business_unit or not ms.business_unit.is_api_enrollment_business_unit():
+                bu_l.append(ms.business_unit)
+        return bu_l
+
+    def meta_business_units(self):
+        return set([bu.meta_business_unit for bu in self.business_units()])
+
+    def snapshots_with_osx_app_instances(self):
+        return list(ms for ms in self.snapshots if ms.osx_app_instances.count())
+
+    def tags_with_types(self):
+        tags = [('machine', mt.tag)
+                for mt in MachineTag.objects.select_related('tag').filter(
+                    serial_number=self.serial_number
+                )]
+        tags.extend(('meta_business_unit', mbut.tag)
+                    for mbut in MetaBusinessUnitTag.objects.filter(meta_business_unit__in=self.meta_business_units()))
+        tags.sort(key=lambda t: (t[1].meta_business_unit is None, str(t[1]).upper()))
+        return tags
+
+    def tags(self):
+        tags = list({t[1] for t in self.tags_with_types()})
+        tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
+        return tags
+
+    def available_tags(self):
+        # tags w/o mbu or w mbu where this machine is and that this machine does not have yet
+        tags = set([])
+        for meta_business_unit in self.meta_business_units():
+            tags.update(Tag.objects.available_for_meta_business_unit(meta_business_unit))
+        tags = list(tags.difference(self.tags()))
+        tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
+        return tags
