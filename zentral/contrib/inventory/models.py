@@ -367,7 +367,7 @@ class Machine(object):
     def business_units(self, include_api_enrollment_business_unit=False):
         bu_l = []
         for ms in self.snapshots:
-            if (ms.business_units and
+            if (ms.business_unit and
                 (include_api_enrollment_business_unit or
                  not ms.business_unit.is_api_enrollment_business_unit())):
                 bu_l.append(ms.business_unit)
