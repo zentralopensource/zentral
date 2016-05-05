@@ -387,7 +387,7 @@ class MetaMachine(object):
         return bu_l
 
     def meta_business_units(self):
-        return set([bu.meta_business_unit for bu in self.business_units()])
+        return set([bu.meta_business_unit for bu in self.business_units(include_api_enrollment_business_unit=True)])
 
     def snapshots_with_osx_app_instances(self):
         return list(ms for ms in self.snapshots if ms.osx_app_instances.count())
