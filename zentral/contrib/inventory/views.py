@@ -8,7 +8,7 @@ from zentral.utils.text import str_to_ascii
 from . import event_type_probes
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm)
-from .models import MetaBusinessUnit, MachineGroup, MachineSnapshot, Machine, MetaBusinessUnitTag, MachineTag
+from .models import MetaBusinessUnit, MachineGroup, MachineSnapshot, Machine, MetaBusinessUnitTag, MachineTag, Tag
 
 
 class MachineListView(generic.TemplateView):
@@ -200,38 +200,39 @@ class UpdateMBUView(generic.UpdateView):
     fields = ('name',)
 
 
-class AddMBUTagView(generic.FormView):
-    template_name = "inventory/add_mbu_tag.html"
+class MBUTagsView(generic.FormView):
+    template_name = "inventory/mbu_tags.html"
     form_class = AddMBUTagForm
 
     def dispatch(self, request, *args, **kwargs):
         self.mbu = get_object_or_404(MetaBusinessUnit, pk=kwargs['pk'])
-        return super(AddMBUTagView, self).dispatch(request, *args, **kwargs)
+        return super(MBUTagsView, self).dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        context = super(AddMBUTagView, self).get_context_data(**kwargs)
+        context = super(MBUTagsView, self).get_context_data(**kwargs)
         context['inventory'] = True
         context['meta_business_unit'] = self.mbu
+        context['tags'] = self.mbu.tags()
         return context
 
     def get_form_kwargs(self, *args, **kwargs):
-        kwargs = super(AddMBUTagView, self).get_form_kwargs(*args, **kwargs)
+        kwargs = super(MBUTagsView, self).get_form_kwargs(*args, **kwargs)
         kwargs['meta_business_unit'] = self.mbu
         return kwargs
 
     def form_valid(self, form):
         form.save()
-        return super(AddMBUTagView, self).form_valid(form)
+        return super(MBUTagsView, self).form_valid(form)
 
     def get_success_url(self):
-        return reverse('inventory:mbu_machines', args=(self.mbu.id,))
+        return reverse('inventory:mbu_tags', args=(self.mbu.id,))
 
 
 class RemoveMBUTagView(generic.View):
     def post(self, request, *args, **kwargs):
         MetaBusinessUnitTag.objects.filter(tag__id=kwargs['tag_id'],
                                            meta_business_unit__id=kwargs['pk']).delete()
-        return HttpResponseRedirect(reverse('inventory:mbu_machines', args=(kwargs['pk'],)))
+        return HttpResponseRedirect(reverse('inventory:mbu_tags', args=(kwargs['pk'],)))
 
 
 class MBUAPIEnrollmentView(generic.UpdateView):
@@ -351,38 +352,39 @@ class MachineEventsView(generic.ListView):
         return MachineEventSet(serial_number, et)
 
 
-class AddMachineTagView(generic.FormView):
-    template_name = "inventory/add_machine_tag.html"
+class MachineTagsView(generic.FormView):
+    template_name = "inventory/machine_tags.html"
     form_class = AddMachineTagForm
 
     def dispatch(self, request, *args, **kwargs):
         self.msn = kwargs['serial_number']
-        return super(AddMachineTagView, self).dispatch(request, *args, **kwargs)
+        return super(MachineTagsView, self).dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        context = super(AddMachineTagView, self).get_context_data(**kwargs)
+        context = super(MachineTagsView, self).get_context_data(**kwargs)
         context['inventory'] = True
         context['machine'] = Machine(self.msn)
+        context['tags'] = context['machine'].tags_with_types()
         return context
 
     def get_form_kwargs(self, *args, **kwargs):
-        kwargs = super(AddMachineTagView, self).get_form_kwargs(*args, **kwargs)
+        kwargs = super(MachineTagsView, self).get_form_kwargs(*args, **kwargs)
         kwargs['machine_serial_number'] = self.msn
         return kwargs
 
     def form_valid(self, form):
         form.save()
-        return super(AddMachineTagView, self).form_valid(form)
+        return super(MachineTagsView, self).form_valid(form)
 
     def get_success_url(self):
-        return reverse('inventory:machine', args=(self.msn,))
+        return reverse('inventory:machine_tags', args=(self.msn,))
 
 
 class RemoveMachineTagView(generic.View):
     def post(self, request, *args, **kwargs):
         MachineTag.objects.filter(tag__id=kwargs['tag_id'],
                                   serial_number=kwargs['serial_number']).delete()
-        return HttpResponseRedirect(reverse('inventory:machine', args=(kwargs['serial_number'],)))
+        return HttpResponseRedirect(reverse('inventory:machine_tags', args=(kwargs['serial_number'],)))
 
 
 class ProbesView(generic.TemplateView):
@@ -397,3 +399,39 @@ class ProbesView(generic.TemplateView):
 
 class ProbeView(BaseProbeView):
     section = "inventory"
+
+
+class TagsView(generic.ListView):
+    model = Tag
+
+    def get_context_data(self, **kwargs):
+        ctx = super(TagsView, self).get_context_data(**kwargs)
+        ctx['inventory'] = True
+        return ctx
+
+
+class UpdateTagView(generic.UpdateView):
+    template_name = "inventory/edit_tag.html"
+    model = Tag
+    fields = ('name', 'color')
+    color_presets = {
+        "green": "61bd4f",
+        "yellow": "f2d600",
+        "orange": "ffab4a",
+        "red": "eb5a46",
+        "purple": "c377e0",
+        "blue": "0079bf",
+        "sky": "00c2e0",
+        "lime": "51e898",
+        "pink": "ff80ce",
+        "black": "4d4d4d",
+        "grey": "b6bbbf"
+    }
+
+    def get_context_data(self, **kwargs):
+        ctx = super(UpdateTagView, self).get_context_data(**kwargs)
+        ctx['color_presets'] = self.color_presets
+        return ctx
+
+    def get_success_url(self):
+        return reverse('inventory:tags')

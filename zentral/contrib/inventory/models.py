@@ -1,3 +1,4 @@
+import colorsys
 from django.contrib.postgres.fields import JSONField
 from django.core.urlresolvers import reverse
 from django.db import models
@@ -326,7 +327,7 @@ class TagManager(models.Manager):
 class Tag(models.Model):
     meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True)
     name = models.TextField()
-    color = models.CharField(max_length=6, default="FFFFFF")
+    color = models.CharField(max_length=6, default="0079bf")  # blue from UpdateTagView
 
     objects = TagManager()
 
@@ -335,6 +336,18 @@ class Tag(models.Model):
             return "{}/{}".format(self.meta_business_unit, self.name)
         else:
             return self.name
+
+    def text_color(self):
+        hls = colorsys.rgb_to_hls(float(int(self.color[0:2], 16))/255.0,
+                                  float(int(self.color[2:4], 16))/255.0,
+                                  float(int(self.color[4:6], 16))/255.0,)
+        if hls[1] > .7:
+            return "000"
+        else:
+            return "FFF"
+
+    def need_border(self):
+        return self.color.upper() in ['FFFFFF', 'FFF']
 
 
 class MachineTag(models.Model):

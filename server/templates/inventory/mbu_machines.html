@@ -1,9 +1,15 @@
 {% extends 'inventory/machine_list.html' %}
+{% load inventory_extras %}
 
 {% block objectextras %}
+<p>
+{% for tag in object.tags %}
+{% inventory_tag tag %}
+{% endfor %}
 {% if object.api_enrollment_enabled %}
-<p><span class="label label-success">Available for API Enrollment</span></p>
+<span class="label label-success">Available for API Enrollment</span>
 {% endif %}
+</p>
 
 <table class="table">
   {% for bu in object.get_current_business_units %}
@@ -21,19 +27,9 @@
   {% endfor %}
 </table>
 
-<h3>Tags</h3>
-{% for tag in object.tags %}
-<form action="{% url 'inventory:remove_mbu_tag' object.id tag.id %}" method="POST">{% csrf_token %}
-  {{ tag }}
-  <button class="btn btn-default">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-  </button>
-</form>
-{% endfor %}
-
 <p>
   <a href="{% url 'inventory:update_mbu' object.id %}" class="btn btn-default">Update</a>
-  <a href="{% url 'inventory:add_mbu_tag' object.id %}" class="btn btn-default">Add tag</a>
+  <a href="{% url 'inventory:mbu_tags' object.id %}" class="btn btn-default">Manage tags</a>
   {% if not object.api_enrollment_enabled %}
   <a href="{% url 'inventory:mbu_api_enrollment' object.id %}" class="btn btn-default">Enable API enrollment</a>
   {% endif %}

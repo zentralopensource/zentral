@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -48,7 +49,7 @@
       <td>{{ machine_str }}</td>
       <td>
       {% for tag in tags %}
-      <p>{{ tag }}</p>
+      {% inventory_tag tag %}
       {% endfor %}
       </td>
       <td>

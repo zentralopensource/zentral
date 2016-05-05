@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -22,6 +23,12 @@
         <input type="hidden" name="mbu" value="{{ mbu.id }}">
         <input type="radio" name="dest_mbu" id="id_dest_mbu_{{ mbu.id }}" value="{{ mbu.id }}" {% if forloop.first %}checked{% endif %}>
         <label for="id_dest_mbu_{{ mbu.id }}">{{ mbu.name}}</label>
+        {% for tag in mbu.tags %}
+        {% inventory_tag tag %}
+        {% endfor %}
+        {% if mbu.api_enrollment_enabled %}
+        <span class="label label-success">Available for API enrollment</span>
+        {% endif %}
       </td>
     </tr>
     {% for bu in mbu.get_current_business_units %}

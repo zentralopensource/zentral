@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+  <li><a href="{% url 'inventory:machine' machine.serial_number %}">{{ machine.serial_number }}</a></li>
+  <li class="active">Tags</li>
+</ol>
+
+<h2>{{ tags|length }} Tag{{ tags|length|pluralize }}</h2>
+<div class="table-responsive">
+  <table class="table">
+    <thead>
+      <th>Tag ID</th>
+      <th>Tag</th>
+      <th></th>
+    </thead>
+    <tbody>
+      {% for type, tag in tags %}
+      <tr>
+        <td>{{ tag.id }}</td>
+        <td>{% inventory_tag tag %}</td>
+        <td>
+          {% if type == "machine" %}
+          <form action="{% url 'inventory:remove_machine_tag' machine.serial_number tag.id %}" method="POST">{% csrf_token %}
+            <button class="btn btn-default">
+              <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+            </button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2>Add tag</h2>
+<form method="POST" action="{% url 'inventory:machine_tags' machine.serial_number %}">{% csrf_token %}
+  {{ form.as_p }}
+  <p><button type="submit" class="btn btn-default">Add tag</button></p>
+</form>
+{% endblock %}

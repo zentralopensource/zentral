@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inventory_extras %}
 
 {% block content %}
 <div class="row">
@@ -11,23 +12,18 @@
 
     <h2>
       {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}{{ serial_number }}
-      <a class="btn btn-default" href="{% url 'inventory:machine_events' serial_number %}">View events</a>
     </h2>
 
-    <h3>Tags</h3>
-    {% for type, tag in machine.tags_with_types %}
-    {% if type == "machine" %}
-    <form action="{% url 'inventory:remove_machine_tag' machine.serial_number tag.id %}" method="POST">{% csrf_token %}
-      {{ tag }}
-      <button class="btn btn-default">
-        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-      </button>
-    </form>
-    {% else %}
-    <p>{{ tag }}</p>
-    {% endif %}
-    {% endfor %}
-    <p><a class="btn btn-default" href="{% url 'inventory:add_machine_tag' machine.serial_number %}">Add tag</a></p>
+    <p>
+      {% for tag in machine.tags %}
+      {% inventory_tag tag %}
+      {% endfor %}
+    </p>
+
+    <p>
+      <a class="btn btn-default" href="{% url 'inventory:machine_events' serial_number %}">View events</a>
+      <a class="btn btn-default" href="{% url 'inventory:machine_tags' machine.serial_number %}">Manage tags</a>
+    </p>
 
 
     <ul class="nav nav-tabs">

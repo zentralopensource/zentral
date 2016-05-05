@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -34,6 +35,9 @@
       <td colspan="3">
         <input type="checkbox" name="mbu_id" value="{{ mbu.id }}">
         <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu.name }}</a>
+        {% for tag in mbu.tags %}
+        {% inventory_tag tag %}
+        {% endfor %}
         {% if mbu.api_enrollment_enabled %}
         <span class="label label-success">Available for API enrollment</span>
         {% endif %}
