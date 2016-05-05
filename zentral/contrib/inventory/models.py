@@ -363,7 +363,7 @@ class MetaBusinessUnitTag(models.Model):
     tag = models.ForeignKey(Tag)
 
 
-class Machine(object):
+class MetaMachine(object):
     """Simplified access to the ms."""
     def __init__(self, serial_number, snapshots=None):
         self.serial_number = serial_number

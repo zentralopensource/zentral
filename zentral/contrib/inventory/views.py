@@ -8,7 +8,7 @@ from zentral.utils.text import str_to_ascii
 from . import event_type_probes
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm)
-from .models import MetaBusinessUnit, MachineGroup, MachineSnapshot, Machine, MetaBusinessUnitTag, MachineTag, Tag
+from .models import MetaBusinessUnit, MachineGroup, MachineSnapshot, MetaMachine, MetaBusinessUnitTag, MachineTag, Tag
 
 
 class MachineListView(generic.TemplateView):
@@ -67,7 +67,7 @@ class MachineListView(generic.TemplateView):
         context['object_list'] = [(l[0].machine.serial_number,
                                    l[0].get_machine_str(),
                                    l,
-                                   Machine(l[0].machine.serial_number, l).tags())
+                                   MetaMachine(l[0].machine.serial_number, l).tags())
                                   for l in sorted(ms_dict.values(),
                                                   key=self._ms_dict_sorting_key)]
         context['object_list_title'] = self.get_list_title(**kwargs)
@@ -276,7 +276,7 @@ class MachineView(generic.TemplateView):
     def get_context_data(self, **kwargs):
         context = super(MachineView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['machine'] = Machine(context['serial_number'])
+        context['machine'] = MetaMachine(context['serial_number'])
         return context
 
 
@@ -363,7 +363,7 @@ class MachineTagsView(generic.FormView):
     def get_context_data(self, **kwargs):
         context = super(MachineTagsView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['machine'] = Machine(self.msn)
+        context['machine'] = MetaMachine(self.msn)
         context['tags'] = context['machine'].tags_with_types()
         return context
 

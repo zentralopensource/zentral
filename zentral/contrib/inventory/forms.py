@@ -1,5 +1,5 @@
 from django import forms
-from .models import MetaBusinessUnit, Source, MetaBusinessUnitTag, Tag, Machine, MachineTag
+from .models import MetaBusinessUnit, Source, MetaBusinessUnitTag, Tag, MetaMachine, MachineTag
 
 
 class MachineSearchForm(forms.Form):
@@ -97,7 +97,7 @@ class AddMachineTagForm(forms.Form):
     new_tag_mbu = forms.ChoiceField(label="new tag mbu", choices=[], required=False)
 
     def __init__(self, *args, **kwargs):
-        self.machine = Machine(kwargs.pop('machine_serial_number'))
+        self.machine = MetaMachine(kwargs.pop('machine_serial_number'))
         super(AddMachineTagForm, self).__init__(*args, **kwargs)
         self.fields['existing_tag'].choices = [(t.id, str(t)) for t in self.machine.available_tags()]
         self.fields['existing_tag'].choices.insert(0, (None, "-"))
