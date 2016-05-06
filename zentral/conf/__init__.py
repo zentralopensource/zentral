@@ -76,7 +76,37 @@ def load_probes(settings, conf_dir):
             probes[probe_d['name']] = probe_d
     return probes
 
+
 probes = load_probes(settings, conf_dir)
+
+
+def inventory_filtered_probes(mbu_ids, tag_ids):
+    tag_ids = set(tag_ids)
+    mbu_ids = set(mbu_ids)
+    filtered_probes = []
+    for probe in probes.values():
+        try:
+            inventory_filters = probe['filters']['inventory']
+        except KeyError:
+            filtered_probes.append(probe)
+            continue
+        if not inventory_filters:
+            filtered_probes.append(probe)
+            continue
+        for inventory_filter in inventory_filters:
+            f_tag_ids = set(int(tag_id) for tag_id in inventory_filter.get('tags', []))
+            if f_tag_ids and not f_tag_ids & tag_ids:
+                # filter on tags but no intersection with the given tags
+                continue
+            f_mbu_ids = set(int(mbu_id) for mbu_id in inventory_filter.get('business_units', []))
+            if f_mbu_ids and not f_mbu_ids & mbu_ids:
+                # filter on business units but not intersection with the given business units
+                continue
+            # both tests above passed. Match.
+            filtered_probes.append(probe)
+            # no need to check the other filters (OR)
+            break
+    return filtered_probes
 
 
 def load_contact_groups(conf_dir):

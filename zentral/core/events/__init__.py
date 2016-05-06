@@ -4,7 +4,7 @@ import os.path
 import uuid
 from dateutil import parser
 from django.utils.text import slugify
-from zentral.conf import probes
+from zentral.conf import inventory_filtered_probes
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.queues import queues
@@ -228,13 +228,25 @@ class BaseEvent(object):
     def get_probes(self):
         l = []
         metadata = self.metadata.serialize()
-        for probe in probes.values():
+        if 'machine' in metadata:
+            machine_d = metadata['machine']
+            mbu_ids = [int(mbu['id']) for mbu in machine_d.get('meta_business_units', [])]
+            tag_ids = [int(tag['id']) for tag in machine_d.get('tags', [])]
+        else:
+            mbu_ids = []
+            tag_ids = []
+        for probe in inventory_filtered_probes(mbu_ids, tag_ids):
             if not self.extra_probe_checks(probe):
                 continue
-            if not _test_pass_filters(probe.get('metadata_filters', None), metadata):
-                continue
-            if _test_pass_filters(probe.get('payload_filters', None), self.payload):
-                l.append(probe)
+            filters = probe.get('filters', {})
+            if filters:
+                if not _test_pass_filters(filters.get('metadata', None),
+                                          metadata):
+                    continue
+                if not _test_pass_filters(filters.get('filters', None),
+                                          self.payload):
+                    continue
+            l.append(probe)
         return l
 
     # notification methods
