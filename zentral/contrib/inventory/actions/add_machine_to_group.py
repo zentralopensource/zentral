@@ -8,9 +8,9 @@ logger = logging.getLogger('zentral.contrib.inventory.actions.add_machine_to_gro
 class Action(BaseAction):
     def trigger(self, event, probe, action_config_d):
         group_name = action_config_d['group_name']
-        machine = event.metadata.get_machine_snapshots()
         for client in clients:
-            for source, ms in machine.items():
+            for ms in event.metadata.machine.snapshots:
+                source = ms.source
                 if source.module == client.source['module'] and source.config == client.source['config']:
                     try:
                         client.add_machine_to_group(ms, group_name)

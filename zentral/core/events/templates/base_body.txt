@@ -1,7 +1,7 @@
 Serial number: {{ machine_serial_number }}
 {% if machine_url %}Zentral URL: {{ machine_url }}{% endif %}
 
-{% for name, source_names in machine_names.items() %}
+{% for name, source_names in machine.names_with_sources.items() %}
 Name: {{ name }}, ({{ source_names|sort|join(', ') }})
 {% endfor %}
 

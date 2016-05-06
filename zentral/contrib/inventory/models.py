@@ -1,9 +1,13 @@
 import colorsys
+import logging
 from django.contrib.postgres.fields import JSONField
 from django.core.urlresolvers import reverse
 from django.db import models
 from django.db.models import Count, Q
+from zentral.conf import settings
 from zentral.utils.mt_models import prepare_commit_tree, AbstractMTObject, MTObjectManager
+
+logger = logging.getLogger('zentral.contrib.inventory.models')
 
 
 class MetaBusinessUnitManager(models.Manager):
@@ -377,6 +381,25 @@ class MetaMachine(object):
             if ms.system_info and ms.system_info.computer_name:
                 return ms.system_info.computer_name
 
+    def get_url(self):
+        try:
+            tls_hostname = settings['api']['tls_hostname']
+        except KeyError:
+            logger.warning("Missing api.tls_hostname configuration key")
+        else:
+            return "{}{}".format(tls_hostname.rstrip('/'),
+                                 reverse('inventory:machine',
+                                         args=(self.machine_serial_number,)))
+
+    @property
+    def names_with_sources(self):
+        names = {}
+        for ms in self.snapshots:
+            names.setdefault(ms.get_machine_str(), []).append(ms.source.name)
+        return names
+
+    # Meta? Business units
+
     def business_units(self, include_api_enrollment_business_unit=False):
         bu_l = []
         for ms in self.snapshots:
@@ -389,8 +412,12 @@ class MetaMachine(object):
     def meta_business_units(self):
         return set([bu.meta_business_unit for bu in self.business_units(include_api_enrollment_business_unit=True)])
 
+    # Filtered snapshots
+
     def snapshots_with_osx_app_instances(self):
         return list(ms for ms in self.snapshots if ms.osx_app_instances.count())
+
+    # Inventory tags
 
     def tags_with_types(self):
         tags = [('machine', mt.tag)

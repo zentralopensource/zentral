@@ -3,10 +3,9 @@ import logging
 import os.path
 import uuid
 from dateutil import parser
-from django.core.urlresolvers import reverse
 from django.utils.text import slugify
-from zentral.conf import probes, settings
-from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.conf import probes
+from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.queues import queues
 from .template_loader import TemplateLoader
@@ -95,26 +94,9 @@ class EventMetadata(object):
         if isinstance(self.created_at, str):
             self.created_at = parser.parse(self.created_at)
         self.machine_serial_number = kwargs.pop('machine_serial_number')
+        self.machine = MetaMachine(self.machine_serial_number)
         self.request = kwargs.pop('request', None)
         self.tags = kwargs.pop('tags', [])
-
-    def get_machine_url(self):
-        try:
-            tls_hostname = settings['api']['tls_hostname']
-        except KeyError:
-            logger.warning("Missing api.tls_hostname configuration key")
-        else:
-            return "{}{}".format(tls_hostname.rstrip('/'),
-                                 reverse('inventory:machine',
-                                         args=(self.machine_serial_number,)))
-
-    def get_machine_snapshots(self):
-        if not hasattr(self, '_cached_machine_snapshots'):
-            self._cached_machine_snapshots = {}
-            qs = MachineSnapshot.objects.current().prefetch_related('groups')
-            for ms in qs.filter(machine__serial_number=self.machine_serial_number):
-                self._cached_machine_snapshots[ms.source] = ms
-        return self._cached_machine_snapshots
 
     @classmethod
     def deserialize(cls, event_d_metadata):
@@ -138,26 +120,29 @@ class EventMetadata(object):
         if self.tags:
             d['tags'] = self.tags
         machine_d = {}
-        meta_business_units = []
-        for source, ms in self.get_machine_snapshots().items():
+        for ms in self.machine.snapshots:
+            source = ms.source
             ms_d = {'name': ms.get_machine_str()}
             if ms.business_unit:
-                meta_business_units.append(ms.business_unit.meta_business_unit)
                 if not ms.business_unit.is_api_enrollment_business_unit():
-                    ms_d['business_unit'] = {'key': ms.business_unit.get_short_key(),
+                    ms_d['business_unit'] = {'reference': ms.business_unit.reference,
+                                             'key': ms.business_unit.get_short_key(),
                                              'name': ms.business_unit.name}
             if ms.os_version:
                 ms_d['os_version'] = str(ms.os_version)
-            groups = list(ms.groups.all())
-            if groups:
-                ms_d['group_keys'] = [g.get_short_key() for g in groups]
-                ms_d['group_names'] = [g.name for g in groups]
+            for group in ms.groups.all():
+                ms_d.set_default('groups', []).append({'reference': group.reference,
+                                                       'key': group.get_short_key(),
+                                                       'name': group.name})
             key = slugify(source.name)
             if key in ms_d:
                 # TODO: earlier warning in conf check ?
                 logger.warning('Inventory source slug %s exists already', key)
             machine_d[key] = ms_d
-        for meta_business_unit in set(meta_business_units):
+        for tag in self.machine.tags():
+            machine_d.setdefault('tags', []).append({'id': tag.id,
+                                                     'name': tag.name})
+        for meta_business_unit in self.machine.meta_business_units():
             machine_d.setdefault('meta_business_units', []).append({
                 'name': meta_business_unit.name,
                 'id': meta_business_unit.id
@@ -264,17 +249,10 @@ class BaseEvent(object):
                    'created_at': self.metadata.created_at,
                    'payload': self.payload,
                    'probe': probe,
-                   'machine_serial_number': self.metadata.machine_serial_number,
-                   'machine_url': self.metadata.get_machine_url(),
-                   'machine': self.metadata.get_machine_snapshots()}
-            machine_names = {}
-            meta_business_units = []
-            for source, ms in ctx['machine'].items():
-                machine_names.setdefault(ms.get_machine_str(), []).append(source.name)
-                if ms.business_unit:
-                    meta_business_units.append(ms.business_unit)
-            ctx['meta_business_units'] = set(meta_business_units)
-            ctx['machine_names'] = machine_names
+                   'machine': self.metadata.machine,
+                   'machine_serial_number': self.metadata.machine.serial_number,
+                   'machine_snapshots': self.metadata.machine.snapshots,
+                   'machine_url': self.metadata.machine.get_url()}
             ctx.update(self._get_extra_context())
             self._notification_context = ctx
         return self._notification_context
