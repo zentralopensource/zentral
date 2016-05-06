@@ -2,7 +2,7 @@ def test_probe_event_type(probe, module_str):
     """Test the probe event type metadata filters.
 
        Used to find the probes that apply to the events of a module"""
-    metadata_filters = probe.get('metadata_filters', [])
+    metadata_filters = probe.get('filters', {}).get('metadata', [])
     for metadata_filter in metadata_filters:
         event_type_filter_attr = "type"
         event_type_filter_val = metadata_filter.get(event_type_filter_attr, None)

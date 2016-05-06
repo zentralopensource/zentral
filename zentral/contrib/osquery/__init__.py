@@ -24,9 +24,9 @@ def build_osquery_conf(all_probes):
                 event_type_probes.append((probe_name, probe_d))
             continue
         # check and fix existing metadata_filters
-        metadata_filters = probe_d.get('metadata_filters', None)
+        metadata_filters = probe_d.get('filters', {}).get('metadata', None)
         if not metadata_filters:
-            probe_d['metadata_filters'] = [{'type': 'osquery_result'}]
+            probe_d.setdefault('filters', {})['metadata'] = [{'type': 'osquery_result'}]
         else:
             for metadata_filter in metadata_filters:
                 if metadata_filter.setdefault('type', "osquery_result") != "osquery_result":

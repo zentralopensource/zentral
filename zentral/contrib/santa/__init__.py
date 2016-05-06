@@ -29,9 +29,9 @@ def build_santa_conf(all_probes):
                 event_type_probes.append((probe_name, probe_d))
             continue
         # check and fix existing metadata_filters
-        metadata_filters = probe_d.get('metadata_filters', None)
+        metadata_filters = probe_d.get('filters', {}).get('metadata', None)
         if not metadata_filters:
-            probe_d['metadata_filters'] = [{'type': 'santa_event'}]
+            probe_d.setdefault('filters', {})['metadata'] = [{'type': 'santa_event'}]
         else:
             for metadata_filter in metadata_filters:
                 if metadata_filter.setdefault('type', "santa_event") != "santa_event":
