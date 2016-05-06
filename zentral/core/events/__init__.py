@@ -243,7 +243,7 @@ class BaseEvent(object):
                 if not _test_pass_filters(filters.get('metadata', None),
                                           metadata):
                     continue
-                if not _test_pass_filters(filters.get('filters', None),
+                if not _test_pass_filters(filters.get('payload', None),
                                           self.payload):
                     continue
             l.append(probe)
