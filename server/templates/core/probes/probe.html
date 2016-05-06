@@ -23,11 +23,13 @@
 </div>
 {% endif %}
 
-{% if probe.metadata_filters %}
-<h3>Metadata Filters</h3>
+{% if probe.filters %}
+<h3>Filters</h3>
+{% if probe.filters.inventory %}
+<h4>Inventory</h4>
 <table class="table">
   <tbody>
-    {% for metadata_filter in probe.metadata_filters %}
+    {% for metadata_filter in probe.filters.inventory %}
     <tr>
       <td>{{ metadata_filter|pythonprettyprint }}</td>
     </tr>
@@ -36,17 +38,31 @@
 </table>
 {% endif %}
 
-{% if probe.payload_filters %}
-<h3>Payload Filters</h3>
+{% if probe.filters.metadata %}
+<h4>Metadata</h4>
 <table class="table">
   <tbody>
-    {% for payload_filter in probe.payload_filters %}
+    {% for metadata_filter in probe.filters.metadata %}
+    <tr>
+      <td>{{ metadata_filter|pythonprettyprint }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if probe.filters.payload %}
+<h4>Payload</h4>
+<table class="table">
+  <tbody>
+    {% for payload_filter in probe.filters.payload %}
     <tr>
       <td>{{ payload_filter|pythonprettyprint }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 {% endif %}
 
 {% block probe_extra %}
