@@ -131,9 +131,9 @@ class EventMetadata(object):
             if ms.os_version:
                 ms_d['os_version'] = str(ms.os_version)
             for group in ms.groups.all():
-                ms_d.set_default('groups', []).append({'reference': group.reference,
-                                                       'key': group.get_short_key(),
-                                                       'name': group.name})
+                ms_d.setdefault('groups', []).append({'reference': group.reference,
+                                                      'key': group.get_short_key(),
+                                                      'name': group.name})
             key = slugify(source.name)
             if key in ms_d:
                 # TODO: earlier warning in conf check ?

@@ -389,7 +389,7 @@ class MetaMachine(object):
         else:
             return "{}{}".format(tls_hostname.rstrip('/'),
                                  reverse('inventory:machine',
-                                         args=(self.machine_serial_number,)))
+                                         args=(self.serial_number,)))
 
     @property
     def names_with_sources(self):
