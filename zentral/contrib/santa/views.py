@@ -81,7 +81,7 @@ class EnrollmentDebuggingView(View):
     debugging_template = """machine_serial_number="0123456789"
 machine_id="%(secret)s\$SERIAL\$$machine_serial_number"
 # rule download
-curl -XPOST -k %(tls_hostname)s%(path)s | jq ."""
+curl -XPOST -k %(tls_hostname)s/santa/ruledownload/$machine_id | jq ."""
 
     def get(self, request, *args, **kwargs):
         try:
@@ -93,8 +93,7 @@ curl -XPOST -k %(tls_hostname)s%(path)s | jq ."""
         except ValueError:
             bu = None
         secret = make_secret("zentral.contrib.santa", bu)
-        debugging_tools = self.debugging_template % {'path': reverse('santa:ruledownload', args=(secret,)),
-                                                     'secret': secret,
+        debugging_tools = self.debugging_template % {'secret': secret,
                                                      'tls_hostname': settings['api']['tls_hostname']}
         return HttpResponse(debugging_tools)
 
