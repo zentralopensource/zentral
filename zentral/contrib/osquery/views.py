@@ -1,7 +1,7 @@
 import json
 import logging
 from dateutil import parser
-from django.core.urlresolvers import reverse_lazy
+from django.core.urlresolvers import reverse, reverse_lazy
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic import View, DetailView, ListView, TemplateView
@@ -41,9 +41,9 @@ class EnrollmentView(BaseEnrollmentView):
 class EnrollmentDebuggingView(View):
     debugging_template = """machine_serial_number="0123456789"
 enroll_secret="%(secret)s\$SERIAL\$$machine_serial_number"
-node_key_json=$(curl -XPOST -k -d '{"enroll_secret":"'"$enroll_secret"'"}' %(tls_hostname)s/osquery/enroll)
+node_key_json=$(curl -XPOST -k -d '{"enroll_secret":"'"$enroll_secret"'"}' %(tls_hostname)s%(enroll_path)s)
 echo $node_key_json | jq .
-curl -XPOST -k -d "$node_key_json"  %(tls_hostname)s/osquery/config | jq ."""
+curl -XPOST -k -d "$node_key_json"  %(tls_hostname)s%(config_path)s | jq ."""
 
     def get(self, request, *args, **kwargs):
         try:
@@ -54,7 +54,9 @@ curl -XPOST -k -d "$node_key_json"  %(tls_hostname)s/osquery/config | jq ."""
             bu = mbu.api_enrollment_business_units()[0]
         except ValueError:
             bu = None
-        debugging_tools = self.debugging_template % {'secret': make_secret("zentral.contrib.osquery", bu),
+        debugging_tools = self.debugging_template % {'config_path': reverse("osquery:config"),
+                                                     'enroll_path': reverse("osquery:enroll"),
+                                                     'secret': make_secret("zentral.contrib.osquery", bu),
                                                      'tls_hostname': settings['api']['tls_hostname']}
         return HttpResponse(debugging_tools)
 

@@ -1,10 +1,13 @@
 import logging
 from django.core.urlresolvers import reverse
-from django.views.generic import TemplateView
-from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
+from django.http import HttpResponse
+from django.views.generic import TemplateView, View
+from zentral.conf import settings
+from zentral.contrib.inventory.models import MachineSnapshot, MetaBusinessUnit, MetaMachine
 from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import stores
-from zentral.utils.api_views import SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
+from zentral.utils.api_views import (make_secret,
+                                     SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView)
 from . import build_santa_conf, event_type_probes, probes
 from .events import post_santa_events, post_santa_preflight
 from .osx_package.builder import SantaZentralEnrollPkgBuilder
@@ -72,6 +75,28 @@ class ProbeView(BaseProbeView):
 class EnrollmentView(BaseEnrollmentView):
     template_name = "santa/enrollment.html"
     section = "santa"
+
+
+class EnrollmentDebuggingView(View):
+    debugging_template = """machine_serial_number="0123456789"
+enroll_secret="%(secret)s\$SERIAL\$$machine_serial_number"
+# rule download
+curl -XPOST -k %(tls_hostname)s%(path)s | jq ."""
+
+    def get(self, request, *args, **kwargs):
+        try:
+            mbu = MetaBusinessUnit.objects.get(pk=int(request.GET['mbu_id']))
+            # -> BaseInstallerPackageView
+            # TODO Race. The meta_business_unit could maybe be without any api BU.
+            # TODO. Better selection if multiple BU ?
+            bu = mbu.api_enrollment_business_units()[0]
+        except ValueError:
+            bu = None
+        secret = make_secret("zentral.contrib.santa", bu)
+        debugging_tools = self.debugging_template % {'path': reverse('santa:ruledownload', args=(secret,)),
+                                                     'secret': secret,
+                                                     'tls_hostname': settings['api']['tls_hostname']}
+        return HttpResponse(debugging_tools)
 
 
 class InstallerPackageView(BaseInstallerPackageView):
