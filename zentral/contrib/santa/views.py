@@ -79,7 +79,7 @@ class EnrollmentView(BaseEnrollmentView):
 
 class EnrollmentDebuggingView(View):
     debugging_template = """machine_serial_number="0123456789"
-enroll_secret="%(secret)s\$SERIAL\$$machine_serial_number"
+machine_id="%(secret)s\$SERIAL\$$machine_serial_number"
 # rule download
 curl -XPOST -k %(tls_hostname)s%(path)s | jq ."""
 
