@@ -2,7 +2,7 @@ import colorsys
 import logging
 from django.contrib.postgres.fields import JSONField
 from django.core.urlresolvers import reverse
-from django.db import models
+from django.db import connection, models
 from django.db.models import Count, Q
 from zentral.conf import settings
 from zentral.utils.mt_models import prepare_commit_tree, AbstractMTObject, MTObjectManager
@@ -62,18 +62,28 @@ class MetaBusinessUnit(models.Model):
             b.set_meta_business_unit(self)
         return b
 
-    def has_machine(self, machine_serial_number):
-        return self.businessunit_set.filter(machinesnapshot__machine__serial_number=machine_serial_number,
-                                            machinesnapshot__mt_next__isnull=True).count() > 0
-
-    def get_machine_count(self):
-        qs = MetaBusinessUnit.objects.filter(pk=self.id)
-        qs = qs.filter(businessunit__machinesnapshot__mt_next__isnull=True)
-        qs = qs.annotate(num_msn=Count('businessunit__machinesnapshot__machine__serial_number', distinct=True))
-        try:
-            return qs[0].num_msn
-        except IndexError:
-            return 0
+    def get_machine_count(self, tags=None):
+        if not tags or set(self.tags()) & set(tags):
+            query = """SELECT count(distinct(serial_number))
+            FROM inventory_machine AS m
+            JOIN inventory_machinesnapshot AS ms ON (ms.machine_id = m.id)
+            JOIN inventory_businessunit AS bu ON (ms.business_unit_id = bu.id)
+            WHERE ms.mt_next_id IS NULL
+            AND bu.meta_business_unit_id = %s"""
+            args = [self.id]
+        else:
+            query = """SELECT count(distinct(m.serial_number))
+            FROM inventory_machine AS m
+            JOIN inventory_machinesnapshot AS ms ON (ms.machine_id = m.id)
+            JOIN inventory_businessunit AS bu ON (ms.business_unit_id = bu.id)
+            JOIN inventory_machinetag AS mt ON (mt.serial_number = m.serial_number)
+            WHERE ms.mt_next_id IS NULL
+            AND bu.meta_business_unit_id = %s
+            AND mt.tag_id IN %s"""
+            args = (self.id, tuple(t.id for t in tags))
+        cursor = connection.cursor()
+        cursor.execute(query, args)
+        return cursor.fetchone()[0]
 
     def tags(self):
         tags = list(mbut.tag for mbut in self.metabusinessunittag_set.select_related('tag'))
@@ -272,9 +282,26 @@ class MachineSnapshotManager(MTObjectManager):
                                    'system_info',
                                    'teamviewer').filter(mt_next__isnull=True)
 
-    def get_current_count(self):
-        result = self.current().aggregate(Count('machine__serial_number', distinct=True))
-        return result['machine__serial_number__count']
+    def get_current_count(self, tags=None):
+        if tags:
+            query = """SELECT count(distinct(m.serial_number))
+            FROM inventory_machine AS m
+            JOIN inventory_machinesnapshot AS ms ON (ms.machine_id = m.id)
+            LEFT JOIN inventory_machinetag AS mt ON (mt.serial_number = m.serial_number)
+            LEFT JOIN inventory_businessunit AS bu ON (ms.business_unit_id = bu.id)
+            LEFT JOIN inventory_metabusinessunittag AS mbut ON (mbut.meta_business_unit_id = bu.meta_business_unit_id)
+            WHERE ms.mt_next_id IS NULL
+            AND (mt.tag_id IN %(tag_id)s OR mbut.tag_id IN %(tag_id)s)"""
+            args = {"tag_id": tuple(t.id for t in tags)}
+        else:
+            query = """SELECT count(distinct(m.serial_number))
+            FROM inventory_machine AS m
+            JOIN inventory_machinesnapshot AS ms ON (ms.machine_id = m.id)
+            WHERE ms.mt_next_id IS NULL"""
+            args = []
+        cursor = connection.cursor()
+        cursor.execute(query, args)
+        return cursor.fetchone()[0]
 
 
 class MachineSnapshot(AbstractMTObject):

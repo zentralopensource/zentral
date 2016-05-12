@@ -215,7 +215,8 @@ class DistributedReadView(BaseNodeView):
     def do_node_post(self, data):
         queries = {}
         if self.machine_serial_number:
-            for dqn in DistributedQueryNode.objects.new_queries_with_serial_number(self.machine_serial_number):
+            machine = MetaMachine(self.machine_serial_number)
+            for dqn in DistributedQueryNode.objects.new_queries_for_machine(machine):
                 dq = dqn.distributed_query
                 queries['q_{}'.format(dq.id)] = dq.query
         return {'queries': queries}

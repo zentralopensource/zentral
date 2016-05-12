@@ -11,4 +11,4 @@ class DistributedQueryForm(forms.ModelForm):
 
     class Meta:
         model = DistributedQuery
-        fields = ['query', 'meta_business_unit', 'shard']
+        fields = ['query', 'meta_business_unit', 'tags', 'shard']
