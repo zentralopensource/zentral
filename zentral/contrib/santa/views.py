@@ -1,11 +1,11 @@
 import logging
 from django.core.urlresolvers import reverse
 from django.views.generic import TemplateView
-from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
 from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import stores
 from zentral.utils.api_views import SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
-from . import santa_conf, event_type_probes, probes
+from . import build_santa_conf, event_type_probes, probes
 from .events import post_santa_events, post_santa_preflight
 from .osx_package.builder import SantaZentralEnrollPkgBuilder
 
@@ -123,7 +123,7 @@ class PreflightView(BaseView):
 
 class RuleDownloadView(BaseView):
     def do_post(self, data):
-        return santa_conf
+        return build_santa_conf(MetaMachine(self.machine_serial_number))
 
 
 class EventUploadView(BaseView):

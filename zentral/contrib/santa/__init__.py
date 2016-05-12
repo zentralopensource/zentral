@@ -1,15 +1,11 @@
-from zentral.conf import probes as all_probes
+from zentral.conf import probes as all_probes, machine_probes
 from zentral.core.probes.utils import test_probe_event_type
 from zentral.core.exceptions import ImproperlyConfigured
 
 
-def build_santa_conf(all_probes):
+def setup_santa_probes(all_probes):
     """
-    Build the santa conf, the probe lookup dict and the list of santa probes.
-
-    The santa conf is the source of the json document that is sent to the santa
-    client when it connects to zentral. It is a list of all the rules found in
-    all the configured probes.
+    Build the probe lookup dict and the list of santa probes.
 
     The lookup dict is used when we process a santa event to find the probes
     that, because of the set of santa rules they contain, are responsible for
@@ -18,7 +14,6 @@ def build_santa_conf(all_probes):
 
     The list of santa probes is a list of (probe_name, probe_d) tupes.
     """
-    rules = []
     lookup_d = {}
     probes = []  # probes with a santa section
     event_type_probes = []  # probes without a santa section but with a match on the event type
@@ -39,13 +34,28 @@ def build_santa_conf(all_probes):
                     ImproperlyConfigured("Santa probe %s with wrong type metadata_filter %s" %
                                          (probe_d.get('name', '?'), metadata_filter['type']))
         probes.append((probe_name, probe_d))
-        rules.extend(santa_l)
         for santa_r in santa_l:
             lookup_d.setdefault(santa_r["sha256"], []).append(probe_d.copy())
     probes.sort()
-    return {'rules': rules}, lookup_d, probes, event_type_probes
+    return lookup_d, probes, event_type_probes
 
-santa_conf, probes_lookup_dict, probes, event_type_probes = build_santa_conf(all_probes)
+probes_lookup_dict, probes, event_type_probes = setup_santa_probes(all_probes)
+
+
+def build_santa_conf(machine):
+    """
+    Build the santa conf.
+
+    The santa conf is the source of the json document that is sent to the santa
+    client when it connects to zentral. It is a list of all the rules found in
+    all the configured probes for that client.
+    """
+    rules = []
+    probes_to_filter = (probe_d for _, probe_d in probes)
+    for probe_d in machine_probes(machine, probes_to_filter=probes_to_filter):
+        santa_l = probe_d['santa']
+        rules.extend(santa_l)
+    return {'rules': rules}
 
 
 # django

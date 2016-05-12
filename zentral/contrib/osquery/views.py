@@ -2,17 +2,18 @@ import json
 import logging
 from dateutil import parser
 from django.core.urlresolvers import reverse_lazy
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
-from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.conf import settings
+from zentral.contrib.inventory.models import MachineSnapshot, MetaBusinessUnit, MetaMachine
 from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import stores
-from zentral.utils.api_views import (JSONPostAPIView, verify_secret, APIAuthError,
+from zentral.utils.api_views import (JSONPostAPIView, make_secret, verify_secret, APIAuthError,
                                      BaseEnrollmentView, BaseInstallerPackageView)
 from zentral.utils.sql import format_sql
-from . import osquery_conf, event_type_probes, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
+from . import build_osquery_conf, event_type_probes, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
 from .forms import DistributedQueryForm
 from .models import enroll, DistributedQuery, DistributedQueryNode
@@ -35,6 +36,27 @@ class ProbesView(TemplateView):
 class EnrollmentView(BaseEnrollmentView):
     template_name = "osquery/enrollment.html"
     section = "osquery"
+
+
+class EnrollmentDebuggingView(View):
+    debugging_template = """machine_serial_number="0123456789"
+enroll_secret="%(secret)s\$SERIAL\$$machine_serial_number"
+node_key_json=$(curl -XPOST -k -d '{"enroll_secret":"'"$enroll_secret"'"}' %(tls_hostname)s/osquery/enroll)
+echo $node_key_json | jq .
+curl -XPOST -k -d "$node_key_json"  %(tls_hostname)s/osquery/config | jq ."""
+
+    def get(self, request, *args, **kwargs):
+        try:
+            mbu = MetaBusinessUnit.objects.get(pk=int(request.GET['mbu_id']))
+            # -> BaseInstallerPackageView
+            # TODO Race. The meta_business_unit could maybe be without any api BU.
+            # TODO. Better selection if multiple BU ?
+            bu = mbu.api_enrollment_business_units()[0]
+        except ValueError:
+            bu = None
+        debugging_tools = self.debugging_template % {'secret': make_secret("zentral.contrib.osquery", bu),
+                                                     'tls_hostname': settings['api']['tls_hostname']}
+        return HttpResponse(debugging_tools)
 
 
 class InstallerPackageView(BaseInstallerPackageView):
@@ -179,7 +201,10 @@ class ConfigView(BaseNodeView):
     request_type = "config"
 
     def do_node_post(self, data):
-        return osquery_conf
+        # TODO: The machine serial number is included in the string used to authenticate the requests
+        # This is done in the osx pkg builder. The machine serial number should always be present here.
+        # Maybe we could code a fallback to the available mbu probes if the serial number is not present.
+        return build_osquery_conf(MetaMachine(self.machine_serial_number))
 
 
 class DistributedReadView(BaseNodeView):

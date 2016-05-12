@@ -17,7 +17,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='distributedquery',
             name='meta_business_unit',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='inventory.MetaBusinessUnit'),
+            field=models.ForeignKey(blank=True, null=True,
+                                    on_delete=django.db.models.deletion.SET_NULL,
+                                    to='inventory.MetaBusinessUnit'),
         ),
         migrations.AddField(
             model_name='distributedquery',

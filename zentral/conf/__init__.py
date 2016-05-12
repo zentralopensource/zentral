@@ -80,11 +80,16 @@ def load_probes(settings, conf_dir):
 probes = load_probes(settings, conf_dir)
 
 
-def inventory_filtered_probes(mbu_ids, tag_ids):
+def inventory_filtered_probes(mbu_ids, tag_ids, probes_to_filter=None):
+    """Return the probes matching meta business units id and tag ids.
+
+    By default filter all the probes. Can be restricted to only a subset of the probes."""
+    if probes_to_filter is None:
+        probes_to_filter = probes.values()
     tag_ids = set(tag_ids)
     mbu_ids = set(mbu_ids)
     filtered_probes = []
-    for probe in probes.values():
+    for probe in probes_to_filter:
         try:
             inventory_filters = probe['filters']['inventory']
         except KeyError:
@@ -107,6 +112,15 @@ def inventory_filtered_probes(mbu_ids, tag_ids):
             # no need to check the other filters (OR)
             break
     return filtered_probes
+
+
+def machine_probes(machine, probes_to_filter=None):
+    """Return the probes that are available for a machine.
+
+    By default filter all the probes. Can be restricted to only a subset of the probes."""
+    mbu_ids = [mbu.id for mbu in machine.meta_business_units()]
+    tag_ids = [tag.id for tag in machine.tags()]
+    return inventory_filtered_probes(mbu_ids, tag_ids, probes_to_filter)
 
 
 def load_contact_groups(conf_dir):

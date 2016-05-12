@@ -13,6 +13,33 @@
     <label for="id_meta_business_unit">Business unit</label>
     {{ form.meta_business_unit }}
   </div>
+  <a class="btn btn-default"
+     id="get-debugging-tools"
+     href="{% url 'osquery:enrollment_debugging' %}">Get enrollment debugging tools</a>
   <button class="btn btn-default" type="submit">Download enrollment pkg</button>
 </form>
+
+<div style="margin:20px 0 0 0">
+  <pre id="debugging-tools" style="display:none"></pre>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+<script>
+  $(document).ready(function(){
+    $("#get-debugging-tools").click(function(event){
+      event.preventDefault();
+      var mbu_id = $("#id_meta_business_unit").val();
+      var url = $(this).attr("href");
+      $.ajax({
+        url: url,
+        data: {mbu_id: mbu_id},
+        dataType: "text",
+        success: function(data) {
+          $('#debugging-tools').text(data).show();
+        }
+      });
+    });
+  });
+</script>
 {% endblock %}
