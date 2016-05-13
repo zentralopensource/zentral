@@ -1,7 +1,8 @@
 import json
 import logging
 import requests
-from .base import BaseAction
+from zentral.core.actions.backends.base import BaseAction
+
 
 logger = logging.getLogger('zentral.contrib.zendesk.actions.ticket')
 
