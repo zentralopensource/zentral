@@ -17,7 +17,13 @@
   <dd><a href="{% url 'inventory:mbu_machines' object.meta_business_unit.id %}">{{ object.meta_business_unit }}</a></dd>
   {% endif %}
   <dt>Tags</dt>
-  <dd>{% for tag in object.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</dd>
+  <dd>
+    {% for tag in object.tags.all %}
+    {% inventory_tag tag %}
+    {% empty %}
+    -
+    {% endfor %}
+  </dd>
   <dt>Shard</dt>
   <dd>{{ object.shard }}</dd>
 </dl>

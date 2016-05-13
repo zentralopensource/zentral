@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -19,6 +20,14 @@
         <dt>Business unit</dt>
         <dd><a href="{% url 'inventory:mbu_machines' dq.meta_business_unit.id %}">{{ dq.meta_business_unit }}</a></dd>
         {% endif %}
+        <dt>Tags</dt>
+        <dd>
+          {% for tag in dq.tags.all %}
+          {% inventory_tag tag %}
+          {% empty %}
+          -
+          {% endfor %}
+        </dd>
         <dt>Shard</dt>
         <dd>{{ dq.shard }}</dd>
         </dl>
