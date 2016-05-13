@@ -85,10 +85,26 @@ class InventoryClient(BaseInventory):
 
     def get_machines(self):
         group_cache = {g.pop('id'): g for g in self._groups()}
+        machines = {}
         for c in self._computers():
             platform = c.pop('platform')
             machine_id = c.pop('watchman_id')
             serial_number = c.pop('serial_number')
+            if c.pop('hidden'):
+                logger.warning("Hidden computer %s %s", serial_number, machine_id)
+                continue
+            created_at = c.pop('created_at')
+            if serial_number in machines:
+                logger.warning("Computer %s has multiple instances", serial_number)
+                if machines[serial_number]['created_at'] > created_at:
+                    logger.warning("Instance %s of Computer %s ignored",
+                                   machine_id,
+                                   serial_number)
+                    continue
+                else:
+                    logger.warning("Instance %s of Computer %s ignored",
+                                   machines[serial_number]['machine_id'],
+                                   serial_number)
             if platform == 'linux':
                 # TODO better!
                 serial_number = machine_id
@@ -174,4 +190,8 @@ class InventoryClient(BaseInventory):
                 ct['teamviewer'] = {'teamviewer_id': teamviewer_id,
                                     'release': c['teamviewer_release'],
                                     'unattended': c['teamviewer_unattended']}
-            yield ct
+            machines[serial_number] = {'machine_id': machine_id,
+                                       'created_at': created_at,
+                                       'commit_tree': ct}
+        for machine_d in machines.values():
+            yield machine_d['commit_tree']
