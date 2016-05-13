@@ -3,7 +3,7 @@ import logging
 import requests
 from .base import BaseAction
 
-logger = logging.getLogger('zentral.core.actions.backends.zendesk')
+logger = logging.getLogger('zentral.contrib.zendesk.actions.ticket')
 
 API_ENDPOINT = "https://{subdomain}.zendesk.com/api/v2/tickets.json"
 
