@@ -17,10 +17,12 @@ register_event_type(ZendeskCommentCreationEvent)
 
 
 def post_zendesk_event(user_agent, ip, data):
-    if data['type'] == 'ticket':
+    data_type = data['type']
+    data = data['data']
+    if data_type == 'ticket':
         event_class = ZendeskTicketCreationEvent
     else:
-        logger.error("Unknown zendesk event type '%s'", data['type'])
+        logger.error("Unknown zendesk event type '%s'", data_type)
         return
     msn = None  # TODO!!!
     metadata = EventMetadata(event_class.event_type,
