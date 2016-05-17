@@ -108,7 +108,7 @@ class EventMetadata(object):
             kwargs['request'] = EventRequest(**request_d)
         return cls(**kwargs)
 
-    def serialize(self):
+    def serialize(self, machine_metadata=True):
         d = {'created_at': self.created_at.isoformat(),
              'id': str(self.uuid),
              'index': self.index,
@@ -119,6 +119,8 @@ class EventMetadata(object):
             d['request'] = self.request.serialize()
         if self.tags:
             d['tags'] = self.tags
+        if not machine_metadata:
+            return d
         machine_d = {}
         for ms in self.machine.get_snapshots():
             source = ms.source
@@ -214,9 +216,9 @@ class BaseEvent(object):
         metadata = EventMetadata.deserialize(payload.pop('_zentral'))
         return cls(metadata, payload)
 
-    def serialize(self):
+    def serialize(self, machine_metadata=True):
         event_d = self.payload.copy()
-        event_d['_zentral'] = self.metadata.serialize()
+        event_d['_zentral'] = self.metadata.serialize(machine_metadata)
         return event_d
 
     def post(self):

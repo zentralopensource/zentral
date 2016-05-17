@@ -67,7 +67,7 @@ class EventQueues(object):
 
     @redis_connection_error_decorator
     def post_event(self, event):
-        event_payload = json.dumps(event.serialize()).encode('utf-8')
+        event_payload = json.dumps(event.serialize(machine_metadata=False)).encode('utf-8')
         s = hashlib.sha1(event_payload)
         event_id = s.hexdigest().encode('utf-8')
         event_job_counter = '%s_job_num' % event_id
