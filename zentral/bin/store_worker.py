@@ -34,7 +34,8 @@ def store_events(store_name, worker_id):
             try:
                 store.store(event)
             except:
-                logger.exception('Could not store event in store %s', store_name)
+                logger.exception('Could not store event in store %s\n%s',
+                                 store_name, event.serialize())
                 time.sleep(5)
             else:
                 break

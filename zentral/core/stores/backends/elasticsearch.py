@@ -16,7 +16,7 @@ except NotImplementedError:
 BASE_VISU_URL = ("{kibana_base_url}#/discover?_g=()&"
                  "_a=(columns:!(_source),index:{index},interval:auto,"
                  "query:(query_string:(analyze_wildcard:!t,query:'{query}')),"
-                 "sort:!(zzzentral.created_at,desc))")
+                 "sort:!(created_at,desc))")
 
 INDEX_CONF = """
 {
@@ -26,7 +26,6 @@ INDEX_CONF = """
         {
           "zentral_ip_address": {
             "mapping": {
-              "index": "not_analyzed",
               "type": "ip"
             },
             "match": "*ip_address"
@@ -44,35 +43,10 @@ INDEX_CONF = """
         }
       ],
       "properties": {
-        "zzzentral": {
+        "request": {
           "properties": {
-            "machine": {
-              "properties": {
-                "meta_business_units": {
-                  "properties": {
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "index": "not_analyzed",
-                      "type": "string"
-                    }
-                  },
-                  "type": "nested"
-                }
-              }
-            },
-            "tags": {
-              "index": "not_analyzed",
-              "type": "string"
-            },
-            "request": {
-              "properties": {
-                "ip": {
-                  "index": "not_analyzed",
-                  "type": "ip"
-                }
-              }
+            "ip": {
+              "type": "ip"
             }
           }
         }
@@ -117,11 +91,15 @@ class EventStore(BaseEventStore):
 
     def _serialize_event(self, event):
         event_d = event.serialize()
-        event_d['zzzentral'] = event_d.pop('_zentral')
-        return event.event_type, event_d
+        es_event_d = event_d.pop('_zentral')
+        es_event_d.pop('type')  # document type in ES
+        es_event_d[event.event_type] = event_d
+        return event.event_type, es_event_d
 
-    def _deserialize_event(self, event_d):
-        event_d['_zentral'] = event_d.pop('zzzentral')
+    def _deserialize_event(self, event_type, es_event_d):
+        event_d = es_event_d.pop(event_type)
+        event_d['_zentral'] = es_event_d
+        event_d['_zentral']['type'] = event_type
         return event_from_event_d(event_d)
 
     def store(self, event_d):
@@ -135,7 +113,7 @@ class EventStore(BaseEventStore):
 
     def count(self, machine_serial_number, event_type=None):
         # TODO: count could work from first fetch with elasticsearch.
-        q = "zzzentral.machine_serial_number:{}".format(machine_serial_number)
+        q = "machine_serial_number:{}".format(machine_serial_number)
         if event_type:
             q = "{} AND _type:{}".format(q, event_type)
         r = self._es.count(index=self.index, q=q)
@@ -143,25 +121,25 @@ class EventStore(BaseEventStore):
 
     def fetch(self, machine_serial_number, offset=0, limit=0, event_type=None):
         # TODO: count could work from first fetch with elasticsearch.
-        q = "zzzentral.machine_serial_number:{}".format(machine_serial_number)
+        q = "machine_serial_number:{}".format(machine_serial_number)
         if event_type:
             q = "{} AND _type:{}".format(q, event_type)
         kwargs = {'index': self.index,
                   'q': q,
-                  'sort': 'zzzentral.created_at:desc'}
+                  'sort': 'created_at:desc'}
         if limit:
             kwargs['size'] = limit
         if offset:
             kwargs['from_'] = offset
         r = self._es.search(**kwargs)
         for hit in r['hits']['hits']:
-            yield self._deserialize_event(hit['_source'])
+            yield self._deserialize_event(hit['_type'], hit['_source'])
 
     def event_types_with_usage(self, machine_serial_number):
         body = {
             'query': {
                 'query_string': {
-                    'query': 'zzzentral.machine_serial_number:{}'.format(machine_serial_number)
+                    'query': 'machine_serial_number:{}'.format(machine_serial_number)
                 }
             },
             'aggs': {'doc_types': {"terms": {'field': '_type'}}}}
