@@ -120,7 +120,7 @@ class EventMetadata(object):
         if self.tags:
             d['tags'] = self.tags
         machine_d = {}
-        for ms in self.machine.snapshots:
+        for ms in self.machine.get_snapshots():
             source = ms.source
             ms_d = {'name': ms.get_machine_str()}
             if ms.business_unit:
@@ -263,7 +263,7 @@ class BaseEvent(object):
                    'probe': probe,
                    'machine': self.metadata.machine,
                    'machine_serial_number': self.metadata.machine.serial_number,
-                   'machine_snapshots': self.metadata.machine.snapshots,
+                   'machine_snapshots': self.metadata.machine.get_snapshots(),
                    'machine_url': self.metadata.machine.get_url()}
             ctx.update(self._get_extra_context())
             self._notification_context = ctx

@@ -398,13 +398,16 @@ class MetaMachine(object):
     """Simplified access to the ms."""
     def __init__(self, serial_number, snapshots=None):
         self.serial_number = serial_number
-        if snapshots is None:
-            self.snapshots = list(MachineSnapshot.objects.current().filter(machine__serial_number=serial_number))
-        else:
-            self.snapshots = snapshots
+        self._snapshots = snapshots
+
+    def get_snapshots(self):
+        if self._snapshots is None:
+            self._snapshots = list(MachineSnapshot.objects.current()
+                                   .filter(machine__serial_number=self.serial_number))
+        return self._snapshots
 
     def computer_name(self):
-        for ms in self.snapshots:
+        for ms in self.get_snapshots():
             if ms.system_info and ms.system_info.computer_name:
                 return ms.system_info.computer_name
 
@@ -421,7 +424,7 @@ class MetaMachine(object):
     @property
     def names_with_sources(self):
         names = {}
-        for ms in self.snapshots:
+        for ms in self.get_snapshots():
             names.setdefault(ms.get_machine_str(), []).append(ms.source.name)
         return names
 
@@ -429,7 +432,7 @@ class MetaMachine(object):
 
     def business_units(self, include_api_enrollment_business_unit=False):
         bu_l = []
-        for ms in self.snapshots:
+        for ms in self.get_snapshots():
             if (ms.business_unit and
                 (include_api_enrollment_business_unit or
                  not ms.business_unit.is_api_enrollment_business_unit())):
@@ -442,7 +445,7 @@ class MetaMachine(object):
     # Filtered snapshots
 
     def snapshots_with_osx_app_instances(self):
-        return list(ms for ms in self.snapshots if ms.osx_app_instances.count())
+        return list(ms for ms in self.get_snapshots() if ms.osx_app_instances.count())
 
     # Inventory tags
 

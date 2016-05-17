@@ -9,7 +9,7 @@ class Action(BaseAction):
     def trigger(self, event, probe, action_config_d):
         group_name = action_config_d['group_name']
         for client in clients:
-            for ms in event.metadata.machine.snapshots:
+            for ms in event.metadata.machine.get_snapshots():
                 source = ms.source
                 if source.module == client.source['module'] and source.config == client.source['config']:
                     try:
