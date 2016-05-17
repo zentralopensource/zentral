@@ -4,7 +4,7 @@
     "due_date_with_timestamp": "{{ticket.due_date_with_timestamp}}",
     "due_date": "{{ticket.due_date}}",
     "status": "{{ticket.status}}",
-    "organization.name": "{{ticket.organization.name}}",
+    "organization_name": "{{ticket.organization.name}}",
     "current_user": {
       "external_id": "{{ticket.current_user.external_id}}",
       "last_name": "{{ticket.current_user.last_name}}",
