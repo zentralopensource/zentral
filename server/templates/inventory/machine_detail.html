@@ -27,7 +27,7 @@
 
 
     <ul class="nav nav-tabs">
-      {% for ms in machine.snapshots %}
+      {% for ms in machine.get_snapshots %}
       <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
         <a href="#" data-tabclass="detailstab" data-tabid="details-{{ ms.id }}">
           {{ ms.source.name }}
@@ -38,7 +38,7 @@
   </div>
 </div>
 
-{% for ms in machine.snapshots %}
+{% for ms in machine.get_snapshots %}
 <div class="row detailstab" id="details-{{ ms.id }}"{% if not forloop.first %}style="display:none;"{% endif %}>
 <div class="col-md-6">
 {% if ms.business_unit %}
