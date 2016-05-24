@@ -1,5 +1,5 @@
-from zentral.core.events import BaseEvent, EventMetadata, event_cls_from_type, register_event_type
 import logging
+from zentral.core.events import BaseEvent, EventMetadata, event_cls_from_type, register_event_type
 
 logger = logging.getLogger('zentral.contrib.inventory.events')
 

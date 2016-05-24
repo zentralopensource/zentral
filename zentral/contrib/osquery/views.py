@@ -13,7 +13,7 @@ from zentral.core.stores import stores
 from zentral.utils.api_views import (JSONPostAPIView, make_secret, verify_secret, APIAuthError,
                                      BaseEnrollmentView, BaseInstallerPackageView)
 from zentral.utils.sql import format_sql
-from . import build_osquery_conf, event_type_probes, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
+from .conf import build_osquery_conf, event_type_probes, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
 from .forms import DistributedQueryForm
 from .models import enroll, DistributedQuery, DistributedQueryNode

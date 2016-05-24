@@ -1,5 +1,5 @@
 import logging
-from zentral.contrib.santa import probes_lookup_dict
+from zentral.contrib.santa.conf import probes_lookup_dict
 from zentral.core.events import BaseEvent, EventMetadata, EventRequest, register_event_type
 
 logger = logging.getLogger('zentral.contrib.santa.events')

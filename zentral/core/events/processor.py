@@ -1,6 +1,5 @@
 import logging
 from prometheus_client import start_http_server, Counter
-from zentral.core.actions import actions
 
 logger = logging.getLogger('zentral.core.events.processor')
 
@@ -39,16 +38,10 @@ class EventProcessor(object):
             counter_dict['ip'] = request.ip
         for probe in event.get_probes():
             counter_dict['processed'] = 'Y'
-            for action_name, action_config_d in probe.get('actions', {}).items():
-                try:
-                    action = actions[action_name]
-                except KeyError:
-                    logger.error('Unknown action %s', action_name)
-                    counter_dict['error'] = 'Y'
-                    continue
+            for action, action_config_d in probe.get("actions", []):
                 try:
                     action.trigger(event, probe, action_config_d)
                 except:
-                    logger.exception("Could not trigger action %s", action_name)
+                    logger.exception("Could not trigger action %s", action.name)
                     counter_dict['error'] = 'Y'
         self.counter.labels(counter_dict).inc()

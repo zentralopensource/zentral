@@ -1,5 +1,5 @@
 import logging
-from zentral.conf import probes
+from zentral.contrib.osquery.conf import queries_lookup_dict
 from zentral.core.events import BaseEvent, EventMetadata, EventRequest, register_event_type
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
@@ -24,27 +24,22 @@ class OsqueryRequestEvent(OsqueryEvent):
 register_event_type(OsqueryRequestEvent)
 
 
-def _get_probe_and_query_from_payload(payload):
+def _get_probe_and_query_from_payload(self):
     """Fetch the corresponding probe and query dict from the config."""
-    probe, query = None, None
-    try:
-        query_name = payload['name']
-    except KeyError:
-        logger.error("Missing 'name' in event payload")
+    query_probe, query = None, None
+    if not self.payload:
+        logger.error("Missing payload")
     else:
-        probe_name, probe_query_id = query_name.rsplit('_', 1)
         try:
-            probe = probes[probe_name]
+            query_name = self.payload['name']
         except KeyError:
-            logger.error('Unknown probe %s', probe_name)
+            logger.error("Missing 'name' in event payload")
         else:
             try:
-                query = probe['osquery']['schedule'][int(probe_query_id)].copy()
+                query_probe, query = queries_lookup_dict[query_name]
             except KeyError:
                 logger.error('Unknown query %s', query_name)
-            else:
-                query['name'] = query_name
-    return probe, query
+    return query_probe, query
 
 
 class OsqueryResultEvent(OsqueryEvent):

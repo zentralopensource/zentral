@@ -6,7 +6,7 @@ from django.views.generic import TemplateView
 from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.core.probes.views import BaseProbeView
 from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
-from . import event_type_probes
+from .conf import event_type_probes
 from .events import post_munki_events
 from .models import MunkiState
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder

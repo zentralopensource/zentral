@@ -42,7 +42,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'bootstrapform',
-    'base'
+    'base',
+    'zentral.core.probes'
 ]
 
 # add the zentral apps

@@ -8,7 +8,7 @@ from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import stores
 from zentral.utils.api_views import (make_secret,
                                      SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView)
-from . import build_santa_conf, event_type_probes, probes
+from .conf import build_santa_conf, event_type_probes, probes
 from .events import post_santa_events, post_santa_preflight
 from .osx_package.builder import SantaZentralEnrollPkgBuilder
 

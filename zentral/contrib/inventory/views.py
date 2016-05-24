@@ -5,7 +5,7 @@ from django.views import generic
 from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import frontend_store
 from zentral.utils.text import str_to_ascii
-from . import event_type_probes
+from .conf import event_type_probes
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm)
 from .models import MetaBusinessUnit, MachineGroup, MachineSnapshot, MetaMachine, MetaBusinessUnitTag, MachineTag, Tag

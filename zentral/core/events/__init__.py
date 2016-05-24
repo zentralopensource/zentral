@@ -4,9 +4,9 @@ import os.path
 import uuid
 from dateutil import parser
 from django.utils.text import slugify
-from zentral.conf import inventory_filtered_probes
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.exceptions import ImproperlyConfigured
+from zentral.core.probes.conf import all_probes
 from zentral.core.queues import queues
 from .template_loader import TemplateLoader
 
@@ -237,7 +237,7 @@ class BaseEvent(object):
         else:
             mbu_ids = []
             tag_ids = []
-        for probe in inventory_filtered_probes(mbu_ids, tag_ids):
+        for probe in all_probes.inventory_filtered_probes(mbu_ids, tag_ids):
             if not self.extra_probe_checks(probe):
                 continue
             filters = probe.get('filters', {})
