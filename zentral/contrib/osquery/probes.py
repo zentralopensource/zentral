@@ -43,7 +43,8 @@ class OSQueryProbe(BaseProbe):
         # query name starts with probe name.
         probe_links = []
         for store in stores:
-            url = store.get_visu_url({'name__startswith': [self.name]})
+            url = store.get_visu_url("osquery_result",
+                                     {'name__startswith': [self.name]})
             if url:
                 probe_links.append((store.name, url))
         probe_links.sort()
@@ -57,7 +58,8 @@ class OSQueryProbe(BaseProbe):
             osquery_ctx = {}
             query_links = []
             for store in stores:
-                url = store.get_visu_url({'name': [query_name]})
+                url = store.get_visu_url("osquery_result",
+                                         {'name': [query_name]})
                 if url:
                     query_links.append((store.name, url))
             query_links.sort()

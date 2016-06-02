@@ -154,7 +154,7 @@ class EventStore(BaseEventStore):
             if hasattr(connection, 'pool'):
                 connection.pool.close()
 
-    def get_visu_url(self, search_dict):
+    def get_visu_url(self, event_type, search_dict):
         # TODO: doc, better args, ...
         search_atoms = []
         for key, val in search_dict.items():
@@ -162,7 +162,7 @@ class EventStore(BaseEventStore):
             if key.endswith('__startswith'):
                 key = key.replace('__startswith', '')
                 wildcard = "*"
-            atom = " OR ".join("%s:%s%s" % (key, elm, wildcard) for elm in val)
+            atom = " OR ".join("%s.%s:%s%s" % (event_type, key, elm, wildcard) for elm in val)
             search_atoms.append("(%s)" % atom)
         query = " OR ".join(search_atoms)
         if self.kibana_base_url:

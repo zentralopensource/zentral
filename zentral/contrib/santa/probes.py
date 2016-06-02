@@ -41,7 +41,7 @@ class SantaProbe(BaseProbe):
             probe_search_dict['certificate_sha256'] = all_certificate_sha256
         if probe_search_dict:
             for store in stores:
-                url = store.get_visu_url(probe_search_dict)
+                url = store.get_visu_url("santa_event", probe_search_dict)
                 if url:
                     probe_links.append((store.name, url))
         probe_links.sort()
@@ -61,7 +61,7 @@ class SantaProbe(BaseProbe):
                 search_dict = {'file_sha256': [sha256]}
             for store in stores:
                 # match
-                url = store.get_visu_url(search_dict)
+                url = store.get_visu_url("santa_event", search_dict)
                 if url:
                     policy_links.append((store.name, url))
             policy_links.sort()
