@@ -8,23 +8,24 @@ logger = logging.getLogger('zentral.utils.apps')
 
 
 EVENTS_MODULE_NAME = "events"
+PROBES_MODULE_NAME = "probes"
 
 
 class ZentralAppConfig(AppConfig):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.events_module = None
-        self.events = None
         self.events_templates_dir = None
+        self.probes_module = None
 
     def ready(self):
         """
         To run some extra code when Django starts
         """
         self.import_events()
+        self.import_probes()
 
     def import_events(self):
-        self.events = []
         if module_has_submodule(self.module, EVENTS_MODULE_NAME):
             events_module_name = "%s.%s" % (self.name, EVENTS_MODULE_NAME)
             self.events_module = import_module(events_module_name)
@@ -33,3 +34,9 @@ class ZentralAppConfig(AppConfig):
             if os.path.exists(events_templates_dir):
                 self.events_templates_dir = events_templates_dir
                 logger.debug('Found events templates dir "%s"', events_templates_dir)
+
+    def import_probes(self):
+        if module_has_submodule(self.module, PROBES_MODULE_NAME):
+            probes_module_name = "%s.%s" % (self.name, PROBES_MODULE_NAME)
+            self.probes_module = import_module(probes_module_name)
+            logger.debug('Probes module "%s" imported', probes_module_name)

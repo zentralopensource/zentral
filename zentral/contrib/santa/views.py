@@ -4,13 +4,13 @@ from django.http import HttpResponse
 from django.views.generic import TemplateView, View
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MachineSnapshot, MetaBusinessUnit, MetaMachine
-from zentral.core.probes.views import BaseProbeView
-from zentral.core.stores import stores
+from zentral.core.probes.conf import ProbeList
 from zentral.utils.api_views import (make_secret,
                                      SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView)
-from .conf import build_santa_conf, event_type_probes, probes
+from .conf import build_santa_conf
 from .events import post_santa_events, post_santa_preflight
 from .osx_package.builder import SantaZentralEnrollPkgBuilder
+from .probes import SantaProbe
 
 logger = logging.getLogger('zentral.contrib.santa.views')
 
@@ -21,54 +21,9 @@ class ProbesView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super(ProbesView, self).get_context_data(**kwargs)
         context['santa'] = True
-        context['probes'] = probes
-        context['event_type_probes'] = event_type_probes
-        return context
-
-
-class ProbeView(BaseProbeView):
-    template_name = "santa/probe.html"
-    section = "santa"
-
-    def get_extra_context_data(self, probe):
-        context = {}
-        # policies
-        policies = []
-        all_file_sha256 = []
-        all_certificate_sha256 = []
-        for idx, policy in enumerate(probe.get('santa', [])):
-            # policy links. match policy sha256.
-            policy_links = []
-            sha256 = policy['sha256']
-            if policy['rule_type'] == 'CERTIFICATE':
-                search_dict = {'signing_chain.sha256': [sha256]}
-                all_certificate_sha256.append(sha256)
-            else:
-                search_dict = {'file_sha256': [sha256]}
-                all_file_sha256.append(sha256)
-            for store in stores:
-                # match
-                url = store.get_visu_url(search_dict)
-                if url:
-                    policy_links.append((store.name, url))
-            policy_links.sort()
-            policies.append((policy, policy_links))
-        context['santa_policies'] = policies
-
-        # probe links. match all sha256 in the probe.
-        probe_links = []
-        probe_search_dict = {}
-        if all_file_sha256:
-            probe_search_dict['file_sha256'] = all_file_sha256
-        if all_certificate_sha256:
-            probe_search_dict['all_certificate_sha256'] = all_certificate_sha256
-        if probe_search_dict:
-            for store in stores:
-                url = store.get_visu_url(probe_search_dict)
-                if url:
-                    probe_links.append((store.name, url))
-        probe_links.sort()
-        context['probe_links'] = probe_links
+        pl = ProbeList()  # not all_probes to avoid cache inconsistency
+        context['probes'] = pl.class_filter(SantaProbe)
+        context['event_type_probes'] = pl.module_prefix_filter("santa").exclude_class(SantaProbe)
         return context
 
 

@@ -1,5 +1,6 @@
 import logging
 from zentral.contrib.santa.conf import probes_lookup_dict
+from zentral.contrib.santa.probes import SantaProbe
 from zentral.core.events import BaseEvent, EventMetadata, EventRequest, register_event_type
 
 logger = logging.getLogger('zentral.contrib.santa.events')
@@ -22,9 +23,9 @@ class SantaEventEvent(SantaBaseEvent):
 
     def __init__(self, *args, **kwargs):
         super(SantaBaseEvent, self).__init__(*args, **kwargs)
-        self.rule_probes = self._get_rule_probes()
+        self._set_rule_probes()
 
-    def _get_rule_probes(self):
+    def _set_rule_probes(self):
         """Find the probes that could have triggered the event."""
         # TODO: the whole zentral contrib app works only with sha256
         # TODO: we could do a better job and try to match the policy
@@ -41,15 +42,9 @@ class SantaEventEvent(SantaBaseEvent):
                 sha256_l.append(cert_sha256)
 
         # We look for the probes.
-        found_probes = []
+        self.rule_probes = []
         for sha256 in sha256_l:
-            for probe in probes_lookup_dict.get(sha256, []):
-                found_probes.append(probe)
-        if found_probes:
-            found_probes_count = len(found_probes)
-            if found_probes_count > 1:
-                logger.warning("Found %d matching santa probes for sha256 %s." % (found_probes_count, sha256))
-        return found_probes
+            self.rule_probes.extend(probes_lookup_dict.get(sha256, []))
 
     def _get_extra_context(self):
         ctx = {}
@@ -65,10 +60,7 @@ class SantaEventEvent(SantaBaseEvent):
 
     def extra_probe_checks(self, probe):
         """Exclude santa probes if not connected to event."""
-        if "santa" in probe and probe not in self.rule_probes:
-            return False
-        else:
-            return True
+        return not isinstance(probe, SantaProbe) or probe in self.rule_probes
 
 register_event_type(SantaEventEvent)
 

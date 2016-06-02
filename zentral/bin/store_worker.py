@@ -6,53 +6,28 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings')
 import django
 django.setup()
 import logging
-import time
 from multiprocessing import Process
 from zentral.core.queues import queues
-from zentral.core.queues.exceptions import TemporaryQueueError
 from zentral.core.stores import stores
 
 logger = logging.getLogger('zentral.bin.store_worker')
 
 
-def store_events(store_name, worker_id):
+def store_events(worker_id, store_name):
     for store in stores:
         if store.name == store_name:
             break
     else:
         return
-    while True:
-        while True:
-            try:
-                event_id, event = queues.get_store_event_job(store.name, worker_id)
-            except TemporaryQueueError:
-                logger.exception('Could not get new store job')
-                time.sleep(5)
-            else:
-                break
-        while True:
-            try:
-                store.store(event)
-            except:
-                logger.exception('Could not store event in store %s\n%s',
-                                 store_name, event.serialize())
-                time.sleep(5)
-            else:
-                break
-        while True:
-            try:
-                queues.ack_store_event_job(store.name, worker_id, event_id)
-            except TemporaryQueueError:
-                logger.exception('Could not hack store job')
-                time.sleep(5)
-            else:
-                break
+    store_worker = queues.get_store_worker(store)
+    store_worker.run()
+
 
 if __name__ == '__main__':
     p_l = []
     for store in stores:
         store.wait_and_configure()
-        p = Process(target=store_events, args=(store.name, 0))
+        p = Process(target=store_events, args=(0, store.name))
         p.daemon = 1
         p.start()
         p_l.append(p)

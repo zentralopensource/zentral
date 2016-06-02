@@ -2,10 +2,9 @@ from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views import generic
-from zentral.core.probes.views import BaseProbeView
 from zentral.core.stores import frontend_store
 from zentral.utils.text import str_to_ascii
-from .conf import event_type_probes
+from zentral.core.probes.conf import ProbeList
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm)
 from .models import MetaBusinessUnit, MachineGroup, MachineSnapshot, MetaMachine, MetaBusinessUnitTag, MachineTag, Tag
@@ -393,12 +392,8 @@ class ProbesView(generic.TemplateView):
     def get_context_data(self, **kwargs):
         context = super(ProbesView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['event_type_probes'] = event_type_probes
+        context['event_type_probes'] = ProbeList().module_prefix_filter("inventory")
         return context
-
-
-class ProbeView(BaseProbeView):
-    section = "inventory"
 
 
 class TagsView(generic.ListView):

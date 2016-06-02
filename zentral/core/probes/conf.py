@@ -1,8 +1,8 @@
 import weakref
-from .models import Probe
+from .models import ProbeSource
 
 
-class ProbesView(object):
+class ProbeView(object):
     def __init__(self, parent=None):
         self.parent = parent
         self._probes = None
@@ -12,7 +12,7 @@ class ProbesView(object):
 
     def iter_parent_probes(self):
         if self.parent is None:
-            for p in Probe.objects.active():
+            for p in ProbeSource.objects.active():
                 yield p.load()
         else:
             yield from self.parent
@@ -26,7 +26,7 @@ class ProbesView(object):
         return len(self._probes)
 
 
-class ProbesDict(ProbesView):
+class ProbesDict(ProbeView):
     def __init__(self, parent=None, item_func=None, unique_key=True):
         super(ProbesDict, self).__init__(parent)
         if item_func is None:
@@ -38,8 +38,8 @@ class ProbesDict(ProbesView):
     def _load(self):
         if self._probes is None:
             self._probes = {}
-            for probe_d in self.iter_parent_probes():
-                for key, val in self.item_func(probe_d):
+            for probe in self.iter_parent_probes():
+                for key, val in self.item_func(probe):
                     if self.unique_key:
                         self._probes[key] = val
                     else:
@@ -50,23 +50,23 @@ class ProbesDict(ProbesView):
         return self._probes[key]
 
 
-class ProbesList(ProbesView):
+class ProbeList(ProbeView):
     def __init__(self, parent=None, filter_func=None):
-        super(ProbesList, self).__init__(parent)
+        super(ProbeList, self).__init__(parent)
         self.filter_func = filter_func
         self._children = weakref.WeakSet()
 
     def clear(self):
-        super(ProbesList, self).clear()
+        super(ProbeList, self).clear()
         for child in self._children:
             child.clear()
 
     def _load(self):
         if self._probes is None:
             self._probes = []
-            for probe_d in self.iter_parent_probes():
-                if self.filter_func is None or self.filter_func(probe_d):
-                    self._probes.append(probe_d)
+            for probe in self.iter_parent_probes():
+                if self.filter_func is None or self.filter_func(probe):
+                    self._probes.append(probe)
 
     def filter(self, filter_func):
         child = self.__class__(self, filter_func)
@@ -78,15 +78,21 @@ class ProbesList(ProbesView):
         self._children.add(child)
         return child
 
+    def class_filter(self, probe_class):
+        def _filter(probe):
+            return isinstance(probe, probe_class)
+        return self.filter(_filter)
+
+    def exclude_class(self, probe_class):
+        def _filter(probe):
+            return not isinstance(probe, probe_class)
+        return self.filter(_filter)
+
     def inventory_filtered_probes(self, mbu_ids, tag_ids):
         def _filter(probe):
-            try:
-                inventory_filters = probe['filters']['inventory']
-            except KeyError:
+            if not probe.inventory_filters:
                 return True
-            if not inventory_filters:
-                return True
-            for inventory_filter in inventory_filters:
+            for inventory_filter in probe.inventory_filters:
                 f_tag_ids = set(int(tag_id)
                                 for tag_id in inventory_filter.get('tags', []))
                 if f_tag_ids and not f_tag_ids & tag_ids:
@@ -106,14 +112,13 @@ class ProbesList(ProbesView):
         return self.filter(_filter)
 
     def machine_filtered_probes(self, meta_machine):
-        mbu_ids = [mbu.id for mbu in meta_machine.meta_business_units()]
-        tag_ids = [tag.id for tag in meta_machine.tags()]
+        mbu_ids = set(mbu.id for mbu in meta_machine.meta_business_units())
+        tag_ids = set(tag.id for tag in meta_machine.tags())
         return self.inventory_filtered_probes(mbu_ids, tag_ids)
 
     def module_prefix_filter(self, module_prefix):
         def _filter(probe):
-            metadata_filters = probe.get('filters', {}).get('metadata', [])
-            for metadata_filter in metadata_filters:
+            for metadata_filter in probe.metadata_filters:
                 # TODO TAGS
                 event_type_filter_val = metadata_filter.get("type", None)
                 if event_type_filter_val is None or \
@@ -122,5 +127,4 @@ class ProbesList(ProbesView):
             return False
         return self.filter(_filter)
 
-all_probes = ProbesList()
-all_probes_dict = all_probes.dict()
+all_probes = ProbeList()

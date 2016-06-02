@@ -26,7 +26,6 @@ urlpatterns = [
         name='remove_machine_tag'),
     url(r'^machine/(?P<serial_number>\S+)/$', views.MachineView.as_view(), name='machine'),
     url(r'^probes/$', views.ProbesView.as_view(), name='probes'),
-    url(r'^probes/(?P<probe_key>[\S ]+)/$', views.ProbeView.as_view(), name='probe'),
     url(r'^tags/$', views.TagsView.as_view(), name='tags'),
     url(r'^tags/(?P<pk>\d+)/update/$', views.UpdateTagView.as_view(), name='update_tag'),
 ]

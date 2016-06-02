@@ -1,5 +1,6 @@
 import logging
 from zentral.contrib.osquery.conf import queries_lookup_dict
+from zentral.contrib.osquery.probes import OSQueryProbe
 from zentral.core.events import BaseEvent, EventMetadata, EventRequest, register_event_type
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
@@ -24,30 +25,28 @@ class OsqueryRequestEvent(OsqueryEvent):
 register_event_type(OsqueryRequestEvent)
 
 
-def _get_probe_and_query_from_payload(self):
-    """Fetch the corresponding probe and query dict from the config."""
-    query_probe, query = None, None
-    if not self.payload:
-        logger.error("Missing payload")
-    else:
-        try:
-            query_name = self.payload['name']
-        except KeyError:
-            logger.error("Missing 'name' in event payload")
-        else:
-            try:
-                query_probe, query = queries_lookup_dict[query_name]
-            except KeyError:
-                logger.error('Unknown query %s', query_name)
-    return query_probe, query
-
-
 class OsqueryResultEvent(OsqueryEvent):
     event_type = "osquery_result"
 
     def __init__(self, *args, **kwargs):
         super(OsqueryResultEvent, self).__init__(*args, **kwargs)
-        self.query_probe, self.query = _get_probe_and_query_from_payload(self.payload)
+        self._set_probe_and_query_from_payload()
+
+    def _set_probe_and_query_from_payload(self):
+        """Fetch the corresponding probe and query dict from the config."""
+        self.query_probe, self.query = None, None
+        if not self.payload:
+            logger.error("Missing payload")
+        else:
+            try:
+                query_name = self.payload['name']
+            except KeyError:
+                logger.error("Missing 'name' in event payload")
+            else:
+                try:
+                    self.query_probe, self.query = queries_lookup_dict[query_name]
+                except KeyError:
+                    logger.error('Unknown query %s', query_name)
 
     def _get_extra_context(self):
         ctx = {}
@@ -63,10 +62,7 @@ class OsqueryResultEvent(OsqueryEvent):
 
     def extra_probe_checks(self, probe):
         """Exclude osquery probes if not connected to event."""
-        if "osquery" in probe and probe != self.query_probe:
-            return False
-        else:
-            return True
+        return not isinstance(probe, OSQueryProbe) or probe == self.query_probe
 
 register_event_type(OsqueryResultEvent)
 
@@ -80,53 +76,18 @@ register_event_type(OsqueryStatusEvent)
 
 # Utility functions used by the osquery enrollment / log API
 
-
-def _payloads_from_osquery_status(data):
-    for payload in data['data']:
-        yield payload
-
-
-def _payloads_from_osquery_result(data):
-    for osquery_ev in data['data']:
-        payload = osquery_ev.copy()
-        snapshot = payload.pop('snapshot', None)
-        if snapshot:
-            # We keep all the tuples together in the same event
-            # but we transform the tuple list in a dictionary
-            probe, query_conf = _get_probe_and_query_from_payload(payload)
-            conf_key = None
-            if query_conf:
-                conf_key = query_conf.get('key', None)
-            snap_d = {}
-            for index, columns in enumerate(snapshot):
-                if conf_key:
-                    key = "|".join([columns[k] for k in conf_key])
-                else:
-                    key = index
-                if key in snap_d:
-                    logger.error("Duplicated key %s in query %s", conf_key, query_conf)
-                else:
-                    snap_d[key] = columns
-            payload[payload['name']] = snap_d
-            yield payload
-        else:
-            yield payload
-
-
 def post_events_from_osquery_log(msn, user_agent, ip, data):
     if data["log_type"] == "status":
         event_cls = OsqueryStatusEvent
-        payloads = _payloads_from_osquery_status(data)
     elif data["log_type"] == "result":
         event_cls = OsqueryResultEvent
-        payloads = _payloads_from_osquery_result(data)
     else:
         raise NotImplementedError("Unknown log type.")
     metadata = EventMetadata(event_cls.event_type,
                              machine_serial_number=msn,
                              request=EventRequest(user_agent, ip),
                              tags=['osquery'])
-    for index, payload in enumerate(payloads):
+    for index, payload in enumerate(data['data']):
         metadata.index = index
         event = event_cls(metadata, payload)
         event.post()

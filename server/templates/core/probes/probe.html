@@ -4,32 +4,43 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  {% for url, anchor_text in breadcrumbs %}
-  {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a>
-  {% else %}
-  <li class="active">{{ anchor_text }}</li>
-  {% endif %}
-  {% endfor %}
+  <li><a href="{% url 'probes:index' %}">Probes</a>
+  <li class="active">{{ probe.name }}</li>
 </ol>
 
-<h2>Probe <i>{{ probe.name }}</i></h2>
+<h2>
+  Probe <i>{{ probe.name }}</i>
+</h2>
 
-{% if probe_links %}
+<p>
+  {% if probe.status == 'ACTIVE' %}
+  <span class="label label-info">Active</span>
+  {% else %}
+  <span class="label label-danger">Inactive</span>
+  {% endif %}
+</p>
+
+{% if probe.description %}
+<p>
+  {{ probe.description|linebreaksbr }}
+</p>
+{% endif %}
+
 <div class="btn-group" role="group">
+  <a class="btn btn-default" href="{% url 'probes:update' probe.pk %}">Update</a>
+  <a class="btn btn-default" href="{% url 'probes:delete' probe.pk %}">Delete</a>
   {% for store_name, store_url in probe_links %}
   <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
   {% endfor %}
 </div>
-{% endif %}
 
-{% if probe.filters %}
+{% if probe.inventory_filters or probe.metadata_filters or probe.payload_filters %}
 <h3>Filters</h3>
-{% if probe.filters.inventory %}
+{% if probe.inventory_filters %}
 <h4>Inventory</h4>
 <table class="table">
   <tbody>
-    {% for metadata_filter in probe.filters.inventory %}
+    {% for metadata_filter in probe.inventory_filters %}
     <tr>
       <td>{{ metadata_filter|pythonprettyprint }}</td>
     </tr>
@@ -38,11 +49,11 @@
 </table>
 {% endif %}
 
-{% if probe.filters.metadata %}
+{% if probe.metadata_filters %}
 <h4>Metadata</h4>
 <table class="table">
   <tbody>
-    {% for metadata_filter in probe.filters.metadata %}
+    {% for metadata_filter in probe.metadata_filters %}
     <tr>
       <td>{{ metadata_filter|pythonprettyprint }}</td>
     </tr>
@@ -51,11 +62,11 @@
 </table>
 {% endif %}
 
-{% if probe.filters.payload %}
+{% if probe.payload_filters %}
 <h4>Payload</h4>
 <table class="table">
   <tbody>
-    {% for payload_filter in probe.filters.payload %}
+    {% for payload_filter in probe.payload_filters %}
     <tr>
       <td>{{ payload_filter|pythonprettyprint }}</td>
     </tr>
@@ -75,10 +86,10 @@
     <th>Configuration</th>
   </thead>
   <tbody>
-    {% for name, configuration in probe.actions.items %}
+    {% for action, action_probe_config in probe.actions %}
     <tr>
-      <td>{{ name }}</td>
-      <td>{{ configuration|pythonprettyprint }}</td>
+      <td>{{ action.name }}</td>
+      <td>{{ action_probe_config|pythonprettyprint }}</td>
     </tr>
     {% endfor %}
   </tbody>

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% load probe_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Probes</li>
+</ol>
+
+<h2>{{ object_list|length }} Probe{{ object_list|length|pluralize }}</h2>
+
+{% probe_list object_list %}
+
+{% endblock %}

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load probe_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -8,16 +9,5 @@
 
 <h2>{{ event_type_probes|length }} Munki event probe{{ event_type_probes|length|pluralize }}</h2>
 <p class="small text-muted">Probes matching the munki events</p>
-<table class="table">
-  <thead>
-    <th>Name</th>
-  </thead>
-  <tbody>
-    {% for k, probe in event_type_probes %}
-    <tr>
-      <td><a href="{% url 'munki:probe' k %}">{{ probe.name }}</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% probe_list event_type_probes %}
 {% endblock %}

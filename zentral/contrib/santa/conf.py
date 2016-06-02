@@ -1,18 +1,13 @@
-from zentral.core.probes.conf import all_probes
+from zentral.core.probes.conf import ProbeList, all_probes
+from .probes import SantaProbe
 
 
-event_type_probes = (all_probes
-                     .module_prefix_filter("santa")
-                     .filter(lambda p: "santa" not in p))
+def iter_santa_policies(probe):
+    for santa_p in probe.policies:
+        yield (santa_p["sha256"], probe)
 
-probes = all_probes.filter(lambda p: "santa" in p)
-
-
-def iter_santa_rules(probe_d):
-    for santa_r in probe_d.get("santa", []):
-        yield (santa_r["sha256"], probe_d)
-
-probes_lookup_dict = probes.dict(iter_santa_rules, unique_key=False)
+probes_lookup_dict = all_probes.class_filter(SantaProbe).dict(iter_santa_policies,
+                                                              unique_key=False)
 
 
 def build_santa_conf(machine):
@@ -24,11 +19,8 @@ def build_santa_conf(machine):
     all the configured probes for that client.
     """
     rules = []
-    for probe_d in probes.machine_probes(machine):
+    santa_probes = ProbeList().class_filter(SantaProbe)  # ProbeList to avoid cache inconsistency
+    for probe_d in santa_probes.machine_probes(machine):
         santa_l = probe_d['santa']
         rules.extend(santa_l)
     return {'rules': rules}
-
-
-# django
-default_app_config = "zentral.contrib.santa.apps.ZentralSantaAppConfig"

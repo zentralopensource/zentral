@@ -38,7 +38,7 @@ class EventProcessor(object):
             counter_dict['ip'] = request.ip
         for probe in event.get_probes():
             counter_dict['processed'] = 'Y'
-            for action, action_config_d in probe.get("actions", []):
+            for action, action_config_d in probe.actions:
                 try:
                     action.trigger(event, probe, action_config_d)
                 except:

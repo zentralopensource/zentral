@@ -29,6 +29,9 @@ user_templates_dir = os.path.join(conf_dir, 'templates')
 
 settings = load_config_file(find_conf_file(conf_dir, "base"))
 
+# add default apps
+settings.setdefault('apps', {})['zentral.core.probes'] = {}
+
 
 def load_contact_groups(conf_dir):
     # TODO : optimize !!!

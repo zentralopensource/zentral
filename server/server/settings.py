@@ -43,7 +43,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'bootstrapform',
     'base',
-    'zentral.core.probes'
 ]
 
 # add the zentral apps

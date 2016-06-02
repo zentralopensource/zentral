@@ -8,7 +8,6 @@ urlpatterns = [
     url(r'^enrollment/debugging/$', views.EnrollmentDebuggingView.as_view(), name='enrollment_debugging'),
     url(r'^installer_package/$', views.InstallerPackageView.as_view(), name='installer_package'),
     url(r'^probes/$', views.ProbesView.as_view(), name='probes'),
-    url(r'^probes/(?P<probe_key>[\S ]+)/$', views.ProbeView.as_view(), name='probe'),
     # API
     url(r'^preflight/(?P<machine_id>\S+)$', csrf_exempt(views.PreflightView.as_view()), name='preflight'),
     url(r'^ruledownload/(?P<machine_id>\S+)$', csrf_exempt(views.RuleDownloadView.as_view()), name='ruledownload'),

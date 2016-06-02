@@ -8,16 +8,15 @@ from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MachineSnapshot, MetaBusinessUnit, MetaMachine
-from zentral.core.probes.views import BaseProbeView
-from zentral.core.stores import stores
+from zentral.core.probes.conf import ProbeList
 from zentral.utils.api_views import (JSONPostAPIView, make_secret, verify_secret, APIAuthError,
                                      BaseEnrollmentView, BaseInstallerPackageView)
-from zentral.utils.sql import format_sql
-from .conf import build_osquery_conf, event_type_probes, probes, DEFAULT_ZENTRAL_INVENTORY_QUERY
+from .conf import build_osquery_conf, DEFAULT_ZENTRAL_INVENTORY_QUERY
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
 from .forms import DistributedQueryForm
 from .models import enroll, DistributedQuery, DistributedQueryNode
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
+from .probes import OSQueryProbe
 
 logger = logging.getLogger('zentral.contrib.osquery.views')
 
@@ -28,8 +27,9 @@ class ProbesView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super(ProbesView, self).get_context_data(**kwargs)
         context['osquery'] = True
-        context['probes'] = probes
-        context['event_type_probes'] = event_type_probes
+        pl = ProbeList()  # not all_probes to avoid cache inconsistency
+        context['probes'] = pl.class_filter(OSQueryProbe)
+        context['event_type_probes'] = pl.module_prefix_filter("osquery").exclude_class(OSQueryProbe)
         return context
 
 
@@ -64,43 +64,6 @@ curl -XPOST -k -d "$node_key_json"  %(tls_hostname)s%(config_path)s | jq ."""
 class InstallerPackageView(BaseInstallerPackageView):
     builder = OsqueryZentralEnrollPkgBuilder
     module = "zentral.contrib.osquery"
-
-
-class ProbeView(BaseProbeView):
-    template_name = "osquery/probe.html"
-    section = "osquery"
-
-    def get_extra_context_data(self, probe):
-        # queries
-        schedule = []
-        for idx, osquery in enumerate(probe.get('osquery', {}).get('schedule', [])):
-            # query links. match query_name.
-            osquery_ctx = {}
-            query_links = []
-            query_name = "{}_{}".format(probe['name'], idx)
-            for store in stores:
-                url = store.get_visu_url({'name': [query_name]})
-                if url:
-                    query_links.append((store.name, url))
-            query_links.sort()
-            osquery_ctx['links'] = query_links
-            osquery_ctx['html_query'] = format_sql(osquery['query'])
-            osquery_ctx['interval'] = osquery['interval']
-            osquery_ctx['value'] = osquery.get('value', None)
-            osquery_ctx['description'] = osquery.get('description', None)
-            schedule.append(osquery_ctx)
-
-        # probe links. query name starts with probe name.
-        probe_links = []
-        for store in stores:
-            url = store.get_visu_url({'name__startswith': [probe['name']]})
-            if url:
-                probe_links.append((store.name, url))
-        probe_links.sort()
-
-        return {'osquery_schedule': schedule,
-                'osquery_file_paths': probe.get('osquery', {}).get('file_paths', {}),
-                'probe_links': probe_links}
 
 
 class DistributedIndexView(ListView):

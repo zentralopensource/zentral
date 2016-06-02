@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 import yaml
 from zentral.conf.utils import load_config_file
 from zentral.core.exceptions import ImproperlyConfigured
-from zentral.core.probes.models import Probe
+from zentral.core.probes.models import ProbeSource
 
 logger = logging.getLogger("zentral.core.probes.management."
                            "commands.import_probes")
@@ -24,12 +24,16 @@ class Command(BaseCommand):
             except ImproperlyConfigured:
                 logger.error("Probe %s not imported. Syntax Error ?",
                              probe_basename)
+                continue
             name = loaded_probe.pop('name', probe_basename)
+            description = loaded_probe.pop('description', None)
             defaults = {"body": yaml.safe_dump(loaded_probe,
                                                default_flow_style=False,
                                                default_style='')}
-            probe, created = Probe.objects.get_or_create(name=name,
-                                                         defaults=defaults)
+            if description:
+                defaults['description'] = description
+            _, created = ProbeSource.objects.get_or_create(name=name,
+                                                           defaults=defaults)
             if not created:
                 logger.warning("Probe %s / %s not imported. Already in DB ?",
                                name, probe_basename)

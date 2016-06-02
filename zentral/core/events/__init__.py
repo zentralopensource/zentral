@@ -232,22 +232,18 @@ class BaseEvent(object):
         metadata = self.metadata.serialize()
         if 'machine' in metadata:
             machine_d = metadata['machine']
-            mbu_ids = [int(mbu['id']) for mbu in machine_d.get('meta_business_units', [])]
-            tag_ids = [int(tag['id']) for tag in machine_d.get('tags', [])]
+            mbu_ids = {int(mbu['id']) for mbu in machine_d.get('meta_business_units', [])}
+            tag_ids = {int(tag['id']) for tag in machine_d.get('tags', [])}
         else:
-            mbu_ids = []
-            tag_ids = []
+            mbu_ids = set([])
+            tag_ids = set([])
         for probe in all_probes.inventory_filtered_probes(mbu_ids, tag_ids):
             if not self.extra_probe_checks(probe):
                 continue
-            filters = probe.get('filters', {})
-            if filters:
-                if not _test_pass_filters(filters.get('metadata', None),
-                                          metadata):
-                    continue
-                if not _test_pass_filters(filters.get('payload', None),
-                                          self.payload):
-                    continue
+            if not _test_pass_filters(probe.metadata_filters, metadata):
+                continue
+            if not _test_pass_filters(probe.payload_filters, self.payload):
+                continue
             l.append(probe)
         return l
 

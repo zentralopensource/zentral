@@ -1,9 +1,12 @@
 import colorsys
 import logging
+import re
 from django.contrib.postgres.fields import JSONField
+from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
 from django.db import connection, models
 from django.db.models import Count, Q
+from django.utils.translation import ugettext_lazy as _
 from zentral.conf import settings
 from zentral.utils.mt_models import prepare_commit_tree, AbstractMTObject, MTObjectManager
 
@@ -355,10 +358,20 @@ class TagManager(models.Manager):
         return self.filter(Q(meta_business_unit=meta_business_unit) | Q(meta_business_unit__isnull=True))
 
 
+def validate_color(value):
+    if not re.match(r'^[0-9a-fA-F]{6}$', value):
+        raise ValidationError(
+            _('%(value)s is not a valid color.'),
+            params={'value': value},
+        )
+
+
 class Tag(models.Model):
     meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True)
     name = models.TextField()
-    color = models.CharField(max_length=6, default="0079bf")  # blue from UpdateTagView
+    color = models.CharField(max_length=6,
+                             default="0079bf",  # blue from UpdateTagView
+                             validators=[validate_color])
 
     objects = TagManager()
 
@@ -369,13 +382,17 @@ class Tag(models.Model):
             return self.name
 
     def text_color(self):
-        hls = colorsys.rgb_to_hls(float(int(self.color[0:2], 16))/255.0,
-                                  float(int(self.color[2:4], 16))/255.0,
-                                  float(int(self.color[4:6], 16))/255.0,)
-        if hls[1] > .7:
+        try:
+            hls = colorsys.rgb_to_hls(float(int(self.color[0:2], 16))/255.0,
+                                      float(int(self.color[2:4], 16))/255.0,
+                                      float(int(self.color[4:6], 16))/255.0,)
+        except ValueError:
             return "000"
         else:
-            return "FFF"
+            if hls[1] > .7:
+                return "000"
+            else:
+                return "FFF"
 
     def need_border(self):
         return self.color.upper() in ['FFFFFF', 'FFF']

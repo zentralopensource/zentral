@@ -8,10 +8,11 @@ django-bootstrap-form
 fabric
 gunicorn
 python-dateutil
-redis
 prometheus_client
 jinja2
 elasticsearch
 pyyaml
 sqlparse
 pygments
+redis
+kombu

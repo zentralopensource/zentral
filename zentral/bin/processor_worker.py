@@ -12,11 +12,10 @@ from zentral.core.queues import queues
 
 
 def process_events(worker_id, prometheus_server_base_port):
-    processor = EventProcessor(worker_id, prometheus_server_base_port)
-    while True:
-        event_id, event = queues.get_process_event_job(worker_id)
-        processor.process(event)
-        queues.ack_process_event_job(worker_id, event_id)
+    event_processor = EventProcessor(worker_id,
+                                     prometheus_server_base_port)
+    processor_worker = queues.get_processor_worker(event_processor)
+    processor_worker.run()
 
 if __name__ == '__main__':
     pw_settings = settings.get('processor_workers', {})

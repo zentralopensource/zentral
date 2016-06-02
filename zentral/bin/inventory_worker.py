@@ -12,7 +12,6 @@ import uuid
 from zentral.contrib.inventory.clients import clients, InventoryError
 from zentral.contrib.inventory.events import post_inventory_events
 from zentral.contrib.inventory.utils import push_inventory_metrics
-from zentral.core.queues.exceptions import TemporaryQueueError
 
 logger = logging.getLogger('zentral.bin.inventory_worker')
 
@@ -31,10 +30,9 @@ def sync_inventory(client_name, worker_id):
             event_index = 0
             for machine_snapshot, events in client.sync():
                 if machine_snapshot.machine and machine_snapshot.machine.serial_number:
-                    try:
-                        event_index = post_inventory_events(machine_snapshot.machine.serial_number, events, pk, event_index)
-                    except TemporaryQueueError:
-                        logger.exception('Could not post inventory event')
+                    event_index = post_inventory_events(machine_snapshot.machine.serial_number,
+                                                        events, pk, event_index)
+                    logger.exception('Could not post inventory event')
                 else:
                     logger.error('Machine w/o serial number')
         except InventoryError:
