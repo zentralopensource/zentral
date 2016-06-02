@@ -20,7 +20,6 @@ def build_santa_conf(machine):
     """
     rules = []
     santa_probes = ProbeList().class_filter(SantaProbe)  # ProbeList to avoid cache inconsistency
-    for probe_d in santa_probes.machine_filtered(machine):
-        santa_l = probe_d['santa']
-        rules.extend(santa_l)
+    for probe in santa_probes.machine_filtered(machine):
+        rules.extend(probe.policies)
     return {'rules': rules}
