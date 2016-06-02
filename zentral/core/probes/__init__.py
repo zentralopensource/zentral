@@ -31,23 +31,28 @@ class BaseProbe(object):
                 err_list.append("name key in probe body")
             if "description" in self.probe_d:
                 err_list.append("description key in probe body")
-            # TODO import loop !!!
-            from zentral.core.actions import actions
-            # TODO import loop !!!
-            for action_name, action_config_d in self.probe_d.pop("actions", {}).items():
-                try:
-                    self.actions.append((actions[action_name], action_config_d))
-                except KeyError:
-                    err_list.append("unknown action %s" % action_name)
+            actions = self.probe_d.pop("actions", {})
+            if not isinstance(actions, dict):
+                err_list.append("actions section is not a hash/dict")
+            else:
+                # TODO import loop !!!
+                from zentral.core.actions import actions as available_actions
+                for action_name, action_config_d in actions.items():
+                    try:
+                        self.actions.append((available_actions[action_name],
+                                             action_config_d))
+                    except KeyError:
+                        err_list.append("unknown action %s" % action_name)
             filters = self.probe_d.get("filters", {})
             if not isinstance(filters, dict):
                 err_list.append("filters section is not a hash/dict")
-            for subfilter_section_name in ("inventory", "metadata", "payload"):
-                subfilter = filters.get(subfilter_section_name, [])
-                if not isinstance(subfilter, list):
-                    err_list.append("{} filter is not a list".format(subfilter_section_name))
-                else:
-                    setattr(self, "{}_filters".format(subfilter_section_name), subfilter)
+            else:
+                for subfilter_section_name in ("inventory", "metadata", "payload"):
+                    subfilter = filters.get(subfilter_section_name, [])
+                    if not isinstance(subfilter, list):
+                        err_list.append("{} filter is not a list".format(subfilter_section_name))
+                    else:
+                        setattr(self, "{}_filters".format(subfilter_section_name), subfilter)
         if not err_list:
             err_list = self.check()
         return err_list
