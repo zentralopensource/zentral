@@ -111,7 +111,7 @@ class ProbeList(ProbeView):
             return False
         return self.filter(_filter)
 
-    def machine_filtered_probes(self, meta_machine):
+    def machine_filtered(self, meta_machine):
         mbu_ids = set(mbu.id for mbu in meta_machine.meta_business_units())
         tag_ids = set(tag.id for tag in meta_machine.tags())
         return self.inventory_filtered_probes(mbu_ids, tag_ids)
