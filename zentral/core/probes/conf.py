@@ -30,7 +30,7 @@ class ProbesDict(ProbeView):
     def __init__(self, parent=None, item_func=None, unique_key=True):
         super(ProbesDict, self).__init__(parent)
         if item_func is None:
-            self.item_func = lambda p: [(p['name'], p)]
+            self.item_func = lambda p: [(p.name, p)]
         else:
             self.item_func = item_func
         self.unique_key = unique_key
@@ -48,6 +48,10 @@ class ProbesDict(ProbeView):
     def __getitem__(self, key):
         self._load()
         return self._probes[key]
+
+    def get(self, *args, **kwargs):
+        self._load()
+        return self._probes.get(*args, **kwargs)
 
 
 class ProbeList(ProbeView):
