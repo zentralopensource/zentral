@@ -43,6 +43,9 @@ class BaseProbe(object):
                                              action_config_d))
                     except KeyError:
                         err_list.append("unknown action %s" % action_name)
+                    if action_config_d is not None and not isinstance(action_config_d, dict):
+                        print(action_config_d)
+                        err_list.append("action {} configuration is not a dict".format(action_name))
             filters = self.probe_d.get("filters", {})
             if not isinstance(filters, dict):
                 err_list.append("filters section is not a hash/dict")
@@ -62,9 +65,9 @@ class BaseProbe(object):
                             else:
                                 for key, val in filter_item.items():
                                     if isinstance(val, list):
-                                        if not all(isinstance(s, str) for s in val):
+                                        if not all(isinstance(s, (int, str)) for s in val):
                                             err_list.append(
-                                                "{} test in {} filter section is not a list of str".format(
+                                                "{} test in {} filter section is not a list of str or int".format(
                                                     key, filter_section_name
                                                 )
                                             )
