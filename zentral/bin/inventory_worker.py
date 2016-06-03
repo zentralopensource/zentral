@@ -32,7 +32,6 @@ def sync_inventory(client_name, worker_id):
                 if machine_snapshot.machine and machine_snapshot.machine.serial_number:
                     event_index = post_inventory_events(machine_snapshot.machine.serial_number,
                                                         events, pk, event_index)
-                    logger.exception('Could not post inventory event')
                 else:
                     logger.error('Machine w/o serial number')
         except InventoryError:
