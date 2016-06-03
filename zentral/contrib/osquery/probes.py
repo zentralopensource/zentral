@@ -37,7 +37,7 @@ class OSQueryProbe(BaseProbe):
 
     def iter_schedule_queries(self):
         for idx, osquery_query in enumerate(self.schedule):
-            yield ('%s_%d' % (self.name, idx), osquery_query)
+            yield ('%s_%d' % (self.slug, idx), osquery_query)
 
     def get_probe_links(self):
         # query name starts with probe name.
