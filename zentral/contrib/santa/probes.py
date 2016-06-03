@@ -20,7 +20,7 @@ class SantaProbe(BaseProbe):
             # TODO: tags
             for metadata_filter in self.metadata_filters:
                 if metadata_filter.setdefault('type', "santa_event") != "santa_event":
-                    err_list.append("Wrong metadata filter")
+                    err_list.append("Wrong metadata type filter for probe with santa section")
                     return err_list
 
     def get_probe_links(self):

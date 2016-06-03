@@ -32,7 +32,7 @@ class OSQueryProbe(BaseProbe):
             # TODO: tags
             for metadata_filter in self.metadata_filters:
                 if metadata_filter.setdefault('type', "osquery_result") != "osquery_result":
-                    err_list.append("Wrong metadata filter")
+                    err_list.append("Wrong metadata type filter for probe with osquery section")
                     return err_list
 
     def iter_schedule_queries(self):

@@ -47,12 +47,34 @@ class BaseProbe(object):
             if not isinstance(filters, dict):
                 err_list.append("filters section is not a hash/dict")
             else:
-                for subfilter_section_name in ("inventory", "metadata", "payload"):
-                    subfilter = filters.get(subfilter_section_name, [])
-                    if not isinstance(subfilter, list):
-                        err_list.append("{} filter is not a list".format(subfilter_section_name))
+                for filter_section_name in ("inventory", "metadata", "payload"):
+                    filter_section = filters.get(filter_section_name, [])
+                    if not isinstance(filter_section, list):
+                        err_list.append("{} filter section is not a list".format(filter_section_name))
                     else:
-                        setattr(self, "{}_filters".format(subfilter_section_name), subfilter)
+                        for filter_item in filter_section:
+                            if not isinstance(filter_item, dict):
+                                err_list.append(
+                                    "{} filter section list contains non dict items".format(
+                                        filter_section_name
+                                    )
+                                )
+                            else:
+                                for key, val in filter_item.items():
+                                    if isinstance(val, list):
+                                        if not all(isinstance(s, str) for s in val):
+                                            err_list.append(
+                                                "{} test in {} filter section is not a list of str".format(
+                                                    key, filter_section_name
+                                                )
+                                            )
+                                    elif not isinstance(val, str):
+                                        err_list.append(
+                                            "{} test in {} filter section is not a list of str or a str".format(
+                                                key, filter_section_name
+                                            )
+                                        )
+                        setattr(self, "{}_filters".format(filter_section_name), filter_section)
         if not err_list:
             err_list = self.check()
         return err_list
