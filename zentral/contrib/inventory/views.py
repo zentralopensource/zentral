@@ -1,9 +1,10 @@
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core.urlresolvers import reverse
+from django.db import connection
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views import generic
 from zentral.core.stores import frontend_store
-from zentral.utils.text import str_to_ascii
 from zentral.core.probes.conf import ProbeList
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm)
@@ -16,9 +17,6 @@ class MachineListView(generic.TemplateView):
     def get_object(self, **kwargs):
         return None
 
-    def get_list_qs(self, **kwargs):
-        return MachineSnapshot.objects.current()
-
     def get_list_title(self, **kwargs):
         return ""
 
@@ -29,49 +27,95 @@ class MachineListView(generic.TemplateView):
         self.search_form = MachineSearchForm(request.GET)
         return super(MachineListView, self).get(request, *args, **kwargs)
 
-    @staticmethod
-    def _ms_dict_sorting_key(ms_list):
-        key = None
-        if not ms_list:
-            return key
-        ms = ms_list[0]
-        key = str_to_ascii(ms.get_machine_str()).lower()
-        return key
+    def get_extra_joins(self):
+        return []
 
-    def _get_filtered_qs(self, **kwargs):
-        qs = self.get_list_qs(**kwargs)
+    def get_extra_wheres(self):
+        return []
+
+    def _get_filtered_serial_numbers(self):
+        extra_joins = self.get_extra_joins()
+        extra_wheres = self.get_extra_wheres()
+        query_args = {}
         if self.search_form.is_valid():
             cleaned_data = self.search_form.cleaned_data
             serial_number = cleaned_data['serial_number']
             if serial_number:
-                qs = qs.filter(machine__serial_number__icontains=serial_number)
+                extra_wheres.append("and serial_number ~* %(serial_number)s")
+                query_args['serial_number'] = serial_number
             name = cleaned_data['name']
             if name:
-                qs = qs.filter(system_info__computer_name__icontains=name)
+                extra_wheres.append("and (si.id is not null and computer_name ~* %(name)s)")
+                query_args['name'] = name
             source = cleaned_data['source']
             if source:
-                qs = qs.filter(source=source)
-        return qs
+                extra_wheres.append("and ms.source_id = %(source_id)s")
+                query_args['source_id'] = source.id
+            tag = cleaned_data['tag']
+            if tag:
+                extra_wheres.append("and (serial_number in "
+                                    " (select serial_number from inventory_machinetag where tag_id=%(tag_id)s) "
+                                    "or ms.business_unit_id in "
+                                    " (select bu.id from inventory_businessunit as bu "
+                                    "  join inventory_metabusinessunittag as mbut "
+                                    "  on (mbut.meta_business_unit_id = bu.meta_business_unit_id) "
+                                    "  where mbut.tag_id=%(tag_id)s))")
+                query_args['tag_id'] = tag.id
+        query = ("select m.serial_number as serial_number, max(si.computer_name) as computer_name "
+                 "from inventory_machinesnapshot  as ms "
+                 "join inventory_machine as m on (m.id = ms.machine_id) "
+                 "left join inventory_systeminfo as si on (si.id = ms.system_info_id) "
+                 "{} "
+                 "where ms.mt_next_id is null {} "
+                 "group by serial_number "
+                 "order by computer_name;")
+        query = query.format(" ".join(extra_joins), " ".join(extra_wheres))
+        cursor = connection.cursor()
+        cursor.execute(query, query_args)
+        return [t[0] for t in cursor.fetchall()]
+
+    def _get_serial_number_page(self):
+        paginator = Paginator(self._get_filtered_serial_numbers(), 50)
+        page_num = self.request.GET.get('page')
+        try:
+            return paginator.page(page_num)
+        except PageNotAnInteger:
+            return paginator.page(1)
+        except EmptyPage:
+            return paginator.page(paginator.num_pages)
 
     def get_context_data(self, **kwargs):
         context = super(MachineListView, self).get_context_data(**kwargs)
         self.object = self.get_object(**kwargs)
         context['object'] = self.object
         context['inventory'] = True
-        # group by machine serial number
+        serial_number_page = self._get_serial_number_page()
         ms_dict = {}
-        for ms in self._get_filtered_qs(**kwargs).order_by('system_info__computer_name'):
+        for ms in (MachineSnapshot.objects.current()
+                   .filter(machine__serial_number__in=[msn for msn in serial_number_page])):
             ms_dict.setdefault(ms.machine.serial_number, []).append(ms)
-        # sorted
-        context['object_list'] = [(l[0].machine.serial_number,
-                                   l[0].get_machine_str(),
-                                   l,
-                                   MetaMachine(l[0].machine.serial_number, l).tags())
-                                  for l in sorted(ms_dict.values(),
-                                                  key=self._ms_dict_sorting_key)]
+        context['object_list'] = [MetaMachine(msn, ms_dict[msn]) for msn in serial_number_page]
+        # pagination
+        context['total_objects'] = serial_number_page.paginator.count
+        if serial_number_page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = serial_number_page.next_page_number()
+            context['next_url'] = "?{}".format(qd.urlencode())
+        if serial_number_page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = serial_number_page.previous_page_number()
+            context['previous_url'] = "?{}".format(qd.urlencode())
         context['object_list_title'] = self.get_list_title(**kwargs)
         context['search_form'] = self.search_form
-        context['breadcrumbs'] = self.get_breadcrumbs(**kwargs)
+        breadcrumbs = self.get_breadcrumbs(**kwargs)
+        if breadcrumbs and serial_number_page.number > 1:
+            _, anchor_text = breadcrumbs.pop()
+            qd = self.request.GET.copy()
+            qd.pop('page')
+            breadcrumbs.extend([("?{}".format(qd.urlencode()), anchor_text),
+                                (None, "page {} of {}".format(serial_number_page.number,
+                                                              serial_number_page.paginator.num_pages))])
+        context['breadcrumbs'] = breadcrumbs
         return context
 
 
@@ -120,8 +164,14 @@ class GroupMachinesView(MachineListView):
     def get_object(self, **kwargs):
         return MachineGroup.objects.select_related('source').get(pk=kwargs['group_id'])
 
-    def get_list_qs(self, **kwargs):
-        return MachineSnapshot.objects.current().filter(groups__id=kwargs['group_id'])
+    def get_extra_joins(self):
+        return ["join inventory_machinesnapshot_groups as msg "
+                "on (msg.machinesnapshot_id = ms.id) "
+                "join inventory_machinegroup as mg "
+                "on (mg.id = msg.machinegroup_id)"]
+
+    def get_extra_wheres(self):
+        return ["and mg.id = %d" % self.object.id]
 
     def get_list_title(self, **kwargs):
         return "Group: {} - {}".format(self.object.source.name, self.object.name)
@@ -253,8 +303,14 @@ class MBUMachinesView(MachineListView):
     def get_object(self, **kwargs):
         return MetaBusinessUnit.objects.get(pk=kwargs['pk'])
 
-    def get_list_qs(self, **kwargs):
-        return MachineSnapshot.objects.current().filter(business_unit__meta_business_unit=self.object)
+    def get_extra_joins(self):
+        return ["join inventory_businessunit as bu "
+                "on (bu.id = ms.business_unit_id) "
+                "join inventory_metabusinessunit as mbu "
+                "on (mbu.id = bu.meta_business_unit_id)"]
+
+    def get_extra_wheres(self):
+        return ["and mbu.id = %d" % self.object.id]
 
     def get_list_title(self, **kwargs):
         return "BU: {}".format(self.object.name)

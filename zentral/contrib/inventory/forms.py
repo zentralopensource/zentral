@@ -8,6 +8,9 @@ class MachineSearchForm(forms.Form):
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_snapshot_sources(),
                                     required=False,
                                     widget=forms.Select(attrs={'class': 'form-control'}))
+    tag = forms.ModelChoiceField(queryset=Tag.objects.all(),
+                                 required=False,
+                                 widget=forms.Select(attrs={'class': 'form-control'}))
 
 
 class MachineGroupSearchForm(forms.Form):

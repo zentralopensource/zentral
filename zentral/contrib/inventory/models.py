@@ -423,6 +423,9 @@ class MetaMachine(object):
                                    .filter(machine__serial_number=self.serial_number))
         return self._snapshots
 
+    def get_snapshots_sources_for_display(self):
+        return sorted((s.source for s in self._snapshots), key=lambda s: s.name)
+
     def computer_name(self):
         for ms in self.get_snapshots():
             if ms.system_info and ms.system_info.computer_name:
