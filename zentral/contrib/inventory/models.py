@@ -357,6 +357,31 @@ class TagManager(models.Manager):
     def available_for_meta_business_unit(self, meta_business_unit):
         return self.filter(Q(meta_business_unit=meta_business_unit) | Q(meta_business_unit__isnull=True))
 
+    def used_in_inventory(self):
+        query = """
+        select tag_id, count(*) from (
+            select mt.tag_id, m.serial_number
+            from inventory_machinetag as mt
+            join inventory_machine as m on (m.serial_number = mt.serial_number)
+            join inventory_machinesnapshot as ms on (ms.machine_id = m.id)
+            where ms.mt_next_id is null
+
+            union
+
+            select mbut.tag_id, m.serial_number
+            from inventory_metabusinessunittag as mbut
+            join inventory_businessunit as bu on mbut.meta_business_unit_id = bu.meta_business_unit_id
+            join inventory_machinesnapshot as ms on (ms.business_unit_id = bu.id)
+            join inventory_machine as m on (m.id = ms.machine_id)
+            where ms.mt_next_id is null
+        ) as tag_links
+        group by tag_id;"""
+        cursor = connection.cursor()
+        cursor.execute(query)
+        counts = {t[0]: t[1] for t in cursor.fetchall()}
+        for tag in self.filter(pk__in=counts.keys()):
+            yield tag, counts[tag.id]
+
 
 def validate_color(value):
     if not re.match(r'^[0-9a-fA-F]{6}$', value):
@@ -380,6 +405,9 @@ class Tag(models.Model):
             return "{}/{}".format(self.meta_business_unit, self.name)
         else:
             return self.name
+
+    class Meta:
+        ordering = ("meta_business_unit__name", "name")
 
     def text_color(self):
         try:

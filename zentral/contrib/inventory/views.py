@@ -52,7 +52,7 @@ class MachineListView(generic.TemplateView):
                 extra_wheres.append("and ms.source_id = %(source_id)s")
                 query_args['source_id'] = source.id
             tag = cleaned_data['tag']
-            if tag:
+            if tag is not None:
                 extra_wheres.append("and (serial_number in "
                                     " (select serial_number from inventory_machinetag where tag_id=%(tag_id)s) "
                                     "or ms.business_unit_id in "
@@ -60,7 +60,7 @@ class MachineListView(generic.TemplateView):
                                     "  join inventory_metabusinessunittag as mbut "
                                     "  on (mbut.meta_business_unit_id = bu.meta_business_unit_id) "
                                     "  where mbut.tag_id=%(tag_id)s))")
-                query_args['tag_id'] = tag.id
+                query_args['tag_id'] = tag
         query = ("select m.serial_number as serial_number, max(si.computer_name) as computer_name "
                  "from inventory_machinesnapshot  as ms "
                  "join inventory_machine as m on (m.id = ms.machine_id) "
