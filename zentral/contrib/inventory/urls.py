@@ -28,6 +28,7 @@ urlpatterns = [
     url(r'^probes/$', views.ProbesView.as_view(), name='probes'),
     url(r'^tags/$', views.TagsView.as_view(), name='tags'),
     url(r'^tags/(?P<pk>\d+)/update/$', views.UpdateTagView.as_view(), name='update_tag'),
+    url(r'^tags/(?P<pk>\d+)/delete/$', views.DeleteTagView.as_view(), name='delete_tag'),
 ]
 
 

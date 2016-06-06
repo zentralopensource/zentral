@@ -4,13 +4,45 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">Osquery distributed queries</li>
+  {% for url, anchor_text in breadcrumbs %}
+  {% if url %}
+  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  {% else %}
+  <li class="active">{{ anchor_text }}</li>
+  {% endif %}
+  {% endfor %}
 </ol>
 
-<h2>{{ object_list|length }} Osquery distributed queries</h2>
+<h2>{{ page_obj.paginator.count }} Osquery distributed quer{{ page_obj.paginator.count|pluralize:"y,ies" }}</h2>
 <p>
   <a href="{% url 'osquery:distributed_create' %}" class="btn btn-default">Create</a>
 </p>
+<form method="GET" class="form form-inline" style="margin:1em 0 2em 0">
+  <div class="form-group">
+    <label for="id_meta_business_unit">{{ search_form.meta_business_unit.label|title }}</label>
+    {{ search_form.meta_business_unit }}
+  </div>
+  <div class="form-group">
+    <label for="id_tag">{{ search_form.tag.label|title }}</label>
+    {{ search_form.tag }}
+  </div>
+  <button type="submit" class="btn btn-default">Search</button>
+</form>
+
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
     {% for dq in object_list %}
     <div class="panel panel-default">
       <div class="panel-body">
@@ -37,4 +69,17 @@
       </div>
     </div>
     {% endfor %}
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
 {% endblock %}

@@ -1,5 +1,5 @@
 from django import forms
-from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from .models import DistributedQuery
 
 
@@ -12,3 +12,13 @@ class DistributedQueryForm(forms.ModelForm):
     class Meta:
         model = DistributedQuery
         fields = ['query', 'meta_business_unit', 'tags', 'shard']
+
+
+class DistributedQuerySearchForm(forms.Form):
+    meta_business_unit = forms.ModelChoiceField(queryset=(MetaBusinessUnit.objects.distinct()
+                                                          .filter(distributedquery__isnull=False)),
+                                                required=False,
+                                                widget=forms.Select(attrs={'class': 'form-control'}))
+    tag = forms.ModelChoiceField(queryset=Tag.objects.distinct().filter(distributedquery__isnull=False),
+                                 required=False,
+                                 widget=forms.Select(attrs={'class': 'form-control'}))

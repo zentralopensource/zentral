@@ -4,13 +4,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  {% for url, anchor_text in breadcrumbs %}
-  {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a>
-  {% else %}
-  <li class="active">{{ anchor_text }}</li>
-  {% endif %}
-  {% endfor %}
+  <li><a href="{% url 'inventory:mbu' %}">Business units</a>
+  <li class="active">Merge</li>
 </ol>
 
 <h2>Merge business units</h2>
@@ -46,6 +41,9 @@
     {% endfor %}
   {% endfor %}
   </table>
-  <p><button type="submit" class="btn btn-default">Merge</button></p>
+  <p>
+    <a class="btn btn-default" href="{% url 'inventory:mbu' %}">Cancel</a>
+    <button type="submit" class="btn btn-primary">Merge</button>
+  </p>
 </form>
 {% endblock %}

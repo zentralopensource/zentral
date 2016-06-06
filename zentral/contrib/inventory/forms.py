@@ -27,10 +27,13 @@ class MachineGroupSearchForm(forms.Form):
 
 
 class MetaBusinessUnitSearchForm(forms.Form):
-    name = forms.CharField(label="name", max_length=64, required=False)
+    name = forms.CharField(max_length=64, required=False)
     source = forms.ModelChoiceField(queryset=Source.objects.current_business_unit_sources(),
                                     required=False,
                                     widget=forms.Select(attrs={'class': 'form-control'}))
+    tag = forms.ModelChoiceField(queryset=Tag.objects.distinct().filter(metabusinessunittag__isnull=False),
+                                 required=False,
+                                 widget=forms.Select(attrs={'class': 'form-control'}))
 
 
 class MergeMBUForm(forms.Form):
@@ -101,9 +104,9 @@ class AddMBUTagForm(forms.Form):
 
 class AddMachineTagForm(forms.Form):
     existing_tag = forms.ChoiceField(label="existing tag", choices=[], required=False)
-    new_tag_name = forms.CharField(label="new tag name", max_length=200, required=False)
+    new_tag_name = forms.CharField(label="name", max_length=200, required=False)
     new_tag_color = forms.CharField(label="color", max_length=6, required=False)
-    new_tag_mbu = forms.ChoiceField(label="new tag mbu", choices=[], required=False)
+    new_tag_mbu = forms.ChoiceField(label="restricted to business unit", choices=[], required=False)
 
     def __init__(self, *args, **kwargs):
         self.machine = MetaMachine(kwargs.pop('machine_serial_number'))

@@ -1,5 +1,5 @@
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.core.urlresolvers import reverse
+from django.core.urlresolvers import reverse, reverse_lazy
 from django.db import connection
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -108,11 +108,12 @@ class MachineListView(generic.TemplateView):
         context['object_list_title'] = self.get_list_title(**kwargs)
         context['search_form'] = self.search_form
         breadcrumbs = self.get_breadcrumbs(**kwargs)
-        if breadcrumbs and serial_number_page.number > 1:
+        if breadcrumbs:
             _, anchor_text = breadcrumbs.pop()
             qd = self.request.GET.copy()
-            qd.pop('page')
-            breadcrumbs.extend([("?{}".format(qd.urlencode()), anchor_text),
+            qd.pop('page', None)
+            reset_link = "?{}".format(qd.urlencode())
+            breadcrumbs.extend([(reset_link, anchor_text),
                                 (None, "page {} of {}".format(serial_number_page.number,
                                                               serial_number_page.paginator.num_pages))])
         context['breadcrumbs'] = breadcrumbs
@@ -186,16 +187,15 @@ class GroupMachinesView(MachineListView):
         return l
 
 
-class MBUView(generic.TemplateView):
+class MBUView(generic.ListView):
     template_name = "inventory/mbu_list.html"
+    paginate_by = 25
 
     def get(self, request, *args, **kwargs):
         self.search_form = MetaBusinessUnitSearchForm(request.GET)
         return super(MBUView, self).get(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs):
-        context = super(MBUView, self).get_context_data(**kwargs)
-        context['inventory'] = True
+    def get_queryset(self, **kwargs):
         qs = MetaBusinessUnit.objects.all()
         if self.search_form.is_valid():
             name = self.search_form.cleaned_data['name']
@@ -204,14 +204,36 @@ class MBUView(generic.TemplateView):
             source = self.search_form.cleaned_data['source']
             if source:
                 qs = qs.filter(businessunit__source=source)
-        context['object_list'] = qs
+            tag = self.search_form.cleaned_data['tag']
+            if tag:
+                qs = qs.filter(metabusinessunittag__tag=tag)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        context = super(MBUView, self).get_context_data(**kwargs)
+        context['inventory'] = True
         context['search_form'] = self.search_form
+        # pagination
+        page = context['page_obj']
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            context['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            context['previous_url'] = "?{}".format(qd.urlencode())
+        # breadcrumbs
         l = []
+        qd = self.request.GET.copy()
+        qd.pop('page', None)
+        reset_link = "?{}".format(qd.urlencode())
         if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
             l.append((reverse('inventory:mbu'), 'Inventory business units'))
-            l.append((None, "Search"))
+            l.append((reset_link, "Search"))
         else:
-            l.append((None, "Inventory business units"))
+            l.append((reset_link, "Inventory business units"))
+        l.append((None, "page {} of {}".format(page.number, page.paginator.num_pages)))
         context['breadcrumbs'] = l
         return context
 
@@ -221,6 +243,7 @@ class ReviewMBUMergeView(generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super(ReviewMBUMergeView, self).get_context_data(**kwargs)
+        ctx['inventory'] = True
         ctx['meta_business_units'] = MetaBusinessUnit.objects.filter(id__in=self.request.GET.getlist('mbu_id'))
         return ctx
 
@@ -262,6 +285,7 @@ class MBUTagsView(generic.FormView):
         context['inventory'] = True
         context['meta_business_unit'] = self.mbu
         context['tags'] = self.mbu.tags()
+        context['color_presets'] = TAG_COLOR_PRESETS
         return context
 
     def get_form_kwargs(self, *args, **kwargs):
@@ -420,6 +444,7 @@ class MachineTagsView(generic.FormView):
         context['inventory'] = True
         context['machine'] = MetaMachine(self.msn)
         context['tags'] = context['machine'].tags_with_types()
+        context['color_presets'] = TAG_COLOR_PRESETS
         return context
 
     def get_form_kwargs(self, *args, **kwargs):
@@ -452,6 +477,21 @@ class ProbesView(generic.TemplateView):
         return context
 
 
+TAG_COLOR_PRESETS = {
+    "green": "61bd4f",
+    "yellow": "f2d600",
+    "orange": "ffab4a",
+    "red": "eb5a46",
+    "purple": "c377e0",
+    "blue": "0079bf",
+    "sky": "00c2e0",
+    "lime": "51e898",
+    "pink": "ff80ce",
+    "black": "4d4d4d",
+    "grey": "b6bbbf"
+}
+
+
 class TagsView(generic.ListView):
     model = Tag
 
@@ -465,24 +505,22 @@ class UpdateTagView(generic.UpdateView):
     template_name = "inventory/edit_tag.html"
     model = Tag
     fields = ('name', 'color')
-    color_presets = {
-        "green": "61bd4f",
-        "yellow": "f2d600",
-        "orange": "ffab4a",
-        "red": "eb5a46",
-        "purple": "c377e0",
-        "blue": "0079bf",
-        "sky": "00c2e0",
-        "lime": "51e898",
-        "pink": "ff80ce",
-        "black": "4d4d4d",
-        "grey": "b6bbbf"
-    }
 
     def get_context_data(self, **kwargs):
         ctx = super(UpdateTagView, self).get_context_data(**kwargs)
-        ctx['color_presets'] = self.color_presets
+        ctx['inventory'] = True
+        ctx['color_presets'] = TAG_COLOR_PRESETS
         return ctx
 
     def get_success_url(self):
         return reverse('inventory:tags')
+
+
+class DeleteTagView(generic.DeleteView):
+    model = Tag
+    success_url = reverse_lazy("inventory:tags")
+
+    def get_context_data(self, **kwargs):
+        ctx = super(DeleteTagView, self).get_context_data(**kwargs)
+        ctx['links'] = self.object.links()
+        return ctx

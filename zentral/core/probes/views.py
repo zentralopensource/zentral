@@ -68,3 +68,8 @@ class DeleteProbeView(DeleteView):
     model = ProbeSource
     template_name = "core/probes/delete.html"
     success_url = reverse_lazy('probes:index')
+
+    def get_context_data(self, **kwargs):
+        ctx = super(DeleteProbeView, self).get_context_data(**kwargs)
+        ctx['inventory'] = True
+        return ctx

@@ -425,10 +425,27 @@ class Tag(models.Model):
     def need_border(self):
         return self.color.upper() in ['FFFFFF', 'FFF']
 
+    def links(self):
+        l = []
+        from zentral.contrib.osquery.models import DistributedQuery
+        for model, label, attribute, base_url in ((MachineTag,
+                                                   "machines", "tag",
+                                                   reverse("inventory:index")),
+                                                  (MetaBusinessUnitTag,
+                                                   "business units", "tag",
+                                                   reverse("inventory:mbu")),
+                                                  (DistributedQuery, "osquery distributed queries", "tags",
+                                                   reverse("osquery:distributed_index"))):
+            obj_count = model.objects.filter(**{attribute: self.id}).count()
+            if obj_count:
+                l.append(("{} {}".format(obj_count, label),
+                          "{}?tag={}".format(base_url, self.id)))
+        return l
+
 
 class MachineTag(models.Model):
     serial_number = models.TextField()
-    tag = models.ForeignKey(Tag)
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
 
     class Meta:
         unique_together = (('serial_number', 'tag'),)
@@ -436,7 +453,7 @@ class MachineTag(models.Model):
 
 class MetaBusinessUnitTag(models.Model):
     meta_business_unit = models.ForeignKey(MetaBusinessUnit)
-    tag = models.ForeignKey(Tag)
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
 
 
 class MetaMachine(object):

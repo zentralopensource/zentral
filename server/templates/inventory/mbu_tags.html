@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load bootstrap inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -36,8 +36,56 @@
 </div>
 
 <h2>Add tag</h2>
-<form method="POST" action="{% url 'inventory:mbu_tags' meta_business_unit.id %}">{% csrf_token %}
-  {{ form.as_p }}
-  <p><button type="submit" class="btn btn-default">Add tag</button></p>
+<form method="POST" class="form" action="{% url 'inventory:mbu_tags' meta_business_unit.id %}">{% csrf_token %}
+  {{form.existing_tag|bootstrap }}
+  <div id="new-tag" style="display:none">
+  <h3> or create new tag</h3>
+  {{ form.restrict_new_tag_to_mbu|bootstrap }}
+  {{ form.new_tag_name|bootstrap }}
+  <div class="form-group">
+    <label class="control-label  " for="id_new_tag_color">color</label>
+    <div>
+      presets:
+      {% for color_name, color_code in color_presets.items %}
+        <span class="label color-preset" data-color="{{ color_code }}" style="background-color:#{{ color_code }};padding: 0 10px;margin:0 0 5px 0;">&nbsp;</span>
+      {% endfor %}
+    </div>
+    <input class=" form-control" id="id_new_tag_color" maxlength="6" name="new_tag_color" type="text">
+  </div>
+  </div>
+  <p>
+    <a href="{% url 'inventory:mbu_machines' meta_business_unit.id %}" class="btn btn-default">Cancel</a>
+    <button type="submit" class="btn btn-primary">Add tag</button>
+  </p>
 </form>
+{% endblock %}
+
+{% block extrajs %}
+<script>
+  function toggle_form($exiting_tag_sel) {
+    if ($exiting_tag_sel.val() > "") {
+      $('#new-tag').hide();
+    } else {
+      $('#new-tag').show();
+    }
+  }
+
+  function apply_color_preset(preset_elm) {
+    var color = preset_elm.data("color");
+    $('#id_new_tag_color').val(color);
+  }
+
+  $(document).ready(function(){
+    toggle_form($("#id_existing_tag"));
+
+    $(".color-preset").click(function(event){
+      event.preventDefault();
+      apply_color_preset($(this));
+    });
+
+    $("#id_existing_tag").change(function(event){
+      toggle_form($(this));
+    });
+  });
+</script>
 {% endblock %}

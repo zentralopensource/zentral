@@ -13,7 +13,7 @@
   <p>Do you want to enable the API Enrollment on this business unit?</p>
   <p>
     <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
-    <button type="submit" class="btn btn-default">{% if object %}Update{% else %}Create{% endif %}</button>
+    <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Create{% endif %}</button>
   </p>
 </form>
 {% endblock %}

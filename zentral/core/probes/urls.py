@@ -14,6 +14,6 @@ main_menu_cfg = {
     'weight': 1,
     'items': (
         ('index', 'Probes'),
-        ('create', 'New probe'),
+        ('create', 'Create probe'),
     )
 }

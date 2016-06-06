@@ -13,7 +13,7 @@ from zentral.utils.api_views import (JSONPostAPIView, make_secret, verify_secret
                                      BaseEnrollmentView, BaseInstallerPackageView)
 from .conf import build_osquery_conf, DEFAULT_ZENTRAL_INVENTORY_QUERY
 from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
-from .forms import DistributedQueryForm
+from .forms import DistributedQueryForm, DistributedQuerySearchForm
 from .models import enroll, DistributedQuery, DistributedQueryNode
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 from .probes import OSQueryProbe
@@ -68,10 +68,49 @@ class InstallerPackageView(BaseInstallerPackageView):
 
 class DistributedIndexView(ListView):
     model = DistributedQuery
+    paginate_by = 10
+
+    def get(self, request, *args, **kwargs):
+        self.search_form = DistributedQuerySearchForm(request.GET)
+        return super(DistributedIndexView, self).get(request, *args, **kwargs)
+
+    def get_queryset(self, **kwargs):
+        qs = DistributedQuery.objects.all()
+        if self.search_form.is_valid():
+            mbu = self.search_form.cleaned_data['meta_business_unit']
+            if mbu:
+                qs = qs.filter(meta_business_unit=mbu)
+            tag = self.search_form.cleaned_data['tag']
+            if tag:
+                qs = qs.filter(tags=tag)
+        return qs
 
     def get_context_data(self, **kwargs):
         ctx = super(DistributedIndexView, self).get_context_data(**kwargs)
         ctx['osquery'] = True
+        ctx['search_form'] = self.search_form
+        # pagination
+        page = ctx['page_obj']
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        # breadcrumbs
+        l = []
+        qd = self.request.GET.copy()
+        qd.pop('page', None)
+        reset_link = "?{}".format(qd.urlencode())
+        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
+            l.append((reverse('osquery:distributed_index'), 'Osquery distributed queries'))
+            l.append((reset_link, "Search"))
+        else:
+            l.append((reset_link, "Osquery distributed queries"))
+        l.append((None, "page {} of {}".format(page.number, page.paginator.num_pages)))
+        ctx['breadcrumbs'] = l
         return ctx
 
 
