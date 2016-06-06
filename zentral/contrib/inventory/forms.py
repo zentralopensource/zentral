@@ -8,7 +8,7 @@ class MachineSearchForm(forms.Form):
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_snapshot_sources(),
                                     required=False,
                                     widget=forms.Select(attrs={'class': 'form-control'}))
-    tag = forms.ChoiceField(choices=[('', '--------')] + [(t.id, str(t)) for t, _ in Tag.objects.used_in_inventory()],
+    tag = forms.ChoiceField(choices=[],
                             required=False,
                             widget=forms.Select(attrs={'class': 'form-control'}))
 
@@ -17,6 +17,11 @@ class MachineSearchForm(forms.Form):
             return int(self.cleaned_data['tag'])
         else:
             return None
+
+    def __init__(self, *args, **kwargs):
+        super(MachineSearchForm, self).__init__(*args, **kwargs)
+        self.fields['tag'].choices = [(t.id, str(t)) for t, _ in Tag.objects.used_in_inventory()]
+        self.fields['tag'].choices.insert(0, ('', '--------'))
 
 
 class MachineGroupSearchForm(forms.Form):
