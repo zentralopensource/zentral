@@ -1,0 +1,15 @@
+{
+  "data": {
+    "ticket": {"id": "{{ticket.id}}",
+               "url": "{{ ticket.url }}",
+               "title": "{{ ticket.title }}",
+               "type": "{{ ticket.type }}"},
+    "author": {"name": "{{ticket.latest_comment.author.name}}"},
+    "created_at": "{{ticket.latest_comment.created_at}}",
+    "created_at_with_timestamp": "{{ticket.latest_comment.created_at_with_timestamp}}",
+    "is_public": {{latest_comment.is_public}},
+    "value": "{{ticket.latest_comment.value}}",
+  },
+  "zentral_api_secret": "%ZENTRAL_API_SECRET%",
+  "type": "comment"
+}

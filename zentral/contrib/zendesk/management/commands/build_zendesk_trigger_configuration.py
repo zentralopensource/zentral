@@ -18,7 +18,7 @@ class Command(BaseCommand):
 
     def handle(self, **options):
         zentral_api_secret = make_secret("zentral.contrib.zendesk")
-        for trigger_type in ("ticket",):
+        for trigger_type in ("ticket", "comment"):
             print("TRIGGER TYPE:", trigger_type)
             template = self.read_template(trigger_type)
             template = template.replace("%ZENTRAL_API_SECRET%", zentral_api_secret)
