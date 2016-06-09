@@ -24,6 +24,7 @@ class BaseProbe(object):
             self.probe_d = yaml.load(self.source.body)
         except yaml.parser.ParserError:
             err_list.append("Could not parse probe source body")
+            return err_list
         if not isinstance(self.probe_d, dict):
             err_list.append("Probe body should be a hash/dict")
         else:
