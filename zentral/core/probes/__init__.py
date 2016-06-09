@@ -22,7 +22,7 @@ class BaseProbe(object):
         err_list = []
         try:
             self.probe_d = yaml.load(self.source.body)
-        except yaml.parser.ParserError:
+        except yaml.error.YAMLError:
             err_list.append("Could not parse probe source body")
             return err_list
         if not isinstance(self.probe_d, dict):
