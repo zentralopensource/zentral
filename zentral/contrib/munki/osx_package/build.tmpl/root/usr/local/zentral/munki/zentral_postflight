@@ -299,7 +299,7 @@ def get_job_details(machine_serial_number):
     return make_api_request(url, {'machine_serial_number': machine_serial_number})
 
 
-def post_job(data, compress=True):
+def post_job(data):
     url = "{}/post_job/".format(ZENTRAL_API_ENDPOINT.strip('/'))
     return make_api_request(url, data)
 
