@@ -7,7 +7,7 @@
     "created_at": "{{ticket.latest_comment.created_at}}",
     "created_at_with_time": "{{ticket.latest_comment.created_at_with_time}}",
     "is_public": {{ticket.latest_comment.is_public}},
-    "value": "{{ticket.latest_comment.value}}",
+    "value": "{{ticket.latest_comment.value}}"
   },
   "zentral_api_secret": "%ZENTRAL_API_SECRET%",
   "type": "comment"
