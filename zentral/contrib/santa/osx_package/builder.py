@@ -32,6 +32,7 @@ class SantaZentralEnrollPkgBuilder(PackageBuilder):
                              (("%TLS_HOSTNAME%", tls_hostname),))
         postinstall_script = self.get_build_path("scripts", "postinstall")
         self.replace_in_file(postinstall_script,
-                             (("%API_SECRET%", api_secret),))
+                             (("%API_SECRET%", api_secret),
+                              ("%TLS_HOSTNAME%", tls_hostname)))
         if tls_server_certs:
             self.include_tls_server_certs(config_plist, tls_server_certs)

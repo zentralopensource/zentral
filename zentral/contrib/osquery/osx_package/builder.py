@@ -14,6 +14,8 @@ class OsqueryZentralEnrollPkgBuilder(PackageBuilder):
     def set_tls_hostname(self):
         self.replace_in_file(self.launchd_plist,
                              (("%TLS_HOSTNAME%", self.tls_hostname),))
+        self.replace_in_file(self.postinstall,
+                             (("%TLS_HOSTNAME%", self.tls_hostname),))
 
     def set_enroll_secret_secret(self):
         self.replace_in_file(self.get_build_path("scripts", "preinstall"),
@@ -40,6 +42,7 @@ class OsqueryZentralEnrollPkgBuilder(PackageBuilder):
         self.tls_server_certs = tls_server_certs
         # extra steps
         self.launchd_plist = self.get_root_path("Library/LaunchDaemons/com.facebook.osqueryd.plist")
+        self.postinstall = self.get_build_path("scripts", "postinstall")
         self.set_enroll_secret_secret()
         self.set_tls_hostname()
         if self.tls_server_certs:

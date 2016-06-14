@@ -4,9 +4,7 @@
 ## load com.facebook.osqueryd
 sudo /bin/launchctl load -w "/Library/LaunchDaemons/com.facebook.osqueryd.plist"  >/dev/null 2>&1
 
-## on jamf managed clients, run recon
-if [[ -e /usr/local/bin/jamf ]]; then
-  /usr/local/bin/jamf recon
-fi
+## write zentral base url
+sudo defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"
 
 exit 0
