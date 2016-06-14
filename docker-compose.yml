@@ -4,8 +4,8 @@ db:
     - ./conf/start/docker/postgres.env
 elastic:
   image: elasticsearch:2
-redis:
-  image: redis
+rabbitmq:
+  image: rabbitmq:3
 prompg:
   image: prom/pushgateway
 promsrv:
@@ -42,14 +42,14 @@ web:
   links:
     - db
     - elastic
-    - redis
+    - rabbitmq
 inventory_worker:
   extends: app
   command: inventory_worker
   links:
     - db
     - prompg
-    - redis
+    - rabbitmq
 store_worker:
   extends: app
   command: store_worker
@@ -57,11 +57,11 @@ store_worker:
     - db
     - elastic
     - prompg
-    - redis
+    - rabbitmq
 processor_worker:
   extends: app
   command: processor_worker
   links:
     - db
     - prompg
-    - redis
+    - rabbitmq

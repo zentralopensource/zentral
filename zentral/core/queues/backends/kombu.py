@@ -1,4 +1,4 @@
-from kombu import Connection, Exchange, Queue
+from kombu import Connection, Consumer, Exchange, Queue
 from kombu.mixins import ConsumerMixin
 from kombu.pools import producers
 from zentral.core.probes.conf import all_probes
@@ -19,17 +19,25 @@ probes_exchange = Exchange('probes', type='fanout', durable=True)
 class StoreWorker(ConsumerMixin):
     def __init__(self, connection, event_store):
         self.connection = connection
+        self.channel2 = None
         self.event_store = event_store
 
-    def get_consumers(self, Consumer, channel):
-        return [Consumer(queues=[store_events_queue],
+    def get_consumers(self, _, default_channel):
+        self.channel2 = default_channel.connection.channel()
+        return [Consumer(default_channel,
+                         queues=[store_events_queue],
                          accept=['json'],
                          callbacks=[self.store_event]),
-                Consumer(queues=[Queue(exchange=probes_exchange,
+                Consumer(self.channel2,
+                         queues=[Queue(exchange=probes_exchange,
                                        auto_delete=True,
                                        durable=False)],
                          accept=['json'],
                          callbacks=[self.clear_probes_cache])]
+
+    def on_consumer_end(self, connection, default_channel):
+        if self.channel2:
+            self.channel2.close()
 
     def store_event(self, body, message):
         from zentral.core.events import event_from_event_d
@@ -43,7 +51,6 @@ class StoreWorker(ConsumerMixin):
         message.ack()
 
     def clear_probes_cache(self, body, message):
-        print("STORE WORKER CLEAR PROBES CACHE")
         all_probes.clear()
         message.ack()
 
@@ -51,17 +58,25 @@ class StoreWorker(ConsumerMixin):
 class ProcessorWorker(ConsumerMixin):
     def __init__(self, connection, event_processor):
         self.connection = connection
+        self.channel2 = None
         self.event_processor = event_processor
 
-    def get_consumers(self, Consumer, channel):
-        return [Consumer(queues=[process_events_queue],
+    def get_consumers(self, _, default_channel):
+        self.channel2 = default_channel.connection.channel()
+        return [Consumer(default_channel,
+                         queues=[process_events_queue],
                          accept=['json'],
                          callbacks=[self.process_event]),
-                Consumer(queues=[Queue(exchange=probes_exchange,
+                Consumer(self.channel2,
+                         queues=[Queue(exchange=probes_exchange,
                                        auto_delete=True,
                                        durable=False)],
                          accept=['json'],
                          callbacks=[self.clear_probes_cache])]
+
+    def on_consumer_end(self, connection, default_channel):
+        if self.channel2:
+            self.channel2.close()
 
     def process_event(self, body, message):
         from zentral.core.events import event_from_event_d
@@ -70,7 +85,6 @@ class ProcessorWorker(ConsumerMixin):
         message.ack()
 
     def clear_probes_cache(self, body, message):
-        print("PROCESSOR WORKER CLEAR PROBES CACHE")
         all_probes.clear()
         message.ack()
 

@@ -45,7 +45,6 @@ class BaseProbe(object):
                     except KeyError:
                         err_list.append("unknown action %s" % action_name)
                     if action_config_d is not None and not isinstance(action_config_d, dict):
-                        print(action_config_d)
                         err_list.append("action {} configuration is not a dict".format(action_name))
             filters = self.probe_d.get("filters", {})
             if not isinstance(filters, dict):

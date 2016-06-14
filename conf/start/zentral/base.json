@@ -25,7 +25,7 @@
   },
   "queues": {
     "backend": "zentral.core.queues.backends.kombu",
-    "backend_url": "redis://redis:6379/"
+    "backend_url": "amqp://guest:guest@rabbitmq:5672//"
   },
   "stores": {
     "elasticsearch": {

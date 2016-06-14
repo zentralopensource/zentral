@@ -278,3 +278,10 @@ class BaseEvent(object):
             ctx = self.get_notification_context(probe)
             self._notification_body = render_notification_part(ctx, self.event_type, 'body')
         return self._notification_body
+
+
+class CommandEvent(BaseEvent):
+    event_type = "zentral_command"
+
+
+register_event_type(CommandEvent)
