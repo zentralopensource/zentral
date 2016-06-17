@@ -8,7 +8,7 @@
 
 <h2>Osquery enrollment</h2>
 
-<form action="{% url 'osquery:installer_package' %}" method="POST" class="form">{% csrf_token %}
+<form method="POST" class="form">{% csrf_token %}
   <div class="form-group">
     <label for="id_meta_business_unit">Business unit</label>
     {{ form.meta_business_unit }}
@@ -16,7 +16,10 @@
   <a class="btn btn-default"
      id="get-debugging-tools"
      href="{% url 'osquery:enrollment_debugging' %}">Get enrollment debugging tools</a>
-  <button class="btn btn-default" type="submit">Download enrollment pkg</button>
+  <a class="btn btn-default download-tool"
+     href="{% url 'osquery:installer_package' %}">Download macOS enrollment pkg</a>
+  <a class="btn btn-default download-tool"
+     href="{% url 'osquery:setup_script' %}">Download Ubuntu setup script</a>
 </form>
 
 <div style="margin:20px 0 0 0">
@@ -39,6 +42,13 @@
           $('#debugging-tools').text(data).show();
         }
       });
+    });
+    $(".download-tool").click(function(event){
+      event.preventDefault();
+      var link = $(this);
+      var form = link.parent();
+      form.attr("action", link.attr("href"));
+      form.submit();
     });
   });
 </script>

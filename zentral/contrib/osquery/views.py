@@ -16,6 +16,7 @@ from .events import post_enrollment_event, post_request_event, post_events_from_
 from .forms import DistributedQueryForm, DistributedQuerySearchForm
 from .models import enroll, DistributedQuery, DistributedQueryNode
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
+from .deb_script.builder import OsqueryZentralEnrollScriptBuilder
 from .probes import OSQueryProbe
 
 logger = logging.getLogger('zentral.contrib.osquery.views')
@@ -63,6 +64,11 @@ curl -XPOST -k -d "$node_key_json"  %(tls_hostname)s%(config_path)s | jq ."""
 
 class InstallerPackageView(BaseInstallerPackageView):
     builder = OsqueryZentralEnrollPkgBuilder
+    module = "zentral.contrib.osquery"
+
+
+class SetupScriptView(BaseInstallerPackageView):
+    builder = OsqueryZentralEnrollScriptBuilder
     module = "zentral.contrib.osquery"
 
 

@@ -9,6 +9,7 @@ urlpatterns = [
     url(r'^enrollment/debugging/$',
         views.EnrollmentDebuggingView.as_view(), name='enrollment_debugging'),
     url(r'^installer_package/$', views.InstallerPackageView.as_view(), name='installer_package'),
+    url(r'^setup_script/$', views.SetupScriptView.as_view(), name='setup_script'),
     # django admin distributed queries
     url(r'^distributed/$',
         csrf_exempt(views.DistributedIndexView.as_view()),
