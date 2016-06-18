@@ -14,6 +14,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 
 SAL_BUNDLE_ID = "com.salsoftware.sal"
+# Currently not used
 SAL_KEY_PREFERENCE = "enrolment_key"
 SAL_SERVER_PREFERENCE = "ServerURL"
 
@@ -30,6 +31,9 @@ SYSTEM_PROFILER = "/usr/sbin/system_profiler"
 
 
 def get_sal_infos():
+    """Returns dict of preferences set for Sal, minimum should be key (for business unit)
+    and ServerURL (unless inherited from DNS/Sal default of 'http://sal/"""
+    #../sal-scripts/blob/3e11bb5ffe654869a6d6aeebb65418b0d13e9eeb/utils.py#L39
     try:
         from Foundation import (CFPreferencesCopyKeyList,
                                 kCFPreferencesAnyUser,
@@ -50,12 +54,15 @@ def get_sal_infos():
 
 
 def get_santa_versions():
+    """Returns component versions of santa, including kext, daemon, job control script,
+    and GUI (santa-driver, santad, santactl, and SantaGUI, respectively)"""
     versions = {}
     try:
         stdout = subprocess.check_output([SANTACTL, "version"])
     except (OSError, subprocess.CalledProcessError):
         pass
     else:
+        # if previous check_output command in the try was successful,
         for line in stdout.splitlines():
             component, version = (s.strip() for s in line.split('|'))
             versions[component] = version
@@ -63,6 +70,9 @@ def get_santa_versions():
 
 
 def parse_santa_fileinfo_output(stdout, fileinfo):
+    """ Takes output of successful run of get_santa_fileinfo(bundle_path) below,
+    adds into passed fileinfo dict the splitlines output, along with specific
+    handling of cert chain/signing info since it's super verbose"""
     signing_chain = None
     current_issued_cert = None
     current_cert = None
@@ -105,6 +115,10 @@ def parse_santa_fileinfo_output(stdout, fileinfo):
 
 
 def get_santa_fileinfo(bundle_path):
+    """ Get's app bundle paths from munki's AppInventory, returns dict of parsed 
+    output from santactl, including Path, SHA-256/1, Bundle Name/Version/
+    BundleVersionString values, type (executable), if code-signed, santas rules
+    for handling, cert/signing chain info"""
     fileinfo = {}
     try:
         stdout = subprocess.check_output([SANTACTL, "fileinfo", bundle_path])
@@ -207,6 +221,8 @@ def iter_manage_install_reports():
 
 
 def build_reports_payload(last_seen=None):
+    """ Unpacks ManagedInstallReport generator object, initializes MIR objects,
+    skips if already processed, otherwise serializes & returns payload"""
     payload = []
     for filepath in iter_manage_install_reports():
         mir = ManagedInstallReport(filepath)
@@ -234,6 +250,8 @@ class SystemProfilerReport(object):
                 return subdata
 
     def get_machine_snapshot(self):
+        """ Parses sysprofiler output, returns a dict w/three sub-dicts for
+        serial / model, CPU, RAM / OS major-minor-patch"""
         # Hardware
         data = self._get_data_type('SPHardwareDataType')
         if len(data['_items']) != 1:
@@ -312,6 +330,7 @@ if __name__ == '__main__':
     except IndexError:
         pass
     spr = SystemProfilerReport()
+    # initialize data dict
     data = {'machine_snapshot': spr.get_machine_snapshot()}
     sal_infos = get_sal_infos()
     if sal_infos is not None:
@@ -319,7 +338,9 @@ if __name__ == '__main__':
     msn = data['machine_snapshot']['machine']['serial_number']
     job_details = get_job_details(msn)
     ai = ApplicationInventory()
+    # if it's both an auto run (vs. debug/testing) and we have santa fileinfo collected
     data['include_santa_fileinfo'] = run_type == 'auto' and job_details['include_santa_fileinfo']
+    # retain the boolean about whether we've included santa fileinfo, populate w/ info or []
     data['santa_fileinfo_included'], data['machine_snapshot']['osx_app_instances'] = ai.get_osx_app_instances(data['include_santa_fileinfo'])
     last_seen_sha1sum = job_details.get('last_seen_sha1sum', None)
     data['reports'] = build_reports_payload(last_seen_sha1sum)
