@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
 from django.db import connection, models
 from django.db.models import Count, Q
+from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
 from zentral.conf import settings
 from zentral.utils.mt_models import prepare_commit_tree, AbstractMTObject, MTObjectManager
@@ -393,7 +394,8 @@ def validate_color(value):
 
 class Tag(models.Model):
     meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True)
-    name = models.TextField()
+    name = models.CharField(max_length=50, unique=True)
+    slug = models.SlugField(unique=True)
     color = models.CharField(max_length=6,
                              default="0079bf",  # blue from UpdateTagView
                              validators=[validate_color])
@@ -408,6 +410,10 @@ class Tag(models.Model):
 
     class Meta:
         ordering = ("meta_business_unit__name", "name")
+
+    def save(self, *args, **kwargs):
+        self.slug = slugify(self.name)
+        super(Tag, self).save(*args, **kwargs)
 
     def text_color(self):
         try:

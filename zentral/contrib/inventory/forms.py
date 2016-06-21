@@ -1,4 +1,6 @@
 from django import forms
+from django.core.exceptions import ValidationError
+from django.utils.text import slugify
 from .models import MetaBusinessUnit, Source, MetaBusinessUnitTag, Tag, MetaMachine, MachineTag
 
 
@@ -72,10 +74,43 @@ class MBUAPIEnrollmentForm(forms.ModelForm):
         return self.instance
 
 
-class AddMBUTagForm(forms.Form):
+class AddTagForm(forms.Form):
     existing_tag = forms.ModelChoiceField(label="existing tag", queryset=Tag.objects.none(), required=False)
-    new_tag_name = forms.CharField(label="new tag name", max_length=200, required=False)
+    new_tag_name = forms.CharField(label="new tag name", max_length=50, required=False)
     new_tag_color = forms.CharField(label="color", max_length=6, required=False)
+
+    def clean(self):
+        cleaned_data = super(AddTagForm, self).clean()
+        existing_tag = cleaned_data.get("existing_tag")
+        new_tag_name = cleaned_data.get("new_tag_name")
+        if not existing_tag:
+            if not new_tag_name or not new_tag_name.strip():
+                msg = "You must select an existing tag or enter a name for a new tag"
+                self.add_error('existing_tag', msg)
+                self.add_error('new_tag_name', msg)
+            else:
+                t = Tag(name=new_tag_name, slug=slugify(new_tag_name))
+                try:
+                    t.validate_unique()
+                except ValidationError:
+                    self.add_error('new_tag_name', "A tag with the same name or slug already exists")
+
+    def _get_tag(self):
+        tag = self.cleaned_data['existing_tag']
+        if not tag:
+            kwargs = {'name': self.cleaned_data.get('new_tag_name')}
+            meta_business_unit = self._get_mbu()
+            if meta_business_unit:
+                kwargs['meta_business_unit'] = meta_business_unit
+            new_tag_color = self.cleaned_data.get('new_tag_color')
+            if new_tag_color:
+                kwargs['color'] = new_tag_color
+            tag = Tag(**kwargs)
+            tag.save()
+        return tag
+
+
+class AddMBUTagForm(AddTagForm):
     restrict_new_tag_to_mbu = forms.BooleanField(label="restrict new tag to mbu", required=False)
 
     def __init__(self, *args, **kwargs):
@@ -84,64 +119,30 @@ class AddMBUTagForm(forms.Form):
         etqs = Tag.objects.available_for_meta_business_unit(self.mbu)
         self.fields['existing_tag'].queryset = etqs.exclude(metabusinessunittag__meta_business_unit=self.mbu)
 
-    def clean(self):
-        cleaned_data = super(AddMBUTagForm, self).clean()
-        existing_tag = cleaned_data.get("existing_tag")
-        new_tag_name = cleaned_data.get("new_tag_name")
-        if not existing_tag and (not new_tag_name or not new_tag_name.strip()):
-            msg = "Must select an existing tag or enter a name for a new tag"
-            self.add_error('existing_tag', msg)
-            self.add_error('new_tag_name', msg)
+    def _get_mbu(self):
+        if self.cleaned_data['restrict_new_tag_to_mbu']:
+            return self.mbu
 
     def save(self):
-        tag = self.cleaned_data['existing_tag']
-        if not tag:
-            kwargs = {'name': self.cleaned_data.get('new_tag_name')}
-            if self.cleaned_data.get('restrict_new_tag_to_mbu'):
-                kwargs['meta_business_unit'] = self.mbu
-            new_tag_color = self.cleaned_data.get('new_tag_color')
-            if new_tag_color:
-                kwargs['defaults'] = {'color': new_tag_color}
-            tag, _ = Tag.objects.update_or_create(**kwargs)
         return MetaBusinessUnitTag.objects.get_or_create(meta_business_unit=self.mbu,
-                                                         tag=tag)
+                                                         tag=self._get_tag())
 
 
-class AddMachineTagForm(forms.Form):
-    existing_tag = forms.ChoiceField(label="existing tag", choices=[], required=False)
-    new_tag_name = forms.CharField(label="name", max_length=200, required=False)
-    new_tag_color = forms.CharField(label="color", max_length=6, required=False)
-    new_tag_mbu = forms.ChoiceField(label="restricted to business unit", choices=[], required=False)
+class AddMachineTagForm(AddTagForm):
+    new_tag_mbu = forms.ModelChoiceField(label="restricted to business unit",
+                                         queryset=MetaBusinessUnit.objects.none(), required=False)
 
     def __init__(self, *args, **kwargs):
         self.machine = MetaMachine(kwargs.pop('machine_serial_number'))
         super(AddMachineTagForm, self).__init__(*args, **kwargs)
-        self.fields['existing_tag'].choices = [(t.id, str(t)) for t in self.machine.available_tags()]
-        self.fields['existing_tag'].choices.insert(0, (None, "-"))
-        self.fields['new_tag_mbu'].choices = [(mbu.id, str(mbu)) for mbu in self.machine.meta_business_units()]
-        self.fields['new_tag_mbu'].choices.insert(0, (None, "-"))
+        self.fields['existing_tag'].queryset = Tag.objects.filter(id__in=[t.id for t in self.machine.available_tags()])
+        self.fields['new_tag_mbu'].queryset = MetaBusinessUnit.objects.filter(
+            id__in=[mbu.id for mbu in self.machine.meta_business_units()]
+        )
 
-    def clean(self):
-        cleaned_data = super(AddMachineTagForm, self).clean()
-        existing_tag = cleaned_data.get("existing_tag")
-        new_tag_name = cleaned_data.get("new_tag_name")
-        if not existing_tag and (not new_tag_name or not new_tag_name.strip()):
-            msg = "Must select an existing tag or enter a name for a new tag"
-            self.add_error('existing_tag', msg)
-            self.add_error('new_tag_name', msg)
+    def _get_mbu(self):
+        return self.cleaned_data.get('new_tag_mbu')
 
-    def save(self):
-        tag_id = self.cleaned_data['existing_tag']
-        if not tag_id:
-            kwargs = {'name': self.cleaned_data.get('new_tag_name')}
-            new_tag_mbu = self.cleaned_data.get('new_tag_mbu')
-            if new_tag_mbu:
-                kwargs['meta_business_unit'] = MetaBusinessUnit.objects.get(pk=new_tag_mbu)
-            new_tag_color = self.cleaned_data.get('new_tag_color')
-            if new_tag_color:
-                kwargs['defaults'] = {'color': new_tag_color}
-            tag, _ = Tag.objects.update_or_create(**kwargs)
-        else:
-            tag = Tag.objects.get(pk=tag_id)
+    def save(self, *args, **kwargs):
         return MachineTag.objects.get_or_create(serial_number=self.machine.serial_number,
-                                                tag=tag)
+                                                tag=self._get_tag())

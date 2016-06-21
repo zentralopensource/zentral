@@ -11,7 +11,8 @@
 <div class="table-responsive">
   <table class="table">
     <thead>
-      <th>Tag ID</th>
+      <th>ID</th>
+      <th>Slug</th>
       <th>Tag</th>
       <th></th>
     </thead>
@@ -19,6 +20,7 @@
       {% for tag in object_list %}
       <tr>
         <td>{{ tag.id }}</td>
+        <td>{{ tag.slug }}</td>
         <td>{% inventory_tag tag %}</td>
         <td>
           <a class="btn btn-default" href="{% url 'inventory:update_tag' tag.id %}">
