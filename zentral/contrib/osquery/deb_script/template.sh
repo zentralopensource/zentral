@@ -34,6 +34,12 @@ sudo cat << ENROLL_SECRET > /etc/zentral/osquery/enroll_secret.txt
 %ENROLL_SECRET_SECRET%\$SERIAL\$$MACHINE_ID
 ENROLL_SECRET
 
+# config info
+sudo cat << CONFIG_INFO > /etc/zentral/info.cfg
+[server]
+base_url: https://%TLS_HOSTNAME%
+CONFIG_INFO
+
 # TODO log rotation
 
 # reset db dir
