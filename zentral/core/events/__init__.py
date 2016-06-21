@@ -1,6 +1,7 @@
 from datetime import datetime
 import logging
 import os.path
+import re
 import uuid
 from dateutil import parser
 from django.utils.text import slugify
@@ -280,8 +281,37 @@ class BaseEvent(object):
         return self._notification_body
 
 
+# Zentral Commands
+
+
 class CommandEvent(BaseEvent):
     event_type = "zentral_command"
 
 
 register_event_type(CommandEvent)
+
+
+COMMAND_RE = re.compile(r"^zentral\$(?P<command>[a-zA-Z\-_ ]+)"
+                        "(?P<serial_numbers>(?:\$[a-zA-Z0-9\-_]+)+)"
+                        "(?P<args>(?:#[a-zA-Z0-9\-_ ]+)+)?$")
+
+
+def post_command_events(message, source, tags):
+    if not message:
+        return
+    for line in message.splitlines():
+        line = line.strip()
+        m = COMMAND_RE.match(line)
+        if m:
+            payload = {'command': m.group('command'),
+                       'source': source}
+            args = m.group('args')
+            if args:
+                payload['args'] = [arg for arg in args.split('#') if arg]
+            for serial_number in m.group('serial_numbers').split('$'):
+                if serial_number:
+                    metadata = EventMetadata(CommandEvent.event_type,
+                                             machine_serial_number=serial_number,
+                                             tags=tags)
+                    event = CommandEvent(metadata, payload.copy())
+                    event.post()
