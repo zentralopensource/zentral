@@ -20,6 +20,18 @@ sudo apt-get update
 # install osquery
 sudo apt-get install osquery
 
+# rsyslogd pipe for osquery
+sudo cat << RSYSLOGD > /etc/rsyslog.d/60-osquery.conf
+template(
+  name="OsqueryCsvFormat"
+  type="string"
+  string="%timestamp:::date-rfc3339,csv%,%hostname:::csv%,%syslogseverity:::csv%,%syslogfacility-text:::csv%,%syslogtag:::csv%,%msg:::csv%\n"
+)
+*.* action(type="ompipe" Pipe="/var/osquery/syslog_pipe" template="OsqueryCsvFormat")
+RSYSLOGD
+sudo service rsyslog restart
+sudo /etc/init.d/osqueryd restart
+
 # create zentral config dir
 sudo mkdir -p /etc/zentral/osquery
 
