@@ -333,8 +333,8 @@ class MachineSnapshot(AbstractMTObject):
             return self.diff(previous_snapshot)
 
     def get_machine_str(self):
-        if self.system_info and self.system_info.computer_name:
-            return self.system_info.computer_name
+        if self.system_info and (self.system_info.computer_name or self.system_info.hostname):
+            return self.system_info.computer_name or self.system_info.hostname
         elif self.machine:
             return self.machine.serial_number
         elif self.reference:
