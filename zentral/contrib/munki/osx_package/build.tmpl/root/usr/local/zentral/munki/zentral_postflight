@@ -33,7 +33,7 @@ SYSTEM_PROFILER = "/usr/sbin/system_profiler"
 def get_sal_infos():
     """Returns dict of preferences set for Sal, minimum should be key (for business unit)
     and ServerURL (unless inherited from DNS/Sal default of 'http://sal/"""
-    #../sal-scripts/blob/3e11bb5ffe654869a6d6aeebb65418b0d13e9eeb/utils.py#L39
+    # ../sal-scripts/blob/3e11bb5ffe654869a6d6aeebb65418b0d13e9eeb/utils.py#L39
     try:
         from Foundation import (CFPreferencesCopyKeyList,
                                 kCFPreferencesAnyUser,
@@ -115,7 +115,7 @@ def parse_santa_fileinfo_output(stdout, fileinfo):
 
 
 def get_santa_fileinfo(bundle_path):
-    """ Get's app bundle paths from munki's AppInventory, returns dict of parsed 
+    """ Get's app bundle paths from munki's AppInventory, returns dict of parsed
     output from santactl, including Path, SHA-256/1, Bundle Name/Version/
     BundleVersionString values, type (executable), if code-signed, santas rules
     for handling, cert/signing chain info"""
@@ -286,8 +286,10 @@ class SystemProfilerReport(object):
         os_build = os_build.strip('(').strip(')')
         os_version = {'name': os_name,
                       'build': os_build}
-        os_version['major'], os_version['minor'], os_version['patch'] = (int(s) for s in os_version_str.split('.'))
-
+        os_version_elements = [int(s) for s in os_version_str.split('.')]
+        os_version_keys = ['major', 'minor', 'patch']
+        for idx, elm in enumerate(os_version_elements):
+            os_version[os_version_keys[idx]] = elm
         return {'machine': machine,
                 'system_info': system_info,
                 'os_version': os_version}
