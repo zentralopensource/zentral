@@ -280,16 +280,14 @@ class SystemProfilerReport(object):
         item_d = data['_items'][0]
 
         system_info['computer_name'] = item_d['local_host_name']
-
+        # OS version
         os_version = item_d['os_version']
         os_name, os_version_str, os_build = os_version.rsplit(' ', 2)
-        os_build = os_build.strip('(').strip(')')
+        os_build = os_build.strip('()')
         os_version = {'name': os_name,
                       'build': os_build}
-        os_version_elements = [int(s) for s in os_version_str.split('.')]
-        os_version_keys = ['major', 'minor', 'patch']
-        for idx, elm in enumerate(os_version_elements):
-            os_version[os_version_keys[idx]] = elm
+        os_version.update(dict(zip(['major', 'minor', 'patch'],
+                                   (int(s) for s in os_version_str.split('.')))))
         return {'machine': machine,
                 'system_info': system_info,
                 'os_version': os_version}
