@@ -76,6 +76,9 @@ sudo cat << OSQUERY_FLAGS > /etc/osquery/osquery.flags
 --distributed_tls_read_endpoint=/osquery/distributed/read
 --distributed_tls_write_endpoint=/osquery/distributed/write
 --distributed_interval=60
+--disable_audit=false
+--audit_allow_config=true
+--audit_persist=true
 OSQUERY_FLAGS
 
 # restart osquery
