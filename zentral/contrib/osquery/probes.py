@@ -44,7 +44,7 @@ class OSQueryProbe(BaseProbe):
         probe_links = []
         for store in stores:
             url = store.get_visu_url("osquery_result",
-                                     {'name__startswith': [self.name]})
+                                     {'name__startswith': [self.slug]})
             if url:
                 probe_links.append((store.name, url))
         probe_links.sort()
