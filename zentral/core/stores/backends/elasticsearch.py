@@ -58,7 +58,7 @@ INDEX_CONF = """
 
 
 class EventStore(BaseEventStore):
-    MAX_CONNECTION_ATTEMPTS = 10
+    MAX_CONNECTION_ATTEMPTS = 20
 
     def __init__(self, config_d, test=False):
         super(EventStore, self).__init__(config_d)
@@ -73,7 +73,7 @@ class EventStore(BaseEventStore):
                 if not self._es.indices.exists(self.index):
                     self._es.indices.create(self.index, body=INDEX_CONF)
             except ConnectionError as e:
-                s = 1000 / random.randint(300, 1000)
+                s = 1000 / random.randint(200, 1000)
                 logger.warning('Could not connect to server %d/%d. Sleep %ss',
                                i + 1, self.MAX_CONNECTION_ATTEMPTS, s)
                 time.sleep(s)
