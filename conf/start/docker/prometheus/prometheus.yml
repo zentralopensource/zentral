@@ -6,13 +6,13 @@ global:
 scrape_configs:
   - job_name: 'prometheus'
     metrics_path: '/prometheus/metrics'
-    target_groups:
+    static_configs:
       - targets: ['localhost:9090']
 
   - job_name: 'zentral_pushgateway'
-    target_groups:
+    static_configs:
       - targets: ['prompg:9091']
 
   - job_name: 'zentral_processors'
-    target_groups:
+    static_configs:
       - targets: ['processor_worker:8100']
