@@ -6,6 +6,22 @@
 
 set -e
 
+restart_osqueryd () {
+  if [ -x /bin/systemctl ]; then
+    sudo systemctl restart osqueryd
+  else
+    sudo /etc/init.d/osqueryd restart
+  fi
+}
+
+restart_rsyslog () {
+  if [ -x /bin/systemctl ]; then
+    sudo systemctl restart rsyslog
+  else
+    sudo service rsyslog restart
+  fi
+}
+
 # add osquery repository key
 sudo apt-key adv --keyserver keyserver.ubuntu.com \
                  --recv-keys 1484120AC4E9F8A1A577AEEE97A80C63C9D8B80B
@@ -29,8 +45,9 @@ template(
 )
 *.* action(type="ompipe" Pipe="/var/osquery/syslog_pipe" template="OsqueryCsvFormat")
 RSYSLOGD
-sudo service rsyslog restart
-sudo /etc/init.d/osqueryd restart
+
+restart_rsyslog
+restart_osqueryd
 
 # create zentral config dir
 sudo mkdir -p /etc/zentral/osquery
@@ -81,5 +98,4 @@ sudo cat << OSQUERY_FLAGS > /etc/osquery/osquery.flags
 --audit_persist=true
 OSQUERY_FLAGS
 
-# restart osquery
-sudo /etc/init.d/osqueryd restart
+restart_osqueryd
