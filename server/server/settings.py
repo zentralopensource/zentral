@@ -33,6 +33,8 @@ SERVER_EMAIL = django_zentral_settings.get('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 
 ALLOWED_HOSTS = django_zentral_settings['ALLOWED_HOSTS']
 
+MEDIA_ROOT = django_zentral_settings.get("MEDIA_ROOT", "")
+
 
 # Application definition
 
