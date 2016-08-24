@@ -35,6 +35,7 @@ class EnrollmentDebuggingView(View):
 
 
 class PostEventView(SignedRequestJSONPostAPIView):
+    payload_encoding = "latin-1"
     verify_module = "zentral.contrib.jss"
     tmp_dir = "/tmp/jss_events/"
 
