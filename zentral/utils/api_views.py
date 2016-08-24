@@ -4,7 +4,7 @@ import warnings
 import zlib
 from django import forms
 from django.core import signing
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.views.generic import TemplateView, View
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, BusinessUnit
@@ -90,6 +90,8 @@ def make_secret(module, business_unit=None):
 
 
 class JSONPostAPIView(View):
+    payload_encoding = 'utf-8'
+
     def check_request_secret(self, request, *args, **kwargs):
         # ALWAYS PASS !
         pass
@@ -117,7 +119,12 @@ class JSONPostAPIView(View):
         else:
             if request.META.get('HTTP_CONTENT_ENCODING', None) in ['zlib', 'gzip']:
                 payload = zlib.decompress(payload)
-            payload = payload.decode('utf-8')
+            try:
+                payload = payload.decode(self.payload_encoding)
+            except UnicodeDecodeError:
+                err_msg_tmpl = 'Could not decode payload with encoding %s'
+                logger.error(err_msg_tmpl, self.payload_encoding, extra={'request': request})
+                return HttpResponseBadRequest(err_msg_tmpl % self.payload_encoding)
             data = json.loads(payload)
         try:
             self.check_data_secret(data)
