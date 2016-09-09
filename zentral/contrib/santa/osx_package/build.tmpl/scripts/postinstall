@@ -6,15 +6,15 @@ SERIAL_NUMBER=$(/usr/sbin/system_profiler SPHardwareDataType | awk '/Serial/ {pr
 MACHINE_ID="%API_SECRET%\$SERIAL\$${SERIAL_NUMBER}"
 
 ## set machine_id
-sudo sed -i -e "s/%MACHINE_ID%/$MACHINE_ID/" /var/db/santa/config.plist
+/usr/bin/sed -i -e "s/%MACHINE_ID%/$MACHINE_ID/" /var/db/santa/config.plist
 
 ## load com.google.santad.plist
-sudo /bin/launchctl load -w "/Library/LaunchDaemons/com.google.santad.plist"  >/dev/null 2>&1
+/bin/launchctl load -w "/Library/LaunchDaemons/com.google.santad.plist"  >/dev/null 2>&1
 
 ## force santa sync (=> preflight => machine_id => serial number)
-sudo /usr/local/bin/santactl sync
+/usr/local/bin/santactl sync
 
 ## write zentral base url
-sudo defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"
+/usr/bin/defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"
 
 exit 0

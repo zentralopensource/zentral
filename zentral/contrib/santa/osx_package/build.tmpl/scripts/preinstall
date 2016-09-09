@@ -2,6 +2,6 @@
 ## Preinstall script
 
 ## unload com.google.santad.plist
-sudo /bin/launchctl unload -w "/Library/LaunchDaemons/com.google.santad.plist" > /dev/null
+/bin/launchctl unload -w "/Library/LaunchDaemons/com.google.santad.plist" > /dev/null
 
 exit 0
