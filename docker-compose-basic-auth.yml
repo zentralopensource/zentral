@@ -1,0 +1,67 @@
+version: '2'
+
+services:
+  db:
+    image: postgres:9.4
+    env_file:
+      - ./conf/start/docker/postgres.env
+  elastic:
+    image: elasticsearch:2
+  rabbitmq:
+    image: rabbitmq:3
+  prompg:
+    image: prom/pushgateway
+  promsrv:
+    build: ./conf/start/docker/prometheus/
+  nginx:
+    image: nginx
+    ports:
+      - "443:443"
+    depends_on:
+      - promsrv
+      - web
+    volumes:
+      - ./conf/basic_auth/docker/nginx/conf.d/:/etc/nginx/conf.d/
+      - ./conf/basic_auth/docker/nginx/extra/:/etc/nginx/extra/
+      - ./conf/start/docker/tls:/etc/nginx/tls
+  app:
+    build: .
+    entrypoint: /zentral/docker-entrypoint.py
+    environment:
+      ZENTRAL_CONF_DIR: /zentral/conf/start/zentral/
+      POSTGRES_HOST: db
+    env_file:
+      - ./conf/start/docker/postgres.env
+    volumes:
+      - .:/zentral
+    restart: onfailure:10
+  inventory_worker:
+    extends: app
+    command: inventory_worker
+    depends_on:
+      - db
+      - prompg
+      - rabbitmq
+  processor_worker:
+    extends: app
+    command: processor_worker
+    depends_on:
+      - db
+      - rabbitmq
+  store_worker:
+    extends: app
+    command: store_worker
+    depends_on:
+      - db
+      - elastic
+      - rabbitmq
+  web:
+    extends: app
+    command: runserver
+    depends_on:
+      - db
+      - elastic
+      - rabbitmq
+
+networks:
+  default:
