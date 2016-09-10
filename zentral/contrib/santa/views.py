@@ -77,7 +77,11 @@ class PreflightView(BaseView):
                              self.user_agent,
                              self.ip,
                              data)
-        major, minor, patch = (int(s) for s in data['os_version'].split('.'))
+        patch = 0
+        try:
+            major, minor, patch = (int(s) for s in data['os_version'].split('.'))
+        except ValueError:
+            major, minor = (int(s) for s in data['os_version'].split('.'))
         tree = {'source': {'module': 'zentral.contrib.santa',
                            'name': 'Santa',
                            },
