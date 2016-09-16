@@ -69,63 +69,31 @@ def get_santa_versions():
     return versions
 
 
-def parse_santa_fileinfo_output(stdout, fileinfo):
-    """ Takes output of successful run of get_santa_fileinfo(bundle_path) below,
-    adds into passed fileinfo dict the splitlines output, along with specific
-    handling of cert chain/signing info since it's super verbose"""
-    signing_chain = None
-    current_issued_cert = None
-    current_cert = None
-    for line in stdout.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        key, val = (s.strip() for s in line.split(':', 1))
-        # adapt key and val
-        key = key.lower().replace(' ', '_').replace('-', '_')
-        if val == 'Yes':
-            val = True
-        elif val == 'No':
-            val = False
-        # process lines
-        if key == 'signing_chain':
-            current_cert = {}
-        elif current_cert is None:
-            # the bundle infos
-            fileinfo[key] = val
-        else:
-            # the signing chain
-            if '.' in key:
-                if current_cert:
-                    if signing_chain is None:
-                        signing_chain = current_cert
-                    if current_issued_cert is not None:
-                        current_issued_cert['signed_by'] = current_cert
-                    current_issued_cert = current_cert
-                    current_cert = {}
-                key = key.split('_', 1)[-1]
-            current_cert[key] = val
-    if current_cert:
-        if signing_chain is None:
-            signing_chain = current_cert
-        if current_issued_cert is not None:
-            current_issued_cert['signed_by'] = current_cert
-    if signing_chain:
-        fileinfo['signed_by'] = signing_chain
-
-
 def get_santa_fileinfo(bundle_path):
     """ Get's app bundle paths from munki's AppInventory, returns dict of parsed
     output from santactl, including Path, SHA-256/1, Bundle Name/Version/
     BundleVersionString values, type (executable), if code-signed, santas rules
     for handling, cert/signing chain info"""
-    fileinfo = {}
     try:
-        stdout = subprocess.check_output([SANTACTL, "fileinfo", bundle_path])
+        stdout = subprocess.check_output([SANTACTL, "fileinfo", "--json", bundle_path])
     except subprocess.CalledProcessError:
-        pass
-    else:
-        parse_santa_fileinfo_output(stdout, fileinfo)
+        return {}
+    stdout = stdout.strip()
+    try:
+        stdout = stdout[stdout.index('{'):]
+    except ValueError:
+        return {}
+    fileinfo = json.loads(stdout)
+    for k in fileinfo:
+        v = fileinfo.pop(k)
+        k = k.lower().replace(' ', '_').replace('-', '_')
+        if v == "Yes":
+            v = True
+        elif v == "No":
+            v = False
+        elif v == "None":
+            v = None
+        fileinfo[k] = v
     return fileinfo
 
 
