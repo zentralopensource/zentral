@@ -1,9 +1,8 @@
 *.pyc
 __pycache__
 *.sw[op]
-/*.yml
 !/docker-compose.yml
-/conf/*
+*.htpasswd
 !/conf/start
 /docs/_build/
 /docs/_static/
