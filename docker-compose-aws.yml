@@ -1,14 +1,6 @@
 version: '2'
 
 services:
-  db:
-    image: postgres:9.4
-    env_file:
-      - ./conf/start/docker/postgres.env
-    networks:
-      default:
-        aliases:
-          - postgres
   elastic:
     image: elasticsearch:2
     networks:
@@ -47,29 +39,29 @@ services:
     extends: app
     command: inventory_worker
     depends_on:
-      - db
       - prompg
       - rabbitmq
   processor_worker:
     extends: app
     command: processor_worker
     depends_on:
-      - db
       - rabbitmq
   store_worker:
     extends: app
     command: store_worker
     depends_on:
-      - db
       - elastic
       - rabbitmq
   web:
     extends: app
     command: runserver
     depends_on:
-      - db
       - elastic
       - rabbitmq
+    environment:
+      POSTGRES_HOST: db
+    env_file:
+      - ./conf/start/docker/postgres.env
 
 networks:
   default:
