@@ -27,6 +27,7 @@ echo "Enter the full path to your tls certificate:"
 read TLSCERTIFICATE
 mv conf/start/docker/tls/zentral.crt conf/start/docker/tls/zentral.crt.bak
 cp "$TLSCERTIFICATE" conf/start/docker/tls/zentral.crt
+sed -i "s/zentral_fullchain.crt/zentral.crt/g" conf/start/zentral/base.json
 echo "*.crt" >> .gitignore
 
 echo "Path to your tls key:"
