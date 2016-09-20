@@ -58,4 +58,6 @@ echo "Reset git cache? y or n"
 read ANSWER
 if [[ $ANSWER == 'y' ]]; then
   git rm --cached -r .
+else
+  exit 0
 fi
