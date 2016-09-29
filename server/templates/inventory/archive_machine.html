@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-12">
+    <ol class="breadcrumb">
+      <li><a href="/">Home</a></li>
+      <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+      <li><a href="{% url 'inventory:machine' machine.serial_number %}">{{ machine.serial_number }}</a></li>
+      <li class="active">archive</li>
+    </ol>
+
+    <h2>
+      {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}{{ serial_number }}
+    </h2>
+
+    <p>
+      {% for tag in machine.tags %}
+      {% inventory_tag tag %}
+      {% endfor %}
+    </p>
+
+    <p>Do you really want to archive this machine?</p>
+    <form method="POST">{% csrf_token %}
+      <a class="btn btn-default" href="{% url 'inventory:machine' machine.serial_number %}">No</a>
+      <button type="submit" class="btn btn-danger">Yes</button>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

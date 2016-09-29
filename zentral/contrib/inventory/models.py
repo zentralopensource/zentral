@@ -1,4 +1,5 @@
 import colorsys
+from datetime import datetime
 import logging
 import re
 from django.contrib.postgres.fields import JSONField
@@ -284,7 +285,8 @@ class MachineSnapshotManager(MTObjectManager):
                                    'business_unit__meta_business_unit',
                                    'os_version',
                                    'system_info',
-                                   'teamviewer').filter(mt_next__isnull=True)
+                                   'teamviewer').filter(mt_next__isnull=True,
+                                                        archived_at__isnull=True)
 
     def get_current_count(self, tags=None):
         if tags:
@@ -294,14 +296,14 @@ class MachineSnapshotManager(MTObjectManager):
             LEFT JOIN inventory_machinetag AS mt ON (mt.serial_number = m.serial_number)
             LEFT JOIN inventory_businessunit AS bu ON (ms.business_unit_id = bu.id)
             LEFT JOIN inventory_metabusinessunittag AS mbut ON (mbut.meta_business_unit_id = bu.meta_business_unit_id)
-            WHERE ms.mt_next_id IS NULL
+            WHERE ms.mt_next_id IS NULL AND ms.archived_at IS NULL
             AND (mt.tag_id IN %(tag_id)s OR mbut.tag_id IN %(tag_id)s)"""
             args = {"tag_id": tuple(t.id for t in tags)}
         else:
             query = """SELECT count(distinct(m.serial_number))
             FROM inventory_machine AS m
             JOIN inventory_machinesnapshot AS ms ON (ms.machine_id = m.id)
-            WHERE ms.mt_next_id IS NULL"""
+            WHERE ms.mt_next_id IS NULL AND ms.archived_at IS NULL"""
             args = []
         cursor = connection.cursor()
         cursor.execute(query, args)
@@ -319,6 +321,7 @@ class MachineSnapshot(AbstractMTObject):
     system_info = models.ForeignKey(SystemInfo, blank=True, null=True)
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
     teamviewer = models.ForeignKey(TeamViewer, blank=True, null=True)
+    archived_at = models.DateTimeField(blank=True, null=True)
     mt_next = models.OneToOneField('self', blank=True, null=True, related_name="mt_previous")
 
     objects = MachineSnapshotManager()
@@ -543,3 +546,10 @@ class MetaMachine(object):
         tags = list(tags.difference(self.tags()))
         tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
         return tags
+
+    def archive(self):
+        archived_at = datetime.now()
+        for ms in self.get_snapshots():
+            tree = ms.serialize()
+            tree['archived_at'] = archived_at
+            MachineSnapshot.objects.commit(tree)

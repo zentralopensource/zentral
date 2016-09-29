@@ -2,7 +2,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core.urlresolvers import reverse, reverse_lazy
 from django.db import connection
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.views import generic
 from zentral.core.stores import frontend_store
 from zentral.core.probes.conf import ProbeList
@@ -66,7 +66,7 @@ class MachineListView(generic.TemplateView):
                  "join inventory_machine as m on (m.id = ms.machine_id) "
                  "left join inventory_systeminfo as si on (si.id = ms.system_info_id) "
                  "{} "
-                 "where ms.mt_next_id is null {} "
+                 "where ms.mt_next_id is null and ms.archived_at is null {} "
                  "group by serial_number "
                  "order by computer_name;")
         query = query.format(" ".join(extra_joins), " ".join(extra_wheres))
@@ -357,6 +357,24 @@ class MachineView(generic.TemplateView):
         context['inventory'] = True
         context['machine'] = MetaMachine(context['serial_number'])
         return context
+
+
+class ArchiveMachineView(generic.TemplateView):
+    template_name = "inventory/archive_machine.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.machine = MetaMachine(kwargs['serial_number'])
+        return super(ArchiveMachineView, self).dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super(ArchiveMachineView, self).get_context_data(**kwargs)
+        context['inventory'] = True
+        context['machine'] = self.machine
+        return context
+
+    def post(self, request, *args, **kwargs):
+        self.machine.archive()
+        return redirect('inventory:index')
 
 
 class MachineEventSet(object):
