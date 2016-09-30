@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'inventory:macos_apps' %}">macOS applications</a></li>
+  <li class="active">{{ macos_app }}</li>
+</ol>
+
+<h2>{{ macos_app }}</h2>
+
+<dl class="dl-horizontal">
+    <dt>Bundle ID</dt>
+    <dd>{{ macos_app.bundle_id|default:"-" }}</dd>
+    <dt>Bundle name</dt>
+    <dd>{{ macos_app.bundle_name }}</dd>
+    <dt>Bundle version</dt>
+    <dd>{{ macos_app.bundle_version|default:"-" }}</dd>
+    <dt>Bundle version string</dt>
+    <dd>{{ macos_app.bundle_version_str }}</dd>
+</dl>
+
+<h3>{{ instance_count }} application instance{{ instance_count|pluralize }}</h3>
+
+{% for instance in instances %}
+<div class="panel panel-default">
+  <div class="panel-body">
+      <p>
+        <a class="btn btn-primary" href="{% url 'inventory:macos_app_instance_machines' macos_app.id instance.id %}">
+          View {{ instance.machinesnapshot_num }} machine{{ instance.machinesnapshot_num|pluralize }}
+        </a>
+      </p>
+      <dl class="dl-horizontal">
+          <dt>Bundle path</dt>
+          <dd>{{ instance.bundle_path }}</dd>
+          <dt>Path</dt>
+          <dd>{{ instance.path|default:"-" }}</dd>
+          <dt>Sha1</dt>
+          <dd>{{ instance.sha_1|default:"-" }}</dd>
+          <dt>Sha256</dt>
+          <dd>{{ instance.sha_256|default:"-" }}</dd>
+      </dl>
+      {% for cert in instance.certificate_chain %}
+      <p>signed by</p>
+      <dl class="dl-horizontal">
+        <dt>Common name</dt>
+        <dd>{{ cert.common_name }}</dd>
+        <dt>Organization</dt>
+        <dd>{{ cert.organization }}</dd>
+        <dt>Organizational unit</dt>
+        <dd>{{ cert.organizational_unit }}</dd>
+        <dt>Sha1</dt>
+        <dd>{{ cert.sha_1 }}</dd>
+        <dt>Sha256</dt>
+        <dd>{{ cert.sha_256 }}</dd>
+        <dt>Validity</dt>
+        <dd>{{ cert.valid_from }} - {{ cert.valid_until }}</dt>
+      </dl>
+      {% endfor %}
+   </div>
+</div>
+{% endfor %}
+
+
+{% endblock %}

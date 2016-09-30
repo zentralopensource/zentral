@@ -30,6 +30,11 @@ urlpatterns = [
     url(r'^tags/$', views.TagsView.as_view(), name='tags'),
     url(r'^tags/(?P<pk>\d+)/update/$', views.UpdateTagView.as_view(), name='update_tag'),
     url(r'^tags/(?P<pk>\d+)/delete/$', views.DeleteTagView.as_view(), name='delete_tag'),
+    url(r'^macos_apps/$', views.MacOSAppsView.as_view(), name='macos_apps'),
+    url(r'^macos_apps/(?P<pk>\d+)/$', views.MacOSAppView.as_view(), name='macos_app'),
+    url(r'^macos_apps/(?P<pk>\d+)/instance/(?P<osx_app_instance_id>\d+)/machines/$',
+        views.OSXAppInstanceMachinesView.as_view(),
+        name='macos_app_instance_machines'),
 ]
 
 
@@ -39,6 +44,7 @@ main_menu_cfg = {
         ('index', 'Machines'),
         ('groups', 'Groups'),
         ('mbu', 'Business units'),
+        ('macos_apps', 'macOS applications'),
         ('probes', 'Probes'),
         ('tags', 'Tags'),
     )

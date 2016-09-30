@@ -1,5 +1,6 @@
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.utils.text import slugify
 from .models import MetaBusinessUnit, Source, MetaBusinessUnitTag, Tag, MetaMachine, MachineTag
 
@@ -146,3 +147,63 @@ class AddMachineTagForm(AddTagForm):
     def save(self, *args, **kwargs):
         return MachineTag.objects.get_or_create(serial_number=self.machine.serial_number,
                                                 tag=self._get_tag())
+
+
+class MacOSAppSearchForm(forms.Form):
+    bundle_name = forms.CharField(label='Bundle name', max_length=64, required=False)
+    source = forms.ModelChoiceField(queryset=Source.objects.current_macos_apps_sources(),
+                                    required=False,
+                                    widget=forms.Select(attrs={'class': 'form-control'}))
+    page = forms.IntegerField(required=False)
+
+    def search(self, limit):
+        args = []
+        query = ("SELECT DISTINCT a.*, "
+                 "string_agg(distinct src.name, ',  ') as source_names, count(*) OVER() AS full_count "
+                 "FROM inventory_osxapp AS a "
+                 "JOIN inventory_osxappinstance AS i ON (i.app_id = a.id) "
+                 "JOIN inventory_machinesnapshot_osx_app_instances AS si ON (si.osxappinstance_id = i.id) "
+                 "JOIN inventory_machinesnapshot AS s ON (si.machinesnapshot_id = s.id) "
+                 "JOIN inventory_source AS src ON (s.source_id = src.id) "
+                 "WHERE s.mt_next_id IS NULL and s.archived_at IS NULL")
+        # bundle name
+        bundle_name = self.cleaned_data['bundle_name']
+        if bundle_name:
+            args.append(bundle_name)
+            query = "{} AND a.bundle_name ~* %s".format(query)
+        # source
+        source = self.cleaned_data['source']
+        if source:
+            args.append(source.id)
+            query = "{} AND src.id = %s".format(query)
+        # pagination / ordering
+        page = self.cleaned_data['page']
+        offset = (page - 1) * limit
+        args.extend([offset, limit])
+        query = ("{} GROUP BY a.id "
+                 "ORDER BY a.bundle_name, a.bundle_id, a.bundle_version_str, a.bundle_version "
+                 "OFFSET %s LIMIT %s").format(query)
+        cursor = connection.cursor()
+        cursor.execute(query, args)
+        columns = [col[0] for col in cursor.description]
+        results = []
+        full_count = 0
+        for t in cursor.fetchall():
+            d = dict(zip(columns, t))
+            full_count = d.pop('full_count')
+            results.append(d)
+        if full_count > offset + limit:
+            next_page = page + 1
+        else:
+            next_page = None
+        if page > 1:
+            previous_page = page - 1
+        else:
+            previous_page = None
+        total_pages = full_count // limit + 1
+        return results, full_count, previous_page, next_page, total_pages
+
+    def clean(self):
+        cleaned_data = self.cleaned_data
+        cleaned_data['page'] = max(1, int(cleaned_data.get('page') or 1))
+        return cleaned_data

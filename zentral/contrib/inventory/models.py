@@ -98,22 +98,33 @@ class MetaBusinessUnit(models.Model):
 
 class SourceManager(MTObjectManager):
     def current_machine_group_sources(self):
-        qs = self.filter(machinegroup__isnull=False,
-                         machinegroup__machinesnapshot__mt_next__isnull=True)
-        qs = qs.annotate(num_machine_groups=Count('machinegroup'))
-        return qs.order_by('module', 'name')
+        return (self.filter(machinegroup__isnull=False,
+                            machinegroup__machinesnapshot__mt_next__isnull=True,
+                            machinegroup__machinesnapshot__archived_at__isnull=True)
+                .annotate(num_machine_groups=Count('machinegroup'))
+                .order_by('module', 'name'))
 
     def current_business_unit_sources(self):
-        qs = self.filter(businessunit__isnull=False,
-                         businessunit__machinesnapshot__mt_next__isnull=True)
-        qs = qs.annotate(num_business_units=Count('businessunit'))
-        return qs.order_by('module', 'name')
+        return (self.filter(businessunit__isnull=False,
+                            businessunit__machinesnapshot__mt_next__isnull=True,
+                            businessunit__machinesnapshot__archived_at__isnull=True)
+                .annotate(num_business_units=Count('businessunit'))
+                .order_by('module', 'name'))
 
     def current_machine_snapshot_sources(self):
-        qs = self.filter(machinesnapshot__isnull=False,
-                         machinesnapshot__mt_next__isnull=True)
-        qs = qs.annotate(num_machine_snapshots=Count('machinesnapshot'))
-        return qs.order_by('module', 'name')
+        return (self.filter(machinesnapshot__isnull=False,
+                            machinesnapshot__mt_next__isnull=True,
+                            machinesnapshot__archived_at__isnull=True)
+                .annotate(num_machine_snapshots=Count('machinesnapshot'))
+                .order_by('module', 'name'))
+
+    def current_macos_apps_sources(self):
+        return (self.filter(machinesnapshot__isnull=False,
+                            machinesnapshot__mt_next__isnull=True,
+                            machinesnapshot__archived_at__isnull=True)
+                .annotate(num_osx_app_instances=Count('machinesnapshot__osx_app_instances'))
+                .filter(num_osx_app_instances__gt=0)
+                .order_by('module', 'name'))
 
 
 class Source(AbstractMTObject):
@@ -248,11 +259,34 @@ class Certificate(AbstractMTObject):
     signed_by = models.ForeignKey('self', blank=True, null=True)
 
 
+class OSXAppManager(MTObjectManager):
+    def current(self):
+        return self.distinct().filter(osxappinstance__machinesnapshot__mt_next__isnull=True)
+
+
 class OSXApp(AbstractMTObject):
     bundle_id = models.TextField(db_index=True, blank=True, null=True)
     bundle_name = models.TextField(db_index=True, blank=True, null=True)
     bundle_version = models.TextField(blank=True, null=True)
     bundle_version_str = models.TextField(blank=True, null=True)
+
+    objects = OSXAppManager()
+
+    def __str__(self):
+        return " ".join([self.bundle_name, self.bundle_version_str])
+
+    def sources(self):
+        return (Source.objects.distinct()
+                .filter(machinesnapshot__osx_app_instances__app=self)
+                .order_by('module', 'name'))
+
+    def get_sources_for_display(self):
+        return " ".join(s.name for s in self.sources())
+
+    def current_instances(self):
+        return (self.osxappinstance_set.filter(machinesnapshot__mt_next__isnull=True,
+                                               machinesnapshot__archived_at__isnull=True)
+                                       .annotate(machinesnapshot_num=Count('machinesnapshot')))
 
 
 class OSXAppInstance(AbstractMTObject):
@@ -263,6 +297,14 @@ class OSXAppInstance(AbstractMTObject):
     sha_256 = models.CharField(max_length=64, db_index=True, blank=True, null=True)
     type = models.TextField(blank=True, null=True)
     signed_by = models.ForeignKey(Certificate, blank=True, null=True)
+
+    def certificate_chain(self):
+        chain = []
+        obj = self
+        while obj.signed_by:
+            chain.append(obj.signed_by)
+            obj = obj.signed_by
+        return chain
 
 
 class TeamViewer(AbstractMTObject):

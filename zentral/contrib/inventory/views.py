@@ -7,8 +7,12 @@ from django.views import generic
 from zentral.core.stores import frontend_store
 from zentral.core.probes.conf import ProbeList
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
-                    MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm)
-from .models import MetaBusinessUnit, MachineGroup, MachineSnapshot, MetaMachine, MetaBusinessUnitTag, MachineTag, Tag
+                    MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
+                    MacOSAppSearchForm)
+from .models import (MetaBusinessUnit, MachineGroup,
+                     MachineSnapshot, MetaMachine,
+                     MetaBusinessUnitTag, MachineTag, Tag,
+                     OSXApp, OSXAppInstance)
 
 
 class MachineListView(generic.TemplateView):
@@ -184,6 +188,32 @@ class GroupMachinesView(MachineListView):
             l.append((None, "Machine search"))
         else:
             l.append((None, self.object.name))
+        return l
+
+
+class OSXAppInstanceMachinesView(MachineListView):
+    template_name = "inventory/osx_app_instance_machines.html"
+
+    def get_object(self, **kwargs):
+        return OSXAppInstance.objects.select_related('app').get(app__pk=kwargs['pk'], pk=kwargs['osx_app_instance_id'])
+
+    def get_extra_joins(self):
+        return ["join inventory_machinesnapshot_osx_app_instances as msoai "
+                "on (msoai.machinesnapshot_id = ms.id) "]
+
+    def get_extra_wheres(self):
+        return ["and msoai.osxappinstance_id = %d" % self.object.id]
+
+    def get_list_title(self, **kwargs):
+        return "macOS app instance: {}".format(self.object.app)
+
+    def get_breadcrumbs(self, **kwargs):
+        l = [(reverse('inventory:macos_apps'), 'macOS applications'),
+             ((reverse('inventory:macos_app', args=(self.object.app.id,)), str(self.object.app)))]
+        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
+            l.append((None, "Machine search"))
+        else:
+            l.append((None, "Machines"))
         return l
 
 
@@ -541,4 +571,59 @@ class DeleteTagView(generic.DeleteView):
     def get_context_data(self, **kwargs):
         ctx = super(DeleteTagView, self).get_context_data(**kwargs)
         ctx['links'] = self.object.links()
+        return ctx
+
+
+class MacOSAppsView(generic.TemplateView):
+    template_name = "inventory/macos_apps.html"
+
+    def get(self, request, *args, **kwargs):
+        self.search_form = MacOSAppSearchForm(request.GET)
+        if not self.search_form.is_valid():
+            return redirect('inventory:macos_apps')
+        return super(MacOSAppsView, self).get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super(MacOSAppsView, self).get_context_data(**kwargs)
+        ctx['inventory'] = True
+        ctx['search_form'] = self.search_form
+        (ctx['object_list'],
+         ctx['total_objects'],
+         previous_page,
+         next_page,
+         ctx['total_pages']) = self.search_form.search(limit=50)
+        if next_page:
+            qd = self.request.GET.copy()
+            qd['page'] = next_page
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        if previous_page:
+            qd = self.request.GET.copy()
+            qd['page'] = previous_page
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        qd = self.request.GET.copy()
+        qd.pop('page', None)
+        reset_link = "?{}".format(qd.urlencode())
+        breadcrumbs = []
+        if len([i for k, i in self.search_form.cleaned_data.items() if i and not k == 'page']):
+            breadcrumbs.append((reverse('inventory:macos_apps'), "macOS applications"))
+            breadcrumbs.append((reset_link, "Search"))
+        else:
+            breadcrumbs.append((reset_link, "macOSApplication"))
+        breadcrumbs.append((None, "page {} of {}".format(self.search_form.cleaned_data['page'],
+                                                         ctx['total_pages'])))
+        ctx['breadcrumbs'] = breadcrumbs
+        return ctx
+
+
+class MacOSAppView(generic.TemplateView):
+    template_name = "inventory/macos_app.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super(MacOSAppView, self).get_context_data(**kwargs)
+        macos_app = get_object_or_404(OSXApp, pk=kwargs['pk'])
+        ctx['macos_app'] = macos_app
+        instance_qs = macos_app.current_instances()
+        ctx['instance_count'] = instance_qs.count()
+        ctx['instances'] = instance_qs.order_by('id')
+        ctx['inventory'] = True
         return ctx

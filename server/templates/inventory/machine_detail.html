@@ -154,7 +154,7 @@
 
 
 {% if machine.snapshots_with_osx_app_instances %}
-<h2>OSX Apps</h2>
+<h2>macOS Apps</h2>
 
 <ul class="nav nav-tabs">
   {% for ms in machine.snapshots_with_osx_app_instances %}
@@ -181,7 +181,7 @@
     {% with osx_app_instance.app as app %}
     <tr>
       <td>{{ app.bundle_id|default:"" }}</td>
-      <td>{{ app.bundle_name }}</td>
+      <td><a href="{% url 'inventory:macos_app' app.id %}">{{ app.bundle_name }}</a></td>
       <td>{{ app.bundle_version_str }}</td>
       <td>{{ osx_app_instance.bundle_path }}</td>
     </tr>

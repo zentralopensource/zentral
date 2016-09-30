@@ -126,13 +126,23 @@ class ApplicationInventory(object):
                 if not fileinfo:
                     warnings.warn('Bundle {} without santa fileinfo'.format(osx_app_instance['app']['bundle_id']))
                 else:
+                    signing_chain = fileinfo.get('signing_chain', None)
+                    if not signing_chain:
+                        signed_by = None
+                    else:
+                        signed_by = signing_chain.pop(0)
+                        current_signed_by = signed_by
+                        while signing_chain:
+                            current_signed_by_signed_by = signing_chain.pop(0)
+                            current_signed_by['signed_by'] = current_signed_by_signed_by
+                            current_signed_by = current_signed_by_signed_by
                     if 'bundle_version' in fileinfo:
                         osx_app_instance['app'].update({'bundle_version': fileinfo['bundle_version']})
                     osx_app_instance.update({'path': fileinfo.get('path', None),
                                              'sha_1': fileinfo['sha_1'],
                                              'sha_256': fileinfo['sha_256'],
                                              'type': fileinfo['type'],
-                                             'signed_by': fileinfo.get('signed_by', None)})
+                                             'signed_by': signed_by})
             apps.append(osx_app_instance)
         return include_santa_fileinfo, apps
 
