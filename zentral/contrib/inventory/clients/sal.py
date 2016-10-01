@@ -67,15 +67,10 @@ class InventoryClient(BaseInventory):
                                        'links': self._bu_links_from_id(business_unit_id)}
 
             # os version
-            os_version = {'name': sal_machine['os_family']}
-            try:
-                (os_version['major'],
-                 os_version['minor'],
-                 os_version['patch']) = (int(p) for p in sal_machine['operating_system'].split("."))
-            except:
-                raise
-            else:
-                ct['os_version'] = os_version
+            os_version = dict(zip(('major', 'minor', 'patch'),
+                                  (int(p) for p in sal_machine['operating_system'].split("."))))
+            os_version['name'] = sal_machine['os_family']
+            ct['os_version'] = os_version
 
             # system info
             ct['system_info'] = {'computer_name': sal_machine['hostname'].strip(),
