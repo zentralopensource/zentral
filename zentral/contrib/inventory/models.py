@@ -400,7 +400,8 @@ class MachineSnapshot(AbstractMTObject):
 
     def ordered_osx_app_instances(self):
         return self.osx_app_instances.select_related('app').all().order_by('app__bundle_name',
-                                                                           'app__bundle_version_str')
+                                                                           'app__bundle_version_str',
+                                                                           'bundle_path')
 
 
 class TagManager(models.Manager):
