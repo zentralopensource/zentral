@@ -92,13 +92,10 @@ DATABASES = {
         'ATOMIC_REQUESTS': True,
     }
 }
-POSTGRES_PASSWORD = os.environ.get('POSTGRES_PASSWORD')
-if POSTGRES_PASSWORD:
-    DATABASES['default']['PASSWORD'] = POSTGRES_PASSWORD
-POSTGRES_HOST = os.environ.get('POSTGRES_HOST')
-if POSTGRES_HOST:
-    DATABASES['default']['HOST'] = POSTGRES_HOST
-
+for key in ('HOST', 'PASSWORD', 'PORT'):
+    val = os.environ.get('POSTGRES_{}'.format(key))
+    if val:
+        DATABASES['default'][key] = val
 
 # Internationalization
 # https://docs.djangoproject.com/en/1.8/topics/i18n/
