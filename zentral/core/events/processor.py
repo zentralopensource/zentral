@@ -44,4 +44,4 @@ class EventProcessor(object):
                 except:
                     logger.exception("Could not trigger action %s", action.name)
                     counter_dict['error'] = 'Y'
-        self.counter.labels(counter_dict).inc()
+        self.counter.labels(**counter_dict).inc()

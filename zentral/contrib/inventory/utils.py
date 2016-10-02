@@ -57,11 +57,11 @@ def push_inventory_metrics():
               registry=registry)
     for r in osx_app_count():
         count = r.pop('count')
-        g.labels(r).set(count)
+        g.labels(**r).set(count)
     g = Gauge('zentral_inventory_os_versions', 'Zentral inventory OS Versions',
               ['name', 'major', 'minor', 'patch', 'build', 'source'],
               registry=registry)
     for r in os_version_count():
         count = r.pop('count')
-        g.labels(r).set(count)
+        g.labels(**r).set(count)
     push_to_gateway(ppg, job='zentral_push_inventory_metrics', registry=registry)
