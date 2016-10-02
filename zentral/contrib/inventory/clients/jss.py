@@ -104,15 +104,10 @@ class InventoryClient(BaseInventory):
 
             hardware = computer['hardware']
             # os version
-            os_version = {'name': hardware['os_name'],
-                          'build': hardware['os_build']}
-            os_version_version = hardware['os_version'].split('.')
-            if len(os_version_version) > 0:
-                os_version['major'] = os_version_version[0]
-                if len(os_version_version) > 1:
-                    os_version['minor'] = os_version_version[1]
-                    if len(os_version_version) > 2:
-                        os_version['patch'] = os_version_version[2]
+            os_version = dict(zip(('major', 'minor', 'patch'),
+                                  (int(s) for s in hardware['os_version'].split('.'))))
+            os_version.update({'name': hardware['os_name'],
+                               'build': hardware['os_build']})
             ct['os_version'] = os_version
 
             # system info

@@ -77,22 +77,15 @@ class PreflightView(BaseView):
                              self.user_agent,
                              self.ip,
                              data)
-        patch = 0
-        try:
-            major, minor, patch = (int(s) for s in data['os_version'].split('.'))
-        except ValueError:
-            major, minor = (int(s) for s in data['os_version'].split('.'))
+        os_version = dict(zip(('major', 'minor', 'patch'),
+                              (int(s) for s in data['os_version'].split('.'))))
+        os_version.update({'name': 'Mac OS X',
+                           'build': data['os_build']})
         tree = {'source': {'module': 'zentral.contrib.santa',
-                           'name': 'Santa',
-                           },
+                           'name': 'Santa'},
                 'reference': machine_serial_number,
                 'machine': {'serial_number': machine_serial_number},
-                'os_version': {'name': 'Mac OS X',
-                               'major': major,
-                               'minor': minor,
-                               'patch': patch,
-                               'build': data['os_build'],
-                               },
+                'os_version': os_version,
                 'system_info': {'computer_name': data['hostname']},
                 }
         if self.business_unit:
