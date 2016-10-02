@@ -398,6 +398,10 @@ class MachineSnapshot(AbstractMTObject):
                 ll.append((url, link.anchor_text))
             yield group, ll
 
+    def ordered_osx_app_instances(self):
+        return self.osx_app_instances.select_related('app').all().order_by('app__bundle_name',
+                                                                           'app__bundle_version_str')
+
 
 class TagManager(models.Manager):
     def available_for_meta_business_unit(self, meta_business_unit):

@@ -177,7 +177,7 @@
     <th>Bundle Path</th>
   </thead>
   <tbody>
-    {% for osx_app_instance in ms.osx_app_instances.all %}
+    {% for osx_app_instance in ms.ordered_osx_app_instances %}
     {% with osx_app_instance.app as app %}
     <tr>
       <td>{{ app.bundle_id|default:"" }}</td>
