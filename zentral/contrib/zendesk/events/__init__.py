@@ -5,6 +5,9 @@ from zentral.core.events import BaseEvent, EventMetadata, EventRequest, register
 logger = logging.getLogger('zentral.contrib.zendesk.events')
 
 
+ALL_EVENTS_SEARCH_DICT = {"tag": "zendesk"}
+
+
 class ZendeskTicketCreationEvent(BaseEvent):
     event_type = "zendesk_ticket_creation"
 
@@ -32,6 +35,7 @@ def post_zendesk_event(user_agent, ip, data):
     msn = None  # TODO!!!
     metadata = EventMetadata(event_class.event_type,
                              machine_serial_number=msn,
-                             request=EventRequest(user_agent, ip))
+                             request=EventRequest(user_agent, ip),
+                             tags=['zendesk'])
     event = event_class(metadata, data)
     event.post()

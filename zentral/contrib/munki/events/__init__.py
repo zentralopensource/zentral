@@ -5,6 +5,9 @@ from zentral.core.events import BaseEvent, EventMetadata, EventRequest, register
 logger = logging.getLogger('zentral.contrib.munki.events')
 
 
+ALL_EVENTS_SEARCH_DICT = {"event_type": "munki_event"}
+
+
 class MunkiEvent(BaseEvent):
     event_type = "munki_event"
 

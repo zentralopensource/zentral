@@ -8,6 +8,9 @@ logger = logging.getLogger('zentral.contrib.santa.events')
 __all__ = ['post_santa_events', 'post_santa_preflight', 'SantaEventEvent', 'SantaPreflightEvent']
 
 
+ALL_EVENTS_SEARCH_DICT = {"tag": "santa"}
+
+
 class SantaBaseEvent(BaseEvent):
     pass
 

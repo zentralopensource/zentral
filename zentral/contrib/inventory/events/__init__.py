@@ -4,6 +4,9 @@ from zentral.core.events import BaseEvent, EventMetadata, event_cls_from_type, r
 logger = logging.getLogger('zentral.contrib.inventory.events')
 
 
+ALL_EVENTS_SEARCH_DICT = {"tag": "inventory_update"}
+
+
 class InventoryMachineAdded(BaseEvent):
     event_type = 'inventory_machine_added'
 

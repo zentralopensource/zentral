@@ -2,4 +2,71 @@
 
 {% block content %}
 <h2>Welcome to Zentral!</h2>
+
+<h3>{{ apps|length }} Configured app{{ apps|pluralize }}</h3>
+
+{% for app in apps %}
+<div class="row">
+  <div class="col-md-12">
+    <h4>{{ app|title }}</h4>
+  </div>
+  <div class="row">
+    <div class="col-md-3">
+      <canvas class="chart"
+              data-app="{{ app }}"
+              data-dataset="event_count"
+              width="100"
+              height="80"></canvas>
+    </div>
+    <div class="col-md-3">
+      <canvas class="chart"
+              data-app="{{ app }}"
+              data-dataset="unique_msn"
+              width="100"
+              height="80"></canvas>
+    </div>
+  </div>
+</div>
+
+{% endfor %}
+{% endblock %}
+
+{% block extrajs %}
+<script>
+  function get_data_and_make_chart(url, charts) {
+    $.getJSON(url, function(data) {
+      for (var dataset in data.datasets) {
+        if (data.datasets.hasOwnProperty(dataset)) {
+          var canvas = charts[data.app][dataset];
+          var chart = new Chart(canvas, {
+            type: 'bar',
+            data: {labels: data.labels,
+                   datasets: [data.datasets[dataset]]},
+            options: {}
+          });
+        }
+      }
+    });
+  }
+
+  $(document).ready(function(){
+    var charts = {};
+    var urls = Array();
+    $(".chart").each(function(index, canvas) {
+      canvas = $(canvas);
+      var app = canvas.data('app');
+      var dataset = canvas.data('dataset');
+      if(! charts.hasOwnProperty(app)) {
+        charts[app] = {};
+        urls.push('/app/' + app + '/hist_data/day/14/');
+      }
+      charts[app][dataset] = canvas;
+    });
+    for (var idx in urls) {
+      if (urls.hasOwnProperty(idx)) {
+        get_data_and_make_chart(urls[idx], charts);
+      }
+    }
+  });
+</script>
 {% endblock %}

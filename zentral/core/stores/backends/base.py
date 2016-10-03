@@ -5,3 +5,6 @@ class BaseEventStore(object):
 
     def get_visu_url(self, event_type, search_dict):
         return None
+
+    def get_app_hist_data(self, interval, bucket_number, tag=None, event_type=None):
+        return []

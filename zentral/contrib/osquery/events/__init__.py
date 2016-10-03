@@ -8,6 +8,9 @@ logger = logging.getLogger('zentral.contrib.osquery.events')
 __all__ = ['OsqueryEnrollmentEvent', 'OsqueryResultEvent', 'OsqueryStatusEvent']
 
 
+ALL_EVENTS_SEARCH_DICT = {"tag": "osquery"}
+
+
 class OsqueryEvent(BaseEvent):
     pass
 

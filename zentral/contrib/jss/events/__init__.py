@@ -4,6 +4,9 @@ from zentral.core.events import BaseEvent, EventMetadata, EventRequest, event_cl
 logger = logging.getLogger('zentral.contrib.jss.events')
 
 
+ALL_EVENTS_SEARCH_DICT = {"tag": "jss"}
+
+
 JSS_EVENTS = {"ComputerAdded": "computer_added",
               "ComputerCheckIn": "computer_checkin",
               "ComputerInventoryCompleted": "computer_inventory_completed",

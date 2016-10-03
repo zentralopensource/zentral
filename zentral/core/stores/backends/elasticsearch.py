@@ -1,6 +1,7 @@
 import logging
 import random
 import time
+from dateutil import parser
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import ConnectionError, RequestError
 from zentral.core.events import event_from_event_d
@@ -17,6 +18,13 @@ BASE_VISU_URL = ("{kibana_base_url}#/discover?_g=()&"
                  "_a=(columns:!(_source),index:{index},interval:auto,"
                  "query:(query_string:(analyze_wildcard:!t,query:'{query}')),"
                  "sort:!(created_at,desc))")
+
+INTERVAL_UNIT = {
+    "hour": "h",
+    "day": "d",
+    "week": "w",
+    "month": "M",
+}
 
 INDEX_CONF = """
 {
@@ -169,3 +177,48 @@ class EventStore(BaseEventStore):
             return BASE_VISU_URL.format(kibana_base_url=self.kibana_base_url,
                                         index=self.index,
                                         query=query)
+
+    def _get_hist_query_dict(self, interval, bucket_number, tag, event_type):
+        filter_list = []
+        if tag:
+            filter_list.append({"term": {"tags": tag}})
+        if event_type:
+            filter_list.append({"type": {"value": event_type}})
+        interval_unit = INTERVAL_UNIT[interval]
+        gte_range = "now-{q}{u}/{u}".format(q=bucket_number - 1,
+                                            u=interval_unit)
+        lt_range = "now+1{u}/{u}".format(u=interval_unit)
+        filter_list.append({"range": {"created_at": {"gte": gte_range, "lt": lt_range}}})
+        return {"bool": {"filter": filter_list}}
+
+    def _get_hist_date_histogram_dict(self, interval, bucket_number):
+        interval_unit = INTERVAL_UNIT[interval]
+        min_bound = "now-{q}{u}/{u}".format(q=bucket_number - 1,
+                                            u=interval_unit)
+        max_bound = "now/{u}".format(u=interval_unit)
+        return {"field": "created_at",
+                "interval": interval,
+                "min_doc_count": 0,
+                "extended_bounds": {
+                  "min": min_bound,
+                  "max": max_bound
+                }}
+
+    def get_app_hist_data(self, interval, bucket_number, tag=None, event_type=None):
+        body = {"query": self._get_hist_query_dict(interval, bucket_number, tag, event_type),
+                "aggs": {
+                  "buckets": {
+                    "date_histogram": self._get_hist_date_histogram_dict(interval, bucket_number),
+                    "aggs": {
+                      "unique_msn": {
+                        "cardinality": {
+                          "field": "machine_serial_number",
+                          "missing": 0
+                        }
+                      }
+                    }
+                  }
+                }}
+        r = self._es.search(index=self.index, body=body, search_type="count")
+        return [(parser.parse(b["key_as_string"]), b["doc_count"], b["unique_msn"]["value"])
+                for b in r['aggregations']['buckets']['buckets']]
