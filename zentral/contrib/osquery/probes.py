@@ -22,6 +22,16 @@ class OSQueryProbe(BaseProbe):
         if not self.schedule:
             err_list.append("osquery schedule is empty")
             return err_list
+        for idx, query_dict in enumerate(self.schedule):
+            if not (query_dict.get("query", None) or "").strip():
+                desc = query_dict.get("description", None)
+                if not desc:
+                    desc = "#{}".format(idx + 1)
+                else:
+                    desc = "'{}'".format(desc)
+                err_list.append("Query {} is empty".format(desc))
+        if err_list:
+            return err_list
         self.file_paths = osquery.get("file_paths", {})
         if not isinstance(self.file_paths, dict):
             err_list.append("osquery file_paths is not a hash/dict")

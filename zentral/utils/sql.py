@@ -5,6 +5,8 @@ import sqlparse
 
 
 def format_sql(query):
+    if not query:
+        return ""
     sql_lexer = SqlLexer()
     html_formatter = HtmlFormatter()
     reindent = len(query) > 80
