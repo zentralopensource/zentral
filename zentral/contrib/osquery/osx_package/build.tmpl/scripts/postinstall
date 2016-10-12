@@ -7,4 +7,8 @@
 ## write zentral base url
 /usr/bin/defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"
 
+## Correct invalid permissions on "/Library/LaunchDaemons/com.facebook.osqueryd.plist".
+chown root:wheel "/Library/LaunchDaemons/com.facebook.osqueryd.plist"
+chmod 700 "/Library/LaunchDaemons/com.facebook.osqueryd.plist"
+
 exit 0
