@@ -184,6 +184,17 @@ class InventoryClient(BaseInventory):
                 system_info['cpu_brand'] = c['processor']
             ct['system_info'] = system_info
 
+            # network interfaces
+            network_interface = {}
+            for attr, ni_attr in (('active_mac_address', 'mac'),
+                                  ('primary_ip', 'address')):
+                value = c.get(attr, None)
+                if value:
+                    network_interface[ni_attr] = value
+            if len(network_interface) == 2:
+                network_interface['interface'] = 'primary'
+                ct['network_interfaces'] = [network_interface]
+
             # teamviewer
             teamviewer_id = c['teamviewer_id']
             if teamviewer_id:

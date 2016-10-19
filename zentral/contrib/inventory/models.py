@@ -259,6 +259,27 @@ class Certificate(AbstractMTObject):
     signed_by = models.ForeignKey('self', blank=True, null=True)
 
 
+class NetworkInterface(AbstractMTObject):
+    interface = models.TextField(blank=False, null=False)
+    mac = models.CharField(max_length=17, blank=False, null=False)
+    address = models.GenericIPAddressField(blank=False, null=False, unpack_ipv4=True)
+    mask = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
+    broadcast = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
+
+    class Meta:
+        ordering = ('interface',)
+
+    def get_mac_organization(self):
+        mac = self.mac.replace(":", "").upper()
+        assignments = [mac[:l] for l in (9, 7, 6)]
+        found_assignments = list(MACAddressBlockAssignment.objects.select_related("organization")
+                                 .filter(assignment__in=assignments))
+        if not found_assignments:
+            return None
+        found_assignments.sort(key=lambda a: len(a.assignment), reverse=True)
+        return found_assignments[0].organization
+
+
 class OSXAppManager(MTObjectManager):
     def current(self):
         return self.distinct().filter(osxappinstance__machinesnapshot__mt_next__isnull=True)
@@ -361,8 +382,10 @@ class MachineSnapshot(AbstractMTObject):
     groups = models.ManyToManyField(MachineGroup)
     os_version = models.ForeignKey(OSVersion, blank=True, null=True)
     system_info = models.ForeignKey(SystemInfo, blank=True, null=True)
+    network_interfaces = models.ManyToManyField(NetworkInterface)
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
     teamviewer = models.ForeignKey(TeamViewer, blank=True, null=True)
+    public_ip_address = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
     archived_at = models.DateTimeField(blank=True, null=True)
     mt_next = models.OneToOneField('self', blank=True, null=True, related_name="mt_previous")
 
@@ -600,3 +623,34 @@ class MetaMachine(object):
             tree = ms.serialize()
             tree['archived_at'] = archived_at
             MachineSnapshot.objects.commit(tree)
+
+
+class MACAddressBlockAssignmentOrganization(models.Model):
+    name = models.TextField()
+    address = models.TextField()
+
+    class Meta:
+        unique_together = (('name', 'address'),)
+
+
+class MACAddressBlockAssignmentManager(models.Manager):
+    def import_assignment(self, registry, assignment, organization_name, organization_address):
+        organization, _ = MACAddressBlockAssignmentOrganization.objects.get_or_create(name=organization_name,
+                                                                                      address=organization_address)
+        return MACAddressBlockAssignment.objects.update_or_create(assignment=assignment,
+                                                                  defaults={"registry": registry,
+                                                                            "organization": organization})
+
+
+class MACAddressBlockAssignment(models.Model):
+    registry = models.CharField(max_length=8,
+                                choices=(('MA-L', 'MA-L'),
+                                         ('MA-M', 'MA-M'),
+                                         ('MA-S', 'MA-S')))
+    assignment = models.CharField(max_length=9, unique=True)
+    organization = models.ForeignKey(MACAddressBlockAssignmentOrganization)
+
+    objects = MACAddressBlockAssignmentManager()
+
+    def __str__(self):
+        return " ".join((self.registry, self.assignment))

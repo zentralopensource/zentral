@@ -72,6 +72,7 @@ class PostJobView(BaseView):
         ms_tree['source'] = {'module': 'zentral.contrib.munki',
                              'name': 'Munki'}
         ms_tree['reference'] = ms_tree['machine']['serial_number']
+        ms_tree['public_ip_address'] = self.ip
         if data.get('include_santa_fileinfo', False):
             clean_certs_datetime(ms_tree)
             if self.business_unit:

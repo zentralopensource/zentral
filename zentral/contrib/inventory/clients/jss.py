@@ -119,6 +119,22 @@ class InventoryClient(BaseInventory):
                            'physical_memory': computer['hardware']['total_ram'] * 2**20}
             ct['system_info'] = system_info
 
+            # public ip
+            last_reported_ip = computer['general'].get('ip_address', None)
+            if last_reported_ip:
+                ct['public_ip_address'] = last_reported_ip
+
+            # network interfaces
+            network_interface = {}
+            for attr, ni_attr in (('mac_address', 'mac'),
+                                  ('last_reported_ip', 'address')):
+                value = computer['general'].get(attr, None)
+                if value:
+                    network_interface[ni_attr] = value
+            if len(network_interface) == 2:
+                network_interface['interface'] = 'primary'
+                ct['network_interfaces'] = [network_interface]
+
             # osx apps
             osx_app_instances = []
             for app_d in computer['software']['applications']:

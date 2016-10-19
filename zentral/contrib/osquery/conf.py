@@ -20,7 +20,12 @@ def build_osquery_conf(machine):
                      "SELECT 'system_info' as table_name, "
                      "computer_name, hostname, hardware_model, hardware_serial, "
                      "cpu_type, cpu_subtype, cpu_brand, cpu_physical_cores, "
-                     "cpu_logical_cores, physical_memory from system_info",
+                     "cpu_logical_cores, physical_memory from system_info;"
+                     "SELECT 'network_interface' as table_name, "
+                     "id.interface, id.mac, "
+                     "ia.address, ia.mask, ia.broadcast "
+                     "from interface_details as id, interface_addresses as ia "
+                     "where ia.interface = id.interface and ia.broadcast > '';",
             'snapshot': True,
             'interval': 600
         }

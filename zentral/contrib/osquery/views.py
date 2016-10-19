@@ -269,7 +269,8 @@ class LogView(BaseNodeView):
             tree = {'source': {'module': self.ms.source.module,
                                'name': self.ms.source.name},
                     'machine': {'serial_number': self.machine_serial_number},
-                    'reference': self.ms.reference}
+                    'reference': self.ms.reference,
+                    'public_ip_address': self.ip}
             if self.business_unit:
                 tree['business_unit'] = self.business_unit.serialize()
             for t in last_snapshot:
@@ -278,6 +279,8 @@ class LogView(BaseNodeView):
                     tree['os_version'] = t
                 elif table_name == 'system_info':
                     tree['system_info'] = t
+                elif table_name == 'network_interface':
+                    tree.setdefault('network_interfaces', []).append(t)
             try:
                 MachineSnapshot.objects.commit(tree)
             except:

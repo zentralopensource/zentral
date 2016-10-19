@@ -87,6 +87,7 @@ class PreflightView(BaseView):
                 'machine': {'serial_number': machine_serial_number},
                 'os_version': os_version,
                 'system_info': {'computer_name': data['hostname']},
+                'public_ip_address': self.ip,
                 }
         if self.business_unit:
             tree['business_unit'] = self.business_unit.serialize()

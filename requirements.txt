@@ -16,3 +16,4 @@ sqlparse
 pygments
 redis
 kombu
+tqdm
