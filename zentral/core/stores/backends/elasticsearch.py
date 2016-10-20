@@ -78,9 +78,7 @@ class EventStore(BaseEventStore):
                                auth['region'], 'es')
 
             # this could break if you mix https and non-https servers
-            use_ssl = False
-            if config_d['servers'][0].startswith("https://"):
-                use_ssl = True
+            use_ssl = config_d['servers'][0].startswith("https://")
 
             self._es = Elasticsearch(
                 hosts=config_d['servers'],
