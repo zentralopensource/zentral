@@ -17,3 +17,4 @@ pygments
 redis
 kombu
 tqdm
+requests-aws4auth
