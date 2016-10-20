@@ -24,6 +24,7 @@ RUN mkdir /zentral
 WORKDIR /zentral
 ADD requirements.txt /zentral
 RUN pip install -r requirements.txt
+RUN chmod 644 ./zentral/contrib/osquery/osx_package/build.tmpl/root/Library/LaunchDaemons/com.facebook.osqueryd.plist
 ADD . /zentral
 USER zentral
 ENTRYPOINT ["/zentral/docker-entrypoint.py"]
