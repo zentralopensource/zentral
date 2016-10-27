@@ -1,3 +1,4 @@
+from collections import Counter
 import colorsys
 from datetime import datetime
 import logging
@@ -334,8 +335,62 @@ class TeamViewer(AbstractMTObject):
     unattended = models.NullBooleanField(blank=True, null=True)
 
 
+def update_ms_tree_platform(tree):
+    os_version_t = tree.get("os_version", {})
+    os_name = os_version_t.get("name", None)
+    try:
+        minor = int(os_version_t.get("minor", None))
+    except (TypeError, ValueError):
+        minor = None
+    if not os_name:
+        return
+    os_name = os_name.lower()
+    os_name_split = os_name.split()
+    if len(os_name_split) == 2 and \
+       os_name_split[0][0] == os_name_split[1][0] and \
+       (minor == 4 or minor == 10):
+        # ubuntu
+        tree["platform"] = MachineSnapshot.LINUX
+        return
+    os_name = os_name.replace(" ", "")
+    if "osx" in os_name:
+        tree["platform"] = MachineSnapshot.MACOS
+    elif "ios" in os_name:
+        tree["platform"] = MachineSnapshot.IOS
+    elif "ubuntu" in os_name:
+        tree["platform"] = MachineSnapshot.LINUX
+
+
+def update_ms_tree_type(tree):
+    HARDWARE_MODEL_MACHINE_TYPE_DICT = {
+        'imac': MachineSnapshot.DESKTOP,
+        'ipad': MachineSnapshot.TABLET,
+        'iphone': MachineSnapshot.MOBILE,
+        'macbook': MachineSnapshot.LAPTOP,
+        'macmini': MachineSnapshot.DESKTOP,
+        'macpro': MachineSnapshot.DESKTOP,
+        'powermac': MachineSnapshot.DESKTOP,
+        'vmware': MachineSnapshot.VM,
+        'xserve': MachineSnapshot.SERVER,
+    }
+    system_info_t = tree.get("system_info", {})
+    hardware_model = system_info_t.get("hardware_model", None)
+    if hardware_model:
+        hardware_model = hardware_model.lower()
+        for prefix, ms_type in HARDWARE_MODEL_MACHINE_TYPE_DICT.items():
+            if hardware_model.startswith(prefix):
+                tree["type"] = ms_type
+                return
+    else:
+        cpu_brand = system_info_t.get("cpu_brand", None)
+        if cpu_brand and "xeon" in cpu_brand.lower():
+            tree["type"] = MachineSnapshot.SERVER
+
+
 class MachineSnapshotManager(MTObjectManager):
     def commit(self, tree):
+        update_ms_tree_platform(tree)
+        update_ms_tree_type(tree)
         obj, created = super().commit(tree, current=True)
         if created:
             self.filter(source=obj.source,
@@ -374,6 +429,32 @@ class MachineSnapshotManager(MTObjectManager):
 
 
 class MachineSnapshot(AbstractMTObject):
+    DESKTOP = "DESKTOP"
+    LAPTOP = "LAPTOP"
+    MOBILE = "MOBILE"
+    SERVER = "SERVER"
+    TABLET = "TABLET"
+    VM = "VM"
+    TYPE_CHOICES = (
+        (DESKTOP, _('Desktop')),
+        (LAPTOP, _('Laptop')),
+        (MOBILE, _('Mobile')),
+        (SERVER, _('Server')),
+        (TABLET, _('Tablet')),
+        (VM, _('VM')),
+    )
+    LINUX = "LINUX"
+    MACOS = "MACOS"
+    WINDOWS = "WINDOWS"
+    ANDROID = "ANDROID"
+    IOS = "IOS"
+    PLATFORM_CHOICES = (
+        (LINUX, _('Linux')),
+        (MACOS, _('macOS')),
+        (WINDOWS, _('Windows')),
+        (ANDROID, _('Android')),
+        (IOS, _('iOS')),
+    )
     source = models.ForeignKey(Source)
     reference = models.TextField(blank=True, null=True)
     machine = models.ForeignKey(Machine)
@@ -381,7 +462,9 @@ class MachineSnapshot(AbstractMTObject):
     business_unit = models.ForeignKey(BusinessUnit, blank=True, null=True)
     groups = models.ManyToManyField(MachineGroup)
     os_version = models.ForeignKey(OSVersion, blank=True, null=True)
+    platform = models.CharField(max_length=32, blank=True, null=True, choices=PLATFORM_CHOICES)
     system_info = models.ForeignKey(SystemInfo, blank=True, null=True)
+    type = models.CharField(max_length=32, blank=True, null=True, choices=TYPE_CHOICES)
     network_interfaces = models.ManyToManyField(NetworkInterface)
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
     teamviewer = models.ForeignKey(TeamViewer, blank=True, null=True)
@@ -585,6 +668,20 @@ class MetaMachine(object):
 
     def meta_business_units(self):
         return set([bu.meta_business_unit for bu in self.business_units(include_api_enrollment_business_unit=True)])
+
+    def get_platform(self):
+        c = Counter(ms.platform for ms in self.get_snapshots() if ms.platform)
+        try:
+            return c.most_common(1)[0][0]
+        except IndexError:
+            pass
+
+    def get_type(self):
+        c = Counter(ms.type for ms in self.get_snapshots() if ms.type)
+        try:
+            return c.most_common(1)[0][0]
+        except IndexError:
+            pass
 
     # Filtered snapshots
 

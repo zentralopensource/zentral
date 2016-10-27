@@ -150,6 +150,12 @@ class EventMetadata(object):
                 'name': meta_business_unit.name,
                 'id': meta_business_unit.id
             })
+        ms_platform = self.machine.get_platform()
+        if ms_platform:
+            machine_d['platform'] = ms_platform
+        ms_type = self.machine.get_type()
+        if ms_type:
+            machine_d['type'] = ms_type
         if machine_d:
             d['machine'] = machine_d
         return d
@@ -235,10 +241,13 @@ class BaseEvent(object):
             machine_d = metadata['machine']
             mbu_ids = {int(mbu['id']) for mbu in machine_d.get('meta_business_units', [])}
             tag_ids = {int(tag['id']) for tag in machine_d.get('tags', [])}
+            ms_platform = machine_d.get("platform", None)
+            ms_type = machine_d.get("type", None)
         else:
             mbu_ids = set([])
             tag_ids = set([])
-        for probe in all_probes.inventory_filtered_probes(mbu_ids, tag_ids):
+            ms_platform = ms_type = None
+        for probe in all_probes.inventory_filtered_probes(mbu_ids, tag_ids, ms_platform, ms_type):
             if not self.extra_probe_checks(probe):
                 continue
             if not _test_pass_filters(probe.metadata_filters, metadata):

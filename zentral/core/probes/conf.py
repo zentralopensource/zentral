@@ -92,24 +92,30 @@ class ProbeList(ProbeView):
             return not isinstance(probe, probe_class)
         return self.filter(_filter)
 
-    def inventory_filtered_probes(self, mbu_ids, tag_ids):
+    def inventory_filtered_probes(self, mbu_ids, tag_ids, ms_platform, ms_type):
         def _filter(probe):
             if not probe.inventory_filters:
                 return True
             for inventory_filter in probe.inventory_filters:
+                # tags
                 f_tag_ids = set(int(tag_id)
                                 for tag_id in inventory_filter.get('tags', []))
                 if f_tag_ids and not f_tag_ids & tag_ids:
-                    # filter on tags
-                    # but no intersection with the given tags
                     continue
+                # business units
                 f_mbu_ids = set(int(mbu_id)
                                 for mbu_id in inventory_filter.get('business_units', []))
                 if f_mbu_ids and not f_mbu_ids & mbu_ids:
-                    # filter on business units
-                    # but no intersection with the given business units
                     continue
-                # both tests above passed. Match.
+                # machine snapshot platform
+                f_platforms = set(inventory_filter.get('platforms', []))
+                if f_platforms and ms_platform not in f_platforms:
+                    continue
+                # machine snapshot type
+                f_types = set(inventory_filter.get('types', []))
+                if f_types and ms_type not in f_types:
+                    continue
+                # all tests above passed => Match
                 # no need to check the other filters (OR)
                 return True
             return False
@@ -118,7 +124,9 @@ class ProbeList(ProbeView):
     def machine_filtered(self, meta_machine):
         mbu_ids = set(mbu.id for mbu in meta_machine.meta_business_units())
         tag_ids = set(tag.id for tag in meta_machine.tags())
-        return self.inventory_filtered_probes(mbu_ids, tag_ids)
+        return self.inventory_filtered_probes(mbu_ids, tag_ids,
+                                              meta_machine.get_platform(),
+                                              meta_machine.get_type())
 
     def module_prefix_filter(self, module_prefix):
         def _filter(probe):

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -8,7 +9,11 @@
   <li class="active">Events</li>
 </ol>
 
-<h2>{% if computer_name %}{{ computer_name }} / {% endif %}<a href="{% url 'inventory:machine' serial_number %}">{{ serial_number }}</a> Events</h2>
+<h2>
+  {% machine_type_icon machine %}
+  {% machine_platform_icon machine %}
+  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{% url 'inventory:machine' serial_number %}">{{ serial_number }}</a> Events
+</h2>
 
 <form class="form-inline" method="GET">
   <div class="form-group">

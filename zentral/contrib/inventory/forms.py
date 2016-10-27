@@ -2,12 +2,18 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.db import connection
 from django.utils.text import slugify
-from .models import MetaBusinessUnit, Source, MetaBusinessUnitTag, Tag, MetaMachine, MachineTag
+from .models import (MachineSnapshot, MachineTag, MetaMachine,
+                     MetaBusinessUnit, MetaBusinessUnitTag,
+                     Source, Tag)
 
 
 class MachineSearchForm(forms.Form):
     serial_number = forms.CharField(label="serial number", max_length=32, required=False)
     name = forms.CharField(label="name", max_length=64, required=False)
+    platform = forms.ChoiceField(label="platform", choices=[], required=False,
+                                 widget=forms.Select(attrs={'class': 'form-control'}))
+    type = forms.ChoiceField(label="type", choices=[], required=False,
+                             widget=forms.Select(attrs={'class': 'form-control'}))
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_snapshot_sources(),
                                     required=False,
                                     widget=forms.Select(attrs={'class': 'form-control'}))
@@ -24,7 +30,9 @@ class MachineSearchForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super(MachineSearchForm, self).__init__(*args, **kwargs)
         self.fields['tag'].choices = [(t.id, str(t)) for t, _ in Tag.objects.used_in_inventory()]
-        self.fields['tag'].choices.insert(0, ('', '--------'))
+        self.fields['tag'].choices.insert(0, ('', '----'))
+        self.fields['platform'].choices = [('', '----')] + list(MachineSnapshot.PLATFORM_CHOICES)
+        self.fields['type'].choices = [('', '----')] + list(MachineSnapshot.TYPE_CHOICES)
 
 
 class MachineGroupSearchForm(forms.Form):

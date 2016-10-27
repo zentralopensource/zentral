@@ -55,6 +55,14 @@ class MachineListView(generic.TemplateView):
             if source:
                 extra_wheres.append("and ms.source_id = %(source_id)s")
                 query_args['source_id'] = source.id
+            platform = cleaned_data['platform']
+            if platform:
+                extra_wheres.append("and ms.platform = %(platform)s")
+                query_args['platform'] = platform
+            ms_type = cleaned_data['type']
+            if ms_type:
+                extra_wheres.append("and ms.type = %(type)s")
+                query_args['type'] = ms_type
             tag = cleaned_data['tag']
             if tag is not None:
                 extra_wheres.append("and (serial_number in "
@@ -438,12 +446,8 @@ class MachineEventsView(generic.ListView):
 
     def get_context_data(self, **kwargs):
         context = super(MachineEventsView, self).get_context_data(**kwargs)
-        for ms in self.ms_list:
-            context['serial_number'] = ms.machine.serial_number
-            if ms.system_info and ms.system_info.computer_name:
-                context['computer_name'] = ms.system_info.computer_name
-                break
-
+        context["serial_number"] = self.serial_number
+        context["machine"] = MetaMachine(self.serial_number)
         # pagination
         page = context['page_obj']
         if page.has_next():
@@ -460,7 +464,7 @@ class MachineEventsView(generic.ListView):
         # event types selection
         request_event_type = self.request.GET.get('event_type')
         for event_type, count in frontend_store.event_types_with_usage(
-                context['serial_number']).items():
+                self.serial_number).items():
             total_events += count
             event_types.append((event_type,
                                 request_event_type == event_type,
@@ -473,10 +477,9 @@ class MachineEventsView(generic.ListView):
         return context
 
     def get_queryset(self):
-        serial_number = self.kwargs['serial_number']
-        self.ms_list = list(MachineSnapshot.objects.current().filter(machine__serial_number=serial_number))
+        self.serial_number = self.kwargs['serial_number']
         et = self.request.GET.get('event_type')
-        return MachineEventSet(serial_number, et)
+        return MachineEventSet(self.serial_number, et)
 
 
 class MachineTagsView(generic.FormView):
