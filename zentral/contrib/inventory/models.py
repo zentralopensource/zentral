@@ -427,6 +427,18 @@ class MachineSnapshotManager(MTObjectManager):
         cursor.execute(query, args)
         return cursor.fetchone()[0]
 
+    def current_platforms(self):
+        qs = (self.filter(platform__isnull=False, archived_at__isnull=True, mt_next__isnull=True)
+              .values("platform").distinct())
+        pcd = dict(MachineSnapshot.PLATFORM_CHOICES)
+        return sorted((rd["platform"], pcd[rd["platform"]]) for rd in qs)
+
+    def current_types(self):
+        qs = (self.filter(type__isnull=False, archived_at__isnull=True, mt_next__isnull=True)
+              .values("type").distinct())
+        tcd = dict(MachineSnapshot.TYPE_CHOICES)
+        return sorted((rd["type"], tcd[rd["type"]]) for rd in qs)
+
 
 class MachineSnapshot(AbstractMTObject):
     DESKTOP = "DESKTOP"

@@ -31,8 +31,8 @@ class MachineSearchForm(forms.Form):
         super(MachineSearchForm, self).__init__(*args, **kwargs)
         self.fields['tag'].choices = [(t.id, str(t)) for t, _ in Tag.objects.used_in_inventory()]
         self.fields['tag'].choices.insert(0, ('', '----'))
-        self.fields['platform'].choices = [('', '----')] + list(MachineSnapshot.PLATFORM_CHOICES)
-        self.fields['type'].choices = [('', '----')] + list(MachineSnapshot.TYPE_CHOICES)
+        self.fields['platform'].choices = [('', '----')] + MachineSnapshot.objects.current_platforms()
+        self.fields['type'].choices = [('', '----')] + MachineSnapshot.objects.current_types()
 
 
 class MachineGroupSearchForm(forms.Form):
