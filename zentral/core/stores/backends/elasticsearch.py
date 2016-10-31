@@ -150,8 +150,9 @@ class EventStore(BaseEventStore):
                     'query': 'machine_serial_number:{}'.format(machine_serial_number)
                 }
             },
+            'size': 0,
             'aggs': {'doc_types': {"terms": {'field': '_type'}}}}
-        r = self._es.search(index=self.index, body=body, search_type="count")
+        r = self._es.search(index=self.index, body=body)
         types_d = {}
         for bucket in r['aggregations']['doc_types']['buckets']:
             types_d[bucket['key']] = bucket['doc_count']
@@ -206,6 +207,7 @@ class EventStore(BaseEventStore):
 
     def get_app_hist_data(self, interval, bucket_number, tag=None, event_type=None):
         body = {"query": self._get_hist_query_dict(interval, bucket_number, tag, event_type),
+                "size": 0,
                 "aggs": {
                   "buckets": {
                     "date_histogram": self._get_hist_date_histogram_dict(interval, bucket_number),
@@ -219,6 +221,6 @@ class EventStore(BaseEventStore):
                     }
                   }
                 }}
-        r = self._es.search(index=self.index, body=body, search_type="count")
+        r = self._es.search(index=self.index, body=body)
         return [(parser.parse(b["key_as_string"]), b["doc_count"], b["unique_msn"]["value"])
                 for b in r['aggregations']['buckets']['buckets']]
