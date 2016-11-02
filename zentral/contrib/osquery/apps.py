@@ -1,6 +1,6 @@
 from zentral.utils.apps import ZentralAppConfig
 
 
-class ZentralOSQueryAppConfig(ZentralAppConfig):
+class ZentralOsqueryAppConfig(ZentralAppConfig):
     name = "zentral.contrib.osquery"
-    verbose_name = "Zentral OSQuery contrib app"
+    verbose_name = "Zentral Osquery contrib app"

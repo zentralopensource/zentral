@@ -34,7 +34,7 @@ def wait_for_db():
 
 def django_migrate_db():
     try:
-        subprocess.check_call(['python', 'server/manage.py', 'migrate'])
+        subprocess.check_call(['python', 'server/manage.py', 'migrate', '--noinput'])
     except subprocess.CalledProcessError:
         return False
     else:

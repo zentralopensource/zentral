@@ -4,6 +4,7 @@
 {% if action %}
 action: {{ action }}
 {% endif %}
+{% if query %}
 {% if query.description %}
 query description: {{ query.description }}
 {% endif %}
@@ -14,5 +15,6 @@ query value: {{ query.value }}
 {% for key, val in columns|dictsort %}
 {{ key }}: {{ val }}
 {% endfor %}
+{% endif %}
 {% endif %}
 {% endblock %}

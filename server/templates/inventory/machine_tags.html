@@ -18,7 +18,7 @@
       <th></th>
     </thead>
     <tbody>
-      {% for type, tag in tags %}
+      {% for type, tag in machine.tags_with_types %}
       <tr>
         <td>{{ tag.id }}</td>
         <td>{% inventory_tag tag %}</td>

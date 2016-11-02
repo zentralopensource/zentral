@@ -1,1 +1,1 @@
-default_app_config = "zentral.contrib.osquery.apps.ZentralOSQueryAppConfig"
+default_app_config = "zentral.contrib.osquery.apps.ZentralOsqueryAppConfig"

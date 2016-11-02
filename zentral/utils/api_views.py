@@ -177,7 +177,7 @@ class EnrollmentForm(forms.Form):
 class BaseEnrollmentView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super(BaseEnrollmentView, self).get_context_data(**kwargs)
-        context[self.section] = True
+        context['setup'] = True
         context['form'] = EnrollmentForm()
         return context
 

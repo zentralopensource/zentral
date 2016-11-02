@@ -1,42 +1,30 @@
 import json
 import logging
 from dateutil import parser
-from django.core.urlresolvers import reverse, reverse_lazy
-from django.http import HttpResponse, JsonResponse
+from django.core.urlresolvers import reverse
+from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.views.generic import View, DetailView, ListView, TemplateView
-from django.views.generic.edit import CreateView, UpdateView, DeleteView
+from django.views.generic import View, TemplateView
+from django.views.generic.edit import FormView
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MachineSnapshot, MetaBusinessUnit, MetaMachine
-from zentral.core.probes.conf import ProbeList
+from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import (JSONPostAPIView, make_secret, verify_secret, APIAuthError,
                                      BaseEnrollmentView, BaseInstallerPackageView)
 from .conf import build_osquery_conf, DEFAULT_ZENTRAL_INVENTORY_QUERY
-from .events import post_enrollment_event, post_request_event, post_events_from_osquery_log
-from .forms import DistributedQueryForm, DistributedQuerySearchForm
-from .models import enroll, DistributedQuery, DistributedQueryNode
+from .events import (post_distributed_query_result, post_enrollment_event,
+                     post_events_from_osquery_log, post_request_event)
+from .forms import (CreateProbeForm, CreateComplianceProbeForm, CreateDistributedQueryProbeForm, CreateFIMProbeForm,
+                    QueryForm, PreferenceFileForm, KeyFormSet, FileChecksumForm, DistributedQueryForm, FilePathForm)
+from .models import enroll, DistributedQueryProbeMachine
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 from .deb_script.builder import OsqueryZentralEnrollScriptBuilder
-from .probes import OSQueryProbe
 
 logger = logging.getLogger('zentral.contrib.osquery.views')
 
 
-class ProbesView(TemplateView):
-    template_name = "osquery/probes.html"
-
-    def get_context_data(self, **kwargs):
-        context = super(ProbesView, self).get_context_data(**kwargs)
-        context['osquery'] = True
-        pl = ProbeList()  # not all_probes to avoid cache inconsistency
-        context['probes'] = pl.class_filter(OSQueryProbe)
-        context['event_type_probes'] = pl.module_prefix_filter("osquery").exclude_class(OSQueryProbe)
-        return context
-
-
 class EnrollmentView(BaseEnrollmentView):
     template_name = "osquery/enrollment.html"
-    section = "osquery"
 
 
 class EnrollmentDebuggingView(View):
@@ -72,97 +60,535 @@ class SetupScriptView(BaseInstallerPackageView):
     module = "zentral.contrib.osquery"
 
 
-class DistributedIndexView(ListView):
-    model = DistributedQuery
-    paginate_by = 10
+# query probes
+
+
+class CreateProbeView(FormView):
+    form_class = CreateProbeForm
+    template_name = "osquery/create_probe.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Create osquery probe"
+        ctx["probes"] = True
+        return ctx
+
+    def form_valid(self, form):
+        probe_source = form.save()
+        return HttpResponseRedirect(probe_source.get_absolute_url())
+
+
+class AddProbeQueryView(FormView):
+    form_class = QueryForm
+    template_name = "osquery/query_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['add_query'] = True
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery")
+        return ctx
+
+    def form_valid(self, form):
+        query_d = form.get_query_d()
+
+        def func(probe_d):
+            queries = probe_d.setdefault("queries", [])
+            queries.append(query_d)
+        self.probe_source.update_body(func)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.probe_source.get_absolute_url("osquery")
+
+
+class UpdateProbeQueryView(FormView):
+    form_class = QueryForm
+    template_name = "osquery/query_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        self.query_id = int(kwargs["query_id"])
+        try:
+            self.query = self.probe.queries[self.query_id]
+        except IndexError:
+            raise Http404
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        return self.form_class.get_initial(self.query)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['add_query'] = False
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery")
+        return ctx
+
+    def form_valid(self, form):
+        query_d = form.get_query_d()
+
+        def func(probe_d):
+            probe_d["queries"][self.query_id] = query_d
+        self.probe_source.update_body(func)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.probe_source.get_absolute_url("osquery")
+
+
+class DeleteProbeQueryView(TemplateView):
+    template_name = "osquery/delete_query.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        self.query_id = int(kwargs["query_id"])
+        try:
+            self.query_d = self.probe.queries[self.query_id]
+        except IndexError:
+            raise Http404
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['add_query'] = False
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery")
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        if self.probe.can_delete_queries:
+            def func(probe_d):
+                probe_d["queries"].pop(self.query_id)
+                if not probe_d["queries"]:
+                    probe_d.pop("queries")
+            self.probe_source.update_body(func)
+        return HttpResponseRedirect(self.probe_source.get_absolute_url("osquery"))
+
+
+# compliance probes
+
+
+class CreateComplianceProbeView(FormView):
+    form_class = CreateComplianceProbeForm
+    template_name = "osquery/create_compliance_probe.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['title'] = 'Create osquery compliance probe'
+        ctx['probes'] = True
+        return ctx
+
+    def form_valid(self, form):
+        probe_source = form.save()
+        return HttpResponseRedirect(probe_source.get_absolute_url())
+
+
+class AddComplianceProbePreferenceFileView(TemplateView):
+    template_name = "osquery/preference_file_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['title'] = 'Add compliance probe preference file'
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery_compliance")
+        ctx['preference_file_form'] = self.preference_file_form
+        ctx['key_form_set'] = self.key_form_set
+        return ctx
+
+    def forms_valid(self):
+        preference_file = self.preference_file_form.cleaned_data
+        preference_file['keys'] = self.key_form_set.get_keys()
+
+        def func(probe_d):
+            preference_files = probe_d.setdefault("preference_files", [])
+            preference_files.append(preference_file)
+        self.probe_source.update_body(func)
+        return HttpResponseRedirect(self.probe_source.get_absolute_url("preference_files"))
 
     def get(self, request, *args, **kwargs):
-        self.search_form = DistributedQuerySearchForm(request.GET)
-        return super(DistributedIndexView, self).get(request, *args, **kwargs)
+        self.preference_file_form = PreferenceFileForm(prefix='pff')
+        self.key_form_set = KeyFormSet(prefix='kfs')
+        return super().get(request, *args, **kwargs)
 
-    def get_queryset(self, **kwargs):
-        qs = DistributedQuery.objects.all()
-        if self.search_form.is_valid():
-            mbu = self.search_form.cleaned_data['meta_business_unit']
-            if mbu:
-                qs = qs.filter(meta_business_unit=mbu)
-            tag = self.search_form.cleaned_data['tag']
-            if tag:
-                qs = qs.filter(tags=tag)
-        return qs
-
-    def get_context_data(self, **kwargs):
-        ctx = super(DistributedIndexView, self).get_context_data(**kwargs)
-        ctx['osquery'] = True
-        ctx['search_form'] = self.search_form
-        # pagination
-        page = ctx['page_obj']
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
-        # breadcrumbs
-        l = []
-        qd = self.request.GET.copy()
-        qd.pop('page', None)
-        reset_link = "?{}".format(qd.urlencode())
-        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
-            l.append((reverse('osquery:distributed_index'), 'Osquery distributed queries'))
-            l.append((reset_link, "Search"))
+    def post(self, request, *args, **kwargs):
+        self.preference_file_form = PreferenceFileForm(request.POST, prefix='pff')
+        self.key_form_set = KeyFormSet(request.POST, prefix='kfs')
+        if self.preference_file_form.is_valid() and self.key_form_set.is_valid():
+            return self.forms_valid()
         else:
-            l.append((reset_link, "Osquery distributed queries"))
-        l.append((None, "page {} of {}".format(page.number, page.paginator.num_pages)))
-        ctx['breadcrumbs'] = l
-        return ctx
+            return self.render_to_response(self.get_context_data())
 
 
-class CreateDistributedView(CreateView):
-    model = DistributedQuery
-    form_class = DistributedQueryForm
+class UpdateComplianceProbePreferenceFileView(TemplateView):
+    template_name = "osquery/preference_file_form.html"
 
-    def get_context_data(self, **kwargs):
-        ctx = super(CreateDistributedView, self).get_context_data(**kwargs)
-        ctx['osquery'] = True
-        return ctx
-
-
-class DistributedView(DetailView):
-    model = DistributedQuery
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        self.preference_file_id = int(kwargs["pf_id"])
+        try:
+            self.preference_file = self.probe.preference_files[self.preference_file_id]
+        except IndexError:
+            raise Http404
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        ctx = super(DistributedView, self).get_context_data(**kwargs)
-        ctx['osquery'] = True
+        ctx = super().get_context_data(**kwargs)
+        ctx['title'] = 'Update compliance probe preference file'
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery_compliance")
+        ctx['preference_file_form'] = self.preference_file_form
+        ctx['key_form_set'] = self.key_form_set
         return ctx
 
+    def forms_valid(self):
+        preference_file = self.preference_file_form.cleaned_data
+        preference_file['keys'] = self.key_form_set.get_keys()
 
-class UpdateDistributedView(UpdateView):
-    model = DistributedQuery
-    form_class = DistributedQueryForm
+        def func(probe_d):
+            probe_d["preference_files"][self.preference_file_id] = preference_file
+        self.probe_source.update_body(func)
+        return HttpResponseRedirect(self.probe_source.get_absolute_url("preference_files"))
+
+    def get(self, request, *args, **kwargs):
+        self.preference_file_form = PreferenceFileForm(prefix='pff',
+                                                       initial=PreferenceFileForm.get_initial(self.preference_file))
+        self.key_form_set = KeyFormSet(prefix='kfs',
+                                       initial=KeyFormSet.get_initial(self.preference_file))
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        self.preference_file_form = PreferenceFileForm(request.POST, prefix='pff')
+        self.key_form_set = KeyFormSet(request.POST, prefix='kfs')
+        if self.preference_file_form.is_valid() and self.key_form_set.is_valid():
+            return self.forms_valid()
+        else:
+            return self.render_to_response(self.get_context_data())
+
+
+class DeleteComplianceProbePreferenceFileView(TemplateView):
+    template_name = "osquery/delete_preference_file.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        self.preference_file_id = int(kwargs["pf_id"])
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        ctx = super(UpdateDistributedView, self).get_context_data(**kwargs)
-        ctx['osquery'] = True
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery_compliance")
         return ctx
 
+    def post(self, request, *args, **kwargs):
+        if self.probe.can_delete_items:
+            def func(probe_d):
+                probe_d['preference_files'].pop(self.preference_file_id)
+                if not probe_d['preference_files']:
+                    probe_d.pop('preference_files')
+            self.probe_source.update_body(func)
+        return HttpResponseRedirect(self.probe_source.get_absolute_url("osquery_compliance"))
 
-class DeleteDistributedView(DeleteView):
-    model = DistributedQuery
-    success_url = reverse_lazy('osquery:distributed_index')
+
+class AddComplianceProbeFileChecksumView(FormView):
+    form_class = FileChecksumForm
+    template_name = "osquery/file_checksum_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        ctx = super(DeleteDistributedView, self).get_context_data(**kwargs)
-        ctx['osquery'] = True
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['add_checksum'] = True
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery_compliance")
         return ctx
+
+    def form_valid(self, form):
+        file_checksum = form.cleaned_data
+
+        def func(probe_d):
+            file_checksums = probe_d.setdefault('file_checksums', [])
+            file_checksums.append(file_checksum)
+        self.probe_source.update_body(func)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.probe_source.get_absolute_url("file_checksums")
+
+
+class UpdateComplianceProbeFileChecksumView(FormView):
+    form_class = FileChecksumForm
+    template_name = "osquery/file_checksum_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        self.file_checksum_id = int(kwargs["fc_id"])
+        try:
+            self.file_checksum = self.probe.file_checksums[self.file_checksum_id]
+        except IndexError:
+            raise Http404
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        return self.form_class.get_initial(self.file_checksum)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['add_checksum'] = False
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("file_checksums")
+        return ctx
+
+    def form_valid(self, form):
+        file_checksum = form.cleaned_data
+
+        def func(probe_d):
+            probe_d["file_checksums"][self.file_checksum_id] = file_checksum
+        self.probe_source.update_body(func)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.probe_source.get_absolute_url("file_checksums")
+
+
+class DeleteComplianceProbeFileChecksumView(TemplateView):
+    template_name = "osquery/delete_file_checksum.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        self.file_checksum_id = int(kwargs["fc_id"])
+        try:
+            self.file_checksum = self.probe.file_checksums[self.file_checksum_id]
+        except IndexError:
+            raise Http404
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("file_checksums")
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        if self.probe.can_delete_items:
+            def func(probe_d):
+                probe_d["file_checksums"].pop(self.file_checksum_id)
+                if not probe_d["file_checksums"]:
+                    probe_d.pop("file_checksums")
+            self.probe_source.update_body(func)
+        return HttpResponseRedirect(self.probe_source.get_absolute_url("osquery_compliance"))
+
+
+# distributed query probes
+
+
+class CreateDistributedQueryProbeView(FormView):
+    form_class = CreateDistributedQueryProbeForm
+    template_name = "osquery/create_probe.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Create osquery distributed query probe"
+        ctx["probes"] = True
+        return ctx
+
+    def form_valid(self, form):
+        probe_source = form.save()
+        return HttpResponseRedirect(probe_source.get_absolute_url())
 
 
 class DownloadDistributedView(View):
     def get(self, request, *args, **kwargs):
-        dq = get_object_or_404(DistributedQuery, pk=kwargs['pk'])
-        return JsonResponse(dq.serialize())
+        probe_source = get_object_or_404(ProbeSource, pk=kwargs['probe_id'])
+        probe = probe_source.load()
+        return JsonResponse(probe.serialize())
+
+
+class UpdateDistributedQueryProbeQueryView(FormView):
+    form_class = DistributedQueryForm
+    template_name = "osquery/distributed_query_query_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        return {'query': self.probe.distributed_query}
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery")
+        return ctx
+
+    def form_valid(self, form):
+        body = form.get_body()
+
+        def func(probe_d):
+            probe_d.update(body)
+        self.probe_source.update_body(func)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.probe_source.get_absolute_url("osquery")
+
+
+# FIM probes
+
+
+class CreateFIMProbeView(FormView):
+    form_class = CreateFIMProbeForm
+    template_name = "osquery/create_fim_probe.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Create osquery FIM probe"
+        ctx["probes"] = True
+        return ctx
+
+    def form_valid(self, form):
+        probe_source = form.save()
+        return HttpResponseRedirect(probe_source.get_absolute_url())
+
+
+class AddFIMProbeFilePathView(FormView):
+    form_class = FilePathForm
+    template_name = "osquery/file_path_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['add_file_path'] = True
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery_fim")
+        return ctx
+
+    def form_valid(self, form):
+        file_path = form.get_file_path()
+
+        def func(probe_d):
+            file_paths = probe_d.setdefault("file_paths", [])
+            file_paths.append(file_path)
+        self.probe_source.update_body(func)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.probe_source.get_absolute_url("osquery_fim")
+
+
+class UpdateFIMProbeFilePathView(FormView):
+    form_class = FilePathForm
+    template_name = "osquery/file_path_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        self.file_path_id = int(kwargs["file_path_id"])
+        try:
+            self.file_path = self.probe.file_paths[self.file_path_id]
+        except IndexError:
+            raise Http404
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        return self.form_class.get_file_path_initial(self.file_path)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['add_file_path'] = False
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery_fim")
+        return ctx
+
+    def form_valid(self, form):
+        file_path = form.get_file_path()
+
+        def func(probe_d):
+            probe_d["file_paths"][self.file_path_id] = file_path
+        self.probe_source.update_body(func)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.probe_source.get_absolute_url("osquery_fim")
+
+
+class DeleteFIMProbeFilePathView(TemplateView):
+    template_name = "osquery/delete_file_path.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        self.file_path_id = int(kwargs["file_path_id"])
+        try:
+            self.file_path = self.probe.file_paths[self.file_path_id]
+        except IndexError:
+            raise Http404
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("osquery_fim")
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        if self.probe.can_delete_file_paths:
+            def func(probe_d):
+                probe_d["osquery_fim"].pop(self.file_path_id)
+                if not probe_d["osquery_fim"]:
+                    probe_d.pop("osquery_fim")
+            self.probe_source.update_body(func)
+        return HttpResponseRedirect(self.probe_source.get_absolute_url("osquery_fim"))
 
 
 # API
@@ -224,9 +650,7 @@ class DistributedReadView(BaseNodeView):
         queries = {}
         if self.machine_serial_number:
             machine = MetaMachine(self.machine_serial_number)
-            for dqn in DistributedQueryNode.objects.new_queries_for_machine(machine):
-                dq = dqn.distributed_query
-                queries['q_{}'.format(dq.id)] = dq.query
+            queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(machine)
         return {'queries': queries}
 
 
@@ -234,16 +658,45 @@ class DistributedWriteView(BaseNodeView):
     request_type = "distributed_write"
 
     def do_node_post(self, data):
-        for key, val in data.get('queries').items():
-            dq_id = int(key.rsplit('_', 1)[-1])
-            sn = self.machine_serial_number
+        payloads = []
+
+        def get_probe_pk(key):
+            return int(key.split('_')[-1])
+
+        queries = data['queries']
+        ps_d = {ps.id: ps
+                for ps in ProbeSource.objects.filter(
+                    model='OsqueryDistributedQueryProbe',
+                    pk__in=[get_probe_pk(k) for k in queries.keys()]
+                )}
+        for key, val in queries.items():
             try:
-                dqn = DistributedQueryNode.objects.get(distributed_query__id=dq_id,
-                                                       machine_serial_number=sn)
-            except DistributedQueryNode.DoesNotExist:
-                logger.error("Unknown distributed query node query %s sn %s", dq_id, sn)
+                probe_source = ps_d[get_probe_pk(key)]
+            except KeyError:
+                logger.error("Unknown distributed query probe %s", key)
             else:
-                dqn.set_json_result(val)
+                payload = {'probe': {'id': probe_source.pk,
+                                     'name': probe_source.name}}
+                try:
+                    status = int(data['statuses'][key])
+                except KeyError:
+                    # osquery < 2.1.2 has no statuses
+                    status = 0
+                if status > 0:
+                    # error
+                    payload["error"] = True
+                elif status == 0:
+                    payload["error"] = False
+                    if val:
+                        payload["result"] = val
+                    else:
+                        payload["empty"] = True
+                else:
+                    raise ValueError("Unknown distributed query status '{}'".format(status))
+                payloads.append(payload)
+        post_distributed_query_result(self.machine_serial_number,
+                                      self.user_agent, self.ip,
+                                      payloads)
         return {}
 
 

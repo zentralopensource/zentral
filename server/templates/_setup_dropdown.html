@@ -1,0 +1,17 @@
+<li class="dropdown{% if active %} active{% endif %}">
+    <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button">
+      <span class="glyphicon glyphicon-cog" aria-hidden="true"></span>
+      Setup <span class="caret"></span></a>
+    </a>
+    <ul class="dropdown-menu">
+      {% for section in section_list %}
+      <li class="dropdown-header">{{ section.title }}</li>
+      {% for link, anchor_text in section.link_list %}
+      <li><a href="{{ link }}">{{ anchor_text }}</a></li>
+      {% endfor %}
+      {% if not forloop.last %}
+      <li role="separator" class="divider"></li>
+      {% endif %}
+      {% endfor %}
+    </ul>
+</li>

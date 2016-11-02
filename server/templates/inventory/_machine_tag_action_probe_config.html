@@ -1,0 +1,19 @@
+{% load inventory_extras %}
+<table class="action-probe-config table table-condensed">
+  <tr>
+    <td>action</td>
+    <td>{{ action_config_d.action }}</td>
+  </tr>
+  {% if action_config_d.tags %}
+  <tr>
+    <td>tags</td>
+    <td>{% for t in action_config_d.tags %}{% inventory_tag t %}{% endfor %}</td>
+  </tr>
+  {% endif %}
+  {% if action_config_d.tags_from_event_payload_attr %}
+  <tr>
+    <td>Payload attr for the tag names</td>
+    <td>{{ action_config_d.tags_from_event_payload_attr }}</td>
+  </tr>
+  {% endif %}
+</table>

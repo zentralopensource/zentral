@@ -1,7 +1,8 @@
 import logging
 import psycopg2
 from psycopg2.extras import Json
-from zentral.core.events import event_cls_from_type, EventMetadata, EventRequest
+from zentral.core.events import event_cls_from_type
+from zentral.core.events.base import EventMetadata, EventRequest
 from zentral.core.stores.backends.base import BaseEventStore
 
 logger = logging.getLogger('zentral.core.stores.backends.postgres')
@@ -86,9 +87,9 @@ class EventStore(BaseEventStore):
                           payload)
         return event
 
-    def store(self, event_d):
+    def store(self, event):
         with self._conn:
-            doc = self._serialize_event(event_d)
+            doc = self._serialize_event(event)
             with self._conn.cursor() as cur:
                 cur.execute("insert into events (machine_serial_number, "
                             "event_type, uuid, index, user_agent, ip, payload, created_at) "
@@ -96,7 +97,9 @@ class EventStore(BaseEventStore):
                             "%(uuid)s, %(index)s, %(user_agent)s, %(ip)s, %(payload)s, %(created_at)s)",
                             doc)
 
-    def count(self, machine_serial_number, event_type=None):
+    # machine events
+
+    def machine_events_count(self, machine_serial_number, event_type=None):
         with self._conn:
             query = "select count(*) from events where machine_serial_number = %s"
             args = [machine_serial_number]
@@ -107,7 +110,7 @@ class EventStore(BaseEventStore):
                 cur.execute(query, args)
                 return cur.fetchone()[0]
 
-    def fetch(self, machine_serial_number, offset=0, limit=0, event_type=None):
+    def machine_events_fetch(self, machine_serial_number, offset=0, limit=0, event_type=None):
         query = "select * from events where machine_serial_number = %s"
         args = [machine_serial_number]
         if event_type:
@@ -127,7 +130,7 @@ class EventStore(BaseEventStore):
                 for t in cur.fetchall():
                     yield self._deserialize_event(dict(zip(columns, t)))
 
-    def event_types_with_usage(self, machine_serial_number):
+    def machine_events_types_with_usage(self, machine_serial_number):
         query = "select event_type, count(*) from events where machine_serial_number = %s group by event_type"
         types_d = {}
         with self._conn.cursor() as cur:
@@ -135,6 +138,14 @@ class EventStore(BaseEventStore):
             for t in cur.fetchall():
                 types_d[t[0]] = t[1]
         return types_d
+
+    # probe events
+
+    # TODO: not implemented
+
+    # app hist
+
+    # TODO: not implemented
 
     def close(self):
         self._conn.close()

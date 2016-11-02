@@ -2,12 +2,14 @@ from email.mime.text import MIMEText
 import logging
 from smtplib import SMTP_SSL, SMTPException
 from zentral.conf import contact_groups
-from zentral.core.actions.backends.base import BaseAction
+from zentral.core.actions.backends.base import BaseAction, ContactGroupForm
 
 logger = logging.getLogger('zentral.core.actions.backends.email')
 
 
 class Action(BaseAction):
+    action_form_class = ContactGroupForm
+
     def __init__(self, config_d):
         super(Action, self).__init__(config_d)
         self.conn = None

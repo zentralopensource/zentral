@@ -1,5 +1,6 @@
 import logging
-from zentral.core.events import BaseEvent, EventMetadata, EventRequest, event_cls_from_type, register_event_type
+from zentral.core.events import event_cls_from_type, register_event_type
+from zentral.core.events.base import BaseEvent
 
 logger = logging.getLogger('zentral.contrib.jss.events')
 
@@ -30,17 +31,12 @@ JSS_EVENTS = {"ComputerAdded": "computer_added",
 for jss_event, event_subtype in JSS_EVENTS.items():
     event_type = 'jss_{}'.format(event_subtype)
     event_class_name = "".join(s.title() for s in event_type.split('_'))
-    event_class = type(event_class_name, (BaseEvent,), {'event_type': event_type})
+    event_class = type(event_class_name, (BaseEvent,), {'event_type': event_type, 'tags': ['jss']})
     register_event_type(event_class)
 
 
 def post_jss_event(user_agent, ip, data):
-    payload = data["event"]
     event_cls = event_cls_from_type('jss_{}'.format(JSS_EVENTS[data["webhook"]["webhookEvent"]]))
+    payload = data["event"]
     msn = payload.get("serialNumber", None)
-    metadata = EventMetadata(event_cls.event_type,
-                             machine_serial_number=msn,
-                             request=EventRequest(user_agent, ip),
-                             tags=['jss'])
-    event = event_cls(metadata, payload)
-    event.post()
+    event_cls.post_machine_request_payloads(msn, user_agent, ip, [payload])

@@ -26,7 +26,6 @@ urlpatterns = [
         name='remove_machine_tag'),
     url(r'^machine/(?P<serial_number>\S+)/archive/$', views.ArchiveMachineView.as_view(), name='archive_machine'),
     url(r'^machine/(?P<serial_number>\S+)/$', views.MachineView.as_view(), name='machine'),
-    url(r'^probes/$', views.ProbesView.as_view(), name='probes'),
     url(r'^tags/$', views.TagsView.as_view(), name='tags'),
     url(r'^tags/(?P<pk>\d+)/update/$', views.UpdateTagView.as_view(), name='update_tag'),
     url(r'^tags/(?P<pk>\d+)/delete/$', views.DeleteTagView.as_view(), name='delete_tag'),
@@ -37,7 +36,6 @@ urlpatterns = [
         name='macos_app_instance_machines'),
 ]
 
-
 main_menu_cfg = {
     'weight': 0,
     'items': (
@@ -45,7 +43,6 @@ main_menu_cfg = {
         ('groups', 'Groups'),
         ('mbu', 'Business units'),
         ('macos_apps', 'macOS applications'),
-        ('probes', 'Probes'),
         ('tags', 'Tags'),
     )
 }

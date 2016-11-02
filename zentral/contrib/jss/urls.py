@@ -11,7 +11,7 @@ urlpatterns = [
 ]
 
 
-main_menu_cfg = {
+setup_menu_cfg = {
     'items': (
         ('enrollment', 'Enrollment'),
     )

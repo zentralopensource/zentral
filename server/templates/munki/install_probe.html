@@ -1,0 +1,36 @@
+{% extends 'core/probes/probe.html' %}
+
+{% block probe_extra %}
+<a name="munki"></a>
+<h3>Munki install</h3>
+
+<div class="panel panel-default">
+  <table class="table table-condensed probe-panel">
+    <tr>
+      <td>install types</td>
+      <td>{{ probe.get_install_types_display }}</td>
+    </tr>
+    {% if probe.installed_item_names %}
+    <tr>
+      <td>installed item name{{ probe.installed_item_names|length|pluralize }}</td>
+      <td>
+        {{ probe.get_installed_item_names_display }}
+      </td>
+    </tr>
+    {% endif %}
+    {% if probe.unattended_installs is not None %}
+    <tr>
+      <td>unattended installs</td>
+      <td>{{ probe.unattended_installs|yesno }}</td>
+    </tr>
+    {% endif %}
+  </table>
+  <div class="panel-footer">
+    <div class="btn-group" role="group">
+      <a class="btn btn-default" href="{% url 'munki:update_install_probe' object.id %}">
+        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

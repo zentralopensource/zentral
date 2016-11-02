@@ -12,7 +12,6 @@ logger = logging.getLogger('zentral.contrib.jss.views')
 
 class EnrollmentView(BaseEnrollmentView):
     template_name = "jss/enrollment.html"
-    section = "jss"
 
 
 class EnrollmentDebuggingView(View):

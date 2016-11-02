@@ -20,6 +20,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='probesource',
             name='body',
-            field=models.TextField(validators=[zentral.core.probes.models.validate_body]),
+            field=models.TextField(),
         ),
     ]
