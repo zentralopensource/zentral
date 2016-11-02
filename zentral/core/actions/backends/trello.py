@@ -1,6 +1,7 @@
 import logging
+from django import forms
 import requests
-from .base import BaseAction
+from .base import BaseAction, BaseActionForm
 
 logger = logging.getLogger('zentral.core.actions.backends.trello')
 
@@ -90,7 +91,21 @@ class TrelloClient(object):
             r.raise_for_status()
 
 
+class ActionForm(BaseActionForm):
+    board = forms.CharField()
+    list = forms.CharField()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name in ("board", "list"):
+            default_value = self.config_d.get("default_{}".format(field_name), None)
+            if default_value:
+                self.fields[field_name].initial = default_value
+
+
 class Action(BaseAction):
+    action_form_class = ActionForm
+
     def __init__(self, config_d):
         super(Action, self).__init__(config_d)
         self.client = TrelloClient(config_d["application_key"],

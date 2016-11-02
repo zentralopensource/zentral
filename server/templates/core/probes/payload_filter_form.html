@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'probes:index' %}">Probes</a></li>
+  <li><a href="{% url 'probes:probe' probe_source.id %}">{{ probe_source.name }}</a></li>
+  <li class="active">{% if add_filter %}Add{% else %}Update{% endif %} {{ section }} filter</li>
+</ol>
+
+<h2>{% if add_filter %}Add{% else %}Update{% endif %} {{ section }} filter</h2>
+<div class="item-form empty-itemform" style="display:none">
+  <div class="form-group">
+    {{ form.empty_form.attribute.label_tag }}
+    {{ form.empty_form.attribute|bootstrap_inline }}
+  </div>
+  <div class="form-group">
+    {{ form.empty_form.values.label_tag }}
+    {{ form.empty_form.values|bootstrap_inline }}
+  </div>
+  <input type="hidden" id="id_form-__prefix__-DELETE" name="form-__prefix__-DELETE">
+  <a href="#" class="btn btn-danger delete-filter-item">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+  </a>
+</div>
+<form method="POST" class="form form-inline">{% csrf_token %}
+  {{ form.management_form }}
+  <div id="item-forms">
+    {% for itemform in form %}
+    <div class="item-form">
+      <div class="form-group">
+        {{ itemform.attribute.label_tag }}
+        {{ itemform.attribute|bootstrap_inline }}
+      </div>
+      <div class="form-group">
+        {{ itemform.values.label_tag }}
+        {{ itemform.values|bootstrap_inline }}
+      </div>
+      <input type="hidden" id="id_{{ itemform.prefix }}-DELETE" name="{{ itemform.prefix }}-DELETE">
+      <a href="#" class="btn btn-danger delete-filter-item">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+  <p>
+    <a class="btn btn-default" href="#" id="add-filter-item">
+      <span class="glyphicon glyphicon-plus" aria-hidden="true"></span> attribute
+    </a>
+  </p>
+  <p>
+    <a class="btn btn-default" href="{{ probe_source.get_filters_absolute_url }}">Cancel</a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
+</form>
+{% endblock %}
+
+{% block extrajs %}
+<script>
+  function toggle_delete_buttons(){
+    $('.delete-filter-item').toggle($(".item-form:visible").length > 1);
+  }
+
+  function add_filter_item() {
+    var itemform = $(".empty-itemform")
+                   .clone()
+                   .show()
+                   .removeClass('empty-itemform');
+    var new_prefix;
+    $("#id_form-TOTAL_FORMS").val(function(i, oldval){
+      new_prefix = parseInt(oldval, 10);
+      return new_prefix + 1;
+    });
+    var set_prefix = function(i, old_val) {
+      return old_val.replace('__prefix__', new_prefix);
+    }
+    itemform.find('label')
+            .attr('for', set_prefix);
+    itemform.find('input')
+            .attr('id', set_prefix)
+            .attr('name', set_prefix);
+    $("#item-forms").append(itemform);
+    toggle_delete_buttons();
+  }
+
+  function delete_filter_item(btn) {
+    btn.prev().val(1);
+    btn.parent().hide();
+    toggle_delete_buttons();
+  }
+  
+  $(document).ready(function(){
+    $("#add-filter-item").click(function(event){
+      add_filter_item();
+    })
+    toggle_delete_buttons();
+  }); 
+
+  $(document).on('click', ".delete-filter-item", function(event){
+    delete_filter_item($(this));
+  });
+</script>
+{% endblock %}

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load inventory_extras probe_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -29,69 +29,225 @@
 <div class="btn-group" role="group">
   <a class="btn btn-default" href="{% url 'probes:update' probe.pk %}">Update</a>
   <a class="btn btn-default" href="{% url 'probes:delete' probe.pk %}">Delete</a>
-  {% for store_name, store_url in probe_links %}
+  <a class="btn btn-default" href="{% url 'probes:probe_events' probe.pk %}">Events</a>
+  {% for store_name, store_url in probe.get_store_links %}
   <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
   {% endfor %}
 </div>
 
-{% if probe.inventory_filters or probe.metadata_filters or probe.payload_filters %}
+<a name="filters"></a>
 <h3>Filters</h3>
+
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="addFilter"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Add filter
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="addFilter">
+    <li>
+      <a href="{% url 'probes:add_filter' object.id "inventory" %}">
+        Inventory filter
+      </a>
+    </li>
+    {% if probe.can_edit_metadata_filters %}
+    <li>
+      <a href="{% url 'probes:add_filter' object.id "metadata" %}">
+        Metadata filter
+      </a>
+    </li>
+    {% endif %}
+    {% if probe.can_edit_payload_filters %}
+    <li>
+      <a href="{% url 'probes:add_filter' object.id "payload" %}">
+        Payload filter
+      </a>
+    </li>
+    {% endif %}
+  </ul>
+</div>
+
+<div class="row">
 {% if probe.inventory_filters %}
+<div class="col-md-4">
 <h4>Inventory</h4>
-<table class="table">
-  <tbody>
-    {% for metadata_filter in probe.inventory_filters %}
+
+{% for inventory_filter in probe.inventory_filters %}
+<div class="panel panel-default">
+  <table class="table table-condensed probe-panel">
+    {% if inventory_filter.meta_business_units %}
     <tr>
-      <td>{{ metadata_filter|pythonprettyprint }}</td>
+      <td>
+        Business unit{{ inventory_filter.meta_business_units|length|pluralize }}
+      </td>
+      <td>
+        {% for mbu in inventory_filter.meta_business_units %}
+        <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu }}</a>
+        {% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      </td>
     </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    {% endif %}
+    {% if inventory_filter.tags %}
+    <tr>
+      <td>
+        Tag{{ inventory_filter.tags|length|pluralize }}
+      </td>
+      <td>
+        {% for tag in inventory_filter.tags %}
+        {% inventory_tag tag %}
+        {% endfor %}
+      </td>
+    </tr>
+    {% endif %}
+    {% if inventory_filter.platforms %}
+    <tr>
+      <td>
+        Platform{{ inventory_filter.platforms|length|pluralize }}
+      </td>
+      <td>{{ inventory_filter.get_platforms_display }}</td>
+    </tr>
+    {% endif %}
+    {% if inventory_filter.types %}
+    <tr>
+      <td>
+        Type{{ inventory_filter.types|length|pluralize }}
+      </td>
+      <td>{{ inventory_filter.get_types_display }}</td>
+    </tr>
+    {% endif %}
+   </table>
+  <div class="panel-footer">
+    <div class="btn-group" role="group">
+      <a href="{% url 'probes:update_filter' object.id "inventory" forloop.counter0 %}" class="btn btn-default">
+        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+       </a>
+      <a href="{% url 'probes:delete_filter' object.id "inventory" forloop.counter0 %}" class="btn btn-danger">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+    </div>
+  </div>
+</div>
+{% endfor %}
+</div> <!-- inventory filters col -->
 {% endif %}
 
-{% if probe.metadata_filters %}
+{% if probe.can_edit_metadata_filters and probe.metadata_filters %}
+<div class="col-md-4">
 <h4>Metadata</h4>
-<table class="table">
-  <tbody>
-    {% for metadata_filter in probe.metadata_filters %}
+
+{% for metadata_filter in probe.metadata_filters %}
+<div class="panel panel-default">
+  <table class="table table-condensed probe-panel">
+    {% if metadata_filter.event_tags %}
     <tr>
-      <td>{{ metadata_filter|pythonprettyprint }}</td>
+      <td>tags</td>
+      <td>
+          {{ metadata_filter.get_event_tags_display }}
+      </td>
     </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    {% endif %}
+    {% if metadata_filter.event_types %}
+    <tr>
+      <td>type</td>
+      <td>
+          {{ metadata_filter.get_event_types_display }}
+      </td>
+    </tr>
+    {% endif %}
+  </table>
+  <div class="panel-footer">
+    <div class="btn-group" role="group">
+      <a href="{% url 'probes:update_filter' object.id "metadata" forloop.counter0 %}" class="btn btn-default">
+        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+       </a>
+      <a href="{% url 'probes:delete_filter' object.id "metadata" forloop.counter0 %}" class="btn btn-danger">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+    </div>
+  </div>
+</div>
+{% endfor %}
+</div> <!-- metadata filters col -->
 {% endif %}
 
-{% if probe.payload_filters %}
+{% if probe.can_edit_payload_filters and probe.payload_filters %}
+<div class="col-md-4">
 <h4>Payload</h4>
-<table class="table">
-  <tbody>
-    {% for payload_filter in probe.payload_filters %}
+
+{% for payload_filter in probe.payload_filters %}
+<div class="panel panel-default">
+  <table class="table table-condensed probe-panel">
+    {% for attribute, values in payload_filter.items_display %}
     <tr>
-      <td>{{ payload_filter|pythonprettyprint }}</td>
+      <td>{{ attribute }}</td>
+      <td>
+          {{ values|join:", " }}
+      </td>
     </tr>
     {% endfor %}
-  </tbody>
-</table>
+  </table>
+  <div class="panel-footer">
+    <div class="btn-group" role="group">
+      <a href="{% url 'probes:update_filter' object.id "payload" forloop.counter0 %}" class="btn btn-default">
+        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+       </a>
+      <a href="{% url 'probes:delete_filter' object.id "payload" forloop.counter0 %}" class="btn btn-danger">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+    </div>
+  </div>
+</div>
+{% endfor %}
+</div> <!-- payload filters col -->
 {% endif %}
-{% endif %}
+</div> <!-- filters row -->
 
 {% block probe_extra %}
 {% endblock %}
 
+<a name="actions"></a>
 <h3>Actions</h3>
+
+{% if add_action_urls %}
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="addAction"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Add action
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="addAction">
+    {% for action_name, edit_action_url in add_action_urls %}
+    <li><a href="{{ edit_action_url }}">{{ action_name }}</a></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if probe.actions %}
 <table class="table">
   <thead>
     <th>Name</th>
     <th>Configuration</th>
+    <th></th>
   </thead>
   <tbody>
     {% for action, action_probe_config in probe.actions %}
     <tr>
       <td>{{ action.name }}</td>
-      <td>{{ action_probe_config|pythonprettyprint }}</td>
+      <td>{% if action_probe_config %}{% action_probe_config action action_probe_config %}{% endif %}</td>
+      <td>
+          <a href="{% url 'probes:edit_action' object.id action.name %}"
+             class="btn btn-default{% if not action.can_be_updated %} disabled{% endif %}">
+            <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+          </a>
+          <a href="{% url 'probes:delete_action' object.id action.name %}" class="btn btn-danger">
+            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+          </a>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 {% endblock %}

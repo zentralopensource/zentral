@@ -1,5 +1,5 @@
 import logging
-from zentral.core.events import BaseEvent, EventMetadata, EventRequest, register_event_type, post_command_events
+from zentral.core.events.base import BaseEvent, register_event_type, post_command_events
 
 
 logger = logging.getLogger('zentral.contrib.zendesk.events')
@@ -8,13 +8,17 @@ logger = logging.getLogger('zentral.contrib.zendesk.events')
 ALL_EVENTS_SEARCH_DICT = {"tag": "zendesk"}
 
 
-class ZendeskTicketCreationEvent(BaseEvent):
+class BaseZendeskEvent(BaseEvent):
+    tags = ["zendesk"]
+
+
+class ZendeskTicketCreationEvent(BaseZendeskEvent):
     event_type = "zendesk_ticket_creation"
 
 register_event_type(ZendeskTicketCreationEvent)
 
 
-class ZendeskCommentCreationEvent(BaseEvent):
+class ZendeskCommentCreationEvent(BaseZendeskEvent):
     event_type = "zendesk_comment_creation"
 
 register_event_type(ZendeskCommentCreationEvent)
@@ -33,9 +37,4 @@ def post_zendesk_event(user_agent, ip, data):
         logger.error("Unknown zendesk event type '%s'", data_type)
         return
     msn = None  # TODO!!!
-    metadata = EventMetadata(event_class.event_type,
-                             machine_serial_number=msn,
-                             request=EventRequest(user_agent, ip),
-                             tags=['zendesk'])
-    event = event_class(metadata, data)
-    event.post()
+    event_class.post_machine_request_payloads(msn, user_agent, ip, [data])

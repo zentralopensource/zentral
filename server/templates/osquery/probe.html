@@ -2,55 +2,87 @@
 {% load inventory_extras %}
 
 {% block probe_extra %}
-{% if osquery_schedule %}
-<h3>Schedule</h3>
-{% for conf in osquery_schedule %}
+<a name="osquery"></a>
+<h3>Osquery</h3>
+
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="addComponent"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Add
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="addComponent">
+    <li>
+      <a href="{% url 'osquery:add_probe_query' object.id %}">
+        Query
+      </a>
+    </li>
+  </ul>
+</div>
+
+{% if probe.queries %}
+<h4>Quer{{ probe.queries|length|pluralize:"y,ies" }}</h4>
+{% for query in probe.queries %}
 <div class="panel panel-default">
-  <div class="panel-body">
-    {{ conf.html_query|safe }}
-    <dl class="dl">
-      <dt>Interval</dt>
-      <dd>{{ conf.interval }}</dd>
-      {% if conf.value %}
-      <dt>Value</dt>
-      <dd>{{ conf.value }}</dd>
-      {% endif %}
-      {% if conf.description %}
-      <dt>Description</dt>
-      <dd>{{ conf.description }}</dd>
-      {% endif %}
-    </dl>
-  </div>
-  {% if conf.links %}
+  <table class="table table-condensed probe-panel">
+    <tr>
+      <td>Query</td>
+      <td>
+        {{ query.get_query_html|safe }}
+      </td>
+    </tr>
+    {% if query.description %}
+    <tr>
+      <td>Description</td>
+      <td>{{ query.description|linebreaks }}</td>
+    </tr>
+    {% endif %}
+    {% if query.value %}
+    <tr>
+      <td>Value</td>
+      <td>{{ query.value|linebreaks }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td>Interval</td>
+      <td>{{ query.interval }}s</td>
+    </tr>
+    {% if not query.removed %}
+    <tr>
+      <td>Removed?</td>
+      <td>No</td>
+    </tr>
+    {% endif %}
+    {% if query.shard %}
+    <tr>
+      <td>Shard</td>
+      <td>{{ query.shard }}%</td>
+    </tr>
+    {% endif %}
+    {% if query.version %}
+    <tr>
+      <td>Version</td>
+      <td>{{ query.version }}</td>
+    </tr>
+    {% endif %}
+  </table>
   <div class="panel-footer">
-    <div class="btn-group-vertical" role="group">
-      {% for store_name, store_url in conf.links %}
+    <div class="btn-group" role="group">
+      <a class="btn btn-default" href="{% url 'osquery:update_probe_query' object.id forloop.counter0 %}">
+        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+      </a>
+      {% if probe.can_delete_queries %}
+      <a class="btn btn-danger" href="{% url 'osquery:delete_probe_query' object.id forloop.counter0 %}">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+      {% endif %}
+      {% for store_name, store_url in query.get_store_links %}
       <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
       {% endfor %}
     </div>
   </div>
-  {% endif %}
 </div>
 {% endfor %}
+{% endif %}
 
-{% if osquery_file_paths %}
-<h3>File Paths</h3>
-<table class="table">
-  <thead>
-    <th>Configuration</th>
-    <th>Paths</th>
-  </thead>
-  <tbody>
-    {% for conf, paths in osquery_file_paths.items %}
-    <tr>
-      <td><pre>{{ conf }}</pre></td>
-      <td>
-	{{ paths|pythonprettyprint }}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-{% endif %}
 {% endblock %}

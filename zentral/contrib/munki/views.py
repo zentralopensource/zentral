@@ -1,36 +1,84 @@
 import logging
 from datetime import timedelta
 from dateutil import parser
+from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.views.generic import TemplateView
+from django.views.generic.edit import FormView
 from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
-from zentral.core.probes.conf import ProbeList
 from .events import post_munki_events
+from .forms import CreateInstallProbeForm, UpdateInstallProbeForm
 from .models import MunkiState
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 
 logger = logging.getLogger('zentral.contrib.munki.views')
 
 
-class ProbesView(TemplateView):
-    template_name = "munki/probes.html"
-
-    def get_context_data(self, **kwargs):
-        context = super(ProbesView, self).get_context_data(**kwargs)
-        context['munki'] = True
-        context['event_type_probes'] = ProbeList().module_prefix_filter("munki")
-        return context
-
-
 class EnrollmentView(BaseEnrollmentView):
     template_name = "munki/enrollment.html"
-    section = "munki"
 
 
 class InstallerPackageView(BaseInstallerPackageView):
     module = "zentral.contrib.munki"
     builder = MunkiZentralEnrollPkgBuilder
+
+
+# install probe
+
+
+class CreateInstallProbeView(FormView):
+    form_class = CreateInstallProbeForm
+    template_name = "munki/install_probe_form.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['title'] = 'Create munki install probe'
+        ctx['probes'] = True
+        return ctx
+
+    def form_valid(self, form):
+        probe_source = form.save()
+        return HttpResponseRedirect(probe_source.get_absolute_url())
+
+
+class UpdateInstallProbeView(FormView):
+    form_class = UpdateInstallProbeForm
+    template_name = "munki/install_probe_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs['probe_id'])
+        self.probe = self.probe_source.load()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        return self.form_class.get_probe_initial(self.probe)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['title'] = 'Update munki install probe'
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("munki")
+        return ctx
+
+    def form_valid(self, form):
+        body = form.get_body()
+
+        def func(probe_d):
+            probe_d.update(body)
+            if "unattended_installs" not in body:
+                probe_d.pop("unattended_installs", None)
+        self.probe_source.update_body(func)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.probe_source.get_absolute_url("munki")
+
+
+# API
 
 
 class BaseView(SignedRequestHeaderJSONPostAPIView):

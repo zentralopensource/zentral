@@ -5,7 +5,6 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.views import generic
 from zentral.core.stores import frontend_store
-from zentral.core.probes.conf import ProbeList
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
                     MacOSAppSearchForm)
@@ -424,7 +423,7 @@ class MachineEventSet(object):
 
     def count(self):
         if self._count is None:
-            self._count = self.store.count(self.machine_serial_number, self.event_type)
+            self._count = self.store.machine_events_count(self.machine_serial_number, self.event_type)
         return self._count
 
     def __len__(self):
@@ -437,7 +436,7 @@ class MachineEventSet(object):
         else:
             start = k
             stop = k + 1
-        return self.store.fetch(self.machine_serial_number, start, stop - start, self.event_type)
+        return self.store.machine_events_fetch(self.machine_serial_number, start, stop - start, self.event_type)
 
 
 class MachineEventsView(generic.ListView):
@@ -463,7 +462,7 @@ class MachineEventsView(generic.ListView):
 
         # event types selection
         request_event_type = self.request.GET.get('event_type')
-        for event_type, count in frontend_store.event_types_with_usage(
+        for event_type, count in frontend_store.machine_events_types_with_usage(
                 self.serial_number).items():
             total_events += count
             event_types.append((event_type,
@@ -494,7 +493,6 @@ class MachineTagsView(generic.FormView):
         context = super(MachineTagsView, self).get_context_data(**kwargs)
         context['inventory'] = True
         context['machine'] = MetaMachine(self.msn)
-        context['tags'] = context['machine'].tags_with_types()
         context['color_presets'] = TAG_COLOR_PRESETS
         return context
 
@@ -516,16 +514,6 @@ class RemoveMachineTagView(generic.View):
         MachineTag.objects.filter(tag__id=kwargs['tag_id'],
                                   serial_number=kwargs['serial_number']).delete()
         return HttpResponseRedirect(reverse('inventory:machine_tags', args=(kwargs['serial_number'],)))
-
-
-class ProbesView(generic.TemplateView):
-    template_name = "inventory/probes.html"
-
-    def get_context_data(self, **kwargs):
-        context = super(ProbesView, self).get_context_data(**kwargs)
-        context['inventory'] = True
-        context['event_type_probes'] = ProbeList().module_prefix_filter("inventory")
-        return context
 
 
 TAG_COLOR_PRESETS = {

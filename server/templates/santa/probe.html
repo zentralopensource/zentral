@@ -1,25 +1,50 @@
 {% extends 'core/probes/probe.html' %}
-{% load inventory_extras %}
 
 {% block probe_extra %}
-{% if santa_policies %}
-<h3>Policies</h3>
+<a name="santa"></a>
+<h3>Rule{{ probe.rules|length|pluralize }}  </h3>
 
-{% for policy, links in santa_policies %}
+<p>
+  <a class="btn btn-default" href="{% url 'santa:add_probe_rule' object.id %}">Add rule</a>
+</p>
+
+{% for rule in probe.rules %}
 <div class="panel panel-default">
-  <div class="panel-body">
-    {{ policy|pythonprettyprint }}
-  </div>
-  {% if links %}
+  <table class="table table-condensed probe-panel">
+    <tr>
+      <td>Policy</td>
+      <td>
+        <span class="label label-{% if rule.policy == "BLACKLIST" %}danger{% else %}success{% endif %}">
+          {{ rule.get_policy_display }}
+        </span>
+      </td>
+    </tr>
+    <tr>
+      <td>{{ rule.get_rule_type_display }}</td>
+      <td>{{ rule.sha256 }}</td>
+    </tr>
+    {% if rule.custom_msg %}
+    <tr>
+      <td>Custom message</td>
+      <td>{{ rule.custom_msg }}</td>
+    </tr>
+    {% endif %}
+  </table>
   <div class="panel-footer">
-    <div class="btn-group-vertical" role="group">
-      {% for store_name, store_url in links %}
+    <div class="btn-group" role="group">
+      <a class="btn btn-default" href="{% url 'santa:update_probe_rule' object.id forloop.counter0 %}">
+        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+      </a>
+      {% if probe.can_delete_rules %}
+      <a class="btn btn-danger" href="{% url 'santa:delete_probe_rule' object.id forloop.counter0 %}">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+      {% endif %}
+      {% for store_name, store_url in rule.get_store_links %}
       <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
       {% endfor %}
     </div>
   </div>
-  {% endif %}
 </div>
 {% endfor %}
-{% endif %}
 {% endblock %}

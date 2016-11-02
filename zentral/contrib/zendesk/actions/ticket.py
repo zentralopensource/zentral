@@ -1,15 +1,29 @@
 import json
 import logging
+from django import forms
 import requests
-from zentral.core.actions.backends.base import BaseAction
+from zentral.core.actions.backends.base import BaseAction, BaseActionForm
+from zentral.utils.forms import CommaSeparatedQuotedStringField
 
 
 logger = logging.getLogger('zentral.contrib.zendesk.actions.ticket')
 
 API_ENDPOINT = "https://{subdomain}.zendesk.com/api/v2/tickets.json"
 
+PRIORITIES = ["low", "normal", "high", "urgent"]
+DEFAULT_PRIORITY = "normal"
+
+
+class ActionForm(BaseActionForm):
+    priority = forms.ChoiceField(choices=[(p, p) for p in PRIORITIES], initial=DEFAULT_PRIORITY)
+    tags = CommaSeparatedQuotedStringField(required=False,
+                                           help_text=('Comma separated tag list. '
+                                                      'Quote the tags with "" if they contain a comma.'))
+
 
 class Action(BaseAction):
+    action_form_class = ActionForm
+
     def _prepare_tag_set(self, tags):
         if isinstance(tags, str):
             tags = [t.strip() for t in tags.split(',') if t.strip()]
@@ -30,10 +44,10 @@ class Action(BaseAction):
                 'subject': event.get_notification_subject(probe)}}
 
         # priority
-        priority = action_config_d.get('priority', 'normal')
-        if priority not in ('urgent', 'high', 'normal', 'low'):
+        priority = action_config_d.get('priority', DEFAULT_PRIORITY)
+        if priority not in PRIORITIES:
             logger.warning('Invalid priority level %s', priority)
-            priority = 'normal'
+            priority = DEFAULT_PRIORITY
         args['ticket']['priority'] = priority
 
         # tags

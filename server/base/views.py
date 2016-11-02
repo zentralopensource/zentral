@@ -45,7 +45,8 @@ class AppHistogramDataView(generic.View):
         labels = []
         event_count_data = []
         unique_msn_data = []
-        for dt, event_count, unique_msn in frontend_store.get_app_hist_data(interval, int(kwargs["bucket_number"]), **search_dict):
+        for dt, event_count, unique_msn in frontend_store.get_app_hist_data(interval, int(kwargs["bucket_number"]),
+                                                                            **search_dict):
             labels.append(dt.strftime(date_format))
             event_count_data.append(event_count)
             unique_msn_data.append(unique_msn)

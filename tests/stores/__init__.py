@@ -1,4 +1,4 @@
-from zentral.core.events import EventMetadata, EventRequest, BaseEvent, register_event_type
+from zentral.core.events.base import EventMetadata, EventRequest, BaseEvent, register_event_type
 
 
 class TestEvent1(BaseEvent):
@@ -33,19 +33,19 @@ class BaseTestEventStore(object):
     event_store = None
 
     def test_table_creation(self):
-        self.assertEqual(self.event_store.count("not_so_random_machine_serial_number"), 0)
+        self.assertEqual(self.event_store.machine_events_count("not_so_random_machine_serial_number"), 0)
 
     def test_store_event_with_request(self):
         event = make_event()
         self.event_store.store(event)
-        l = list(self.event_store.fetch(event.metadata.machine_serial_number))
+        l = list(self.event_store.machine_events_fetch(event.metadata.machine_serial_number))
         e = l[0]
         self.assertEqual(e.serialize(), event.serialize())
 
     def test_store_event_without_request(self):
         event = make_event(with_request=False)
         self.event_store.store(event)
-        l = list(self.event_store.fetch(event.metadata.machine_serial_number))
+        l = list(self.event_store.machine_events_fetch(event.metadata.machine_serial_number))
         e = l[0]
         self.assertEqual(e.serialize(), event.serialize())
 
@@ -53,7 +53,7 @@ class BaseTestEventStore(object):
         for i in range(100):
             event = make_event(idx=i)
             self.event_store.store(event)
-        l = list(self.event_store.fetch(event.metadata.machine_serial_number, offset=10, limit=2))
+        l = list(self.event_store.machine_events_fetch(event.metadata.machine_serial_number, offset=10, limit=2))
         self.assertEqual(len(l), 2)
         self.assertEqual(l[0].payload['idx'], 89)
         self.assertEqual(l[1].payload['idx'], 88)
@@ -62,6 +62,6 @@ class BaseTestEventStore(object):
         for i in range(100):
             event = make_event(idx=i, first_type=i < 50)
             self.event_store.store(event)
-        types_d = self.event_store.event_types_with_usage(event.metadata.machine_serial_number)
+        types_d = self.event_store.machine_events_types_with_usage(event.metadata.machine_serial_number)
         self.assertEqual(types_d['event_type_1'], 50)
         self.assertEqual(types_d['event_type_2'], 50)

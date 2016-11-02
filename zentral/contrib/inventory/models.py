@@ -8,10 +8,14 @@ from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
 from django.db import connection, models
 from django.db.models import Count, Q
+from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
 from zentral.conf import settings
 from zentral.utils.mt_models import prepare_commit_tree, AbstractMTObject, MTObjectManager
+from .conf import (update_ms_tree_platform, update_ms_tree_type,
+                   PLATFORM_CHOICES, PLATFORM_CHOICES_DICT,
+                   TYPE_CHOICES, TYPE_CHOICES_DICT)
 
 logger = logging.getLogger('zentral.contrib.inventory.models')
 
@@ -69,7 +73,7 @@ class MetaBusinessUnit(models.Model):
         return b
 
     def get_machine_count(self, tags=None):
-        if not tags or set(self.tags()) & set(tags):
+        if not tags or set(self.tags) & set(tags):
             query = """SELECT count(distinct(serial_number))
             FROM inventory_machine AS m
             JOIN inventory_machinesnapshot AS ms ON (ms.machine_id = m.id)
@@ -337,58 +341,6 @@ class TeamViewer(AbstractMTObject):
     unattended = models.NullBooleanField(blank=True, null=True)
 
 
-def update_ms_tree_platform(tree):
-    os_version_t = tree.get("os_version", {})
-    os_name = os_version_t.get("name", None)
-    try:
-        minor = int(os_version_t.get("minor", None))
-    except (TypeError, ValueError):
-        minor = None
-    if not os_name:
-        return
-    os_name = os_name.lower()
-    os_name_split = os_name.split()
-    if len(os_name_split) == 2 and \
-       os_name_split[0][0] == os_name_split[1][0] and \
-       (minor == 4 or minor == 10):
-        # ubuntu
-        tree["platform"] = MachineSnapshot.LINUX
-        return
-    os_name = os_name.replace(" ", "")
-    if "osx" in os_name:
-        tree["platform"] = MachineSnapshot.MACOS
-    elif "ios" in os_name:
-        tree["platform"] = MachineSnapshot.IOS
-    elif "ubuntu" in os_name:
-        tree["platform"] = MachineSnapshot.LINUX
-
-
-def update_ms_tree_type(tree):
-    HARDWARE_MODEL_MACHINE_TYPE_DICT = {
-        'imac': MachineSnapshot.DESKTOP,
-        'ipad': MachineSnapshot.TABLET,
-        'iphone': MachineSnapshot.MOBILE,
-        'macbook': MachineSnapshot.LAPTOP,
-        'macmini': MachineSnapshot.DESKTOP,
-        'macpro': MachineSnapshot.DESKTOP,
-        'powermac': MachineSnapshot.DESKTOP,
-        'vmware': MachineSnapshot.VM,
-        'xserve': MachineSnapshot.SERVER,
-    }
-    system_info_t = tree.get("system_info", {})
-    hardware_model = system_info_t.get("hardware_model", None)
-    if hardware_model:
-        hardware_model = hardware_model.lower()
-        for prefix, ms_type in HARDWARE_MODEL_MACHINE_TYPE_DICT.items():
-            if hardware_model.startswith(prefix):
-                tree["type"] = ms_type
-                return
-    else:
-        cpu_brand = system_info_t.get("cpu_brand", None)
-        if cpu_brand and "xeon" in cpu_brand.lower():
-            tree["type"] = MachineSnapshot.SERVER
-
-
 class MachineSnapshotManager(MTObjectManager):
     def commit(self, tree):
         update_ms_tree_platform(tree)
@@ -432,43 +384,15 @@ class MachineSnapshotManager(MTObjectManager):
     def current_platforms(self):
         qs = (self.filter(platform__isnull=False, archived_at__isnull=True, mt_next__isnull=True)
               .values("platform").distinct())
-        pcd = dict(MachineSnapshot.PLATFORM_CHOICES)
-        return sorted((rd["platform"], pcd[rd["platform"]]) for rd in qs)
+        return sorted((rd["platform"], PLATFORM_CHOICES_DICT[rd["platform"]]) for rd in qs)
 
     def current_types(self):
         qs = (self.filter(type__isnull=False, archived_at__isnull=True, mt_next__isnull=True)
               .values("type").distinct())
-        tcd = dict(MachineSnapshot.TYPE_CHOICES)
-        return sorted((rd["type"], tcd[rd["type"]]) for rd in qs)
+        return sorted((rd["type"], TYPE_CHOICES_DICT[rd["type"]]) for rd in qs)
 
 
 class MachineSnapshot(AbstractMTObject):
-    DESKTOP = "DESKTOP"
-    LAPTOP = "LAPTOP"
-    MOBILE = "MOBILE"
-    SERVER = "SERVER"
-    TABLET = "TABLET"
-    VM = "VM"
-    TYPE_CHOICES = (
-        (DESKTOP, _('Desktop')),
-        (LAPTOP, _('Laptop')),
-        (MOBILE, _('Mobile')),
-        (SERVER, _('Server')),
-        (TABLET, _('Tablet')),
-        (VM, _('VM')),
-    )
-    LINUX = "LINUX"
-    MACOS = "MACOS"
-    WINDOWS = "WINDOWS"
-    ANDROID = "ANDROID"
-    IOS = "IOS"
-    PLATFORM_CHOICES = (
-        (LINUX, _('Linux')),
-        (MACOS, _('macOS')),
-        (WINDOWS, _('Windows')),
-        (ANDROID, _('Android')),
-        (IOS, _('iOS')),
-    )
     source = models.ForeignKey(Source)
     reference = models.TextField(blank=True, null=True)
     machine = models.ForeignKey(Machine)
@@ -636,21 +560,20 @@ class MetaMachine(object):
     """Simplified access to the ms."""
     def __init__(self, serial_number, snapshots=None):
         self.serial_number = serial_number
-        self._snapshots = snapshots
 
-    def get_snapshots(self):
-        if self._snapshots is None:
-            self._snapshots = list(MachineSnapshot.objects.current()
-                                   .filter(machine__serial_number=self.serial_number))
-        return self._snapshots
+    @cached_property
+    def snapshots(self):
+        return list(MachineSnapshot.objects.current()
+                    .filter(machine__serial_number=self.serial_number))
 
-    def get_snapshots_sources_for_display(self):
-        return sorted((s.source for s in self._snapshots), key=lambda s: s.name)
-
+    @cached_property
     def computer_name(self):
-        for ms in self.get_snapshots():
+        for ms in self.snapshots:
             if ms.system_info and ms.system_info.computer_name:
                 return ms.system_info.computer_name
+
+    def get_snapshots_sources_for_display(self):
+        return sorted((s.source for s in self.snapshots), key=lambda s: s.name)
 
     def get_url(self):
         try:
@@ -665,7 +588,7 @@ class MetaMachine(object):
     @property
     def names_with_sources(self):
         names = {}
-        for ms in self.get_snapshots():
+        for ms in self.snapshots:
             names.setdefault(ms.get_machine_str(), []).append(ms.source.name)
         return names
 
@@ -673,25 +596,32 @@ class MetaMachine(object):
 
     def business_units(self, include_api_enrollment_business_unit=False):
         bu_l = []
-        for ms in self.get_snapshots():
+        for ms in self.snapshots:
             if (ms.business_unit and
                 (include_api_enrollment_business_unit or
                  not ms.business_unit.is_api_enrollment_business_unit())):
                 bu_l.append(ms.business_unit)
         return bu_l
 
+    @cached_property
     def meta_business_units(self):
-        return set([bu.meta_business_unit for bu in self.business_units(include_api_enrollment_business_unit=True)])
+        return set(bu.meta_business_unit for bu in self.business_units(include_api_enrollment_business_unit=True))
 
-    def get_platform(self):
-        c = Counter(ms.platform for ms in self.get_snapshots() if ms.platform)
+    @cached_property
+    def meta_business_unit_id_set(self):
+        return set(mbu.id for mbu in self.meta_business_units)
+
+    @cached_property
+    def platform(self):
+        c = Counter(ms.platform for ms in self.snapshots if ms.platform)
         try:
             return c.most_common(1)[0][0]
         except IndexError:
             pass
 
-    def get_type(self):
-        c = Counter(ms.type for ms in self.get_snapshots() if ms.type)
+    @cached_property
+    def type(self):
+        c = Counter(ms.type for ms in self.snapshots if ms.type)
         try:
             return c.most_common(1)[0][0]
         except IndexError:
@@ -700,37 +630,43 @@ class MetaMachine(object):
     # Filtered snapshots
 
     def snapshots_with_osx_app_instances(self):
-        return list(ms for ms in self.get_snapshots() if ms.osx_app_instances.count())
+        return list(ms for ms in self.snapshots if ms.osx_app_instances.count())
 
     # Inventory tags
 
+    @cached_property
     def tags_with_types(self):
         tags = [('machine', mt.tag)
                 for mt in MachineTag.objects.select_related('tag').filter(
                     serial_number=self.serial_number
                 )]
         tags.extend(('meta_business_unit', mbut.tag)
-                    for mbut in MetaBusinessUnitTag.objects.filter(meta_business_unit__in=self.meta_business_units()))
+                    for mbut in MetaBusinessUnitTag.objects.filter(meta_business_unit__in=self.meta_business_units))
         tags.sort(key=lambda t: (t[1].meta_business_unit is None, str(t[1]).upper()))
         return tags
 
+    @cached_property
     def tags(self):
-        tags = list({t[1] for t in self.tags_with_types()})
+        tags = list({t[1] for t in self.tags_with_types})
         tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
         return tags
+
+    @cached_property
+    def tag_id_set(self):
+        return set(t.id for t in self.tags)
 
     def available_tags(self):
         # tags w/o mbu or w mbu where this machine is and that this machine does not have yet
         tags = set([])
-        for meta_business_unit in self.meta_business_units():
+        for meta_business_unit in self.meta_business_units:
             tags.update(Tag.objects.available_for_meta_business_unit(meta_business_unit))
-        tags = list(tags.difference(self.tags()))
+        tags = list(tags.difference(self.tags))
         tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
         return tags
 
     def archive(self):
         archived_at = datetime.now()
-        for ms in self.get_snapshots():
+        for ms in self.snapshots:
             tree = ms.serialize()
             tree['archived_at'] = archived_at
             MachineSnapshot.objects.commit(tree)

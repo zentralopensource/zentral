@@ -3,7 +3,6 @@
 from __future__ import unicode_literals
 
 from django.db import migrations, models
-import zentral.core.probes.models
 
 
 class Migration(migrations.Migration):
@@ -20,6 +19,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='probesource',
             name='body',
-            field=models.TextField(validators=[zentral.core.probes.models.validate_body]),
+            field=models.TextField(),
         ),
     ]

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load inventory_extras probe_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'probes:index' %}">Probes</a>
+  <li class="active">{{ probe.name }}</li>
+</ol>
+
+<h2>
+  Probe <i>{{ probe.name }}</i>
+</h2>
+
+<p>
+  <span class="label label-danger">Syntax Error</span>
+</p>
+
+{% if probe.description %}
+<p>
+  {{ probe.description|linebreaksbr }}
+</p>
+{% endif %}
+
+<div class="btn-group" role="group">
+  <a class="btn btn-danger" href="{% url 'probes:delete' probe.pk %}">Delete</a>
+</div>
+
+<h3>Raw view</h3>
+
+<div class="panel panel-default">
+  <table class="table table-condensed probe-panel">
+    <tr>
+      <td>Model</td>
+      <td>{{ object.model }}</td>
+    </tr>
+    <tr>
+      <td>Event types</td>
+      <td>{{ object.event_types }}</td>
+    </tr>
+    <tr>
+      <td>Body</td>
+      <td>{{ object.body|pythonprettyprint }}</td>
+    </tr>
+    <tr>
+      <td>Syntax errors</td>
+      <td>{{ probe.syntax_errors|pythonprettyprint }}</td>
+    </tr>
+  </table>
+</div>
+{% endblock %}

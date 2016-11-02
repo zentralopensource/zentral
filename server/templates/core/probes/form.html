@@ -9,11 +9,11 @@
   <li><a href="{% url 'probes:probe' object.id %}">{{ object.name }}</a></li>
   <li class="active">Update</li>
   {% else %}
-  <li class="active">Create probe</li>
+  <li class="active">Create events probe</li>
   {% endif %}
 </ol>
 
-<h2>{% if object %}Update{% else %}Create{% endif %} probe</h2>
+<h2>{% if object %}Update{% else %}Create events{% endif %} probe</h2>
 <form method="POST">{% csrf_token %}
   {{ form|bootstrap }}
   {% if object %}

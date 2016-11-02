@@ -146,7 +146,7 @@ class AddMachineTagForm(AddTagForm):
         super(AddMachineTagForm, self).__init__(*args, **kwargs)
         self.fields['existing_tag'].queryset = Tag.objects.filter(id__in=[t.id for t in self.machine.available_tags()])
         self.fields['new_tag_mbu'].queryset = MetaBusinessUnit.objects.filter(
-            id__in=[mbu.id for mbu in self.machine.meta_business_units()]
+            id__in=self.machine.meta_business_unit_id_set
         )
 
     def _get_mbu(self):

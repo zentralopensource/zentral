@@ -1,10 +1,12 @@
 pip
 setuptools
+coverage
 django
 requests
 ipython
 psycopg2
 django-bootstrap-form
+djangorestframework
 fabric
 gunicorn
 python-dateutil

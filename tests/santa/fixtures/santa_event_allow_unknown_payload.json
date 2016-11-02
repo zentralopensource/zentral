@@ -1,0 +1,49 @@
+{
+  "file_sha256": "40814645ca000f81c6f196510459c37fbe4f741aef29dc4c536726a4bf259002",
+  "ppid": 1,
+  "file_name": "SwitchBoard",
+  "signing_chain": [
+    {
+      "valid_until": 1487705860,
+      "sha256": "ee8a210b8516be499b98367e13f40f2a378c601bafd975f4fc02682ae818d2e1",
+      "valid_from": 1329853060,
+      "ou": "JQ525L2MZD",
+      "org": "Adobe Systems, Inc.",
+      "cn": "Developer ID Application: Adobe Systems, Inc."
+    },
+    {
+      "valid_until": 1801519935,
+      "sha256": "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f",
+      "valid_from": 1328134335,
+      "ou": "Apple Certification Authority",
+      "org": "Apple Inc.",
+      "cn": "Developer ID Certification Authority"
+    },
+    {
+      "valid_until": 2054670036,
+      "sha256": "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024",
+      "valid_from": 1146001236,
+      "ou": "Apple Certification Authority",
+      "org": "Apple Inc.",
+      "cn": "Apple Root CA"
+    }
+  ],
+  "pid": 12711,
+  "file_path": "/Applications/Adobe Bridge CC 2015/Adobe Bridge CC 2015.app/Contents/MacOS/SwitchBoard.app/Contents/MacOS",
+  "file_bundle_version_string": "SBSV 3.0.1.2",
+  "file_bundle_id": "com.adobe.switchboard-3.0",
+  "decision": "ALLOW_UNKNOWN",
+  "parent_name": "launchd",
+  "file_bundle_path": "/Applications/Adobe Bridge CC 2015/Adobe Bridge CC 2015.app/Contents/MacOS/SwitchBoard.app",
+  "execution_time": 1480350586.067313,
+  "executing_user": "sara.morgan",
+  "file_bundle_version": "3.0.1.2",
+  "current_sessions": [
+    "yo@console"
+  ],
+  "quarantine_timestamp": 0,
+  "file_bundle_name": "SwitchBoard",
+  "logged_in_users": [
+    "yo"
+  ]
+}

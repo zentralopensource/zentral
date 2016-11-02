@@ -1,10 +1,22 @@
 from datetime import datetime
 import json
 import os
-from .base import BaseAction
+from django import forms
+from .base import BaseAction, BaseActionForm
+
+
+class ActionForm(BaseActionForm):
+    sub_dir = forms.CharField(label="Sub dir", required=False)
+
+    def __init__(self, *args, **kwargs):
+        super(ActionForm, self).__init__(*args, **kwargs)
+        self.fields["sub_dir"].help_text = ("sub dir relative path in '{}'. "
+                                            "Can be left empty.").format(self.config_d["local_dir"])
 
 
 class Action(BaseAction):
+    action_form_class = ActionForm
+
     def trigger(self, event, probe, action_config_d):
         action_config_d = action_config_d or {}
         local_dir = self.config_d['local_dir']

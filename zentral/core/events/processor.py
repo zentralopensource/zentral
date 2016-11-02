@@ -1,5 +1,6 @@
 import logging
 from prometheus_client import start_http_server, Counter
+from zentral.core.probes.conf import all_probes
 
 logger = logging.getLogger('zentral.core.events.processor')
 
@@ -36,7 +37,7 @@ class EventProcessor(object):
         if request:
             counter_dict['user_agent'] = request.user_agent
             counter_dict['ip'] = request.ip
-        for probe in event.get_probes():
+        for probe in all_probes.event_filtered(event):
             counter_dict['processed'] = 'Y'
             for action, action_config_d in probe.actions:
                 try:

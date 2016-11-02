@@ -4,8 +4,9 @@ from .base import BaseAction
 
 
 class Action(BaseAction):
+    action_form_class = None
+
     def trigger(self, event, probe, action_config_d):
-        action_config_d = action_config_d or {}
         url = self.config_d["url"]
         auth = None
         if "basic_auth" in self.config_d:

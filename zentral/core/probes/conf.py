@@ -49,6 +49,10 @@ class ProbesDict(ProbeView):
         self._load()
         return self._probes[key]
 
+    def keys(self):
+        self._load()
+        return self._probes.keys()
+
     def get(self, *args, **kwargs):
         self._load()
         return self._probes.get(*args, **kwargs)
@@ -82,61 +86,25 @@ class ProbeList(ProbeView):
         self._children.add(child)
         return child
 
-    def class_filter(self, probe_class):
+    def model_filter(self, *models):
         def _filter(probe):
-            return isinstance(probe, probe_class)
+            return probe.get_model() in models
         return self.filter(_filter)
 
-    def exclude_class(self, probe_class):
+    def class_filter(self, *probe_classes):
         def _filter(probe):
-            return not isinstance(probe, probe_class)
-        return self.filter(_filter)
-
-    def inventory_filtered_probes(self, mbu_ids, tag_ids, ms_platform, ms_type):
-        def _filter(probe):
-            if not probe.inventory_filters:
-                return True
-            for inventory_filter in probe.inventory_filters:
-                # tags
-                f_tag_ids = set(int(tag_id)
-                                for tag_id in inventory_filter.get('tags', []))
-                if f_tag_ids and not f_tag_ids & tag_ids:
-                    continue
-                # business units
-                f_mbu_ids = set(int(mbu_id)
-                                for mbu_id in inventory_filter.get('business_units', []))
-                if f_mbu_ids and not f_mbu_ids & mbu_ids:
-                    continue
-                # machine snapshot platform
-                f_platforms = set(inventory_filter.get('platforms', []))
-                if f_platforms and ms_platform not in f_platforms:
-                    continue
-                # machine snapshot type
-                f_types = set(inventory_filter.get('types', []))
-                if f_types and ms_type not in f_types:
-                    continue
-                # all tests above passed => Match
-                # no need to check the other filters (OR)
-                return True
-            return False
+            return isinstance(probe, probe_classes)
         return self.filter(_filter)
 
     def machine_filtered(self, meta_machine):
-        mbu_ids = set(mbu.id for mbu in meta_machine.meta_business_units())
-        tag_ids = set(tag.id for tag in meta_machine.tags())
-        return self.inventory_filtered_probes(mbu_ids, tag_ids,
-                                              meta_machine.get_platform(),
-                                              meta_machine.get_type())
-
-    def module_prefix_filter(self, module_prefix):
         def _filter(probe):
-            for metadata_filter in probe.metadata_filters:
-                # TODO TAGS
-                event_type_filter_val = metadata_filter.get("type", None)
-                if event_type_filter_val is None or \
-                   event_type_filter_val.startswith(module_prefix):
-                    return True
-            return False
+            return probe.test_machine(meta_machine)
         return self.filter(_filter)
+
+    def event_filtered(self, event):
+        def _filter(probe):
+            return probe.test_event(event)
+        return self.filter(_filter)
+
 
 all_probes = ProbeList()
