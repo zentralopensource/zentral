@@ -146,7 +146,9 @@ class Link(AbstractMTObject):
 
 class AbstractMachineGroupManager(MTObjectManager):
     def current(self):
-        qs = self.filter(machinesnapshot__mt_next__isnull=True)
+        qs = self.filter(machinesnapshot__isnull=False,
+                         machinesnapshot__mt_next__isnull=True,
+                         machinesnapshot__archived_at__isnull=True)
         return qs.distinct().select_related('source').order_by('source__module', 'name')
 
 
