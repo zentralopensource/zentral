@@ -23,8 +23,8 @@ def set_probe_source_apps_event_type_model(apps, schema_editor):
     for ps in ProbeSource.objects.all():
         probe = load_probe(ps)
         ps.model = probe.get_model()
-        ps.apps = [etc.get_app_display() for etc in probe.event_type_classes]
-        ps.event_types = [etc.event_type for etc in probe.event_type_classes]
+        ps.apps = []
+        ps.event_types = []
         ps.save()
 
 
