@@ -5,6 +5,7 @@ from __future__ import unicode_literals
 from django.db import migrations
 import yaml
 
+
 def fix_metadata_filter_type(apps, schema_editor):
     ProbeSource = apps.get_model("probes", "ProbeSource")
     for ps in ProbeSource.objects.filter(body__icontains="metadata"):

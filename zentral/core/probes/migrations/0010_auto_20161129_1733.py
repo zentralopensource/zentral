@@ -19,7 +19,6 @@ def deactivate_bad_probe_sources(apps, schema_editor):
         p = load_probe(ps)
         if not p.loaded:
             ps.status = "INACTIVE"
-            ps.description = " - ".join(e for e in ("SYNTAX ERROR", ps.description) if e)
             ps.save()
             print("PROBE", ps.name, "set to INACTIVE:", "SYNTAX ERROR")
 

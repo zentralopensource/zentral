@@ -16,7 +16,10 @@ def set_probe_source_apps_event_type_model(apps, schema_editor):
             ps.model = "SantaProbe"
             ps.event_types.append("santa_event")
         elif "osquery" in probe_d:
-            ps.model = "OsqueryProbe"
+            if isinstance(probe_d["osquery"], dict) and probe_d["osquery"].get("file_categories"):
+                ps.model = "OsqueryFIMProbe"
+            else:
+                ps.model = "OsqueryProbe"
             ps.event_types.append("osquery_result")
         else:
             ps.model = "BaseProbe"

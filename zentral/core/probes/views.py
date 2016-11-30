@@ -85,7 +85,10 @@ class ProbeView(DetailView):
         return ctx
 
     def get_template_names(self):
-        return [self.probe.template_name]
+        if self.probe.loaded:
+            return [self.probe.template_name]
+        else:
+            return ["core/probes/syntax_error.html"]
 
 
 class ProbeEventSet(object):

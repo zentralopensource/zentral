@@ -4,7 +4,6 @@ from __future__ import unicode_literals
 
 import django.contrib.postgres.fields
 from django.db import migrations, models
-import zentral.core.probes.models
 
 
 class Migration(migrations.Migration):
