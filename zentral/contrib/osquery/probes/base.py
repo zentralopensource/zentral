@@ -20,6 +20,9 @@ class OsqueryResultProbe(BaseProbe):
         else:
             return True
 
+    def iter_discovery_queries(self):
+        yield from []
+
     def iter_scheduled_queries(self):
         raise NotImplementedError
 
@@ -116,6 +119,9 @@ class OsqueryProbe(OsqueryResultProbe):
         self.queries = [OsqueryQuery(probe=self, **query_data)
                         for query_data in data["queries"]]
         self.can_delete_queries = len(self.queries) > 1
+
+    def iter_discovery_queries(self):
+        yield from self.discovery
 
     def iter_scheduled_queries(self):
         yield from self.queries

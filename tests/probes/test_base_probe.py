@@ -115,6 +115,8 @@ class InventoryFilterBaseProbeTestCase(TestCase):
                                          ([self.mbu1.id], [self.tag1.id], "WINDOWS", "LAPTOP", True)):
             mmm = MockMetaMachine(mbuis, tis, p, t)
             self.assertEqual(inventory_filter.test_machine(mmm), result)
+            self.assertEqual(self.probe.test_machine(mmm), result)
+            self.assertEqual(self.error_probe.test_machine(mmm), False)
 
     def test_probe_test_event(self):
         for mbuis, tis, p, t, result in (([1238971298], [self.tag1.id], "WINDOWS", "LAPTOP", False),
@@ -127,6 +129,7 @@ class InventoryFilterBaseProbeTestCase(TestCase):
             event_metadata.machine = MockMetaMachine(mbuis, tis, p, t)
             event = BaseEvent(event_metadata, {"godzilla": "kommt"})
             self.assertEqual(self.probe.test_event(event), result)
+            self.assertEqual(self.error_probe.test_event(event), False)
 
 
 class MetadataFilterBaseProbeTestCase(TestCase):

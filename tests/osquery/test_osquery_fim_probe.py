@@ -155,39 +155,42 @@ class OsqueryFIMProbeTestCase(TestCase):
         # default machine has a subset of the queries
         default_machine = MockMetaMachine([], [], None, None)
         config = build_osquery_conf(default_machine)
+        self.assertCountEqual(["schedule", "file_accesses", "file_paths"],
+                              config.keys())  # no packs
         schedule = config["schedule"]
-        self.assertTrue(DEFAULT_ZENTRAL_INVENTORY_QUERY in schedule)
-        schedule.pop(DEFAULT_ZENTRAL_INVENTORY_QUERY)
-        self.assertEqual(len(schedule), 2)
-        self.assertTrue(self.query_1_key in schedule)
-        self.assertTrue(self.query_2_key in schedule)
-        self.assertTrue(self.query_mbu_key not in schedule)
-        self.assertEqual(set(config["file_paths"].keys()),
-                         set([self.query_1_filepath_hash,
-                              self.query_2_filepath_hash]))
+        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY,
+                               self.query_1_key,
+                               self.query_2_key],
+                              schedule.keys())
+        file_paths = config["file_paths"]
+        self.assertCountEqual(file_paths.keys(),
+                              [self.query_1_filepath_hash,
+                               self.query_2_filepath_hash])
         for key, file_path in ((self.query_1_filepath_hash, self.query_1_filepath),
                                (self.query_2_filepath_hash, self.query_2_filepath)):
-            self.assertEqual(config["file_paths"].get(key), [file_path])
-        self.assertEqual(set(config["file_accesses"]),
-                         set([self.query_2_filepath_hash]))
+            self.assertEqual(file_paths.get(key), [file_path])
+        file_accesses = config["file_accesses"]
+        self.assertEqual([self.query_2_filepath_hash], file_accesses)
 
         # mbu has all the queries
         mbu_machine = MockMetaMachine([1], [], None, "SERVER")
         config = build_osquery_conf(mbu_machine)
+        self.assertCountEqual(["schedule", "file_accesses", "file_paths"],
+                              config.keys())  # no packs
         schedule = config["schedule"]
-        self.assertTrue(DEFAULT_ZENTRAL_INVENTORY_QUERY in schedule)
-        schedule.pop(DEFAULT_ZENTRAL_INVENTORY_QUERY)
-        self.assertEqual(len(schedule), 3)
-        self.assertTrue(self.query_1_key in schedule)
-        self.assertTrue(self.query_2_key in schedule)
-        self.assertTrue(self.query_mbu_key in schedule)
-        self.assertEqual(set(config["file_paths"].keys()),
-                         set([self.query_1_filepath_hash,
-                              self.query_2_filepath_hash,
-                              self.query_mbu_filepath_hash]))
+        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY,
+                               self.query_1_key,
+                               self.query_2_key,
+                               self.query_mbu_key],
+                              schedule.keys())
+        file_paths = config["file_paths"]
+        self.assertCountEqual(file_paths.keys(),
+                              [self.query_1_filepath_hash,
+                               self.query_2_filepath_hash,
+                               self.query_mbu_filepath_hash])
         for key, file_path in ((self.query_1_filepath_hash, self.query_1_filepath),
                                (self.query_2_filepath_hash, self.query_2_filepath),
                                (self.query_mbu_filepath_hash, self.query_mbu_filepath)):
-            self.assertEqual(config["file_paths"].get(key), [file_path])
-        self.assertEqual(set(config["file_accesses"]),
-                         set([self.query_2_filepath_hash]))
+            self.assertEqual(file_paths.get(key), [file_path])
+        file_accesses = config["file_accesses"]
+        self.assertEqual([self.query_2_filepath_hash], file_accesses)

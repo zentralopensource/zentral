@@ -36,6 +36,8 @@ def build_osquery_result_event(query_name):
 class OsqueryProbeTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # schedule
+        # probe 1, all machines, schedule
         cls.query_1 = {"query": "select * from processes",
                        "interval": 123}
         cls.query_1_key = "osquery-probe-1_00adca42"
@@ -46,15 +48,24 @@ class OsqueryProbeTestCase(TestCase):
             body={"queries": [cls.query_1]}
         )
         cls.probe_1 = cls.probe_source_1.load()
+        # query pack
+        cls.query_pack_discovery = [
+            "select pid from processes where name = 'foobar';",
+            "select count(*) from users where username like 'www%';"
+        ]
+        cls.query_pack_key = "zentral_05f720ae"
+        # probe 2, all machines, query pack
         cls.query_2 = {"query": "select * from users"}
         cls.query_2_key = "osquery-probe-2_19206bc4"
         cls.probe_source_2 = ProbeSource.objects.create(
             model="OsqueryProbe",
             name="osquery probe 2",
             status=ProbeSource.ACTIVE,
-            body={"queries": [cls.query_2]}
+            body={"queries": [cls.query_2],
+                  "discovery": cls.query_pack_discovery}
         )
         cls.probe_2 = cls.probe_source_2.load()
+        # probe windows, windows machines, query pack
         cls.query_windows = {"query": "select * from users"}
         cls.query_windows_key = "osquery-probe-windows_19206bc4"
         cls.probe_source_windows = ProbeSource.objects.create(
@@ -62,16 +73,39 @@ class OsqueryProbeTestCase(TestCase):
             name="osquery probe windows",
             status=ProbeSource.ACTIVE,
             body={"filters": {"inventory": [{"platforms": ["WINDOWS"]}]},
-                  "queries": [cls.query_windows]}
+                  "queries": [cls.query_windows],
+                  "discovery": cls.query_pack_discovery[::-1]}  # reversed !
         )
         cls.probe_windows = cls.probe_source_windows.load()
         all_probes.clear()
+
+    def test_bad_version(self):
+        ps = ProbeSource.objects.create(
+            model="OsqueryProbe",
+            name="bad version",
+            status=ProbeSource.ACTIVE,
+            body={"queries": [{"query": "select * from users;",
+                               "version": "bad version"}]}
+        )
+        self.assertEqual(ps.status, ProbeSource.INACTIVE)
+        probe = ps.load()
+        self.assertEqual(probe.loaded, False)
+        self.assertIsInstance(probe.syntax_errors, dict)
+        self.assertIn("queries", probe.syntax_errors)
+        self.assertIsInstance(probe.syntax_errors["queries"], dict)
+        self.assertIn("version", probe.syntax_errors["queries"])
 
     def test_probes(self):
         for probe in (self.probe_1,
                       self.probe_2,
                       self.probe_windows):
             self.assertTrue(isinstance(probe, OsqueryProbe))
+
+    def test_probe_discovery(self):
+        for probe, discovery in ((self.probe_1, []),
+                                 (self.probe_2, self.query_pack_discovery),
+                                 (self.probe_windows, self.query_pack_discovery)):
+            self.assertCountEqual(probe.discovery, discovery)
 
     def test_probes_metadata_filters(self):
         for probe in (self.probe_1,
@@ -135,15 +169,35 @@ class OsqueryProbeTestCase(TestCase):
         # default machine has a subset of the queries
         default_machine = MockMetaMachine([], [], None, None)
         config = build_osquery_conf(default_machine)
+        # schedule with query 1
         schedule = config["schedule"]
-        self.assertTrue(DEFAULT_ZENTRAL_INVENTORY_QUERY in schedule)
-        schedule.pop(DEFAULT_ZENTRAL_INVENTORY_QUERY)
-        self.assertEqual(len(schedule), 2)
+        self.assertIsInstance(schedule, dict)
+        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY, self.query_1_key], schedule.keys())
+        # 1 pack with query 2
+        packs = config["packs"]
+        self.assertIsInstance(packs, dict)
+        self.assertCountEqual([self.query_pack_key], packs.keys())
+        pack = packs[self.query_pack_key]
+        self.assertIsInstance(pack, dict)
+        self.assertCountEqual(["discovery", "queries"], pack.keys())
+        self.assertCountEqual(pack["discovery"], self.query_pack_discovery)
+        pack_queries = pack["queries"]
+        self.assertCountEqual([self.query_2_key], pack_queries.keys())
 
         # windows has all the queries
         windows = MockMetaMachine([1], [1], "WINDOWS", None)
         config = build_osquery_conf(windows)
+        # schedule with query 1
         schedule = config["schedule"]
-        self.assertTrue(DEFAULT_ZENTRAL_INVENTORY_QUERY in schedule)
-        schedule.pop(DEFAULT_ZENTRAL_INVENTORY_QUERY)
-        self.assertEqual(len(schedule), 3)
+        self.assertIsInstance(schedule, dict)
+        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY, self.query_1_key], schedule.keys())
+        # 1 pack with query 2 and query windows
+        packs = config["packs"]
+        self.assertIsInstance(packs, dict)
+        self.assertCountEqual([self.query_pack_key], packs.keys())
+        pack = packs[self.query_pack_key]
+        self.assertIsInstance(pack, dict)
+        self.assertCountEqual(["discovery", "queries"], pack.keys())
+        self.assertCountEqual(pack["discovery"], self.query_pack_discovery)
+        pack_queries = pack["queries"]
+        self.assertCountEqual([self.query_2_key, self.query_windows_key], pack_queries.keys())

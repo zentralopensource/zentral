@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from zentral.core.probes.conf import ProbeList
 
@@ -24,6 +25,7 @@ def build_osquery_conf(machine):
             'interval': 600
         }
     }
+    packs = {}
     file_paths = {}
     file_accesses = []
     # ProbeList() to avoid cache inconsistency
@@ -32,17 +34,39 @@ def build_osquery_conf(machine):
                                            "OsqueryComplianceProbe",
                                            "OsqueryFIMProbe")
                              .machine_filtered(machine)):
+        # packs or schedule
+        pack_discovery_queries = sorted(set(probe.iter_discovery_queries()))  # no duplicates, ordering agnostic
+        if pack_discovery_queries:
+            # group queries in packs by discovery conf
+            # build pack key = zentral_SHA1(discovery queries)
+            pack_hash = hashlib.sha1()
+            for dq in pack_discovery_queries:
+                pack_hash.update(dq.encode("utf-8"))
+            pack_key = "zentral_{h}".format(h=pack_hash.hexdigest()[:8])
+            # prepare default pack conf
+            pack_conf = packs.setdefault(pack_key, {"discovery": pack_discovery_queries,
+                                                    "queries": {}})
+            query_dict = pack_conf["queries"]
+        else:
+            # put other queries in schedule
+            query_dict = schedule
+
+        # add probe queries to query_dict
         for osquery_query in probe.iter_scheduled_queries():
-            if osquery_query.name in schedule:
-                logger.warning("Query %s skipped, already in schedule", osquery_query.name)
+            if osquery_query.name in query_dict:
+                logger.warning("Query %s skipped, already seen", osquery_query.name)
             else:
-                schedule[osquery_query.name] = osquery_query.to_configuration()
+                query_dict[osquery_query.name] = osquery_query.to_configuration()
+
+        # file paths / file accesses
         for file_path in getattr(probe, "file_paths", []):
             file_paths[file_path.category] = [file_path.file_path]
             if file_path.file_access:
                 file_accesses.append(file_path.category)
 
     conf = {'schedule': schedule}
+    if packs:
+        conf['packs'] = packs
     if file_paths:
         conf['file_paths'] = file_paths
     if file_accesses:
