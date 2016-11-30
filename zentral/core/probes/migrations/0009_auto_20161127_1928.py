@@ -22,10 +22,19 @@ def convert_probe_source(apps, schema_editor):
         for inventory_filter in probe_d.get("filters", {}).get("inventory", []):
             mf_mbu = inventory_filter.pop("business_units", None)
             if mf_mbu:
+                if not isinstance(mf_mbu, list):
+                    mf_mbu = [mf_mbu]
                 inventory_filter["meta_business_unit_ids"] = mf_mbu
             mf_tag = inventory_filter.pop("tags", None)
             if mf_tag:
+                if not isinstance(mf_tag, list):
+                    mf_tag = [mf_tag]
                 inventory_filter["tag_ids"] = mf_tag
+        # fix payload filters
+        for payload_filter in probe_d.get("filters", {}).get("payload", []):
+            for k, v in list(payload_filter.items()):
+                if not isinstance(v, list):
+                    payload_filter[k] = [v]
         # fix metadata filters
         for metadata_filter in probe_d.get("filters", {}).get("metadata", []):
             mf_type = metadata_filter.pop("type", None)
