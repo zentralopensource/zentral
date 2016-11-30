@@ -206,12 +206,14 @@ class BaseProbe(object):
 
     def load(self, data):
         self.loaded = False
+        self.syntax_errors = None
         serializer = self.serializer_class(data=data)
         if serializer.is_valid():
             self.load_validated_data(serializer.validated_data)
             self.loaded = True
         else:
             logger.warning("Invalid source body for probe %s", self.pk)
+            self.syntax_errors = serializer.errors
 
     def load_actions(self, validated_data):
         self.actions = []

@@ -78,10 +78,11 @@ class ProbeView(DetailView):
         ctx = super(ProbeView, self).get_context_data(**kwargs)
         ctx['probes'] = True
         ctx['probe'] = self.probe = self.object.load()
-        ctx['add_action_urls'] = [
-            (action.name, reverse("probes:edit_action", args=(self.object.id, action.name)))
-            for action in self.probe.not_configured_actions()
-        ]
+        if self.probe.loaded:
+            ctx['add_action_urls'] = [
+                (action.name, reverse("probes:edit_action", args=(self.object.id, action.name)))
+                for action in self.probe.not_configured_actions()
+            ]
         return ctx
 
     def get_template_names(self):

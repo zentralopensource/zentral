@@ -39,8 +39,12 @@
       <td>{{ object.event_types }}</td>
     </tr>
     <tr>
-      <td>Body<td>
+      <td>Body</td>
       <td>{{ object.body|pythonprettyprint }}</td>
+    </tr>
+    <tr>
+      <td>Syntax errors</td>
+      <td>{{ probe.syntax_errors|pythonprettyprint }}</td>
     </tr>
   </table>
 </div>
