@@ -3,28 +3,32 @@
 from __future__ import unicode_literals
 
 from django.db import migrations
-from zentral.core.probes import probe_classes
-from zentral.core.probes.base import BaseProbe
-
-
-def load_probe(source):
-    for probe_cls in probe_classes.values():
-        if probe_cls == BaseProbe:
-            continue
-        try:
-            return probe_cls(source)
-        except ValueError:
-            pass
-    return BaseProbe(source)
+import yaml
+from zentral.core.events import event_types as available_event_types
 
 
 def set_probe_source_apps_event_type_model(apps, schema_editor):
     ProbeSource = apps.get_model("probes", "ProbeSource")
     for ps in ProbeSource.objects.all():
-        probe = load_probe(ps)
-        ps.model = probe.get_model()
-        ps.apps = []
+        probe_d = yaml.load(ps.body)
         ps.event_types = []
+        if "santa" in probe_d:
+            ps.model = "SantaProbe"
+            ps.event_types.append("santa_event")
+        elif "osquery" in probe_d:
+            ps.model = "OsqueryProbe"
+            ps.event_types.append("osquery_result")
+        else:
+            ps.model = "BaseProbe"
+            for metadata_filter in probe_d.get("filters", {}).get("metadata", []):
+                mf_type = metadata_filter.get("type", [])
+                if isinstance(mf_type, str):
+                    mf_type = [mf_type]
+                for t in mf_type:
+                    if t in available_event_types and t not in ps.event_types:
+                        ps.event_types.append(t)
+        ps.apps = []
+        ps.event_types.sort()
         ps.save()
 
 
