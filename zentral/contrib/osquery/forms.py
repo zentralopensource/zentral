@@ -4,7 +4,18 @@ from zentral.utils.forms import validate_sha256
 from .probes import OsqueryProbe, OsqueryComplianceProbe, OsqueryDistributedQueryProbe, OsqueryFIMProbe
 
 
-# query probe
+# OsqueryProbe
+
+
+class DiscoveryForm(forms.Form):
+    query = forms.CharField(widget=forms.Textarea(attrs={'rows': 5}))
+
+    def get_item_d(self):
+        return self.cleaned_data["query"]
+
+    @staticmethod
+    def get_initial(discovery):
+        return {"query": discovery}
 
 
 class QueryForm(forms.Form):
@@ -45,7 +56,7 @@ class QueryForm(forms.Form):
         else:
             return value
 
-    def get_query_d(self):
+    def get_item_d(self):
         return {f: v for f, v in self.cleaned_data.items() if v is not None}
 
     @staticmethod
@@ -63,26 +74,10 @@ class CreateProbeForm(BaseCreateProbeForm, QueryForm):
     field_order = ("name", "query", "description", "value", "interval", "removed", "shard")
 
     def get_body(self):
-        return {"queries": [self.get_query_d()]}
+        return {"queries": [self.get_item_d()]}
 
 
-# distributed query probes
-
-
-class DistributedQueryForm(forms.Form):
-    query = forms.CharField(widget=forms.Textarea(attrs={'class': 'form-control',
-                                                         'rows': 5}))
-
-    def get_body(self):
-        return {'distributed_query': self.cleaned_data['query']}
-
-
-class CreateDistributedQueryProbeForm(BaseCreateProbeForm, DistributedQueryForm):
-    model = OsqueryDistributedQueryProbe
-    field_order = ("name", "query")
-
-
-# Compliance probes
+# OsqueryComplianceProbe
 
 
 class PreferenceFileForm(forms.Form):
@@ -204,6 +199,9 @@ class FileChecksumForm(forms.Form):
                                   max_value=2678400,  # 31 days
                                   initial=3600)
 
+    def get_item_d(self):
+        return self.cleaned_data
+
     @staticmethod
     def get_initial(file_checksum):
         initial = {}
@@ -221,6 +219,22 @@ class CreateComplianceProbeForm(BaseCreateProbeForm):
         return {}
 
 
+# OsqueryDistributedQueryProbe
+
+
+class DistributedQueryForm(forms.Form):
+    query = forms.CharField(widget=forms.Textarea(attrs={'class': 'form-control',
+                                                         'rows': 5}))
+
+    def get_body(self):
+        return {'distributed_query': self.cleaned_data['query']}
+
+
+class CreateDistributedQueryProbeForm(BaseCreateProbeForm, DistributedQueryForm):
+    model = OsqueryDistributedQueryProbe
+    field_order = ("name", "query")
+
+
 # FIM probes
 
 
@@ -236,11 +250,11 @@ class FilePathForm(forms.Form):
             file_access = False
         return file_access
 
-    def get_file_path(self):
+    def get_item_d(self):
         return self.cleaned_data
 
     @staticmethod
-    def get_file_path_initial(file_path):
+    def get_initial(file_path):
         return {"file_path": file_path.file_path,
                 "file_access": file_path.file_access}
 
@@ -250,4 +264,4 @@ class CreateFIMProbeForm(BaseCreateProbeForm, FilePathForm):
     field_order = ("name", "file_path", "file_access")
 
     def get_body(self):
-        return {'file_paths': [self.get_file_path()]}
+        return {'file_paths': [self.get_item_d()]}

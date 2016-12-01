@@ -6,10 +6,10 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'probes:index' %}">Probes</a></li>
   <li><a href="{% url 'probes:probe' probe_source.id %}">{{ probe_source.name }}</a></li>
-  <li class="active">{% if add_query %}Add{% else %}Update{% endif %} osquery query</li>
+  <li class="active">{% if add_item %}Add{% else %}Update{% endif %} osquery query</li>
 </ol>
 
-<h2>{% if add_query %}Add{% else %}Update{% endif %} osquery query</h2>
+<h2>{% if add_item %}Add{% else %}Update{% endif %} osquery query</h2>
 <form method="POST">{% csrf_token %}
   {{ form|bootstrap }}
   <a class="btn btn-default" href="{{ cancel_url }}">Cancel</a>

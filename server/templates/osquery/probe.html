@@ -13,12 +13,42 @@
   </button>
   <ul class="dropdown-menu" aria-labelledby="addComponent">
     <li>
+      <a href="{% url 'osquery:add_probe_discovery' object.id %}">
+        Discovery query
+      </a>
+    </li>
+    <li>
       <a href="{% url 'osquery:add_probe_query' object.id %}">
         Query
       </a>
     </li>
   </ul>
 </div>
+
+{% if probe.discovery %}
+<h4>Discovery quer{{ probe.discovery|length|pluralize:"y,ies" }}</h4>
+{% for discovery_html in probe.get_discovery_display %}
+<div class="panel panel-default">
+  <table class="table table-condensed probe-panel">
+    <tr>
+      <td>
+        {{ discovery_html|safe }}
+      </td>
+    </tr>
+  </table>
+  <div class="panel-footer">
+    <div class="btn-group" role="group">
+      <a class="btn btn-default" href="{% url 'osquery:update_probe_discovery' object.id forloop.counter0 %}">
+        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+      </a>
+      <a class="btn btn-danger" href="{% url 'osquery:delete_probe_discovery' object.id forloop.counter0 %}">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
 
 {% if probe.queries %}
 <h4>Quer{{ probe.queries|length|pluralize:"y,ies" }}</h4>

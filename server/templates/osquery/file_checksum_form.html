@@ -6,10 +6,10 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'probes:index' %}">Probes</a></li>
   <li><a href="{% url 'probes:probe' probe_source.id %}">{{ probe_source.name }}</a></li>
-  <li class="active">{% if add_checksum %}Add{% else %}Update{% endif %} file checksum</li>
+  <li class="active">{% if add_item %}Add{% else %}Update{% endif %} file checksum</li>
 </ol>
 
-<h2>{% if add_checksum %}Add{% else %}Update{% endif %} osquery compliance file checksum</h2>
+<h2>{% if add_item %}Add{% else %}Update{% endif %} compliance probe file checksum</h2>
 <form method="POST">{% csrf_token %}
   {{ form|bootstrap }}
   <a class="btn btn-default" href="{{ cancel_url }}">Cancel</a>

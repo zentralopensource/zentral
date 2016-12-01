@@ -11,6 +11,14 @@ urlpatterns = [
     url(r'^setup_script/$', views.SetupScriptView.as_view(), name='setup_script'),
     # osquery probes
     url(r'^probes/create/$', views.CreateProbeView.as_view(), name='create_probe'),
+    # osquery probe discovery
+    url(r'^probes/(?P<probe_id>\d+)/discovery/add/$',
+        views.AddProbeDiscoveryView.as_view(), name='add_probe_discovery'),
+    url(r'^probes/(?P<probe_id>\d+)/discovery/(?P<discovery_id>\d+)/update/$',
+        views.UpdateProbeDiscoveryView.as_view(), name='update_probe_discovery'),
+    url(r'^probes/(?P<probe_id>\d+)/discovery/(?P<discovery_id>\d+)/delete/$',
+        views.DeleteProbeDiscoveryView.as_view(), name='delete_probe_discovery'),
+    # osquery probes query
     url(r'^probes/(?P<probe_id>\d+)/queries/add/$',
         views.AddProbeQueryView.as_view(), name='add_probe_query'),
     url(r'^probes/(?P<probe_id>\d+)/queries/(?P<query_id>\d+)/update/$',
@@ -20,12 +28,14 @@ urlpatterns = [
     # osquery compliance probes
     url(r'^compliance_probes/create/$',
         views.CreateComplianceProbeView.as_view(), name='create_compliance_probe'),
+    # osquery compliance probes preference files
     url(r'^compliance_probes/(?P<probe_id>\d+)/preference_files/add/$',
         views.AddComplianceProbePreferenceFileView.as_view(), name='add_compliance_probe_preference_file'),
     url(r'^compliance_probes/(?P<probe_id>\d+)/preference_files/(?P<pf_id>\d+)/update/$',
         views.UpdateComplianceProbePreferenceFileView.as_view(), name='update_compliance_probe_preference_file'),
     url(r'^compliance_probes/(?P<probe_id>\d+)/preference_files/(?P<pf_id>\d+)/delete/$',
         views.DeleteComplianceProbePreferenceFileView.as_view(), name='delete_compliance_probe_preference_file'),
+    # osquery compliance probes file checksums
     url(r'^compliance_probes/(?P<probe_id>\d+)/file_checksums/add/$',
         views.AddComplianceProbeFileChecksumView.as_view(), name='add_compliance_probe_file_checksum'),
     url(r'^compliance_probes/(?P<probe_id>\d+)/file_checksums/(?P<fc_id>\d+)/update/$',
@@ -37,12 +47,10 @@ urlpatterns = [
         views.CreateDistributedQueryProbeView.as_view(), name='create_distributed_query_probe'),
     url(r'^distributed_query_probes/(?P<probe_id>\d+)/update_query/$',
         views.UpdateDistributedQueryProbeQueryView.as_view(), name='update_distributed_query_probe_query'),
-    url(r'^distributed_query_probes/(?P<probe_id>\d+)/download/$',
-        csrf_exempt(views.DownloadDistributedView.as_view()),
-        name='distributed_download'),
     # osquery fim probes
     url(r'fim_probes/create/$',
         views.CreateFIMProbeView.as_view(), name='create_fim_probe'),
+    # osquery fim probes file paths
     url(r'fim_probes/(?P<probe_id>\d+)/file_paths/add/$',
         views.AddFIMProbeFilePathView.as_view(), name='add_fim_probe_file_path'),
     url(r'^probes/(?P<probe_id>\d+)/file_paths/(?P<file_path_id>\d+)/update/$',

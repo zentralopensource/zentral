@@ -4,7 +4,8 @@ import warnings
 import zlib
 from django import forms
 from django.core import signing
-from django.http import HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
+from django.core.exceptions import SuspiciousOperation
+from django.http import HttpResponseForbidden, JsonResponse
 from django.views.generic import TemplateView, View
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, BusinessUnit
@@ -124,8 +125,11 @@ class JSONPostAPIView(View):
             except UnicodeDecodeError:
                 err_msg_tmpl = 'Could not decode payload with encoding %s'
                 logger.error(err_msg_tmpl, self.payload_encoding, extra={'request': request})
-                return HttpResponseBadRequest(err_msg_tmpl % self.payload_encoding)
-            data = json.loads(payload)
+                raise SuspiciousOperation(err_msg_tmpl % self.payload_encoding)
+            try:
+                data = json.loads(payload)
+            except ValueError:
+                raise SuspiciousOperation("Payload is not valid json")
         try:
             self.check_data_secret(data)
         except APIAuthError as auth_err:
@@ -201,3 +205,5 @@ class BaseInstallerPackageView(View):
                                                    request.get_host(),
                                                    make_secret(self.module, business_unit),
                                                    tls_server_certs)
+        else:
+            raise SuspiciousOperation("Unknown MBU or MBU not available for api enrollment")

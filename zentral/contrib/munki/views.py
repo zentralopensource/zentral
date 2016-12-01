@@ -30,7 +30,7 @@ class InstallerPackageView(BaseInstallerPackageView):
 
 class CreateInstallProbeView(FormView):
     form_class = CreateInstallProbeForm
-    template_name = "munki/install_probe_form.html"
+    template_name = "core/probes/form.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -45,7 +45,7 @@ class CreateInstallProbeView(FormView):
 
 class UpdateInstallProbeView(FormView):
     form_class = UpdateInstallProbeForm
-    template_name = "munki/install_probe_form.html"
+    template_name = "core/probes/form.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs['probe_id'])

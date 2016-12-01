@@ -16,7 +16,7 @@ class OsqueryZentralEnrollScriptBuilder(object):
         with open(tls_server_certs, "r") as f:
             tls_server_certs_data = f.read()
             content = content.replace("%TLS_SERVER_CERTS%", tls_server_certs_data)
-        response = HttpResponse(content, "application/octet-stream")
+        response = HttpResponse(content, "text/x-shellscript")
         response['Content-Length'] = len(content)
         response['Content-Disposition'] = 'attachment; filename="{}"'.format(self.script_name)
         return response

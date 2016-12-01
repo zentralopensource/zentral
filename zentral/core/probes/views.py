@@ -1,4 +1,5 @@
 import logging
+from django import forms
 from django.core.urlresolvers import reverse, reverse_lazy
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -190,6 +191,9 @@ class DeleteProbeView(DeleteView):
         return ctx
 
 
+# Actions
+
+
 class EditActionView(FormView):
     template_name = "core/probes/action_form.html"
 
@@ -259,6 +263,9 @@ class DeleteActionView(TemplateView):
     def post(self, request, *args, **kwargs):
         self.probe_source.delete_action(self.action.name)
         return HttpResponseRedirect(self.probe_source.get_actions_absolute_url())
+
+
+# Filters
 
 
 class AddFilterView(FormView):
@@ -367,3 +374,97 @@ class DeleteFilterView(TemplateView):
     def post(self, request, *args, **kwargs):
         self.probe_source.delete_filter(self.section, self.filter_id)
         return HttpResponseRedirect(self.probe_source.get_filters_absolute_url())
+
+
+# Item views, used by other probes
+
+
+class BaseProbeItemView(FormView):
+    probe_item_attribute = None
+    success_anchor = None
+    permission = None
+
+    def do_setup(self, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.redirect_url = self.probe_source.get_absolute_url(self.success_anchor)
+        self.probe = self.probe_source.load()
+        if self.permission and not getattr(self.probe, self.permission):
+            return HttpResponseRedirect(self.redirect_url)
+
+    def dispatch(self, request, *args, **kwargs):
+        response = self.do_setup(**kwargs)
+        if response:
+            return response
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probes"] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['add_item'] = False
+        ctx['cancel_url'] = self.redirect_url
+        return ctx
+
+    def get_success_url(self):
+        return self.redirect_url
+
+    def form_valid(self, form):
+        item_d = form.get_item_d()
+        func = self.get_update_func(item_d)
+        self.probe_source.update_body(func)
+        return super().form_valid(form)
+
+
+class AddProbeItemView(BaseProbeItemView):
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["add_item"] = True
+        return ctx
+
+    def get_update_func(self, item_d):
+        def func(probe_d):
+            items = probe_d.setdefault(self.probe_item_attribute, [])
+            items.append(item_d)
+        return func
+
+
+class EditProbeItemView(BaseProbeItemView):
+    item_pk_kwarg = None
+
+    def do_setup(self, **kwargs):
+        response = super().do_setup(**kwargs)
+        if response:
+            return response
+        self.item_id = int(kwargs[self.item_pk_kwarg])
+        self.items = getattr(self.probe, self.probe_item_attribute, [])
+        try:
+            self.item = self.items[self.item_id]
+        except IndexError:
+            return HttpResponseRedirect(self.redirect_url)
+
+
+class UpdateProbeItemView(EditProbeItemView):
+    def get_initial(self):
+        return self.form_class.get_initial(self.item)
+
+    def get_update_func(self, item_d):
+        def func(probe_d):
+            probe_d[self.probe_item_attribute][self.item_id] = item_d
+        return func
+
+
+class DeleteForm(forms.Form):
+    def get_item_d(self):
+        return {}
+
+
+class DeleteProbeItemView(EditProbeItemView):
+    form_class = DeleteForm
+
+    def get_update_func(self, item_d):
+        def func(probe_d):
+            probe_d[self.probe_item_attribute].pop(self.item_id)
+            if not probe_d[self.probe_item_attribute]:
+                probe_d.pop(self.probe_item_attribute)
+        return func

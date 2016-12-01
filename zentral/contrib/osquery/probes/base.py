@@ -126,6 +126,10 @@ class OsqueryProbe(OsqueryResultProbe):
     def iter_scheduled_queries(self):
         yield from self.queries
 
+    def get_discovery_display(self):
+        for discovery in self.discovery:
+            yield format_sql(discovery)
+
     def get_extra_event_search_dict(self):
         return {'event_type': self.forced_event_type,
                 'name__regexp': '{s}_[0-9a-f]{{{l}}}'.format(s=self.slug, l=self.hash_length)}
