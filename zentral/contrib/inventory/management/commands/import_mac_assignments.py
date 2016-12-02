@@ -5,7 +5,7 @@ import requests
 from tqdm import tqdm
 from zentral.contrib.inventory.models import MACAddressBlockAssignment
 
-logger = logging.getLogger("zentral.contrib.inventory.management.commandes.import_mac_assignments")
+logger = logging.getLogger("zentral.contrib.inventory.management.commands.import_mac_assignments")
 
 
 class Command(BaseCommand):

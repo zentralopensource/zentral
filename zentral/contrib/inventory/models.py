@@ -268,7 +268,7 @@ class Certificate(AbstractMTObject):
 
 class NetworkInterface(AbstractMTObject):
     interface = models.TextField(blank=False, null=False)
-    mac = models.CharField(max_length=17, blank=False, null=False)
+    mac = models.CharField(max_length=23, blank=False, null=False)  # 48 or 64 bit with separators
     address = models.GenericIPAddressField(blank=False, null=False, unpack_ipv4=True)
     mask = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
     broadcast = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
