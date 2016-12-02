@@ -31,7 +31,7 @@ class DistributedQueryProbeMachineManager(models.Manager):
     def new_queries_for_machine(self, machine):
         queries = {}
 
-        seen_probe_id = {dqpm.id for dqpm in self.filter(machine_serial_number=machine.serial_number)}
+        seen_probe_id = {dqpm.probe_source_id for dqpm in self.filter(machine_serial_number=machine.serial_number)}
 
         def not_seen_probe_filter(probe):
             return probe.pk not in seen_probe_id
@@ -40,6 +40,7 @@ class DistributedQueryProbeMachineManager(models.Manager):
         def recent_probe_filter(probe):
             return probe.created_at > min_age
         # TODO: slow
+        # could filter the probes that are too old in the db
         probe_list = (ProbeList().model_filter('OsqueryDistributedQueryProbe')
                                  .machine_filtered(machine)
                                  .filter(not_seen_probe_filter)

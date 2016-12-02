@@ -1,9 +1,11 @@
+from datetime import timedelta
 from django.test import TestCase
+from django.utils import timezone
 from zentral.core.events import event_types
 from zentral.core.events.base import EventMetadata
 from zentral.core.probes.conf import all_probes
 from zentral.core.probes.models import ProbeSource
-from zentral.contrib.osquery.models import DistributedQueryProbeMachine
+from zentral.contrib.osquery.models import DistributedQueryProbeMachine, MAX_DISTRIBUTED_QUERY_AGE
 from zentral.contrib.osquery.probes import OsqueryDistributedQueryProbe
 from tests.inventory.utils import MockMetaMachine
 
@@ -140,3 +142,36 @@ class OsqueryDistributedQueryProbeTestCase(TestCase):
             self.assertEqual(queries[key], query)
         extra_queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(windows_machine)
         self.assertEqual(extra_queries, {})
+
+    def test_default_machine_older_distributed_queries(self):
+        default_machine = MockMetaMachine([], [], None, None, serial_number="MSN3")
+        # consume all queries
+        queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(default_machine)
+        self.assertEqual(len(queries), 2)
+        queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(default_machine)
+        self.assertEqual(len(queries), 0)
+        # make a query that is one hour too old
+        probe_source_too_old = ProbeSource.objects.create(
+            model="OsqueryDistributedQueryProbe",
+            name="QUERY TOO OLD",
+            status=ProbeSource.ACTIVE,
+            body={"distributed_query": "SELECT 'QUERY TOO OLD';"},
+        )
+        probe_source_too_old.created_at = timezone.now() - MAX_DISTRIBUTED_QUERY_AGE - timedelta(hours=1)
+        probe_source_too_old.save()
+        queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(default_machine)
+        # it's not there
+        self.assertEqual(len(queries), 0)
+        # make a query that is one hour younger than the limit
+        probe_source_ok = ProbeSource.objects.create(
+            model="OsqueryDistributedQueryProbe",
+            name="QUERY OK",
+            status=ProbeSource.ACTIVE,
+            body={"distributed_query": "SELECT 'QUERY OK';"},
+        )
+        probe_source_ok.created_at = timezone.now() - MAX_DISTRIBUTED_QUERY_AGE + timedelta(hours=1)
+        probe_source_ok.save()
+        # it's there
+        queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(default_machine)
+        self.assertEqual(len(queries), 1)
+        self.assertEqual(queries["q_{}".format(probe_source_ok.pk)], "SELECT 'QUERY OK';")
