@@ -3,6 +3,8 @@ __pycache__
 *.sw[op]
 /*.yml
 !/docker-compose.yml
+!/docker-compose.basic-auth.yml
+!/docker-compose.common.yml
 /conf/*
 !/conf/start
 /docs/_build/

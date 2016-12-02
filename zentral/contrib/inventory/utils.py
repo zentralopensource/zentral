@@ -1,6 +1,7 @@
 from django.db import connection
 from zentral.conf import settings
-from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
+                               generate_latest, CONTENT_TYPE_LATEST as prometheus_metrics_content_type)
 
 
 def osx_app_count():
@@ -47,7 +48,7 @@ def os_version_count():
         yield d
 
 
-def push_inventory_metrics():
+def get_prometheus_inventory_metrics():
     ppg = settings.get('apps', {}).get('zentral.contrib.inventory', {}).get('prometheus_push_gateway', None)
     if not ppg:
         return
@@ -64,4 +65,4 @@ def push_inventory_metrics():
     for r in os_version_count():
         count = r.pop('count')
         g.labels(**r).set(count)
-    push_to_gateway(ppg, job='zentral_push_inventory_metrics', registry=registry)
+    return generate_latest(registry)

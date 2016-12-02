@@ -1,7 +1,7 @@
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core.urlresolvers import reverse, reverse_lazy
 from django.db import connection
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.views import generic
 from zentral.core.stores import frontend_store
@@ -12,6 +12,7 @@ from .models import (MetaBusinessUnit, MachineGroup,
                      MachineSnapshot, MetaMachine,
                      MetaBusinessUnitTag, MachineTag, Tag,
                      OSXApp, OSXAppInstance)
+from .utils import get_prometheus_inventory_metrics, prometheus_metrics_content_type
 
 
 class MachineListView(generic.TemplateView):
@@ -618,3 +619,9 @@ class MacOSAppView(generic.TemplateView):
         ctx['instances'] = instance_qs.order_by('id')
         ctx['inventory'] = True
         return ctx
+
+
+class PrometheusMetricsView(generic.View):
+    def get(self, request, *args, **kwargs):
+        return HttpResponse(get_prometheus_inventory_metrics(),
+                            content_type=prometheus_metrics_content_type)

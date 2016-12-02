@@ -2,7 +2,7 @@ version: '2'
 
 services:
   db:
-    image: postgres:9.4
+    image: postgres:9.6
     env_file:
       - ./conf/start/docker/postgres.env
     networks:
@@ -11,15 +11,13 @@ services:
           - postgres
   rabbitmq:
   elastic:
-    image: elasticsearch:2
+    image: elasticsearch:5
     networks:
       default:
         aliases:
           - elasticsearch
   rabbitmq:
     image: rabbitmq:3
-  prompg:
-    image: prom/pushgateway
   promsrv:
     build: ./conf/start/docker/prometheus/
   nginx:
@@ -32,39 +30,35 @@ services:
     volumes:
       - ./conf/start/docker/nginx/conf.d/:/etc/nginx/conf.d/
       - ./conf/start/docker/tls:/etc/nginx/tls
-  app:
-    build: .
-    entrypoint: /zentral/docker-entrypoint.py
-    environment:
-      ZENTRAL_CONF_DIR: /zentral/conf/start/zentral/
-      POSTGRES_HOST: db
-    env_file:
-      - ./conf/start/docker/postgres.env
-    volumes:
-      - .:/zentral
-    restart: onfailure:10
   inventory_worker:
-    extends: app
+    extends:
+      file: docker-compose.common.yml
+      service: app
     command: inventory_worker
     depends_on:
       - db
-      - prompg
       - rabbitmq
   processor_worker:
-    extends: app
+    extends:
+      file: docker-compose.common.yml
+      service: app
     command: processor_worker
     depends_on:
       - db
       - rabbitmq
   store_worker:
-    extends: app
+    extends:
+      file: docker-compose.common.yml
+      service: app
     command: store_worker
     depends_on:
       - db
       - elastic
       - rabbitmq
   web:
-    extends: app
+    extends:
+      file: docker-compose.common.yml
+      service: app
     command: runserver
     depends_on:
       - db

@@ -11,7 +11,6 @@ from multiprocessing import Process
 import uuid
 from zentral.contrib.inventory.clients import clients, InventoryError
 from zentral.contrib.inventory.events import post_inventory_events
-from zentral.contrib.inventory.utils import push_inventory_metrics
 
 logger = logging.getLogger('zentral.bin.inventory_worker')
 
@@ -38,7 +37,6 @@ def sync_inventory(client_name, worker_id):
             logger.exception("Inventory Error - %s - Sleeping 60s", client.name)
             time.sleep(60)
             logger.error("Inventory Error - %s - Resuming", client.name)
-        push_inventory_metrics()
         time.sleep(SLEEP)
 
 

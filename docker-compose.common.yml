@@ -1,0 +1,14 @@
+version: '2'
+
+services:
+  app:
+    build: .
+    entrypoint: /zentral/docker-entrypoint.py
+    environment:
+      ZENTRAL_CONF_DIR: /zentral/conf/start/zentral/
+      POSTGRES_HOST: db
+    env_file:
+      - ./conf/start/docker/postgres.env
+    volumes:
+      - .:/zentral
+    restart: on-failure:10
