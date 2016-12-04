@@ -34,6 +34,7 @@ class BaseInventory(object):
     def _events_from_diff(self, diff):
         events = []
         for m2m_attr, event_type in (('links', 'inventory_link_update'),
+                                     ('network_interfaces', 'inventory_network_interface_update'),
                                      ('osx_app_instances', 'inventory_osx_app_instance_update'),
                                      ('groups', 'inventory_group_update')):
             m2m_diff = diff.get(m2m_attr, {})

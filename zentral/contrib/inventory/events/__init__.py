@@ -23,6 +23,7 @@ for attr in ('reference',
              'group',
              'os_version',
              'system_info',
+             'network_interface',
              'osx_app_instance',
              'teamviewer'):
     event_type = 'inventory_{}_update'.format(attr)
