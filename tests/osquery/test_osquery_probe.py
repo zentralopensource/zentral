@@ -41,6 +41,7 @@ class OsqueryProbeTestCase(TestCase):
         cls.query_1 = {"query": "select * from processes",
                        "interval": 123}
         cls.query_1_key = "osquery-probe-1_00adca42"
+        cls.query_1_result_name = cls.query_1_key
         cls.probe_source_1 = ProbeSource.objects.create(
             model="OsqueryProbe",
             name="osquery probe 1",
@@ -53,10 +54,11 @@ class OsqueryProbeTestCase(TestCase):
             "select pid from processes where name = 'foobar';",
             "select count(*) from users where username like 'www%';"
         ]
-        cls.query_pack_key = "zentral_05f720ae"
+        cls.query_pack_key = "05f720ae"
         # probe 2, all machines, query pack
         cls.query_2 = {"query": "select * from users"}
         cls.query_2_key = "osquery-probe-2_19206bc4"
+        cls.query_2_result_name = "pack_05f720ae_osquery-probe-2_19206bc4"
         cls.probe_source_2 = ProbeSource.objects.create(
             model="OsqueryProbe",
             name="osquery probe 2",
@@ -68,6 +70,7 @@ class OsqueryProbeTestCase(TestCase):
         # probe windows, windows machines, query pack
         cls.query_windows = {"query": "select * from users"}
         cls.query_windows_key = "osquery-probe-windows_19206bc4"
+        cls.query_windows_result_name = "pack_05f720ae_osquery-probe-windows_19206bc4"
         cls.probe_source_windows = ProbeSource.objects.create(
             model="OsqueryProbe",
             name="osquery probe windows",
@@ -131,15 +134,15 @@ class OsqueryProbeTestCase(TestCase):
         windows = MockMetaMachine([1], [1], "WINDOWS", None)
         tests = (
           # wrong hash
-          (self.probe_1, self.query_2_key, default_machine, False),
-          (self.probe_2, self.query_1_key, windows, False),
-          (self.probe_windows, self.query_1_key, windows, False),
+          (self.probe_1, self.query_2_result_name, default_machine, False),
+          (self.probe_2, self.query_1_result_name, windows, False),
+          (self.probe_windows, self.query_1_result_name, windows, False),
           # ok
-          (self.probe_1, self.query_1_key, default_machine, True),
-          (self.probe_2, self.query_2_key, windows, True),
+          (self.probe_1, self.query_1_result_name, default_machine, True),
+          (self.probe_2, self.query_2_result_name, windows, True),
           # windows
-          (self.probe_windows, self.query_windows_key, default_machine, False),
-          (self.probe_windows, self.query_windows_key, windows, True),
+          (self.probe_windows, self.query_windows_result_name, default_machine, False),
+          (self.probe_windows, self.query_windows_result_name, windows, True),
         )
         for probe, query_name, machine, result in tests:
             event = build_osquery_result_event(query_name)
@@ -147,23 +150,23 @@ class OsqueryProbeTestCase(TestCase):
             self.assertEqual(probe.test_event(event), result)
 
     def test_scheduled_queries(self):
-        for probe, key in ((self.probe_1, self.query_1_key),
-                           (self.probe_2, self.query_2_key),
-                           (self.probe_windows, self.query_windows_key)):
+        for probe, key in ((self.probe_1, self.query_1_result_name),
+                           (self.probe_2, self.query_2_result_name),
+                           (self.probe_windows, self.query_windows_result_name)):
             self.assertTrue(isinstance(probe.scheduled_queries, dict))
             self.assertTrue(key in probe.scheduled_queries)
             for osquery_query in probe.iter_scheduled_queries():
-                self.assertTrue(osquery_query.name in probe.scheduled_queries)
+                self.assertIn(osquery_query.result_name, probe.scheduled_queries)
 
     def test_extra_event_search_dict(self):
-        for probe, key in ((self.probe_1, self.query_1_key),
-                           (self.probe_2, self.query_2_key),
-                           (self.probe_windows, self.query_windows_key)):
+        for probe, result_name in ((self.probe_1, self.query_1_result_name),
+                                   (self.probe_2, self.query_2_result_name),
+                                   (self.probe_windows, self.query_windows_result_name)):
             sd = probe.get_extra_event_search_dict()
             self.assertEqual(sd["event_type"], "osquery_result")
-            self.assertTrue(re.match(sd["name__regexp"], key) is not None)
-            for osquery_query in probe.iter_scheduled_queries():
-                self.assertTrue(re.match(sd["name__regexp"], osquery_query.name) is not None)
+            self.assertEqual([q.result_name for q in probe.iter_scheduled_queries()],
+                             [result_name])
+            self.assertTrue(re.match(sd["name__regexp"], result_name) is not None)
 
     def test_osquery_conf(self):
         # default machine has a subset of the queries

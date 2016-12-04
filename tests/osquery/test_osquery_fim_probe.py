@@ -139,17 +139,17 @@ class OsqueryFIMProbeTestCase(TestCase):
             self.assertTrue(isinstance(probe.scheduled_queries, dict))
             self.assertTrue(key in probe.scheduled_queries)
             for osquery_query in probe.iter_scheduled_queries():
-                self.assertTrue(osquery_query.name in probe.scheduled_queries)
+                self.assertIn(osquery_query.result_name, probe.scheduled_queries)
 
     def test_extra_event_search_dict(self):
-        for probe, key in ((self.probe_1, self.query_1_key),
-                           (self.probe_2, self.query_2_key),
-                           (self.probe_mbu, self.query_mbu_key)):
+        for probe, result_name in ((self.probe_1, self.query_1_key),
+                                   (self.probe_2, self.query_2_key),
+                                   (self.probe_mbu, self.query_mbu_key)):
             sd = probe.get_extra_event_search_dict()
             self.assertEqual(sd["event_type"], "osquery_result")
-            self.assertTrue(re.match(sd["name__regexp"], key) is not None)
-            for osquery_query in probe.iter_scheduled_queries():
-                self.assertTrue(re.match(sd["name__regexp"], osquery_query.name) is not None)
+            self.assertEqual([q.result_name for q in probe.iter_scheduled_queries()],
+                             [result_name])
+            self.assertTrue(re.match(sd["name__regexp"], result_name) is not None)
 
     def test_osquery_conf(self):
         # default machine has a subset of the queries

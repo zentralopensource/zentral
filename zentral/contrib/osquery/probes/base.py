@@ -27,8 +27,26 @@ class OsqueryResultProbe(BaseProbe):
         raise NotImplementedError
 
     @cached_property
+    def pack_discovery_queries(self):
+        # ordering and no duplicates to group the queries from the different probes
+        return sorted(set(self.iter_discovery_queries()))
+
+    @cached_property
+    def pack_key(self):
+        if not self.pack_discovery_queries:
+            # the queries in this probe will not be put in a pack
+            return None
+        # the queries in this probe need to be put in a pack
+        # with the discovery queries
+        h = hashlib.sha1()
+        for dq in self.pack_discovery_queries:
+            h.update(dq.encode("utf-8"))
+        return h.hexdigest()[:self.hash_length]
+
+    @cached_property
     def scheduled_queries(self):
-        return dict((q.name, q) for q in self.iter_scheduled_queries())
+        return dict((q.result_name, q)
+                    for q in self.iter_scheduled_queries())
 
 
 class OsqueryQuery(object):
@@ -60,9 +78,20 @@ class OsqueryQuery(object):
         name_items.append(hashlib.sha1(self.query.encode("utf-8")).hexdigest()[:self.hash_length])
         return '_'.join(name_items)
 
+    @cached_property
+    def result_name(self):
+        if self.probe.pack_key:
+            # osquery will prefix the name of the query with the name of the pack
+            # in the osquery result name keys
+            prefix = "pack_{k}_".format(k=self.probe.pack_key)
+        else:
+            # no prefix in the 'schedule' queries
+            prefix = ""
+        return "{p}{n}".format(p=prefix, n=self.name)
+
     def get_store_links(self):
         return self.probe.get_store_links(event_type=self.probe.forced_event_type,
-                                          name=self.name)
+                                          name=self.result_name)
 
     def to_configuration(self):
         s = OsqueryQuerySerializer(instance=self)
@@ -132,7 +161,7 @@ class OsqueryProbe(OsqueryResultProbe):
 
     def get_extra_event_search_dict(self):
         return {'event_type': self.forced_event_type,
-                'name__regexp': '{s}_[0-9a-f]{{{l}}}'.format(s=self.slug, l=self.hash_length)}
+                'name__regexp': '(pack_[0-9a-f]{{{l}}}_)?{s}_[0-9a-f]{{{l}}}'.format(s=self.slug, l=self.hash_length)}
 
 
 register_probe_class(OsqueryProbe)

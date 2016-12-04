@@ -1,4 +1,3 @@
-import hashlib
 import logging
 from zentral.core.probes.conf import ProbeList
 
@@ -35,20 +34,12 @@ def build_osquery_conf(machine):
                                            "OsqueryFIMProbe")
                              .machine_filtered(machine)):
         # packs or schedule
-        pack_discovery_queries = sorted(set(probe.iter_discovery_queries()))  # no duplicates, ordering agnostic
-        if pack_discovery_queries:
-            # group queries in packs by discovery conf
-            # build pack key = zentral_SHA1(discovery queries)
-            pack_hash = hashlib.sha1()
-            for dq in pack_discovery_queries:
-                pack_hash.update(dq.encode("utf-8"))
-            pack_key = "zentral_{h}".format(h=pack_hash.hexdigest()[:8])
-            # prepare default pack conf
-            pack_conf = packs.setdefault(pack_key, {"discovery": pack_discovery_queries,
-                                                    "queries": {}})
+        if probe.pack_key:
+            pack_conf = packs.setdefault(probe.pack_key,
+                                         {"discovery": probe.pack_discovery_queries,
+                                          "queries": {}})
             query_dict = pack_conf["queries"]
         else:
-            # put other queries in schedule
             query_dict = schedule
 
         # add probe queries to query_dict
