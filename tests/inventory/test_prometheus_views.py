@@ -23,7 +23,8 @@ class InventoryViewsTestCase(TestCase):
                  'bundle_path': "/Applications/Baller.app"}
             ]
         }
-        MachineSnapshot.objects.commit(tree)
+        ms, _ = MachineSnapshot.objects.commit(tree)
+        source_id = ms.source.pk
         response = self.client.get(reverse("inventory:prometheus_metrics"))
         labels_dict = {}
         for family in text_string_to_metric_families(response.content.decode('utf-8')):
@@ -33,7 +34,7 @@ class InventoryViewsTestCase(TestCase):
             labels_dict[name] = labels
         self.assertEqual(labels_dict['zentral_inventory_osx_apps'],
                          {'name': 'Baller.app',
-                          'source': 'tests.zentral.io#1',
+                          'source': 'tests.zentral.io#{}'.format(source_id),
                           'version_str': '1.2.3'})
         self.assertEqual(labels_dict['zentral_inventory_os_versions'],
                          {'build': '_',
@@ -41,4 +42,4 @@ class InventoryViewsTestCase(TestCase):
                           'minor': '11',
                           'name': 'OS X',
                           'patch': '1',
-                          'source': 'tests.zentral.io#1'})
+                          'source': 'tests.zentral.io#{}'.format(source_id)})

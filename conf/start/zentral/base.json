@@ -54,8 +54,7 @@
         {
           "backend": "zentral.contrib.inventory.clients.dummy"
         }
-      ],
-      "prometheus_push_gateway": "prompg:9091"
+      ]
     },
     "zentral.contrib.jss": {},
     "zentral.contrib.munki": {},
