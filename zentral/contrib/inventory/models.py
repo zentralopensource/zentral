@@ -301,7 +301,7 @@ class OSXApp(AbstractMTObject):
     objects = OSXAppManager()
 
     def __str__(self):
-        return " ".join([self.bundle_name, self.bundle_version_str])
+        return " ".join(s for s in (self.bundle_name, self.bundle_version_str) if s)
 
     def sources(self):
         return (Source.objects.distinct()

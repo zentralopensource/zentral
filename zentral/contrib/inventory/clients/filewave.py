@@ -58,6 +58,31 @@ class InventoryClient(BaseInventory):
         "fileset_version"
     ]
 
+    MACHINE_APPS_QUERY = {
+        "name": "Zentral temporary machine apps",
+        "main_component": "Application",
+        "criteria": {
+            "logic": "all",
+            "expressions": [
+                {"column": "serial_number", "operator": "is", "component": "DesktopClient", "qualifier": None},
+            ]
+        },
+        "fields": [
+            {"component": "Application", "column": "name"},
+            {"component": "Application", "column": "version"},
+            {"component": "Application", "column": "short_version"},
+            {"component": "Application", "column": "path"},
+            {"component": "Application", "column": "product_id"},
+        ]
+    }
+    MACHINE_APPS_FIELDS = [
+        "name",
+        "version",
+        "short_version",
+        "path",
+        "product_id",
+    ]
+
     def __init__(self, config_d):
         super().__init__(config_d)
         self.base_url = config_d['base_url']
@@ -107,6 +132,19 @@ class InventoryClient(BaseInventory):
         r.raise_for_status()
         return r.json()["values"]
 
+    def execute_machine_apps_query(self, serial_number):
+        query = self.MACHINE_APPS_QUERY
+        query["criteria"]["expressions"][0]["qualifier"] = serial_number
+        r = self.session.post("{}/query/".format(self.base_api_url), json=query)
+        r.raise_for_status()
+        query_id = r.json()["id"]
+        r = self.session.get("{}/query_result/{}".format(self.base_api_url, query_id))
+        r.raise_for_status()
+        values = r.json()["values"]
+        r = self.session.delete("{}/query/{}".format(self.base_api_url, query_id))
+        r.raise_for_status()
+        return values
+
     def get_machines(self):
         trees = {}
         for t in self.execute_machine_query():
@@ -132,6 +170,23 @@ class InventoryClient(BaseInventory):
                                    if result[t])
                 if system_info:
                     tree["system_info"] = system_info
+                if result["os_type"] == "OSX":
+                    osx_app_instances = []
+                    for at in self.execute_machine_apps_query(serial_number):
+                        aresult = dict(zip(self.MACHINE_APPS_FIELDS, at))
+                        app = {"bundle_name": aresult["name"]}
+                        if aresult["product_id"]:
+                            app["bundle_id"] = aresult["product_id"]
+                        if aresult["short_version"]:
+                            app["bundle_version_str"] = aresult["short_version"]
+                            if aresult["version"]:
+                                app["bundle_version"] = aresult["version"]
+                        elif aresult["version"]:
+                            app["bundle_version_str"] = aresult["version"]
+                        osx_app_instances.append({"bundle_path": aresult["path"],
+                                                  "app": app})
+                    if osx_app_instances:
+                        tree["osx_app_instances"] = osx_app_instances
                 trees[serial_number] = tree
             else:
                 tree = trees[serial_number]

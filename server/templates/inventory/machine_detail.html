@@ -219,8 +219,8 @@
     <tr>
       <td>{{ app.bundle_id|default:"" }}</td>
       <td><a href="{% url 'inventory:macos_app' app.id %}">{{ app.bundle_name }}</a></td>
-      <td>{{ app.bundle_version_str }}</td>
-      <td>{{ osx_app_instance.bundle_path }}</td>
+      <td>{{ app.bundle_version_str|default:"" }}</td>
+      <td>{{ osx_app_instance.bundle_path|default:"" }}</td>
     </tr>
     {% endwith %}
     {% endfor %}
