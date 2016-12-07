@@ -2,6 +2,7 @@ from importlib import import_module
 import json
 import logging
 import pprint
+from urllib.parse import urlparse
 from django.utils import timezone
 import requests
 from rest_framework import serializers
@@ -94,7 +95,10 @@ def sync_feed(feed):
     feed.feedprobe_set.exclude(key__in=seen_keys, archived_at__isnull=True).update(archived_at=timezone.now())
 
 
-def export_feed(feed_name, feed_id, probes, feed_description=None):
+def export_feed(feed_name, probes, feed_description=None):
+    o = urlparse(settings["api"]["tls_hostname"])
+    netloc = o.netloc.split(":")[0].split(".")
+    feed_id = ".".join(netloc[::-1])
     feed = {"name": feed_name,
             "id": feed_id,
             "probes": {}}
@@ -104,4 +108,4 @@ def export_feed(feed_name, feed_id, probes, feed_description=None):
         probe_d = probe.export()
         if probe_d:
             feed["probes"][probe.slug] = probe_d
-    return json.dumps(feed)
+    return json.dumps(feed, indent=2, sort_keys=True)
