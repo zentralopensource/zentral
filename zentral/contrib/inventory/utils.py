@@ -5,14 +5,17 @@ from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
 
 def osx_app_count():
     query = """
-    select a.bundle_name as name, a.bundle_version_str as version_str, s.id as source_id, s.module as source_module,
-    sum((ms.mt_next_id is null and ms.id is not null)::integer) as count
-    from inventory_osxapp as a
-    join inventory_osxappinstance as ai on (ai.app_id = a.id)
+    select a.bundle_name as name, a.bundle_version_str as version_str,
+    s.id as source_id, s.module as source_module, foo.count
+    from (
+    select ai.app_id, ms.source_id, count(*) as count
+    from inventory_osxappinstance as ai
     join inventory_machinesnapshot_osx_app_instances as msai on (msai.osxappinstance_id = ai.id)
-    join inventory_machinesnapshot as ms on (ms.id = msai.machinesnapshot_id)
-    join inventory_source as s on (ms.source_id = s.id)
-    group by a.bundle_name, a.bundle_version_str, s.id, s.module
+    join inventory_machinesnapshot as ms on (ms.id = msai.machinesnapshot_id and ms.mt_next_id is null)
+    group by ai.app_id, ms.source_id
+    ) as foo
+    join inventory_osxapp as a on (foo.app_id = a.id)
+    join inventory_source as s on (foo.source_id = s.id)
     """
     cursor = connection.cursor()
     cursor.execute(query)
@@ -29,10 +32,11 @@ def osx_app_count():
 def os_version_count():
     query = """
     select o.name, o.major, o.minor, o.patch, o.build, s.id as source_id, s.module as source_module,
-    sum((ms.mt_next_id is null and ms.id is not null)::integer) as count
+    count(*) as count
     from inventory_osversion as o
     join inventory_machinesnapshot as ms on (ms.os_version_id = o.id)
     join inventory_source as s on (ms.source_id = s.id)
+    where ms.mt_next_id is null
     group by o.name, o.major, o.minor, o.patch, o.build, s.id, s.module
     """
     cursor = connection.cursor()
