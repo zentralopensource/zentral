@@ -198,17 +198,5 @@ class InventoryClient(BaseInventory):
                 tree_network_interfaces = tree.setdefault("network_interfaces", [])
                 if network_interface not in tree_network_interfaces:
                     tree_network_interfaces.append(network_interface)
-            # group
-            if result["fileset_id"]:
-                if result["fileset_version"]:
-                    version = "v{}".format(result["fileset_version"])
-                else:
-                    version = None
-                name = " ".join(s for s in ("Fileset", result["fileset_name"], version) if s)
-                group = {"reference": result["fileset_id"],
-                         "name": name}
-                tree_groups = tree.setdefault("groups", [])
-                if group not in tree_groups:
-                    tree_groups.append(group)
 
         yield from trees.values()
