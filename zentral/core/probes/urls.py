@@ -17,12 +17,22 @@ urlpatterns = [
         views.UpdateFilterView.as_view(), name='update_filter'),
     url(r'^(?P<pk>\d+)/filters/(?P<section>(inventory|metadata|payload))/(?P<filter_id>\d+)/delete/$',
         views.DeleteFilterView.as_view(), name='delete_filter'),
+    # feeds
+    url(r'^feeds/$', views.FeedsView.as_view(), name="feeds"),
+    url(r'^feeds/add/$', views.AddFeedView.as_view(), name="add_feed"),
+    url(r'^feeds/(?P<pk>\d+)/$', views.FeedView.as_view(), name="feed"),
+    url(r'^feeds/(?P<pk>\d+)/sync/$', views.SyncFeedView.as_view(), name="sync_feed"),
+    url(r'^feeds/(?P<pk>\d+)/delete/$', views.DeleteFeedView.as_view(), name="delete_feed"),
+    url(r'^feeds/(?P<pk>\d+)/probes/(?P<probe_id>\d+)/$', views.FeedProbeView.as_view(), name="feed_probe"),
+    url(r'^feeds/(?P<pk>\d+)/probes/(?P<probe_id>\d+)/import/$',
+        views.ImportFeedProbeView.as_view(), name="import_feed_probe"),
 ]
 
 main_menu_cfg = {
     'weight': 1,
     'items': (
         ('index', 'all probes'),
+        ('feeds', 'feeds'),
     ),
     'extra_context_links': (
         'probe_extra_links',

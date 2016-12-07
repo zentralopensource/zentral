@@ -12,27 +12,55 @@
   Probe <i>{{ probe.name }}</i>
 </h2>
 
-<p>
-  {% if probe.status == 'ACTIVE' %}
-  <span class="label label-info">Active</span>
-  {% else %}
-  <span class="label label-danger">Inactive</span>
-  {% endif %}
-</p>
-
-{% if probe.description %}
-<p>
-  {{ probe.description|linebreaksbr }}
-</p>
-{% endif %}
-
-<div class="btn-group" role="group">
-  <a class="btn btn-default" href="{% url 'probes:update' probe.pk %}">Update</a>
-  <a class="btn btn-default" href="{% url 'probes:delete' probe.pk %}">Delete</a>
-  <a class="btn btn-default" href="{% url 'probes:probe_events' probe.pk %}">Events</a>
-  {% for store_name, store_url in probe.get_store_links %}
-  <a class="btn btn-default" href="{{ store_url }}"><span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}</a>
-  {% endfor %}
+<div class="panel panel-default">
+  <table class="table table-condensed probe-panel">
+    <tr>
+      <td>status</td>
+      <td>
+        {% if probe.status == 'ACTIVE' %}
+        <span class="label label-info">Active</span>
+        {% else %}
+        <span class="label label-danger">Inactive</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% if probe.description %}
+    <tr>
+      <td>description</td>
+      <td>
+        {{ probe.description|linebreaks }}
+      </td>
+    </tr>
+    {% endif %}
+    {% if object.feed_probe %}
+    <tr>
+      <td>feed</td>
+      <td><a href="{% url 'probes:feed' object.feed_probe.feed.id %}">{{ object.feed_probe.feed }}</a></td>
+    </tr>
+    <tr>
+      <td>feed probe</td>
+      <td><a href="{% url 'probes:feed_probe' object.feed_probe.feed.id object.feed_probe.id %}">{{ object.feed_probe }}</a></td>
+    </tr>
+    {% endif %}
+  </table>
+  <div class="panel-footer">
+    <div class="btn-group" role="group">
+      <a class="btn btn-default" href="{% url 'probes:update' probe.pk %}">
+        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+      </a>
+      <a class="btn btn-danger" href="{% url 'probes:delete' probe.pk %}">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+      <a class="btn btn-default" href="{% url 'probes:probe_events' probe.pk %}">
+        <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
+      </a>
+      {% for store_name, store_url in probe.get_store_links %}
+      <a class="btn btn-default" href="{{ store_url }}">
+        <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
 </div>
 
 <a name="filters"></a>

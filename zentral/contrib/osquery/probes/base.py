@@ -122,7 +122,7 @@ class OsqueryQuerySerializer(serializers.Serializer):
     platform = serializers.MultipleChoiceField(choices=PLATFORM_CHOICES, required=False)
     shard = serializers.IntegerField(min_value=1, max_value=100, required=False,
                                      help_text="Restrict this query to a percentage (1-100) of target hosts")
-    version = serializers.RegexField('$[0-9]+\.[0-9]+\.[0-9]+\Z', required=False,
+    version = serializers.RegexField('^[0-9]+\.[0-9]+\.[0-9]+\Z', required=False,
                                      help_text="Only run on osquery versions greater than or equal-to *")
 
 

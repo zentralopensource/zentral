@@ -10,6 +10,66 @@ from . import probe_classes
 logger = logging.getLogger('zentral.core.probes.models')
 
 
+class Feed(models.Model):
+    url = models.URLField(unique=True)
+    name = models.TextField()
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self, anchor=None):
+        return reverse("probes:feed", args=(self.pk,))
+
+
+class FeedImport(models.Model):
+    OK = 'OK'
+    DOWNLOAD_ERROR = 'DOWNLOAD_ERROR'
+    FEED_ERROR = 'FEED_ERROR'
+    STATUS_CHOICES = (
+        (OK, 'OK'),
+        (DOWNLOAD_ERROR, 'download error'),
+        (FEED_ERROR, 'feed error'),
+    )
+    feed = models.ForeignKey(Feed)
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES)
+    new_probes = models.PositiveIntegerField(default=0)
+    updated_probes = models.PositiveIntegerField(default=0)
+    archived_probes = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class FeedProbe(models.Model):
+    feed = models.ForeignKey(Feed)
+    model = models.CharField(max_length=255)
+    name = models.TextField()
+    description = models.TextField(blank=True)
+    key = models.CharField(max_length=255)
+    body = JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    archived_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        unique_together = (('feed', 'key'),)
+        ordering = ('name',)
+
+    def __str__(self):
+        return self.name
+
+    def get_probe_class(self):
+        return probe_classes.get(self.model, None)
+
+    def get_model_display(self):
+        probe_class = self.get_probe_class()
+        if probe_class:
+            return probe_class.model_display
+        else:
+            return "Unknown probe class"
+
+
 class ProbeSourceManager(models.Manager):
     def active(self):
         return self.filter(status=ProbeSource.ACTIVE)
@@ -42,6 +102,9 @@ class ProbeSource(models.Model):
     description = models.TextField(blank=True)
     # auto fields for search / filtering
     event_types = ArrayField(models.CharField(max_length=255), blank=True, editable=False)
+
+    feed_probe = models.ForeignKey(FeedProbe, blank=True, null=True, editable=False, on_delete=models.SET_NULL)
+    feed_probe_updated_at = models.DateTimeField(blank=True, null=True)
 
     body = JSONField(editable=False)
 
@@ -144,41 +207,3 @@ class ProbeSource(models.Model):
             filter_section_l = probe_d["filters"][filter_section]
             filter_section_l.pop(filter_id)
         self.update_body(func)
-
-
-class Feed(models.Model):
-    url = models.URLField()
-    name = models.TextField()
-    description = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-
-class FeedImport(models.Model):
-    OK = 'OK'
-    DOWNLOAD_ERROR = 'DOWNLOAD_ERROR'
-    FEED_ERROR = 'FEED_ERROR'
-    STATUS_CHOICES = (
-        (OK, 'OK'),
-        (DOWNLOAD_ERROR, 'download error'),
-        (FEED_ERROR, 'feed error'),
-    )
-    feed = models.ForeignKey(Feed)
-    status = models.CharField(max_length=32, choices=STATUS_CHOICES)
-    new_probes = models.PositiveIntegerField(default=0)
-    updated_probes = models.PositiveIntegerField(default=0)
-    archived_probes = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-
-class FeedProbe(models.Model):
-    feed = models.ForeignKey(Feed)
-    model = models.CharField(max_length=255)
-    key = models.CharField(max_length=255)
-    body = JSONField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    archived_at = models.DateTimeField(blank=True, null=True)
-
-    class Meta:
-        unique_together = (('feed', 'key'),)

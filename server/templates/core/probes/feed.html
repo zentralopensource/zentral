@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load inventory_extras probe_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'probes:index' %}">Probes</a>
+  <li><a href="{% url 'probes:feeds' %}">Feeds</a>
+  <li class="active">{{ feed.name }}</li>
+</ol>
+
+<h2>
+  Feed <i>{{ feed.name }}</i>
+</h2>
+<div class="panel panel-default">
+  <table class="table table-condensed probe-panel">
+    <tr>
+      <td>URL</td>
+      <td>{{ feed.url|urlize }}</td>
+    </tr>
+    <tr><td>created at</td><td>{{ feed.created_at }}</td></tr>
+    <tr><td>updated at</td><td>{{ feed.updated_at }}</td></tr>
+  </table>
+  <div class="panel-footer">
+    <form action="{% url 'probes:sync_feed' feed.id %}" method="POST" class="btn-group">{% csrf_token %}
+      <button type="submit" class="btn btn-default">
+        <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
+      </button>
+      <a href="{% url 'probes:delete_feed' feed.id %}" class="btn btn-danger">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+    </form>
+  </div>
+</div>
+
+<h3>{{ active_probes|length }} Probe{{ active_probes|length|pluralize }}</h3>
+
+<table class="table">
+  <thead>
+    <th>Model</th>
+    <th>Name</th>
+    <th>Description</th>
+  </thead>
+  <tbody>
+    {% for feed_probe in active_probes %}
+    <tr>
+      <td>{{ feed_probe.get_model_display }}</td>
+      <td><a href="{% url 'probes:feed_probe' feed.id feed_probe.id %}">{{ feed_probe }}</a></td>
+      <td>{{ feed_probe.description }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

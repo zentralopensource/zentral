@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'probes:index' %}">Probes</a></li>
+  <li><a href="{% url 'probes:feeds' %}">Feeds</a></li>
+  <li><a href="{% url 'probes:feed' feed.id  %}">{{ feed }}</a></li>
+  <li><a href="{% url 'probes:feed_probe' feed.id feed_probe.id %}">{{ feed_probe }}</a></li>
+  <li class="active">Import</li>
+</ol>
+
+<h2>{{ title }}</h2>
+<form method="POST">{% csrf_token %}
+  {{ form|bootstrap }}
+  <a class="btn btn-default" href="{% url 'probes:feed_probe' feed.id feed_probe.id %}">Cancel</a>
+  <button class="btn btn-primary" type="submit">Save</button>
+</form>
+{% endblock %}

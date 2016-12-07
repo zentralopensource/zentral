@@ -5,6 +5,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.conf import PLATFORM_CHOICES, TYPE_CHOICES
 from zentral.utils.forms import CommaSeparatedQuotedStringField
 from .base import BaseProbe
+from .feeds import get_feed_serializer, sync_feed, update_or_create_feed
 from .models import ProbeSource
 from . import probe_classes
 
@@ -160,15 +161,18 @@ PayloadFilterFormSet = forms.formset_factory(PayloadFilterItemForm,
                                              min_num=1, max_num=10, extra=0, can_delete=True)
 
 
+def clean_probe_name(name):
+    if name and ProbeSource.objects.filter(Q(name=name) | Q(slug=slugify(name))).count() > 0:
+        raise forms.ValidationError('A probe with this name already exists')
+    return name
+
+
 class BaseCreateProbeForm(forms.Form):
     model = BaseProbe
     name = forms.CharField(max_length=255)
 
     def clean_name(self):
-        name = self.cleaned_data.get("name")
-        if name and ProbeSource.objects.filter(Q(name=name) | Q(slug=slugify(name))).count() > 0:
-            raise forms.ValidationError('A probe with this name already exists')
-        return name
+        return clean_probe_name(self.cleaned_data.get("name"))
 
     def get_probe_source_model(self):
         for k, v in probe_classes.items():
@@ -188,3 +192,38 @@ class CreateProbeForm(BaseCreateProbeForm, MetadataFilterForm):
 
     def get_body(self):
         return {"filters": {"metadata": [self.get_filter_d()]}}
+
+
+class AddFeedForm(forms.Form):
+    url = forms.URLField()
+
+    def clean(self):
+        url = self.cleaned_data.get("url")
+        if url:
+            try:
+                self.cleaned_data["serializer"] = get_feed_serializer(url)
+            except ValueError:
+                self.add_error("url", "Invalid feed")
+        return self.cleaned_data
+
+    def save(self):
+        feed, created = update_or_create_feed(self.cleaned_data["url"])
+        sync_feed(feed)
+        return feed, created
+
+
+class ImportFeedProbeForm(forms.Form):
+    probe_name = forms.CharField(label="Probe name")
+
+    def clean_probe_name(self):
+        return clean_probe_name(self.cleaned_data.get("probe_name"))
+
+    def save(self, feed_probe):
+        return ProbeSource.objects.create(
+            model=feed_probe.model,
+            name=self.cleaned_data["probe_name"],
+            description=feed_probe.description,
+            feed_probe=feed_probe,
+            feed_probe_updated_at=feed_probe.updated_at,
+            body=feed_probe.body
+        )

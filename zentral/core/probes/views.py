@@ -3,11 +3,14 @@ from django import forms
 from django.core.urlresolvers import reverse, reverse_lazy
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
-from django.views.generic import DetailView, ListView, TemplateView
+from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import DeleteView, FormView, UpdateView
 from zentral.core.stores import frontend_store
-from .forms import CreateProbeForm, ProbeSearchForm, InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet
-from .models import ProbeSource
+from .feeds import sync_feed
+from .forms import (CreateProbeForm, ProbeSearchForm,
+                    InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet,
+                    AddFeedForm, ImportFeedProbeForm)
+from .models import Feed, FeedProbe, ProbeSource
 
 logger = logging.getLogger("zentral.core.probes.views")
 
@@ -187,7 +190,7 @@ class DeleteProbeView(DeleteView):
 
     def get_context_data(self, **kwargs):
         ctx = super(DeleteProbeView, self).get_context_data(**kwargs)
-        ctx['inventory'] = True
+        ctx['probes'] = True
         return ctx
 
 
@@ -468,3 +471,122 @@ class DeleteProbeItemView(EditProbeItemView):
             if not probe_d[self.probe_item_attribute]:
                 probe_d.pop(self.probe_item_attribute)
         return func
+
+
+# feeds
+
+
+class FeedsView(ListView):
+    template_name = "core/probes/feeds.html"
+    model = Feed
+    paginate_by = 10
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['probes'] = True
+        # pagination
+        page = ctx['page_obj']
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        bc = [(reverse('probes:index'), 'Probes')]
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop("page", None)
+            reset_link = "?{}".format(qd.urlencode())
+        else:
+            reset_link = None
+        paginator = page.paginator
+        if paginator.count:
+            count = paginator.count
+            pluralize = min(1, count - 1) * 's'
+            bc.extend([(reset_link, '{} feed{}'.format(count, pluralize)),
+                       (None, "page {} of {}".format(page.number, paginator.num_pages))])
+        else:
+            bc.append((None, "no feeds"))
+        ctx['breadcrumbs'] = bc
+        return ctx
+
+
+class AddFeedView(FormView):
+    form_class = AddFeedForm
+    template_name = "core/probes/add_feed.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['probes'] = True
+        ctx['title'] = "Add feed"
+        return ctx
+
+    def form_valid(self, form):
+        feed, created = form.save()
+        return HttpResponseRedirect(feed.get_absolute_url())
+
+
+class FeedView(DetailView):
+    template_name = "core/probes/feed.html"
+    model = Feed
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['probes'] = True
+        ctx['active_probes'] = list(self.object.feedprobe_set.filter(archived_at__isnull=True))
+        return ctx
+
+
+class SyncFeedView(View):
+    def post(self, request, *args, **kwargs):
+        feed = get_object_or_404(Feed, pk=int(kwargs["pk"]))
+        sync_feed(feed)
+        return HttpResponseRedirect(feed.get_absolute_url())
+
+
+class DeleteFeedView(DeleteView):
+    model = Feed
+    template_name = "core/probes/delete_feed.html"
+    success_url = reverse_lazy('probes:feeds')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['probes'] = True
+        ctx['title'] = 'Delete feed'
+        return ctx
+
+
+class FeedProbeView(DetailView):
+    template_name = "core/probes/feed_probe.html"
+    model = FeedProbe
+
+    def get_object(self):
+        return get_object_or_404(self.model, pk=self.kwargs["probe_id"], feed__pk=self.kwargs["pk"])
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["probe_sources"] = list(self.object.probesource_set.all())
+        return ctx
+
+
+class ImportFeedProbeView(FormView):
+    form_class = ImportFeedProbeForm
+    template_name = "core/probes/import_feed_probe.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.feed_probe = get_object_or_404(FeedProbe, pk=self.kwargs["probe_id"], feed__pk=self.kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['probes'] = True
+        ctx['feed_probe'] = self.feed_probe
+        ctx['feed'] = self.feed_probe.feed
+        ctx['title'] = "Import feed probe"
+        return ctx
+
+    def form_valid(self, form):
+        probe_source = form.save(self.feed_probe)
+        return HttpResponseRedirect(probe_source.get_absolute_url())

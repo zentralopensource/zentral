@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  {% for url, anchor_text in breadcrumbs %}
+  {% if url %}
+  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  {% else %}
+  <li class="active">{{ anchor_text }}</li>
+  {% endif %}
+  {% endfor %}
+</ol>
+
+<h2>{{ paginator.count }} Feed{{ paginator.count|pluralize }}</h2>
+
+<a href="{% url 'probes:add_feed' %}" class="btn btn-default">Add feed</a>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+<div class="table-reponsive">
+  <table class="table">
+    <thead>
+      <th>Name</th>
+      <th>URL</th>
+      <th>Created at</th>
+      <th>Updated at</th>
+    </thead>
+    <tbody>
+    {% for feed in object_list %}
+    <tr>
+      <td><a href="{% url 'probes:feed' feed.id %}">{{ feed.name }}</a></td>
+      <td><a href="{{ feed.url }}" target="_blank">{{ feed.url }}</a></td>
+      <td>{{ feed.created_at }}</td>
+      <td>{{ feed.updated_at }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

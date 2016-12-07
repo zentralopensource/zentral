@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'probes:index' %}">Probes</a></li>
+  <li><a href="{% url 'probes:feeds' %}">Feeds</a></li>
+  <li><a href="{% url 'probes:feed' object.id %}">{{ object.name }}</a></li>
+  <li class="active">Confirm delete</li>
+</ol>
+
+<h2>Delete feed <em>{{ object.name }}</em></h2>
+<p>Do you really want to delete this feed ?</p>
+<form method="POST">{% csrf_token %}
+  <a class="btn btn-default" href="{% url 'probes:feed' object.id %}">No</a>
+  <button class="btn btn-danger" type="submit">Yes</button>
+</form>
+{% endblock %}
