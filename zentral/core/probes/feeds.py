@@ -1,21 +1,30 @@
 from importlib import import_module
 import json
+import logging
+import pprint
 from django.utils import timezone
 import requests
 from rest_framework import serializers
 from zentral.conf import settings
 from .models import Feed, FeedProbe
 
+logger = logging.getLogger("zentral.core.probes.feeds")
+
+
+class FeedError(Exception):
+    def __init__(self, message="Feed error"):
+        self.message = message
+
 
 class FeedProbeSerializer(serializers.Serializer):
     model = serializers.CharField()
-    name = serializers.CharField()
+    name = serializers.RegexField(r'^[-\w]+\Z')
     body = serializers.JSONField()
 
 
 class FeedSerializer(serializers.Serializer):
     name = serializers.CharField()
-    id = serializers.RegexField(r'^([a-z0-9\-]+\.)*[a-z0-9]+\Z')
+    id = serializers.RegexField(r'^([-\w]+\.)*[-\w]+\Z')
     probes = serializers.DictField(
         child=FeedProbeSerializer()
     )
@@ -46,18 +55,23 @@ def get_feed_serializer_classes():
 
 
 def get_feed_serializer(url):
-    r = requests.get(url, stream=True)
-    r.raise_for_status()
+    try:
+        r = requests.get(url, stream=True)
+        r.raise_for_status()
+    except requests.exceptions.ConnectionError:
+        raise FeedError("Connection error")
+    except requests.exceptions.HTTPError as e:
+        raise FeedError("HTTP error {}".format(e.response.status_code))
+    # TODO next line to fix import of osquery packs
     feed_data = json.loads(r.text.replace("\\\n", " "))
     for feed_serializer_cls in get_feed_serializer_classes():
         feed_serializer = feed_serializer_cls(data=feed_data)
         if feed_serializer.is_valid():
             return feed_serializer
         else:
-            import pprint
-            print(feed_serializer_cls)
-            pprint.pprint(feed_serializer.errors)
-    raise ValueError("Unknown feed type")
+            logger.warning("Feed serializer %s errors", feed_serializer_cls)
+            logger.warning(pprint.pformat(feed_serializer.errors))
+    raise FeedError("Unknown feed type")
 
 
 def update_or_create_feed(url):

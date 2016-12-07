@@ -5,7 +5,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.conf import PLATFORM_CHOICES, TYPE_CHOICES
 from zentral.utils.forms import CommaSeparatedQuotedStringField
 from .base import BaseProbe
-from .feeds import get_feed_serializer, sync_feed, update_or_create_feed
+from .feeds import FeedError, get_feed_serializer, sync_feed, update_or_create_feed
 from .models import ProbeSource
 from . import probe_classes
 
@@ -156,6 +156,7 @@ class BasePayloadFilterFormSet(forms.BaseFormSet):
             initial.append({"attribute": key, "values": val})
         return initial
 
+
 PayloadFilterFormSet = forms.formset_factory(PayloadFilterItemForm,
                                              formset=BasePayloadFilterFormSet,
                                              min_num=1, max_num=10, extra=0, can_delete=True)
@@ -202,8 +203,8 @@ class AddFeedForm(forms.Form):
         if url:
             try:
                 self.cleaned_data["serializer"] = get_feed_serializer(url)
-            except ValueError:
-                self.add_error("url", "Invalid feed")
+            except FeedError as e:
+                self.add_error("url", e.message)
         return self.cleaned_data
 
     def save(self):
