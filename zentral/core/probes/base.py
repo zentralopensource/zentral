@@ -1,3 +1,4 @@
+import copy
 import logging
 from django.core.urlresolvers import reverse_lazy
 from django.utils.functional import cached_property
@@ -355,5 +356,26 @@ class BaseProbe(object):
              if action_name not in configured_actions]
         l.sort(key=lambda action: action.name)
         return l
+
+    # export method for probe sharing
+
+    def export(self):
+        body = copy.deepcopy(self.source.body)
+        if "actions" in body:
+            del body["actions"]
+        body_filters = body.get("filters", {})
+        if "inventory" in body_filters:
+            del body_filters["inventory"]
+        if not self.can_edit_metadata_filters and "metadata" in body_filters:
+            del body_filters["metadata"]
+        if not self.can_edit_payload_filters and "payload" in body_filters:
+            del body_filters["payload"]
+        d = {"name": self.name,
+             "model": self.get_model(),
+             "body": body}
+        if self.description:
+            d["description"] = self.description
+        return d
+
 
 register_probe_class(BaseProbe)

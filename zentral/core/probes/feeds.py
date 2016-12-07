@@ -92,3 +92,16 @@ def sync_feed(feed):
                                                                  defaults=feed_probe_data)
         seen_keys.append(feed_probe.key)
     feed.feedprobe_set.exclude(key__in=seen_keys, archived_at__isnull=True).update(archived_at=timezone.now())
+
+
+def export_feed(feed_name, feed_id, probes, feed_description=None):
+    feed = {"name": feed_name,
+            "id": feed_id,
+            "probes": {}}
+    if feed_description:
+        feed["description"] = feed_description
+    for probe in probes:
+        probe_d = probe.export()
+        if probe_d:
+            feed["probes"][probe.slug] = probe_d
+    return json.dumps(feed)
