@@ -19,7 +19,7 @@ class FeedError(Exception):
 
 class FeedProbeSerializer(serializers.Serializer):
     model = serializers.CharField()
-    name = serializers.RegexField(r'^[-\w]+\Z')
+    name = serializers.CharField()
     body = serializers.JSONField()
 
 
