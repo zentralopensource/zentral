@@ -64,7 +64,10 @@ def get_feed_serializer(url):
     except requests.exceptions.HTTPError as e:
         raise FeedError("HTTP error {}".format(e.response.status_code))
     # TODO next line to fix import of osquery packs
-    feed_data = json.loads(r.text.replace("\\\n", " "))
+    try:
+        feed_data = json.loads(r.text.replace("\\\n", " "))
+    except ValueError:
+        raise FeedError("Invalid JSON")
     for feed_serializer_cls in get_feed_serializer_classes():
         feed_serializer = feed_serializer_cls(data=feed_data)
         if feed_serializer.is_valid():
