@@ -1,12 +1,13 @@
 import logging
 from django import forms
 from django.core.urlresolvers import reverse, reverse_lazy
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import DeleteView, FormView, UpdateView
+import requests
 from zentral.core.stores import frontend_store
-from .feeds import sync_feed
+from .feeds import export_feed, sync_feed
 from .forms import (CreateProbeForm, ProbeSearchForm,
                     InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet,
                     AddFeedForm, ImportFeedProbeForm)
@@ -192,6 +193,31 @@ class DeleteProbeView(DeleteView):
         ctx = super(DeleteProbeView, self).get_context_data(**kwargs)
         ctx['probes'] = True
         return ctx
+
+
+class ExportProbeView(View):
+    def post(self, request, *args, **kwargs):
+        probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
+        probe = probe_source.load()
+        if not probe.loaded:
+            raise Http404
+        filename = "zentral_probe_{}.json".format(probe.slug)
+        feed_name = "Probe {}".format(probe.name)
+        gist_description = "Export of the Zentral probe {}".format(probe.name)
+        gist = {
+            "description": gist_description,
+            "public": False,
+            "files": {
+                filename: {
+                    "content": export_feed(feed_name, [probe])
+                }
+            }
+        }
+        r = requests.post("https://api.github.com/gists", json=gist)
+        r.raise_for_status()
+        response = r.json()
+        return JsonResponse({"raw_url": response["files"][filename]["raw_url"],
+                             "html_url": response["html_url"]})
 
 
 # Actions

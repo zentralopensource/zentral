@@ -9,6 +9,7 @@ urlpatterns = [
     url(r'^(?P<pk>\d+)/events/$', views.ProbeEventsView.as_view(), name='probe_events'),
     url(r'^(?P<pk>\d+)/update/$', views.UpdateProbeView.as_view(), name='update'),
     url(r'^(?P<pk>\d+)/delete/$', views.DeleteProbeView.as_view(), name='delete'),
+    url(r'^(?P<pk>\d+)/export/$', views.ExportProbeView.as_view(), name='export'),
     url(r'^(?P<pk>\d+)/actions/(?P<action>\S+)/edit/$', views.EditActionView.as_view(), name='edit_action'),
     url(r'^(?P<pk>\d+)/actions/(?P<action>\S+)/delete/$', views.DeleteActionView.as_view(), name='delete_action'),
     url(r'^(?P<pk>\d+)/filters/(?P<section>(inventory|metadata|payload))/add/$',
