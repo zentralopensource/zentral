@@ -61,16 +61,16 @@
         {{ query.get_query_html|safe }}
       </td>
     </tr>
-    {% if query.description|prettydescription %}
+    {% if query.description %}
     <tr>
       <td>Description</td>
-      <td>{{ query.description|linebreaks }}</td>
+      <td>{{ query.description|prettydescription }}</td>
     </tr>
     {% endif %}
     {% if query.value %}
     <tr>
       <td>Value</td>
-      <td>{{ query.value|linebreaks }}</td>
+      <td>{{ query.value|prettydescription }}</td>
     </tr>
     {% endif %}
     <tr>
