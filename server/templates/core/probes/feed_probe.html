@@ -50,7 +50,7 @@
         {% endif %}
       </td>
       <td>
-        {% if probe_source.feed_probe_updated_at < object.updated_at %}
+        {% if probe_source.feed_probe_update_available %}
         <span class="label label-default">UPDATE AVAILABLE</span>
         {% else %}
         <span class="label label-success">OK</span>

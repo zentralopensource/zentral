@@ -39,7 +39,14 @@
     </tr>
     <tr>
       <td>feed probe</td>
-      <td><a href="{% url 'probes:feed_probe' object.feed_probe.feed.id object.feed_probe.id %}">{{ object.feed_probe }}</a></td>
+      <td>
+        <a href="{% url 'probes:feed_probe' object.feed_probe.feed.id object.feed_probe.id %}">
+          {{ object.feed_probe }}
+        </a>
+        {% if object.feed_probe_update_available %}
+        <a href="{% url 'probes:review_update' object.id %}" class="btn btn-warning">Update available</a>
+        {% endif %}
+      </td>
     </tr>
     {% endif %}
   </table>

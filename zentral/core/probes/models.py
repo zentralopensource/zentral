@@ -5,6 +5,7 @@ from django.db import models, transaction
 from django.db.models import F, Func
 from django.utils.text import slugify
 from zentral.core.events import event_types
+from zentral.utils.dict import dict_diff
 from . import probe_classes
 
 logger = logging.getLogger('zentral.core.probes.models')
@@ -89,6 +90,7 @@ class ProbeSource(models.Model):
 
     feed_probe = models.ForeignKey(FeedProbe, blank=True, null=True, editable=False, on_delete=models.SET_NULL)
     feed_probe_updated_at = models.DateTimeField(blank=True, null=True)
+    feed_probe_update_available = models.BooleanField(default=False)
 
     body = JSONField(editable=False)
 
@@ -191,3 +193,46 @@ class ProbeSource(models.Model):
             filter_section_l = probe_d["filters"][filter_section]
             filter_section_l.pop(filter_id)
         self.update_body(func)
+
+    # update
+
+    def update_diff(self):
+        if not self.feed_probe:
+            return {}
+        probe = self.load()
+        current_body = probe.export()["body"]
+        return dict_diff(current_body, self.feed_probe.body)
+
+    def skip_update(self):
+        if self.feed_probe_update_available:
+            self.feed_probe_update_available = False
+            self.save()
+
+    def apply_update(self):
+        update_diff = self.update_diff()
+        if not update_diff:
+            if self.feed_probe_update_available:
+                self.feed_probe_update_available = False
+                self.save()
+            return
+        body = self.body
+        for key, kdiff in update_diff.items():
+            removed = kdiff.get("removed")
+            added = kdiff.get("added")
+            if isinstance(added, list) or isinstance(removed, list):
+                val = body.get(key, [])
+                for removed_item in (removed or []):
+                    val.remove(removed_item)
+                for added_item in (added or []):
+                    val.append(added_item)
+                if val:
+                    body[key] = val
+                elif key in body:
+                    del body[key]
+            else:
+                if added:
+                    body[key] = added
+                elif key in body:
+                    del body[key]
+        self.feed_probe_update_available = False
+        self.save()

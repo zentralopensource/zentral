@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load base_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'probes:index' %}">Probes</a>
+  <li><a href="{% url 'probes:probe' probe_source.id %}">{{ probe_source.name }}</a></li>
+  <li class="active">review update</li>
+</ol>
+
+<h2>
+  Review probe <em>{{ probe_source.name }}</em> update
+</h2>
+
+<div class="panel panel-default">
+  <div class="panel-heading">
+    <h3 class="panel-title">Update diff</h3>
+  </div>
+  <div class="panel-body">
+    {{ update_diff|pythonprettyprint }}
+  </div>
+  <div class="panel-footer">
+    <form class="btn-group" role="group" method="POST">{% csrf_token %}
+      <a href="{% url 'probes:probe' probe_source.id %}" class="btn btn-default">
+        Cancel
+      </a>
+      <button name="action" value="skip" class="btn btn-default">
+        Skip update
+      </button>
+      <button name="action" value="apply" class="btn btn-primary">
+        Apply update
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

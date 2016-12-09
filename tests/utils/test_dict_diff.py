@@ -1,5 +1,5 @@
 from django.test import SimpleTestCase
-from zentral.core.probes.feeds import dict_diff
+from zentral.utils.dict import dict_diff
 
 
 class DictDiffTestCase(SimpleTestCase):

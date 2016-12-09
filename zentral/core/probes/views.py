@@ -221,6 +221,31 @@ class ExportProbeView(View):
                              "html_url": response["html_url"]})
 
 
+class ReviewProbeUpdateView(TemplateView):
+    template_name = "core/probes/review_update.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data()
+        ctx["probes"] = True
+        ctx["probe_source"] = self.probe_source
+        ctx["update_diff"] = self.probe_source.update_diff()
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST["action"]
+        if action == "skip":
+            self.probe_source.skip_update()
+            messages.warning(request, "Probe update skipped")
+        elif action == "apply":
+            self.probe_source.apply_update()
+            messages.success(request, "Probe updated")
+        return HttpResponseRedirect(self.probe_source.get_absolute_url())
+
+
 # Actions
 
 
