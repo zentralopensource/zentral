@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load base_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -50,7 +50,7 @@
       <tr>
         <td>{{ event.event_type }}</td>
         <td>{{ event.metadata.created_at }}</td>
-        <td><pre>{{ event.payload|pprint }}</pre></td>
+        <td><pre>{{ event.payload|pythonprettyprint }}</pre></td>
       </tr>
       {% endfor %}
     </tbody>

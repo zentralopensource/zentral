@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras probe_extras %}
+{% load base_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -18,7 +18,7 @@
 
 {% if probe.description %}
 <p>
-  {{ probe.description|linebreaksbr }}
+  {{ probe.description|prettydescription }}
 </p>
 {% endif %}
 

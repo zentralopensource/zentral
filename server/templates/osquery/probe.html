@@ -1,5 +1,5 @@
 {% extends 'core/probes/probe.html' %}
-{% load inventory_extras %}
+{% load base_extras %}
 
 {% block probe_extra %}
 <a name="osquery"></a>
@@ -61,7 +61,7 @@
         {{ query.get_query_html|safe }}
       </td>
     </tr>
-    {% if query.description %}
+    {% if query.description|prettydescription %}
     <tr>
       <td>Description</td>
       <td>{{ query.description|linebreaks }}</td>

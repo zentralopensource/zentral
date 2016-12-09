@@ -600,7 +600,7 @@ class MacOSAppsView(generic.TemplateView):
             breadcrumbs.append((reverse('inventory:macos_apps'), "macOS applications"))
             breadcrumbs.append((reset_link, "Search"))
         else:
-            breadcrumbs.append((reset_link, "macOSApplication"))
+            breadcrumbs.append((reset_link, "macOS applications"))
         breadcrumbs.append((None, "page {} of {}".format(self.search_form.cleaned_data['page'],
                                                          ctx['total_pages'])))
         ctx['breadcrumbs'] = breadcrumbs

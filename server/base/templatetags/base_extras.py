@@ -1,7 +1,12 @@
 from importlib import import_module
 import logging
+import pprint
 from django import template
 from django.core.urlresolvers import reverse
+from django.utils.html import linebreaks, urlize
+from django.utils.safestring import mark_safe
+from pygments import lexers, highlight
+from pygments.formatters import HtmlFormatter
 from zentral.conf import settings
 
 register = template.Library()
@@ -69,3 +74,17 @@ def setup_dropdown(context):
     context["active"] = context.get("setup", False)
     context["section_list"] = SETUP_DROPDOWN
     return context
+
+
+@register.filter(is_safe=True, needs_autoescape=True)
+def prettydescription(value, autoescape=True):
+    """combine linebreaks and urlize"""
+    return mark_safe(linebreaks(urlize(value, nofollow=True, autoescape=autoescape)))
+
+
+@register.filter()
+def pythonprettyprint(val):
+    s = pprint.pformat(val)
+    lexer = lexers.get_lexer_by_name('python')
+    formatter = HtmlFormatter()
+    return mark_safe(highlight(s, lexer, formatter))

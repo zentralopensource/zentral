@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras probe_extras %}
+{% load base_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -22,7 +22,7 @@
     </tr>
     <tr><td>model</td><td>{{ object.get_model_display }}</td></tr>
     {% if object.description %}
-    <tr><td>description</td><td>{{ object.description|linebreaks }}</td></tr>
+    <tr><td>description</td><td>{{ object.description|prettydescription }}</td></tr>
     {% endif %}
     <tr><td>body</td><td>{{ object.body|pythonprettyprint }}</td></tr>
   </table>
