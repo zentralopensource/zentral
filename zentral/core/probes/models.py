@@ -15,30 +15,14 @@ class Feed(models.Model):
     name = models.TextField()
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now_add=True)
+    last_synced_at = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return self.name
 
     def get_absolute_url(self, anchor=None):
         return reverse("probes:feed", args=(self.pk,))
-
-
-class FeedImport(models.Model):
-    OK = 'OK'
-    DOWNLOAD_ERROR = 'DOWNLOAD_ERROR'
-    FEED_ERROR = 'FEED_ERROR'
-    STATUS_CHOICES = (
-        (OK, 'OK'),
-        (DOWNLOAD_ERROR, 'download error'),
-        (FEED_ERROR, 'feed error'),
-    )
-    feed = models.ForeignKey(Feed)
-    status = models.CharField(max_length=32, choices=STATUS_CHOICES)
-    new_probes = models.PositiveIntegerField(default=0)
-    updated_probes = models.PositiveIntegerField(default=0)
-    archived_probes = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class FeedProbe(models.Model):

@@ -1,13 +1,14 @@
 import logging
 from django import forms
 from django.core.urlresolvers import reverse, reverse_lazy
+from django.contrib import messages
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import DeleteView, FormView, UpdateView
 import requests
 from zentral.core.stores import frontend_store
-from .feeds import export_feed, sync_feed
+from .feeds import FeedError, export_feed, sync_feed
 from .forms import (CreateProbeForm, ProbeSearchForm,
                     InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet,
                     AddFeedForm, ImportFeedProbeForm)
@@ -568,7 +569,16 @@ class FeedView(DetailView):
 class SyncFeedView(View):
     def post(self, request, *args, **kwargs):
         feed = get_object_or_404(Feed, pk=int(kwargs["pk"]))
-        sync_feed(feed)
+        try:
+            operations = sync_feed(feed)
+        except FeedError as e:
+            messages.error(request, "Could not sync feed: {}".format(e.message))
+        else:
+            if operations:
+                msg = "Probes {}.".format(", ".join("{}: {}".format(l, v) for l, v in operations.items()))
+            else:
+                msg = "No changes."
+            messages.info(request, "Sync OK. {}".format(msg))
         return HttpResponseRedirect(feed.get_absolute_url())
 
 

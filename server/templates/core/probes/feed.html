@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load base_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -17,8 +18,12 @@
       <td>URL</td>
       <td>{{ feed.url|urlize }}</td>
     </tr>
+    {% if feed.description %}
+    <tr><td>description</td><td>{{ feed.description|prettydescription }}</td></tr>
+    {% endif %}
     <tr><td>created at</td><td>{{ feed.created_at }}</td></tr>
     <tr><td>updated at</td><td>{{ feed.updated_at }}</td></tr>
+    <tr><td>last synced at</td><td>{{ feed.last_synced_at }}</td></tr>
   </table>
   <div class="panel-footer">
     <form action="{% url 'probes:sync_feed' feed.id %}" method="POST" class="btn-group">{% csrf_token %}
