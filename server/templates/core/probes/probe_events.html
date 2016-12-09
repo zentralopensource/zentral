@@ -51,7 +51,7 @@
           {% endif %}
           <p>{{ event.metadata.created_at }}</p>
         </td>
-        <td><pre>{{ event.payload|pythonprettyprint }}</pre></td>
+        <td>{{ event.payload|pythonprettyprint }}</td>
       </tr>
       {% endwith %}
       {% endfor %}

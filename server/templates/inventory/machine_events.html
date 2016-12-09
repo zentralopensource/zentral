@@ -50,7 +50,7 @@
       <tr>
         <td>{{ event.event_type }}</td>
         <td>{{ event.metadata.created_at }}</td>
-        <td><pre>{{ event.payload|pythonprettyprint }}</pre></td>
+        <td>{{ event.payload|pythonprettyprint }}</td>
       </tr>
       {% endfor %}
     </tbody>
