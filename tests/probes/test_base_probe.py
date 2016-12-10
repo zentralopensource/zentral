@@ -210,16 +210,20 @@ class PayloadFilterBaseProbeTestCase(TestCase):
             "zo": ["zoval2", "zoval1"],
             "zo2": ["zo2val"]
         }
+        cls.payload_filter_data3 = {
+            "a.b.c": ["abc"]
+        }
         cls.probe_source = ProbeSource.objects.create(
             model="BaseProbe",
             name="base probe",
             body={"filters": {"payload": [cls.payload_filter_data,
-                                          cls.payload_filter_data2]}}
+                                          cls.payload_filter_data2,
+                                          cls.payload_filter_data3]}}
         )
         cls.probe = cls.probe_source.load()
 
     def test_payload_filters(self):
-        self.assertEqual(len(self.probe.payload_filters), 2)
+        self.assertEqual(len(self.probe.payload_filters), 3)
 
     def test_payload_filter_items(self):
         payload_filter = self.probe.payload_filters[0]
@@ -242,12 +246,24 @@ class PayloadFilterBaseProbeTestCase(TestCase):
             self.assertEqual(payload_filter.test_event_payload(payload),
                              result)
 
+    def test_dotted_payload_attribute(self):
+        payload_filter = self.probe.payload_filters[2]
+        for payload, result in (({"a": 1}, False),
+                                ({"a": {"b": {"d": "d"}}}, False),
+                                ({"a": {"b": {"c": "ab", "d": "d"}}}, False),
+                                ({"a": {"b": {"c": "abc", "d": "d"}}}, True),
+                                ):
+            self.assertEqual(payload_filter.test_event_payload(payload),
+                             result)
+
     def test_probe_test_event(self):
         for payload, result in (({}, False),
                                 ({"un": 1}, False),
                                 ({"yo": "yoval1", "yo2": ["yo2val"]}, True),
                                 ({"zo": "zoval1", "zo2": ["zo2val"]}, True),
                                 ({"yo": "yoval1", "zo2": ["zo2val"]}, False),
+                                ({"a": 1}, False),
+                                ({"a": {"b": {"c": "abc", "d": "d"}}}, True),
                                 ):
             event = BaseEvent(EventMetadata(machine_serial_number="YOZO",
                                             event_type=BaseEvent.event_type),

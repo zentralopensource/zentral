@@ -137,9 +137,14 @@ class PayloadFilter(object):
 
     def test_event_payload(self, payload):
         for payload_attribute, filter_value_set in self.items.items():
-            payload_value = payload.get(payload_attribute, None)
-            if not payload_value:
-                return False
+            payload_value = payload
+            for attr in payload_attribute.split("."):
+                if not isinstance(payload_value, dict):
+                    logger.warning("Wrong payload filter attribute %s", payload_attribute)
+                    return False
+                payload_value = payload_value.get(attr, None)
+                if not payload_value:
+                    return False
             if isinstance(payload_value, set):
                 payload_value_set = payload_value
             elif isinstance(payload_value, list):
