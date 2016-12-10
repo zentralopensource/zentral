@@ -50,7 +50,7 @@
     <tr>
       <td>{{ feed_probe.get_model_display }}</td>
       <td><a href="{% url 'probes:feed_probe' feed.id feed_probe.id %}">{{ feed_probe }}</a></td>
-      <td>{{ feed_probe.description }}</td>
+      <td>{{ feed_probe.description|prettydescription }}</td>
     </tr>
     {% endfor %}
   </tbody>

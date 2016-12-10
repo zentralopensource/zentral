@@ -89,7 +89,7 @@ class ProbeSource(models.Model):
     event_types = ArrayField(models.CharField(max_length=255), blank=True, editable=False)
 
     feed_probe = models.ForeignKey(FeedProbe, blank=True, null=True, editable=False, on_delete=models.SET_NULL)
-    feed_probe_updated_at = models.DateTimeField(blank=True, null=True)
+    feed_probe_last_synced_at = models.DateTimeField(blank=True, null=True)
     feed_probe_update_available = models.BooleanField(default=False)
 
     body = JSONField(editable=False)

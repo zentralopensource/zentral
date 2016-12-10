@@ -1,5 +1,6 @@
 from django import forms
 from django.db.models import Q
+from django.utils import timezone
 from django.utils.text import slugify
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.conf import PLATFORM_CHOICES, TYPE_CHOICES
@@ -225,6 +226,6 @@ class ImportFeedProbeForm(forms.Form):
             name=self.cleaned_data["probe_name"],
             description=feed_probe.description,
             feed_probe=feed_probe,
-            feed_probe_updated_at=feed_probe.updated_at,
+            feed_probe_last_synced_at=timezone.now(),
             body=feed_probe.body
         )
