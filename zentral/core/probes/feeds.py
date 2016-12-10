@@ -9,6 +9,7 @@ import requests
 from rest_framework import serializers
 from zentral.conf import settings
 from zentral.utils.dict import dict_diff
+from . import probe_classes
 from .models import Feed, FeedProbe
 
 logger = logging.getLogger("zentral.core.probes.feeds")
@@ -40,6 +41,13 @@ class FeedSerializer(serializers.Serializer):
     def iter_feed_probes(self):
         feed_id = self.validated_data["id"]
         for probe_id, probe_validated_data in self.validated_data["probes"].items():
+            model = probe_validated_data["model"]
+            probe_class = probe_classes.get(model)
+            if not probe_class:
+                raise FeedError("Probe {}: unknown model {}".format(probe_id, model))
+            probe_serializer = probe_class.serializer_class(data=probe_validated_data["body"])
+            if not probe_serializer.is_valid():
+                raise FeedError("Probe {}: invalid {} body".format(probe_id, model))
             yield "{}.{}".format(feed_id, probe_id), probe_validated_data
 
 
@@ -104,7 +112,8 @@ def sync_feed(feed):
     seen_keys = []
     created = updated = archived = removed = 0
     # created / updated
-    for feed_probe_key, feed_probe_data in feed_serializer.iter_feed_probes():
+    feed_probes = list(feed_serializer.iter_feed_probes())  # too trigger the FeedErrors before touching the DB
+    for feed_probe_key, feed_probe_data in feed_probes:
         seen_keys.append(feed_probe_key)
         feed_probe, fp_created = FeedProbe.objects.get_or_create(feed=feed, key=feed_probe_key,
                                                                  defaults=feed_probe_data)

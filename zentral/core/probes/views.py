@@ -597,7 +597,7 @@ class SyncFeedView(View):
         try:
             operations = sync_feed(feed)
         except FeedError as e:
-            messages.error(request, "Could not sync feed: {}".format(e.message))
+            messages.error(request, "Could not sync feed. {}".format(e.message))
         else:
             if operations:
                 msg = "Probes {}.".format(", ".join("{}: {}".format(l, v) for l, v in operations.items()))
