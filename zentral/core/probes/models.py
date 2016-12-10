@@ -19,6 +19,9 @@ class Feed(models.Model):
     updated_at = models.DateTimeField(auto_now_add=True)
     last_synced_at = models.DateTimeField(blank=True, null=True)
 
+    class Meta:
+        ordering = ('name',)
+
     def __str__(self):
         return self.name
 
@@ -39,7 +42,7 @@ class FeedProbe(models.Model):
 
     class Meta:
         unique_together = (('feed', 'key'),)
-        ordering = ('name',)
+        ordering = ('model', 'name')
 
     def __str__(self):
         return self.name
