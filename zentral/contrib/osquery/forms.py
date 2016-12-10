@@ -85,15 +85,30 @@ class PreferenceFileForm(forms.Form):
     type = forms.ChoiceField(label='Location',
                              choices=(('USERS', '/Users/%/Library/Preferences/'),
                                       ('GLOBAL', '/Library/Preferences/')))
+    description = forms.CharField(required=False,
+                                  widget=forms.Textarea(attrs={'rows': 3}))
     interval = forms.IntegerField(min_value=10,  # 10 seconds
                                   max_value=2678400,  # 31 days
                                   initial=3600)
 
+    def clean_value(self):
+        value = self.cleaned_data.get("value")
+        if not value:
+            return None
+        else:
+            return value
+
+    def get_item_d(self):
+        return {f: v for f, v in self.cleaned_data.items() if v is not None}
+
     @staticmethod
-    def get_initial(preference_file):
-        return {'rel_path': preference_file.rel_path,
-                'type': preference_file.type,
-                'interval': preference_file.interval}
+    def get_initial(query):
+        initial = {}
+        for attr in ("rel_path", "type", "description", "interval"):
+            value = getattr(query, attr, None)
+            if value is not None:
+                initial[attr] = value
+        return initial
 
 
 class KeyForm(forms.Form):
@@ -195,17 +210,26 @@ class FileChecksumForm(forms.Form):
     path = forms.CharField()
     sha256 = forms.CharField(validators=[validate_sha256],
                              help_text="The result of shasum -a 256 /path/to/file")
+    description = forms.CharField(required=False,
+                                  widget=forms.Textarea(attrs={'rows': 3}))
     interval = forms.IntegerField(min_value=10,  # 10 seconds
                                   max_value=2678400,  # 31 days
                                   initial=3600)
 
+    def clean_description(self):
+        description = self.cleaned_data.get("description")
+        if not description:
+            return None
+        else:
+            return description
+
     def get_item_d(self):
-        return self.cleaned_data
+        return {f: v for f, v in self.cleaned_data.items() if v is not None}
 
     @staticmethod
     def get_initial(file_checksum):
         initial = {}
-        for field in ("path", "sha256", "interval"):
+        for field in ("path", "sha256", "description", "interval"):
             val = getattr(file_checksum, field, None)
             if val:
                 initial[field] = val

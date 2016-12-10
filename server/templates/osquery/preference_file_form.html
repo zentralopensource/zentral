@@ -33,6 +33,7 @@
 <form method="POST" class="form">{% csrf_token %}
   {{ preference_file_form.type|bootstrap }}
   {{ preference_file_form.rel_path|bootstrap }}
+  {{ preference_file_form.description|bootstrap }}
   {{ preference_file_form.interval|bootstrap }}
 
   {{ key_form_set.management_form }}

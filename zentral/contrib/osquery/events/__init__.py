@@ -14,11 +14,13 @@ class OsqueryEvent(BaseEvent):
 class OsqueryEnrollmentEvent(OsqueryEvent):
     event_type = "osquery_enrollment"
 
+
 register_event_type(OsqueryEnrollmentEvent)
 
 
 class OsqueryRequestEvent(OsqueryEvent):
     event_type = "osquery_request"
+
 
 register_event_type(OsqueryRequestEvent)
 
@@ -44,17 +46,20 @@ class OsqueryResultEvent(OsqueryEvent):
                 pass
         return ctx
 
+
 register_event_type(OsqueryResultEvent)
 
 
 class OsqueryDistributedQueryResultEvent(OsqueryEvent):
     event_type = "osquery_distributed_query_result"
 
+
 register_event_type(OsqueryDistributedQueryResultEvent)
 
 
 class OsqueryStatusEvent(OsqueryEvent):
     event_type = "osquery_status"
+
 
 register_event_type(OsqueryStatusEvent)
 

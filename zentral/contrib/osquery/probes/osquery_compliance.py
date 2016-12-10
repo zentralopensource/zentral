@@ -51,12 +51,13 @@ class PreferenceFile(object):
         ('GLOBAL', '/Library/Preferences')
     )
 
-    def __init__(self, probe, type, rel_path, keys, interval=3600):
+    def __init__(self, probe, type, rel_path, keys, description=None, interval=3600):
         self.probe = probe
         self.type = type
         self.rel_path = rel_path
         self.keys = keys
         self.interval = interval
+        self.description = description
 
     def get_rel_paths(self):
         exact_match = '%' not in self.rel_path
@@ -127,14 +128,16 @@ class PreferenceFileSerializer(serializers.Serializer):
     keys = serializers.ListField(
         child=PreferenceFileKeySerializer()
     )
+    description = serializers.CharField(required=False)
     interval = serializers.IntegerField(min_value=10, max_value=2678400, default=3600)
 
 
 class FileChecksum(object):
-    def __init__(self, probe, path, sha256, interval=3600):
+    def __init__(self, probe, path, sha256, description=None, interval=3600):
         self.probe = probe
         self.path = path
         self.sha256 = sha256
+        self.description = description
         self.interval = interval
 
     def get_sql_fragment(self):
@@ -153,6 +156,7 @@ class FileChecksum(object):
 class FileChecksumSerializer(serializers.Serializer):
     path = serializers.CharField()
     sha256 = serializers.RegexField('^[a-f0-9]{64}\Z')
+    description = serializers.CharField(required=False)
     interval = serializers.IntegerField(min_value=10, max_value=2678400, default=3600)
 
 

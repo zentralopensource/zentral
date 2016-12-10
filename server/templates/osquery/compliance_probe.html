@@ -1,4 +1,5 @@
 {% extends 'core/probes/probe.html' %}
+{% load base_extras %}
 
 {% block probe_extra %}
 <a name="osquery_compliance"></a>
@@ -53,6 +54,9 @@
       {% endif %}
     </tr>
     {% endfor %}
+    {% if preference_file.description %}
+    <tr><td>description</td><td>{{ preference_file.description|prettydescription }}</td></tr>
+    {% endif %}
     <tr><td>interval</td><td>{{ preference_file.interval }}s</td></tr>
   </table>
   <div class="panel-footer">
@@ -84,6 +88,9 @@
   </div>
   <table class="table table-condensed probe-panel">
     <tr><td>sha256</td><td>{{ file_checksum.sha256 }}</td></tr>
+    {% if file_checksum.description %}
+    <tr><td>description</td><td>{{ file_checksum.description|prettydescription }}</td></tr>
+    {% endif %}
     <tr><td>interval</td><td>{{ file_checksum.interval }}s</td></tr>
   </table>
   <div class="panel-footer">
