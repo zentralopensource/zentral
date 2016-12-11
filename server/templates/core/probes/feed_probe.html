@@ -43,7 +43,7 @@
     <tr>
       <td><a href="{% url 'probes:probe' probe_source.pk %}">{{ probe_source.name }}</a></td>
       <td>
-        {% if probe.status == 'ACTIVE' %}
+        {% if probe_source.status == 'ACTIVE' %}
         <span class="label label-info">Active</span>
         {% else %}
         <span class="label label-danger">Inactive</span>
