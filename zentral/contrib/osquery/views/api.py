@@ -5,7 +5,7 @@ from django.core.exceptions import SuspiciousOperation
 from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import JSONPostAPIView, verify_secret, APIAuthError
-from zentral.contrib.osquery.conf import build_osquery_conf, DEFAULT_ZENTRAL_INVENTORY_QUERY
+from zentral.contrib.osquery.conf import build_osquery_conf, DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME
 from zentral.contrib.osquery.events import (post_distributed_query_result, post_enrollment_event,
                                             post_events_from_osquery_log, post_request_event)
 from zentral.contrib.osquery.models import enroll, DistributedQueryProbeMachine
@@ -27,7 +27,8 @@ class EnrollView(JSONPostAPIView):
 
     def do_post(self, data):
         ms, action = enroll(self.machine_serial_number,
-                            self.business_unit)
+                            self.business_unit,
+                            data.get("host_identifier"))
         post_enrollment_event(ms.machine.serial_number,
                               self.user_agent, self.ip,
                               {'action': action})
@@ -136,7 +137,7 @@ class LogView(BaseNodeView):
             # TODO verify. New since osquery 1.6.4 ?
             data_data = [json.loads(data_data)]
         for r in data_data:
-            if r.get('name', None) == DEFAULT_ZENTRAL_INVENTORY_QUERY:
+            if r.get('name', None) == DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME:
                 inventory_results.append((parser.parse(r['calendarTime']), r['snapshot']))
             else:
                 other_results.append(r)

@@ -2,7 +2,7 @@ import json
 from django.core.urlresolvers import reverse
 from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import MachineSnapshot
-from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY
+from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import make_secret
 
@@ -60,6 +60,24 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(machine_test_qs.count(), 1)
         machine = machine_test_qs.all()[0]
         self.assertEqual(machine.reference, json_response["node_key"])
+
+    def test_enroll_with_host_identifier_ok(self):
+        machine_serial_number = "210923091238731290"
+        machine_test_qs = MachineSnapshot.objects.filter(source__module="zentral.contrib.osquery",
+                                                         machine__serial_number=machine_serial_number)
+        # no machine
+        self.assertEqual(machine_test_qs.count(), 0)
+        # enroll machine
+        secret = "{}$SERIAL${}".format(make_secret("zentral.contrib.osquery"),
+                                       machine_serial_number)
+        response = self.post_as_json("enroll", {"enroll_secret": secret,
+                                                "host_identifier": "godzilla"})
+        json_response = response.json()
+        self.assertCountEqual(["node_key"], json_response.keys())
+        self.assertEqual(machine_test_qs.count(), 1)
+        machine = machine_test_qs.all()[0]
+        self.assertEqual(machine.reference, json_response["node_key"])
+        self.assertEqual(machine.system_info.computer_name, "godzilla")
 
     def test_config_405(self):
         response = self.client.get(reverse("osquery:enroll"))
@@ -187,7 +205,7 @@ class OsqueryAPIViewsTestCase(TestCase):
             "node_key": node_key,
             "log_type": "result",
             "data": [
-                {"name": DEFAULT_ZENTRAL_INVENTORY_QUERY,
+                {"name": DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME,
                  "calendarTime": 'Thu Dec  1 15:22:17 2016 UTC',
                  "snapshot": snapshot}
             ]

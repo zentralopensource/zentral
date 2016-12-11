@@ -4,7 +4,7 @@ from zentral.core.events import event_types
 from zentral.core.events.base import EventMetadata
 from zentral.core.probes.conf import all_probes
 from zentral.core.probes.models import ProbeSource
-from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY, build_osquery_conf
+from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, build_osquery_conf
 from zentral.contrib.osquery.probes import OsqueryFIMProbe
 from tests.inventory.utils import MockMetaMachine
 
@@ -158,7 +158,7 @@ class OsqueryFIMProbeTestCase(TestCase):
         self.assertCountEqual(["schedule", "file_accesses", "file_paths"],
                               config.keys())  # no packs
         schedule = config["schedule"]
-        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY,
+        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME,
                                self.query_1_key,
                                self.query_2_key],
                               schedule.keys())
@@ -178,7 +178,7 @@ class OsqueryFIMProbeTestCase(TestCase):
         self.assertCountEqual(["schedule", "file_accesses", "file_paths"],
                               config.keys())  # no packs
         schedule = config["schedule"]
-        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY,
+        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME,
                                self.query_1_key,
                                self.query_2_key,
                                self.query_mbu_key],

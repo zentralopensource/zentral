@@ -8,13 +8,15 @@ from zentral.core.probes.conf import ProbeList
 MAX_DISTRIBUTED_QUERY_AGE = timedelta(days=1)
 
 
-def enroll(serial_number, business_unit):
+def enroll(serial_number, business_unit, host_identifier):
     tree = {'source': {'module': 'zentral.contrib.osquery',
                        'name': 'OSQuery'},
             'reference': get_random_string(64),
             'machine': {'serial_number': serial_number}}
     if business_unit:
         tree['business_unit'] = business_unit.serialize()
+    if host_identifier:
+        tree["system_info"] = {"computer_name": host_identifier}
     ms, _ = MachineSnapshot.objects.commit(tree)
     # TODO: check, but _ must be always true (because of the random reference)
     try:

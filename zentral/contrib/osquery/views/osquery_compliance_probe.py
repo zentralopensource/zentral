@@ -48,7 +48,7 @@ class AddComplianceProbePreferenceFileView(TemplateView):
         return ctx
 
     def forms_valid(self):
-        preference_file = self.preference_file_form.cleaned_data
+        preference_file = self.preference_file_form.get_item_d()
         preference_file['keys'] = self.key_form_set.get_keys()
 
         def func(probe_d):
@@ -96,7 +96,7 @@ class UpdateComplianceProbePreferenceFileView(TemplateView):
         return ctx
 
     def forms_valid(self):
-        preference_file = self.preference_file_form.cleaned_data
+        preference_file = self.preference_file_form.get_item_d()
         preference_file['keys'] = self.key_form_set.get_keys()
 
         def func(probe_d):

@@ -5,7 +5,7 @@ from zentral.core.events import event_types
 from zentral.core.events.base import EventMetadata
 from zentral.core.probes.conf import all_probes
 from zentral.core.probes.models import ProbeSource
-from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY, build_osquery_conf
+from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, build_osquery_conf
 from zentral.contrib.osquery.probes import OsqueryComplianceProbe
 from tests.inventory.utils import MockMetaMachine
 
@@ -222,7 +222,7 @@ class OsqueryComplianceProbeTestCase(TestCase):
         config = build_osquery_conf(default_machine)
         self.assertCountEqual(["schedule"], config.keys())  # no file_paths, file_accesses or packs
         schedule = config["schedule"]
-        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY,
+        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME,
                                self.query_pfu_key, self.query_pfg_key,
                                self.query_fc_key],
                               schedule.keys())
@@ -232,7 +232,7 @@ class OsqueryComplianceProbeTestCase(TestCase):
         config = build_osquery_conf(tag_machine)
         self.assertCountEqual(["schedule"], config.keys())  # no file_paths, file_accesses or packs
         schedule = config["schedule"]
-        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY,
+        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME,
                                self.query_pfu_key, self.query_pfg_key,
                                self.query_fc_key, self.query_tag_key],
                               schedule.keys())

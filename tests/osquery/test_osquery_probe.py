@@ -4,7 +4,7 @@ from zentral.core.events import event_types
 from zentral.core.events.base import EventMetadata
 from zentral.core.probes.conf import all_probes
 from zentral.core.probes.models import ProbeSource
-from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY, build_osquery_conf
+from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, build_osquery_conf
 from zentral.contrib.osquery.probes import OsqueryProbe
 from tests.inventory.utils import MockMetaMachine
 
@@ -175,7 +175,7 @@ class OsqueryProbeTestCase(TestCase):
         # schedule with query 1
         schedule = config["schedule"]
         self.assertIsInstance(schedule, dict)
-        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY, self.query_1_key], schedule.keys())
+        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, self.query_1_key], schedule.keys())
         # 1 pack with query 2
         packs = config["packs"]
         self.assertIsInstance(packs, dict)
@@ -193,7 +193,7 @@ class OsqueryProbeTestCase(TestCase):
         # schedule with query 1
         schedule = config["schedule"]
         self.assertIsInstance(schedule, dict)
-        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY, self.query_1_key], schedule.keys())
+        self.assertCountEqual([DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, self.query_1_key], schedule.keys())
         # 1 pack with query 2 and query windows
         packs = config["packs"]
         self.assertIsInstance(packs, dict)

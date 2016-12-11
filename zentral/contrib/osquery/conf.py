@@ -3,23 +3,26 @@ from zentral.core.probes.conf import ProbeList
 
 logger = logging.getLogger('zentral.contrib.osquery.conf')
 
-DEFAULT_ZENTRAL_INVENTORY_QUERY = "__default_zentral_inventory_query__"
+DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME = "__default_zentral_inventory_query__"
+DEFAULT_ZENTRAL_INVENTORY_QUERY = (
+    "SELECT 'os_version' as table_name, name, major, minor, "
+    "patch, build from os_version;"
+    "SELECT 'system_info' as table_name, "
+    "computer_name, hostname, hardware_model, hardware_serial, "
+    "cpu_type, cpu_subtype, cpu_brand, cpu_physical_cores, "
+    "cpu_logical_cores, physical_memory from system_info;"
+    "SELECT 'network_interface' as table_name, "
+    "id.interface, id.mac, "
+    "ia.address, ia.mask, ia.broadcast "
+    "from interface_details as id, interface_addresses as ia "
+    "where ia.interface = id.interface and ia.broadcast > '';"
+)
 
 
 def build_osquery_conf(machine):
     schedule = {
-        DEFAULT_ZENTRAL_INVENTORY_QUERY: {
-            'query': "SELECT 'os_version' as table_name, name, major, minor, "
-                     "patch, build from os_version;"
-                     "SELECT 'system_info' as table_name, "
-                     "computer_name, hostname, hardware_model, hardware_serial, "
-                     "cpu_type, cpu_subtype, cpu_brand, cpu_physical_cores, "
-                     "cpu_logical_cores, physical_memory from system_info;"
-                     "SELECT 'network_interface' as table_name, "
-                     "id.interface, id.mac, "
-                     "ia.address, ia.mask, ia.broadcast "
-                     "from interface_details as id, interface_addresses as ia "
-                     "where ia.interface = id.interface and ia.broadcast > '';",
+        DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: {
+            'query': DEFAULT_ZENTRAL_INVENTORY_QUERY,
             'snapshot': True,
             'interval': 600
         }

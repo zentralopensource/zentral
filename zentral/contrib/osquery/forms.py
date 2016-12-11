@@ -91,12 +91,12 @@ class PreferenceFileForm(forms.Form):
                                   max_value=2678400,  # 31 days
                                   initial=3600)
 
-    def clean_value(self):
-        value = self.cleaned_data.get("value")
-        if not value:
+    def clean_description(self):
+        description = self.cleaned_data.get("description")
+        if not description:
             return None
         else:
-            return value
+            return description
 
     def get_item_d(self):
         return {f: v for f, v in self.cleaned_data.items() if v is not None}
