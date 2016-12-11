@@ -2,7 +2,9 @@ import json
 from django.core.urlresolvers import reverse
 from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import MachineSnapshot
-from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, DEFAULT_ZENTRAL_INVENTORY_QUERY
+from zentral.contrib.osquery.conf import (DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME,
+                                          DEFAULT_ZENTRAL_INVENTORY_QUERY,
+                                          OSX_APP_INSTANCE_QUERY)
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import make_secret
 
@@ -133,6 +135,25 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(response["Content-Type"], "application/json")
         json_response = response.json()
         self.assertIn("schedule", json_response)
+        schedule = json_response["schedule"]
+        self.assertIn(DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, schedule)
+        self.assertEqual(schedule[DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME]["query"],
+                         DEFAULT_ZENTRAL_INVENTORY_QUERY)
+
+    def test_osx_app_instance_schedule(self):
+        node_key = self.enroll_machine("0123456789")
+        self.post_default_inventory_query_snapshot(node_key)
+        # machine platform = MACOS now
+        response = self.post_as_json("config", {"node_key": node_key})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        json_response = response.json()
+        self.assertIn("schedule", json_response)
+        schedule = json_response["schedule"]
+        self.assertIn(DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, schedule)
+        self.assertEqual(schedule[DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME]["query"],
+                         "{}{}".format(DEFAULT_ZENTRAL_INVENTORY_QUERY,
+                                       OSX_APP_INSTANCE_QUERY))
 
     def test_distributed_read_405(self):
         response = self.client.get(reverse("osquery:distributed_read"))
@@ -248,7 +269,15 @@ class OsqueryAPIViewsTestCase(TestCase):
                 "mac": "38:c9:87:21:b1:32",
                 "mask": "255.255.255.0",
                 "table_name": "network_interface"
-            }
+            },
+            {
+                "bundle_id": "com.agilebits.onepassword4-updater",
+                "bundle_name": "1Password Updater",
+                "bundle_path": "/Applications/1Password 6.app/Contents/Helpers/1Password Updater.app",
+                "bundle_version": "652003",
+                "bundle_version_str": "6.5.2",
+                "table_name": "apps"
+            },
         ]
         post_data = {
             "node_key": node_key,
@@ -272,6 +301,9 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(MachineSnapshot.objects.filter(reference=node_key).count(), 2)
         self.assertEqual(MachineSnapshot.objects.filter(reference=node_key,
                                                         system_info__computer_name="godzilla").count(), 1)
+        self.assertEqual(MachineSnapshot.objects.filter(
+            reference=node_key,
+            osx_app_instances__app__bundle_name="1Password Updater").count(), 1)
 
     def test_log_status(self):
         node_key = self.enroll_machine("0123456789")

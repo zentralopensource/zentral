@@ -75,6 +75,11 @@ class BaseNodeView(JSONPostAPIView):
                 tree['system_info'] = t
             elif table_name == 'network_interface':
                 tree.setdefault('network_interfaces', []).append(t)
+            elif table_name == 'apps':
+                bundle_path = t.pop('bundle_path')
+                osx_app_instance = {'app': t,
+                                    'bundle_path': bundle_path}
+                tree.setdefault('osx_app_instances', []).append(osx_app_instance)
         try:
             MachineSnapshot.objects.commit(tree)
         except:

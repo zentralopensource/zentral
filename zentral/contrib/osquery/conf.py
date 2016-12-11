@@ -1,28 +1,40 @@
 import logging
 from zentral.core.probes.conf import ProbeList
+from zentral.contrib.inventory.conf import MACOS
 
 logger = logging.getLogger('zentral.contrib.osquery.conf')
 
 DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME = "__default_zentral_inventory_query__"
 DEFAULT_ZENTRAL_INVENTORY_QUERY = (
-    "SELECT 'os_version' as table_name, name, major, minor, "
+    "select 'os_version' as table_name, name, major, minor, "
     "patch, build from os_version;"
-    "SELECT 'system_info' as table_name, "
+    "select 'system_info' as table_name, "
     "computer_name, hostname, hardware_model, hardware_serial, "
     "cpu_type, cpu_subtype, cpu_brand, cpu_physical_cores, "
     "cpu_logical_cores, physical_memory from system_info;"
-    "SELECT 'network_interface' as table_name, "
+    "select 'network_interface' as table_name, "
     "id.interface, id.mac, "
     "ia.address, ia.mask, ia.broadcast "
     "from interface_details as id, interface_addresses as ia "
     "where ia.interface = id.interface and ia.broadcast > '';"
 )
+OSX_APP_INSTANCE_QUERY = (
+    "select 'apps' as table_name, "
+    "bundle_identifier as bundle_id, bundle_name, "
+    "bundle_version, bundle_short_version as bundle_version_str, "
+    "path as bundle_path "
+    "from apps;"
+)
 
 
 def build_osquery_conf(machine):
+    inventory_query = DEFAULT_ZENTRAL_INVENTORY_QUERY
+    print("MACHINE PLATFORM", machine, machine.platform)
+    if machine.platform == MACOS:
+        inventory_query = "{}{}".format(inventory_query, OSX_APP_INSTANCE_QUERY)
     schedule = {
         DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: {
-            'query': DEFAULT_ZENTRAL_INVENTORY_QUERY,
+            'query': inventory_query,
             'snapshot': True,
             'interval': 600
         }
