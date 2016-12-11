@@ -2,9 +2,36 @@ import json
 from django.core.urlresolvers import reverse
 from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import MachineSnapshot
-from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME
+from zentral.contrib.osquery.conf import DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, DEFAULT_ZENTRAL_INVENTORY_QUERY
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import make_secret
+
+
+DEFAULT_ZENTRAL_INVENTORY_QUERY_SNAPSHOT = [
+    {'build': '15D21',
+     'major': '10',
+     'minor': '11',
+     'name': 'Mac OS X',
+     'patch': '3',
+     'table_name': 'os_version'},
+    {'computer_name': 'godzilla',
+     'cpu_brand': 'Intel(R) Core(TM)2 Duo CPU T9600 @2.80GHz',
+     'cpu_logical_cores': '2',
+     'cpu_physical_cores': '2',
+     'cpu_subtype': 'Intel 80486',
+     'cpu_type': 'i486',
+     'hardware_model': 'MacBookPro5,1',
+     'hardware_serial': '0123456789',
+     'hostname': 'godzilla.box',
+     'physical_memory': '8589934592',
+     'table_name': 'system_info'},
+    {'address': '192.168.1.123',
+     'broadcast': '192.168.1.255',
+     'interface': 'en1',
+     'mac': '00:23:ac:a8:49:a9',
+     'mask': '255.255.255.0',
+     'table_name': 'network_interface'}
+]
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -112,15 +139,29 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 405)
         self.assertCountEqual(["POST", "OPTIONS"], (m.strip() for m in response["Allow"].split(",")))
 
-    def test_distributed_read_no_queries(self):
+    def test_distributed_read_default_inventory_query(self):
         node_key = self.enroll_machine("0123456789")
         response = self.post_as_json("distributed_read", {"node_key": node_key})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
         json_response = response.json()
-        self.assertEqual(json_response, {"queries": {}})
+        self.assertEqual(json_response,
+                         {"queries": {DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: DEFAULT_ZENTRAL_INVENTORY_QUERY}})
 
-    def test_distributed_read_one_query(self):
+    def post_default_inventory_query_snapshot(self, node_key):
+        self.post_as_json("distributed_write",
+                          {"node_key": node_key,
+                           "queries": {
+                               DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: DEFAULT_ZENTRAL_INVENTORY_QUERY_SNAPSHOT,
+                            }})
+
+    def test_default_inventory_query_snapshot(self):
+        node_key = self.enroll_machine("0123456789")
+        self.post_default_inventory_query_snapshot(node_key)
+        ms = MachineSnapshot.objects.current().get(machine__serial_number="0123456789")
+        self.assertEqual(ms.os_version.build, DEFAULT_ZENTRAL_INVENTORY_QUERY_SNAPSHOT[0]["build"])
+
+    def test_distributed_read_one_query_plus_default_inventory_query(self):
         node_key = self.enroll_machine("0123456789")
         # one distributed query probe
         dq = "select * from users;"
@@ -135,8 +176,16 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
         json_response = response.json()
-        self.assertEqual(json_response, {"queries": {"q_{}".format(probe_source.pk): dq}})
-        # 2nd distributed read empty
+        self.assertEqual(json_response,
+                         {
+                            "queries": {
+                                DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: DEFAULT_ZENTRAL_INVENTORY_QUERY,
+                                "q_{}".format(probe_source.pk): dq
+                            }
+                         })
+        # post default inventory snapshot.
+        self.post_default_inventory_query_snapshot(node_key)
+        # 2nd distributed read empty (snapshot done and no other distributed queries available)
         response = self.post_as_json("distributed_read", {"node_key": node_key})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
@@ -206,7 +255,7 @@ class OsqueryAPIViewsTestCase(TestCase):
             "log_type": "result",
             "data": [
                 {"name": DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME,
-                 "calendarTime": 'Thu Dec  1 15:22:17 2016 UTC',
+                 "unixTime": '1480605737',
                  "snapshot": snapshot}
             ]
         }
