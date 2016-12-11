@@ -29,7 +29,6 @@ OSX_APP_INSTANCE_QUERY = (
 
 def build_osquery_conf(machine):
     inventory_query = DEFAULT_ZENTRAL_INVENTORY_QUERY
-    print("MACHINE PLATFORM", machine, machine.platform)
     if machine.platform == MACOS:
         inventory_query = "{}{}".format(inventory_query, OSX_APP_INSTANCE_QUERY)
     schedule = {
