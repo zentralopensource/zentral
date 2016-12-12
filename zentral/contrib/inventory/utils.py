@@ -1,6 +1,12 @@
+import logging
 from django.db import connection
 from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
                                generate_latest, CONTENT_TYPE_LATEST as prometheus_metrics_content_type)
+from zentral.contrib.inventory.models import MachineSnapshotCommit
+from zentral.contrib.inventory.events import post_inventory_events
+from zentral.utils.json import log_data
+
+logger = logging.getLogger("zentral.contrib.inventory.utils")
 
 
 def osx_app_count():
@@ -8,11 +14,11 @@ def osx_app_count():
     select a.bundle_name as name, a.bundle_version_str as version_str,
     s.id as source_id, s.module as source_module, foo.count
     from (
-    select ai.app_id, ms.source_id, count(*) as count
+    select ai.app_id, cms.source_id, count(*) as count
     from inventory_osxappinstance as ai
     join inventory_machinesnapshot_osx_app_instances as msai on (msai.osxappinstance_id = ai.id)
-    join inventory_machinesnapshot as ms on (ms.id = msai.machinesnapshot_id and ms.mt_next_id is null)
-    group by ai.app_id, ms.source_id
+    join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = msai.machinesnapshot_id)
+    group by ai.app_id, cms.source_id
     ) as foo
     join inventory_osxapp as a on (foo.app_id = a.id)
     join inventory_source as s on (foo.source_id = s.id)
@@ -35,8 +41,8 @@ def os_version_count():
     count(*) as count
     from inventory_osversion as o
     join inventory_machinesnapshot as ms on (ms.os_version_id = o.id)
-    join inventory_source as s on (ms.source_id = s.id)
-    where ms.mt_next_id is null
+    join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)
+    join inventory_source as s on (cms.source_id = s.id)
     group by o.name, o.major, o.minor, o.patch, o.build, s.id, s.module
     """
     cursor = connection.cursor()
@@ -66,3 +72,59 @@ def get_prometheus_inventory_metrics():
         count = r.pop('count')
         g.labels(**r).set(count)
     return generate_latest(registry)
+
+
+def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
+    source = machine_snapshot_commit.source.serialize()
+    diff = machine_snapshot_commit.update_diff()
+    if diff is None:
+        return [('inventory_machine_added',
+                {'source': source,
+                 'machine_snapshot': machine_snapshot_commit.machine_snapshot.serialize()})]
+    events = []
+    for m2m_attr, event_type in (('links', 'inventory_link_update'),
+                                 ('network_interfaces', 'inventory_network_interface_update'),
+                                 ('osx_app_instances', 'inventory_osx_app_instance_update'),
+                                 ('deb_packages', 'inventory_deb_package_update'),
+                                 ('groups', 'inventory_group_update')):
+        m2m_diff = diff.get(m2m_attr, {})
+        for action in ['added', 'removed']:
+            for obj in m2m_diff.get(action, []):
+                obj['action'] = action
+                if 'source' not in obj:
+                    obj['source'] = source
+                events.append((event_type, obj))
+    for fk_attr in ('reference',
+                    'machine',
+                    'business_unit',
+                    'os_version',
+                    'system_info',
+                    'teamviewer'):
+        event_type = 'inventory_{}_update'.format(fk_attr)
+        fk_diff = diff.get(fk_attr, {})
+        for action in ['added', 'removed']:
+            obj = fk_diff.get(action, None)
+            if obj:
+                if isinstance(obj, dict):
+                    event = obj
+                    if 'source' not in obj:
+                        event['source'] = source
+                else:
+                    event = {'source': source,
+                             fk_attr: obj}
+                event['action'] = action
+                events.append((event_type, event))
+    return events
+
+
+def commit_machine_snapshot_and_trigger_events(tree):
+    try:
+        machine_snapshot_commit, machine_snapshot = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+    except:
+        logger.exception("Could not commit machine snapshot")
+        log_data(tree, "/tmp", "snapshot_errors")
+    else:
+        if machine_snapshot_commit:
+            post_inventory_events(machine_snapshot_commit.serial_number,
+                                  inventory_events_from_machine_snapshot_commit(machine_snapshot_commit))
+        return machine_snapshot

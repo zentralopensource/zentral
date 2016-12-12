@@ -4,7 +4,7 @@ from .base import BaseInventory
 logger = logging.getLogger('zentral.contrib.inventory.backends.dummy')
 
 DUMMY_MACHINES = [
-    {'machine': {'serial_number': '0123456789'},
+    {'serial_number': '0123456789',
      'groups': [{'reference': 'dummy_group_1',
                  'name': 'Dummy Group 1'}],
      'os_version': {'name': 'OSX',
@@ -19,7 +19,7 @@ DUMMY_MACHINES = [
                      'physical_memory': 8 * 2**30},
      'osx_app_instances': [{'app': {'bundle_name': 'Dummy.app', 'bundle_version_str': '1.0'}}],
      },
-    {'machine': {'serial_number': '9876543210'},
+    {'serial_number': '9876543210',
      'groups': [{'reference': 'dummy_group_2',
                  'name': 'Dummy Group 2'}],
      'os_version': {'name': 'OSX',

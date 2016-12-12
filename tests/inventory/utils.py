@@ -5,3 +5,4 @@ class MockMetaMachine(object):
         self.platform = platform
         self.type = type
         self.serial_number = serial_number
+        self.has_deb_packages = platform == "LINUX"

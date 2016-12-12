@@ -171,9 +171,8 @@ class MacOSAppSearchForm(forms.Form):
                  "FROM inventory_osxapp AS a "
                  "JOIN inventory_osxappinstance AS i ON (i.app_id = a.id) "
                  "JOIN inventory_machinesnapshot_osx_app_instances AS si ON (si.osxappinstance_id = i.id) "
-                 "JOIN inventory_machinesnapshot AS s ON (si.machinesnapshot_id = s.id) "
-                 "JOIN inventory_source AS src ON (s.source_id = src.id) "
-                 "WHERE s.mt_next_id IS NULL and s.archived_at IS NULL")
+                 "JOIN inventory_currentmachinesnapshot AS cms ON (si.machinesnapshot_id = cms.machine_snapshot_id) "
+                 "JOIN inventory_source AS src ON (cms.source_id = src.id)")
         # bundle name
         bundle_name = self.cleaned_data['bundle_name']
         if bundle_name:

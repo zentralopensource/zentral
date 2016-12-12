@@ -35,6 +35,15 @@ DEFAULT_ZENTRAL_INVENTORY_QUERY_SNAPSHOT = [
      'table_name': 'network_interface'}
 ]
 
+OSX_APP_INSTANCE = {
+    "bundle_id": "com.agilebits.onepassword4-updater",
+    "bundle_name": "1Password Updater",
+    "bundle_path": "/Applications/1Password 6.app/Contents/Helpers/1Password Updater.app",
+    "bundle_version": "652003",
+    "bundle_version_str": "6.5.2",
+    "table_name": "apps"
+}
+
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class OsqueryAPIViewsTestCase(TestCase):
@@ -77,7 +86,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     def test_enroll_ok(self):
         machine_serial_number = "210923091238731290"
         machine_test_qs = MachineSnapshot.objects.filter(source__module="zentral.contrib.osquery",
-                                                         machine__serial_number=machine_serial_number)
+                                                         serial_number=machine_serial_number)
         # no machine
         self.assertEqual(machine_test_qs.count(), 0)
         # enroll machine
@@ -93,7 +102,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     def test_enroll_with_host_identifier_ok(self):
         machine_serial_number = "210923091238731290"
         machine_test_qs = MachineSnapshot.objects.filter(source__module="zentral.contrib.osquery",
-                                                         machine__serial_number=machine_serial_number)
+                                                         serial_number=machine_serial_number)
         # no machine
         self.assertEqual(machine_test_qs.count(), 0)
         # enroll machine
@@ -169,17 +178,20 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(json_response,
                          {"queries": {DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: DEFAULT_ZENTRAL_INVENTORY_QUERY}})
 
-    def post_default_inventory_query_snapshot(self, node_key):
+    def post_default_inventory_query_snapshot(self, node_key, with_app=False):
+        snapshot = list(DEFAULT_ZENTRAL_INVENTORY_QUERY_SNAPSHOT)
+        if with_app:
+            snapshot.append(OSX_APP_INSTANCE)
         self.post_as_json("distributed_write",
                           {"node_key": node_key,
                            "queries": {
-                               DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: DEFAULT_ZENTRAL_INVENTORY_QUERY_SNAPSHOT,
+                               DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: snapshot,
                             }})
 
     def test_default_inventory_query_snapshot(self):
         node_key = self.enroll_machine("0123456789")
         self.post_default_inventory_query_snapshot(node_key)
-        ms = MachineSnapshot.objects.current().get(machine__serial_number="0123456789")
+        ms = MachineSnapshot.objects.current().get(serial_number="0123456789")
         self.assertEqual(ms.os_version.build, DEFAULT_ZENTRAL_INVENTORY_QUERY_SNAPSHOT[0]["build"])
 
     def test_distributed_read_one_query_plus_default_inventory_query(self):
@@ -206,7 +218,23 @@ class OsqueryAPIViewsTestCase(TestCase):
                          })
         # post default inventory snapshot.
         self.post_default_inventory_query_snapshot(node_key)
-        # 2nd distributed read empty (snapshot done and no other distributed queries available)
+        # 2nd distributed read still has the inventory query
+        # but with the apps now that we know what kind of machine it is
+        response = self.post_as_json("distributed_read", {"node_key": node_key})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        json_response = response.json()
+        inventory_query = "{}{}".format(DEFAULT_ZENTRAL_INVENTORY_QUERY,
+                                        OSX_APP_INSTANCE_QUERY)
+        self.assertEqual(json_response,
+                         {
+                            "queries": {
+                                DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: inventory_query,
+                            }
+                         })
+        # post default inventory snapshot with one app
+        self.post_default_inventory_query_snapshot(node_key, with_app=True)
+        # 3rd distributed read empty (2 snapshots done and no other distributed queries available)
         response = self.post_as_json("distributed_read", {"node_key": node_key})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
@@ -270,14 +298,7 @@ class OsqueryAPIViewsTestCase(TestCase):
                 "mask": "255.255.255.0",
                 "table_name": "network_interface"
             },
-            {
-                "bundle_id": "com.agilebits.onepassword4-updater",
-                "bundle_name": "1Password Updater",
-                "bundle_path": "/Applications/1Password 6.app/Contents/Helpers/1Password Updater.app",
-                "bundle_version": "652003",
-                "bundle_version_str": "6.5.2",
-                "table_name": "apps"
-            },
+            OSX_APP_INSTANCE,
         ]
         post_data = {
             "node_key": node_key,

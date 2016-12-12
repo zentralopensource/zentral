@@ -73,12 +73,11 @@ class MachineListView(generic.TemplateView):
                                     "  on (mbut.meta_business_unit_id = bu.meta_business_unit_id) "
                                     "  where mbut.tag_id=%(tag_id)s))")
                 query_args['tag_id'] = tag
-        query = ("select m.serial_number as serial_number, max(si.computer_name) as computer_name "
-                 "from inventory_machinesnapshot  as ms "
-                 "join inventory_machine as m on (m.id = ms.machine_id) "
+        query = ("select ms.serial_number as serial_number, max(si.computer_name) as computer_name "
+                 "from inventory_machinesnapshot as ms "
                  "left join inventory_systeminfo as si on (si.id = ms.system_info_id) "
                  "{} "
-                 "where ms.mt_next_id is null and ms.archived_at is null {} "
+                 "where ms.id in (select machine_snapshot_id from inventory_currentmachinesnapshot) {} "
                  "group by serial_number "
                  "order by computer_name;")
         query = query.format(" ".join(extra_joins), " ".join(extra_wheres))
@@ -104,8 +103,8 @@ class MachineListView(generic.TemplateView):
         serial_number_page = self._get_serial_number_page()
         ms_dict = {}
         for ms in (MachineSnapshot.objects.current()
-                   .filter(machine__serial_number__in=[msn for msn in serial_number_page])):
-            ms_dict.setdefault(ms.machine.serial_number, []).append(ms)
+                   .filter(serial_number__in=[msn for msn in serial_number_page])):
+            ms_dict.setdefault(ms.serial_number, []).append(ms)
         context['object_list'] = [MetaMachine(msn, ms_dict[msn]) for msn in serial_number_page]
         # pagination
         context['total_objects'] = serial_number_page.paginator.count

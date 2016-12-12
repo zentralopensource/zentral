@@ -145,14 +145,14 @@ class SantaProbeTestCase(TestCase):
         config = build_santa_conf(default_machine)
         self.assertEqual(len(config["rules"]), 4)
         self.assertEqual(frozenrules(config["rules"]),
-                         frozenrules(self.blacklist_rules
-                                     + self.whitelist_rules))
+                         frozenrules(self.blacklist_rules +
+                                     self.whitelist_rules))
 
         # tablet has all the rules
         tablet = MockMetaMachine([], [], None, "TABLET")
         config = build_santa_conf(tablet)
         self.assertEqual(len(config["rules"]), 6)
         self.assertEqual(frozenrules(config["rules"]),
-                         frozenrules(self.blacklist_rules
-                                     + self.whitelist_rules
-                                     + self.tablet_rules))
+                         frozenrules(self.blacklist_rules +
+                                     self.whitelist_rules +
+                                     self.tablet_rules))

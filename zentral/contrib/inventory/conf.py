@@ -87,3 +87,14 @@ def update_ms_tree_type(tree):
         cpu_brand = system_info_t.get("cpu_brand", None)
         if cpu_brand and "xeon" in cpu_brand.lower():
             tree["type"] = SERVER
+
+
+def has_deb_packages(machine_snapshot):
+    os_version = machine_snapshot.os_version
+    if not os_version:
+        return False
+    os_name = os_version.name
+    if not os_name:
+        return False
+    os_name = os_name.lower()
+    return "ubuntu" in os_name or "debian" in os_name

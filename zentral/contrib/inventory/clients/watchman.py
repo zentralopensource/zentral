@@ -119,7 +119,7 @@ class InventoryClient(BaseInventory):
             # serial number, reference
             ct = {'reference': str(machine_id),
                   'links': self._machine_links_from_id(machine_id),
-                  'machine': {'serial_number': serial_number}}
+                  'serial_number': serial_number}
 
             # the unique group is a business unit in zentral
             gid = c['group']

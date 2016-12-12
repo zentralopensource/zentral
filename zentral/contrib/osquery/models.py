@@ -1,32 +1,40 @@
+import logging
 from datetime import timedelta
 from django.db import models
 from django.utils import timezone
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.contrib.inventory.models import MachineSnapshotCommit
+from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.core.probes.conf import ProbeList
+
+logger = logging.getLogger("zentral.contrib.osquery.models")
 
 MAX_DISTRIBUTED_QUERY_AGE = timedelta(days=1)
 
 
-def enroll(serial_number, business_unit, host_identifier):
+def enroll(serial_number, business_unit, host_identifier, ip):
     tree = {'source': {'module': 'zentral.contrib.osquery',
-                       'name': 'OSQuery'},
+                       'name': 'osquery'},
             'reference': get_random_string(64),
-            'machine': {'serial_number': serial_number}}
+            'serial_number': serial_number}
     if business_unit:
         tree['business_unit'] = business_unit.serialize()
     if host_identifier:
         tree["system_info"] = {"computer_name": host_identifier}
-    ms, _ = MachineSnapshot.objects.commit(tree)
-    # TODO: check, but _ must be always true (because of the random reference)
-    try:
-        previous_ms = ms.mt_previous
-    except MachineSnapshot.DoesNotExist:
-        previous_ms = None
-    if previous_ms:
-        # ms with same source for same serial number existed
-        return ms, 're-enrollment'
-    return ms, 'enrollment'
+    if ip:
+        tree["public_ip_address"] = ip
+    action = None
+    ms = commit_machine_snapshot_and_trigger_events(tree)
+    if not ms:
+        logger.error("Enrollment error. Could not commit tree")
+    else:
+        if MachineSnapshotCommit.objects.filter(source=ms.source,
+                                                serial_number=serial_number).count() > 1:
+            # msc with same source for same serial number existed
+            action = 're-enrollment'
+        else:
+            action = 'enrollment'
+    return ms, action
 
 
 class DistributedQueryProbeMachineManager(models.Manager):

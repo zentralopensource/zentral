@@ -1,11 +1,12 @@
 import logging
 from datetime import timedelta
 from dateutil import parser
+from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.generic.edit import FormView
-from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
 from .events import post_munki_events
@@ -115,18 +116,25 @@ def clean_certs_datetime(tree):
 
 
 class PostJobView(BaseView):
+    @transaction.non_atomic_requests
     def do_post(self, data):
         ms_tree = data['machine_snapshot']
         ms_tree['source'] = {'module': 'zentral.contrib.munki',
                              'name': 'Munki'}
-        ms_tree['reference'] = ms_tree['machine']['serial_number']
+        machine = ms_tree.pop('machine', None)
+        if machine:
+            # TODO deprecated
+            ms_tree['serial_number'] = machine['serial_number']
+        ms_tree['reference'] = ms_tree['serial_number']
         ms_tree['public_ip_address'] = self.ip
         if data.get('include_santa_fileinfo', False):
             clean_certs_datetime(ms_tree)
             if self.business_unit:
                 ms_tree['business_unit'] = self.business_unit.serialize()
-            ms, created = MachineSnapshot.objects.commit(ms_tree)
-            msn = ms.machine.serial_number
+            ms = commit_machine_snapshot_and_trigger_events(ms_tree)
+            if not ms:
+                raise RuntimeError("Could not commit machine snapshot")
+            msn = ms.serial_number
         else:
             msn = ms_tree['reference']
         reports = [(parser.parse(r.pop('start_time')),
@@ -150,6 +158,7 @@ class PostJobView(BaseView):
                                 'run_type': report['run_type'],
                                 'start_time': start_time,
                                 'end_time': end_time})
-        MunkiState.objects.update_or_create(machine_serial_number=msn,
-                                            defaults=update_dict)
+        with transaction.atomic():
+            MunkiState.objects.update_or_create(machine_serial_number=msn,
+                                                defaults=update_dict)
         return {}

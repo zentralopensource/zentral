@@ -11,6 +11,7 @@ ALL_EVENTS_SEARCH_DICT = {"event_type": "munki_event"}
 class MunkiEvent(BaseEvent):
     event_type = "munki_event"
 
+
 register_event_type(MunkiEvent)
 
 

@@ -151,7 +151,7 @@ class InventoryClient(BaseInventory):
             result = dict(zip(self.MACHINE_FIELDS, t))
             serial_number = result["serial_number"]
             if serial_number not in trees:
-                tree = {"machine": {"serial_number": serial_number},
+                tree = {"serial_number": serial_number,
                         "reference": result["filewave_id"]}
                 # os_version
                 os_version = dict(zip(("major", "minor", "patch"),

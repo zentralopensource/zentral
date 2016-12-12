@@ -1,12 +1,14 @@
 import json
 import logging
 from django.core.exceptions import SuspiciousOperation
+from django.db import transaction
 from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
+from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import JSONPostAPIView, verify_secret, APIAuthError
 from zentral.contrib.osquery.conf import (build_osquery_conf,
-                                          DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME,
-                                          DEFAULT_ZENTRAL_INVENTORY_QUERY)
+                                          get_distributed_inventory_query,
+                                          DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME)
 from zentral.contrib.osquery.events import (post_distributed_query_result, post_enrollment_event,
                                             post_events_from_osquery_log, post_request_event)
 from zentral.contrib.osquery.models import enroll, DistributedQueryProbeMachine
@@ -29,11 +31,15 @@ class EnrollView(JSONPostAPIView):
     def do_post(self, data):
         ms, action = enroll(self.machine_serial_number,
                             self.business_unit,
-                            data.get("host_identifier"))
-        post_enrollment_event(ms.machine.serial_number,
-                              self.user_agent, self.ip,
-                              {'action': action})
-        return {'node_key': ms.reference}
+                            data.get("host_identifier"),
+                            self.ip)
+        if ms and action:
+            post_enrollment_event(ms.serial_number,
+                                  self.user_agent, self.ip,
+                                  {'action': action})
+            return {'node_key': ms.reference}
+        else:
+            raise RuntimeError("Could not enroll client")
 
 
 class BaseNodeView(JSONPostAPIView):
@@ -50,7 +56,7 @@ class BaseNodeView(JSONPostAPIView):
             logger.error("APIAuthError %s", auth_err, extra=data)
             raise APIAuthError(auth_err)
         # TODO: Better verification ?
-        self.machine_serial_number = self.ms.machine.serial_number
+        self.machine_serial_number = self.ms.serial_number
         self.business_unit = self.ms.business_unit
 
     def do_post(self, data):
@@ -59,31 +65,59 @@ class BaseNodeView(JSONPostAPIView):
                            self.request_type)
         return self.do_node_post(data)
 
-    def commit_default_inventory_query_result(self, snapshot):
+    def commit_inventory_query_result(self, snapshot):
         tree = {'source': {'module': self.ms.source.module,
                            'name': self.ms.source.name},
-                'machine': {'serial_number': self.machine_serial_number},
+                'serial_number': self.machine_serial_number,
                 'reference': self.ms.reference,
                 'public_ip_address': self.ip}
+
+        def clean_dict(d):
+            for k, v in list(d.items()):
+                if v is None or v == "":
+                    del d[k]
+            return d
+
         if self.business_unit:
             tree['business_unit'] = self.business_unit.serialize()
         for t in snapshot:
             table_name = t.pop('table_name')
             if table_name == 'os_version':
-                tree['os_version'] = t
+                os_version = clean_dict(t)
+                if os_version:
+                    tree['os_version'] = os_version
             elif table_name == 'system_info':
-                tree['system_info'] = t
+                system_info = clean_dict(t)
+                if system_info:
+                    tree['system_info'] = system_info
             elif table_name == 'network_interface':
-                tree.setdefault('network_interfaces', []).append(t)
+                network_interface = clean_dict(t)
+                if network_interface:
+                    network_interfaces = tree.setdefault('network_interfaces', [])
+                    if network_interface not in network_interfaces:
+                        network_interfaces.append(network_interface)
+                    else:
+                        logger.warning("Duplicated network interface")
             elif table_name == 'apps':
                 bundle_path = t.pop('bundle_path')
-                osx_app_instance = {'app': t,
-                                    'bundle_path': bundle_path}
-                tree.setdefault('osx_app_instances', []).append(osx_app_instance)
-        try:
-            MachineSnapshot.objects.commit(tree)
-        except:
-            logger.exception('Cannot save machine snapshot')
+                osx_app = clean_dict(t)
+                if osx_app and bundle_path:
+                    osx_app_instance = {'app': osx_app,
+                                        'bundle_path': bundle_path}
+                    osx_app_instances = tree.setdefault('osx_app_instances', [])
+                    if osx_app_instance not in osx_app_instances:
+                        osx_app_instances.append(osx_app_instance)
+                    else:
+                        logger.warning("Duplicated osx app instance")
+            elif table_name == 'deb_packages':
+                deb_package = clean_dict(t)
+                if deb_package:
+                    deb_packages = tree.setdefault('deb_packages', [])
+                    if deb_package not in deb_packages:
+                        deb_packages.append(deb_package)
+                    else:
+                        logger.warning("Duplicated deb package")
+        commit_machine_snapshot_and_trigger_events(tree)
 
 
 class ConfigView(BaseNodeView):
@@ -104,14 +138,16 @@ class DistributedReadView(BaseNodeView):
         if self.machine_serial_number:
             machine = MetaMachine(self.machine_serial_number)
             queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(machine)
-            if not self.ms.os_version:
-                queries[DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME] = DEFAULT_ZENTRAL_INVENTORY_QUERY
+            inventory_query = get_distributed_inventory_query(machine, self.ms)
+            if inventory_query:
+                queries[DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME] = inventory_query
         return {'queries': queries}
 
 
 class DistributedWriteView(BaseNodeView):
     request_type = "distributed_write"
 
+    @transaction.non_atomic_requests
     def do_node_post(self, data):
         payloads = []
 
@@ -133,7 +169,7 @@ class DistributedWriteView(BaseNodeView):
                 status = 0
             if key == DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME:
                 if status == 0 and val:
-                    self.commit_default_inventory_query_result(val)
+                    self.commit_inventory_query_result(val)
                 else:
                     logger.warning("Inventory distributed query write with status = %s and val = %s",
                                    status, val)
@@ -166,6 +202,7 @@ class DistributedWriteView(BaseNodeView):
 class LogView(BaseNodeView):
     request_type = "log"
 
+    @transaction.non_atomic_requests
     def do_node_post(self, data):
         inventory_results = []
         other_results = []
@@ -181,7 +218,7 @@ class LogView(BaseNodeView):
         if inventory_results:
             inventory_results.sort(reverse=True)
             last_snapshot = inventory_results[0][1]
-            self.commit_default_inventory_query_result(last_snapshot)
+            self.commit_inventory_query_result(last_snapshot)
         data['data'] = other_results
         post_events_from_osquery_log(self.machine_serial_number,
                                      self.user_agent, self.ip, data)

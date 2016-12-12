@@ -25,6 +25,7 @@ for attr in ('reference',
              'system_info',
              'network_interface',
              'osx_app_instance',
+             'deb_package',
              'teamviewer'):
     event_type = 'inventory_{}_update'.format(attr)
     event_class_name = "".join(s.title() for s in event_type.split('_'))
@@ -32,15 +33,12 @@ for attr in ('reference',
     register_event_type(event_class)
 
 
-def post_inventory_events(msn, events, uuid, index):
-    for event_type, data in events:
+def post_inventory_events(msn, events):
+    for index, (event_type, data) in enumerate(events):
         event_cls = event_cls_from_type(event_type)
         metadata = EventMetadata(event_cls.event_type,
                                  machine_serial_number=msn,
-                                 uuid=uuid,
                                  index=index,
                                  tags=event_cls.tags)
         event = event_cls(metadata, data)
         event.post()
-        index += 1
-    return index

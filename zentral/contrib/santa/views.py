@@ -1,11 +1,13 @@
 import logging
 from django.core.urlresolvers import reverse
+from django.db import transaction
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView, View
 from django.views.generic.edit import FormView
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MachineSnapshot, MetaBusinessUnit, MetaMachine
+from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import (make_secret,
                                      SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView)
@@ -169,6 +171,7 @@ class BaseView(SignedRequestJSONPostAPIView):
 
 
 class PreflightView(BaseView):
+    @transaction.non_atomic_requests
     def do_post(self, data):
         machine_serial_number = data['serial_num']
         assert(machine_serial_number == self.machine_serial_number)
@@ -183,14 +186,14 @@ class PreflightView(BaseView):
         tree = {'source': {'module': 'zentral.contrib.santa',
                            'name': 'Santa'},
                 'reference': machine_serial_number,
-                'machine': {'serial_number': machine_serial_number},
+                'serial_number': machine_serial_number,
                 'os_version': os_version,
                 'system_info': {'computer_name': data['hostname']},
                 'public_ip_address': self.ip,
                 }
         if self.business_unit:
             tree['business_unit'] = self.business_unit.serialize()
-        ms, created = MachineSnapshot.objects.commit(tree)
+        commit_machine_snapshot_and_trigger_events(tree)
         return {'BatchSize': 20,  # TODO: ???
                 'UploadLogsUrl': 'https://{host}{path}'.format(host=self.request.get_host(),
                                                                path=reverse('santa:logupload',
@@ -211,7 +214,7 @@ class EventUploadView(BaseView):
             machine_serial_number = "UNKNOWN"
             logger.error("Machine ID not found", extra={'request': self.request})
         else:
-            machine_serial_number = ms.machine.serial_number
+            machine_serial_number = ms.serial_number
         post_santa_events(machine_serial_number,
                           self.user_agent,
                           self.ip,

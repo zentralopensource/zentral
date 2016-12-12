@@ -8,9 +8,7 @@ django.setup()
 import logging
 import time
 from multiprocessing import Process
-import uuid
 from zentral.contrib.inventory.clients import clients, InventoryError
-from zentral.contrib.inventory.events import post_inventory_events
 
 logger = logging.getLogger('zentral.bin.inventory_worker')
 
@@ -24,15 +22,8 @@ def sync_inventory(client_name, worker_id):
     else:
         return
     while True:
-        pk = uuid.uuid4()
         try:
-            event_index = 0
-            for machine_snapshot, events in client.sync():
-                if machine_snapshot.machine and machine_snapshot.machine.serial_number:
-                    event_index = post_inventory_events(machine_snapshot.machine.serial_number,
-                                                        events, pk, event_index)
-                else:
-                    logger.error('Machine w/o serial number')
+            client.sync()
         except InventoryError:
             logger.exception("Inventory Error - %s - Sleeping 60s", client.name)
             time.sleep(60)

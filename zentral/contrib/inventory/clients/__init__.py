@@ -9,4 +9,5 @@ def get_clients(settings):
         module = import_module(inv_cli_settings['backend'])
         yield getattr(module, "InventoryClient")(inv_cli_settings)
 
+
 clients = list(get_clients(settings))

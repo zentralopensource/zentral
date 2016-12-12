@@ -1,19 +1,19 @@
 from collections import Counter
 import colorsys
-from datetime import datetime
 import logging
 import re
 from django.contrib.postgres.fields import JSONField
 from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
-from django.db import connection, models
+from django.db import connection, IntegrityError, models, transaction
 from django.db.models import Count, Q
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
 from zentral.conf import settings
-from zentral.utils.mt_models import prepare_commit_tree, AbstractMTObject, MTObjectManager
-from .conf import (update_ms_tree_platform, update_ms_tree_type,
+from zentral.utils.mt_models import AbstractMTObject, prepare_commit_tree, MTObjectManager, MTOError
+from .conf import (has_deb_packages,
+                   update_ms_tree_platform, update_ms_tree_type,
                    PLATFORM_CHOICES, PLATFORM_CHOICES_DICT,
                    TYPE_CHOICES, TYPE_CHOICES_DICT)
 
@@ -72,29 +72,6 @@ class MetaBusinessUnit(models.Model):
             b.set_meta_business_unit(self)
         return b
 
-    def get_machine_count(self, tags=None):
-        if not tags or set(self.tags) & set(tags):
-            query = """SELECT count(distinct(serial_number))
-            FROM inventory_machine AS m
-            JOIN inventory_machinesnapshot AS ms ON (ms.machine_id = m.id)
-            JOIN inventory_businessunit AS bu ON (ms.business_unit_id = bu.id)
-            WHERE ms.mt_next_id IS NULL
-            AND bu.meta_business_unit_id = %s"""
-            args = [self.id]
-        else:
-            query = """SELECT count(distinct(m.serial_number))
-            FROM inventory_machine AS m
-            JOIN inventory_machinesnapshot AS ms ON (ms.machine_id = m.id)
-            JOIN inventory_businessunit AS bu ON (ms.business_unit_id = bu.id)
-            JOIN inventory_machinetag AS mt ON (mt.serial_number = m.serial_number)
-            WHERE ms.mt_next_id IS NULL
-            AND bu.meta_business_unit_id = %s
-            AND mt.tag_id IN %s"""
-            args = (self.id, tuple(t.id for t in tags))
-        cursor = connection.cursor()
-        cursor.execute(query, args)
-        return cursor.fetchone()[0]
-
     def tags(self):
         tags = list(mbut.tag for mbut in self.metabusinessunittag_set.select_related('tag'))
         tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
@@ -103,33 +80,25 @@ class MetaBusinessUnit(models.Model):
 
 class SourceManager(MTObjectManager):
     def current_machine_group_sources(self):
-        return (self.filter(machinegroup__isnull=False,
-                            machinegroup__machinesnapshot__mt_next__isnull=True,
-                            machinegroup__machinesnapshot__archived_at__isnull=True)
-                .annotate(num_machine_groups=Count('machinegroup'))
-                .order_by('module', 'name'))
+        return (self.filter(machinegroup__machinesnapshot__currentmachinesnapshot__isnull=False)
+                    .distinct()
+                    .order_by("module", "name"))
 
     def current_business_unit_sources(self):
-        return (self.filter(businessunit__isnull=False,
-                            businessunit__machinesnapshot__mt_next__isnull=True,
-                            businessunit__machinesnapshot__archived_at__isnull=True)
-                .annotate(num_business_units=Count('businessunit'))
-                .order_by('module', 'name'))
+        return (self.filter(businessunit__machinesnapshot__currentmachinesnapshot__isnull=False)
+                    .distinct()
+                    .order_by("module", "name"))
 
     def current_machine_snapshot_sources(self):
-        return (self.filter(machinesnapshot__isnull=False,
-                            machinesnapshot__mt_next__isnull=True,
-                            machinesnapshot__archived_at__isnull=True)
-                .annotate(num_machine_snapshots=Count('machinesnapshot'))
-                .order_by('module', 'name'))
+        return (self.filter(currentmachinesnapshot__isnull=False)
+                    .distinct()
+                    .order_by("module", "name"))
 
     def current_macos_apps_sources(self):
-        return (self.filter(machinesnapshot__isnull=False,
-                            machinesnapshot__mt_next__isnull=True,
-                            machinesnapshot__archived_at__isnull=True)
-                .annotate(num_osx_app_instances=Count('machinesnapshot__osx_app_instances'))
-                .filter(num_osx_app_instances__gt=0)
-                .order_by('module', 'name'))
+        return (self.filter(machinesnapshot__currentmachinesnapshot__isnull=False,
+                            machinesnapshot__osx_app_instances__isnull=False)
+                    .distinct()
+                    .order_by("module", "name"))
 
 
 class Source(AbstractMTObject):
@@ -150,10 +119,10 @@ class Link(AbstractMTObject):
 
 class AbstractMachineGroupManager(MTObjectManager):
     def current(self):
-        qs = self.filter(machinesnapshot__isnull=False,
-                         machinesnapshot__mt_next__isnull=True,
-                         machinesnapshot__archived_at__isnull=True)
-        return qs.distinct().select_related('source').order_by('source__module', 'name')
+        return (self.filter(machinesnapshot__currentmachinesnapshot__isnull=False)
+                    .distinct()
+                    .select_related('source')
+                    .order_by('source__module', 'name'))
 
 
 class AbstractMachineGroup(AbstractMTObject):
@@ -222,10 +191,6 @@ class MachineGroup(AbstractMachineGroup):
     machine_links = models.ManyToManyField(Link, related_name="+")  # tmpl for links to machine in a group
 
 
-class Machine(AbstractMTObject):
-    serial_number = models.TextField(unique=True)
-
-
 class OSVersion(AbstractMTObject):
     name = models.TextField(blank=True, null=True)
     major = models.PositiveIntegerField()
@@ -255,17 +220,6 @@ class SystemInfo(AbstractMTObject):
     physical_memory = models.BigIntegerField(blank=True, null=True)
 
 
-class Certificate(AbstractMTObject):
-    common_name = models.TextField()
-    organization = models.TextField(blank=True, null=True)
-    organizational_unit = models.TextField(blank=True, null=True)
-    sha_1 = models.CharField(max_length=40)
-    sha_256 = models.CharField(max_length=64, db_index=True)
-    valid_from = models.DateTimeField()
-    valid_until = models.DateTimeField()
-    signed_by = models.ForeignKey('self', blank=True, null=True)
-
-
 class NetworkInterface(AbstractMTObject):
     interface = models.TextField(blank=False, null=False)
     mac = models.CharField(max_length=23, blank=False, null=False)  # 48 or 64 bit with separators
@@ -289,7 +243,7 @@ class NetworkInterface(AbstractMTObject):
 
 class OSXAppManager(MTObjectManager):
     def current(self):
-        return self.distinct().filter(osxappinstance__machinesnapshot__mt_next__isnull=True)
+        return self.distinct().filter(osxappinstance__machinesnapshot__currentmachinesnapshot__isnull=False)
 
 
 class OSXApp(AbstractMTObject):
@@ -312,9 +266,19 @@ class OSXApp(AbstractMTObject):
         return " ".join(s.name for s in self.sources())
 
     def current_instances(self):
-        return (self.osxappinstance_set.filter(machinesnapshot__mt_next__isnull=True,
-                                               machinesnapshot__archived_at__isnull=True)
+        return (self.osxappinstance_set.filter(machinesnapshot__currentmachinesnapshot__isnull=False)
                                        .annotate(machinesnapshot_num=Count('machinesnapshot')))
+
+
+class Certificate(AbstractMTObject):
+    common_name = models.TextField()
+    organization = models.TextField(blank=True, null=True)
+    organizational_unit = models.TextField(blank=True, null=True)
+    sha_1 = models.CharField(max_length=40)
+    sha_256 = models.CharField(max_length=64, db_index=True)
+    valid_from = models.DateTimeField()
+    valid_until = models.DateTimeField()
+    signed_by = models.ForeignKey('self', blank=True, null=True)
 
 
 class OSXAppInstance(AbstractMTObject):
@@ -335,6 +299,15 @@ class OSXAppInstance(AbstractMTObject):
         return chain
 
 
+class DebPackage(AbstractMTObject):
+    name = models.TextField(blank=True, null=True)
+    version = models.TextField(blank=True, null=True)
+    source = models.TextField(blank=True, null=True)
+    size = models.BigIntegerField(blank=True, null=True)
+    arch = models.TextField(blank=True, null=True)
+    revision = models.TextField(blank=True, null=True)
+
+
 class TeamViewer(AbstractMTObject):
     teamviewer_id = models.TextField(blank=False, null=False)
     release = models.TextField(blank=True, null=True)
@@ -342,52 +315,20 @@ class TeamViewer(AbstractMTObject):
 
 
 class MachineSnapshotManager(MTObjectManager):
-    def commit(self, tree):
-        update_ms_tree_platform(tree)
-        update_ms_tree_type(tree)
-        obj, created = super().commit(tree, current=True)
-        if created:
-            self.filter(source=obj.source,
-                        machine__serial_number=obj.machine.serial_number,
-                        mt_next__isnull=True).exclude(pk=obj.id).update(mt_next=obj)
-        return obj, created
-
     def current(self):
-        return self.select_related('machine',
-                                   'business_unit__meta_business_unit',
-                                   'os_version',
-                                   'system_info',
-                                   'teamviewer').filter(mt_next__isnull=True,
-                                                        archived_at__isnull=True)
-
-    def get_current_count(self, tags=None):
-        if tags:
-            query = """SELECT count(distinct(m.serial_number))
-            FROM inventory_machine AS m
-            JOIN inventory_machinesnapshot AS ms ON (ms.machine_id = m.id)
-            LEFT JOIN inventory_machinetag AS mt ON (mt.serial_number = m.serial_number)
-            LEFT JOIN inventory_businessunit AS bu ON (ms.business_unit_id = bu.id)
-            LEFT JOIN inventory_metabusinessunittag AS mbut ON (mbut.meta_business_unit_id = bu.meta_business_unit_id)
-            WHERE ms.mt_next_id IS NULL AND ms.archived_at IS NULL
-            AND (mt.tag_id IN %(tag_id)s OR mbut.tag_id IN %(tag_id)s)"""
-            args = {"tag_id": tuple(t.id for t in tags)}
-        else:
-            query = """SELECT count(distinct(m.serial_number))
-            FROM inventory_machine AS m
-            JOIN inventory_machinesnapshot AS ms ON (ms.machine_id = m.id)
-            WHERE ms.mt_next_id IS NULL AND ms.archived_at IS NULL"""
-            args = []
-        cursor = connection.cursor()
-        cursor.execute(query, args)
-        return cursor.fetchone()[0]
+        return (self.select_related('business_unit__meta_business_unit',
+                                    'os_version',
+                                    'system_info',
+                                    'teamviewer')
+                    .filter(currentmachinesnapshot__isnull=False))
 
     def current_platforms(self):
-        qs = (self.filter(platform__isnull=False, archived_at__isnull=True, mt_next__isnull=True)
+        qs = (self.filter(platform__isnull=False, currentmachinesnapshot__isnull=False)
               .values("platform").distinct())
         return sorted((rd["platform"], PLATFORM_CHOICES_DICT[rd["platform"]]) for rd in qs)
 
     def current_types(self):
-        qs = (self.filter(type__isnull=False, archived_at__isnull=True, mt_next__isnull=True)
+        qs = (self.filter(type__isnull=False, currentmachinesnapshot__isnull=False)
               .values("type").distinct())
         return sorted((rd["type"], TYPE_CHOICES_DICT[rd["type"]]) for rd in qs)
 
@@ -395,7 +336,7 @@ class MachineSnapshotManager(MTObjectManager):
 class MachineSnapshot(AbstractMTObject):
     source = models.ForeignKey(Source)
     reference = models.TextField(blank=True, null=True)
-    machine = models.ForeignKey(Machine)
+    serial_number = models.TextField(db_index=True)
     links = models.ManyToManyField(Link)
     business_unit = models.ForeignKey(BusinessUnit, blank=True, null=True)
     groups = models.ManyToManyField(MachineGroup)
@@ -405,31 +346,17 @@ class MachineSnapshot(AbstractMTObject):
     type = models.CharField(max_length=32, blank=True, null=True, choices=TYPE_CHOICES)
     network_interfaces = models.ManyToManyField(NetworkInterface)
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
+    deb_packages = models.ManyToManyField(DebPackage)
     teamviewer = models.ForeignKey(TeamViewer, blank=True, null=True)
     public_ip_address = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
-    archived_at = models.DateTimeField(blank=True, null=True)
-    mt_next = models.OneToOneField('self', blank=True, null=True, related_name="mt_previous")
 
     objects = MachineSnapshotManager()
-    mt_excluded_fields = ('mt_next',)
-
-    def update_diff(self):
-        try:
-            previous_snapshot = self.mt_previous
-        except MachineSnapshot.DoesNotExist:
-            return None
-        else:
-            return self.diff(previous_snapshot)
 
     def get_machine_str(self):
         if self.system_info and (self.system_info.computer_name or self.system_info.hostname):
             return self.system_info.computer_name or self.system_info.hostname
-        elif self.machine:
-            return self.machine.serial_number
-        elif self.reference:
-            return self.reference
         else:
-            return "{} #{}".format(self.source, self.id)
+            return self.serial_number
 
     def groups_with_links(self):
         for group in self.groups.prefetch_related('links', 'machine_links').all():
@@ -448,6 +375,77 @@ class MachineSnapshot(AbstractMTObject):
                                                                            'bundle_path')
 
 
+class MachineSnapshotCommitManager(models.Manager):
+    def commit_machine_snapshot_tree(self, tree):
+        update_ms_tree_platform(tree)
+        update_ms_tree_type(tree)
+        machine_snapshot, _ = MachineSnapshot.objects.commit(tree)
+        serial_number = machine_snapshot.serial_number
+        source = machine_snapshot.source
+        try:
+            with transaction.atomic():
+                try:
+                    msc = MachineSnapshotCommit.objects.filter(serial_number=serial_number,
+                                                               source=source).order_by('-version')[0]
+                except IndexError:
+                    new_version = 1
+                    parent = None
+                else:
+                    if msc.machine_snapshot == machine_snapshot:
+                        return None, machine_snapshot
+                    new_version = msc.version + 1
+                    parent = msc
+                msc = MachineSnapshotCommit.objects.create(serial_number=serial_number,
+                                                           source=source,
+                                                           version=new_version,
+                                                           machine_snapshot=machine_snapshot,
+                                                           parent=parent)
+                CurrentMachineSnapshot.objects.update_or_create(serial_number=serial_number,
+                                                                source=source,
+                                                                defaults={'machine_snapshot': machine_snapshot})
+                return msc, machine_snapshot
+        except IntegrityError:
+            msc = MachineSnapshotCommit.objects.get(serial_number=serial_number,
+                                                    source=source,
+                                                    version=new_version)
+            if msc.machine_snapshot == machine_snapshot:
+                logger.warning("MachineSnapshotCommit race with same snapshot for "
+                               "source {} and serial_number {}".format(source, serial_number))
+                return None, machine_snapshot
+            else:
+                raise MTOError("MachineSnapshotCommit race for "
+                               "source {} and serial_number {}".format(source, serial_number))
+
+
+class MachineSnapshotCommit(models.Model):
+    serial_number = models.TextField(db_index=True)
+    source = models.ForeignKey(Source)
+    version = models.PositiveIntegerField(default=1)
+    machine_snapshot = models.ForeignKey(MachineSnapshot)
+    parent = models.ForeignKey('self', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = MachineSnapshotCommitManager()
+
+    class Meta:
+        unique_together = ('serial_number', 'source', 'version')
+
+    def update_diff(self):
+        if not self.parent:
+            return None
+        else:
+            return self.machine_snapshot.diff(self.parent.machine_snapshot)
+
+
+class CurrentMachineSnapshot(models.Model):
+    serial_number = models.TextField(db_index=True)
+    source = models.ForeignKey(Source)
+    machine_snapshot = models.ForeignKey(MachineSnapshot)
+
+    class Meta:
+        unique_together = ('serial_number', 'source')
+
+
 class TagManager(models.Manager):
     def available_for_meta_business_unit(self, meta_business_unit):
         return self.filter(Q(meta_business_unit=meta_business_unit) | Q(meta_business_unit__isnull=True))
@@ -455,21 +453,18 @@ class TagManager(models.Manager):
     def used_in_inventory(self):
         query = """
         select tag_id, count(*) from (
-            select mt.tag_id, m.serial_number
+            select mt.tag_id, cms.serial_number
             from inventory_machinetag as mt
-            join inventory_machine as m on (m.serial_number = mt.serial_number)
-            join inventory_machinesnapshot as ms on (ms.machine_id = m.id)
-            where ms.mt_next_id is null
+            join inventory_currentmachinesnapshot as cms on (mt.serial_number = cms.serial_number)
 
             union
 
-            select mbut.tag_id, m.serial_number
+            select mbut.tag_id, cms.serial_number
             from inventory_metabusinessunittag as mbut
             join inventory_businessunit as bu on mbut.meta_business_unit_id = bu.meta_business_unit_id
             join inventory_machinesnapshot as ms on (ms.business_unit_id = bu.id)
-            join inventory_machine as m on (m.id = ms.machine_id)
-            where ms.mt_next_id is null
-        ) as tag_links
+            join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)
+        ) as tag_serial_numbers
         group by tag_id;"""
         cursor = connection.cursor()
         cursor.execute(query)
@@ -527,15 +522,12 @@ class Tag(models.Model):
 
     def links(self):
         l = []
-        from zentral.contrib.osquery.models import DistributedQuery
         for model, label, attribute, base_url in ((MachineTag,
                                                    "machines", "tag",
                                                    reverse("inventory:index")),
                                                   (MetaBusinessUnitTag,
                                                    "business units", "tag",
-                                                   reverse("inventory:mbu")),
-                                                  (DistributedQuery, "osquery distributed queries", "tags",
-                                                   reverse("osquery:distributed_index"))):
+                                                   reverse("inventory:mbu"))):
             obj_count = model.objects.filter(**{attribute: self.id}).count()
             if obj_count:
                 l.append(("{} {}".format(obj_count, label),
@@ -563,8 +555,7 @@ class MetaMachine(object):
 
     @cached_property
     def snapshots(self):
-        return list(MachineSnapshot.objects.current()
-                    .filter(machine__serial_number=self.serial_number))
+        return list(MachineSnapshot.objects.current().filter(serial_number=self.serial_number))
 
     @cached_property
     def computer_name(self):
@@ -627,6 +618,10 @@ class MetaMachine(object):
         except IndexError:
             pass
 
+    @cached_property
+    def has_deb_packages(self):
+        return any(has_deb_packages(ms) for ms in self.snapshots)
+
     # Filtered snapshots
 
     def snapshots_with_osx_app_instances(self):
@@ -665,11 +660,7 @@ class MetaMachine(object):
         return tags
 
     def archive(self):
-        archived_at = datetime.now()
-        for ms in self.snapshots:
-            tree = ms.serialize()
-            tree['archived_at'] = archived_at
-            MachineSnapshot.objects.commit(tree)
+        CurrentMachineSnapshot.objects.filter(serial_number=self.serial_number).delete()
 
 
 class MACAddressBlockAssignmentOrganization(models.Model):

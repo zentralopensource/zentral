@@ -68,7 +68,7 @@ class InventoryClient(BaseInventory):
             # serial number, reference
             ct = {'reference': str(machine_id),
                   'links': self._machine_links_from_id(machine_id),
-                  'machine': {'serial_number': computer['general']['serial_number']}}
+                  'serial_number': computer['general']['serial_number']}
 
             # business unit
             site_id = computer['general']['site']['id']

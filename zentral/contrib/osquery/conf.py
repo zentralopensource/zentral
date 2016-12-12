@@ -25,17 +25,31 @@ OSX_APP_INSTANCE_QUERY = (
     "path as bundle_path "
     "from apps;"
 )
+DEB_PACKAGE_QUERY = "select 'deb_packages' as table_name, * from deb_packages;"
+
+
+def get_inventory_query_for_machine(machine):
+    queries = [DEFAULT_ZENTRAL_INVENTORY_QUERY]
+    if machine.platform == MACOS:
+        queries.append(OSX_APP_INSTANCE_QUERY)
+    elif machine.has_deb_packages:
+        queries.append(DEB_PACKAGE_QUERY)
+    return "".join(queries)
+
+
+def get_distributed_inventory_query(machine, ms):
+    if (not ms.os_version
+            or (machine.platform == MACOS and not ms.osx_app_instances.count())
+            or (machine.has_deb_packages and not ms.deb_packages.count())):
+        return get_inventory_query_for_machine(machine)
 
 
 def build_osquery_conf(machine):
-    inventory_query = DEFAULT_ZENTRAL_INVENTORY_QUERY
-    if machine.platform == MACOS:
-        inventory_query = "{}{}".format(inventory_query, OSX_APP_INSTANCE_QUERY)
     schedule = {
         DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: {
-            'query': inventory_query,
+            'query': get_inventory_query_for_machine(machine),
             'snapshot': True,
-            'interval': 600
+            'interval': 1001
         }
     }
     packs = {}

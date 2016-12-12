@@ -243,7 +243,7 @@ class SystemProfilerReport(object):
             raise ValueError('0 or more than one item in a SPHardwareDataType output!')
         item_d = data['_items'][0]
 
-        machine = {'serial_number': item_d['serial_number']}
+        serial_number = item_d['serial_number']
         system_info = {'hardware_model': item_d['machine_model'],
                        'cpu_type': item_d.get('cpu_type', None)}
         # RAM
@@ -273,7 +273,7 @@ class SystemProfilerReport(object):
                       'build': os_build}
         os_version.update(dict(zip(['major', 'minor', 'patch'],
                                    (int(s) for s in os_version_str.split('.')))))
-        return {'machine': machine,
+        return {'serial_number': serial_number,
                 'system_info': system_info,
                 'os_version': os_version}
 
@@ -320,7 +320,7 @@ if __name__ == '__main__':
     sal_infos = get_sal_infos()
     if sal_infos is not None:
         data['sal_infos'] = sal_infos
-    msn = data['machine_snapshot']['machine']['serial_number']
+    msn = data['machine_snapshot']['serial_number']
     job_details = get_job_details(msn)
     ai = ApplicationInventory()
     # if it's both an auto run (vs. debug/testing) and we have santa fileinfo collected

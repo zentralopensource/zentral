@@ -51,7 +51,7 @@ class InventoryClient(BaseInventory):
             machine_id = sal_machine['serial']  # serial number == machine_id in this client
             ct = {'reference': machine_id,
                   'links': self._machine_links_from_id(machine_id),
-                  'machine': {'serial_number': machine_id}}
+                  'serial_number': machine_id}
 
             # groups
             sal_group_id = sal_machine.get('machine_group', None)

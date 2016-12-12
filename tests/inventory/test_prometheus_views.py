@@ -1,7 +1,7 @@
 from django.urls import reverse
 from django.test import TestCase
 from prometheus_client.parser import text_string_to_metric_families
-from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.contrib.inventory.models import MachineSnapshotCommit
 
 
 class InventoryViewsTestCase(TestCase):
@@ -13,7 +13,7 @@ class InventoryViewsTestCase(TestCase):
     def test_prometheus_metrics_with_machine_snapshot(self):
         tree = {
             "source": {"module": "tests.zentral.io", "name": "Zentral Tests"},
-            "machine": {"serial_number": "0123456789"},
+            "serial_number": "0123456789",
             "os_version": {'name': 'OS X', 'major': 10, 'minor': 11, 'patch': 1},
             "osx_app_instances": [
                 {'app': {'bundle_id': 'io.zentral.baller',
@@ -23,7 +23,7 @@ class InventoryViewsTestCase(TestCase):
                  'bundle_path': "/Applications/Baller.app"}
             ]
         }
-        ms, _ = MachineSnapshot.objects.commit(tree)
+        _, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         source_id = ms.source.pk
         response = self.client.get(reverse("inventory:prometheus_metrics"))
         labels_dict = {}

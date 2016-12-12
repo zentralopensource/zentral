@@ -14,6 +14,7 @@ class SantaBaseEvent(BaseEvent):
 class SantaPreflightEvent(SantaBaseEvent):
     event_type = "santa_preflight"
 
+
 register_event_type(SantaPreflightEvent)
 
 

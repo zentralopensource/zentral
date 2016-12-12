@@ -3,11 +3,14 @@ from datetime import datetime
 import hashlib
 from django.core.exceptions import FieldDoesNotExist
 from django.contrib.postgres.fields import JSONField
-from django.db import models
+from django.utils.functional import cached_property
+from django.utils.timezone import is_aware, make_naive
+from django.db import IntegrityError, models, transaction
 
 
 class MTOError(Exception):
-    pass
+    def __init__(self, message):
+        self.message = message
 
 
 class Hasher(object):
@@ -28,6 +31,8 @@ class Hasher(object):
         elif isinstance(v, int):
             v = str(v)
         elif isinstance(v, datetime):
+            if is_aware(v):
+                v = make_naive(v)
             v = v.isoformat()
         elif isinstance(v, list):
             assert(all([isinstance(e, str) and len(e) == 40 for e in v]))
@@ -67,8 +72,14 @@ def prepare_commit_tree(tree):
                 hash_list = []
                 for subtree in v:
                     prepare_commit_tree(subtree)
-                    hash_list.append(subtree['mt_hash'])
+                    subtree_mt_hash = subtree['mt_hash']
+                    if subtree_mt_hash in hash_list:
+                        raise MTOError("Duplicated subtree in key {}".format(k))
+                    else:
+                        hash_list.append(subtree_mt_hash)
                 v = hash_list
+            elif isinstance(v, datetime) and is_aware(v):
+                tree[k] = v = make_naive(v)
             h.add_field(k, v)
     tree['mt_hash'] = h.hexdigest()
 
@@ -84,14 +95,11 @@ def cleanup_commit_tree(tree):
 
 
 class MTObjectManager(models.Manager):
-    def commit(self, tree, current=False, **extra_obj_save_kwargs):
+    def commit(self, tree, **extra_obj_save_kwargs):
         prepare_commit_tree(tree)
         created = False
         try:
-            search_dict = {'mt_hash': tree['mt_hash']}
-            if current:
-                search_dict['mt_next__isnull'] = True
-            obj = self.get(**search_dict)
+            obj = self.get(mt_hash=tree['mt_hash'])
         except self.model.DoesNotExist:
             obj = self.model()
             m2m_fields = []
@@ -123,19 +131,28 @@ class MTObjectManager(models.Manager):
                 else:
                     obj.get_mt_field(k)
                     setattr(obj, k, v)
-            obj.save(**extra_obj_save_kwargs)
-            for k, l in m2m_fields:
-                setattr(obj, k, l)
-            if not obj.hash(recursive=False) == obj.mt_hash:
-                raise MTOError('Obj {} Hash missmatch!!!'.format(obj))
-            created = True
+            try:
+                with transaction.atomic():
+                    obj.save(**extra_obj_save_kwargs)
+                    for k, l in m2m_fields:
+                        setattr(obj, k, l)
+            except IntegrityError as integrity_error:
+                # the object has been concurrently created ?
+                try:
+                    obj = self.get(**search_dict)
+                except self.model.DoesNotExist:
+                    # that was not a key error:
+                    raise integrity_error
+            else:
+                if not obj.hash(recursive=False) == obj.mt_hash:
+                    raise MTOError('Obj {} Hash missmatch!!!'.format(obj))
+                created = True
         return obj, created
 
 
 class AbstractMTObject(models.Model):
-    mt_hash = models.CharField(max_length=40, db_index=True)
+    mt_hash = models.CharField(max_length=40, unique=True)
     mt_created_at = models.DateTimeField(auto_now_add=True)
-
     mt_excluded_fields = None
 
     class Meta:
@@ -143,15 +160,15 @@ class AbstractMTObject(models.Model):
 
     objects = MTObjectManager()
 
-    def get_mt_excluded_field_set(self):
-        # TODO: memoize ? classmethod ? better ?
+    @cached_property
+    def mt_excluded_field_set(self):
         l = ['id', 'mt_hash', 'mt_created_at']
         if self.mt_excluded_fields:
             l.extend(self.mt_excluded_fields)
         return set(l)
 
     def get_mt_field(self, name, many_to_one=None, many_to_many=None):
-        if name in self.get_mt_excluded_field_set():
+        if name in self.mt_excluded_field_set:
             raise MTOError("Field '{}' of {} is excluded".format(name,
                                                                  self._meta.object_name))
         try:
@@ -175,9 +192,8 @@ class AbstractMTObject(models.Model):
         return f
 
     def _iter_mto_fields(self):
-        excluded_field_set = self.get_mt_excluded_field_set()
         for f in self._meta.get_fields():
-            if f.name not in excluded_field_set and not f.auto_created:
+            if f.name not in self.mt_excluded_field_set and not f.auto_created:
                 v = getattr(self, f.name)
                 if f.many_to_many:
                     v = v.all()
