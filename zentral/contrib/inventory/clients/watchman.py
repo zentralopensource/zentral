@@ -12,6 +12,8 @@ MAC_VERSION_RE = re.compile(r'^(?P<name>.*) (?P<major>[0-9]{1,3})\.'
 LINUX_VERSION_RE = re.compile(r'^(?P<name>[^0-9]*) (?P<major>[0-9]{1,3})\.'
                               '(?P<minor>[0-9]{1,3})(?:\.'
                               '(?P<patch>[0-9]{1,3}))?.*$')
+WINDOWS_VERSION_RE = re.compile(r'^(?P<name>[^0-9]* (?P<major>[0-9]{1,3})\.'
+                                '(?P<minor>[0-9]{1,3}).*)$')
 INSTALLED_RAM_RE = re.compile(r'^(?P<val>[0-9\.]+) (?P<unit>(?:GB|kB))$')
 PROCESSOR_RE = re.compile(r'(?P<brand>.*) \((?P<cpu_logical_cores>[0-9]+) core '
                           '(?P<cpu_physical_cores>[0-9]+) processor\)$')
@@ -105,7 +107,7 @@ class InventoryClient(BaseInventory):
                     logger.warning("Instance %s of Computer %s ignored",
                                    machines[serial_number]['machine_id'],
                                    serial_number)
-            if platform == 'linux':
+            if platform == 'linux' or platform == 'windows':
                 # TODO better!
                 serial_number = machine_id
             elif platform == 'mac':
@@ -147,10 +149,12 @@ class InventoryClient(BaseInventory):
                 m = MAC_VERSION_RE.match(c['os_version'])
             elif platform == 'linux':
                 m = LINUX_VERSION_RE.match(c['os_version'])
+            elif platform == 'windows':
+                m = WINDOWS_VERSION_RE.match(c['os_version'])
             if m:
                 os_version = m.groupdict()
                 for k in ('major', 'minor', 'patch'):
-                    v = os_version.get(k, None)
+                    v = os_version.get(k)
                     if v:
                         os_version[k] = int(v)
                 ct['os_version'] = os_version

@@ -1,5 +1,6 @@
 from django import template
 from django.utils.safestring import mark_safe
+from zentral.contrib.inventory.conf import IOS, LINUX, MACOS, WINDOWS
 
 register = template.Library()
 
@@ -32,10 +33,12 @@ def machine_type_icon(meta_machine):
 def machine_platform_icon(meta_machine):
     machine_platform = meta_machine.platform
     icon = None
-    if machine_platform in {"MACOS", "IOS"}:
+    if machine_platform in {MACOS, IOS}:
         icon = "apple"
-    elif machine_platform == "LINUX":
+    elif machine_platform == LINUX:
         icon = "linux"
+    elif machine_platform == WINDOWS:
+        icon = "windows"
     if icon:
         return mark_safe('<i class="fa fa-{}" aria-hidden="true"></i>'.format(icon))
     return ""

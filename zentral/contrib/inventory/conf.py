@@ -50,9 +50,9 @@ HARDWARE_MODEL_MACHINE_TYPE_DICT = {
 
 def update_ms_tree_platform(tree):
     os_version_t = tree.get("os_version", {})
-    os_name = os_version_t.get("name", None)
+    os_name = os_version_t.get("name")
     try:
-        minor = int(os_version_t.get("minor", None))
+        minor = int(os_version_t.get("minor"))
     except (TypeError, ValueError):
         minor = None
     if not os_name:
@@ -72,11 +72,13 @@ def update_ms_tree_platform(tree):
         tree["platform"] = IOS
     elif "ubuntu" in os_name:
         tree["platform"] = LINUX
+    elif "windows" in os_name:
+        tree["platform"] = WINDOWS
 
 
 def update_ms_tree_type(tree):
     system_info_t = tree.get("system_info", {})
-    hardware_model = system_info_t.get("hardware_model", None)
+    hardware_model = system_info_t.get("hardware_model")
     if hardware_model:
         hardware_model = hardware_model.lower()
         for prefix, ms_type in HARDWARE_MODEL_MACHINE_TYPE_DICT.items():
@@ -84,7 +86,7 @@ def update_ms_tree_type(tree):
                 tree["type"] = ms_type
                 return
     else:
-        cpu_brand = system_info_t.get("cpu_brand", None)
+        cpu_brand = system_info_t.get("cpu_brand")
         if cpu_brand and "xeon" in cpu_brand.lower():
             tree["type"] = SERVER
 
