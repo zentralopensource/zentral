@@ -6,6 +6,18 @@
 
 set -e
 
+get_machine_id () {
+  if [ -e /etc/monitoringclient/client_settings.conf ]; then
+    MACHINE_ID=$(python -c 'import json;print json.load(open("/etc/monitoringclient/client_settings.conf", "r"))["WatchmanID"]')
+  fi
+  if [ -x /usr/sbin/dmidecode ]; then
+    MACHINE_ID=$(dmidecode -s system-uuid)
+  fi
+  if [ ! $MACHINE_ID ]; then
+    MACHINE_ID=$(cat /var/lib/dbus/machine-id)
+  fi
+}
+
 restart_osqueryd () {
   if [ -x /bin/systemctl ]; then
     sudo systemctl restart osqueryd
@@ -22,19 +34,23 @@ restart_rsyslog () {
   fi
 }
 
+# add apt https transport if missing
+sudo apt-get install -y apt-transport-https
+
 # add osquery repository key
 sudo apt-key adv --keyserver keyserver.ubuntu.com \
                  --recv-keys 1484120AC4E9F8A1A577AEEE97A80C63C9D8B80B
 
-# add osquery repository
+# add/replace osquery repository
+sudo /bin/sed -i '/^deb.*osquery.*$/d' /etc/apt/sources.list
 DISTRO=$(lsb_release -c|cut -d ':' -f2| tr  -d "\t")
-sudo add-apt-repository "deb [arch=amd64] https://osquery-packages.s3.amazonaws.com/$DISTRO $DISTRO main"
+echo "deb [arch=amd64] https://osquery-packages.s3.amazonaws.com/$DISTRO $DISTRO main" | sudo /usr/bin/tee -a /etc/apt/sources.list
 
 # update available package list
 sudo apt-get update
 
 # install osquery
-sudo apt-get install osquery
+sudo apt-get install -y osquery
 
 # rsyslogd pipe for osquery
 sudo cat << RSYSLOGD > /etc/rsyslog.d/60-osquery.conf
@@ -58,7 +74,7 @@ sudo cat << TLS_SERVER_CERT > /etc/zentral/tls_server_certs.crt
 TLS_SERVER_CERT
 
 # enroll secret
-MACHINE_ID=$(cat /var/lib/dbus/machine-id)
+get_machine_id
 sudo cat << ENROLL_SECRET > /etc/zentral/osquery/enroll_secret.txt
 %ENROLL_SECRET_SECRET%\$SERIAL\$$MACHINE_ID
 ENROLL_SECRET
