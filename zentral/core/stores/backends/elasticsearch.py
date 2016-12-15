@@ -66,6 +66,7 @@ class EventStore(BaseEventStore):
         super(EventStore, self).__init__(config_d)
         self._es = Elasticsearch(config_d['servers'])
         self.index = config_d['index']
+        self.read_index = config_d.get('read_index', self.index)
         self.kibana_base_url = config_d.get('kibana_base_url', None)
         self.test = test
 
@@ -134,7 +135,7 @@ class EventStore(BaseEventStore):
         # TODO: count could work from first fetch with elasticsearch.
         body = self._get_machine_events_body(machine_serial_number, event_type)
         body['size'] = 0
-        r = self._es.search(index=self.index, body=body)
+        r = self._es.search(index=self.read_index, body=body)
         return r['hits']['total']
 
     def machine_events_fetch(self, machine_serial_number, offset=0, limit=0, event_type=None):
@@ -145,7 +146,7 @@ class EventStore(BaseEventStore):
         if limit:
             body['size'] = limit
         body['sort'] = [{'created_at': 'desc'}]
-        r = self._es.search(index=self.index, body=body)
+        r = self._es.search(index=self.read_index, body=body)
         for hit in r['hits']['hits']:
             yield self._deserialize_event(hit['_type'], hit['_source'])
 
@@ -165,7 +166,7 @@ class EventStore(BaseEventStore):
                 }
             }
         }
-        r = self._es.search(index=self.index, body=body)
+        r = self._es.search(index=self.read_index, body=body)
         types_d = {}
         for bucket in r['aggregations']['doc_types']['buckets']:
             types_d[bucket['key']] = bucket['doc_count']
@@ -277,7 +278,7 @@ class EventStore(BaseEventStore):
         # TODO: count could work from first fetch with elasticsearch.
         body = self._get_probe_events_body(probe, **search_dict)
         body['size'] = 0
-        r = self._es.search(index=self.index, body=body)
+        r = self._es.search(index=self.read_index, body=body)
         return r['hits']['total']
 
     def probe_events_fetch(self, probe, offset=0, limit=0, **search_dict):
@@ -288,7 +289,7 @@ class EventStore(BaseEventStore):
         if limit:
             body['size'] = limit
         body['sort'] = [{'created_at': 'desc'}]
-        r = self._es.search(index=self.index, body=body)
+        r = self._es.search(index=self.read_index, body=body)
         for hit in r['hits']['hits']:
             yield self._deserialize_event(hit['_type'], hit['_source'])
 
@@ -298,7 +299,7 @@ class EventStore(BaseEventStore):
         body = self._get_probe_events_body(probe, **search_dict)
         kibana_params = {
             "columns": ["_source"],
-            "index": self.index,
+            "index": self.read_index,
             "interval": "auto",
             "query": body["query"],
             "sort": ["created_at", "desc"]
@@ -354,7 +355,7 @@ class EventStore(BaseEventStore):
                     }
                   }
                 }}
-        r = self._es.search(index=self.index, body=body)
+        r = self._es.search(index=self.read_index, body=body)
         return [(parser.parse(b["key_as_string"]), b["doc_count"], b["unique_msn"]["value"])
                 for b in r['aggregations']['buckets']['buckets']]
 
