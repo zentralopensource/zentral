@@ -16,6 +16,7 @@ urlpatterns = [
         views.RemoveMBUTagView.as_view(),
         name='remove_mbu_tag'),
     url(r'^business_units/(?P<pk>\d+)/machines/$', views.MBUMachinesView.as_view(), name='mbu_machines'),
+    url(r'^business_units/(?P<pk>\d+)/detach_bu/(?P<bu_id>\d+)/$', views.DetachBUView.as_view(), name='detach_bu'),
     url(r'^business_units/(?P<pk>\d+)/api_enrollment/$',
         views.MBUAPIEnrollmentView.as_view(),
         name='mbu_api_enrollment'),

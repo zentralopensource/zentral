@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'inventory:mbu' %}">Inventory business units</a>
+  <li><a href="{{ mbu.get_absolute_url }}">{{ mbu }}</a>
+  <li class="active">Detach {{ bu }}</li>
+</ol>
+
+<h2>Detach {{ bu }}</h2>
+<form method="POST" class="form">{% csrf_token %}
+  <p>Please confirm that you would like to detach {{ bu }} from {{ mbu }}</p>
+  <a href="{{ mbu.get_absolute_url }}" class="btn btn-default">Cancel</a>
+  <button type="submit" class="btn btn-primary">Detach</button>
+</form>
+{% endblock %}

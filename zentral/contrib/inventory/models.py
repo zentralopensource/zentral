@@ -186,6 +186,17 @@ class BusinessUnit(AbstractMachineGroup):
         else:
             return self.name
 
+    def can_be_detached(self):
+        return (not self.is_api_enrollment_business_unit() and
+                self.meta_business_unit.get_current_business_units().count() > 1)
+
+    def detach(self):
+        if not self.can_be_detached():
+            return self.meta_business_unit
+        new_mbu = MetaBusinessUnit.objects.create(name=self.name)
+        self.set_meta_business_unit(new_mbu)
+        return new_mbu
+
 
 class MachineGroup(AbstractMachineGroup):
     machine_links = models.ManyToManyField(Link, related_name="+")  # tmpl for links to machine in a group

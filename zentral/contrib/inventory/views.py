@@ -8,7 +8,8 @@ from zentral.core.stores import frontend_store
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
                     MacOSAppSearchForm)
-from .models import (MetaBusinessUnit, MachineGroup,
+from .models import (BusinessUnit,
+                     MetaBusinessUnit, MachineGroup,
                      MachineSnapshot, MetaMachine,
                      MetaBusinessUnitTag, MachineTag, Tag,
                      OSXApp, OSXAppInstance)
@@ -343,6 +344,27 @@ class RemoveMBUTagView(generic.View):
         MetaBusinessUnitTag.objects.filter(tag__id=kwargs['tag_id'],
                                            meta_business_unit__id=kwargs['pk']).delete()
         return HttpResponseRedirect(reverse('inventory:mbu_tags', args=(kwargs['pk'],)))
+
+
+class DetachBUView(generic.TemplateView):
+    template_name = "inventory/detach_bu.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.bu = get_object_or_404(BusinessUnit,
+                                    pk=kwargs['bu_id'],
+                                    meta_business_unit__id=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['inventory'] = True
+        context['bu'] = self.bu
+        context['mbu'] = self.bu.meta_business_unit
+        return context
+
+    def post(self, *args, **kwargs):
+        mbu = self.bu.detach()
+        return HttpResponseRedirect(mbu.get_absolute_url())
 
 
 class MBUAPIEnrollmentView(generic.UpdateView):

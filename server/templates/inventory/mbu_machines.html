@@ -23,6 +23,13 @@
       </a>
       {% endfor %}
     </td>
+    <td>
+      {% if bu.can_be_detached %}
+      <a href="{% url 'inventory:detach_bu' object.id bu.id %}" class="btn btn-default">
+        Detach
+      </a>
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
 </table>
