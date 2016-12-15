@@ -3,7 +3,7 @@ from datetime import datetime
 from dateutil import parser
 from django.test import TestCase
 from django.utils.timezone import is_aware, make_naive
-from zentral.contrib.inventory.conf import DESKTOP, MACOS
+from zentral.contrib.inventory.conf import DESKTOP, MACOS, SERVER, update_ms_tree_type, VM
 from zentral.contrib.inventory.models import (Certificate,
                                               CurrentMachineSnapshot,
                                               MachineSnapshot, MachineSnapshotCommit,
@@ -241,3 +241,49 @@ class MachineSnapshotTestCase(TestCase):
         mm = MetaMachine(self.serial_number)
         mm.archive()
         self.assertEqual(list(Tag.objects.used_in_inventory()), [])
+
+    def test_update_ms_tree_type_hardware_model(self):
+        tree = {"system_info": {"hardware_model": "IMac"}}
+        update_ms_tree_type(tree)
+        self.assertEqual(tree.get("type"), DESKTOP)
+        tree = {"system_info": {"hardware_model1111": "kjwelkjdwlkej"}}
+        self.assertEqual(tree.get("type"), None)
+
+    def test_update_ms_tree_type_network_interface(self):
+        tree = {"network_interfaces": [{"mac": "00:1c:42:00:00:08",
+                                        "name": "en0",
+                                        "address": "192.168.1.17"}]}
+        update_ms_tree_type(tree)
+        self.assertEqual(tree.get("type"), VM)
+        tree = {"system_info": {"hardware_model": "lkqjdwlkjwqd"},
+                "network_interfaces": [{"mac": "00:1C:42:00:00:08",
+                                        "name": "en0",
+                                        "address": "192.168.1.17"}]}
+        update_ms_tree_type(tree)
+        self.assertEqual(tree.get("type"), VM)
+        tree = {"network_interfaces": [{"mac": "38:c9:86:1d:71:ad",
+                                        "name": "en0",
+                                        "address": "192.168.1.19"},
+                                       {"mac": "00:1c:42:00:00:08",
+                                        "name": "en0",
+                                        "address": "192.168.1.17"}]}
+        self.assertEqual(tree.get("type"), None)
+        tree = {"network_interfaces": [{"mac": 11,
+                                        "name": "en0",
+                                        "address": "192.168.1.17"}]}
+        update_ms_tree_type(tree)
+        self.assertEqual(tree.get("type"), None)
+        tree = {"network_interfaces": [{"name": "en0",
+                                        "address": "192.168.1.17"}]}
+        update_ms_tree_type(tree)
+        self.assertEqual(tree.get("type"), None)
+
+    def test_update_ms_tree_type_cpu_brand(self):
+        tree = {"system_info": {"hardware_model": "kjwelkjdwlkej",
+                                "cpu_brand": "Xeon godz"}}
+        update_ms_tree_type(tree)
+        self.assertEqual(tree.get("type"), SERVER)
+        tree = {"system_info": {"hardware_model": "kjwelkjdwlkej",
+                                "cpu_brand": "Godz"}}
+        update_ms_tree_type(tree)
+        self.assertEqual(tree.get("type"), None)

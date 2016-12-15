@@ -48,6 +48,17 @@ HARDWARE_MODEL_MACHINE_TYPE_DICT = {
 }
 
 
+# source http://www.techrepublic.com/blog/data-center/mac-address-scorecard-for-common-virtual-machine-platforms/
+# last check 20161215
+KNOWN_VM_MAC_PREFIXES = {
+    '0003FF',  # Microsoft Corporation (Hyper-V, Virtual Server, Virtual PC)
+    '005056', '000C29', '000569',  # VMware, Inc. (VMware ESX 3, Server, Workstation, Player)
+    '00163E',  # Xensource, Inc.
+    '001C42',  # Parallels, Inc.
+    '080027',  # PCS Systemtechnik GmbH (VirtualBox)
+}
+
+
 def update_ms_tree_platform(tree):
     os_version_t = tree.get("os_version", {})
     os_name = os_version_t.get("name")
@@ -85,10 +96,15 @@ def update_ms_tree_type(tree):
             if hardware_model.startswith(prefix):
                 tree["type"] = ms_type
                 return
-    else:
-        cpu_brand = system_info_t.get("cpu_brand")
-        if cpu_brand and "xeon" in cpu_brand.lower():
-            tree["type"] = SERVER
+    network_interfaces = tree.get("network_interfaces")
+    if network_interfaces and \
+       all(isinstance(ni.get("mac"), str) and ni["mac"].replace(":", "")[:6].upper() in KNOWN_VM_MAC_PREFIXES
+           for ni in network_interfaces):
+        tree["type"] = VM
+        return
+    cpu_brand = system_info_t.get("cpu_brand")
+    if cpu_brand and "xeon" in cpu_brand.lower():
+        tree["type"] = SERVER
 
 
 def has_deb_packages(machine_snapshot):
