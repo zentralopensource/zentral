@@ -1,5 +1,6 @@
 import copy
 import logging
+from zentral.contrib.inventory.models import CurrentMachineSnapshot
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 
 __all__ = ['BaseInventory', 'InventoryError']
@@ -31,6 +32,8 @@ class BaseInventory(object):
 
     # inventory API
     def sync(self):
+        seen_machines = []
+        inventory_source = None
         for machine_d in self.get_machines():
             source = copy.deepcopy(self.source)
             try:
@@ -43,6 +46,7 @@ class BaseInventory(object):
                 logger.warning('Machine serial number blank. Client "%s". Reference "%s"',
                                self.name, machine_d.get('reference', 'Unknown'))
                 continue
+            seen_machines.append(serial_number)
             # source will be modified by mto
             machine_d['source'] = source
             for group_d in machine_d.get('groups', []):
@@ -51,7 +55,13 @@ class BaseInventory(object):
             if business_unit_d:
                 business_unit_d['source'] = source
             # save all
-            commit_machine_snapshot_and_trigger_events(machine_d)
+            ms = commit_machine_snapshot_and_trigger_events(machine_d)
+            if inventory_source is None and ms:
+                inventory_source = ms.source
+        if seen_machines and inventory_source:
+            (CurrentMachineSnapshot.objects.filter(source=inventory_source)
+                                           .exclude(serial_number__in=seen_machines)
+                                           .delete())
 
     def add_machine_to_group(self, machine_snapshot, group_name):
         raise NotImplementedError
