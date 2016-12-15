@@ -393,6 +393,7 @@ class MachineSnapshotCommitManager(models.Manager):
         machine_snapshot, _ = MachineSnapshot.objects.commit(tree)
         serial_number = machine_snapshot.serial_number
         source = machine_snapshot.source
+        new_version = new_parent = None
         try:
             with transaction.atomic():
                 try:
@@ -400,21 +401,21 @@ class MachineSnapshotCommitManager(models.Manager):
                                                                source=source).order_by('-version')[0]
                 except IndexError:
                     new_version = 1
-                    parent = None
                 else:
-                    if msc.machine_snapshot == machine_snapshot:
-                        return None, machine_snapshot
-                    new_version = msc.version + 1
-                    parent = msc
-                msc = MachineSnapshotCommit.objects.create(serial_number=serial_number,
-                                                           source=source,
-                                                           version=new_version,
-                                                           machine_snapshot=machine_snapshot,
-                                                           parent=parent)
+                    if msc.machine_snapshot != machine_snapshot:
+                        new_version = msc.version + 1
+                        new_parent = msc
+                new_msc = None
+                if new_version:
+                    new_msc = MachineSnapshotCommit.objects.create(serial_number=serial_number,
+                                                                   source=source,
+                                                                   version=new_version,
+                                                                   machine_snapshot=machine_snapshot,
+                                                                   parent=new_parent)
                 CurrentMachineSnapshot.objects.update_or_create(serial_number=serial_number,
                                                                 source=source,
                                                                 defaults={'machine_snapshot': machine_snapshot})
-                return msc, machine_snapshot
+                return new_msc, machine_snapshot
         except IntegrityError:
             msc = MachineSnapshotCommit.objects.get(serial_number=serial_number,
                                                     source=source,

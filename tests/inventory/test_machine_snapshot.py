@@ -198,6 +198,15 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(MachineSnapshot.objects.count(), 3)
         self.assertEqual(MachineSnapshot.objects.current().count(), 1)
         self.assertEqual(MachineSnapshot.objects.current().get(pk=ms3.id), ms3)
+        mm = MetaMachine(self.serial_number)
+        mm.archive()
+        self.assertEqual(CurrentMachineSnapshot.objects.count(), 0)
+        tree = copy.deepcopy(self.machine_snapshot3)
+        msc4, ms4 = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        self.assertEqual(ms3, ms4)
+        self.assertEqual(CurrentMachineSnapshot.objects.count(), 1)
+        cms = CurrentMachineSnapshot.objects.get(serial_number=self.serial_number)
+        self.assertEqual(cms.machine_snapshot, ms3)
 
     def test_meta_machine(self):
         tree = copy.deepcopy(self.machine_snapshot)
