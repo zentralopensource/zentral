@@ -117,6 +117,21 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(machine.reference, json_response["node_key"])
         self.assertEqual(machine.system_info.computer_name, "godzilla")
 
+    def test_re_enroll(self):
+        machine_serial_number = "2130982103971203"
+        # enroll machine
+        secret = "{}$SERIAL${}".format(make_secret("zentral.contrib.osquery"),
+                                       machine_serial_number)
+        response = self.post_as_json("enroll", {"enroll_secret": secret,
+                                                "host_identifier": "godzilla"})
+        json_response = response.json()
+        node_key = json_response["node_key"]
+        # re-enroll machine
+        response = self.post_as_json("enroll", {"enroll_secret": secret,
+                                                "host_identifier": "godzilla"})
+        json_response = response.json()
+        self.assertEqual(json_response["node_key"], node_key)
+
     def test_config_405(self):
         response = self.client.get(reverse("osquery:enroll"))
         self.assertEqual(response.status_code, 405)

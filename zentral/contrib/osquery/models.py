@@ -13,27 +13,31 @@ MAX_DISTRIBUTED_QUERY_AGE = timedelta(days=1)
 
 
 def enroll(serial_number, business_unit, host_identifier, ip):
-    tree = {'source': {'module': 'zentral.contrib.osquery',
-                       'name': 'osquery'},
-            'reference': get_random_string(64),
-            'serial_number': serial_number}
+    source_module = "zentral.contrib.osquery"
+    source_name = "osquery"
+    try:
+        msc = (MachineSnapshotCommit.objects.filter(source__name=source_name,
+                                                    source__module=source_module,
+                                                    serial_number=serial_number)
+                                            .order_by("-version"))[0]
+    except IndexError:
+        action = 'enrollment'
+        tree = {'source': {'module': source_module,
+                           'name': source_name},
+                'reference': get_random_string(64),
+                'serial_number': serial_number}
+        if host_identifier:
+            tree["system_info"] = {"computer_name": host_identifier}
+    else:
+        action = 're-enrollment'
+        tree = msc.machine_snapshot.serialize()
     if business_unit:
         tree['business_unit'] = business_unit.serialize()
-    if host_identifier:
-        tree["system_info"] = {"computer_name": host_identifier}
     if ip:
         tree["public_ip_address"] = ip
-    action = None
     ms = commit_machine_snapshot_and_trigger_events(tree)
     if not ms:
         logger.error("Enrollment error. Could not commit tree")
-    else:
-        if MachineSnapshotCommit.objects.filter(source=ms.source,
-                                                serial_number=serial_number).count() > 1:
-            # msc with same source for same serial number existed
-            action = 're-enrollment'
-        else:
-            action = 'enrollment'
     return ms, action
 
 
