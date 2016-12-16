@@ -5,7 +5,7 @@ import urllib.parse
 from dateutil import parser
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import ConnectionError, RequestError
-from zentral.core.events import event_from_event_d, event_types
+from zentral.core.events import event_from_event_d, event_tags, event_types
 from zentral.core.stores.backends.base import BaseEventStore
 from zentral.utils.rison import dumps as rison_dumps
 
@@ -88,7 +88,17 @@ class EventStore(BaseEventStore):
                     logger.info('Index %s exists', self.index)
                 else:
                     raise
-            logger.info('Index %s created', self.index)
+            # wait for index recovery
+            while True:
+                recovery = self._es.indices.get(self.index, feature="_recovery")
+                shards = recovery.get(self.index, {}).get("shards", [])
+                if any(c["stage"] != "DONE" for c in shards):
+                    s = 1000 / random.randint(1000, 3000)
+                    time.sleep(s)
+                    logger.warning("Elasticsearch index recovering")
+                else:
+                    logger.warning("Elasticsearch index recovery done")
+                    break
             break
         else:
             raise Exception('Could not connect to server')
@@ -182,6 +192,7 @@ class EventStore(BaseEventStore):
         query_filter = []
 
         # inventory and metadata filters
+        seen_event_types = set([])
         for section, attributes in (("inventory", (("terms",
                                                     "machine.meta_business_units.id",
                                                     "meta_business_unit_ids"),
@@ -196,6 +207,13 @@ class EventStore(BaseEventStore):
                 for query_type, query_attribute, filter_attribute in attributes:
                     values = getattr(section_filter, filter_attribute, None)
                     if values:
+                        if section == "metadata":
+                            if filter_attribute == "event_types":
+                                seen_event_types.update(values)
+                            elif filter_attribute == "event_tags":
+                                seen_event_types.update(event_cls.event_type
+                                                        for v in values
+                                                        for event_cls in event_tags.get(v, []))
                         if query_type == "terms":
                             section_filter_must.append({"terms": {query_attribute: list(values)}})
                         elif query_type == "type":
@@ -218,8 +236,15 @@ class EventStore(BaseEventStore):
                     query_filter.append(section_should[0])
 
         # payload filters
-        # PB attributes prefixes by event type in ES
-        # we must use a query string for the field name wildcard
+        # PB attributes prefixed by event type in ES
+        # we must try all possible prefixes
+        if seen_event_types:
+            # We are lucky, we only have to test some prefixes
+            # because there is at least one metadata filter with an event type or a tag.
+            payload_event_types_for_filters = seen_event_types
+        else:
+            # Bad luck, no metadata filter. We must try all event types.
+            payload_event_types_for_filters = event_types.keys()
 
         payload_should = []
         for payload_filter in probe.payload_filters:
@@ -228,8 +253,10 @@ class EventStore(BaseEventStore):
                 if values:
 
                     def make_query_string(v):
-                        return {'query_string': {'fields': ['*.{}'.format(attribute)],
+                        return {'query_string': {'fields': ['{}.{}'.format(event_type, attribute)
+                                                            for event_type in payload_event_types_for_filters],
                                                  'query': '"{}"'.format(v)}}
+
                     if len(values) > 1:
                         # TODO: escape value in query string
                         payload_filter_must.append({'bool': {'should': [make_query_string(v) for v in values]}})
