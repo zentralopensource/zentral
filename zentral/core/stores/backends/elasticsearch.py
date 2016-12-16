@@ -5,7 +5,7 @@ import urllib.parse
 from dateutil import parser
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import ConnectionError, RequestError
-from zentral.core.events import event_from_event_d
+from zentral.core.events import event_from_event_d, event_types
 from zentral.core.stores.backends.base import BaseEventStore
 from zentral.utils.rison import dumps as rison_dumps
 
@@ -162,7 +162,10 @@ class EventStore(BaseEventStore):
             'size': 0,
             'aggs': {
                 'doc_types': {
-                    'terms': {'field': '_type'}
+                    'terms': {
+                        'field': '_type',
+                        'size': len(event_types)
+                    }
                 }
             }
         }
