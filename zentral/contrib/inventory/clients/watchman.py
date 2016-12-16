@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 import re
 import requests
@@ -122,6 +123,11 @@ class InventoryClient(BaseInventory):
             ct = {'reference': str(machine_id),
                   'links': self._machine_links_from_id(machine_id),
                   'serial_number': serial_number}
+
+            # last seen
+            last_report = c.get('last_report')
+            if last_report:
+                ct['last_seen'] = datetime.utcfromtimestamp(last_report)
 
             # the unique group is a business unit in zentral
             gid = c['group']

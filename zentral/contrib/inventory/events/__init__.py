@@ -15,6 +15,14 @@ class InventoryMachineAdded(BaseEvent):
 register_event_type(InventoryMachineAdded)
 
 
+class InventoryHeartbeat(BaseEvent):
+    event_type = 'inventory_heartbeat'
+    tags = ['heartbeat']
+
+
+register_event_type(InventoryHeartbeat)
+
+
 # Inventory update events
 for attr in ('reference',
              'machine',
@@ -34,11 +42,12 @@ for attr in ('reference',
 
 
 def post_inventory_events(msn, events):
-    for index, (event_type, data) in enumerate(events):
+    for index, (event_type, created_at, data) in enumerate(events):
         event_cls = event_cls_from_type(event_type)
         metadata = EventMetadata(event_cls.event_type,
                                  machine_serial_number=msn,
                                  index=index,
+                                 created_at=created_at,
                                  tags=event_cls.tags)
         event = event_cls(metadata, data)
         event.post()

@@ -1,3 +1,4 @@
+from dateutil import parser
 import logging
 import requests
 from requests.packages.urllib3.util import Retry
@@ -21,6 +22,7 @@ class InventoryClient(BaseInventory):
         "fields": [
             {"component": "DesktopClient", "column": "filewave_id"},
             {"component": "DesktopClient", "column": "serial_number"},
+            {"component": "DesktopClient", "column": "last_check_in"},
             {"component": "OperatingSystem", "column": "name"},
             {"component": "OperatingSystem", "column": "type"},
             {"component": "OperatingSystem", "column": "version"},
@@ -41,6 +43,7 @@ class InventoryClient(BaseInventory):
     MACHINE_FIELDS = [
         "filewave_id",
         "serial_number",
+        "last_check_in",
         "os_name",
         "os_type",
         "os_version",
@@ -198,5 +201,12 @@ class InventoryClient(BaseInventory):
                 tree_network_interfaces = tree.setdefault("network_interfaces", [])
                 if network_interface not in tree_network_interfaces:
                     tree_network_interfaces.append(network_interface)
+            # last check in
+            last_check_in = result.get('last_check_in')
+            if last_check_in:
+                last_check_in = parser.parse(last_check_in)
+                last_seen = tree.get('last_seen')
+                if not last_seen or last_seen < last_check_in:
+                    tree['last_seen'] = last_check_in
 
         yield from trees.values()

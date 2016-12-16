@@ -78,10 +78,14 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
     source = machine_snapshot_commit.source.serialize()
     diff = machine_snapshot_commit.update_diff()
     if diff is None:
-        return [('inventory_machine_added',
-                {'source': source,
-                 'machine_snapshot': machine_snapshot_commit.machine_snapshot.serialize()})]
-    events = []
+        yield ('inventory_machine_added',
+               None,
+               {'source': source,
+                'machine_snapshot': machine_snapshot_commit.machine_snapshot.serialize()})
+        yield ('inventory_heartbeat',
+               machine_snapshot_commit.last_seen,
+               {'source': source})
+        return
     for m2m_attr, event_type in (('links', 'inventory_link_update'),
                                  ('network_interfaces', 'inventory_network_interface_update'),
                                  ('osx_app_instances', 'inventory_osx_app_instance_update'),
@@ -93,7 +97,7 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                 obj['action'] = action
                 if 'source' not in obj:
                     obj['source'] = source
-                events.append((event_type, obj))
+                yield (event_type, None, obj)
     for fk_attr in ('reference',
                     'machine',
                     'business_unit',
@@ -113,8 +117,12 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                     event = {'source': source,
                              fk_attr: obj}
                 event['action'] = action
-                events.append((event_type, event))
-    return events
+                yield (event_type, None, event)
+    added_last_seen = diff.get("last_seen", {}).get("added")
+    if added_last_seen:
+        yield ("inventory_heartbeat",
+               added_last_seen,
+               {'source': source})
 
 
 def commit_machine_snapshot_and_trigger_events(tree):

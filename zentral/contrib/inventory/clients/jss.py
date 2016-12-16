@@ -1,4 +1,5 @@
 import logging
+from dateutil import parser
 import requests
 from requests.packages.urllib3.util import Retry
 from .base import BaseInventory, InventoryError
@@ -69,6 +70,9 @@ class InventoryClient(BaseInventory):
             ct = {'reference': str(machine_id),
                   'links': self._machine_links_from_id(machine_id),
                   'serial_number': computer['general']['serial_number']}
+            last_contact = computer['general'].get('last_contact_time_utc')
+            if last_contact:
+                ct['last_seen'] = parser.parse(last_contact)
 
             # business unit
             site_id = computer['general']['site']['id']

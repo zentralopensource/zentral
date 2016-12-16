@@ -80,7 +80,6 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(cms.machine_snapshot, ms)
         tree = copy.deepcopy(self.machine_snapshot)
         msc2, ms2 = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
-        self.assertEqual(msc2, None)
         self.assertEqual(ms, ms2)
         self.assertEqual(CurrentMachineSnapshot.objects.all().count(), 1)
         cms = CurrentMachineSnapshot.objects.get(serial_number=self.serial_number, source=ms.source)
@@ -122,6 +121,8 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(msc2.update_diff(),
                          {"os_version": {"added": self.os_version},
                           "osx_app_instances": {"added": [osx_app_instance_diff]},
+                          "last_seen": {"added": msc2.last_seen,
+                                        "removed": msc1.last_seen},
                           "platform": {"added": MACOS}})  # don't forget platform !!!
         tree = copy.deepcopy(self.machine_snapshot3)
         msc3, ms3 = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
@@ -132,7 +133,8 @@ class MachineSnapshotTestCase(TestCase):
         osx_app_instance2_diff = copy.deepcopy(self.osx_app_instance2)
         prepare_diff_dict(osx_app_instance2_diff)
         self.assertEqual(msc3.update_diff(),
-                         {"osx_app_instances": {"added": [osx_app_instance2_diff]}})
+                         {"last_seen": {"added": msc3.last_seen, "removed": msc2.last_seen},
+                          "osx_app_instances": {"added": [osx_app_instance2_diff]}})
         self.assertEqual(ms3.mt_hash, ms3.hash())
         self.assertEqual(Certificate.objects.count(), 1)
         tree = copy.deepcopy(self.machine_snapshot2)
@@ -296,3 +298,23 @@ class MachineSnapshotTestCase(TestCase):
                                 "cpu_brand": "Godz"}}
         update_ms_tree_type(tree)
         self.assertEqual(tree.get("type"), None)
+
+    def test_last_seen(self):
+        tree = copy.deepcopy(self.machine_snapshot)
+        last_seen = datetime.utcnow()
+        tree["last_seen"] = last_seen
+        msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        self.assertEqual(msc.last_seen, last_seen)
+        tree = copy.deepcopy(self.machine_snapshot)
+        tree["last_seen"] = last_seen
+        msc2, ms2 = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        self.assertEqual(msc2, None)
+        tree = copy.deepcopy(self.machine_snapshot)
+        last_seen3 = datetime.utcnow()
+        tree["last_seen"] = last_seen3
+        msc3, ms3 = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        self.assertEqual(msc3.last_seen, last_seen3)
+        self.assertEqual(msc3.parent, msc)
+        self.assertEqual(msc3.machine_snapshot, ms)
+        self.assertEqual(msc3.update_diff(),
+                         {"last_seen": {"added": last_seen3, "removed": last_seen}})

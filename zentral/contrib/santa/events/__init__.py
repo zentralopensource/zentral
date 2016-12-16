@@ -7,19 +7,17 @@ logger = logging.getLogger('zentral.contrib.santa.events')
 ALL_EVENTS_SEARCH_DICT = {"tag": "santa"}
 
 
-class SantaBaseEvent(BaseEvent):
-    tags = ["santa"]
-
-
-class SantaPreflightEvent(SantaBaseEvent):
+class SantaPreflightEvent(BaseEvent):
     event_type = "santa_preflight"
+    tags = ["santa", "heartbeat"]
 
 
 register_event_type(SantaPreflightEvent)
 
 
-class SantaEventEvent(SantaBaseEvent):
+class SantaEventEvent(BaseEvent):
     event_type = "santa_event"
+    tags = ["santa"]
 
     def get_notification_context(self, probe):
         ctx = super().get_notification_context(probe)

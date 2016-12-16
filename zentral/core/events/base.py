@@ -44,8 +44,10 @@ class EventMetadata(object):
         if isinstance(self.uuid, str):
             self.uuid = uuid.UUID(self.uuid)
         self.index = int(kwargs.pop('index', 0))
-        self.created_at = kwargs.pop('created_at', datetime.utcnow())
-        if isinstance(self.created_at, str):
+        self.created_at = kwargs.pop('created_at', None)
+        if self.created_at is None:
+            self.created_at = datetime.utcnow()
+        elif isinstance(self.created_at, str):
             self.created_at = parser.parse(self.created_at)
         self.machine_serial_number = kwargs.pop('machine_serial_number')
         self.machine = MetaMachine(self.machine_serial_number)

@@ -1,5 +1,6 @@
 from collections import Counter
 import colorsys
+from datetime import datetime
 import logging
 import re
 from django.contrib.postgres.fields import JSONField
@@ -9,6 +10,7 @@ from django.db import connection, IntegrityError, models, transaction
 from django.db.models import Count, Q
 from django.utils.functional import cached_property
 from django.utils.text import slugify
+from django.utils.timezone import is_aware, make_naive
 from django.utils.translation import ugettext_lazy as _
 from zentral.conf import settings
 from zentral.utils.mt_models import AbstractMTObject, prepare_commit_tree, MTObjectManager, MTOError
@@ -388,6 +390,11 @@ class MachineSnapshot(AbstractMTObject):
 
 class MachineSnapshotCommitManager(models.Manager):
     def commit_machine_snapshot_tree(self, tree):
+        last_seen = tree.pop('last_seen', None)
+        if not last_seen:
+            last_seen = datetime.utcnow()
+        if is_aware(last_seen):
+            last_seen = make_naive(last_seen)
         update_ms_tree_platform(tree)
         update_ms_tree_type(tree)
         machine_snapshot, _ = MachineSnapshot.objects.commit(tree)
@@ -402,7 +409,7 @@ class MachineSnapshotCommitManager(models.Manager):
                 except IndexError:
                     new_version = 1
                 else:
-                    if msc.machine_snapshot != machine_snapshot:
+                    if msc.machine_snapshot != machine_snapshot or msc.last_seen != last_seen:
                         new_version = msc.version + 1
                         new_parent = msc
                 new_msc = None
@@ -411,7 +418,8 @@ class MachineSnapshotCommitManager(models.Manager):
                                                                    source=source,
                                                                    version=new_version,
                                                                    machine_snapshot=machine_snapshot,
-                                                                   parent=new_parent)
+                                                                   parent=new_parent,
+                                                                   last_seen=last_seen)
                 CurrentMachineSnapshot.objects.update_or_create(serial_number=serial_number,
                                                                 source=source,
                                                                 defaults={'machine_snapshot': machine_snapshot})
@@ -435,6 +443,7 @@ class MachineSnapshotCommit(models.Model):
     version = models.PositiveIntegerField(default=1)
     machine_snapshot = models.ForeignKey(MachineSnapshot)
     parent = models.ForeignKey('self', blank=True, null=True)
+    last_seen = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = MachineSnapshotCommitManager()
@@ -446,7 +455,12 @@ class MachineSnapshotCommit(models.Model):
         if not self.parent:
             return None
         else:
-            return self.machine_snapshot.diff(self.parent.machine_snapshot)
+            diff = self.machine_snapshot.diff(self.parent.machine_snapshot)
+            if self.parent.last_seen and self.parent.last_seen != self.last_seen:
+                diff["last_seen"] = {"removed": self.parent.last_seen}
+            if self.last_seen and self.parent.last_seen != self.last_seen:
+                diff.setdefault("last_seen", {})["added"] = self.last_seen
+            return diff
 
 
 class CurrentMachineSnapshot(models.Model):
