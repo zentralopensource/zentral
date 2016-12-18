@@ -25,7 +25,7 @@ register_event_type(MunkiEvent)
 
 
 def post_munki_request_event(msn, user_agent, ip, **kwargs):
-    MunkiRequestEvent.post_machine_payloads(msn, user_agent, ip, [kwargs])
+    MunkiRequestEvent.post_machine_request_payloads(msn, user_agent, ip, [kwargs])
 
 
 def post_munki_events(msn, user_agent, ip, data):
