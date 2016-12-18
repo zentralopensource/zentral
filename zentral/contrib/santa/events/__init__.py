@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from zentral.core.events.base import BaseEvent, register_event_type
 
@@ -33,8 +34,14 @@ class SantaEventEvent(BaseEvent):
 register_event_type(SantaEventEvent)
 
 
+def get_created_at(payload):
+    return datetime.utcfromtimestamp(payload['execution_time'])
+
+
 def post_santa_events(msn, user_agent, ip, data):
-    SantaEventEvent.post_machine_request_payloads(msn, user_agent, ip, data.get('events', []))
+    SantaEventEvent.post_machine_request_payloads(msn, user_agent, ip,
+                                                  data.get('events', []),
+                                                  get_created_at)
 
 
 def post_santa_preflight(msn, user_agent, ip, data):

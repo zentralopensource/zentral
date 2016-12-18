@@ -119,18 +119,23 @@ class BaseEvent(object):
     tags = []
 
     @classmethod
-    def build_from_machine_request_payloads(cls, msn, ua, ip, payloads):
+    def build_from_machine_request_payloads(cls, msn, ua, ip, payloads, get_created_at=None):
         metadata = EventMetadata(cls.event_type,
                                  machine_serial_number=msn,
                                  request=EventRequest(ua, ip),
                                  tags=cls.tags)
         for index, payload in enumerate(payloads):
             metadata.index = index
+            if get_created_at:
+                try:
+                    metadata.created_at = get_created_at(payload)
+                except:
+                    logger.exception("Could not extract created_at from payload")
             yield cls(metadata, payload)
 
     @classmethod
-    def post_machine_request_payloads(cls, msn, user_agent, ip, payloads):
-        for event in cls.build_from_machine_request_payloads(msn, user_agent, ip, payloads):
+    def post_machine_request_payloads(cls, msn, user_agent, ip, payloads, get_created_at=None):
+        for event in cls.build_from_machine_request_payloads(msn, user_agent, ip, payloads, get_created_at):
             event.post()
 
     def __init__(self, metadata, payload):
