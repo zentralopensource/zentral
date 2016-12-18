@@ -39,7 +39,7 @@ for jss_event, (event_subtype, is_heartbeat) in JSS_EVENTS.items():
 
 
 def post_jss_event(user_agent, ip, data):
-    event_cls = event_cls_from_type('jss_{}'.format(JSS_EVENTS[data["webhook"]["webhookEvent"]]))
+    event_cls = event_cls_from_type('jss_{}'.format(JSS_EVENTS[data["webhook"]["webhookEvent"]][0]))
     payload = data["event"]
     msn = payload.get("serialNumber", None)
     event_cls.post_machine_request_payloads(msn, user_agent, ip, [payload])
