@@ -9,7 +9,7 @@ from django.views.generic.edit import FormView
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView
-from .events import post_munki_events
+from .events import post_munki_events, post_munki_request_event
 from .forms import CreateInstallProbeForm, UpdateInstallProbeForm
 from .models import MunkiState
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
@@ -91,6 +91,7 @@ class JobDetailsView(BaseView):
 
     def do_post(self, data):
         msn = data['machine_serial_number']
+        post_munki_request_event(msn, self.user_agent, self.ip, request_type="job_details")
         response_d = {'include_santa_fileinfo': True}
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=msn)
@@ -141,6 +142,9 @@ class PostJobView(BaseView):
                     parser.parse(r.pop('end_time')),
                     r) for r in data.pop('reports')]
         # Events
+        post_munki_request_event(msn, self.user_agent, self.ip,
+                                 request_type="postflight",
+                                 include_santa_fileinfo=data.get('include_santa_fileinfo', False))
         post_munki_events(msn,
                           self.user_agent,
                           self.ip,

@@ -5,14 +5,27 @@ from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, reg
 logger = logging.getLogger('zentral.contrib.munki.events')
 
 
-ALL_EVENTS_SEARCH_DICT = {"event_type": "munki_event"}
+ALL_EVENTS_SEARCH_DICT = {"tag": "munki"}
+
+
+class MunkiRequestEvent(BaseEvent):
+    event_type = "munki_request"
+    tags = ["munki", "heartbeat"]
+
+
+register_event_type(MunkiRequestEvent)
 
 
 class MunkiEvent(BaseEvent):
     event_type = "munki_event"
+    tags = ["munki"]
 
 
 register_event_type(MunkiEvent)
+
+
+def post_munki_request_event(msn, user_agent, ip, **kwargs):
+    MunkiRequestEvent.post_machine_payloads(msn, user_agent, ip, [kwargs])
 
 
 def post_munki_events(msn, user_agent, ip, data):
