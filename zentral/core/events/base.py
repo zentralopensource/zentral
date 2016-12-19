@@ -33,8 +33,8 @@ class EventRequest(object):
         self.ip = ip
 
     def serialize(self):
-        return {'user_agent': self.user_agent,
-                'ip': self.ip}
+        return {k: v for k, v in (("user_agent", self.user_agent),
+                                  ("ip", self.ip)) if v}
 
 
 class EventMetadata(object):
@@ -120,9 +120,13 @@ class BaseEvent(object):
 
     @classmethod
     def build_from_machine_request_payloads(cls, msn, ua, ip, payloads, get_created_at=None):
+        if ua or ip:
+            request = EventRequest(ua, ip)
+        else:
+            request = None
         metadata = EventMetadata(cls.event_type,
                                  machine_serial_number=msn,
-                                 request=EventRequest(ua, ip),
+                                 request=request,
                                  tags=cls.tags)
         for index, payload in enumerate(payloads):
             metadata.index = index
