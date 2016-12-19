@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from zentral.core.events.base import BaseEvent, register_event_type
 
@@ -71,14 +72,20 @@ def post_distributed_query_result(msn, user_agent, ip, payloads):
     OsqueryDistributedQueryResultEvent.post_machine_request_payloads(msn, user_agent, ip, payloads)
 
 
+def get_osquery_result_created_at(payload):
+    return datetime.utcfromtimestamp(float(payload['unixTime']))
+
+
 def post_events_from_osquery_log(msn, user_agent, ip, data):
     if data["log_type"] == "status":
         event_cls = OsqueryStatusEvent
+        get_created_at = None
     elif data["log_type"] == "result":
         event_cls = OsqueryResultEvent
+        get_created_at = get_osquery_result_created_at
     else:
         raise NotImplementedError("Unknown log type.")
-    event_cls.post_machine_request_payloads(msn, user_agent, ip, data['data'])
+    event_cls.post_machine_request_payloads(msn, user_agent, ip, data['data'], get_created_at)
 
 
 def post_enrollment_event(msn, user_agent, ip, data):
