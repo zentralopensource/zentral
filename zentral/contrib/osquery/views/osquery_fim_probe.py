@@ -1,4 +1,5 @@
 import logging
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponseRedirect
 from django.views.generic.edit import FormView
 from zentral.core.probes.views import AddProbeItemView, UpdateProbeItemView, DeleteProbeItemView
@@ -7,7 +8,7 @@ from zentral.contrib.osquery.forms import CreateFIMProbeForm, FilePathForm
 logger = logging.getLogger('zentral.contrib.osquery.views.osquery_fim_probe')
 
 
-class CreateFIMProbeView(FormView):
+class CreateFIMProbeView(LoginRequiredMixin, FormView):
     form_class = CreateFIMProbeForm
     template_name = "core/probes/form.html"
 

@@ -1,5 +1,6 @@
 import logging
 from django.core.urlresolvers import reverse
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -19,11 +20,11 @@ from .osx_package.builder import SantaZentralEnrollPkgBuilder
 logger = logging.getLogger('zentral.contrib.santa.views')
 
 
-class EnrollmentView(BaseEnrollmentView):
+class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
     template_name = "santa/enrollment.html"
 
 
-class EnrollmentDebuggingView(View):
+class EnrollmentDebuggingView(LoginRequiredMixin, View):
     debugging_template = """machine_serial_number="0123456789"
 machine_id="%(secret)s\$SERIAL\$$machine_serial_number"
 # rule download
@@ -44,12 +45,12 @@ curl -XPOST -k %(tls_hostname)s/santa/ruledownload/$machine_id | jq ."""
         return HttpResponse(debugging_tools)
 
 
-class InstallerPackageView(BaseInstallerPackageView):
+class InstallerPackageView(LoginRequiredMixin, BaseInstallerPackageView):
     module = "zentral.contrib.santa"
     builder = SantaZentralEnrollPkgBuilder
 
 
-class CreateProbeView(FormView):
+class CreateProbeView(LoginRequiredMixin, FormView):
     form_class = CreateProbeForm
     template_name = "santa/create_probe.html"
 
@@ -63,7 +64,7 @@ class CreateProbeView(FormView):
         return HttpResponseRedirect(probe_source.get_absolute_url())
 
 
-class AddProbeRuleView(FormView):
+class AddProbeRuleView(LoginRequiredMixin, FormView):
     form_class = RuleForm
     template_name = "santa/rule_form.html"
 
@@ -94,7 +95,7 @@ class AddProbeRuleView(FormView):
         return self.probe_source.get_absolute_url("santa")
 
 
-class UpdateProbeRuleView(FormView):
+class UpdateProbeRuleView(LoginRequiredMixin, FormView):
     form_class = RuleForm
     template_name = "santa/rule_form.html"
 
@@ -132,7 +133,7 @@ class UpdateProbeRuleView(FormView):
         return self.probe_source.get_absolute_url("santa")
 
 
-class DeleteProbeRuleView(TemplateView):
+class DeleteProbeRuleView(LoginRequiredMixin, TemplateView):
     template_name = "santa/delete_rule.html"
 
     def dispatch(self, request, *args, **kwargs):

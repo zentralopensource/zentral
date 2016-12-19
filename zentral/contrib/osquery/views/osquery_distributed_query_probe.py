@@ -1,4 +1,5 @@
 import logging
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views.generic.edit import FormView
@@ -8,7 +9,7 @@ from zentral.contrib.osquery.forms import CreateDistributedQueryProbeForm, Distr
 logger = logging.getLogger('zentral.contrib.osquery.views.osquery_distributed_query_probe')
 
 
-class CreateDistributedQueryProbeView(FormView):
+class CreateDistributedQueryProbeView(LoginRequiredMixin, FormView):
     form_class = CreateDistributedQueryProbeForm
     template_name = "core/probes/form.html"
 
@@ -23,7 +24,7 @@ class CreateDistributedQueryProbeView(FormView):
         return HttpResponseRedirect(probe_source.get_absolute_url())
 
 
-class UpdateDistributedQueryProbeQueryView(FormView):
+class UpdateDistributedQueryProbeQueryView(LoginRequiredMixin, FormView):
     form_class = DistributedQueryForm
     template_name = "osquery/distributed_query_query_form.html"
 

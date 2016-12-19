@@ -2,6 +2,7 @@ import logging
 from django import forms
 from django.core.urlresolvers import reverse, reverse_lazy
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic import View, DetailView, ListView, TemplateView
@@ -17,7 +18,7 @@ from .models import Feed, FeedProbe, ProbeSource
 logger = logging.getLogger("zentral.core.probes.views")
 
 
-class IndexView(ListView):
+class IndexView(LoginRequiredMixin, ListView):
     model = ProbeSource
     paginate_by = 50
     template_name = "core/probes/index.html"
@@ -63,7 +64,7 @@ class IndexView(ListView):
         return ctx
 
 
-class CreateProbeView(FormView):
+class CreateProbeView(LoginRequiredMixin, FormView):
     form_class = CreateProbeForm
     template_name = "core/probes/form.html"
 
@@ -77,7 +78,7 @@ class CreateProbeView(FormView):
         return HttpResponseRedirect(probe_source.get_absolute_url())
 
 
-class ProbeView(DetailView):
+class ProbeView(LoginRequiredMixin, DetailView):
     model = ProbeSource
 
     def get_context_data(self, **kwargs):
@@ -124,7 +125,7 @@ class ProbeEventSet(object):
                                              **self.probe.get_extra_event_search_dict())
 
 
-class ProbeEventsView(ListView):
+class ProbeEventsView(LoginRequiredMixin, ListView):
     template_name = "core/probes/probe_events.html"
     paginate_by = 10
 
@@ -171,7 +172,7 @@ class ProbeEventsView(ListView):
         return ProbeEventSet(self.probe)
 
 
-class UpdateProbeView(UpdateView):
+class UpdateProbeView(LoginRequiredMixin, UpdateView):
     model = ProbeSource
     fields = ['name', 'status', 'description']
     template_name = "core/probes/form.html"
@@ -185,7 +186,7 @@ class UpdateProbeView(UpdateView):
         return ctx
 
 
-class DeleteProbeView(DeleteView):
+class DeleteProbeView(LoginRequiredMixin, DeleteView):
     model = ProbeSource
     template_name = "core/probes/delete.html"
     success_url = reverse_lazy('probes:index')
@@ -196,7 +197,7 @@ class DeleteProbeView(DeleteView):
         return ctx
 
 
-class ExportProbeView(View):
+class ExportProbeView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
         probe = probe_source.load()
@@ -221,7 +222,7 @@ class ExportProbeView(View):
                              "html_url": response["html_url"]})
 
 
-class ReviewProbeUpdateView(TemplateView):
+class ReviewProbeUpdateView(LoginRequiredMixin, TemplateView):
     template_name = "core/probes/review_update.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -249,7 +250,7 @@ class ReviewProbeUpdateView(TemplateView):
 # Actions
 
 
-class EditActionView(FormView):
+class EditActionView(LoginRequiredMixin, FormView):
     template_name = "core/probes/action_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -295,7 +296,7 @@ class EditActionView(FormView):
         return self.probe_source.get_actions_absolute_url()
 
 
-class DeleteActionView(TemplateView):
+class DeleteActionView(LoginRequiredMixin, TemplateView):
     template_name = "core/probes/delete_action.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -323,7 +324,7 @@ class DeleteActionView(TemplateView):
 # Filters
 
 
-class AddFilterView(FormView):
+class AddFilterView(LoginRequiredMixin, FormView):
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -360,7 +361,7 @@ class AddFilterView(FormView):
         return self.probe_source.get_filters_absolute_url()
 
 
-class UpdateFilterView(FormView):
+class UpdateFilterView(LoginRequiredMixin, FormView):
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -405,7 +406,7 @@ class UpdateFilterView(FormView):
         return self.probe_source.get_filters_absolute_url()
 
 
-class DeleteFilterView(TemplateView):
+class DeleteFilterView(LoginRequiredMixin, TemplateView):
     template_name = "core/probes/delete_filter.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -434,7 +435,7 @@ class DeleteFilterView(TemplateView):
 # Item views, used by other probes
 
 
-class BaseProbeItemView(FormView):
+class BaseProbeItemView(LoginRequiredMixin, FormView):
     probe_item_attribute = None
     success_anchor = None
     permission = None
@@ -528,7 +529,7 @@ class DeleteProbeItemView(EditProbeItemView):
 # feeds
 
 
-class FeedsView(ListView):
+class FeedsView(LoginRequiredMixin, ListView):
     template_name = "core/probes/feeds.html"
     model = Feed
     paginate_by = 10
@@ -565,7 +566,7 @@ class FeedsView(ListView):
         return ctx
 
 
-class AddFeedView(FormView):
+class AddFeedView(LoginRequiredMixin, FormView):
     form_class = AddFeedForm
     template_name = "core/probes/add_feed.html"
 
@@ -580,7 +581,7 @@ class AddFeedView(FormView):
         return HttpResponseRedirect(feed.get_absolute_url())
 
 
-class FeedView(DetailView):
+class FeedView(LoginRequiredMixin, DetailView):
     template_name = "core/probes/feed.html"
     model = Feed
 
@@ -591,7 +592,7 @@ class FeedView(DetailView):
         return ctx
 
 
-class SyncFeedView(View):
+class SyncFeedView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         feed = get_object_or_404(Feed, pk=int(kwargs["pk"]))
         try:
@@ -607,7 +608,7 @@ class SyncFeedView(View):
         return HttpResponseRedirect(feed.get_absolute_url())
 
 
-class DeleteFeedView(DeleteView):
+class DeleteFeedView(LoginRequiredMixin, DeleteView):
     model = Feed
     template_name = "core/probes/delete_feed.html"
     success_url = reverse_lazy('probes:feeds')
@@ -619,7 +620,7 @@ class DeleteFeedView(DeleteView):
         return ctx
 
 
-class FeedProbeView(DetailView):
+class FeedProbeView(LoginRequiredMixin, DetailView):
     template_name = "core/probes/feed_probe.html"
     model = FeedProbe
 
@@ -632,7 +633,7 @@ class FeedProbeView(DetailView):
         return ctx
 
 
-class ImportFeedProbeView(FormView):
+class ImportFeedProbeView(LoginRequiredMixin, FormView):
     form_class = ImportFeedProbeForm
     template_name = "core/probes/import_feed_probe.html"
 

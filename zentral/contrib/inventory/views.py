@@ -1,9 +1,10 @@
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core.urlresolvers import reverse, reverse_lazy
 from django.db import connection
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
-from django.views import generic
+from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.core.stores import frontend_store
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
@@ -16,7 +17,7 @@ from .models import (BusinessUnit,
 from .utils import get_prometheus_inventory_metrics, prometheus_metrics_content_type
 
 
-class MachineListView(generic.TemplateView):
+class MachineListView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/machine_list.html"
 
     def get_object(self, **kwargs):
@@ -143,7 +144,7 @@ class IndexView(MachineListView):
         return l
 
 
-class GroupsView(generic.TemplateView):
+class GroupsView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/group_list.html"
 
     def get(self, request, *args, **kwargs):
@@ -225,7 +226,7 @@ class OSXAppInstanceMachinesView(MachineListView):
         return l
 
 
-class MBUView(generic.ListView):
+class MBUView(LoginRequiredMixin, ListView):
     template_name = "inventory/mbu_list.html"
     paginate_by = 25
 
@@ -276,7 +277,7 @@ class MBUView(generic.ListView):
         return context
 
 
-class ReviewMBUMergeView(generic.TemplateView):
+class ReviewMBUMergeView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/review_mbu_merge.html"
 
     def get_context_data(self, **kwargs):
@@ -286,7 +287,7 @@ class ReviewMBUMergeView(generic.TemplateView):
         return ctx
 
 
-class MergeMBUView(generic.FormView):
+class MergeMBUView(LoginRequiredMixin, FormView):
     template_name = "inventory/merge_mbu.html"
     form_class = MergeMBUForm
 
@@ -298,19 +299,19 @@ class MergeMBUView(generic.FormView):
         return reverse('inventory:mbu_machines', args=(self.dest_mbu.id,))
 
 
-class CreateMBUView(generic.CreateView):
+class CreateMBUView(LoginRequiredMixin, CreateView):
     template_name = "inventory/edit_mbu.html"
     model = MetaBusinessUnit
     fields = ('name',)
 
 
-class UpdateMBUView(generic.UpdateView):
+class UpdateMBUView(LoginRequiredMixin, UpdateView):
     template_name = "inventory/edit_mbu.html"
     model = MetaBusinessUnit
     fields = ('name',)
 
 
-class MBUTagsView(generic.FormView):
+class MBUTagsView(LoginRequiredMixin, FormView):
     template_name = "inventory/mbu_tags.html"
     form_class = AddMBUTagForm
 
@@ -339,14 +340,14 @@ class MBUTagsView(generic.FormView):
         return reverse('inventory:mbu_tags', args=(self.mbu.id,))
 
 
-class RemoveMBUTagView(generic.View):
+class RemoveMBUTagView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         MetaBusinessUnitTag.objects.filter(tag__id=kwargs['tag_id'],
                                            meta_business_unit__id=kwargs['pk']).delete()
         return HttpResponseRedirect(reverse('inventory:mbu_tags', args=(kwargs['pk'],)))
 
 
-class DetachBUView(generic.TemplateView):
+class DetachBUView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/detach_bu.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -367,7 +368,7 @@ class DetachBUView(generic.TemplateView):
         return HttpResponseRedirect(mbu.get_absolute_url())
 
 
-class MBUAPIEnrollmentView(generic.UpdateView):
+class MBUAPIEnrollmentView(LoginRequiredMixin, UpdateView):
     template_name = "inventory/mbu_api_enrollment.html"
     form_class = MBUAPIEnrollmentForm
     queryset = MetaBusinessUnit.objects.all()
@@ -408,7 +409,7 @@ class MBUMachinesView(MachineListView):
         return l
 
 
-class MachineView(generic.TemplateView):
+class MachineView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/machine_detail.html"
 
     def get_context_data(self, **kwargs):
@@ -418,7 +419,7 @@ class MachineView(generic.TemplateView):
         return context
 
 
-class ArchiveMachineView(generic.TemplateView):
+class ArchiveMachineView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/archive_machine.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -461,7 +462,7 @@ class MachineEventSet(object):
         return self.store.machine_events_fetch(self.machine_serial_number, start, stop - start, self.event_type)
 
 
-class MachineEventsView(generic.ListView):
+class MachineEventsView(LoginRequiredMixin, ListView):
     template_name = "inventory/machine_events.html"
     paginate_by = 10
 
@@ -503,7 +504,7 @@ class MachineEventsView(generic.ListView):
         return MachineEventSet(self.serial_number, et)
 
 
-class MachineTagsView(generic.FormView):
+class MachineTagsView(LoginRequiredMixin, FormView):
     template_name = "inventory/machine_tags.html"
     form_class = AddMachineTagForm
 
@@ -531,7 +532,7 @@ class MachineTagsView(generic.FormView):
         return reverse('inventory:machine_tags', args=(self.msn,))
 
 
-class RemoveMachineTagView(generic.View):
+class RemoveMachineTagView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         MachineTag.objects.filter(tag__id=kwargs['tag_id'],
                                   serial_number=kwargs['serial_number']).delete()
@@ -553,7 +554,7 @@ TAG_COLOR_PRESETS = {
 }
 
 
-class TagsView(generic.ListView):
+class TagsView(LoginRequiredMixin, ListView):
     model = Tag
 
     def get_context_data(self, **kwargs):
@@ -562,7 +563,7 @@ class TagsView(generic.ListView):
         return ctx
 
 
-class UpdateTagView(generic.UpdateView):
+class UpdateTagView(LoginRequiredMixin, UpdateView):
     template_name = "inventory/edit_tag.html"
     model = Tag
     fields = ('name', 'color')
@@ -577,7 +578,7 @@ class UpdateTagView(generic.UpdateView):
         return reverse('inventory:tags')
 
 
-class DeleteTagView(generic.DeleteView):
+class DeleteTagView(LoginRequiredMixin, DeleteView):
     model = Tag
     success_url = reverse_lazy("inventory:tags")
 
@@ -587,7 +588,7 @@ class DeleteTagView(generic.DeleteView):
         return ctx
 
 
-class MacOSAppsView(generic.TemplateView):
+class MacOSAppsView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/macos_apps.html"
 
     def get(self, request, *args, **kwargs):
@@ -628,7 +629,7 @@ class MacOSAppsView(generic.TemplateView):
         return ctx
 
 
-class MacOSAppView(generic.TemplateView):
+class MacOSAppView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/macos_app.html"
 
     def get_context_data(self, **kwargs):
@@ -642,7 +643,7 @@ class MacOSAppView(generic.TemplateView):
         return ctx
 
 
-class PrometheusMetricsView(generic.View):
+class PrometheusMetricsView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         return HttpResponse(get_prometheus_inventory_metrics(),
                             content_type=prometheus_metrics_content_type)

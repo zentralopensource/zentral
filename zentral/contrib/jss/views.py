@@ -1,4 +1,5 @@
 import logging
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.urlresolvers import reverse
 from django.http import HttpResponse
 from django.views.generic import View
@@ -10,11 +11,11 @@ from .events import post_jss_event
 logger = logging.getLogger('zentral.contrib.jss.views')
 
 
-class EnrollmentView(BaseEnrollmentView):
+class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
     template_name = "jss/enrollment.html"
 
 
-class EnrollmentDebuggingView(View):
+class EnrollmentDebuggingView(LoginRequiredMixin, View):
     debugging_template = """webhook_url=%(tls_hostname)s%(path)s"""
 
     def get(self, request, *args, **kwargs):
@@ -31,6 +32,9 @@ class EnrollmentDebuggingView(View):
             'tls_hostname': settings['api']['tls_hostname']
         }
         return HttpResponse(debugging_tools)
+
+
+# API
 
 
 class PostEventView(SignedRequestJSONPostAPIView):

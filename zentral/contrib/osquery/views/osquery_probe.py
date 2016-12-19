@@ -1,4 +1,5 @@
 import logging
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponseRedirect
 from django.views.generic.edit import FormView
 from zentral.core.probes.views import AddProbeItemView, UpdateProbeItemView, DeleteProbeItemView
@@ -7,7 +8,7 @@ from zentral.contrib.osquery.forms import CreateProbeForm, DiscoveryForm, QueryF
 logger = logging.getLogger('zentral.contrib.osquery.views.osquery_probe')
 
 
-class CreateProbeView(FormView):
+class CreateProbeView(LoginRequiredMixin, FormView):
     form_class = CreateProbeForm
     template_name = "core/probes/form.html"
 
@@ -21,6 +22,7 @@ class CreateProbeView(FormView):
         probe_source = form.save()
         return HttpResponseRedirect(probe_source.get_absolute_url())
 
+
 # discovery
 
 
@@ -28,6 +30,7 @@ class AddProbeDiscoveryView(AddProbeItemView):
     form_class = DiscoveryForm
     probe_item_attribute = "discovery"
     template_name = "osquery/discovery_form.html"
+
     success_anchor = "osquery"
 
 

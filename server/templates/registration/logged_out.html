@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-4 col-md-offset-4">
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <h3 class="panel-title">Signed out</h3>
+      </div>
+      <div class="panel-body">
+        You have been signed out.
+      </div>
+      <div class="panel-footer btn-group btn-group-justified" role="group" aria-label="sign in">
+        <div class="btn-group" role="group">
+          <a href="{% url 'login' %}" class="btn btn-primary">Sign in</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

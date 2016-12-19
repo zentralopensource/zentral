@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h3>{{ object_list|length }} User{{ object_list|length|pluralize }}</h3>
+
+<a href="{% url 'users:add' %}" class="btn btn-default">
+  Send an invitation
+</a>
+
+<table class="table">
+  <thead>
+    <th>Username</th>
+    <th>Email</th>
+    <th></th>
+  </thead>
+  <tbody>
+    {% for managed_user in object_list %}
+    <tr>
+      <td>{{ managed_user }}</td>
+      <td>{{ managed_user.email }}</td>
+      <td>
+        {% if not managed_user.is_superuser %}
+        <a class="btn btn-danger" href="{% url 'users:delete' managed_user.id %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

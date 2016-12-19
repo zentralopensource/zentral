@@ -1,4 +1,5 @@
 import logging
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.urlresolvers import reverse
 from django.http import HttpResponse
 from django.views.generic import View
@@ -11,11 +12,11 @@ from zentral.contrib.osquery.deb_script.builder import OsqueryZentralEnrollScrip
 logger = logging.getLogger('zentral.contrib.osquery.views.setup')
 
 
-class EnrollmentView(BaseEnrollmentView):
+class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
     template_name = "osquery/enrollment.html"
 
 
-class EnrollmentDebuggingView(View):
+class EnrollmentDebuggingView(LoginRequiredMixin, View):
     debugging_template = """machine_serial_number="0123456789"
 enroll_secret="%(secret)s\$SERIAL\$$machine_serial_number"
 node_key_json=$(curl -XPOST -k -d '{"enroll_secret":"'"$enroll_secret"'"}' %(tls_hostname)s%(enroll_path)s)
@@ -38,11 +39,11 @@ curl -XPOST -k -d "$node_key_json"  %(tls_hostname)s%(config_path)s | jq ."""
         return HttpResponse(debugging_tools)
 
 
-class InstallerPackageView(BaseInstallerPackageView):
+class InstallerPackageView(LoginRequiredMixin, BaseInstallerPackageView):
     builder = OsqueryZentralEnrollPkgBuilder
     module = "zentral.contrib.osquery"
 
 
-class SetupScriptView(BaseInstallerPackageView):
+class SetupScriptView(LoginRequiredMixin, BaseInstallerPackageView):
     builder = OsqueryZentralEnrollScriptBuilder
     module = "zentral.contrib.osquery"

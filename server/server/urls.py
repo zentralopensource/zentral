@@ -5,6 +5,8 @@ from zentral.conf import settings as zentral_settings
 # base
 urlpatterns = [
     url(r'^', include('base.urls', namespace='base')),
+    url(r'^admin/users/', include('accounts.urls', namespace='users')),
+    url(r'^accounts/', include('django.contrib.auth.urls')),
 ]
 
 # zentral apps

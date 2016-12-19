@@ -35,29 +35,46 @@ ALLOWED_HOSTS = django_zentral_settings['ALLOWED_HOSTS']
 
 MEDIA_ROOT = django_zentral_settings.get("MEDIA_ROOT", "")
 
+EMAIL_BACKEND = django_zentral_settings.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = django_zentral_settings.get("EMAIL_HOST", 'localhost')
+EMAIL_PORT = django_zentral_settings.get("EMAIL_PORT", 25)
+EMAIL_HOST_USER = django_zentral_settings.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = django_zentral_settings.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = django_zentral_settings.get("EMAIL_USE_TLS", False)
+EMAIL_USE_SSL = django_zentral_settings.get("EMAIL_USE_SSL", False)
+EMAIL_TIMEOUT = django_zentral_settings.get("EMAIL_TIMEOUT")
+EMAIL_SSL_KEYFILE = django_zentral_settings.get("EMAIL_SSL_KEYFILE")
+EMAIL_SSL_CERTFILE = django_zentral_settings.get("EMAIL_SSL_CERTFILE")
+EMAIL_FILE_PATH = django_zentral_settings.get("EMAIL_FILE_PATH")
 
 # Application definition
 
 INSTALLED_APPS = [
+    'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'bootstrapform',
+    'accounts',
     'base',
 ]
+
+AUTH_USER_MODEL = 'accounts.User'
+LOGIN_REDIRECT_URL = '/'
 
 # add the zentral apps
 for app_name in zentral_settings.get('apps', []):
     INSTALLED_APPS.append(app_name)
 
 MIDDLEWARE_CLASSES = (
+    'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django.middleware.security.SecurityMiddleware',
 )
 
 ROOT_URLCONF = 'server.urls'
@@ -71,6 +88,7 @@ TEMPLATES = [
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'zentral.conf.context_processors.extra_links',
                 'zentral.conf.context_processors.probe_creation_links',

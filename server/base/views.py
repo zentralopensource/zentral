@@ -1,15 +1,16 @@
 from django.apps import apps
 from django.http import Http404, HttpResponse, JsonResponse
-from django.views import generic
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import TemplateView, View
 from zentral.core.stores import frontend_store
 
 
-class HealthCheckView(generic.View):
+class HealthCheckView(View):
     def get(self, request, *args, **kwargs):
         return HttpResponse('OK')
 
 
-class IndexView(generic.TemplateView):
+class IndexView(LoginRequiredMixin, TemplateView):
     template_name = "base/index.html"
 
     def get_context_data(self, **kwargs):
@@ -22,7 +23,7 @@ class IndexView(generic.TemplateView):
         return context
 
 
-class AppHistogramDataView(generic.View):
+class AppHistogramDataView(LoginRequiredMixin, View):
     INTERVAL_DATE_FORMAT = {
         "hour": "%H:%M",
         "day": "%d/%m",

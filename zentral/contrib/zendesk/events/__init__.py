@@ -15,11 +15,13 @@ class BaseZendeskEvent(BaseEvent):
 class ZendeskTicketCreationEvent(BaseZendeskEvent):
     event_type = "zendesk_ticket_creation"
 
+
 register_event_type(ZendeskTicketCreationEvent)
 
 
 class ZendeskCommentCreationEvent(BaseZendeskEvent):
     event_type = "zendesk_comment_creation"
+
 
 register_event_type(ZendeskCommentCreationEvent)
 

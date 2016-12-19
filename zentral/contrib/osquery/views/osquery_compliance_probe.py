@@ -1,4 +1,5 @@
 import logging
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView
@@ -10,7 +11,7 @@ from zentral.contrib.osquery.forms import CreateComplianceProbeForm, PreferenceF
 logger = logging.getLogger('zentral.contrib.osquery.views.osquery_compliance_probe')
 
 
-class CreateComplianceProbeView(FormView):
+class CreateComplianceProbeView(LoginRequiredMixin, FormView):
     form_class = CreateComplianceProbeForm
     template_name = "core/probes/form.html"
 
@@ -28,7 +29,7 @@ class CreateComplianceProbeView(FormView):
 # preference_files
 
 
-class AddComplianceProbePreferenceFileView(TemplateView):
+class AddComplianceProbePreferenceFileView(LoginRequiredMixin, TemplateView):
     template_name = "osquery/preference_file_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -71,7 +72,7 @@ class AddComplianceProbePreferenceFileView(TemplateView):
             return self.render_to_response(self.get_context_data())
 
 
-class UpdateComplianceProbePreferenceFileView(TemplateView):
+class UpdateComplianceProbePreferenceFileView(LoginRequiredMixin, TemplateView):
     template_name = "osquery/preference_file_form.html"
 
     def dispatch(self, request, *args, **kwargs):

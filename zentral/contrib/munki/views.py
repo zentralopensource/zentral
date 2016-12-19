@@ -1,6 +1,7 @@
 import logging
 from datetime import timedelta
 from dateutil import parser
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -17,11 +18,11 @@ from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 logger = logging.getLogger('zentral.contrib.munki.views')
 
 
-class EnrollmentView(BaseEnrollmentView):
+class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
     template_name = "munki/enrollment.html"
 
 
-class InstallerPackageView(BaseInstallerPackageView):
+class InstallerPackageView(LoginRequiredMixin, BaseInstallerPackageView):
     module = "zentral.contrib.munki"
     builder = MunkiZentralEnrollPkgBuilder
 
@@ -29,7 +30,7 @@ class InstallerPackageView(BaseInstallerPackageView):
 # install probe
 
 
-class CreateInstallProbeView(FormView):
+class CreateInstallProbeView(LoginRequiredMixin, FormView):
     form_class = CreateInstallProbeForm
     template_name = "core/probes/form.html"
 
@@ -44,7 +45,7 @@ class CreateInstallProbeView(FormView):
         return HttpResponseRedirect(probe_source.get_absolute_url())
 
 
-class UpdateInstallProbeView(FormView):
+class UpdateInstallProbeView(LoginRequiredMixin, FormView):
     form_class = UpdateInstallProbeForm
     template_name = "core/probes/form.html"
 
