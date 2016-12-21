@@ -2,13 +2,16 @@ import os
 from zentral.core.exceptions import ImproperlyConfigured
 from .utils import find_conf_file, load_config_file
 
-ENVIRONMENT_VARIABLE = "ZENTRAL_CONF_DIR"
+ZENTRAL_CONF_DIR_ENV_VAR = "ZENTRAL_CONF_DIR"
+ZENTRAL_SAML2_IDP_NAME_ENV_VAR = "ZENTRAL_SAML2_IDP_NAME"
+ZENTRAL_SAML2_IDP_METADATA_FILE_ENV_VAR = "ZENTRAL_SAML2_IDP_METADATA_FILE"
+
 
 __all__ = ['contact_groups', 'settings', 'user_templates_dir']
 
 
 def get_conf_dir():
-    conf_dir = os.environ.get(ENVIRONMENT_VARIABLE)
+    conf_dir = os.environ.get(ZENTRAL_CONF_DIR_ENV_VAR)
     if not conf_dir:
         conf_dir = os.path.realpath(os.path.join(os.path.dirname(__file__),
                                     "../../conf"))
@@ -19,6 +22,11 @@ def get_conf_dir():
 
 
 conf_dir = get_conf_dir()
+
+
+saml2_idp_name = os.environ.get(ZENTRAL_SAML2_IDP_NAME_ENV_VAR)
+saml2_idp_metadata_file = os.environ.get(ZENTRAL_SAML2_IDP_METADATA_FILE_ENV_VAR)
+
 
 # the user can override the default templates
 # by putting correctly named templates in the

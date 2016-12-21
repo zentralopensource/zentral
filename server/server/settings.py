@@ -16,9 +16,8 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Import the zentral settings (base.json)
-from zentral.conf import settings as zentral_settings
+from zentral.conf import saml2_idp_metadata_file, settings as zentral_settings
 django_zentral_settings = zentral_settings['django']
-
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = django_zentral_settings['SECRET_KEY']
@@ -61,6 +60,13 @@ INSTALLED_APPS = [
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+]
+if saml2_idp_metadata_file:
+    AUTHENTICATION_BACKENDS.append('accounts.auth_backends.Saml2Backend')
+
 LOGIN_REDIRECT_URL = '/'
 
 # add the zentral apps
@@ -96,6 +102,9 @@ TEMPLATES = [
         },
     },
 ]
+if saml2_idp_metadata_file:
+    for template_conf in TEMPLATES:
+        template_conf['OPTIONS']['context_processors'].append('zentral.conf.context_processors.saml2')
 
 WSGI_APPLICATION = 'server.wsgi.application'
 

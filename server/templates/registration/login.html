@@ -4,9 +4,21 @@
 {% block content %}
 <div class="row">
   <div class="col-md-4 col-md-offset-4">
+    {% if saml2_idp_name %}
+    <div class="btn-group btn-group-justified" role="group" aria-label="SSO">
+      <a href="{{ saml2_login_url }}" class="btn btn-large btn-primary">Sign in with {{ saml2_idp_name }}</a>
+    </div>
+    <h3 class="text-center">or</h3>
+    {% endif %}
     <form class="panel panel-default" method="POST">{% csrf_token %}
       <div class="panel-heading">
-        <h3 class="panel-title">Sign in</h3>
+        <h3 class="panel-title">
+          {% if saml2_idp_name %}
+          Use local credentials
+          {% else %}
+          Sign in
+          {% endif %}
+        </h3>
       </div>
       <div class="panel-body">
         {{ form|bootstrap }}
@@ -14,7 +26,9 @@
       </div>
       <div class="panel-footer btn-group btn-group-justified" role="group" aria-label="sign in">
         <div class="btn-group" role="group">
-          <button type="submit" class="btn btn-primary">Sign in</button>
+          <button type="submit" class="btn btn-primary">
+            Sign in{% if saml2_idp_name %} with local credentials{% endif %}
+          </button>
         </div>
       </div>
     </form>

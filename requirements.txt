@@ -6,6 +6,7 @@ requests
 ipython
 psycopg2
 django-bootstrap-form
+pysaml2
 djangorestframework
 fabric
 gunicorn

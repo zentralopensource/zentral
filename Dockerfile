@@ -16,6 +16,9 @@ RUN curl -fsSL https://github.com/mackyle/xar/archive/xar-1.6.1.tar.gz | tar xvz
     make && make install && \
     cd ../.. && rm -rf xar-*
 
+# xmlsec1 for PySAML2
+RUN apt-get install -y xmlsec1
+
 # zentral user and group
 RUN groupadd -r zentral --gid=999 && useradd -r -s /bin/false -g zentral --uid=999 zentral
 

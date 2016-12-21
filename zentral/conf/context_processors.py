@@ -1,4 +1,5 @@
-from zentral.conf import settings
+from django.urls import reverse
+from zentral.conf import saml2_idp_name, settings
 from zentral.core.probes import probe_classes
 
 
@@ -13,3 +14,7 @@ def probe_creation_links(request):
                              for pc in probe_classes.values()),
                             key=lambda l: l["anchor_text"])
     return {'probe_extra_links': {'create': creation_links}}
+
+def saml2(request):
+    return {'saml2_idp_name': saml2_idp_name,
+            'saml2_login_url': reverse('saml2:login')}

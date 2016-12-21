@@ -5,8 +5,10 @@ __pycache__
 !/docker-compose.yml
 !/docker-compose.basic-auth.yml
 !/docker-compose.common.yml
+!/docker-compose.saml2.yml
 /conf/*
 !/conf/start
+!/conf/saml2
 /docs/_build/
 /docs/_static/
 /docs/_templates/
