@@ -2,10 +2,11 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core.urlresolvers import reverse, reverse_lazy
 from django.db import connection
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.core.stores import frontend_store
+from zentral.conf import settings
 from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
                     MacOSAppSearchForm)
@@ -643,7 +644,12 @@ class MacOSAppView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class PrometheusMetricsView(LoginRequiredMixin, View):
+class PrometheusMetricsView(View):
     def get(self, request, *args, **kwargs):
-        return HttpResponse(get_prometheus_inventory_metrics(),
-                            content_type=prometheus_metrics_content_type)
+        bearer_token = settings['apps']['zentral.contrib.inventory'].get('prometheus_bearer_token')
+        if bearer_token and \
+           request.META.get('HTTP_AUTHORIZATION') == "Bearer {}".format(bearer_token):
+            return HttpResponse(get_prometheus_inventory_metrics(),
+                                content_type=prometheus_metrics_content_type)
+        else:
+            return HttpResponseForbidden()

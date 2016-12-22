@@ -50,6 +50,7 @@
   },
   "apps": {
     "zentral.contrib.inventory": {
+      "prometheus_bearer_token": "CHANGE ME!!!",
       "clients": [
         {
           "backend": "zentral.contrib.inventory.clients.dummy"
