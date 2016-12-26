@@ -1,8 +1,0 @@
-version: '2'
-
-services:
-  nginx:
-    volumes:
-      - ./conf/basic_auth/docker/nginx/conf.d/:/etc/nginx/conf.d/
-      - ./conf/basic_auth/docker/nginx/extra/:/etc/nginx/extra/
-      - ./conf/start/docker/tls:/etc/nginx/tls
