@@ -6,10 +6,10 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'probes:index' %}">Probes</a></li>
   <li><a href="{% url 'probes:probe' probe_source.id %}">{{ probe_source.name }}</a></li>
-  <li class="active">Delete santa policy</li>
+  <li class="active">Delete santa rule</li>
 </ol>
 
-<h2>Delete santa policy</h2>
+<h2>Delete santa rule</h2>
 <form method="POST">{% csrf_token %}
   <a class="btn btn-default" href="{{ cancel_url }}">Cancel</a>
   <button class="btn btn-danger" type="submit">Delete</button>

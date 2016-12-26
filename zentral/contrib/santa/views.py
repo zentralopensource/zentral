@@ -37,7 +37,7 @@ curl -XPOST -k %(tls_hostname)s/santa/ruledownload/$machine_id | jq ."""
             # TODO Race. The meta_business_unit could maybe be without any api BU.
             # TODO. Better selection if multiple BU ?
             bu = mbu.api_enrollment_business_units()[0]
-        except ValueError:
+        except (KeyError, ValueError):
             bu = None
         secret = make_secret("zentral.contrib.santa", bu)
         debugging_tools = self.debugging_template % {'secret': secret,
@@ -139,6 +139,8 @@ class DeleteProbeRuleView(LoginRequiredMixin, TemplateView):
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
         self.probe = self.probe_source.load()
+        if not self.probe.can_delete_rules:
+            return HttpResponseRedirect(self.probe_source.get_absolute_url("santa"))
         self.rule_id = int(kwargs["rule_id"])
         return super().dispatch(request, *args, **kwargs)
 
@@ -151,12 +153,11 @@ class DeleteProbeRuleView(LoginRequiredMixin, TemplateView):
         return ctx
 
     def post(self, request, *args, **kwargs):
-        if self.probe.can_delete_rules:
-            def func(probe_d):
-                probe_d["rules"].pop(self.rule_id)
-                if not probe_d["rules"]:
-                    probe_d.pop("rules")
-            self.probe_source.update_body(func)
+        def func(probe_d):
+            probe_d["rules"].pop(self.rule_id)
+            if not probe_d["rules"]:
+                probe_d.pop("rules")
+        self.probe_source.update_body(func)
         return HttpResponseRedirect(self.probe_source.get_absolute_url("santa"))
 
 

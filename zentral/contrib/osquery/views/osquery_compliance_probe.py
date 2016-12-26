@@ -123,6 +123,7 @@ class UpdateComplianceProbePreferenceFileView(LoginRequiredMixin, TemplateView):
 
 class DeleteComplianceProbePreferenceFileView(DeleteProbeItemView):
     probe_item_attribute = "preference_files"
+    permission = "can_delete_items"
     item_pk_kwarg = "pf_id"
     template_name = "osquery/delete_preference_file.html"
     success_anchor = "osquery_compliance"

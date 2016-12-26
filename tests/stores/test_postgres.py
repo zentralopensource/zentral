@@ -21,6 +21,9 @@ class TestPostgresEventStore(unittest.TestCase, BaseTestEventStore):
         self.event_store.wait_and_configure()
 
     def tearDown(self):
+        with self.event_store._conn:
+            with self.event_store._conn.cursor() as cur:
+                cur.execute("delete from events *;")
         self.event_store.close()
 
 

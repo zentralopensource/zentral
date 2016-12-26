@@ -4,9 +4,14 @@ from prometheus_client.parser import text_string_to_metric_families
 from zentral.contrib.inventory.models import MachineSnapshotCommit
 
 
-class InventoryViewsTestCase(TestCase):
-    def test_prometheus_metrics(self):
+class PrometheusViewsTestCase(TestCase):
+    def test_prometheus_metrics_403(self):
         response = self.client.get(reverse("inventory:prometheus_metrics"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_prometheus_metrics_200(self):
+        response = self.client.get(reverse("inventory:prometheus_metrics"),
+                                   HTTP_AUTHORIZATION="Bearer CHANGE ME!!!")
         self.assertContains(response, "zentral_inventory_os_versions", status_code=200)
         self.assertContains(response, "zentral_inventory_osx_apps", status_code=200)
 
@@ -25,7 +30,8 @@ class InventoryViewsTestCase(TestCase):
         }
         _, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         source_id = ms.source.pk
-        response = self.client.get(reverse("inventory:prometheus_metrics"))
+        response = self.client.get(reverse("inventory:prometheus_metrics"),
+                                   HTTP_AUTHORIZATION="Bearer CHANGE ME!!!")
         labels_dict = {}
         for family in text_string_to_metric_families(response.content.decode('utf-8')):
             self.assertEqual(len(family.samples), 1)
