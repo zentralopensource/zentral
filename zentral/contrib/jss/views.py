@@ -24,7 +24,7 @@ class EnrollmentDebuggingView(LoginRequiredMixin, View):
             # TODO Race. The meta_business_unit could maybe be without any api BU.
             # TODO. Better selection if multiple BU ?
             bu = mbu.api_enrollment_business_units()[0]
-        except ValueError:
+        except (KeyError, ValueError):
             bu = None
         debugging_tools = self.debugging_template % {
             'path': reverse("jss:post_event",
