@@ -4,7 +4,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import FormView, ListView, TemplateView, View
-from .forms import AddUserForm
+from .forms import AddUserForm, UpdateUserForm
 from .models import User
 
 
@@ -31,7 +31,7 @@ class UsersView(CanManageUsersMixin, ListView):
 
 
 class AddUserView(CanManageUsersMixin, FormView):
-    template_name = "accounts/add_user.html"
+    template_name = "accounts/user_form.html"
     form_class = AddUserForm
     success_url = reverse_lazy("users:list")
 
@@ -39,13 +39,50 @@ class AddUserView(CanManageUsersMixin, FormView):
         form.save(self.request)
         return super().form_valid(form)
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Send an email invitation"
+        return ctx
+
+
+class UpdateUserView(CanManageUsersMixin, FormView):
+    template_name = "accounts/user_form.html"
+    form_class = UpdateUserForm
+    success_url = reverse_lazy("users:list")
+
+    def dispatch(self, request, *args, **kwargs):
+        self.user = get_object_or_404(User, pk=kwargs["pk"])
+        if not self.user.editable():
+            return HttpResponseRedirect(self.success_url)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        return {"username": self.user.username,
+                "email": self.user.email,
+                "is_superuser": self.user.is_superuser}
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.user
+        return kwargs
+
+    def form_valid(self, form):
+        form.save(self.request)
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["managed_user"] = self.user
+        ctx["title"] = "Update user {}".format(self.user)
+        return ctx
+
 
 class DeleteUserView(CanManageUsersMixin, TemplateView):
     template_name = "accounts/delete_user.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.user = get_object_or_404(User, pk=kwargs["pk"])
-        if self.user.is_superuser:
+        if not self.user.deletable():
             return HttpResponseRedirect(reverse("users:list"))
         return super().dispatch(request, *args, **kwargs)
 
