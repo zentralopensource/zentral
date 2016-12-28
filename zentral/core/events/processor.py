@@ -27,7 +27,7 @@ class EventProcessor(object):
     def process(self, event):
         metadata = event.metadata
         counter_dict = {'type': event.event_type,
-                        'machine_serial_number': metadata.machine_serial_number,
+                        'machine_serial_number': metadata.machine_serial_number or '_',
                         'user_agent': '_',
                         'ip': '_',
                         'processed': 'N',
