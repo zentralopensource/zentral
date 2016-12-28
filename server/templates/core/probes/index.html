@@ -73,9 +73,15 @@
     <tr>
       <td>{{ probe.get_model_display }}</td>
       <td>
-          {% for event_type in probe.get_event_type_class_names %}
-          <p>{{ event_type }}</p>
+        {% with probe.get_event_type_class_names as event_type_class_names %}
+        {% if event_type_class_names %}
+        <p>
+          {% for event_type in event_type_class_names %}
+          {{ event_type }}{% if not forloop.last %}<br>{% endif %}
           {% endfor %}
+        </p>
+        {% endif %}
+        {% endwith %}
       </td>
       <td><a href="{% url 'probes:probe' probe.pk %}">{{ probe.name }}</a></td>
       <td>

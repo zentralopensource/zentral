@@ -37,6 +37,7 @@
     <tbody>
       {% for event in object_list %}
       {% with event.metadata.machine as machine %}
+      {% with event.metadata.request as request %}
       <tr>
         <td>
           {% if machine.serial_number %}
@@ -45,14 +46,23 @@
             {% machine_platform_icon machine %}
             <a href="{% url 'inventory:machine' machine.serial_number %}">{{ machine.serial_number }}</a>
           </p>
+          {% endif %}
+          {% if machine.computer_name %}
           <p>
             {{ machine.computer_name }}
           </p>
           {% endif %}
-          <p>{{ event.metadata.created_at }}</p>
+          <p>
+            {{ event.get_event_type_display }}<br>
+            {{ event.metadata.created_at }}
+            {% if request %}
+            <br><small>{{ request }}</small>
+            {% endif %}
+          </p>
         </td>
         <td>{{ event.payload|pythonprettyprint }}</td>
       </tr>
+      {% endwith %}
       {% endwith %}
       {% endfor %}
     </tbody>

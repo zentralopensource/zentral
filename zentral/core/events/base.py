@@ -28,6 +28,8 @@ def render_notification_part(ctx, event_type, part):
 
 
 class EventRequest(object):
+    user_agent_str_length = 50
+
     def __init__(self, user_agent, ip):
         self.user_agent = user_agent
         self.ip = ip
@@ -35,6 +37,19 @@ class EventRequest(object):
     def serialize(self):
         return {k: v for k, v in (("user_agent", self.user_agent),
                                   ("ip", self.ip)) if v}
+
+    def __str__(self):
+        l = []
+        if self.ip:
+            l.append(self.ip)
+        if self.user_agent:
+            user_agent = self.user_agent
+            if len(user_agent) > self.user_agent_str_length:
+                user_agent = "{}…".format(
+                   user_agent[:self.user_agent_str_length - 1].strip()
+                )
+            l.append(user_agent)
+        return " - ".join(l)
 
 
 class EventMetadata(object):
@@ -49,8 +64,11 @@ class EventMetadata(object):
             self.created_at = datetime.utcnow()
         elif isinstance(self.created_at, str):
             self.created_at = parser.parse(self.created_at)
-        self.machine_serial_number = kwargs.pop('machine_serial_number')
-        self.machine = MetaMachine(self.machine_serial_number)
+        self.machine_serial_number = kwargs.pop('machine_serial_number', None)
+        if self.machine_serial_number:
+            self.machine = MetaMachine(self.machine_serial_number)
+        else:
+            self.machine = None
         self.request = kwargs.pop('request', None)
         self.tags = kwargs.pop('tags', [])
 
@@ -69,14 +87,14 @@ class EventMetadata(object):
              'id': str(self.uuid),
              'index': self.index,
              'type': self.event_type,
-             'machine_serial_number': self.machine_serial_number,
              }
         if self.request:
             d['request'] = self.request.serialize()
         if self.tags:
             d['tags'] = self.tags
-        if not machine_metadata:
+        if not machine_metadata or not self.machine:
             return d
+        d['machine_serial_number'] = self.machine_serial_number
         machine_d = {}
         for ms in self.machine.snapshots:
             source = ms.source
@@ -224,6 +242,7 @@ class CommandEvent(BaseEvent):
                             "(?P<serial_numbers>(?:\$[a-zA-Z0-9\-_]+)+)"
                             "(?P<args>(?:#[a-zA-Z0-9\-_ ]+)+)?$")
     event_type = "zentral_command"
+    tags = ["zentral"]
 
 
 register_event_type(CommandEvent)
@@ -245,6 +264,6 @@ def post_command_events(message, source, tags):
                 if serial_number:
                     metadata = EventMetadata(CommandEvent.event_type,
                                              machine_serial_number=serial_number,
-                                             tags=tags)
+                                             tags=CommandEvent.tags + tags)
                     event = CommandEvent(metadata, payload.copy())
                     event.post()

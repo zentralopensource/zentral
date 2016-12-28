@@ -1,5 +1,6 @@
-from django.apps import AppConfig
+from zentral.utils.apps import ZentralAppConfig
 
 
-class AccountsConfig(AppConfig):
-    name = 'accounts'
+class ZentralAccountsAppConfig(ZentralAppConfig):
+    name = "accounts"
+    verbose_name = "Zentral accounts app"
