@@ -92,9 +92,10 @@ class EventMetadata(object):
             d['request'] = self.request.serialize()
         if self.tags:
             d['tags'] = self.tags
+        if self.machine_serial_number:
+            d['machine_serial_number'] = self.machine_serial_number
         if not machine_metadata or not self.machine:
             return d
-        d['machine_serial_number'] = self.machine_serial_number
         machine_d = {}
         for ms in self.machine.snapshots:
             source = ms.source
