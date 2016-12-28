@@ -40,6 +40,8 @@ def make_event_metadata_request(request):
 
 
 def make_event_payload(user):
+    if not user or not user.is_authenticated:
+        return None
     return {"user": {"id": user.pk,
                      "username": user.username,
                      "email": user.email,
@@ -48,10 +50,13 @@ def make_event_payload(user):
 
 
 def post_event(event_cls, request, user):
+    payload = make_event_payload(user)
+    if not payload:
+        return
     metadata = EventMetadata(event_cls.event_type,
                              request=make_event_metadata_request(request),
                              tags=event_cls.tags)
-    event = event_cls(metadata, make_event_payload(user))
+    event = event_cls(metadata, payload)
     event.post()
 
 
