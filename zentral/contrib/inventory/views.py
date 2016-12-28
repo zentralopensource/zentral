@@ -460,7 +460,12 @@ class MachineEventSet(object):
         else:
             start = k
             stop = k + 1
-        return self.store.machine_events_fetch(self.machine_serial_number, start, stop - start, self.event_type)
+        for event in self.store.machine_events_fetch(self.machine_serial_number, start, stop - start, self.event_type):
+            if not self.event_type:
+                link = "?event_type={}".format(event.event_type)
+            else:
+                link = None
+            yield event, link
 
 
 class MachineEventsView(LoginRequiredMixin, ListView):

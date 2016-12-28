@@ -41,17 +41,27 @@
 <div class="table-responsive">
   <table class="table">
     <thead>
-      <th>Type</th>
-      <th>Created at</th>
+      <th>Metadata</th>
       <th>Data</th>
     </thead>
     <tbody>
-      {% for event in object_list %}
+      {% for event, link in object_list %}
+      {% with event.metadata.request as request %}
       <tr>
-        <td>{{ event.event_type }}</td>
-        <td>{{ event.metadata.created_at }}</td>
+        <td style="white-space:nowrap">
+          {% if link %}
+          <a href="{{ link }}">{{ event.get_event_type_display }}</a><br>
+          {% else %}
+          {{ event.get_event_type_display }}<br>
+          {% endif %}
+          {{ event.metadata.created_at }}
+          {% if request %}
+          <br><small>{{ request }}</small>
+          {% endif %}
+        </td>
         <td>{{ event.payload|pythonprettyprint }}</td>
       </tr>
+      {% endwith %}
       {% endfor %}
     </tbody>
   </table>
