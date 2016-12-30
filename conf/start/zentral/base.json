@@ -18,7 +18,7 @@
       ]
     ],
     "SERVER_EMAIL": "changethis@example.com",
-    "DEFAULT_EMAIL": "changethis@example.com",
+    "DEFAULT_FROM_EMAIL": "changethis@example.com",
     "ALLOWED_HOSTS": [
       "*"
     ]

@@ -64,6 +64,7 @@ KNOWN_COMMANDS = {
     # extras
     "shell": ["python", 'server/manage.py', 'shell'],
     "tests": ["python", 'server/manage.py', 'test', 'tests/'],
+    "createuser": ["python", 'server/manage.py', 'create_zentral_user'],
 }
 
 
@@ -75,6 +76,7 @@ if __name__ == '__main__':
     args = KNOWN_COMMANDS.get(cmd, None)
     if args:
         filename = args[0]
+        args.extend(sys.argv[2:])
         wait_for_db_migration()
         print('Launch known command "{}"'.format(cmd))
     else:
