@@ -47,7 +47,7 @@ class Command(BaseCommand):
             pass
         else:
             if user.username != username:
-                print("ERROR: user with email {} exists with a different username: {}".format(email, user.username))
+                print("ERROR: user with email {} exists with a different username: {}".format(email, user.username))
                 sys.exit(1)
         if not user:
             user = User.objects.create_user(username, email,
@@ -60,11 +60,11 @@ class Command(BaseCommand):
                 user.is_superuser = superuser
                 user.save()
                 if superuser:
-                    print("Existing user {} {} promoted to superuser".format(username, email))
+                    print("Existing user {} {} promoted to superuser".format(username, email))
                 else:
-                    print("Existing superuser {} {} demoted".format(username, email))
+                    print("Existing superuser {} {} demoted".format(username, email))
             else:
-                print("{} {} {} already exists".format("Superuser" if user.is_superuser else "User",
+                print("{} {} {} already exists".format("Superuser" if user.is_superuser else "User",
                                                        username, email))
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
