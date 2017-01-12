@@ -65,17 +65,27 @@ class SantaSetupViewsTestCase(TestCase):
     def test_installer_package_view(self):
         self.log_user_in()
         # without mbu
-        response = self.client.post(reverse("santa:installer_package"))
+        response = self.client.post(reverse("santa:installer_package"),
+                                    {"mode": 1})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_santa_enroll.pkg"')
+        # without mode
+        response = self.client.post(reverse("santa:installer_package"))
+        self.assertEqual(response.status_code, 400)
+        # with wrong mode
+        response = self.client.post(reverse("santa:installer_package"),
+                                    {"mode": 3})
+        self.assertEqual(response.status_code, 400)
         # with mbu
         mbu = MetaBusinessUnit.objects.create(name="zu")
         response = self.client.post(reverse("santa:installer_package"),
-                                    {"meta_business_unit": mbu.pk})
+                                    {"meta_business_unit": mbu.pk,
+                                     "mode": 1})
         self.assertEqual(response.status_code, 400)
         # enable api
         mbu.create_enrollment_business_unit()
         response = self.client.post(reverse("santa:installer_package"),
-                                    {"meta_business_unit": mbu.pk})
+                                    {"meta_business_unit": mbu.pk,
+                                     "mode": 2})
         self.assertEqual(response.status_code, 200)

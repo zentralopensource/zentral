@@ -1,7 +1,24 @@
 from django import forms
+from django.utils.translation import ugettext_lazy as _
 from zentral.core.probes.forms import BaseCreateProbeForm
+from zentral.utils.api_views import EnrollmentForm
 from zentral.utils.forms import validate_sha256
+from .osx_package.builder import SantaZentralEnrollPkgBuilder
 from .probes import SantaProbe, Rule
+
+
+class SantaEnrollmentForm(EnrollmentForm):
+    mode = forms.ChoiceField(
+        label=_("Mode"),
+        choices=((SantaZentralEnrollPkgBuilder.MONITOR_MODE, _("Monitor")),
+                 (SantaZentralEnrollPkgBuilder.LOCKDOWN_MODE, _("Lockdown"))),
+        initial=SantaZentralEnrollPkgBuilder.MONITOR_MODE,
+        help_text="In Monitor mode, only blacklisted binaries will be blocked. "
+                  "In Lockdown mode, only whitelisted binaries will be allowed to run.")
+
+    def get_build_kwargs(self):
+        mode = int(self.cleaned_data.get("mode", SantaZentralEnrollPkgBuilder.MONITOR_MODE))
+        return {"mode": mode}
 
 
 class RuleForm(forms.Form):

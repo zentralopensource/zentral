@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -9,10 +10,7 @@
 <h2>JSS enrollment</h2>
 
 <form method="POST" class="form">{% csrf_token %}
-  <div class="form-group">
-    <label for="id_meta_business_unit">Business unit</label>
-    {{ form.meta_business_unit }}
-  </div>
+  {{ form|bootstrap }}
   <a class="btn btn-default"
      id="get-debugging-tools"
      href="{% url 'jss:enrollment_debugging' %}">Get enrollment debugging tools</a>

@@ -7,6 +7,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class SantaZentralEnrollPkgBuilder(PackageBuilder):
+    MONITOR_MODE = 1
+    LOCKDOWN_MODE = 2
     package_name = "zentral_santa_enroll.pkg"
     package_identifier = "io.zentral.santa_enroll"
     build_tmpl_dir = os.path.join(BASE_DIR, "build.tmpl")
@@ -23,13 +25,16 @@ class SantaZentralEnrollPkgBuilder(PackageBuilder):
         with open(config_plist, "wb") as f:
             plistlib.dump(pl, f)
 
-    def extra_build_steps(self, tls_hostname, api_secret, tls_server_certs):
+    def extra_build_steps(self, tls_hostname, api_secret, tls_server_certs, mode=MONITOR_MODE):
+        if mode not in {self.MONITOR_MODE, self.LOCKDOWN_MODE}:
+            raise ValueError("Unknown monitor mode {}".format(mode))
         if tls_server_certs and not os.path.exists(tls_server_certs):
             raise ValueError("tls_server_certs file {} is not readable".format(tls_server_certs))
         # extra steps
         config_plist = self.get_root_path("var/db/santa/config.plist")
         self.replace_in_file(config_plist,
-                             (("%TLS_HOSTNAME%", tls_hostname),))
+                             (("%TLS_HOSTNAME%", tls_hostname),
+                              ("%MODE%", str(mode))))
         postinstall_script = self.get_build_path("scripts", "postinstall")
         self.replace_in_file(postinstall_script,
                              (("%API_SECRET%", api_secret),

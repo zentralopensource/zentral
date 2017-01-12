@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>ClientMode</key>
-	<integer>1</integer>
+	<integer>%MODE%</integer>
 	<key>MachineID</key>
 	<string>%MACHINE_ID%</string>
 	<key>SyncBaseURL</key>

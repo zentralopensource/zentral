@@ -6,6 +6,7 @@ from django import forms
 from django.core import signing
 from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponseForbidden, JsonResponse
+from django.utils.translation import ugettext_lazy as _
 from django.views.generic import TemplateView, View
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, BusinessUnit
@@ -173,22 +174,31 @@ class SignedRequestHeaderJSONPostAPIView(SignedRequestJSONPostAPIView):
 
 
 class EnrollmentForm(forms.Form):
-    meta_business_unit = forms.ModelChoiceField(queryset=MetaBusinessUnit.objects.available_for_api_enrollment(),
-                                                required=False,
-                                                widget=forms.Select(attrs={'class': 'form-control'}))
+    meta_business_unit = forms.ModelChoiceField(
+        label=_("Business unit"),
+        queryset=MetaBusinessUnit.objects.available_for_api_enrollment(),
+        required=False,
+    )
+
+    def get_build_kwargs(self):
+        return {}
 
 
 class BaseEnrollmentView(TemplateView):
+    enrollment_form_class = EnrollmentForm
+
     def get_context_data(self, **kwargs):
         context = super(BaseEnrollmentView, self).get_context_data(**kwargs)
         context['setup'] = True
-        context['form'] = EnrollmentForm()
+        context['form'] = self.enrollment_form_class()
         return context
 
 
 class BaseInstallerPackageView(View):
+    enrollment_form_class = EnrollmentForm
+
     def post(self, request):
-        form = EnrollmentForm(request.POST)
+        form = self.enrollment_form_class(request.POST)
         if form.is_valid():
             try:
                 tls_server_certs = settings['api']['tls_server_certs']
@@ -201,9 +211,11 @@ class BaseInstallerPackageView(View):
                 # TODO Race. The meta_business_unit could maybe be without any api BU.
                 # TODO. Better selection if multiple BU ?
                 business_unit = meta_business_unit.api_enrollment_business_units()[0]
+            build_kwargs = form.get_build_kwargs()
             return builder.build_and_make_response(business_unit,
                                                    request.get_host(),
                                                    make_secret(self.module, business_unit),
-                                                   tls_server_certs)
+                                                   tls_server_certs,
+                                                   **build_kwargs)
         else:
             raise SuspiciousOperation("Unknown MBU or MBU not available for api enrollment")

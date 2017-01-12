@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -9,10 +10,7 @@
 <h2>Munki enrollment</h2>
 
 <form action="{% url 'munki:installer_package' %}" method="POST">{% csrf_token %}
-  <div class="form-group">
-    <label for="id_meta_business_unit">Business unit</label>
-    {{ form.meta_business_unit }}
-  </div>
+  {{ form|bootstrap }}
   <button class="btn btn-default" type="submit">Download enrollment pkg</button>
 </form>
 {% endblock %}
