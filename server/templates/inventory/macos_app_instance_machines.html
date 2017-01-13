@@ -1,4 +1,5 @@
 {% extends 'inventory/machine_list.html' %}
+{% load inventory_extras %}
 
 {% block objectextras %}
 <div class="panel panel-default">
@@ -11,7 +12,7 @@
           <dt>Sha1</dt>
           <dd>{{ object.sha_1|default:"-" }}</dd>
           <dt>Sha256</dt>
-          <dd>{{ object.sha_256|default:"-" }}</dd>
+          <dd>{% sha_256_link object.sha_256 %}</dd>
       </dl>
       {% for cert in object.certificate_chain %}
       <p>signed by</p>
@@ -25,7 +26,7 @@
         <dt>Sha1</dt>
         <dd>{{ cert.sha_1 }}</dd>
         <dt>Sha256</dt>
-        <dd>{{ cert.sha_256 }}</dd>
+        <dd>{% sha_256_link cert.sha_256 %}</dd>
         <dt>Validity</dt>
         <dd>{{ cert.valid_from }} - {{ cert.valid_until }}</dt>
       </dl>

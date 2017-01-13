@@ -2,6 +2,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.db import connection
 from django.utils.text import slugify
+from zentral.utils.forms import validate_sha256
 from .models import (MachineSnapshot, MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
                      Source, Tag)
@@ -160,8 +161,11 @@ class AddMachineTagForm(AddTagForm):
 class MacOSAppSearchForm(forms.Form):
     bundle_name = forms.CharField(label='Bundle name', max_length=64, required=False)
     source = forms.ModelChoiceField(queryset=Source.objects.current_macos_apps_sources(),
-                                    required=False,
-                                    widget=forms.Select(attrs={'class': 'form-control'}))
+                                    required=False)
+    sha_256 = forms.CharField(label="SHA 256", max_length=64, required=False,
+                              validators=[validate_sha256],
+                              help_text="sha 256 signature of the binary or "
+                                        "one of the certificate in the chain")
     page = forms.IntegerField(required=False)
 
     def search(self, limit):
@@ -173,16 +177,37 @@ class MacOSAppSearchForm(forms.Form):
                  "JOIN inventory_machinesnapshot_osx_app_instances AS si ON (si.osxappinstance_id = i.id) "
                  "JOIN inventory_currentmachinesnapshot AS cms ON (si.machinesnapshot_id = cms.machine_snapshot_id) "
                  "JOIN inventory_source AS src ON (cms.source_id = src.id)")
+        wheres = []
         # bundle name
         bundle_name = self.cleaned_data['bundle_name']
         if bundle_name:
             args.append(bundle_name)
-            query = "{} AND a.bundle_name ~* %s".format(query)
+            wheres.append("a.bundle_name ~* %s")
         # source
         source = self.cleaned_data['source']
         if source:
             args.append(source.id)
-            query = "{} AND src.id = %s".format(query)
+            wheres.append("src.id = %s")
+        sha_256 = self.cleaned_data["sha_256"]
+        if sha_256:
+            args.insert(0, sha_256)
+            query = (
+                "WITH RECURSIVE filtered_certificates AS ("
+                "SELECT id, signed_by_id "
+                "FROM inventory_certificate "
+                "WHERE sha_256 = %s "
+                "UNION "
+                "SELECT c.id, c.signed_by_id "
+                "FROM inventory_certificate c "
+                "INNER JOIN filtered_certificates fc ON fc.id = c.signed_by_id) "
+                "{} "
+                "LEFT JOIN filtered_certificates fc ON (i.signed_by_id = fc.id)"
+            ).format(query)
+            args.append(sha_256)
+            wheres.append("(fc.id is NULL AND i.sha_256 = %s) OR (fc.id is not NULL)")
+        if wheres:
+            query = "{} WHERE {}".format(query,
+                                         " AND ".join("({})".format(w) for w in wheres))
         # pagination / ordering
         page = self.cleaned_data['page']
         offset = (page - 1) * limit

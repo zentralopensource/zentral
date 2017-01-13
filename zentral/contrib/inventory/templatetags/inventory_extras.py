@@ -1,4 +1,6 @@
 from django import template
+from django.urls import reverse
+from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from zentral.contrib.inventory.conf import IOS, LINUX, MACOS, WINDOWS
 
@@ -42,3 +44,13 @@ def machine_platform_icon(meta_machine):
     if icon:
         return mark_safe('<i class="fa fa-{}" aria-hidden="true"></i>'.format(icon))
     return ""
+
+
+@register.simple_tag
+def sha_256_link(sha_256):
+    if sha_256:
+        url = "{}?{}".format(reverse("inventory:macos_apps"),
+                             urlencode({"sha_256": sha_256}))
+        return mark_safe('<a href="{}">{}</a>'.format(url, sha_256))
+    else:
+        return "-"

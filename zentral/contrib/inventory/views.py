@@ -202,7 +202,7 @@ class GroupMachinesView(MachineListView):
 
 
 class OSXAppInstanceMachinesView(MachineListView):
-    template_name = "inventory/osx_app_instance_machines.html"
+    template_name = "inventory/macos_app_instance_machines.html"
 
     def get_object(self, **kwargs):
         return OSXAppInstance.objects.select_related('app').get(app__pk=kwargs['pk'], pk=kwargs['osx_app_instance_id'])
@@ -599,38 +599,38 @@ class MacOSAppsView(LoginRequiredMixin, TemplateView):
 
     def get(self, request, *args, **kwargs):
         self.search_form = MacOSAppSearchForm(request.GET)
-        if not self.search_form.is_valid():
-            return redirect('inventory:macos_apps')
         return super(MacOSAppsView, self).get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super(MacOSAppsView, self).get_context_data(**kwargs)
         ctx['inventory'] = True
         ctx['search_form'] = self.search_form
-        (ctx['object_list'],
-         ctx['total_objects'],
-         previous_page,
-         next_page,
-         ctx['total_pages']) = self.search_form.search(limit=50)
-        if next_page:
-            qd = self.request.GET.copy()
-            qd['page'] = next_page
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if previous_page:
-            qd = self.request.GET.copy()
-            qd['page'] = previous_page
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        if self.search_form.is_valid():
+            (ctx['object_list'],
+             ctx['total_objects'],
+             previous_page,
+             next_page,
+             ctx['total_pages']) = self.search_form.search(limit=50)
+            if next_page:
+                qd = self.request.GET.copy()
+                qd['page'] = next_page
+                ctx['next_url'] = "?{}".format(qd.urlencode())
+            if previous_page:
+                qd = self.request.GET.copy()
+                qd['page'] = previous_page
+                ctx['previous_url'] = "?{}".format(qd.urlencode())
         qd = self.request.GET.copy()
         qd.pop('page', None)
         reset_link = "?{}".format(qd.urlencode())
         breadcrumbs = []
-        if len([i for k, i in self.search_form.cleaned_data.items() if i and not k == 'page']):
+        if self.search_form.is_valid() \
+           and len([i for k, i in self.search_form.cleaned_data.items() if i and not k == 'page']):
             breadcrumbs.append((reverse('inventory:macos_apps'), "macOS applications"))
             breadcrumbs.append((reset_link, "Search"))
         else:
             breadcrumbs.append((reset_link, "macOS applications"))
         breadcrumbs.append((None, "page {} of {}".format(self.search_form.cleaned_data['page'],
-                                                         ctx['total_pages'])))
+                                                         ctx.get('total_pages', 1))))
         ctx['breadcrumbs'] = breadcrumbs
         return ctx
 
