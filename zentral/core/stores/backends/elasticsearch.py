@@ -311,6 +311,104 @@ class EventStore(BaseEventStore):
         r = self._es.search(index=self.read_index, body=body)
         return r['hits']['total']
 
+    def probe_events_aggregations(self, probe, **search_dict):
+        body = self._get_probe_events_body(probe, **search_dict)
+        body['size'] = 0
+        aggs = {}
+        aggregations = probe.get_aggregations()
+        for field, aggregation in aggregations.items():
+            a_type = aggregation["type"]
+            bucket_number = aggregation["bucket_number"]
+            event_type = aggregation.get("event_type")
+            es_field = ".".join(s for s in (event_type, field) if s)
+            if a_type == "terms":
+                aggs[field] = {
+                    "terms": {
+                        "field": es_field,
+                        "size": bucket_number
+                    }
+                }
+            elif a_type == "table":
+                def add_terms(agg, fields, agg_key=None):
+                    es_fn = "{}.{}".format(event_type, fields.pop(0))
+                    key = agg_key or es_fn
+                    agg.update({
+                        key: {
+                            "terms": {
+                                "field": es_fn,
+                                "size": bucket_number
+                            }
+                        }
+                    })
+                    if fields:
+                        agg[key]["aggs"] = {}
+                        add_terms(agg[key]["aggs"], fields)
+                add_terms(aggs,
+                          [fn for fn, _ in aggregation["columns"]],
+                          field)
+            elif a_type == "date_histogram":
+                aggs[field] = {
+                    "date_histogram": self._get_hist_date_histogram_dict(
+                        aggregation["interval"],
+                        bucket_number,
+                        es_field
+                    )
+                }
+            else:
+                logger.error("Unknown aggregation type %s", a_type)
+        body["aggs"] = aggs
+        r = self._es.search(index=self.read_index, body=body)
+        results = {}
+        for field, agg_result in r["aggregations"].items():
+            aggregation = aggregations[field]
+            interval = aggregation.get("interval")
+            a_type = aggregation["type"]
+            buckets = agg_result["buckets"]
+            if a_type == "table":
+                columns = aggregation["columns"]
+
+                def yield_bucket_values(agg_result, fn_list, value_d=None):
+                    if value_d is None:
+                        value_d = {}
+                    buckets = agg_result["buckets"]
+                    fn_list = list(fn_list)
+                    current_fn = fn_list.pop(0)
+                    for bucket in buckets:
+                        bucket_value_d = value_d.copy()
+                        bucket_value_d[current_fn] = bucket["key"]
+                        if fn_list:
+                            next_fn = fn_list[0]
+                            yield from yield_bucket_values(bucket["{}.{}".format(event_type, next_fn)],
+                                                           fn_list, bucket_value_d)
+                        else:
+                            bucket_value_d["event_count"] = bucket["doc_count"]
+                            yield bucket_value_d
+                    sum_other_doc_count = agg_result.pop("sum_other_doc_count", 0)
+                    if sum_other_doc_count:
+                        other_doc_value_d = value_d.copy()
+                        other_doc_value_d[current_fn] = "…"
+                        for other_fn in fn_list:
+                            other_doc_value_d[other_fn] = "…"
+                        other_doc_value_d["event_count"] = sum_other_doc_count
+                        yield other_doc_value_d
+
+                values = list(yield_bucket_values(agg_result, [fn for fn, _ in columns]))
+            elif a_type == "terms":
+                values = [(b["key"], b["doc_count"]) for b in buckets]
+                sum_other_doc_count = agg_result.get("sum_other_doc_count")
+                if sum_other_doc_count:
+                    values.append((None, sum_other_doc_count))
+            elif a_type == "date_histogram":
+                bucket_number = aggregation["bucket_number"]
+                values = [(parser.parse(b["key_as_string"]), b["doc_count"])
+                          for b in buckets[-1 * bucket_number:]]
+            results[field] = {"label": aggregation.get("label", field.capitalize()),
+                              "type": a_type,
+                              "values": values}
+            if interval:
+                results[field]["interval"] = interval
+        return results
+
     def probe_events_fetch(self, probe, offset=0, limit=0, **search_dict):
         # TODO: count could work from first fetch with elasticsearch.
         body = self._get_probe_events_body(probe, **search_dict)
@@ -348,7 +446,15 @@ class EventStore(BaseEventStore):
         if tag:
             filter_list.append({"term": {"tags": tag}})
         if event_type:
-            filter_list.append({"type": {"value": event_type}})
+            if isinstance(event_type, list):
+                filter_list.append({"bool": {
+                                        "should": [
+                                            {"type": {"value": et}}
+                                            for et in event_type
+                                        ]
+                                    }})
+            else:
+                filter_list.append({"type": {"value": event_type}})
         interval_unit = self.INTERVAL_UNIT[interval]
         gte_range = "now-{q}{u}/{u}".format(q=bucket_number - 1,
                                             u=interval_unit)
@@ -356,12 +462,12 @@ class EventStore(BaseEventStore):
         filter_list.append({"range": {"created_at": {"gte": gte_range, "lt": lt_range}}})
         return {"bool": {"filter": filter_list}}
 
-    def _get_hist_date_histogram_dict(self, interval, bucket_number):
+    def _get_hist_date_histogram_dict(self, interval, bucket_number, field="created_at"):
         interval_unit = self.INTERVAL_UNIT[interval]
         min_bound = "now-{q}{u}/{u}".format(q=bucket_number - 1,
                                             u=interval_unit)
         max_bound = "now/{u}".format(u=interval_unit)
-        return {"field": "created_at",
+        return {"field": field,
                 "interval": interval,
                 "min_doc_count": 0,
                 "extended_bounds": {

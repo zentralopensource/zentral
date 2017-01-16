@@ -19,6 +19,14 @@ register_event_type(MunkiRequestEvent)
 class MunkiEvent(BaseEvent):
     event_type = "munki_event"
     tags = ["munki"]
+    payload_aggregations = [
+        ("munki_version", {"type": "terms", "bucket_number": 10, "label": "Munki versions"}),
+        ("run_type", {"type": "terms", "bucket_number": 10, "label": "Run types"}),
+        ("type", {"type": "terms", "bucket_number": 10, "label": "Types"}),
+        ("name", {"type": "table", "bucket_number": 50, "label": "Bundles",
+                  "columns": [("name", "Name"),
+                              ("version", "Version str.")]}),
+    ]
 
 
 register_event_type(MunkiEvent)

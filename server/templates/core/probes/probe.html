@@ -61,6 +61,9 @@
       <a class="btn btn-default" href="{% url 'probes:probe_events' probe.pk %}">
         <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
       </a>
+      <a class="btn btn-default" href="{% url 'probes:probe_dashboard' probe.pk %}">
+        <span class="glyphicon glyphicon-stats" aria-hidden="true"></span> Dashboard
+      </a>
       {% for store_name, store_url in probe.get_store_links %}
       <a class="btn btn-default" href="{{ store_url }}">
         <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}

@@ -9,6 +9,9 @@ class BaseEventStore(object):
     def probe_events_count(self, probe, **search_dict):
         return 0
 
+    def probe_events_aggregations(self, probe, **search_dict):
+        return {}
+
     def get_vis_url(self, probe, **search_dict):
         return None
 

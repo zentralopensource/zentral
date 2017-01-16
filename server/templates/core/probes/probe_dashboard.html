@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load base_extras inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'probes:index' %}">Probes</a>
+  <li><a href="{% url 'probes:probe' probe.pk %}">{{ probe.name }}</a></li>
+  <li class="active">dashboard</li>
+</ol>
+
+<h2>
+  Probe <i>{{ probe.name }}</i> dashboard
+</h2>
+
+<div id="dashboard-container" class="row" data-url="{% url 'probes:probe_dashboard_data' probe.pk %}">
+
+{% for field, aggregation in aggregations.items %}
+  {% if aggregation.type == "table" %}
+  <div class="col-md-12">
+    <h4>{{ aggregation.label }}</h4>
+    <div class="table-responsive">
+      <table class="table table-condensed" data-field="{{ field }}">
+        <thead>
+          <tr>
+            {% for field_name, label in aggregation.columns %}
+            <th>{{ label }}</th>
+            {% endfor %}
+            <th>Event count</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="row-template" data-field="{{ field }}">
+            {% for field_name, label in aggregation.columns %}
+            <td data-fn="{{ field_name }}"></td>
+            {% endfor %}
+            <td data-fn="event_count"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-md-4">
+    <h4>{{ aggregation.label }}</h4>
+    <canvas class="chart"
+            data-field="{{ field }}"
+            width="100"
+            height="80"></canvas>
+  </div>
+  {% endif %}
+{% endfor %}
+</div>
+
+{% endblock %}
+
+{% block extrajs %}
+<script>
+  function get_data_and_make_charts() {
+    $tabs = $("#dashboard-container");
+    url = $tabs.data("url");
+    $.getJSON(url, function(data) {
+      for (var field in data) {
+        if (data.hasOwnProperty(field)) {
+          var chart_cfg = data[field];
+          if (chart_cfg.type === 'table') {
+            $tr_tmpl = $("tr[data-field='" + field + "']");
+            $tbody = $tr_tmpl.parent();
+            $tr_tmpl.detach();
+            chart_cfg.data.datasets[0].data.forEach(function (row) {
+              $tr = $tr_tmpl.clone();
+              for (var fn in row) {
+                if (row.hasOwnProperty(fn)) {
+                  $tr.find("td[data-fn='" + fn + "']").text(row[fn]);
+                }
+              }
+              $tbody.append($tr);
+            });
+          } else {
+            $canvas = $("canvas[data-field='" + field + "']");
+            var chart = new Chart($canvas, chart_cfg);
+          }
+        }
+      }
+    });
+  }
+
+  $(document).ready(function(){
+    get_data_and_make_charts();
+  });
+</script>
+{% endblock %}

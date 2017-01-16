@@ -2,6 +2,8 @@ from django.contrib.auth.signals import user_logged_in, user_logged_out, user_lo
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 
 
+ALL_EVENTS_SEARCH_DICT = {"event_type": ["zentral_login", "zentral_logout", "zentral_failed_login"]}
+
 # events
 
 

@@ -39,5 +39,6 @@ def get_frontend_store(stores):
             logger.error('No stores')
     return fe_store
 
+
 stores = get_stores(settings)
 frontend_store = get_frontend_store(stores)

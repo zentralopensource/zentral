@@ -136,6 +136,7 @@ class EventMetadata(object):
 class BaseEvent(object):
     event_type = "base"
     tags = []
+    payload_aggregations = []
 
     @classmethod
     def build_from_machine_request_payloads(cls, msn, ua, ip, payloads, get_created_at=None):
@@ -230,6 +231,15 @@ class BaseEvent(object):
     def get_notification_body(self, probe):
         ctx = self.get_notification_context(probe)
         return render_notification_part(ctx, self.event_type, 'body')
+
+    # aggregations
+
+    @classmethod
+    def get_payload_aggregations(cls):
+        for _, val in cls.payload_aggregations:
+            if "event_type" not in val:
+                val["event_type"] = cls.event_type
+        return cls.payload_aggregations
 
 
 register_event_type(BaseEvent)

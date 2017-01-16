@@ -19,6 +19,15 @@ register_event_type(SantaPreflightEvent)
 class SantaEventEvent(BaseEvent):
     event_type = "santa_event"
     tags = ["santa"]
+    payload_aggregations = [
+        ("decision", {"type": "terms", "bucket_number": 10, "label": "Decisions"}),
+        ("file_bundle_name", {"type": "terms", "bucket_number": 10, "label": "Bundle names"}),
+        ("bundles", {"type": "table", "bucket_number": 100, "label": "Bundles",
+                     "columns": [("file_bundle_name", "Name"),
+                                 ("file_bundle_id", "ID"),
+                                 ("file_bundle_path", "File path"),
+                                 ("file_bundle_version_string", "Version str.")]}),
+    ]
 
     def get_notification_context(self, probe):
         ctx = super().get_notification_context(probe)

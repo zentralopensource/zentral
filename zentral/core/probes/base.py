@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import copy
 import logging
 from django.core.urlresolvers import reverse_lazy
@@ -381,6 +382,27 @@ class BaseProbe(object):
         if self.description:
             d["description"] = self.description
         return d
+
+    # aggregations
+
+    def get_aggregations(self):
+        aggs = OrderedDict([("created_at",
+                             {"type": "date_histogram",
+                              "interval": "day",
+                              "bucket_number": 31,
+                              "label": "Events"})])
+        event_type_classes = self.get_event_type_classes()
+        if len(event_type_classes) == 1:
+            event_type_class = event_type_classes[0]
+            for field, aggregation in event_type_class.get_payload_aggregations():
+                aggs[field] = aggregation
+        else:
+            aggs["_type"] = {
+                "type": "terms",
+                "bucket_number": len(event_types),
+                "label": "Event types",
+            }
+        return aggs
 
 
 register_probe_class(BaseProbe)

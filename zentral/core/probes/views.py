@@ -99,6 +99,92 @@ class ProbeView(LoginRequiredMixin, DetailView):
             return ["core/probes/syntax_error.html"]
 
 
+class ProbeDashboardView(LoginRequiredMixin, DetailView):
+    model = ProbeSource
+    template_name = "core/probes/probe_dashboard.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super(ProbeDashboardView, self).get_context_data(**kwargs)
+        ctx['probes'] = True
+        ctx['probe'] = self.probe = self.object.load()
+        if self.probe.loaded:
+            ctx['aggregations'] = self.probe.get_aggregations()
+        return ctx
+
+
+class ProbeDashboardDataView(LoginRequiredMixin, View):
+    INTERVAL_DATE_FORMAT = {
+        "hour": "%H:%M",
+        "day": "%d/%m",
+        "week": "%d/%m",
+        "month": "%m/%y",
+    }
+    COLORS = [
+        '#3366CC', '#DC3912', '#FF9900', '#109618', '#990099', '#3B3EAC', '#0099C6',
+        '#DD4477', '#66AA00', '#B82E2E', '#316395', '#994499', '#22AA99', '#AAAA11',
+        '#6633CC', '#E67300', '#8B0707', '#329262', '#5574A6', '#3B3EAC'
+    ]
+
+    def get(self, response, *args, **kwargs):
+        probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
+        probe = probe_source.load()
+        charts = {}
+        for field, results in frontend_store.probe_events_aggregations(probe,
+                **probe.get_extra_event_search_dict()).items():
+            a_type = results["type"]
+            if a_type == "table":
+                aggregation = probe.get_aggregations()[field]
+                columns = aggregation["columns"]
+                data = []
+                for row in results["values"]:
+                    for k, v in row.items():
+                        if v is None:
+                            row[k] = "-"
+                    data.append(row)
+                data.sort(key=lambda d: [d[fn].lower() for fn, _ in columns])
+                labels = [l for _, l in columns]
+                labels.append("Event count")
+                chart_config = {
+                    "type": "table",
+                    "data": {
+                        "labels": labels,
+                        "datasets": [
+                            {"data": data}
+                        ]
+                    }
+                }
+            elif a_type == "terms":
+                chart_config = {
+                    "type": "doughnut",
+                    "data": {
+                        "labels": [l or "Other" for l, _ in results["values"]],
+                        "datasets": [
+                            {"data": [v for _, v in results["values"]],
+                             "backgroundColor": [self.COLORS[i % len(self.COLORS)]
+                                                 for i in range(len(results["values"]))]}
+                        ]
+                    }
+                }
+            elif a_type == "date_histogram":
+                date_format = self.INTERVAL_DATE_FORMAT.get(results["interval"], "day")
+                chart_config = {
+                    "type": "bar",
+                    "data": {
+                        "labels": [l.strftime(date_format) for l, _ in results["values"]],
+                        "datasets": [
+                            {"label": "event number",
+                             "backgroundColor": [self.COLORS[0] for i in range(len(results["values"]))],
+                             "data": [v for _, v in results["values"]]}
+                        ]
+                    }
+                }
+            else:
+                logger.error("Unknown aggregation type %s", a_type)
+                continue
+            charts[field] = chart_config
+        return JsonResponse(charts)
+
+
 class ProbeEventSet(object):
     def __init__(self, probe):
         self.probe = probe
@@ -139,6 +225,7 @@ class ProbeEventsView(LoginRequiredMixin, ListView):
         ctx['probes'] = True
         ctx['probe_source'] = self.probe_source
         ctx['probe'] = self.probe
+        ctx['aggregations'] = self.probe.get_aggregations()
         # pagination
         page = ctx['page_obj']
         if page.has_next():
