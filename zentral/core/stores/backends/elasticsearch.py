@@ -127,7 +127,7 @@ class EventStore(BaseEventStore):
 
     # machine events
 
-    def _get_machine_events_body(search, machine_serial_number, event_type):
+    def _get_machine_events_body(search, machine_serial_number, event_type=None, tag=None):
         body = {
             'query': {
                 'bool': {
@@ -139,6 +139,8 @@ class EventStore(BaseEventStore):
         }
         if event_type:
             body['query']['bool']['filter'].append({'type': {'value': event_type}})
+        if tag:
+            body['query']['bool']['filter'].append({'term': {'tags': tag}})
         return body
 
     def machine_events_count(self, machine_serial_number, event_type=None):
@@ -161,14 +163,8 @@ class EventStore(BaseEventStore):
             yield self._deserialize_event(hit['_type'], hit['_source'])
 
     def machine_events_types_with_usage(self, machine_serial_number):
-        body = {
-            'query': {
-                'bool': {
-                    'filter': [
-                        {'term': {'machine_serial_number': machine_serial_number}}
-                    ]
-                }
-            },
+        body = self._get_machine_events_body(machine_serial_number)
+        body.update({
             'size': 0,
             'aggs': {
                 'doc_types': {
@@ -178,12 +174,73 @@ class EventStore(BaseEventStore):
                     }
                 }
             }
-        }
+        })
         r = self._es.search(index=self.read_index, body=body)
         types_d = {}
         for bucket in r['aggregations']['doc_types']['buckets']:
             types_d[bucket['key']] = bucket['doc_count']
         return types_d
+
+    def get_last_machine_heartbeats(self, machine_serial_number):
+        body = self._get_machine_events_body(machine_serial_number, tag="heartbeat")
+        body.update({
+            'size': 0,
+            'aggs': {
+                'inventory_heartbeats': {
+                    'filter': {'type': {'value': 'inventory_heartbeat'}},
+                    'aggs': {
+                        'sources': {
+                            'terms': {
+                                'field': 'inventory_heartbeat.source.name',
+                                'size': 10  # TODO: HARDCODED
+                            },
+                            'aggs': {
+                                'max_created_at': {
+                                    'max': {
+                                        'field': 'created_at'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                'other_events': {
+                    'filter': {'bool': {'must_not': {'type': {'value': 'inventory_heartbeat'}}}},
+                    'aggs': {
+                        'event_types': {
+                            'terms': {
+                                'field': '_type',
+                                'size': len([et for et in event_types.values()
+                                             if 'heartbeat' in et.tags])
+                            },
+                            'aggs': {
+                                'max_created_at': {
+                                    'max': {
+                                        'field': 'created_at'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        r = self._es.search(index=self.read_index, body=body)
+        heartbeats = []
+        for bucket in r["aggregations"]["inventory_heartbeats"]["sources"]["buckets"]:
+            heartbeats.append((event_types["inventory_heartbeat"],
+                               bucket["key"],
+                               parser.parse(bucket["max_created_at"]["value_as_string"])))
+        for bucket in r["aggregations"]["other_events"]["event_types"]["buckets"]:
+            event_type = bucket["key"]
+            event_type_class = event_types.get(event_type, None)
+            if not event_type_class:
+                logger.error("Unknown event type %s", event_type)
+            else:
+                heartbeats.append((event_type_class,
+                                   None,
+                                   parser.parse(bucket["max_created_at"]["value_as_string"])))
+        return heartbeats
 
     # probe events
 

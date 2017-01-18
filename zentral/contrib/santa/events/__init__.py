@@ -11,6 +11,7 @@ ALL_EVENTS_SEARCH_DICT = {"tag": "santa"}
 class SantaPreflightEvent(BaseEvent):
     event_type = "santa_preflight"
     tags = ["santa", "heartbeat"]
+    heartbeat_timeout = 2 * 10 * 60
 
 
 register_event_type(SantaPreflightEvent)

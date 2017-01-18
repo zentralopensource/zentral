@@ -22,6 +22,7 @@ register_event_type(OsqueryEnrollmentEvent)
 class OsqueryRequestEvent(OsqueryEvent):
     event_type = "osquery_request"
     tags = ['osquery', 'heartbeat']
+    heartbeat_timeout = 2 * 60
 
 
 register_event_type(OsqueryRequestEvent)

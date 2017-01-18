@@ -232,6 +232,22 @@
 {% endfor %}
 {% endif %}
 
+<h2>{{ heartbeats|length }} Heartbeat{{ heartbeats|length|pluralize }}</h2>
+<table class="table table-condensed">
+  <thead>
+    <th>Event</th>
+    <th>Last seen</th>
+  </thead>
+  <tbody>
+    {% for event_class_display, inventory_source_name, max_date, cell_class in heartbeats %}
+    <tr>
+      <td>{{ event_class_display }}{% if inventory_source_name %} - {{ inventory_source_name }}{% endif %}</td>
+      <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ max_date }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
 {% endblock %}
 
 {% block extrajs %}

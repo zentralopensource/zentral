@@ -136,6 +136,7 @@ class EventMetadata(object):
 class BaseEvent(object):
     event_type = "base"
     tags = []
+    heartbeat_timeout = None
     payload_aggregations = []
 
     @classmethod

@@ -11,6 +11,7 @@ ALL_EVENTS_SEARCH_DICT = {"tag": "munki"}
 class MunkiRequestEvent(BaseEvent):
     event_type = "munki_request"
     tags = ["munki", "heartbeat"]
+    heartbeat_timeout = 2 * 3600
 
 
 register_event_type(MunkiRequestEvent)

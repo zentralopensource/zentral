@@ -1,9 +1,11 @@
+from datetime import datetime, timedelta
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core.urlresolvers import reverse, reverse_lazy
 from django.db import connection
 from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
+from django.utils.timezone import make_naive
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.core.stores import frontend_store
 from zentral.conf import settings
@@ -416,7 +418,25 @@ class MachineView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super(MachineView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['machine'] = MetaMachine(context['serial_number'])
+        context['machine'] = machine = MetaMachine(context['serial_number'])
+        heartbeats = []
+        for event_class, source_name, max_date in frontend_store.get_last_machine_heartbeats(machine.serial_number):
+            heartbeat_timeout = event_class.heartbeat_timeout
+            if heartbeat_timeout:
+                heartbeat_timeout = timedelta(seconds=heartbeat_timeout)
+            max_date = make_naive(max_date)
+            date_class = None
+            if heartbeat_timeout:
+                if datetime.utcnow() - max_date > heartbeat_timeout:
+                    date_class = "danger"
+                else:
+                    date_class = "success"
+            heartbeats.append(
+                (event_class.get_event_type_display(),
+                 source_name, max_date, date_class)
+            )
+        heartbeats.sort()
+        context['heartbeats'] = heartbeats
         return context
 
 
