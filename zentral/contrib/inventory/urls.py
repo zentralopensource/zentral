@@ -28,6 +28,7 @@ urlpatterns = [
     url(r'^machine/(?P<serial_number>\S+)/archive/$', views.ArchiveMachineView.as_view(), name='archive_machine'),
     url(r'^machine/(?P<serial_number>\S+)/$', views.MachineView.as_view(), name='machine'),
     url(r'^tags/$', views.TagsView.as_view(), name='tags'),
+    url(r'^tags/create/$', views.CreateTagView.as_view(), name='create_tag'),
     url(r'^tags/(?P<pk>\d+)/update/$', views.UpdateTagView.as_view(), name='update_tag'),
     url(r'^tags/(?P<pk>\d+)/delete/$', views.DeleteTagView.as_view(), name='delete_tag'),
     url(r'^macos_apps/$', views.MacOSAppsView.as_view(), name='macos_apps'),

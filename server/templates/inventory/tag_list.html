@@ -8,6 +8,9 @@
 </ol>
 
 <h2>{{ object_list|length }} Tag{{ object_list|length|pluralize }}</h2>
+
+<p><a href="{% url 'inventory:create_tag' %}" class="btn btn-default">Create</a></p>
+
 <div class="table-responsive">
   <table class="table">
     <thead>

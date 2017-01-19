@@ -589,13 +589,28 @@ class TagsView(LoginRequiredMixin, ListView):
         return ctx
 
 
+class CreateTagView(LoginRequiredMixin, CreateView):
+    template_name = "inventory/edit_tag.html"
+    model = Tag
+    fields = ('name', 'color')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['inventory'] = True
+        ctx['color_presets'] = TAG_COLOR_PRESETS
+        return ctx
+
+    def get_success_url(self):
+        return reverse('inventory:tags')
+
+
 class UpdateTagView(LoginRequiredMixin, UpdateView):
     template_name = "inventory/edit_tag.html"
     model = Tag
     fields = ('name', 'color')
 
     def get_context_data(self, **kwargs):
-        ctx = super(UpdateTagView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['inventory'] = True
         ctx['color_presets'] = TAG_COLOR_PRESETS
         return ctx

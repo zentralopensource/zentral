@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -14,10 +15,7 @@
 
 <h2>{% if object %}Update{% else %}Create{% endif %} Tag</h2>
 <form method="POST" class="form">{% csrf_token %}
-  <div class="form-group">
-    <label for="id_name">{{ form.name.label|title }}</label>
-    <input type="text" id="id_name"{% if form.name.value %} value="{{ form.name.value }}"{% endif %} name="name" class="form-control" placeholder="{{ form.name.label }}">
-  </div>
+  {{ form.name|bootstrap }}
   <div class="form-group">
     <label for="id_color">{{ form.color.label|title }}</label>
     <div>
