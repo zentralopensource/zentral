@@ -3,7 +3,7 @@ from django.core.urlresolvers import reverse_lazy
 from django.utils.translation import ugettext_lazy as _
 from rest_framework import serializers
 from zentral.core.probes import register_probe_class
-from zentral.core.probes.base import BaseProbe, BaseProbeSerializer, PayloadFilter
+from zentral.core.probes.base import BaseProbe, BaseProbeSerializer
 
 logger = logging.getLogger("zentral.contrib.santa.probes")
 
@@ -29,25 +29,12 @@ class Rule(object):
         self.sha256 = sha256
         self.custom_msg = custom_msg
 
-    def get_payload_filter_kwargs(self):
-        f = {}
-        if self.rule_type == self.CERTIFICATE:
-            f['signing_chain.sha256'] = [self.sha256]
-            if self.policy == self.BLACKLIST:
-                f['decision'] = ['BLOCK_CERTIFICATE']
-            elif self.policy == self.WHITELIST:
-                f['decision'] = ['ALLOW_CERTIFICATE']
-        else:
-            f['file_sha256'] = [self.sha256]
-            if self.policy == self.BLACKLIST:
-                f['decision'] = ['BLOCK_BINARY']
-            elif self.policy == self.WHITELIST:
-                f['decision'] = ['ALLOW_BINARY']
-        return f
-
     def get_store_links(self):
-        search_dict = {'event_type': [self.probe.forced_event_type]}
-        search_dict.update(self.get_payload_filter_kwargs())
+        search_dict = {'event_type': self.probe.forced_event_type}
+        if self.rule_type == self.CERTIFICATE:
+            search_dict['signing_chain.sha256'] = [self.sha256]
+        else:
+            search_dict['file_sha256'] = [self.sha256]
         return self.probe.get_store_links(**search_dict)
 
     def get_policy_display(self):
@@ -84,16 +71,92 @@ class SantaProbe(BaseProbe):
     create_url = reverse_lazy("santa:create_probe")
     template_name = "santa/probe.html"
     forced_event_type = 'santa_event'
-    can_edit_payload_filters = False
 
     def load_validated_data(self, validated_data):
         super().load_validated_data(validated_data)
         self.rules = [Rule(self, **rule_data)
                       for rule_data in validated_data["rules"]]
         self.can_delete_rules = len(self.rules) > 1
-        for r in self.rules:
-            f = r.get_payload_filter_kwargs()
-            self.payload_filters.append(PayloadFilter(**f))
+        self.blacklist_rule_keys = set((r.rule_type, r.sha256)
+                                       for r in self.rules
+                                       if r.policy == Rule.BLACKLIST)
+        self.whitelist_rule_keys = set((r.rule_type, r.sha256)
+                                       for r in self.rules
+                                       if r.policy == Rule.WHITELIST)
+
+    def get_extra_event_search_dict(self):
+        # probe links. match all sha256 in the probe.
+        probe_search_dict = {'event_type': self.forced_event_type}
+        all_file_sha256 = []
+        all_certificate_sha256 = []
+        for rule in self.rules:
+            if rule.rule_type == Rule.CERTIFICATE:
+                all_certificate_sha256.append(rule.sha256)
+            else:
+                all_file_sha256.append(rule.sha256)
+        # TODO BUG "AND" !!!
+        if all_certificate_sha256:
+            probe_search_dict['signing_chain.sha256'] = all_certificate_sha256
+        if all_file_sha256:
+            probe_search_dict['file_sha256'] = all_file_sha256
+        return probe_search_dict
+
+    def test_event(self, event):
+        # inventory_filters, forced_event_type, payload_filters
+        if not super().test_event(event):
+            return False
+
+        # find out if the probe has rules that could have triggered this event
+
+        # test santa event decision
+        payload = event.payload
+        decision = payload.get("decision")
+        if decision is None or decision in ["ALLOW_UNKNOWN", "BLOCK_UNKNOWN",
+                                            "UNKNOWN",
+                                            "BUNDLE_BINARY",
+                                            "ALLOW_SCOPE", "BLOCK_SCOPE"]:
+            # ALLOW_UNKNOWN in MONITOR mode
+            # or BLOCK_UNKNOWN in LOCKDOWN mode
+            # never a match for a SantaProbe
+            # TODO: what is the meaning of UNKNOWN, SCOPE, BUNDLE_BINARY ?
+            return False
+        try:
+            action, rule_type = decision.split("_")
+        except (IndexError, TypeError):
+            logger.warning("Unknown SantaEvent decision %s", decision)
+            return False
+
+        # probe rule keys from event decision
+        if action == "BLOCK":
+            # rule.policy == "BLACKLIST"
+            probe_rule_keys = self.blacklist_rule_keys
+        elif action == "ALLOW":
+            # rule.policy == "WHITELIST"
+            probe_rule_keys = self.whitelist_rule_keys
+        else:
+            logger.warning("Unknown SantaEvent decision %s", decision)
+            return False
+
+        if not probe_rule_keys:
+            # this probe doesn't have any rule with a matching policy
+            return False
+
+        # extract payload sha256 with decision match type
+        if rule_type == "BINARY":
+            sha256_list = [payload["file_sha256"]]
+        elif rule_type == "CERTIFICATE":
+            sha256_list = [cert["sha256"] for cert in payload["signing_chain"]]
+        else:
+            logger.warning("Unknown SantaEvent decision %s", decision)
+            return False
+
+        # is there a matching rule in this probe ?
+        if not any((rule_type, sha256) in probe_rule_keys
+                   for sha256 in sha256_list):
+            return False
+        else:
+            # there is one !
+            return True
 
 
 register_probe_class(SantaProbe)
