@@ -2,7 +2,7 @@ from django.test import TestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.core.events import event_types
 from zentral.core.events.base import BaseEvent, EventMetadata
-from zentral.core.probes.base import BaseProbe
+from zentral.core.probes.base import BaseProbe, get_flattened_payload_values
 from zentral.core.probes.models import ProbeSource
 from tests.inventory.utils import MockMetaMachine
 
@@ -246,12 +246,20 @@ class PayloadFilterBaseProbeTestCase(TestCase):
             self.assertEqual(payload_filter.test_event_payload(payload),
                              result)
 
+    def test_get_flattened_payload_values(self):
+        for payload, attrs, result in (({"a": 1}, ["a"], {1}),
+                                       ({"a": [{"b": [2, 3, 3]}]}, ["a", "b"], {2, 3})):
+            self.assertEqual(set(get_flattened_payload_values(payload, attrs)), result)
+
     def test_dotted_payload_attribute(self):
         payload_filter = self.probe.payload_filters[2]
         for payload, result in (({"a": 1}, False),
                                 ({"a": {"b": {"d": "d"}}}, False),
                                 ({"a": {"b": {"c": "ab", "d": "d"}}}, False),
-                                ({"a": {"b": {"c": "abc", "d": "d"}}}, True),
+                                ({"a": {"b": {"c": set(["abc"]), "d": "d"}}}, True),
+                                ({"a": {"b": [{"c": set(["abc"]), "d": "d"}]}}, True),
+                                ({"a": [{"b": [{"d": "u"},
+                                               {"c": "abc", "d": "d"}]}]}, True),
                                 ):
             self.assertEqual(payload_filter.test_event_payload(payload),
                              result)
@@ -264,6 +272,8 @@ class PayloadFilterBaseProbeTestCase(TestCase):
                                 ({"yo": "yoval1", "zo2": ["zo2val"]}, False),
                                 ({"a": 1}, False),
                                 ({"a": {"b": {"c": "abc", "d": "d"}}}, True),
+                                ({"a": [{"b": {"c": "abc", "d": "d"}}]}, True),
+                                ({"a": [{"b": [{"c": "abc", "d": "d"}]}]}, True),
                                 ):
             event = BaseEvent(EventMetadata(machine_serial_number="YOZO",
                                             event_type=BaseEvent.event_type),

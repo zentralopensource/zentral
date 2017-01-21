@@ -1,4 +1,5 @@
-from collections import OrderedDict
+import collections
+import collections.abc
 import copy
 import logging
 from django.core.urlresolvers import reverse_lazy
@@ -132,26 +133,33 @@ class MetadataFiltersSerializer(serializers.Serializer):
         raise serializers.ValidationError("No event types or tags")
 
 
+def get_flattened_payload_values(payload, attrs):
+    if isinstance(payload, list):
+        for nested_payload in payload:
+            yield from get_flattened_payload_values(nested_payload, list(attrs))
+    elif isinstance(payload, dict):
+        attr = attrs.pop(0)
+        val = payload.get(attr)
+        if val is None:
+            return
+        if not attrs:
+            if isinstance(val, (set, list)):
+                yield from val
+            else:
+                yield val
+        else:
+            yield from get_flattened_payload_values(val, attrs)
+    else:
+        logger.warning("Wrong payload filter attribute %s", attrs)
+
+
 class PayloadFilter(object):
     def __init__(self, **kwargs):
         self.items = {k: set(v) for k, v in kwargs.items()}
 
     def test_event_payload(self, payload):
         for payload_attribute, filter_value_set in self.items.items():
-            payload_value = payload
-            for attr in payload_attribute.split("."):
-                if not isinstance(payload_value, dict):
-                    logger.warning("Wrong payload filter attribute %s", payload_attribute)
-                    return False
-                payload_value = payload_value.get(attr, None)
-                if not payload_value:
-                    return False
-            if isinstance(payload_value, set):
-                payload_value_set = payload_value
-            elif isinstance(payload_value, list):
-                payload_value_set = set(payload_value)
-            else:
-                payload_value_set = set([payload_value])
+            payload_value_set = set(get_flattened_payload_values(payload, payload_attribute.split(".")))
             if not payload_value_set & filter_value_set:
                 return False
         return True
@@ -386,11 +394,11 @@ class BaseProbe(object):
     # aggregations
 
     def get_aggregations(self):
-        aggs = OrderedDict([("created_at",
-                             {"type": "date_histogram",
-                              "interval": "day",
-                              "bucket_number": 31,
-                              "label": "Events"})])
+        aggs = collections.OrderedDict([("created_at",
+                                        {"type": "date_histogram",
+                                         "interval": "day",
+                                         "bucket_number": 31,
+                                         "label": "Events"})])
         event_type_classes = self.get_event_type_classes()
         if len(event_type_classes) == 1:
             event_type_class = event_type_classes[0]
