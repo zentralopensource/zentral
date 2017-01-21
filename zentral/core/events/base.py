@@ -212,13 +212,10 @@ class BaseEvent(object):
 
     @cached_property
     def base_notification_context(self):
-        return {'event_id': self.metadata.uuid,
-                'created_at': self.metadata.created_at,
+        return {'event': self,
+                'metadata': self.metadata,
                 'payload': self.payload,
-                'machine': self.metadata.machine,
-                'machine_serial_number': self.metadata.machine.serial_number,
-                'machine_snapshots': self.metadata.machine.snapshots,
-                'machine_url': self.metadata.machine.get_url()}
+                'machine': self.metadata.machine}
 
     def get_notification_context(self, probe):
         ctx = self.base_notification_context.copy()

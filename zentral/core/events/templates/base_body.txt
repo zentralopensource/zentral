@@ -1,13 +1,17 @@
-Serial number: {{ machine_serial_number }}
-{% if machine_url %}Zentral URL: {{ machine_url }}{% endif %}
-
+{% if machine %}
+*{{ machine.serial_number }}*
 {% for name, source_names in machine.names_with_sources.items() %}
-Name: {{ name }}, ({{ source_names|sort|join(', ') }})
+*{{ name }}* ({{ source_names|sort|join(', ') }})
 {% endfor %}
+{{ machine.get_url() }}
+{% endif %}
 
-{% if event_id %}
-Zentral event id: {{ event_id }}
-Event created at: {{ created_at }}
+{% if event %}
+*{{ event.get_event_type_display() }}*
+> {{ metadata.uuid }}
+{% if metadata.created_at %}
+> {{ metadata.created_at.strftime("%Y-%m-%d %H:%M:%S") }}
+{% endif %}
 {% endif %}
 
 {% block extra %}
