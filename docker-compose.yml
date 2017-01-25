@@ -30,36 +30,20 @@ services:
     volumes:
       - ./conf/start/docker/nginx/conf.d/:/etc/nginx/conf.d/
       - ./conf/start/docker/tls:/etc/nginx/tls
-  inventory_worker:
-    extends:
-      file: docker-compose.common.yml
-      service: app
-    command: inventory_worker
-    depends_on:
-      - db
-      - rabbitmq
-  processor_worker:
-    extends:
-      file: docker-compose.common.yml
-      service: app
-    command: processor_worker
-    depends_on:
-      - db
-      - rabbitmq
-  store_worker:
-    extends:
-      file: docker-compose.common.yml
-      service: app
-    command: store_worker
-    depends_on:
-      - db
-      - elastic
-      - rabbitmq
   web:
     extends:
       file: docker-compose.common.yml
       service: app
     command: runserver
+    depends_on:
+      - db
+      - elastic
+      - rabbitmq
+  workers:
+    extends:
+      file: docker-compose.common.yml
+      service: app
+    command: runworkers
     depends_on:
       - db
       - elastic

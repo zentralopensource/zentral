@@ -62,6 +62,3 @@ class BaseInventory(object):
             (CurrentMachineSnapshot.objects.filter(source=inventory_source)
                                            .exclude(serial_number__in=seen_machines)
                                            .delete())
-
-    def add_machine_to_group(self, machine_snapshot, group_name):
-        raise NotImplementedError

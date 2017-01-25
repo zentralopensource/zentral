@@ -1,7 +1,7 @@
 import json
 from django.core.urlresolvers import reverse
 from django.test import TestCase, override_settings
-from zentral.utils.api_views import make_secret
+from zentral.contrib.jamf.models import JamfInstance
 
 
 COMPUTER_CHECKIN = {
@@ -32,16 +32,17 @@ PAYLOAD = {"webhook": {"webhookEvent": "ComputerCheckIn"},
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class JssAPIViewsTestCase(TestCase):
     def post_as_json(self, secret, data):
-        return self.client.post(reverse("jss:post_event", args=(secret,)),
+        return self.client.post(reverse("jamf:post_event", args=(secret,)),
                                 json.dumps(data),
                                 content_type="application/json")
 
-    def test_secret_bad_module(self):
-        secret = make_secret("zentral.inexisting.module")
-        response = self.post_as_json(secret, PAYLOAD)
-        self.assertContains(response, "Invalid module", status_code=403)
+    def test_secret_bad_secret(self):
+        response = self.post_as_json("co", PAYLOAD)
+        self.assertEqual(response.status_code, 403)
 
     def test_ok(self):
-        secret = make_secret("zentral.contrib.jss")
-        response = self.post_as_json(secret, PAYLOAD)
+        jamf_instance = JamfInstance(host="yo.example.com",
+                                     user="god", password="zilla")
+        jamf_instance.save()
+        response = self.post_as_json(jamf_instance.secret, PAYLOAD)
         self.assertEqual(response.status_code, 200)

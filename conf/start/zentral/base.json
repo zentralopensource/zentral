@@ -57,7 +57,7 @@
         }
       ]
     },
-    "zentral.contrib.jss": {},
+    "zentral.contrib.jamf": {},
     "zentral.contrib.munki": {},
     "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {}

@@ -81,12 +81,14 @@
   <dt>CPU physical cores</dt>
   <dd>{{ system_info.cpu_physical_cores }}</dd>
   {% endif %}
-  {% if system_info.cpu_physical_cores %}
+  {% if system_info.cpu_logical_cores %}
   <dt>CPU logical cores</dt>
   <dd>{{ system_info.cpu_logical_cores }}</dd>
   {% endif %}
+  {% if ms.system_info.physical_memory %}
   <dt>Physical memory</dt>
   <dd>{{ ms.system_info.physical_memory|filesizeformat }}</dd>
+  {% endif %}
 </dl>
 {% endif %}
 {% endwith %}
@@ -163,7 +165,7 @@
   <tbody>
     {% for group, links in ms.groups_with_links %}
     <tr>
-      <td>{{ group.name }}</td>
+      <td><a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a></td>
       <td>
         {% for link_url, anchor_text in links %}
         <a href="{{ link_url }}" class="btn btn-default">

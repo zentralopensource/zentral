@@ -16,4 +16,5 @@ def get_queues(settings):
     queues_settings['stores'] = list(settings['stores'].keys())
     return get_queues_class(settings)(queues_settings)
 
+
 queues = get_queues(settings)

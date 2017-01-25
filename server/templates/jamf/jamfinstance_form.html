@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'jamf:jamf_instances' %}">jamf instances</a></li>
+  <li class="active">{{ title }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+<form method="POST">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    <a href="{% url 'jamf:jamf_instances' %}" class="btn btn-default">Cancel</a>
+    <button class="btn btn-primary">Save</button>
+  </p>
+</form>
+{% endblock %}

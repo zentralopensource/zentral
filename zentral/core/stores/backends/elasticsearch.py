@@ -117,6 +117,8 @@ class EventStore(BaseEventStore):
         return event_from_event_d(event_d)
 
     def store(self, event):
+        if isinstance(event, dict):
+            event = event_from_event_d(event)
         doc_type, body = self._serialize_event(event)
         try:
             self._es.index(index=self.index, doc_type=doc_type, body=body)

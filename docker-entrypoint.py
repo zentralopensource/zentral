@@ -58,9 +58,7 @@ KNOWN_COMMANDS = {
                              "--access-logfile", "-",
                              "--error-logfile", "-",
                              "server.wsgi"],
-    "inventory_worker": ["python", 'zentral/bin/inventory_worker.py'],
-    "store_worker": ["python", 'zentral/bin/store_worker.py'],
-    "processor_worker": ["python", 'zentral/bin/processor_worker.py'],
+    "runworkers": ["python", 'server/manage.py', 'runworkers'],
     # extras
     "shell": ["python", 'server/manage.py', 'shell'],
     "tests": ["python", 'server/manage.py', 'test', 'tests/'],

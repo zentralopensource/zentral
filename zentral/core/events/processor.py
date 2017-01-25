@@ -1,5 +1,6 @@
 import logging
 from prometheus_client import start_http_server, Counter
+from . import event_from_event_d
 from zentral.core.probes.conf import all_probes
 
 logger = logging.getLogger('zentral.core.events.processor')
@@ -25,6 +26,8 @@ class EventProcessor(object):
         logger.info('Prometheus server started on port %s', server_port)
 
     def process(self, event):
+        if isinstance(event, dict):
+            event = event_from_event_d(event)
         metadata = event.metadata
         counter_dict = {'type': event.event_type,
                         'machine_serial_number': metadata.machine_serial_number or '_',

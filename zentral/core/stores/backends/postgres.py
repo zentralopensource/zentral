@@ -1,7 +1,7 @@
 import logging
 import psycopg2
 from psycopg2.extras import Json
-from zentral.core.events import event_cls_from_type
+from zentral.core.events import event_cls_from_type, event_from_event_d
 from zentral.core.events.base import EventMetadata, EventRequest
 from zentral.core.stores.backends.base import BaseEventStore
 
@@ -88,6 +88,8 @@ class EventStore(BaseEventStore):
         return event
 
     def store(self, event):
+        if isinstance(event, dict):
+            event = event_from_event_d(event)
         with self._conn:
             doc = self._serialize_event(event)
             with self._conn.cursor() as cur:
