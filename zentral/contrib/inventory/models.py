@@ -161,7 +161,10 @@ class BusinessUnit(AbstractMachineGroup):
     mt_excluded_fields = ('key', 'meta_business_unit')
 
     def __str__(self):
-        return self.name
+        if self.is_api_enrollment_business_unit():
+            return "{} API enrollment".format(self.meta_business_unit.name)
+        else:
+            return self.name
 
     def save(self, *args, **kwargs):
         self.key = self.generate_key()
