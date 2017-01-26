@@ -20,6 +20,8 @@ services:
     image: rabbitmq:3
   promsrv:
     build: ./conf/start/docker/prometheus/
+    volumes:
+      - prometheus_sd:/prometheus_sd
   nginx:
     image: nginx:mainline-alpine
     ports:
@@ -43,11 +45,16 @@ services:
     extends:
       file: docker-compose.common.yml
       service: app
-    command: runworkers
+    command: runworkers --external-hostname workers --prometheus-sd-file /prometheus_sd/workers.yml
     depends_on:
       - db
       - elastic
       - rabbitmq
+    volumes:
+      - prometheus_sd:/prometheus_sd
 
 networks:
   default:
+
+volumes:
+  prometheus_sd:

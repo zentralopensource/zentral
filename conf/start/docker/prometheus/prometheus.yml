@@ -15,18 +15,7 @@ scrape_configs:
     static_configs:
       - targets: ['web:8000']
 
-  - job_name: 'zentral_inventory_worker_dummy'
-    static_configs:
-      - targets: ['workers:9900']
-
-  - job_name: 'zentral_jamf_events_preprocessor'
-    static_configs:
-      - targets: ['workers:9901']
-
-  - job_name: 'zentral_processor_worker'
-    static_configs:
-      - targets: ['workers:9902']
-
-  - job_name: 'zentral_store_worker_elasticsearch'
-    static_configs:
-      - targets: ['workers:9903']
+  - job_name: 'zentral_workers'
+    file_sd_configs:
+      - files:
+          - '/prometheus_sd/workers.yml'
