@@ -2,7 +2,9 @@ import logging
 from kombu import Connection, Consumer, Exchange, Queue
 from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 from kombu.pools import producers
+from prometheus_client import Counter
 from zentral.core.probes.conf import all_probes
+from zentral.utils.prometheus import PrometheusWorkerMixin
 
 
 logger = logging.getLogger('zentral.core.queues.backends.kombu')
@@ -21,19 +23,33 @@ process_events_queue = Queue('process_events',
 probes_exchange = Exchange('probes', type='fanout', durable=True)
 
 
-class PreprocessorWorker(ConsumerProducerMixin):
+class PreprocessorWorker(ConsumerProducerMixin, PrometheusWorkerMixin):
     def __init__(self, connection, event_preprocessor):
         self.connection = connection
         self.event_preprocessor = event_preprocessor
         input_exchange = Exchange(event_preprocessor.input_queue_name, type="fanout", durable=True)
         self.input_queue = Queue(event_preprocessor.input_queue_name, exchange=input_exchange, durable=True)
-        self.name = "preprocessor worker {}".format(self.event_preprocessor.name)
+        self.name = self.event_preprocessor.name
+
+    def setup_prometheus_metrics(self):
+        self.preprocessed_events_counter = Counter(
+            "preprocessed_events",
+            "Preprocessed events"
+        )
+        self.produced_events_counter = Counter(
+            "produced_events",
+            "Produced events",
+            ["event_type"]
+        )
 
     def log_info(self, msg):
         logger.info("{} - {}".format(self.name, msg))
 
     def run(self, *args, **kwargs):
         self.log_info("run")
+        prometheus_port = kwargs.pop("prometheus_port")
+        if prometheus_port:
+            self.start_prometheus_server(prometheus_port)
         super().run(*args, **kwargs)
 
     def get_consumers(self, _, default_channel):
@@ -45,25 +61,37 @@ class PreprocessorWorker(ConsumerProducerMixin):
     def process_raw_event(self, body, message):
         self.log_info("process raw event")
         for event in self.event_preprocessor.process_raw_event(body):
+            self.produced_events_counter.labels(event.event_type).inc()
             self.producer.publish(event.serialize(machine_metadata=False),
                                   serializer='json',
                                   exchange=store_events_exchange,
                                   declare=[store_events_exchange])
         message.ack()
+        self.preprocessed_events_counter.inc()
 
 
-class StoreWorker(ConsumerProducerMixin):
+class StoreWorker(ConsumerProducerMixin, PrometheusWorkerMixin):
     def __init__(self, connection, event_store):
         self.connection = connection
         self.channel2 = None
         self.event_store = event_store
         self.name = "store worker {}".format(self.event_store.name)
 
+    def setup_prometheus_metrics(self):
+        self.stored_events_counter = Counter(
+            "stored_events",
+            "Stored events",
+            ["event_type"]
+        )
+
     def log_info(self, msg):
         logger.info("{} - {}".format(self.name, msg))
 
     def run(self, *args, **kwargs):
         self.log_info("run")
+        prometheus_port = kwargs.pop("prometheus_port")
+        if prometheus_port:
+            self.start_prometheus_server(prometheus_port)
         super().run(*args, **kwargs)
 
     def get_consumers(self, _, default_channel):
@@ -92,6 +120,7 @@ class StoreWorker(ConsumerProducerMixin):
                               exchange=process_events_exchange,
                               declare=[process_events_exchange])
         message.ack()
+        self.stored_events_counter.labels(body['_zentral']['type']).inc()
 
     def clear_probes_cache(self, body, message):
         self.log_info("clear probes cache")
@@ -99,18 +128,28 @@ class StoreWorker(ConsumerProducerMixin):
         message.ack()
 
 
-class ProcessorWorker(ConsumerMixin):
+class ProcessorWorker(ConsumerMixin, PrometheusWorkerMixin):
     def __init__(self, connection, event_processor):
         self.connection = connection
         self.channel2 = None
         self.event_processor = event_processor
         self.name = "processor worker"
 
+    def setup_prometheus_metrics(self):
+        self.processed_events_counter = Counter(
+            "processed_events",
+            "Processed events",
+            ["event_type"]
+        )
+
     def log_info(self, msg):
         logger.info("{} - {}".format(self.name, msg))
 
     def run(self, *args, **kwargs):
         self.log_info("run")
+        prometheus_port = kwargs.pop("prometheus_port")
+        if prometheus_port:
+            self.start_prometheus_server(prometheus_port)
         super().run(*args, **kwargs)
 
     def get_consumers(self, _, default_channel):
@@ -135,6 +174,7 @@ class ProcessorWorker(ConsumerMixin):
         self.log_info("process event")
         self.event_processor.process(body)
         message.ack()
+        self.processed_events_counter.labels(body['_zentral']['type']).inc()
 
     def clear_probes_cache(self, body, message):
         self.log_info("clear probes cache")

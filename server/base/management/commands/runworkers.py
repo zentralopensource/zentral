@@ -9,7 +9,7 @@ class Command(BaseCommand):
     help = 'Run Zentral workers.'
 
     def add_arguments(self, parser):
-        pass
+        parser.add_argument("--prometheus-base-port", type=int, default=9900)
 
     def get_workers(self):
         for app in settings['apps']:
@@ -23,8 +23,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         processes = []
-        for worker in self.get_workers():
+        prometheus_base_port = kwargs['prometheus_base_port']
+        for idx, worker in enumerate(sorted(self.get_workers(), key=lambda w: w.name)):
             p = Process(target=worker.run,
+                        kwargs={"prometheus_port": prometheus_base_port + idx},
                         name=worker.name)
             p.daemon = 1
             p.start()
