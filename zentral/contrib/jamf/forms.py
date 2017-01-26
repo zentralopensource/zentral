@@ -10,4 +10,7 @@ class JamfInstanceForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["business_unit"].queryset = BusinessUnit.objects.filter(source__module="zentral.contrib.inventory")
+        self.fields["business_unit"].queryset = (
+            BusinessUnit.objects.filter(source__module="zentral.contrib.inventory")
+                                .order_by('meta_business_unit__name')
+        )
