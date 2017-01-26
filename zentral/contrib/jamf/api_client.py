@@ -1,6 +1,7 @@
 import logging
 from dateutil import parser
 from urllib.parse import urlparse
+from xml.sax.saxutils import escape as xml_escape
 from django.urls import reverse
 import requests
 from requests.packages.urllib3.util import Retry
@@ -353,6 +354,7 @@ class APIClient(object):
         else:
             url = "{}/computergroups/id/0".format(self.api_base_url)
             data = (
+                '<?xml version="1.0" encoding="ISO-8859-1"?>'
                 "<computer_group>"
                 "<name>{}</name>"
                 "<is_smart>false</is_smart>"
@@ -360,10 +362,10 @@ class APIClient(object):
                 "<computer><id>{}</id></computer>"
                 "</computers>"
                 "</computer_group>"
-            ).format(group_name, jamf_id)
-            r = self.session.post(url, headers=headers, data=data)
+            ).format(xml_escape(group_name), jamf_id)
+            r = self.session.post(url, headers=headers, data=data.encode("iso-8859-1"))
         if r.status_code != requests.codes.created:
-            raise APIClientError()
+            raise APIClientError(r.text)
 
     def remove_computer_from_group(self, jamf_id, group_name):
         group_d = self.get_computer_group_with_name(group_name)
@@ -413,9 +415,9 @@ class APIClient(object):
                     "<content_type>application/json</content_type>"
                     "<event>{event}</event>"
                     "</webhook>"
-                ).format(name=self.get_webhook_name(event),
-                         url=self.get_webhook_url(),
-                         event=event)
+                ).format(name=xml_escape(self.get_webhook_name(event)),
+                         url=xml_escape(self.get_webhook_url()),
+                         event=xml_escape(event))
                 r = self.session.post("{}/webhooks/id/0".format(self.api_base_url),
                                       headers={'content-type': 'text/xml'},
                                       data=data)

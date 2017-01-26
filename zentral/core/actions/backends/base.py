@@ -38,7 +38,7 @@ class BaseAction(object):
                 continue
             if isinstance(val, list):
                 val = ', '.join([str(v) for v in val])
-            pacd[key] = val
+            pacd[key.replace("_", " ")] = val
         return pacd
 
 
