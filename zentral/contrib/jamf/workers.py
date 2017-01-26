@@ -117,8 +117,6 @@ class Preprocessor(object):
 
         # yield jamf event
         event_cls = event_cls_from_type(event_type)
-        if client:
-            jamf_event["jamf_instance"] = client.get_source_d()["config"]
         yield from event_cls.build_from_machine_request_payloads(
             serial_number,
             raw_event["request"]["user_agent"],

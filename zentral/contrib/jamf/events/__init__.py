@@ -47,6 +47,13 @@ def post_jamf_event(jamf_instance, user_agent, ip, data):
     event_type = 'jamf_{}'.format(JAMF_EVENTS[jamf_event][0])
     payload = data["event"]
 
+    # add origin to jamf event
+    payload["jamf_instance"] = {
+        "host": jamf_instance.host,
+        "path": jamf_instance.path,
+        "port": jamf_instance.port
+    }
+
     # device event ?
     device_type = None
     if jamf_event.startswith("Computer"):
