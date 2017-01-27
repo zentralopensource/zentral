@@ -13,6 +13,7 @@ class Command(BaseCommand):
         parser.add_argument("--prometheus-base-port", type=int, default=9900)
         parser.add_argument("--prometheus-sd-file")
         parser.add_argument("--external-hostname", default="localhost")
+        parser.add_argument("worker", nargs="*")
 
     def get_workers(self):
         for app in settings['apps']:
@@ -30,7 +31,10 @@ class Command(BaseCommand):
         prometheus_base_port = kwargs['prometheus_base_port']
         prometheus_sd_file = kwargs.get('prometheus_sd_file')
         external_hostname = kwargs['external_hostname']
+        workers = kwargs['worker']
         for idx, worker in enumerate(sorted(self.get_workers(), key=lambda w: w.name)):
+            if workers and worker.name not in workers:
+                continue
             prometheus_port = prometheus_base_port + idx
             p = Process(target=worker.run,
                         kwargs={"prometheus_port": prometheus_port},

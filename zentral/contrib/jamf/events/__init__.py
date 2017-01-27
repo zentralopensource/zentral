@@ -32,7 +32,7 @@ JAMF_EVENTS = {"ComputerAdded": ("computer_added", False, None),
 for jamf_event, (event_subtype, is_heartbeat, heartbeat_timeout) in JAMF_EVENTS.items():
     event_type = 'jamf_{}'.format(event_subtype)
     event_class_name = "".join(s.title() for s in event_type.split('_'))
-    tags = ['jamf']
+    tags = ['jamf', 'jamf_webhook']
     if is_heartbeat:
         tags.append('heartbeat')
     event_class = type(event_class_name, (BaseEvent,),
@@ -40,6 +40,14 @@ for jamf_event, (event_subtype, is_heartbeat, heartbeat_timeout) in JAMF_EVENTS.
                         'tags': tags,
                         'heartbeat_timeout': heartbeat_timeout})
     register_event_type(event_class)
+
+
+class JAMFChangeManagementEvent(BaseEvent):
+    event_type = "jamf_change_management"
+    tags = ["jamf", "jamf_beat"]
+
+
+register_event_type(JAMFChangeManagementEvent)
 
 
 def post_jamf_event(jamf_instance, user_agent, ip, data):

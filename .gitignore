@@ -5,9 +5,11 @@ __pycache__
 !/docker-compose.yml
 !/docker-compose.basic-auth.yml
 !/docker-compose.common.yml
+!/docker-compose.logstash.yml
 !/docker-compose.saml2.yml
 /conf/*
 !/conf/start
+!/conf/logstash
 !/conf/saml2
 /docs/_build/
 /docs/_static/

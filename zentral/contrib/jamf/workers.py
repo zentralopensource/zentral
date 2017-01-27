@@ -1,17 +1,21 @@
+import json
 import logging
-from .api_client import APIClient, APIClientError
+import re
+from dateutil import parser
 from zentral.contrib.inventory.models import MachineGroup, MachineSnapshot, MachineSnapshotCommit
 from zentral.contrib.inventory.utils import inventory_events_from_machine_snapshot_commit
 from zentral.core.events import event_cls_from_type
 from zentral.core.events.base import EventMetadata
 from zentral.core.queues import queues
+from zentral.contrib.jamf.events import JAMFChangeManagementEvent
+from .api_client import APIClient, APIClientError
 
 
 logger = logging.getLogger("zentral.contrib.jamf.preprocessor")
 
 
-class Preprocessor(object):
-    name = "jamf events preprocessor"
+class WebhookEventPreprocessor(object):
+    name = "jamf webhook events preprocessor"
     input_queue_name = "jamf_events"
 
     def __init__(self):
@@ -125,5 +129,72 @@ class Preprocessor(object):
         )
 
 
+class BeatPreprocessor(object):
+    name = "jamf beats preprocessor"
+    input_queue_name = "jamf_beats"
+    USER_RE = re.compile(r'^(?P<name>.*) \(ID: (?P<id>\d+)\)$')
+
+    def build_change_management_event(self, raw_event_d):
+        object_type = raw_event_d["object"]
+        payload = {"action": raw_event_d["action"],
+                   "object": {"type": object_type}}
+        # object
+        object_id = None
+        object_info_lines = raw_event_d.get("object_info", "").splitlines()
+        if object_info_lines:
+            l1 = object_info_lines[0].strip()
+            if l1.startswith("ID"):
+                payload["object"]["id"] = object_id = int(l1.split()[-1])
+            if len(object_info_lines) > 1:
+                l2 = object_info_lines[1].strip()
+                if l2.startswith("Name"):
+                    payload["object"]["name"] = " ".join(l2.split()[2:])
+        # jamf instance
+        jamf_instance = raw_event_d["fields"]["jamf_instance"]
+        jamf_instance.setdefault("path", "/JSSResource")
+        jamf_instance.setdefault("port", 8443)
+        payload["jamf_instance"] = jamf_instance
+        # user
+        user_m = self.USER_RE.match(raw_event_d["user"])
+        if user_m:
+            payload["user"] = {"id": int(user_m.group("id")),
+                               "name": user_m.group("name")}
+        # timestamp
+        created_at = parser.parse(raw_event_d["@timestamp"])
+        # machine serial number
+        machine_serial_number = None
+        device_type = None
+        if object_type == "Mobile Device":
+            device_type = "mobile_device"
+        elif object_type == "Computer":
+            device_type = "computer"
+        if device_type and object_id:
+            kwargs = {"reference": "{},{}".format(device_type, object_id),
+                      "source__module": "zentral.contrib.jamf",
+                      "source__name": "jamf",
+                      "source__config": jamf_instance}
+            try:
+                ms = MachineSnapshot.objects.filter(**kwargs).order_by('-id')[0]
+            except IndexError:
+                pass
+            else:
+                machine_serial_number = ms.serial_number
+        # event
+        metadata = EventMetadata(JAMFChangeManagementEvent.event_type,
+                                 machine_serial_number=machine_serial_number,
+                                 created_at=created_at,
+                                 tags=JAMFChangeManagementEvent.tags)
+        return JAMFChangeManagementEvent(metadata, payload)
+
+    def process_raw_event(self, raw_event):
+        raw_event_d = json.loads(raw_event)
+        raw_event_type = raw_event_d["type"]
+        if raw_event_type == "jamf_change_management":
+            yield self.build_change_management_event(raw_event_d)
+        else:
+            logger.warning("Unknown event type %s", raw_event_type)
+
+
 def get_workers():
-    yield queues.get_preprocessor_worker(Preprocessor())
+    yield queues.get_preprocessor_worker(WebhookEventPreprocessor())
+    yield queues.get_preprocessor_worker(BeatPreprocessor())
