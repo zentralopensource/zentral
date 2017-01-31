@@ -133,6 +133,7 @@ class BeatPreprocessor(object):
     name = "jamf beats preprocessor"
     input_queue_name = "jamf_beats"
     USER_RE = re.compile(r'^(?P<name>.*) \(ID: (?P<id>\d+)\)$')
+    OBJECT_INFO_SEP_RE = re.compile("[ \.]{2,}")
 
     def build_change_management_event(self, raw_event_d):
         object_type = raw_event_d["object"]
@@ -140,15 +141,29 @@ class BeatPreprocessor(object):
                    "object": {"type": object_type}}
         # object
         object_id = None
-        object_info_lines = raw_event_d.get("object_info", "").splitlines()
-        if object_info_lines:
-            l1 = object_info_lines[0].strip()
-            if l1.startswith("ID"):
-                payload["object"]["id"] = object_id = int(l1.split()[-1])
-            if len(object_info_lines) > 1:
-                l2 = object_info_lines[1].strip()
-                if l2.startswith("Name"):
-                    payload["object"]["name"] = " ".join(l2.split()[2:])
+        for object_info_line in raw_event_d.get("object_info", "").splitlines():
+            object_info_line = object_info_line.strip()
+            if not object_info_line or object_info_line.startswith("-"):
+                # empty line or line separator
+                continue
+            try:
+                k, v = self.OBJECT_INFO_SEP_RE.split(object_info_line, 1)
+            except ValueError:
+                logger.warning("Unable to parse object info line '%s'", object_info_line)
+            else:
+                if not v:
+                    continue
+                k = k.lower().replace(" ", "_")
+                if k == "id":
+                    v = object_id = int(v)
+                elif k == "type":
+                    logger.warning("Object info type key conflict")
+                    continue
+                elif v == "false":
+                    v = False
+                elif v == "true":
+                    v = True
+                payload["object"][k] = v
         # jamf instance
         jamf_instance = raw_event_d["fields"]["jamf_instance"]
         jamf_instance.setdefault("path", "/JSSResource")
