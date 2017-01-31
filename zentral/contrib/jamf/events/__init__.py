@@ -45,9 +45,27 @@ for jamf_event, (event_subtype, is_heartbeat, heartbeat_timeout) in JAMF_EVENTS.
 class JAMFChangeManagementEvent(BaseEvent):
     event_type = "jamf_change_management"
     tags = ["jamf", "jamf_beat"]
+    payload_aggregations = [
+        ("jamf_instance.host", {"type": "terms", "bucket_number": 10, "label": "Hosts"}),
+        ("action", {"type": "terms", "bucket_number": 10, "label": "Actions"}),
+        ("object.type", {"type": "terms", "bucket_number": 10, "label": "Object types"}),
+    ]
 
 
 register_event_type(JAMFChangeManagementEvent)
+
+
+class JAMFSoftwareServerEvent(BaseEvent):
+    event_type = "jamf_software_server"
+    tags = ["jamf", "jamf_beat"]
+    payload_aggregations = [
+        ("log_level", {"type": "terms", "bucket_number": 10, "label": "Log levels"}),
+        ("component", {"type": "terms", "bucket_number": 10, "label": "Components"}),
+        ("jamf_instance.host", {"type": "terms", "bucket_number": 10, "label": "Hosts"}),
+    ]
+
+
+register_event_type(JAMFSoftwareServerEvent)
 
 
 def post_jamf_event(jamf_instance, user_agent, ip, data):

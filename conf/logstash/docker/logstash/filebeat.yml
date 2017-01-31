@@ -11,13 +11,23 @@ filebeat:
       fields:
         jamf_instance:
           host: jss.apfelwerk.de
+    - paths:
+        - /usr/local/jss/logs/JAMFSoftwareServer.log
+      input_type: log
+      multiline:
+        pattern: '^2'
+        negate: true
+        match: after
+      fields:
+        jamf_instance:
+          host: jss.apfelwerk.de
 
 output:
   logstash:
     hosts:
       - "zentral:5044"
     ssl:
-      certificate_authorities: 
+      certificate_authorities:
         - "/Users/flaco/dev/zentral/conf/start/docker/tls/zentral_fullchain.crt"
 
 logging:
