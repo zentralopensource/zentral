@@ -53,6 +53,7 @@ class DownloadNagiosInstanceEventHandlerView(LoginRequiredMixin, View):
         with open(event_handler, "r") as script_src_f:
             script_src = script_src_f.read()
         script_src = script_src.replace("%SECRET%", nagios_instance.secret)
+        script_src = script_src.replace("%TLS_HOSTNAME%", settings["api"]["tls_hostname"])
         with open(settings['api']['tls_server_certs'], "r") as fullchain_f:
             fullchain = fullchain_f.read()
         script_src = script_src.replace("%FULLCHAIN%", fullchain)

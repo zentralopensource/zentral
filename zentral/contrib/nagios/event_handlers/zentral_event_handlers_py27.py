@@ -4,7 +4,7 @@ import json
 import ssl
 import urllib2
 
-URL = "https://zentral/nagios/post_event/"
+URL = "%TLS_HOSTNAME%/nagios/post_event/"
 USER_AGENT = "Zentral/neh 0.1"
 HEADER = "Zentral-API-Secret"
 SECRET = "%SECRET%"
