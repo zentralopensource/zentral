@@ -39,6 +39,6 @@ class SantaZentralEnrollPkgBuilder(PackageBuilder):
         if tls_server_certs:
             self.include_tls_server_certs(config_plist, tls_server_certs)
         if blacklist_regex:
-            self.set_plist_keys(config_plist, [("blacklist_regex", blacklist_regex)])
+            self.set_plist_keys(config_plist, [("BlacklistRegex", blacklist_regex)])
         if whitelist_regex:
-            self.set_plist_keys(config_plist, [("whitelist_regex", whitelist_regex)])
+            self.set_plist_keys(config_plist, [("WhitelistRegex", whitelist_regex)])
