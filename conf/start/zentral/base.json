@@ -59,6 +59,7 @@
     },
     "zentral.contrib.jamf": {},
     "zentral.contrib.munki": {},
+    "zentral.contrib.nagios": {},
     "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {}
   }
