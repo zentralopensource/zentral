@@ -1,4 +1,3 @@
-import plistlib
 import os
 import shutil
 from zentral.utils.osx_package import PackageBuilder
@@ -27,11 +26,9 @@ class OsqueryZentralEnrollPkgBuilder(PackageBuilder):
         shutil.copy(self.tls_server_certs,
                     self.get_root_path(tls_server_certs_rel_path))
         # add command line option
-        with open(self.launchd_plist, "rb") as f:
-            pl = plistlib.load(f)
-        pl["ProgramArguments"].append("--tls_server_certs=/{}".format(tls_server_certs_rel_path))
-        with open(self.launchd_plist, "wb") as f:
-            plistlib.dump(pl, f)
+        self.append_to_plist_key(self.launchd_plist,
+                                 "ProgramArguments",
+                                 "--tls_server_certs=/{}".format(tls_server_certs_rel_path))
 
     def extra_build_steps(self, tls_hostname, enroll_secret_secret, tls_server_certs):
         # extra args

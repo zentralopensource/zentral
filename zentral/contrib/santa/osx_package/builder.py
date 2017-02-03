@@ -1,4 +1,3 @@
-import plistlib
 import os
 import shutil
 from zentral.utils.osx_package import PackageBuilder
@@ -18,14 +17,12 @@ class SantaZentralEnrollPkgBuilder(PackageBuilder):
         # copy crt in build dir
         shutil.copy(tls_server_certs,
                     self.get_root_path(tls_server_certs_rel_path))
-        # add config key
-        with open(config_plist, "rb") as f:
-            pl = plistlib.load(f)
-        pl["ServerAuthRootsFile"] = "/{}".format(tls_server_certs_rel_path)
-        with open(config_plist, "wb") as f:
-            plistlib.dump(pl, f)
+        self.set_plist_keys(config_plist,
+                            [("ServerAuthRootsFile",
+                              "/{}".format(tls_server_certs_rel_path))])
 
-    def extra_build_steps(self, tls_hostname, api_secret, tls_server_certs, mode=MONITOR_MODE):
+    def extra_build_steps(self, tls_hostname, api_secret, tls_server_certs, mode=MONITOR_MODE,
+                          blacklist_regex=None, whitelist_regex=None):
         if mode not in {self.MONITOR_MODE, self.LOCKDOWN_MODE}:
             raise ValueError("Unknown monitor mode {}".format(mode))
         if tls_server_certs and not os.path.exists(tls_server_certs):
@@ -41,3 +38,7 @@ class SantaZentralEnrollPkgBuilder(PackageBuilder):
                               ("%TLS_HOSTNAME%", tls_hostname)))
         if tls_server_certs:
             self.include_tls_server_certs(config_plist, tls_server_certs)
+        if blacklist_regex:
+            self.set_plist_keys(config_plist, [("blacklist_regex", blacklist_regex)])
+        if whitelist_regex:
+            self.set_plist_keys(config_plist, [("whitelist_regex", whitelist_regex)])

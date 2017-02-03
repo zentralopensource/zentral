@@ -8,6 +8,7 @@ from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponseForbidden, JsonResponse
 from django.utils.translation import ugettext_lazy as _
 from django.views.generic import TemplateView, View
+from django.views.generic.edit import FormView
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, BusinessUnit
 from zentral.core.exceptions import ImproperlyConfigured
@@ -185,37 +186,33 @@ class EnrollmentForm(forms.Form):
 
 
 class BaseEnrollmentView(TemplateView):
-    enrollment_form_class = EnrollmentForm
+    form_class = EnrollmentForm
 
     def get_context_data(self, **kwargs):
         context = super(BaseEnrollmentView, self).get_context_data(**kwargs)
         context['setup'] = True
-        context['form'] = self.enrollment_form_class()
+        context['form'] = self.form_class()
         return context
 
 
-class BaseInstallerPackageView(View):
-    enrollment_form_class = EnrollmentForm
+class BaseInstallerPackageView(FormView):
+    form_class = EnrollmentForm
 
-    def post(self, request):
-        form = self.enrollment_form_class(request.POST)
-        if form.is_valid():
-            try:
-                tls_server_certs = settings['api']['tls_server_certs']
-            except KeyError:
-                tls_server_certs = None
-            builder = self.builder()
-            business_unit = None
-            meta_business_unit = form.cleaned_data['meta_business_unit']
-            if meta_business_unit:
-                # TODO Race. The meta_business_unit could maybe be without any api BU.
-                # TODO. Better selection if multiple BU ?
-                business_unit = meta_business_unit.api_enrollment_business_units()[0]
-            build_kwargs = form.get_build_kwargs()
-            return builder.build_and_make_response(business_unit,
-                                                   request.get_host(),
-                                                   make_secret(self.module, business_unit),
-                                                   tls_server_certs,
-                                                   **build_kwargs)
-        else:
-            raise SuspiciousOperation("Unknown MBU or MBU not available for api enrollment")
+    def form_valid(self, form):
+        try:
+            tls_server_certs = settings['api']['tls_server_certs']
+        except KeyError:
+            tls_server_certs = None
+        builder = self.builder()
+        business_unit = None
+        meta_business_unit = form.cleaned_data['meta_business_unit']
+        if meta_business_unit:
+            # TODO Race. The meta_business_unit could maybe be without any api BU.
+            # TODO. Better selection if multiple BU ?
+            business_unit = meta_business_unit.api_enrollment_business_units()[0]
+        build_kwargs = form.get_build_kwargs()
+        return builder.build_and_make_response(business_unit,
+                                               self.request.get_host(),
+                                               make_secret(self.module, business_unit),
+                                               tls_server_certs,
+                                               **build_kwargs)

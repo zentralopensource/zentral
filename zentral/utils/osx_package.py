@@ -1,5 +1,6 @@
 from itertools import chain
 import os
+import plistlib
 import shutil
 from subprocess import check_call
 import tempfile
@@ -141,3 +142,18 @@ class PackageBuilder(object):
             content = content.replace(pattern, replacement)
         with open(filename, "w", encoding="utf-8") as f:
             f.write(content)
+
+    def set_plist_keys(self, filename, keyvals):
+        with open(filename, "rb") as f:
+            pl = plistlib.load(f)
+        for key, val in keyvals:
+            pl[key] = val
+        with open(filename, "wb") as f:
+            plistlib.dump(pl, f)
+
+    def append_to_plist_key(self, filename, key, val):
+        with open(filename, "rb") as f:
+            pl = plistlib.load(f)
+        pl.setdefault(key, []).append(val)
+        with open(filename, "wb") as f:
+            plistlib.dump(pl, f)

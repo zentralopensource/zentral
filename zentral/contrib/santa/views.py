@@ -21,7 +21,7 @@ logger = logging.getLogger('zentral.contrib.santa.views')
 
 
 class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
-    enrollment_form_class = SantaEnrollmentForm
+    form_class = SantaEnrollmentForm
     template_name = "santa/enrollment.html"
 
 
@@ -48,8 +48,9 @@ curl -XPOST -k %(tls_hostname)s/santa/ruledownload/$machine_id | jq ."""
 
 class InstallerPackageView(LoginRequiredMixin, BaseInstallerPackageView):
     module = "zentral.contrib.santa"
-    enrollment_form_class = SantaEnrollmentForm
+    form_class = SantaEnrollmentForm
     builder = SantaZentralEnrollPkgBuilder
+    template_name = "santa/enrollment.html"
 
 
 class CreateProbeView(LoginRequiredMixin, FormView):
