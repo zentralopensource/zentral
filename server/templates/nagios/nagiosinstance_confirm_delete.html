@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'nagios:nagios_instances' %}">nagios instances</a></li>
+  <li class="active">{{ title }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+<form method="POST">{% csrf_token %}
+  <p>Do you really want to delete this nagios instance ?</p>
+  <p>
+    <a href="{% url 'nagios:nagios_instances' %}" class="btn btn-default">Cancel</a>
+    <button class="btn btn-danger">Delete</button>
+  </p>
+</form>
+
+{% endblock %}
