@@ -19,6 +19,7 @@ class IndexView(LoginRequiredMixin, TemplateView):
         for app_name, app_config in apps.app_configs.items():
             if hasattr(app_config, "events_module"):
                 app_list.append(app_name)
+        app_list.sort()
         context["apps"] = app_list
         return context
 
