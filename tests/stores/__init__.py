@@ -4,11 +4,13 @@ from zentral.core.events.base import EventMetadata, EventRequest, BaseEvent, reg
 class TestEvent1(BaseEvent):
     event_type = "event_type_1"
 
+
 register_event_type(TestEvent1)
 
 
 class TestEvent2(BaseEvent):
     event_type = "event_type_2"
+
 
 register_event_type(TestEvent2)
 

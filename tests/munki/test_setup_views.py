@@ -63,7 +63,10 @@ class MunkiSetupViewsTestCase(TestCase):
         mbu = MetaBusinessUnit.objects.create(name="zu")
         response = self.client.post(reverse("munki:installer_package"),
                                     {"meta_business_unit": mbu.pk})
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response, "form", "meta_business_unit",
+                             "Select a valid choice. "
+                             "That choice is not one of the available choices.")
         # enable api
         mbu.create_enrollment_business_unit()
         response = self.client.post(reverse("munki:installer_package"),

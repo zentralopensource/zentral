@@ -72,17 +72,24 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_santa_enroll.pkg"')
         # without mode
         response = self.client.post(reverse("santa:installer_package"))
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response, "form", "mode", "This field is required.")
         # with wrong mode
         response = self.client.post(reverse("santa:installer_package"),
                                     {"mode": 3})
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response, "form", "mode",
+                             "Select a valid choice. "
+                             "3 is not one of the available choices.")
         # with mbu
         mbu = MetaBusinessUnit.objects.create(name="zu")
         response = self.client.post(reverse("santa:installer_package"),
                                     {"meta_business_unit": mbu.pk,
                                      "mode": 1})
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response, "form", "meta_business_unit",
+                             "Select a valid choice. "
+                             "That choice is not one of the available choices.")
         # enable api
         mbu.create_enrollment_business_unit()
         response = self.client.post(reverse("santa:installer_package"),

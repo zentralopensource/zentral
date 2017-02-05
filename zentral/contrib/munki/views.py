@@ -25,6 +25,7 @@ class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
 class InstallerPackageView(LoginRequiredMixin, BaseInstallerPackageView):
     module = "zentral.contrib.munki"
     builder = MunkiZentralEnrollPkgBuilder
+    template_name = "munki/enrollment.html"
 
 
 # install probe

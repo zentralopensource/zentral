@@ -42,8 +42,10 @@ curl -XPOST -k -d "$node_key_json"  %(tls_hostname)s%(config_path)s | jq ."""
 class InstallerPackageView(LoginRequiredMixin, BaseInstallerPackageView):
     builder = OsqueryZentralEnrollPkgBuilder
     module = "zentral.contrib.osquery"
+    template_name = "osquery/enrollment.html"
 
 
 class SetupScriptView(LoginRequiredMixin, BaseInstallerPackageView):
     builder = OsqueryZentralEnrollScriptBuilder
     module = "zentral.contrib.osquery"
+    template_name = "osquery/enrollment.html"
