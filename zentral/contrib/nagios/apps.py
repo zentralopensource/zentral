@@ -1,6 +1,6 @@
 from zentral.utils.apps import ZentralAppConfig
 
 
-class ZentralOsqueryAppConfig(ZentralAppConfig):
+class ZentralNagiosAppConfig(ZentralAppConfig):
     name = "zentral.contrib.nagios"
     verbose_name = "Zentral Nagios contrib app"
