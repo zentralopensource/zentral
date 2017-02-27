@@ -63,7 +63,7 @@ def verify_secret(secret, module):
             raise APIAuthError('Invalid secret method')
         if not value:
             raise APIAuthError('Invalid secret value')
-        data['machine_serial_number'] = value  # NOT VERIFIED
+        data['machine_serial_number'] = value.strip().splitlines()[0]  # NOT VERIFIED
     try:
         data.update(signing.loads(secret, key=API_SECRET))
     except signing.BadSignature:
