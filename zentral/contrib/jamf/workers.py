@@ -8,7 +8,7 @@ from zentral.core.events import event_cls_from_type
 from zentral.core.events.base import EventMetadata
 from zentral.core.queues import queues
 from zentral.contrib.jamf.events import JAMFChangeManagementEvent, JAMFSoftwareServerEvent
-from .api_client import APIClient, APIClientError
+from .api_client import APIClient
 
 
 logger = logging.getLogger("zentral.contrib.jamf.preprocessor")
@@ -39,8 +39,8 @@ class WebhookEventPreprocessor(object):
         logger.info("Update machine %s %s %s", client.get_source_d(), device_type, jamf_id)
         try:
             machine_d = client.get_machine_d(device_type, jamf_id)
-        except APIClientError as e:
-            logger.error("Could not get machine_d. %s %s %s", client.get_source_d(), device_type, jamf_id)
+        except:
+            logger.exception("Could not get machine_d. %s %s %s", client.get_source_d(), device_type, jamf_id)
         else:
             try:
                 msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
@@ -145,8 +145,12 @@ class BeatPreprocessor(object):
         return parser.parse(raw_event_d["@timestamp"])
 
     def build_change_management_event(self, raw_event_d):
-        object_type = raw_event_d["object"]
-        payload = {"action": raw_event_d["action"],
+        object_type = raw_event_d.get("object", None)
+        action = raw_event_d.get("action", None)
+        if object_type is None or action is None:
+            logger.error("Could not build change management event %s", raw_event_d)
+            return
+        payload = {"action": action,
                    "object": {"type": object_type}}
         # object
         object_id = None
@@ -206,27 +210,41 @@ class BeatPreprocessor(object):
         return JAMFChangeManagementEvent(metadata, payload)
 
     def build_software_server_event(self, raw_event_d):
-        payload = {"log_level": raw_event_d["log_level"],
-                   "info_1": raw_event_d["info_1"],
-                   "component": raw_event_d["component"],
-                   "message": raw_event_d["cleaned_message"]}
-        # jamf instance
-        self.add_payload_jamf_instance(payload, raw_event_d)
-        # event
-        metadata = EventMetadata(JAMFSoftwareServerEvent.event_type,
-                                 created_at=self.get_created_at(raw_event_d),
-                                 tags=JAMFSoftwareServerEvent.tags)
-        return JAMFSoftwareServerEvent(metadata, payload)
+        payload = {}
+        for p_attr, re_attr in (("log_level", "log_level"),
+                                ("info_1", "info_1"),
+                                ("component", "component"),
+                                ("message", "cleaned_message")):
+            v = raw_event_d.get(re_attr, None)
+            if v:
+                payload[p_attr] = v
+            else:
+                logger.warning("Missing software server event attr %s.", re_attr)
+        if not payload:
+            logger.error("Could not build software server event %s", raw_event_d)
+            return None
+        else:
+            # jamf instance
+            self.add_payload_jamf_instance(payload, raw_event_d)
+            # event
+            metadata = EventMetadata(JAMFSoftwareServerEvent.event_type,
+                                     created_at=self.get_created_at(raw_event_d),
+                                     tags=JAMFSoftwareServerEvent.tags)
+            return JAMFSoftwareServerEvent(metadata, payload)
 
     def process_raw_event(self, raw_event):
         raw_event_d = json.loads(raw_event)
         raw_event_type = raw_event_d["type"]
+        event = None
         if raw_event_type == "jamf_change_management":
-            yield self.build_change_management_event(raw_event_d)
+            event = self.build_change_management_event(raw_event_d)
         elif raw_event_type == "jamf_software_server":
-            yield self.build_software_server_event(raw_event_d)
+            event = self.build_software_server_event(raw_event_d)
         else:
             logger.warning("Unknown event type %s", raw_event_type)
+            return
+        if event:
+            yield event
 
 
 def get_workers():
