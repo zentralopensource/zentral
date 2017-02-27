@@ -28,8 +28,8 @@ class EventStore(BaseEventStore):
                         'match': '*ip_address'
                     }},
                     {'zentral_string_default': {
-                        'mapping': {'index': 'not_analyzed', 'type': 'string'},
-                        'match': '*',
+                        'mapping': {'type': 'keyword',
+                                    'ignore_above': 512},
                         'match_mapping_type': 'string'
                     }}
                 ],
