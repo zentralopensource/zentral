@@ -152,6 +152,10 @@ class BeatPreprocessor(object):
             return
         payload = {"action": action,
                    "object": {"type": object_type}}
+        # access denied
+        access_denied = raw_event_d.get("access_denied", False)
+        if access_denied:
+            payload["access_denied"] = True
         # object
         object_id = None
         for object_info_line in raw_event_d.get("object_info", "").splitlines():
