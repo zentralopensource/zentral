@@ -7,8 +7,9 @@ from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import JSONPostAPIView, verify_secret, APIAuthError
 from zentral.contrib.osquery.conf import (build_osquery_conf,
-                                          get_distributed_inventory_query,
-                                          DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME)
+                                          get_distributed_inventory_queries,
+                                          INVENTORY_QUERY_NAME,
+                                          INVENTORY_DISTRIBUTED_QUERY_PREFIX)
 from zentral.contrib.osquery.events import (post_distributed_query_result, post_enrollment_event,
                                             post_events_from_osquery_log, post_request_event)
 from zentral.contrib.osquery.models import enroll, DistributedQueryProbeMachine
@@ -66,11 +67,11 @@ class BaseNodeView(JSONPostAPIView):
         return self.do_node_post(data)
 
     def commit_inventory_query_result(self, snapshot):
-        tree = {'source': {'module': self.ms.source.module,
-                           'name': self.ms.source.name},
-                'serial_number': self.machine_serial_number,
-                'reference': self.ms.reference,
-                'public_ip_address': self.ip}
+        tree = self.ms.serialize()
+        tree["serial_number"] = self.machine_serial_number
+        tree["public_ip_address"] = self.ip
+        if self.business_unit:
+            tree['business_unit'] = self.business_unit.serialize()
 
         def clean_dict(d):
             for k, v in list(d.items()):
@@ -78,8 +79,9 @@ class BaseNodeView(JSONPostAPIView):
                     del d[k]
             return d
 
-        if self.business_unit:
-            tree['business_unit'] = self.business_unit.serialize()
+        deb_packages = []
+        network_interfaces = []
+        osx_app_instances = []
         for t in snapshot:
             table_name = t.pop('table_name')
             if table_name == 'os_version':
@@ -90,10 +92,16 @@ class BaseNodeView(JSONPostAPIView):
                 system_info = clean_dict(t)
                 if system_info:
                     tree['system_info'] = system_info
+            if table_name == 'deb_packages':
+                deb_package = clean_dict(t)
+                if deb_package:
+                    if deb_package not in deb_packages:
+                        deb_packages.append(deb_package)
+                    else:
+                        logger.warning("Duplicated deb package")
             elif table_name == 'network_interface':
                 network_interface = clean_dict(t)
                 if network_interface:
-                    network_interfaces = tree.setdefault('network_interfaces', [])
                     if network_interface not in network_interfaces:
                         network_interfaces.append(network_interface)
                     else:
@@ -104,19 +112,16 @@ class BaseNodeView(JSONPostAPIView):
                 if osx_app and bundle_path:
                     osx_app_instance = {'app': osx_app,
                                         'bundle_path': bundle_path}
-                    osx_app_instances = tree.setdefault('osx_app_instances', [])
                     if osx_app_instance not in osx_app_instances:
                         osx_app_instances.append(osx_app_instance)
                     else:
                         logger.warning("Duplicated osx app instance")
-            elif table_name == 'deb_packages':
-                deb_package = clean_dict(t)
-                if deb_package:
-                    deb_packages = tree.setdefault('deb_packages', [])
-                    if deb_package not in deb_packages:
-                        deb_packages.append(deb_package)
-                    else:
-                        logger.warning("Duplicated deb package")
+        if deb_packages:
+            tree["deb_packages"] = deb_packages
+        if network_interfaces:
+            tree["network_interfaces"] = network_interfaces
+        if osx_app_instances:
+            tree["osx_app_instances"] = osx_app_instances
         commit_machine_snapshot_and_trigger_events(tree)
 
 
@@ -138,9 +143,11 @@ class DistributedReadView(BaseNodeView):
         if self.machine_serial_number:
             machine = MetaMachine(self.machine_serial_number)
             queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(machine)
-            inventory_query = get_distributed_inventory_query(machine, self.ms)
-            if inventory_query:
-                queries[DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME] = inventory_query
+            for query_name, query in get_distributed_inventory_queries(machine, self.ms):
+                if query_name in queries:
+                    logger.error("Conflict on the distributed query name %s", query_name)
+                else:
+                    queries[query_name] = query
         return {'queries': queries}
 
 
@@ -159,17 +166,18 @@ class DistributedWriteView(BaseNodeView):
                 for ps in ProbeSource.objects.filter(
                     model='OsqueryDistributedQueryProbe',
                     pk__in=[get_probe_pk(k) for k in queries.keys()
-                            if k != DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME]
+                            if not k.startswith(INVENTORY_DISTRIBUTED_QUERY_PREFIX)]
                 )}
+        inventory_snapshot = []
         for key, val in queries.items():
             try:
                 status = int(data['statuses'][key])
             except KeyError:
                 # osquery < 2.1.2 has no statuses
                 status = 0
-            if key == DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME:
+            if key.startswith(INVENTORY_DISTRIBUTED_QUERY_PREFIX):
                 if status == 0 and val:
-                    self.commit_inventory_query_result(val)
+                    inventory_snapshot.extend(val)
                 else:
                     logger.warning("Inventory distributed query write with status = %s and val = %s",
                                    status, val)
@@ -196,6 +204,8 @@ class DistributedWriteView(BaseNodeView):
             post_distributed_query_result(self.machine_serial_number,
                                           self.user_agent, self.ip,
                                           payloads)
+        if inventory_snapshot:
+            self.commit_inventory_query_result(inventory_snapshot)
         return {}
 
 
@@ -211,7 +221,7 @@ class LogView(BaseNodeView):
             # TODO verify. New since osquery 1.6.4 ?
             data_data = [json.loads(data_data)]
         for r in data_data:
-            if r.get('name', None) == DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME:
+            if r.get('name', None) == INVENTORY_QUERY_NAME:
                 inventory_results.append((r['unixTime'], r['snapshot']))
             else:
                 other_results.append(r)

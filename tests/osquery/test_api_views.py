@@ -2,14 +2,13 @@ import json
 from django.core.urlresolvers import reverse
 from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import MachineSnapshot
-from zentral.contrib.osquery.conf import (DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME,
-                                          DEFAULT_ZENTRAL_INVENTORY_QUERY,
-                                          OSX_APP_INSTANCE_QUERY)
+from zentral.contrib.osquery.conf import (INVENTORY_QUERY_NAME,
+                                          INVENTORY_DISTRIBUTED_QUERY_PREFIX)
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import make_secret
 
 
-DEFAULT_ZENTRAL_INVENTORY_QUERY_SNAPSHOT = [
+INVENTORY_QUERY_SNAPSHOT = [
     {'build': '15D21',
      'major': '10',
      'minor': '11',
@@ -160,9 +159,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertIn("schedule", json_response)
         schedule = json_response["schedule"]
-        self.assertIn(DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, schedule)
-        self.assertEqual(schedule[DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME]["query"],
-                         DEFAULT_ZENTRAL_INVENTORY_QUERY)
+        self.assertIn(INVENTORY_QUERY_NAME, schedule)
 
     def test_osx_app_instance_schedule(self):
         node_key = self.enroll_machine("0123456789")
@@ -174,10 +171,8 @@ class OsqueryAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertIn("schedule", json_response)
         schedule = json_response["schedule"]
-        self.assertIn(DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME, schedule)
-        self.assertEqual(schedule[DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME]["query"],
-                         "{}{}".format(DEFAULT_ZENTRAL_INVENTORY_QUERY,
-                                       OSX_APP_INSTANCE_QUERY))
+        self.assertIn(INVENTORY_QUERY_NAME, schedule)
+        self.assertIn(" 'apps' ", schedule[INVENTORY_QUERY_NAME]["query"])
 
     def test_distributed_read_405(self):
         response = self.client.get(reverse("osquery:distributed_read"))
@@ -190,24 +185,25 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
         json_response = response.json()
-        self.assertEqual(json_response,
-                         {"queries": {DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: DEFAULT_ZENTRAL_INVENTORY_QUERY}})
+        query_names = ["{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, t)
+                       for t in ("os_version", "system_info", "network_interface")]
+        self.assertCountEqual(json_response["queries"], query_names)
 
     def post_default_inventory_query_snapshot(self, node_key, with_app=False):
-        snapshot = list(DEFAULT_ZENTRAL_INVENTORY_QUERY_SNAPSHOT)
+        snapshot = list(INVENTORY_QUERY_SNAPSHOT)
         if with_app:
             snapshot.append(OSX_APP_INSTANCE)
         self.post_as_json("distributed_write",
                           {"node_key": node_key,
-                           "queries": {
-                               DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: snapshot,
-                            }})
+                           "queries": {"{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, i["table_name"]): [i]
+                                       for i in snapshot}
+                           })
 
     def test_default_inventory_query_snapshot(self):
         node_key = self.enroll_machine("0123456789")
         self.post_default_inventory_query_snapshot(node_key)
         ms = MachineSnapshot.objects.current().get(serial_number="0123456789")
-        self.assertEqual(ms.os_version.build, DEFAULT_ZENTRAL_INVENTORY_QUERY_SNAPSHOT[0]["build"])
+        self.assertEqual(ms.os_version.build, INVENTORY_QUERY_SNAPSHOT[0]["build"])
 
     def test_distributed_read_one_query_plus_default_inventory_query(self):
         node_key = self.enroll_machine("0123456789")
@@ -219,18 +215,17 @@ class OsqueryAPIViewsTestCase(TestCase):
             model="OsqueryDistributedQueryProbe",
             body={"distributed_query": dq}
         )
+        dq_name = "q_{}".format(probe_source.pk)
         # distributed read
         response = self.post_as_json("distributed_read", {"node_key": node_key})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
         json_response = response.json()
-        self.assertEqual(json_response,
-                         {
-                            "queries": {
-                                DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: DEFAULT_ZENTRAL_INVENTORY_QUERY,
-                                "q_{}".format(probe_source.pk): dq
-                            }
-                         })
+        query_names = ["{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, t)
+                       for t in ("os_version", "system_info", "network_interface")]
+        query_names.append(dq_name)
+        self.assertCountEqual(json_response["queries"], query_names)
+        self.assertEqual(json_response["queries"][dq_name], dq)
         # post default inventory snapshot.
         self.post_default_inventory_query_snapshot(node_key)
         # 2nd distributed read still has the inventory query
@@ -239,14 +234,9 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
         json_response = response.json()
-        inventory_query = "{}{}".format(DEFAULT_ZENTRAL_INVENTORY_QUERY,
-                                        OSX_APP_INSTANCE_QUERY)
-        self.assertEqual(json_response,
-                         {
-                            "queries": {
-                                DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: inventory_query,
-                            }
-                         })
+        query_names = ["{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, t)
+                       for t in ("os_version", "system_info", "network_interface", "apps")]
+        self.assertCountEqual(json_response["queries"], query_names)
         # post default inventory snapshot with one app
         self.post_default_inventory_query_snapshot(node_key, with_app=True)
         # 3rd distributed read empty (2 snapshots done and no other distributed queries available)
@@ -319,7 +309,7 @@ class OsqueryAPIViewsTestCase(TestCase):
             "node_key": node_key,
             "log_type": "result",
             "data": [
-                {"name": DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME,
+                {"name": INVENTORY_QUERY_NAME,
                  "unixTime": '1480605737',
                  "snapshot": snapshot}
             ]

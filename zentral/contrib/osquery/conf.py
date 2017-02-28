@@ -4,19 +4,23 @@ from zentral.contrib.inventory.conf import MACOS
 
 logger = logging.getLogger('zentral.contrib.osquery.conf')
 
-DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME = "__default_zentral_inventory_query__"
-DEFAULT_ZENTRAL_INVENTORY_QUERY = (
-    "select 'os_version' as table_name, name, major, minor, "
-    "patch, build from os_version;"
-    "select 'system_info' as table_name, "
-    "computer_name, hostname, hardware_model, hardware_serial, "
-    "cpu_type, cpu_subtype, cpu_brand, cpu_physical_cores, "
-    "cpu_logical_cores, physical_memory from system_info;"
-    "select 'network_interface' as table_name, "
-    "id.interface, id.mac, "
-    "ia.address, ia.mask, ia.broadcast "
-    "from interface_details as id, interface_addresses as ia "
-    "where ia.interface = id.interface and ia.broadcast > '';"
+INVENTORY_QUERY_NAME = "__zentral_inventory_query__"
+INVENTORY_DISTRIBUTED_QUERY_PREFIX = "__zentral_distributed_inventory_query_"
+INVENTORY_QUERIES = (
+    ("os_version",
+     "select 'os_version' as table_name, name, major, minor, "
+     "patch, build from os_version;"),
+    ("system_info",
+     "select 'system_info' as table_name, "
+     "computer_name, hostname, hardware_model, hardware_serial, "
+     "cpu_type, cpu_subtype, cpu_brand, cpu_physical_cores, "
+     "cpu_logical_cores, physical_memory from system_info;"),
+    ("network_interface",
+     "select 'network_interface' as table_name, "
+     "id.interface, id.mac, "
+     "ia.address, ia.mask, ia.broadcast "
+     "from interface_details as id, interface_addresses as ia "
+     "where ia.interface = id.interface and ia.broadcast > '';"),
 )
 OSX_APP_INSTANCE_QUERY = (
     "select 'apps' as table_name, "
@@ -28,25 +32,29 @@ OSX_APP_INSTANCE_QUERY = (
 DEB_PACKAGE_QUERY = "select 'deb_packages' as table_name, * from deb_packages;"
 
 
-def get_inventory_query_for_machine(machine):
-    queries = [DEFAULT_ZENTRAL_INVENTORY_QUERY]
+def get_inventory_queries_for_machine(machine):
+    yield from INVENTORY_QUERIES
     if machine.platform == MACOS:
-        queries.append(OSX_APP_INSTANCE_QUERY)
+        yield "apps", OSX_APP_INSTANCE_QUERY
     elif machine.has_deb_packages:
-        queries.append(DEB_PACKAGE_QUERY)
-    return "".join(queries)
+        yield "deb_packages", DEB_PACKAGE_QUERY
 
 
-def get_distributed_inventory_query(machine, ms):
+def get_inventory_query_for_machine(machine):
+    return "".join(q for _, q in get_inventory_queries_for_machine(machine))
+
+
+def get_distributed_inventory_queries(machine, ms):
     if (not ms.os_version
             or (machine.platform == MACOS and not ms.osx_app_instances.count())
             or (machine.has_deb_packages and not ms.deb_packages.count())):
-        return get_inventory_query_for_machine(machine)
+        for table_name, query in get_inventory_queries_for_machine(machine):
+            yield "{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, table_name), query
 
 
 def build_osquery_conf(machine):
     schedule = {
-        DEFAULT_ZENTRAL_INVENTORY_QUERY_NAME: {
+        INVENTORY_QUERY_NAME: {
             'query': get_inventory_query_for_machine(machine),
             'snapshot': True,
             'interval': 1001
