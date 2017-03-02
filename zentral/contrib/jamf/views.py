@@ -50,12 +50,17 @@ class SetupJamfInstanceView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         jamf_instance = get_object_or_404(JamfInstance, pk=kwargs["pk"])
         api_client = APIClient(**jamf_instance.serialize())
+        jamf_instance_base_url = jamf_instance.base_url()
         try:
-            test_result = api_client.setup()
+            setup_msg = api_client.setup()
         except APIClientError:
-            messages.warning(request, "API test error")
+            msg = "Could not setup webhooks on {}.".format(jamf_instance_base_url)
+            messages.warning(request, msg)
+            logger.exception(msg)
         else:
-            messages.info(request, "{}: {}".format(jamf_instance.base_url(), test_result))
+            msg = "{}: {}".format(jamf_instance_base_url, setup_msg)
+            messages.info(request, msg)
+            logger.info(msg)
         return HttpResponseRedirect(reverse("jamf:jamf_instances"))
 
 
@@ -83,8 +88,18 @@ class DeleteJamfInstanceView(LoginRequiredMixin, DeleteView):
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
+        jamf_instance_base_url = self.object.base_url()
         api_client = APIClient(**self.object.serialize())
-        api_client.cleanup()
+        try:
+            api_client.cleanup()
+        except APIClientError:
+            msg = "Could not remove webhooks configuration on {}.".format(jamf_instance_base_url)
+            messages.warning(request, msg)
+            logger.exception(msg)
+        else:
+            msg = "Removed webhooks configuration on {}.".format(jamf_instance_base_url)
+            messages.info(request, msg)
+            logger.info(msg)
         return response
 
 
