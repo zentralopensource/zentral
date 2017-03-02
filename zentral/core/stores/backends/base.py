@@ -2,6 +2,14 @@ class BaseEventStore(object):
     def __init__(self, config_d):
         self.name = config_d['store_name']
         self.frontend = config_d.get('frontend', False)
+        self.configured = False
+
+    def wait_and_configure(self):
+        self.configured = True
+
+    def wait_and_configure_if_necessary(self):
+        if not self.configured:
+            self.wait_and_configure()
 
     def probe_events_fetch(self, probe, offset=0, limit=0, **search_dict):
         return []

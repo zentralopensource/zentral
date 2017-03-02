@@ -11,7 +11,6 @@ class TestElasticsearchEventStore(unittest.TestCase, BaseTestEventStore):
                                                     'index': self.TEST_INDEX,
                                                     'store_name': 'elasticsearch_test'},
                                                    test=True)
-        self.event_store.wait_and_configure()
 
     def tearDown(self):
         self.event_store._es.indices.delete(index=self.TEST_INDEX, ignore=[404])

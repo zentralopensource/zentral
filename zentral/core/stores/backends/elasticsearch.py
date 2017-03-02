@@ -20,35 +20,40 @@ except NotImplementedError:
 class EventStore(BaseEventStore):
     MAX_CONNECTION_ATTEMPTS = 20
     INDEX_CONF = {
-        'mappings': {
-            '_default_': {
-                'dynamic_templates': [
-                    {'zentral_ip_address': {
-                        'mapping': {'type': 'ip'},
-                        'match': '*ip_address'
+        "settings": {
+            "number_of_shards": 1
+        },
+        "mappings": {
+            "_default_": {
+                "dynamic_templates": [
+                    {"zentral_ip_address": {
+                        "mapping": {"type": "ip"},
+                        "match": "*ip_address"
                     }},
-                    {'zentral_string_default': {
-                        'mapping': {'type': 'keyword',
-                                    'ignore_above': 512},
-                        'match_mapping_type': 'string'
+                    {"zentral_string_default": {
+                        "mapping": {"type": "keyword",
+                                    "ignore_above": 512},
+                        "match": "*",
+                        "unmatch": "*ip_address",
+                        "match_mapping_type": "string"
                     }}
                 ],
-                'properties': {
-                    'created_at': {
-                        'type': 'date'
+                "properties": {
+                    "created_at": {
+                        "type": "date"
                     },
-                    'request': {
-                        'properties': {
-                            'ip': {'type': 'ip'}
+                    "request": {
+                        "properties": {
+                            "ip": {"type": "ip"}
                         }
                     }
                 }
             },
-            'osquery_distributed_query_result': {
-                'properties': {
-                    'osquery_distributed_query_result': {
-                        'properties': {
-                            'result': {'enabled': False}
+            "osquery_distributed_query_result": {
+                "properties": {
+                    "osquery_distributed_query_result": {
+                        "properties": {
+                            "result": {"enabled": False}
                         }
                     }
                 }
@@ -68,6 +73,7 @@ class EventStore(BaseEventStore):
         self.index = config_d['index']
         self.read_index = config_d.get('read_index', self.index)
         self.kibana_base_url = config_d.get('kibana_base_url', None)
+        self.INDEX_CONF["settings"]["number_of_shards"] = config_d.get("number_of_shards", 1)
         self.test = test
 
     def wait_and_configure(self):
@@ -76,6 +82,7 @@ class EventStore(BaseEventStore):
             try:
                 if not self._es.indices.exists(self.index):
                     self._es.indices.create(self.index, body=self.INDEX_CONF)
+                    logger.info("Index %s created", self.index)
             except ConnectionError as e:
                 s = 1000 / random.randint(200, 1000)
                 logger.warning('Could not connect to server %d/%d. Sleep %ss',
@@ -99,6 +106,7 @@ class EventStore(BaseEventStore):
                 else:
                     logger.warning("Elasticsearch index recovery done")
                     break
+            self.configured = True
             break
         else:
             raise Exception('Could not connect to server')
@@ -117,6 +125,7 @@ class EventStore(BaseEventStore):
         return event_from_event_d(event_d)
 
     def store(self, event):
+        self.wait_and_configure_if_necessary()
         if isinstance(event, dict):
             event = event_from_event_d(event)
         doc_type, body = self._serialize_event(event)
@@ -129,7 +138,8 @@ class EventStore(BaseEventStore):
 
     # machine events
 
-    def _get_machine_events_body(search, machine_serial_number, event_type=None, tag=None):
+    def _get_machine_events_body(self, machine_serial_number, event_type=None, tag=None):
+        self.wait_and_configure_if_necessary()
         body = {
             'query': {
                 'bool': {
@@ -247,6 +257,7 @@ class EventStore(BaseEventStore):
     # probe events
 
     def _get_probe_events_body(self, probe, **search_dict):
+        self.wait_and_configure_if_necessary()
         # TODO: doc, better args, ...
         query_filter = []
 
@@ -550,6 +561,7 @@ class EventStore(BaseEventStore):
                     }
                   }
                 }}
+        self.wait_and_configure_if_necessary()
         r = self._es.search(index=self.read_index, body=body)
         return [(parser.parse(b["key_as_string"]), b["doc_count"], b["unique_msn"]["value"])
                 for b in r['aggregations']['buckets']['buckets']]

@@ -50,12 +50,11 @@ class EventStore(BaseEventStore):
                             "where schemaname='public' and tablename='events';")
                 table_count = cur.fetchone()[0]
         if not table_count:
-            self._create_table()
-
-    def _create_table(self):
-        with self._conn:
-            with self._conn.cursor() as cur:
-                cur.execute(self.CREATE_TABLE)
+            # create table
+            with self._conn:
+                with self._conn.cursor() as cur:
+                    cur.execute(self.CREATE_TABLE)
+        self.configured = True
 
     def _serialize_event(self, event):
         metadata = event.metadata
@@ -88,6 +87,7 @@ class EventStore(BaseEventStore):
         return event
 
     def store(self, event):
+        self.wait_and_configure_if_necessary()
         if isinstance(event, dict):
             event = event_from_event_d(event)
         with self._conn:
@@ -102,6 +102,7 @@ class EventStore(BaseEventStore):
     # machine events
 
     def machine_events_count(self, machine_serial_number, event_type=None):
+        self.wait_and_configure_if_necessary()
         with self._conn:
             query = "select count(*) from events where machine_serial_number = %s"
             args = [machine_serial_number]
@@ -113,6 +114,7 @@ class EventStore(BaseEventStore):
                 return cur.fetchone()[0]
 
     def machine_events_fetch(self, machine_serial_number, offset=0, limit=0, event_type=None):
+        self.wait_and_configure_if_necessary()
         query = "select * from events where machine_serial_number = %s"
         args = [machine_serial_number]
         if event_type:
@@ -133,6 +135,7 @@ class EventStore(BaseEventStore):
                     yield self._deserialize_event(dict(zip(columns, t)))
 
     def machine_events_types_with_usage(self, machine_serial_number):
+        self.wait_and_configure_if_necessary()
         query = "select event_type, count(*) from events where machine_serial_number = %s group by event_type"
         types_d = {}
         with self._conn.cursor() as cur:

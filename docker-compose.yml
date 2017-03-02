@@ -12,6 +12,8 @@ services:
   rabbitmq:
   elastic:
     image: elasticsearch:5
+    environment:
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
     networks:
       default:
         aliases:

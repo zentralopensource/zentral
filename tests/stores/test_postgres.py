@@ -18,7 +18,6 @@ class TestPostgresEventStore(unittest.TestCase, BaseTestEventStore):
         if password:
             store_settings['password'] = password
         self.event_store = PostgresEventStore(store_settings)
-        self.event_store.wait_and_configure()
 
     def tearDown(self):
         with self.event_store._conn:
