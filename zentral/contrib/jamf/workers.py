@@ -59,28 +59,25 @@ class WebhookEventPreprocessor(object):
                         event = event_cls(metadata, payload)
                         yield event
 
-    def get_inventory_group(self, client, device_type, jamf_id, is_smart):
+    def get_inventory_groups(self, client, device_type, jamf_id, is_smart):
         kwargs = {"reference": client.group_reference(device_type, jamf_id, is_smart)}
         for k, v in client.get_source_d().items():
             kwargs["source__{}".format(k)] = v
-        try:
-            return MachineGroup.objects.get(**kwargs)
-        except MachineGroup.DoesNotExist:
-            return None
+        return list(MachineGroup.objects.filter(**kwargs))
 
-    def get_inventory_group_machine_references(self, inventory_group):
-        for ms_d in MachineSnapshot.objects.current().filter(groups=inventory_group).values("reference"):
+    def get_inventory_groups_machine_references(self, inventory_groups):
+        for ms_d in MachineSnapshot.objects.current().filter(groups__in=inventory_groups).values("reference"):
             yield ms_d["reference"]
 
     def update_group_machines(self, client, device_type, jamf_group_id, is_smart):
         current_machine_references = set(client.get_group_machine_references(device_type, jamf_group_id))
-        inventory_group = self.get_inventory_group(client, device_type, jamf_group_id, is_smart)
-        if not inventory_group:
+        inventory_groups = self.get_inventory_groups(client, device_type, jamf_group_id, is_smart)
+        if not inventory_groups:
             # unknown group. update all machines
             references_iterator = current_machine_references
         else:
             # known group. update symmetric difference
-            inventory_machine_references = set(self.get_inventory_group_machine_references(inventory_group))
+            inventory_machine_references = set(self.get_inventory_groups_machine_references(inventory_groups))
             references_iterator = inventory_machine_references ^ current_machine_references
         for reference in references_iterator:
             _, jamf_machine_id = reference.split(",")
