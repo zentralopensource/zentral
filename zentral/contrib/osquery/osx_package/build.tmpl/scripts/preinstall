@@ -18,10 +18,10 @@ fi
 /usr/sbin/chown -R root:admin "$ZENTRAL_OSQUERY_ROOT"
 
 # detect client device serial_number
-CLIENT_ID=$(/usr/sbin/system_profiler SPHardwareDataType | awk '/Serial/ {print $4}')
+SERIAL_NUMBER=$(/usr/sbin/ioreg -c IOPlatformExpertDevice -d 2 | awk -F\" '/IOPlatformSerialNumber/{print $(NF-1)}')
 
-# create enrollment file from a secret, insert clients serial_number as ID
-echo "%ENROLL_SECRET_SECRET%\$SERIAL\$${CLIENT_ID}" > "$OSQUERY_ENROLL_SECRET_PATH"
+# create enrollment file from a secret, insert serial_number as ID
+echo "%ENROLL_SECRET_SECRET%\$SERIAL\$${SERIAL_NUMBER}" > "$OSQUERY_ENROLL_SECRET_PATH"
 
 # lock down enrollment secret file
 /bin/chmod 400 "$OSQUERY_ENROLL_SECRET_PATH"
