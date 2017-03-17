@@ -11,9 +11,11 @@ logger = logging.getLogger("zentral.contrib.santa.probes")
 class Rule(object):
     BLACKLIST = "BLACKLIST"
     WHITELIST = "WHITELIST"
+    REMOVE = "REMOVE"
     POLICY_CHOICES = (
         (BLACKLIST, _("Blacklist")),
-        (WHITELIST, _("Whitelist"))
+        (WHITELIST, _("Whitelist")),
+        (REMOVE, _("Remove"))
     )
     BINARY = "BINARY"
     CERTIFICATE = "CERTIFICATE"
