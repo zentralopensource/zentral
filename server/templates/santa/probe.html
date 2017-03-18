@@ -14,7 +14,7 @@
     <tr>
       <td>Policy</td>
       <td>
-        <span class="label label-{% if rule.policy == "BLACKLIST" %}danger{% else %}success{% endif %}">
+        <span class="label label-{% if "BLACKLIST" in rule.policy %}danger{% else %}success{% endif %}">
           {{ rule.get_policy_display }}
         </span>
       </td>

@@ -12,8 +12,10 @@ class Rule(object):
     BLACKLIST = "BLACKLIST"
     WHITELIST = "WHITELIST"
     REMOVE = "REMOVE"
+    SILENT_BLACKLIST = "SILENT_BLACKLIST"
     POLICY_CHOICES = (
         (BLACKLIST, _("Blacklist")),
+        (SILENT_BLACKLIST, _("Silent blacklist")),
         (WHITELIST, _("Whitelist")),
         (REMOVE, _("Remove"))
     )
