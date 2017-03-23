@@ -2,7 +2,7 @@ from itertools import chain
 import os
 import plistlib
 import shutil
-from subprocess import check_call
+from subprocess import check_call, check_output
 import tempfile
 from django.http import HttpResponse
 
@@ -10,6 +10,7 @@ from django.http import HttpResponse
 class PackageBuilder(object):
     package_name = None
     build_tmpl_dir = None
+    with_package_signature = True
 
     def __init__(self):
         # build template dir
@@ -77,6 +78,37 @@ class PackageBuilder(object):
                    shell=True)
         return pkg_path
 
+    def _get_signature_size(self, private_key):
+        return len(check_output(": | openssl dgst -sign '{}' -binary".format(private_key), shell=True))
+
+    def _add_cert_and_get_digest_info(self, pkg_path, certificate, signature_size):
+        digest_info_file = os.path.join(self.tempdir, "digestinfo.dat")
+        check_call(["/usr/local/bin/xar", "--sign",
+                    "-f", pkg_path,
+                    "--digestinfo", digest_info_file,
+                    "--sig-size", str(signature_size),
+                    "--cert-loc", certificate])
+        return digest_info_file
+
+    def _sign_digest_info(self, digest_info_file, private_key):
+        signature_file = os.path.join(self.tempdir, "signature.dat")
+        check_call(["/usr/bin/openssl", "rsautl", "-sign",
+                    "-inkey", private_key,
+                    "-in", digest_info_file,
+                    "-out", signature_file])
+        return signature_file
+
+    def _inject_signature(self, signature_file, pkg_path):
+        check_call(["/usr/local/bin/xar",
+                    "--inject-sig", signature_file,
+                    "-f", pkg_path])
+
+    def _sign_pkg(self, pkg_path, certificate, private_key):
+        signature_size = self._get_signature_size(private_key)
+        digest_info_file = self._add_cert_and_get_digest_info(pkg_path, certificate, signature_size)
+        signature_file = self._sign_digest_info(digest_info_file, private_key)
+        self._inject_signature(signature_file, pkg_path)
+
     def _clean(self):
         shutil.rmtree(self.tempdir)
 
@@ -106,6 +138,9 @@ class PackageBuilder(object):
 
     def build(self, business_unit, *args, **kwargs):
         version = kwargs.pop('version', '1.0')
+        certificate = kwargs.pop("package_signature_certificate", None)
+        private_key = kwargs.pop("package_signature_private_key", None)
+
         self._prepare_temporary_build_dir()
         self.extra_build_steps(*args, **kwargs)
         self._prepare_package_info(self.get_package_identifier(business_unit),
@@ -114,7 +149,10 @@ class PackageBuilder(object):
         self._build_scripts()
         self._build_bom()
         # TODO: memory
-        with open(self._build_pkg(), 'rb') as f:
+        pkg_path = self._build_pkg()
+        if certificate and private_key:
+            self._sign_pkg(pkg_path, certificate, private_key)
+        with open(pkg_path, 'rb') as f:
             content = f.read()
         self._clean()
         return content

@@ -1,5 +1,6 @@
 import json
 import logging
+import os.path
 import warnings
 import zlib
 from django import forms
@@ -199,18 +200,30 @@ class BaseInstallerPackageView(FormView):
     form_class = EnrollmentForm
 
     def form_valid(self, form):
+        build_kwargs = form.get_build_kwargs()
+        builder = self.builder()
+        # tls cert or not
         try:
             tls_server_certs = settings['api']['tls_server_certs']
         except KeyError:
             tls_server_certs = None
-        builder = self.builder()
+        # package signature or not
+        if builder.with_package_signature and "developer_id" in settings["api"]:
+            dev_id = settings["api"]["developer_id"]
+            for attr in ("certificate", "private_key"):
+                filepath = dev_id.get(attr)
+                if not filepath:
+                    logger.error("Missing %s in developer id configuration", attr)
+                elif not os.path.isfile(filepath):
+                    logger.error("File %s does not exist.", attr)
+                else:
+                    build_kwargs["package_signature_{}".format(attr)] = filepath
         business_unit = None
         meta_business_unit = form.cleaned_data['meta_business_unit']
         if meta_business_unit:
             # TODO Race. The meta_business_unit could maybe be without any api BU.
             # TODO. Better selection if multiple BU ?
             business_unit = meta_business_unit.api_enrollment_business_units()[0]
-        build_kwargs = form.get_build_kwargs()
         return builder.build_and_make_response(business_unit,
                                                self.request.get_host(),
                                                make_secret(self.module, business_unit),

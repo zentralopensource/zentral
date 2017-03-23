@@ -6,6 +6,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class OsqueryZentralEnrollScriptBuilder(object):
     script_name = "osquery_zentral_setup.sh"
+    with_package_signature = False
 
     def build_and_make_response(self, business_unit, tls_hostname, enroll_secret_secret, tls_server_certs):
         template_path = os.path.join(BASE_DIR, "template.sh")
