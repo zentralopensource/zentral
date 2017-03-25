@@ -4,6 +4,7 @@ import plistlib
 import shutil
 from subprocess import check_call, check_output
 import tempfile
+import xml.etree.ElementTree as ET
 from django.http import HttpResponse
 
 
@@ -50,6 +51,7 @@ class PackageBuilder(object):
                               ("%INSTALL_KBYTES%", install_kbytes),
                               ("%PKG_IDENTIFIER%", package_identifier),
                               ("%VERSION%", version),))
+        return number_of_files, install_kbytes
 
     def _build_gziped_cpio_arch(self, dirname, arch_name):
         input_path = self.get_build_path(dirname)
@@ -69,12 +71,56 @@ class PackageBuilder(object):
                     self.get_root_path(),
                     self.get_build_path("base.pkg", "Bom")])
 
-    def _build_pkg(self):
-        pkg_path = os.path.join(self.tempdir, self.package_name)
+    def _extract_product_archive(self, base_product_archive):
+        pa_path = os.path.join(self.tempdir, "product_archive")
+        os.mkdir(pa_path)
+        check_call('cd "{}" && '
+                   '/usr/local/bin/xar -xf "{}"'.format(pa_path,
+                                                        base_product_archive),
+                   shell=True)
+        return pa_path
+
+    def _add_package_to_distribution(self, pa_path, package_identifier, install_kbytes, version):
+        distribution_file = os.path.join(pa_path, "Distribution")
+        tree = ET.parse(distribution_file)
+        installer_script = tree.getroot()
+        # Add line to choices-outline
+        choice_id, _ = os.path.splitext(self.package_name)
+        choices_outline = tree.find("choices-outline")
+        line = ET.Element("line")
+        line.set("choice", choice_id)
+        choices_outline.append(line)
+        # Add choice
+        choice = ET.Element("choice")
+        choice.set("id", choice_id)
+        choice.set("title", "{} title".format(choice_id))
+        choice.set("description", "{} description".format(choice_id))
+        pkg_ref = ET.Element("pkg-ref")
+        pkg_ref.set("id", package_identifier)
+        choice.append(pkg_ref)
+        installer_script.append(choice)
+        # Add first pkg-ref
+        pkg_ref = ET.Element("pkg-ref")
+        pkg_ref.set("id", package_identifier)
+        pkg_ref.set("installKBytes", install_kbytes)
+        pkg_ref.set("version", version)
+        pkg_ref.set("auth", "Root")
+        pkg_ref.text = "#{}".format(self.package_name)
+        installer_script.append(pkg_ref)
+        # Add second pkg-ref
+        pkg_ref = ET.Element("pkg-ref")
+        pkg_ref.set("id", package_identifier)
+        bundle_version = ET.Element("bundle-version")
+        pkg_ref.append(bundle_version)
+        installer_script.append(pkg_ref)
+        # write new Distribution
+        tree.write(distribution_file)
+
+    def _build_pkg(self, pkg_dir, filename):
+        pkg_path = os.path.join(self.tempdir, filename)
         check_call('cd "{}" && '
                    '/usr/local/bin/xar '
-                   '--compression none -cf "{}" *'.format(self.get_build_path("base.pkg"),
-                                                          pkg_path),
+                   '--compression none -cf "{}" *'.format(pkg_dir, pkg_path),
                    shell=True)
         return pkg_path
 
@@ -140,29 +186,40 @@ class PackageBuilder(object):
         version = kwargs.pop('version', '1.0')
         certificate = kwargs.pop("package_signature_certificate", None)
         private_key = kwargs.pop("package_signature_private_key", None)
+        base_product_archive = kwargs.pop("base_product_archive", None)
+        product_archive_name = kwargs.pop("product_archive_name", None)
 
         self._prepare_temporary_build_dir()
         self.extra_build_steps(*args, **kwargs)
-        self._prepare_package_info(self.get_package_identifier(business_unit),
-                                   version)
+        package_identifier = self.get_package_identifier(business_unit)
+        _, install_kbytes = self._prepare_package_info(package_identifier, version)
         self._build_payload()
         self._build_scripts()
         self._build_bom()
         # TODO: memory
-        pkg_path = self._build_pkg()
+        if base_product_archive:
+            pa_path = self._extract_product_archive(base_product_archive)
+            shutil.move(self.get_build_path("base.pkg"), os.path.join(pa_path, self.package_name))
+            self._add_package_to_distribution(pa_path, package_identifier, install_kbytes, version)
+            pkg_dir = pa_path
+            filename = product_archive_name
+        else:
+            pkg_dir = self.get_build_path("base.pkg")
+            filename = self.package_name
+        pkg_path = self._build_pkg(pkg_dir, filename)
         if certificate and private_key:
             self._sign_pkg(pkg_path, certificate, private_key)
         with open(pkg_path, 'rb') as f:
             content = f.read()
         self._clean()
-        return content
+        return content, filename
 
     def build_and_make_response(self, *args, **kwargs):
-        content = self.build(*args, **kwargs)
+        content, filename = self.build(*args, **kwargs)
         # TODO: memory
         response = HttpResponse(content, "application/octet-stream")
         response['Content-Length'] = len(content)
-        response['Content-Disposition'] = 'attachment; filename="{}"'.format(self.package_name)
+        response['Content-Disposition'] = 'attachment; filename="{}"'.format(filename)
         return response
 
     # build tools
