@@ -1,4 +1,4 @@
-FROM python:3.4
+FROM python:3.6
 ENV PYTHONUNBUFFERED 1
 
 MAINTAINER Éric Falconnier <eric.falconnier@112hz.com>
@@ -18,6 +18,9 @@ RUN curl -fsSL https://github.com/mackyle/xar/archive/xar-1.6.1.tar.gz | tar xvz
 
 # xmlsec1 for PySAML2
 RUN apt-get install -y xmlsec1
+
+# p7zip to extract dmg
+RUN apt-get install -y p7zip-full
 
 # zentral user and group
 RUN groupadd -r zentral --gid=999 && useradd -r -s /bin/false -g zentral --uid=999 zentral

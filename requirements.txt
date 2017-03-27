@@ -1,7 +1,7 @@
 pip
 setuptools
 coverage
-django
+django<1.11
 requests
 ipython
 psycopg2

@@ -1,0 +1,76 @@
+import os
+from dateutil import parser
+import requests
+import shutil
+from subprocess import check_call
+import tempfile
+from zentral.utils.local_dir import get_and_create_local_dir
+
+
+class Releases(object):
+    GITHUB_API_URL = "https://api.github.com/repos/google/santa/releases"
+
+    def __init__(self):
+        self.release_dir = None
+
+    def _get_release_version(self, release):
+        return release["tag_name"]
+
+    def _get_release_asset(self, release):
+        for asset in release["assets"]:
+            asset_name = asset["name"]
+            if asset_name.endswith(".dmg"):
+                return asset_name, asset["browser_download_url"]
+        raise ValueError("Could not find dmg")
+
+    def _get_local_path(self, filename):
+        if not self.release_dir:
+            self.release_dir = get_and_create_local_dir("santa", "releases")
+        basename, _ = os.path.splitext(filename)
+        local_filename = "{}.pkg".format(basename)
+        return os.path.join(self.release_dir, local_filename)
+
+    def _download_and_extract_package(self, download_url, local_path):
+        # downloaded file is a dmg containing a pkg
+        # download file
+        tempdir = tempfile.mkdtemp(suffix=self.__module__)
+        resp = requests.get(download_url, stream=True)
+        downloaded_file = os.path.join(tempdir, "downloaded_file")
+        with open(downloaded_file, "wb") as f:
+            for chunk in resp.iter_content(64 * 2**10):
+                f.write(chunk)
+        # extract dmg
+        check_call(["/usr/bin/7z", "-o{}".format(tempdir), "x", downloaded_file])
+        # find hfs
+        for filename in os.listdir(tempdir):
+            if filename.endswith(".hfs"):
+                check_call(["/usr/bin/7z", "-o{}".format(tempdir), "x", os.path.join(tempdir, filename)])
+                break
+        # find pkg
+        for root, dirs, files in os.walk(tempdir):
+            for filename in files:
+                if local_path.endswith(filename):
+                    shutil.move(os.path.join(root, filename),
+                                local_path)
+        shutil.rmtree(tempdir)
+
+    def get_versions(self):
+        resp = requests.get(self.GITHUB_API_URL)
+        for release in resp.json():
+            try:
+                filename, download_url = self._get_release_asset(release)
+            except ValueError:
+                continue
+            version = self._get_release_version(release)
+            created_at = parser.parse(release["created_at"])
+            is_local = os.path.exists(self._get_local_path(filename))
+            yield filename, version, created_at, download_url, is_local
+
+    def get_requested_package(self, requested_filename):
+        local_path = self._get_local_path(requested_filename)
+        if not os.path.exists(local_path):
+            for filename, version, created_at, download_url, _ in self.get_versions():
+                if filename == requested_filename:
+                    self._download_and_extract_package(download_url, local_path)
+                    break
+        return local_path

@@ -58,6 +58,7 @@
       ]
     },
     "zentral.contrib.jamf": {},
+    "zentral.contrib.simplemdm": {},
     "zentral.contrib.munki": {},
     "zentral.contrib.nagios": {},
     "zentral.contrib.osquery": {},

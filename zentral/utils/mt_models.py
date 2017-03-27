@@ -139,7 +139,7 @@ class MTObjectManager(models.Manager):
             except IntegrityError as integrity_error:
                 # the object has been concurrently created ?
                 try:
-                    obj = self.get(**search_dict)
+                    obj = self.get(mt_hash=tree['mt_hash'])
                 except self.model.DoesNotExist:
                     # that was not a key error:
                     raise integrity_error

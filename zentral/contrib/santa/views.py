@@ -13,7 +13,7 @@ from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import (make_secret,
                                      SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView)
 from .conf import build_santa_conf
-from .forms import CreateProbeForm, RuleForm, SantaEnrollmentForm
+from .forms import CreateProbeForm, RuleForm
 from .events import post_santa_events, post_santa_preflight
 from .osx_package.builder import SantaZentralEnrollPkgBuilder
 
@@ -21,7 +21,7 @@ logger = logging.getLogger('zentral.contrib.santa.views')
 
 
 class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
-    form_class = SantaEnrollmentForm
+    builder = SantaZentralEnrollPkgBuilder
     template_name = "santa/enrollment.html"
 
 
@@ -48,7 +48,6 @@ curl -XPOST -k %(tls_hostname)s/santa/ruledownload/$machine_id | jq ."""
 
 class InstallerPackageView(LoginRequiredMixin, BaseInstallerPackageView):
     module = "zentral.contrib.santa"
-    form_class = SantaEnrollmentForm
     builder = SantaZentralEnrollPkgBuilder
     template_name = "santa/enrollment.html"
 

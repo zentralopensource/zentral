@@ -1,33 +1,25 @@
 import os
-import shutil
-from zentral.utils.osx_package import PackageBuilder
+from zentral.utils.osx_package import EnrollmentForm, PackageBuilder
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class MunkiZentralEnrollPkgBuilder(PackageBuilder):
+    name = "Zentral Munki Enrollment"
+    form = EnrollmentForm
+    zentral_module = "zentral.contrib.munki"
     package_name = "zentral_munki_enroll.pkg"
-    package_identifier = "io.zentral.munki_enroll"
+    base_package_identifier = "io.zentral.munki_enroll"
     build_tmpl_dir = os.path.join(BASE_DIR, "build.tmpl")
 
-    def include_tls_server_certs(self, tls_server_certs):
-        tls_server_certs_rel_path = "usr/local/zentral/tls_server_certs.crt"
-        # copy crt in build dir
-        shutil.copy(tls_server_certs,
-                    self.get_root_path(tls_server_certs_rel_path))
-        return "/{}".format(tls_server_certs_rel_path)
-
-    def extra_build_steps(self, tls_hostname, api_secret, tls_server_certs):
-        patterns = [("%TLS_HOSTNAME%", tls_hostname),
-                    ("%API_SECRET%", api_secret)]
-        if tls_server_certs:
-            if not os.path.exists(tls_server_certs):
-                raise ValueError("tls_server_certs file {} is not readable".format(tls_server_certs))
-            tls_server_certs_install_path = self.include_tls_server_certs(tls_server_certs)
-        else:
-            tls_server_certs_install_path = ""
+    def extra_build_steps(self):
+        # munki zentral postflight script
+        patterns = [("%TLS_HOSTNAME%", self.get_tls_hostname()),
+                    ("%API_SECRET%", self.make_api_secret())]
+        tls_server_certs_install_path = self.include_tls_server_certs()
         patterns.append(("%TLS_SERVER_CERTS%", tls_server_certs_install_path))
         postflight_script = self.get_root_path("usr/local/zentral/munki/zentral_postflight")
         self.replace_in_file(postflight_script, patterns)
+        # postinstall script
         postinstall_script = self.get_build_path("scripts", "postinstall")
-        self.replace_in_file(postinstall_script, (("%TLS_HOSTNAME%", tls_hostname),))
+        self.replace_in_file(postinstall_script, (("%TLS_HOSTNAME%", self.get_tls_hostname()),))

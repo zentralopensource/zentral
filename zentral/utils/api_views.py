@@ -1,17 +1,14 @@
 import json
 import logging
-import os.path
 import warnings
 import zlib
-from django import forms
 from django.core import signing
 from django.core.exceptions import SuspiciousOperation
-from django.http import HttpResponseForbidden, JsonResponse
-from django.utils.translation import ugettext_lazy as _
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.views.generic import TemplateView, View
 from django.views.generic.edit import FormView
 from zentral.conf import settings
-from zentral.contrib.inventory.models import MetaBusinessUnit, BusinessUnit
+from zentral.contrib.inventory.models import BusinessUnit
 from zentral.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger('zentral.utils.api_views')
@@ -121,8 +118,15 @@ class JSONPostAPIView(View):
         if not payload:
             data = payload
         else:
-            if request.META.get('HTTP_CONTENT_ENCODING', None) in ['zlib', 'gzip']:
-                payload = zlib.decompress(payload)
+            content_encoding = request.META.get('HTTP_CONTENT_ENCODING', None)
+            if content_encoding:
+                # try to decompress the payload.
+                if content_encoding == "deflate" \
+                   or "santa" in self.user_agent and content_encoding == "zlib" \
+                   or self.user_agent == "Zentral/mnkpf 0.1" and content_encoding == "gzip":
+                    payload = zlib.decompress(payload)
+                else:
+                    return HttpResponse("Unsupported Media Type", status=415)
             try:
                 payload = payload.decode(self.payload_encoding)
             except UnicodeDecodeError:
@@ -175,57 +179,25 @@ class SignedRequestHeaderJSONPostAPIView(SignedRequestJSONPostAPIView):
 # Enrollment
 
 
-class EnrollmentForm(forms.Form):
-    meta_business_unit = forms.ModelChoiceField(
-        label=_("Business unit"),
-        queryset=MetaBusinessUnit.objects.available_for_api_enrollment(),
-        required=False,
-    )
-
-    def get_build_kwargs(self):
-        return {}
-
-
 class BaseEnrollmentView(TemplateView):
-    form_class = EnrollmentForm
-
     def get_context_data(self, **kwargs):
         context = super(BaseEnrollmentView, self).get_context_data(**kwargs)
         context['setup'] = True
-        context['form'] = self.form_class()
+        context['form'] = self.builder.form()
         return context
 
 
 class BaseInstallerPackageView(FormView):
-    form_class = EnrollmentForm
+    def get_form_class(self):
+        return self.builder.form
 
     def form_valid(self, form):
         build_kwargs = form.get_build_kwargs()
-        builder = self.builder()
-        # tls cert or not
-        try:
-            tls_server_certs = settings['api']['tls_server_certs']
-        except KeyError:
-            tls_server_certs = None
-        # package signature or not
-        if builder.with_package_signature and "developer_id" in settings["api"]:
-            dev_id = settings["api"]["developer_id"]
-            for attr in ("certificate", "private_key"):
-                filepath = dev_id.get(attr)
-                if not filepath:
-                    logger.error("Missing %s in developer id configuration", attr)
-                elif not os.path.isfile(filepath):
-                    logger.error("File %s does not exist.", attr)
-                else:
-                    build_kwargs["package_signature_{}".format(attr)] = filepath
         business_unit = None
         meta_business_unit = form.cleaned_data['meta_business_unit']
         if meta_business_unit:
             # TODO Race. The meta_business_unit could maybe be without any api BU.
             # TODO. Better selection if multiple BU ?
             business_unit = meta_business_unit.api_enrollment_business_units()[0]
-        return builder.build_and_make_response(business_unit,
-                                               self.request.get_host(),
-                                               make_secret(self.module, business_unit),
-                                               tls_server_certs,
-                                               **build_kwargs)
+        builder = self.builder(business_unit, **build_kwargs)
+        return builder.build_and_make_response()

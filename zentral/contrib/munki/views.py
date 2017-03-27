@@ -19,6 +19,7 @@ logger = logging.getLogger('zentral.contrib.munki.views')
 
 
 class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
+    builder = MunkiZentralEnrollPkgBuilder
     template_name = "munki/enrollment.html"
 
 

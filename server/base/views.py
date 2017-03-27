@@ -17,7 +17,7 @@ class IndexView(LoginRequiredMixin, TemplateView):
         context = super(IndexView, self).get_context_data(**kwargs)
         app_list = []
         for app_name, app_config in apps.app_configs.items():
-            if hasattr(app_config, "events_module"):
+            if getattr(app_config, "events_module", None) is not None:
                 app_list.append(app_name)
         app_list.sort()
         context["apps"] = app_list

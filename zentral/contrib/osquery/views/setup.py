@@ -13,6 +13,7 @@ logger = logging.getLogger('zentral.contrib.osquery.views.setup')
 
 
 class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
+    builder = OsqueryZentralEnrollPkgBuilder
     template_name = "osquery/enrollment.html"
 
 

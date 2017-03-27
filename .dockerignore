@@ -1,9 +1,7 @@
 */__pycache__*
 .git/*
 .gitignore
-/conf/*
-/docs/*
-/fabfile.*
-/tests/*
-/venv/*
-/wheels/*
+./conf/*
+./docs/*
+./tests/*
+./venv/*

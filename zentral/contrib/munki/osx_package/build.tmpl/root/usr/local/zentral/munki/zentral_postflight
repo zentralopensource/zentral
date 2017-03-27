@@ -18,7 +18,7 @@ SAL_BUNDLE_ID = "com.salsoftware.sal"
 SAL_KEY_PREFERENCE = "enrolment_key"
 SAL_SERVER_PREFERENCE = "ServerURL"
 
-USER_AGENT = "Zentral/mnkpf 0.1"
+USER_AGENT = "Zentral/mnkpf 0.2"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"
 ZENTRAL_API_SECRET_HEADER = "Zentral-API-Secret"
@@ -288,7 +288,7 @@ def make_api_request(url, data=None):
         data = json.dumps(data)
         req.add_header('Content-Type', 'application/json')
         data = zlib.compress(data, 9)
-        req.add_header('Content-Encoding', 'gzip')
+        req.add_header('Content-Encoding', 'deflate')
     if ZENTRAL_API_SERVER_CERTIFICATE:
         ctx = ssl.create_default_context(cafile=ZENTRAL_API_SERVER_CERTIFICATE)
     else:

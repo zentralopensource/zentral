@@ -27,5 +27,3 @@ def dict_diff(d1, d2):
             continue
         diff[k2] = {"added": v2}
     return copy.deepcopy(diff)
-
-
