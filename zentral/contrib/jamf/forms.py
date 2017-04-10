@@ -7,6 +7,9 @@ class JamfInstanceForm(forms.ModelForm):
     class Meta:
         model = JamfInstance
         fields = ("business_unit", "host", "port", "path", "user", "password")
+        widgets = {
+            'password': forms.PasswordInput(render_value=True)
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
