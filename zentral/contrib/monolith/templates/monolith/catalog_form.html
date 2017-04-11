@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:catalogs' %}">Monolith catalogs</a></li>
+  <li class="active">Update catalog {{ object }} priority</li>
+</ol>
+
+<h2>Update catalog {{ catalog }} priority</h2>
+
+<form method="POST">{% csrf_token %}
+  {{ form|bootstrap }}
+  <a class="btn btn-default" href="{% url 'monolith:catalogs' %}">Cancel</a>
+  <button class="btn btn-primary" type="submit">Save</button>
+</form>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load base_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
+  <li class="active">Add catalog</li>
+</ol>
+
+<h2>Add catalog</h2>
+<form method="POST" class="form">{% csrf_token %}
+  <dl class="dl-horizontal">
+    <dt>Name</dt>
+    <dd>{{ manifest_enrollment_package.get_name }}<dd>
+    {% if manifest_enrollment_package.build_kwargs %}
+    <dt>Parameters</dt>
+    <dd>{{ manifest_enrollment_package.build_kwargs|pythonprettyprint }}</dd>
+    {% endif %}
+  </dl>
+  <a href="{{ manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
+  <button type="submit" class="btn btn-danger">Delete</button>
+</form>
+{% endblock %}

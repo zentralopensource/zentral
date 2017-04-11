@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Monolith manifests</li>
+</ol>
+
+<h2>{{ paginator.count }} Manifest{{ paginator.count|pluralize }}</h2>
+<p><a class="btn btn-default" href="{% url 'monolith:create_manifest' %}">Create</a></p>
+
+<nav>
+  <ul class="pager">
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+  </ul>
+</nav>
+
+
+{% for manifest in object_list %}
+<table class="table">
+  <tr>
+    <td><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></td>
+  </tr>
+</table>
+{% endfor %}
+
+<nav>
+  <ul class="pager">
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endblock %}

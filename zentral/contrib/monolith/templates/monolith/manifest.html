@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% load base_extras inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>Manifest <i>{{ object }}</i></h2>
+<dl class="dl-horizontal">
+</dl>
+
+<p>
+  <a href="{% url 'monolith:manifest_enrollment' object.id %}" class="btn btn-default">Enrollment</a>
+</p>
+
+<h3>{{ manifest_catalogs|length }} Catalog{{ manifest_catalogs|length|pluralize }}</h3>
+<p><a class="btn btn-default" href="{% url 'monolith:add_manifest_catalog' object.id %}">Add</a></p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>name</th>
+      <th>priority</th>
+      <th>tags</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for manifest_catalog in manifest_catalogs %}
+    <tr>
+      <td>{{ manifest_catalog.catalog }}</td>
+      <td>{{ manifest_catalog.catalog.priority }}</td>
+      <td>
+        {% for tag in manifest_catalog.tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+      <td width="15%">
+        <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_catalog' object.id manifest_catalog.catalog.id %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3>{{ manifest_enrollment_packages|length }} Enrollment package{{ manifest_enrollment_packages|length|pluralize }}</h3>
+
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="addEnrollmentPackage"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Add
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="addEnrollmentPackage">
+    {% for link, anchor_text in add_enrollment_package_links %}
+    <li><a href="{{ link }}">{{ anchor_text }}</a></li>
+    {% endfor %}
+  </ul>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>name</th>
+      <th>version</th>
+      <th>parameters</th>
+      <th>tags</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for manifest_enrollment_package in manifest_enrollment_packages %}
+    <tr>
+      <td>{{ manifest_enrollment_package.get_name }}</td>
+      <td>{{ manifest_enrollment_package.version }}</td>
+      <td>
+        {% if manifest_enrollment_package.build_kwargs %}
+        {{ manifest_enrollment_package.build_kwargs|pythonprettyprint }}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      <td>
+        {% for tag in manifest_enrollment_package.tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+      <td width="15%">
+        {% if manifest_enrollment_package.get_optional %}
+        <a class="btn btn-default" href="{% url 'monolith:update_manifest_enrollment_package' object.id manifest_enrollment_package.id %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        </a>
+        <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_enrollment_package' object.id manifest_enrollment_package.id %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3>{{ manifest_sub_manifests|length }} Sub manifest{{ manifest_sub_manifests|length|pluralize }}</h3>
+<p><a class="btn btn-default" href="{% url 'monolith:add_manifest_sub_manifest' object.id %}">Add</a></p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>name</th>
+      <th>description</th>
+      <th>tags</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for manifest_sub_manifest in manifest_sub_manifests %}
+    <tr>
+      <td>
+        <a href="{% url 'monolith:sub_manifest' manifest_sub_manifest.sub_manifest.id %}">
+          {{ manifest_sub_manifest.sub_manifest }}
+        </a>
+      </td>
+      <td>{{ manifest_sub_manifest.sub_manifest.description|default:"-"|linebreaks }}</td>
+      <td>
+        {% for tag in manifest_sub_manifest.tags.all %}
+        {% inventory_tag tag %}
+        {% endfor %}
+      </td>
+      <td width="15%">
+        <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_sub_manifest' object.id manifest_sub_manifest.sub_manifest.id %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

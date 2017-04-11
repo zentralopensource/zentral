@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
+  <li class="active">Add enrollment package</li>
+  {% if manifest_enrollment_package %}
+  Update enrollment package
+  {% else %}
+  Add enrollment package
+  {% endif %}
+  </li>
+</ol>
+
+<h2>
+  {% if manifest_enrollment_package %}
+  Update {{ manifest_enrollment_package }}
+  {% else %}
+  Add {{ builder_name }}
+  {% endif %}
+</h2>
+
+<form method="POST" class="form">{% csrf_token %}
+  {{ builder_form|bootstrap }}
+  {{ mep_form|bootstrap }}
+  <a href="{{ manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
+  <button type="submit" class="btn btn-primary">
+    {% if manifest_enrollment_package %}
+    Update
+    {% else %}
+    Add
+    {% endif %}
+  </button>
+</form>
+{% endblock %}

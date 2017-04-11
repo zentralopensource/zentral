@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Monolith pkginfos</li>
+</ol>
+
+<h2>{{ name_number }} Package names / {{ info_number }} Packages</h2>
+
+{% for pkg_info_name in pkg_names %}
+<table class="table">
+  <tr>
+    <td colspan=2>{{ pkg_info_name.name }}</td>
+  </tr>
+  {% for pkg_info in pkg_info_name.pkg_infos %}
+  <tr>
+    <td width="25%">{{ pkg_info.version }}</td>
+    <td>{{ pkg_info.catalogs|join:", "}}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endfor %}
+{% endblock %}

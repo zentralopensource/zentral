@@ -1,0 +1,40 @@
+#!/bin/bash -e
+## postinstall
+
+DEFAULT_PLIST=/Library/Preferences/ManagedInstalls
+ROOT_PLIST=/var/root$DEFAULT_PLIST
+
+# get machine serial number
+MSN=$(/usr/sbin/ioreg -c IOPlatformExpertDevice -d 2 | awk -F\" '/IOPlatformSerialNumber/{print $(NF-1)}')
+
+# Set special client identifier for monolith
+defaults write $DEFAULT_PLIST ClientIdentifier "MONOLITH_MACHINE_SERIAL_NUMBER$MSN"
+
+# Set Authorization header to attribute requests to a business unit
+defaults write $ROOT_PLIST AdditionalHttpHeaders -array %HEADERS%
+
+# Set monolith as munki repository
+defaults write $DEFAULT_PLIST SoftwareRepoURL "%SOFTWARE_REPO_URL%"
+
+# Follow Http redirects to original munki repository
+defaults write $DEFAULT_PLIST FollowHTTPRedirects all
+
+# Remove special ManifestURL
+if defaults read $DEFAULT_PLIST ManifestURL; then
+    defaults delete $DEFAULT_PLIST ManifestURL;
+fi
+
+# Unset IconURL, force redirect via monolith
+if defaults read $DEFAULT_PLIST IconURL; then
+    defaults delete $DEFAULT_PLIST IconURL;
+fi
+
+# Unset ClientResourceURL, force redirect via monolith
+if defaults read $DEFAULT_PLIST ClientResourceURL; then
+    defaults delete $DEFAULT_PLIST ClientResourceURL;
+fi
+
+# CA Cert
+defaults write $DEFAULT_PLIST SoftwareRepoCACertificate "%TLS_CA_CERT%"
+
+exit 0

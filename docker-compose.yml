@@ -43,6 +43,8 @@ services:
       - db
       - elastic
       - rabbitmq
+    volumes:
+      - web_media_root:/var/zentral
   workers:
     extends:
       file: docker-compose.common.yml
@@ -60,3 +62,4 @@ networks:
 
 volumes:
   prometheus_sd:
+  web_media_root:

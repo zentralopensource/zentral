@@ -11,6 +11,7 @@
   "django": {
     "SECRET_KEY": "DJANGO SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
     "DEBUG": true,
+    "MEDIA_ROOT": "/var/zentral",
     "ADMINS": [
       [
         "Admin",

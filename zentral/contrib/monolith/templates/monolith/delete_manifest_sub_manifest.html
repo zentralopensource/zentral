@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
+  <li class="active">Delete sub manifest {{ m2m_object }}</li>
+</ol>
+
+<h2>Delete sub manifest</h2>
+<p>Do you really want to remove {{ m2m_object }} from the manifest {{ manifest }} ?</p>
+<form method="POST">{% csrf_token %}
+  {{ form.sub_manifest }}
+  <a class="btn btn-default" href="{{ manifest.get_absolute_url }}">No</a>
+  <button class="btn btn-danger" type="submit">Yes</a>
+</form>
+{% endblock %}

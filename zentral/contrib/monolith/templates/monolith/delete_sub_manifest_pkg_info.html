@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
+  <li><a href="{{ object.sub_manifest.get_absolute_url }}">{{ object.sub_manifest }}</a></li>
+  <li class="active">Remove repository package {{ object.pkg_info_name }}</li>
+</ol>
+
+<h2>Remove repository package from sub manifest </h2>
+<p>Do you really want to remove {{ object.pkg_info_name }} from the sub manifest {{ object.sub_manifest }} ?</p>
+<form method="POST">{% csrf_token %}
+  <a class="btn btn-default" href="{{ object.sub_manifest.get_absolute_url }}">No</a>
+  <button class="btn btn-danger" type="submit">Yes</a>
+</form>
+{% endblock %}

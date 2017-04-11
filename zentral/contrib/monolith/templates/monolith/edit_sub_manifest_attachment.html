@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
+  <li><a href="{{ sub_manifest.get_absolute_url }}">{{ sub_manifest }}</a></li>
+  {% if object %}
+  <li class="active">Update {{ object.get_type_display }}</li>
+  {% else %}
+  <li class="active">Add Configuration Profile or Package</li>
+  {% endif %}
+</ol>
+
+<h2>
+  {% if object %}
+  Edit {{ object.get_type_display }}
+  {% else %}
+  Add configuration profile or package
+  {% endif %}
+</h2>
+
+<form method="POST" enctype="multipart/form-data" class="form">{% csrf_token %}
+  {{ form|bootstrap }}
+  <a href="{{ sub_manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
+  <button type="submit" class="btn btn-default">{% if object %}Update{% else %}Add{% endif %}</button>
+</form>
+{% endblock %}

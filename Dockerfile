@@ -30,8 +30,8 @@ RUN mkdir /zentral
 WORKDIR /zentral
 ADD requirements.txt /zentral
 RUN pip install -r requirements.txt
-RUN mkdir /prometheus_sd
-RUN chown zentral:zentral /prometheus_sd
+RUN mkdir /prometheus_sd && chown zentral:zentral /prometheus_sd
+RUN mkdir /var/zentral && chown zentral:zentral /var/zentral
 ADD . /zentral
 USER zentral
 ENTRYPOINT ["/zentral/docker-entrypoint.py"]

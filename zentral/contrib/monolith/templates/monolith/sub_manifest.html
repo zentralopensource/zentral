@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>Sub manifest <i>{{ object }}</i></h2>
+
+<p>
+  <a href="{% url 'monolith:update_sub_manifest' object.id %}" class="btn btn-default">Update</a>
+  {% if object.can_be_deleted %}
+  <a href="{% url 'monolith:delete_sub_manifest' object.id %}" class="btn btn-danger">Delete</a></p>
+  {% endif %}
+<dl>
+<dt>Description</dt>
+<dd>{{ object.description|default:"-"|linebreaks }}</dd>
+</dl>
+
+<h3>
+  {% if total.pkginfo %}
+  {{ total.pkginfo }} Repository Package{{ total.pkginfo|pluralize }},
+  {% endif %}
+  {% if total.configuration_profile %}
+  {{ total.configuration_profile }} Configuration Profile{{ total.configuration_profile|pluralize }},
+  {% endif %}
+  {% if total.package %}
+  {{ total.package }} Package{{ total.package|pluralize }}
+  {% endif %}
+  {% if total.script %}
+  {{ total.script }} Script{{ total.script|pluralize }}
+  {% endif %}
+</h3>
+
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="addAttachment"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Add
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="addAttachment">
+    <li><a href="{% url 'monolith:sub_manifest_add_pkg_info' object.id %}">Repository Package</a>
+    <li><a href="{% url 'monolith:sub_manifest_add_attachment' object.id %}">Configuration Profile or Package</a>
+    <li><a href="{% url 'monolith:sub_manifest_add_script' object.id %}">Script</a>
+  </ul>
+</div>
+
+{% for key_display, key_list in keys %}
+<h4>{{ key_display }}</h4>
+<table class="table">
+  {% for name, smo in key_list %}
+  <tr>
+    <td class="col-md-6">{{ name }}</td>
+    {% if smo.type %}
+    <td class="col-md-4">{{ smo.get_type_display }}</td>
+    <td class="col-md-2">
+      {% if smo.type == 'script' %}
+      <a class="btn btn-default" href="{% url 'monolith:sub_manifest_update_script' object.id smo.id %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+      </a>
+      {% endif %}
+      <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_attachment' smo.id %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+    </td>
+    {% else %}
+    <td class="col-md-4">repository package</td>
+    <td class="col-md-2">
+      <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_pkg_info' smo.id %}">Delete</a>
+    </td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+</table>
+{% endfor %}
+
+<h3>Included in {{ manifests|length }} manifest{{ manifests|length|pluralize }}</h3>
+<table class="table">
+  {% for tags, manifest in manifests %}
+  <tr>
+    <td><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></td>
+    <td>
+      {% for tag in tags %}{% inventory_tag tag %}{% endfor %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+
+{% endblock %}
