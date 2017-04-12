@@ -7,6 +7,7 @@ __pycache__
 !/docker-compose.common.yml
 !/docker-compose.logstash.yml
 !/docker-compose.saml2.yml
+!/.travis.yml
 /conf/*
 !/conf/start
 !/conf/logstash
