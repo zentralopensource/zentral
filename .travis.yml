@@ -7,6 +7,9 @@ before_install:
   - docker --version
   - docker-compose --version
 
-install: true
+install:
+  - docker-compose pull
+  - docker-compose build
+  - docker-compose up -d db rabbitmq elastic
 
-script: pwd
+script: docker-compose run --rm web tests
