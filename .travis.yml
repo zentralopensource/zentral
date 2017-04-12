@@ -1,0 +1,13 @@
+sudo: required
+
+language: python
+
+services:
+  - docker
+
+install:
+  - docker-compose pull
+  - docker-compose build
+  - docker-compose up -d db rabbitmq elastic
+
+script: docker-compose run --rm web tests
