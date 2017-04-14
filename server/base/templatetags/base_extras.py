@@ -21,7 +21,11 @@ def main_menu_app_dropdowns(context):
     if not DROPDOWN_LIST:
         for app_name in settings['apps']:
             app_shortname = app_name.rsplit('.', 1)[-1]
-            url_module = import_module('{}.urls'.format(app_name))
+            try:
+                url_module = import_module('{}.urls'.format(app_name))
+            except ImportError:
+                # TODO: ModuleNotFoundError for python >= 3.6
+                continue
             main_menu_cfg = getattr(url_module, 'main_menu_cfg', None)
             if not main_menu_cfg:
                 logger.warning('App %s w/o main menu config', app_name)
@@ -57,7 +61,11 @@ def setup_dropdown(context):
     if not SETUP_DROPDOWN:
         for app_name in settings['apps']:
             app_shortname = app_name.rsplit('.', 1)[-1]
-            url_module = import_module('{}.urls'.format(app_name))
+            try:
+                url_module = import_module('{}.urls'.format(app_name))
+            except ImportError:
+                # TODO: ModuleNotFoundError for python >= 3.6
+                continue
             setup_menu_cfg = getattr(url_module, 'setup_menu_cfg', None)
             if not setup_menu_cfg:
                 logger.warning('App %s w/o setup menu config', app_name)

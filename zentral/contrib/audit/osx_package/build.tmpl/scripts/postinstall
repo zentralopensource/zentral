@@ -1,0 +1,14 @@
+#!/bin/bash -e
+## postinstall
+
+# set machine serial number
+SERIAL_NUMBER=$(/usr/sbin/ioreg -c IOPlatformExpertDevice -d 2 | awk -F\" '/IOPlatformSerialNumber/{print $(NF-1)}')
+/usr/bin/sed -i '' "s/%MACHINE_SERIAL_NUMBER%/$SERIAL_NUMBER/" /usr/local/zentral/audit/filebeat.yml
+
+# load launch daemon
+/bin/launchctl load -w "/Library/LaunchDaemons/io.zentral.audit_shipper.plist"
+
+# write zentral base url
+/usr/bin/defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"
+
+exit 0

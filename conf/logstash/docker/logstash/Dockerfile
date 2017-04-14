@@ -1,4 +1,4 @@
 FROM logstash
 COPY logstash.yml /etc/logstash/
 COPY zentral* /etc/logstash/
-COPY jamf_beat.cfg /etc/logstash/conf.d/jamf_beat.cfg
+COPY zentral_beats.cfg /etc/logstash/conf.d/zentral_beats.cfg

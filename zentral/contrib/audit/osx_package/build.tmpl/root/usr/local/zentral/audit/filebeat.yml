@@ -1,0 +1,31 @@
+filebeat:
+  registry_file: /tmp/filebeat/audit_registry
+  prospectors:
+    - input_type: stdin
+      document_type: audit
+      multiline:
+        pattern: '^trailer'
+        negate: true
+        match: before
+      fields:
+        machine_serial_number: "%MACHINE_SERIAL_NUMBER%"
+
+output:
+  logstash:
+    hosts:
+      - "%TLS_HOSTNAME%:5044"
+    ssl:
+      certificate_authorities:
+        - "%TLS_SERVER_CERTS%"
+      certificate: "%TLS_CLIENT_CERT%"
+      key: "%TLS_CLIENT_CERT_KEY%"
+
+logging:
+  level: info
+  to_files: true
+  to_syslog: false
+  files:
+    path: /var/log/filebeat
+    name: audit_logs
+    rotateeverybytes: 10485760 # = 10MB
+    keepfiles: 7
