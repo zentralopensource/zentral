@@ -118,7 +118,8 @@ class OsqueryQuerySerializer(serializers.Serializer):
                         ('linux', 'Linux'),
                         ('manjaro', 'Manjaro Linux'),
                         ('oracle', 'Oracle Linux'),  # Red Hat based
-                        ('posix', 'POSIX'),
+                        ('redhat', 'Red Hat'),  # TODO WHY?
+                        ('posix', 'POSIX'),  # TODO WHY?
                         ('rhel', 'Red Hat Enterprise Linux'),  # Red Hat based
                         ('scientific', 'Scientific Linux'),  # Red Hat based
                         ('ubuntu', 'Ubuntu'),  # Debian based
