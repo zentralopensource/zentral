@@ -10,14 +10,9 @@ from zentral.utils.prometheus import PrometheusWorkerMixin
 logger = logging.getLogger('zentral.core.queues.backends.kombu')
 
 
-store_events_exchange = Exchange('store_events', type="fanout", durable=True)
-store_events_queue = Queue('store_events',
-                           exchange=store_events_exchange,
-                           durable=True)
-
-process_events_exchange = Exchange('process_events', type="fanout", durable=True)
+events_exchange = Exchange('events', type="fanout", durable=True)
 process_events_queue = Queue('process_events',
-                             exchange=process_events_exchange,
+                             exchange=events_exchange,
                              durable=True)
 
 probes_exchange = Exchange('probes', type='fanout', durable=True)
@@ -64,18 +59,21 @@ class PreprocessorWorker(ConsumerProducerMixin, PrometheusWorkerMixin):
             self.produced_events_counter.labels(event.event_type).inc()
             self.producer.publish(event.serialize(machine_metadata=False),
                                   serializer='json',
-                                  exchange=store_events_exchange,
-                                  declare=[store_events_exchange])
+                                  exchange=events_exchange,
+                                  declare=[events_exchange])
         message.ack()
         self.preprocessed_events_counter.inc()
 
 
-class StoreWorker(ConsumerProducerMixin, PrometheusWorkerMixin):
+class StoreWorker(ConsumerMixin, PrometheusWorkerMixin):
     def __init__(self, connection, event_store):
         self.connection = connection
         self.channel2 = None
         self.event_store = event_store
         self.name = "store worker {}".format(self.event_store.name)
+        self.input_queue = Queue(('store_events_{}'.format(self.event_store.name)).replace(" ", "_"),
+                                 exchange=events_exchange,
+                                 durable=True)
 
     def setup_prometheus_metrics(self):
         self.stored_events_counter = Counter(
@@ -97,7 +95,7 @@ class StoreWorker(ConsumerProducerMixin, PrometheusWorkerMixin):
     def get_consumers(self, _, default_channel):
         self.channel2 = default_channel.connection.channel()
         return [Consumer(default_channel,
-                         queues=[store_events_queue],
+                         queues=[self.input_queue],
                          accept=['json'],
                          callbacks=[self.store_event]),
                 Consumer(self.channel2,
@@ -115,10 +113,6 @@ class StoreWorker(ConsumerProducerMixin, PrometheusWorkerMixin):
     def store_event(self, body, message):
         self.log_info("store event")
         self.event_store.store(body)
-        self.producer.publish(body,
-                              serializer='json',
-                              exchange=process_events_exchange,
-                              declare=[process_events_exchange])
         message.ack()
         self.stored_events_counter.labels(body['_zentral']['type']).inc()
 
@@ -215,5 +209,5 @@ class EventQueues(object):
         with producers[self.connection].acquire(block=True) as producer:
             producer.publish(event.serialize(machine_metadata=False),
                              serializer='json',
-                             exchange=store_events_exchange,
-                             declare=[store_events_exchange])
+                             exchange=events_exchange,
+                             declare=[events_exchange])

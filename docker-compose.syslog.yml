@@ -1,0 +1,11 @@
+version: '2'
+
+services:
+  syslog:
+    build: ./conf/syslog/docker/syslog-ng/
+  web:
+    environment:
+      ZENTRAL_CONF_DIR: /zentral/conf/syslog/zentral/
+  workers:
+    environment:
+      ZENTRAL_CONF_DIR: /zentral/conf/syslog/zentral/

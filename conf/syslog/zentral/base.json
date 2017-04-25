@@ -1,0 +1,73 @@
+{
+  "api": {
+    "tls_hostname": "https://zentral",
+    "tls_server_certs": "/zentral/conf/start/docker/tls/zentral_fullchain.crt",
+    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
+  },
+  "extra_links": [
+    {"anchor_text": "Prometheus",
+     "url": "https://zentral/prometheus/"}
+  ],
+  "django": {
+    "SECRET_KEY": "DJANGO SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
+    "DEBUG": true,
+    "MEDIA_ROOT": "/var/zentral",
+    "ADMINS": [
+      [
+        "Admin",
+        "changethis@example.com"
+      ]
+    ],
+    "SERVER_EMAIL": "changethis@example.com",
+    "DEFAULT_FROM_EMAIL": "changethis@example.com",
+    "ALLOWED_HOSTS": [
+      "*"
+    ]
+  },
+  "queues": {
+    "backend": "zentral.core.queues.backends.kombu",
+    "backend_url": "amqp://guest:guest@rabbitmq:5672//"
+  },
+  "stores": {
+    "elasticsearch": {
+      "frontend": true,
+      "backend": "zentral.core.stores.backends.elasticsearch",
+      "servers": [
+        "http://elastic:9200"
+      ],
+      "index": "zentral-events",
+      "kibana_base_url": "https://zentral/kibana/"
+    },
+    "syslog": {
+      "backend": "zentral.core.stores.backends.syslog",
+      "host": "syslog",
+      "protocol": "tcp"
+    }
+  },
+  "processor_workers": {
+    "number": 1,
+    "prometheus_server_base_port": "8100"
+  },
+  "actions": {
+    "debug": {
+      "backend": "zentral.core.actions.backends.json_file",
+      "local_dir": "/tmp/zentral_notifications/"
+    }
+  },
+  "apps": {
+    "zentral.contrib.inventory": {
+      "prometheus_bearer_token": "CHANGE ME!!!",
+      "clients": [
+        {
+          "backend": "zentral.contrib.inventory.clients.dummy"
+        }
+      ]
+    },
+    "zentral.contrib.jamf": {},
+    "zentral.contrib.simplemdm": {},
+    "zentral.contrib.munki": {},
+    "zentral.contrib.nagios": {},
+    "zentral.contrib.osquery": {},
+    "zentral.contrib.santa": {}
+  }
+}

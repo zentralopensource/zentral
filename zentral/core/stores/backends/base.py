@@ -11,6 +11,19 @@ class BaseEventStore(object):
         if not self.configured:
             self.wait_and_configure()
 
+    # machine events
+
+    def machine_events_count(self, machine_serial_number, event_type=None):
+        return 0
+
+    def machine_events_fetch(self, machine_serial_number, offset=0, limit=0, event_type=None):
+        return []
+
+    def machine_events_types_with_usage(self, machine_serial_number):
+        return {}
+
+    # probe events
+
     def probe_events_fetch(self, probe, offset=0, limit=0, **search_dict):
         return []
 
