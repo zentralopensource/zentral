@@ -106,11 +106,24 @@ class OsqueryQuery(object):
 
 
 class OsqueryQuerySerializer(serializers.Serializer):
-    PLATFORM_CHOICES = (('darwin', 'macOS'),
+    PLATFORM_CHOICES = (('arch', 'Arch'),
+                        ('amazon', 'Amazon Linux'),  # Red Hat based
+                        ('centos', 'CentOS'),  # Red Hat based
+                        ('darwin', 'macOS'),
+                        ('debian', 'Debian'),  # Debian based
+                        ('fedora', 'Fedora'),  # Red Hat based
                         ('freebsd', 'FreeBSD'),
+                        ('funtoo', 'Funtoo Linux'),  # Gentoo based
+                        ('gentoo', 'Gentoo Linux'),  # Gentoo based
                         ('linux', 'Linux'),
-                        ('ubuntu', 'Debian-based'),
-                        ('centos', 'RedHat-based'))  # TODO Windows
+                        ('manjaro', 'Manjaro Linux'),
+                        ('oracle', 'Oracle Linux'),  # Red Hat based
+                        ('posix', 'POSIX'),
+                        ('rhel', 'Red Hat Enterprise Linux'),  # Red Hat based
+                        ('scientific', 'Scientific Linux'),  # Red Hat based
+                        ('ubuntu', 'Ubuntu'),  # Debian based
+                        ('windows', 'Windows'),
+                        )
     query = serializers.CharField()
     interval = serializers.IntegerField(min_value=10, max_value=2678400, default=3600)
     description = serializers.CharField(required=False,
