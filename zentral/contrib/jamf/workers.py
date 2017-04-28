@@ -40,7 +40,8 @@ class WebhookEventPreprocessor(object):
         try:
             machine_d = client.get_machine_d(device_type, jamf_id)
         except:
-            logger.exception("Could not get machine_d. %s %s %s", client.get_source_d(), device_type, jamf_id)
+            logger.exception("Could not get machine_d. %s %s %s",
+                             client.get_source_d(), device_type, jamf_id)
         else:
             try:
                 msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
@@ -70,18 +71,23 @@ class WebhookEventPreprocessor(object):
             yield ms_d["reference"]
 
     def update_group_machines(self, client, device_type, jamf_group_id, is_smart):
-        current_machine_references = set(client.get_group_machine_references(device_type, jamf_group_id))
-        inventory_groups = self.get_inventory_groups(client, device_type, jamf_group_id, is_smart)
-        if not inventory_groups:
-            # unknown group. update all machines
-            references_iterator = current_machine_references
+        try:
+            current_machine_references = set(client.get_group_machine_references(device_type, jamf_group_id))
+        except:
+            logger.exception("Could not get group machines. %s %s %s",
+                             client.get_source_d(), device_type, jamf_group_id)
         else:
-            # known group. update symmetric difference
-            inventory_machine_references = set(self.get_inventory_groups_machine_references(inventory_groups))
-            references_iterator = inventory_machine_references ^ current_machine_references
-        for reference in references_iterator:
-            _, jamf_machine_id = reference.split(",")
-            yield from self.update_machine(client, device_type, jamf_machine_id)
+            inventory_groups = self.get_inventory_groups(client, device_type, jamf_group_id, is_smart)
+            if not inventory_groups:
+                # unknown group. update all machines
+                references_iterator = current_machine_references
+            else:
+                # known group. update symmetric difference
+                inventory_machine_references = set(self.get_inventory_groups_machine_references(inventory_groups))
+                references_iterator = inventory_machine_references ^ current_machine_references
+            for reference in references_iterator:
+                _, jamf_machine_id = reference.split(",")
+                yield from self.update_machine(client, device_type, jamf_machine_id)
 
     def process_raw_event(self, raw_event):
         jamf_instance_d = raw_event["jamf_instance"]
