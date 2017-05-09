@@ -28,6 +28,7 @@ class Releases(object):
         download_url = "{}{}".format(self.S3_BUCKET, filename)
         tmp_fh, tmp_path = tempfile.mkstemp(suffix=self.__module__)
         resp = requests.get(download_url, stream=True)
+        resp.raise_for_status()
         with os.fdopen(tmp_fh, "wb") as f:
             for chunk in resp.iter_content(64 * 2**10):
                 f.write(chunk)

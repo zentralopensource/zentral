@@ -31,6 +31,16 @@ class OsqueryEnrollmentForm(EnrollmentForm):
                 choices.append((filename, filename))
             release_field.choices = choices
 
+    def clean_release(self):
+        release = self.cleaned_data["release"]
+        if release:
+            r = Releases()
+            try:
+                r.get_requested_package(release)
+            except:
+                raise forms.ValidationError("Could not download osquery package.")
+        return release
+
     def get_build_kwargs(self):
         kwargs = super().get_build_kwargs()
         if not self.update_for:
