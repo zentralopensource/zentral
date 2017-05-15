@@ -65,7 +65,7 @@
         <span class="glyphicon glyphicon-stats" aria-hidden="true"></span> Dashboard
       </a>
       {% for store_name, store_url in probe.get_store_links %}
-      <a class="btn btn-default" href="{{ store_url }}">
+      <a class="btn btn-default" href="{{ store_url }}" target="_blank">
         <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}
       </a>
       {% endfor %}
