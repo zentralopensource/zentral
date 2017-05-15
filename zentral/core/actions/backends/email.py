@@ -1,6 +1,6 @@
 from email.mime.text import MIMEText
 import logging
-from smtplib import SMTP_SSL, SMTPException
+from smtplib import SMTP, SMTP_SSL, SMTPException
 from zentral.conf import contact_groups
 from zentral.core.actions.backends.base import BaseAction, ContactGroupForm
 
@@ -17,11 +17,18 @@ class Action(BaseAction):
     def _open(self):
         if self.conn:
             return
-        conn = SMTP_SSL(self.config_d['smtp_host'],
-                        self.config_d['smtp_port'])
+        use_ssl = self.config_d.get('smtp_use_ssl', True)
+        if use_ssl:
+            opener = SMTP_SSL
+        else:
+            opener = SMTP
+        conn = opener(self.config_d['smtp_host'],
+                      self.config_d['smtp_port'])
         conn.ehlo()
-        conn.login(self.config_d['smtp_user'],
-                   self.config_d['smtp_password'])
+        user = self.config_d.get("smtp_user")
+        password = self.config_d.get("smtp_password")
+        if user and password:
+            conn.login(user, password)
         self.conn = conn
 
     def _close(self):
