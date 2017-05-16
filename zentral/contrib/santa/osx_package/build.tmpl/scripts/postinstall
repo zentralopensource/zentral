@@ -4,9 +4,13 @@
 ## detect client device serial_number
 SERIAL_NUMBER=$(/usr/sbin/ioreg -c IOPlatformExpertDevice -d 2 | awk -F\" '/IOPlatformSerialNumber/{print $(NF-1)}')
 MACHINE_ID="%API_SECRET%\$SERIAL\$${SERIAL_NUMBER}"
+MACHINE_OWNER=$(/usr/bin/whoami)
 
 ## set machine_id
 /usr/bin/sed -i '' -e "s/%MACHINE_ID%/$MACHINE_ID/" /var/db/santa/config.plist
+
+## set machine_owner
+/usr/bin/sed -i -e "s/%MACHINE_OWNER%/$MACHINE_OWNER/" /var/db/santa/config.plist
 
 ## load com.google.santad.plist
 /bin/launchctl load -w "/Library/LaunchDaemons/com.google.santad.plist"  >/dev/null 2>&1

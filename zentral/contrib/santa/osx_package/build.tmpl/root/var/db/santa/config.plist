@@ -6,6 +6,8 @@
 	<integer>%MODE%</integer>
 	<key>MachineID</key>
 	<string>%MACHINE_ID%</string>
+	<key>MachineOwner</key>
+	<string>%MACHINE_OWNER%</string>
 	<key>SyncBaseURL</key>
 	<string>https://%TLS_HOSTNAME%/santa/</string>
 </dict>
