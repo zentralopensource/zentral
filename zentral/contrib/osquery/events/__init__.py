@@ -1,6 +1,7 @@
 from datetime import datetime
 import logging
 from zentral.core.events.base import BaseEvent, register_event_type
+from zentral.core.queues import queues
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
 
@@ -60,6 +61,13 @@ class OsqueryDistributedQueryResultEvent(OsqueryEvent):
 register_event_type(OsqueryDistributedQueryResultEvent)
 
 
+class OsqueryFileCarveEvent(OsqueryEvent):
+    event_type = "osquery_file_carve"
+
+
+register_event_type(OsqueryFileCarveEvent)
+
+
 class OsqueryStatusEvent(OsqueryEvent):
     event_type = "osquery_status"
 
@@ -71,6 +79,15 @@ register_event_type(OsqueryStatusEvent)
 
 def post_distributed_query_result(msn, user_agent, ip, payloads):
     OsqueryDistributedQueryResultEvent.post_machine_request_payloads(msn, user_agent, ip, payloads)
+
+
+def post_file_carve_events(msn, user_agent, ip, payloads):
+    OsqueryFileCarveEvent.post_machine_request_payloads(msn, user_agent, ip, payloads)
+
+
+def post_finished_file_carve_session(session_id):
+    queues.post_raw_event("osquery_finished_file_carve_session",
+                          {"session_id": session_id})
 
 
 def get_osquery_result_created_at(payload):

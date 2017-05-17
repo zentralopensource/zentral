@@ -47,6 +47,15 @@ urlpatterns = [
         views.CreateDistributedQueryProbeView.as_view(), name='create_distributed_query_probe'),
     url(r'^distributed_query_probes/(?P<probe_id>\d+)/update_query/$',
         views.UpdateDistributedQueryProbeQueryView.as_view(), name='update_distributed_query_probe_query'),
+    # osquery file carve probes
+    url(r'^file_carve_probes/create/$',
+        views.CreateFileCarveProbeView.as_view(), name='create_file_carve_probe'),
+    url(r'^file_carve_probes/(?P<probe_id>\d+)/update_path/$',
+        views.UpdateFileCarveProbePathView.as_view(), name='update_file_carve_probe_path'),
+    url(r'^file_carve_probes/(?P<probe_id>\d+)/sessions/$',
+        views.FileCarveProbeSessionsView.as_view(), name='file_carve_probe_sessions'),
+    url(r'^file_carve_sessions/(?P<session_id>\d+)/archive/$',
+        views.DownloadFileCarveSessionArchiveView.as_view(), name='download_file_carve_session_archive'),
     # osquery fim probes
     url(r'fim_probes/create/$',
         views.CreateFIMProbeView.as_view(), name='create_fim_probe'),
@@ -60,6 +69,8 @@ urlpatterns = [
     # API
     url(r'^enroll$', csrf_exempt(views.EnrollView.as_view()), name='enroll'),
     url(r'^config$', csrf_exempt(views.ConfigView.as_view()), name='config'),
+    url(r'^carver/start$', csrf_exempt(views.CarverStartView.as_view()), name='carver_start'),
+    url(r'^carver/continue$', csrf_exempt(views.CarverContinueView.as_view()), name='carver_continue'),
     url(r'^distributed/read$', csrf_exempt(views.DistributedReadView.as_view()), name='distributed_read'),
     url(r'^distributed/write$', csrf_exempt(views.DistributedWriteView.as_view()), name='distributed_write'),
     url(r'^log$', csrf_exempt(views.LogView.as_view()), name='log'),

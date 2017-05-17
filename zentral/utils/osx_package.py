@@ -364,6 +364,8 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             f.write(content)
 
     def set_plist_keys(self, filename, keyvals):
+        if not keyvals:
+            return
         with open(filename, "rb") as f:
             pl = plistlib.load(f)
         for key, val in keyvals:
@@ -371,10 +373,13 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         with open(filename, "wb") as f:
             plistlib.dump(pl, f)
 
-    def append_to_plist_key(self, filename, key, val):
+    def append_to_plist_key(self, filename, key, values):
+        if not values:
+            return
         with open(filename, "rb") as f:
             pl = plistlib.load(f)
-        pl.setdefault(key, []).append(val)
+        for val in values:
+            pl.setdefault(key, []).append(val)
         with open(filename, "wb") as f:
             plistlib.dump(pl, f)
 

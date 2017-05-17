@@ -1,5 +1,6 @@
 import os
 from django import forms
+from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
 from zentral.utils.osx_package import EnrollmentForm, PackageBuilder
 from zentral.contrib.osquery.releases import Releases
@@ -8,6 +9,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class OsqueryEnrollmentForm(EnrollmentForm):
+    disable_carver = forms.BooleanField(
+        label=_("Disable file carver"),
+        initial=True,
+        required=False
+    )
     release = forms.ChoiceField(
         label=_("Release"),
         choices=[],
@@ -31,6 +37,13 @@ class OsqueryEnrollmentForm(EnrollmentForm):
                 choices.append((filename, filename))
             release_field.choices = choices
 
+    def clean_disable_carver(self):
+        try:
+            disable_carver = bool(self.cleaned_data["disable_carver"])
+        except (ValueError, TypeError):
+            disable_carver = True
+        return disable_carver
+
     def clean_release(self):
         release = self.cleaned_data["release"]
         if release:
@@ -43,6 +56,7 @@ class OsqueryEnrollmentForm(EnrollmentForm):
 
     def get_build_kwargs(self):
         kwargs = super().get_build_kwargs()
+        kwargs["disable_carver"] = self.cleaned_data["disable_carver"]
         if not self.update_for:
             kwargs["release"] = self.cleaned_data["release"]
         return kwargs
@@ -78,11 +92,21 @@ class OsqueryZentralEnrollPkgBuilder(PackageBuilder):
         self.replace_in_file(self.get_build_path("scripts", "postinstall"),
                              (("%TLS_HOSTNAME%", self.get_tls_hostname()),))
 
+        extra_prog_args = []
+
         # tls_server_certs
         tls_server_certs_install_path = self.include_tls_server_certs()
-        self.append_to_plist_key(launchd_plist,
-                                 "ProgramArguments",
-                                 "--tls_server_certs={}".format(tls_server_certs_install_path))
+        extra_prog_args.append("--tls_server_certs={}".format(tls_server_certs_install_path))
+
+        # carver
+        disable_carver = kwargs["disable_carver"]
+        extra_prog_args.append("--disable_carver={}".format(str(disable_carver).lower()))
+        if not disable_carver:
+            extra_prog_args.append("--carver_start_endpoint={}".format(reverse('osquery:carver_start')))
+            extra_prog_args.append("--carver_continue_endpoint={}".format(reverse('osquery:carver_continue')))
+
+        self.append_to_plist_key(launchd_plist, "ProgramArguments", extra_prog_args)
+
         # enroll secret secret
         self.replace_in_file(self.get_build_path("scripts", "preinstall"),
                              (("%ENROLL_SECRET_SECRET%", self.make_api_secret()),))

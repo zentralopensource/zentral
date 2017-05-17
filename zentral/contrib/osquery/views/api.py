@@ -1,6 +1,10 @@
+from base64 import b64decode
 import logging
 from django.core.exceptions import SuspiciousOperation
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
+from django.db.models import Q
+from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.core.events.base import post_machine_conflict_event
@@ -11,8 +15,11 @@ from zentral.contrib.osquery.conf import (build_osquery_conf,
                                           INVENTORY_QUERY_NAME,
                                           INVENTORY_DISTRIBUTED_QUERY_PREFIX)
 from zentral.contrib.osquery.events import (post_distributed_query_result, post_enrollment_event,
+                                            post_file_carve_events, post_finished_file_carve_session,
                                             post_events_from_osquery_log, post_request_event)
-from zentral.contrib.osquery.models import enroll, DistributedQueryProbeMachine
+from zentral.contrib.osquery.models import (enroll,
+                                            DistributedQueryProbeMachine,
+                                            CarveBlock, CarveSession)
 
 logger = logging.getLogger('zentral.contrib.osquery.views.api')
 
@@ -145,6 +152,77 @@ class ConfigView(BaseNodeView):
         return build_osquery_conf(MetaMachine(self.machine_serial_number))
 
 
+class CarverStartView(BaseNodeView):
+    request_type = "carve_start"
+
+    def do_node_post(self, data):
+        probe_source_id = int(data["request_id"].split("_")[-1])
+        probe_source = ProbeSource.objects.get(pk=probe_source_id)
+        session_id = get_random_string(64)
+        CarveSession.objects.create(probe_source=probe_source,
+                                    machine_serial_number=self.machine_serial_number,
+                                    session_id=session_id,
+                                    carve_guid=data["carve_id"],
+                                    carve_size=int(data["carve_size"]),
+                                    block_size=int(data["block_size"]),
+                                    block_count=int(data["block_count"]))
+        post_file_carve_events(self.machine_serial_number, self.user_agent, self.ip,
+                               [{"probe": {"id": probe_source.pk,
+                                           "name": probe_source.name},
+                                 "action": "start",
+                                 "session_id": session_id}])
+        return {"session_id": session_id}
+
+
+class CarverContinueView(BaseNodeView):
+    request_type = "carve_continue"
+
+    def check_data_secret(self, data):
+        # no node id => check carve session id
+        auth_err = None
+        try:
+            self.session_id = data["session_id"]
+            self.carve_session = CarveSession.objects.get(session_id=self.session_id)
+            self.machine_serial_number = self.carve_session.machine_serial_number
+            self.ms = MachineSnapshot.objects.current().get(
+                source__module='zentral.contrib.osquery',
+                serial_number=self.machine_serial_number
+            )
+        except KeyError:
+            auth_err = "Missing session id"
+        except CarveSession.DoesNotExist:
+            auth_err = "Unknown session id"
+        except MachineSnapshot.DoesNotExist:
+            auth_err = "Unknown machine serial number"
+        if auth_err:
+            logger.error("APIAuthError %s", auth_err, extra=data)
+            raise APIAuthError(auth_err)
+        self.business_unit = self.ms.business_unit
+
+    def do_node_post(self, data):
+        data_data = data.pop("data")
+
+        block_id = data["block_id"]
+        cb = CarveBlock.objects.create(carve_session=self.carve_session,
+                                       block_id=int(block_id))
+        cb.file.save(block_id, SimpleUploadedFile(block_id, b64decode(data_data)))
+
+        session_finished = (CarveBlock.objects.filter(carve_session=self.carve_session).count()
+                            == self.carve_session.block_count)
+        probe_source = self.carve_session.probe_source
+        post_file_carve_events(self.machine_serial_number, self.user_agent, self.ip,
+                               [{"probe": {"id": probe_source.pk,
+                                           "name": probe_source.name},
+                                 "action": "continue",
+                                 "block_id": block_id,
+                                 "block_size": len(data_data),
+                                 "session_finished": session_finished,
+                                 "session_id": self.session_id}])
+        if session_finished:
+            post_finished_file_carve_session(self.session_id)
+        return {}
+
+
 class DistributedReadView(BaseNodeView):
     request_type = "distributed_read"
 
@@ -166,17 +244,20 @@ class DistributedWriteView(BaseNodeView):
 
     @transaction.non_atomic_requests
     def do_node_post(self, data):
-        payloads = []
+        dq_payloads = []
+        fc_payloads = []
 
         def get_probe_pk(key):
             return int(key.split('_')[-1])
 
         queries = data['queries']
+
         ps_d = {ps.id: ps
                 for ps in ProbeSource.objects.filter(
-                    model='OsqueryDistributedQueryProbe',
                     pk__in=[get_probe_pk(k) for k in queries.keys()
                             if not k.startswith(INVENTORY_DISTRIBUTED_QUERY_PREFIX)]
+                ).filter(
+                    Q(model='OsqueryDistributedQueryProbe') | Q(model='OsqueryFileCarveProbe')
                 )}
         inventory_snapshot = []
         for key, val in queries.items():
@@ -210,10 +291,18 @@ class DistributedWriteView(BaseNodeView):
                             payload["empty"] = True
                     else:
                         raise ValueError("Unknown distributed query status '{}'".format(status))
-                    payloads.append(payload)
-            post_distributed_query_result(self.machine_serial_number,
-                                          self.user_agent, self.ip,
-                                          payloads)
+                    if probe_source.model == 'OsqueryDistributedQueryProbe':
+                        dq_payloads.append(payload)
+                    else:
+                        fc_payloads.append(payload)
+            if dq_payloads:
+                post_distributed_query_result(self.machine_serial_number,
+                                              self.user_agent, self.ip,
+                                              dq_payloads)
+            if fc_payloads:
+                post_file_carve_events(self.machine_serial_number,
+                                       self.user_agent, self.ip,
+                                       fc_payloads)
         if inventory_snapshot:
             self.commit_inventory_query_result(inventory_snapshot)
         return {}

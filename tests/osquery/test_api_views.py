@@ -215,7 +215,7 @@ class OsqueryAPIViewsTestCase(TestCase):
             model="OsqueryDistributedQueryProbe",
             body={"distributed_query": dq}
         )
-        dq_name = "q_{}".format(probe_source.pk)
+        dq_name = "dq_{}".format(probe_source.pk)
         # distributed read
         response = self.post_as_json("distributed_read", {"node_key": node_key})
         self.assertEqual(response.status_code, 200)
@@ -262,7 +262,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         )
         response = self.post_as_json("distributed_write",
                                      {"node_key": node_key,
-                                      "queries": {"q_{}".format(probe_source.pk): [{"username": "godzilla"}]}})
+                                      "queries": {"dq_{}".format(probe_source.pk): [{"username": "godzilla"}]}})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {})
 

@@ -21,7 +21,7 @@ class OsqueryDistributedQueryProbe(BaseProbe):
     def load_validated_data(self, data):
         super().load_validated_data(data)
         self.distributed_query = data["distributed_query"]
-        self.distributed_query_name = "q_{}".format(self.pk)
+        self.distributed_query_name = "dq_{}".format(self.pk)
 
     def test_event(self, event):
         if not super().test_event(event):

@@ -44,7 +44,7 @@ class OsqueryDistributedQueryProbeTestCase(TestCase):
             body={"distributed_query": cls.query_1}
         )
         cls.probe_1 = cls.probe_source_1.load()
-        cls.query_1_key = "q_{}".format(cls.probe_1.pk)
+        cls.query_1_key = "dq_{}".format(cls.probe_1.pk)
         # probe 2, processes
         cls.query_2 = "select * from processes"
         cls.probe_source_2 = ProbeSource.objects.create(
@@ -54,7 +54,7 @@ class OsqueryDistributedQueryProbeTestCase(TestCase):
             body={"distributed_query": cls.query_2}
         )
         cls.probe_2 = cls.probe_source_2.load()
-        cls.query_2_key = "q_{}".format(cls.probe_2.pk)
+        cls.query_2_key = "dq_{}".format(cls.probe_2.pk)
         # probe windows, system_info
         cls.query_windows = "select * from system_info"
         cls.probe_source_windows = ProbeSource.objects.create(
@@ -65,7 +65,7 @@ class OsqueryDistributedQueryProbeTestCase(TestCase):
                   "distributed_query": cls.query_windows}
         )
         cls.probe_windows = cls.probe_source_windows.load()
-        cls.query_windows_key = "q_{}".format(cls.probe_windows.pk)
+        cls.query_windows_key = "dq_{}".format(cls.probe_windows.pk)
         # clear
         all_probes.clear()
 
@@ -174,4 +174,4 @@ class OsqueryDistributedQueryProbeTestCase(TestCase):
         # it's there
         queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(default_machine)
         self.assertEqual(len(queries), 1)
-        self.assertEqual(queries["q_{}".format(probe_source_ok.pk)], "SELECT 'QUERY OK';")
+        self.assertEqual(queries["dq_{}".format(probe_source_ok.pk)], "SELECT 'QUERY OK';")

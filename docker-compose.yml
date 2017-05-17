@@ -53,6 +53,7 @@ services:
       - elastic
       - rabbitmq
     volumes:
+      - web_media_root:/var/zentral
       - prometheus_sd:/prometheus_sd
 
 networks:

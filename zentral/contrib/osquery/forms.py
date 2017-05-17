@@ -1,7 +1,9 @@
 from django import forms
 from zentral.core.probes.forms import BaseCreateProbeForm
 from zentral.utils.forms import validate_sha256
-from .probes import OsqueryProbe, OsqueryComplianceProbe, OsqueryDistributedQueryProbe, OsqueryFIMProbe
+from .probes import (OsqueryProbe, OsqueryComplianceProbe,
+                     OsqueryDistributedQueryProbe, OsqueryFileCarveProbe,
+                     OsqueryFIMProbe)
 
 
 # OsqueryProbe
@@ -276,6 +278,21 @@ class DistributedQueryForm(forms.Form):
 class CreateDistributedQueryProbeForm(BaseCreateProbeForm, DistributedQueryForm):
     model = OsqueryDistributedQueryProbe
     field_order = ("name", "query")
+
+
+# OsqueryFileCarveProbe
+
+
+class FileCarveForm(forms.Form):
+    path = forms.CharField(help_text="Example: /Users/%/Downloads/%.jpg or /etc/hosts")
+
+    def get_body(self):
+        return {'path': self.cleaned_data['path']}
+
+
+class CreateFileCarveProbeForm(BaseCreateProbeForm, FileCarveForm):
+    model = OsqueryFileCarveProbe
+    field_order = ("name", "path")
 
 
 # FIM probes

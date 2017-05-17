@@ -347,6 +347,9 @@ class BaseProbe(object):
             return False
         return True
 
+    def get_extra_links(self):
+        return []
+
     # links to the matching events in the event stores
     def get_extra_event_search_dict(self):
         return {}
