@@ -136,6 +136,7 @@ class MTObjectManager(models.Manager):
                     obj.save(**extra_obj_save_kwargs)
                     for k, l in m2m_fields:
                         setattr(obj, k, l)
+                    obj.full_clean()
             except IntegrityError as integrity_error:
                 # the object has been concurrently created ?
                 try:
