@@ -8,10 +8,20 @@ urlpatterns = [
 
     # Pkg infos
     url(r'^pkg_infos/$', views.PkgInfosView.as_view(), name='pkg_infos'),
+    url(r'^pkg_infos/(?P<pk>\d+)/update_catalog/$',
+        views.UpdatePkgInfoCatalogView.as_view(),
+        name='update_pkg_info_catalog'),
+    url(r'^pkg_info_names/(?P<pk>\d+)/$', views.PkgInfoNameView.as_view(), name='pkg_info_name'),
 
     # Catalogs
     url(r'^catalogs/$', views.CatalogsView.as_view(), name='catalogs'),
+    url(r'^catalogs/create/$', views.CreateCatalogView.as_view(), name='create_catalog'),
+    url(r'^catalogs/(?P<pk>\d+)/$', views.CatalogView.as_view(), name='catalog'),
     url(r'^catalogs/(?P<pk>\d+)/update/$', views.UpdateCatalogView.as_view(), name='update_catalog'),
+    url(r'^catalogs/(?P<pk>\d+)/update_priority/$',
+        views.UpdateCatalogPriorityView.as_view(),
+        name='update_catalog_priority'),
+    url(r'^catalogs/(?P<pk>\d+)/delete/$', views.DeleteCatalogView.as_view(), name='delete_catalog'),
 
     # Sub manifests
     url(r'^sub_manifests/$', views.SubManifestsView.as_view(), name='sub_manifests'),

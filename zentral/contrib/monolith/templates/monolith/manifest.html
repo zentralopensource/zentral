@@ -9,14 +9,13 @@
 </ol>
 
 <h2>Manifest <i>{{ object }}</i></h2>
-<dl class="dl-horizontal">
-</dl>
 
 <p>
   <a href="{% url 'monolith:manifest_enrollment' object.id %}" class="btn btn-default">Enrollment</a>
 </p>
 
 <h3>{{ manifest_catalogs|length }} Catalog{{ manifest_catalogs|length|pluralize }}</h3>
+
 <p><a class="btn btn-default" href="{% url 'monolith:add_manifest_catalog' object.id %}">Add</a></p>
 
 <table class="table">
@@ -31,7 +30,7 @@
   <tbody>
     {% for manifest_catalog in manifest_catalogs %}
     <tr>
-      <td>{{ manifest_catalog.catalog }}</td>
+      <td><a href="{% url 'monolith:catalog' manifest_catalog.catalog.id %}">{{ manifest_catalog.catalog }}</a></td>
       <td>{{ manifest_catalog.catalog.priority }}</td>
       <td>
         {% for tag in manifest_catalog.tags.all %}

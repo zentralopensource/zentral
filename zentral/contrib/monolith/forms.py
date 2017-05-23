@@ -5,8 +5,39 @@ from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from .attachments import MobileconfigFile, PackageFile
 from .exceptions import AttachmentError
 from .models import (Catalog, Manifest, ManifestCatalog, ManifestSubManifest,
-                     PkgInfoName, SubManifest,
+                     PkgInfo, PkgInfoName, SubManifest,
                      SubManifestPkgInfo, SubManifestAttachment)
+
+
+class PkgInfoSearchForm(forms.Form):
+    name = forms.CharField(label="Name", required=False,
+                           widget=forms.TextInput(attrs={"placeholder": "name"}))
+    catalog = forms.ModelChoiceField(queryset=Catalog.objects.filter(archived_at__isnull=True),
+                                     required=False)
+
+    def is_initial(self):
+        return not {k: v for k, v in self.cleaned_data.items() if v}
+
+
+class UpdatePkgInfoCatalogForm(forms.ModelForm):
+    """Force the selection of only one catalog to conform to our use of munki
+
+    This is sadly hacky in order to make the m2m relation behave like a fk in the form
+    """
+    catalogs = forms.ModelChoiceField(queryset=Catalog.objects.all(), required=True, empty_label=None)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initial = {"catalogs": self.instance.catalogs.all()[0]}
+
+    def clean_catalogs(self):
+        catalogs = self.cleaned_data["catalogs"]
+        if catalogs:
+            return [catalogs]
+
+    class Meta:
+        fields = ("catalogs",)
+        model = PkgInfo
 
 
 class ManifestForm(forms.ModelForm):

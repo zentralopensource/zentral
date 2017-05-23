@@ -8,6 +8,7 @@ from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.queues import queues
+from zentral.utils.http import user_agent_and_ip_address_from_request
 from .template_loader import TemplateLoader
 from . import register_event_type
 
@@ -27,19 +28,62 @@ def render_notification_part(ctx, event_type, part):
         return msg
 
 
+class EventRequestUser(object):
+    user_attr_list = ["id", "username", "email", "is_remote", "is_superuser"]
+
+    def __init__(self, **kwargs):
+        for attr in self.user_attr_list:
+            setattr(self, attr, kwargs.get(attr))
+
+    @classmethod
+    def build_from_user(cls, user):
+        if user and user.is_authenticated:
+            kwargs = {attr: getattr(user, attr) for attr in cls.user_attr_list}
+            return cls(**kwargs)
+
+    def serialize(self):
+        d = {}
+        for attr in self.user_attr_list:
+            val = getattr(self, attr)
+            if val is not None:
+                d[attr] = val
+        return d
+
+
 class EventRequest(object):
     user_agent_str_length = 50
 
-    def __init__(self, user_agent, ip):
+    def __init__(self, user_agent, ip, user=None):
         self.user_agent = user_agent
         self.ip = ip
+        self.user = user
+
+    @classmethod
+    def build_from_request(cls, request):
+        user_agent, ip = user_agent_and_ip_address_from_request(request)
+        user = EventRequestUser.build_from_user(request.user)
+        if user_agent or ip or user:
+            return EventRequest(user_agent, ip, user)
+
+    @classmethod
+    def deserialize(cls, request_d):
+        kwargs = {k: request_d.get(k) for k in ("user_agent", "ip")}
+        user_d = request_d.get("user")
+        if user_d:
+            kwargs["user"] = EventRequestUser(**user_d)
+        return cls(**kwargs)
 
     def serialize(self):
-        return {k: v for k, v in (("user_agent", self.user_agent),
-                                  ("ip", self.ip)) if v}
+        d = {k: v for k, v in (("user_agent", self.user_agent),
+                               ("ip", self.ip)) if v}
+        if self.user:
+            d["user"] = self.user.serialize()
+        return d
 
     def __str__(self):
         l = []
+        if self.user and self.user.username:
+            l.append(self.user.username)
         if self.ip:
             l.append(self.ip)
         if self.user_agent:
@@ -79,7 +123,7 @@ class EventMetadata(object):
         kwargs['uuid'] = kwargs.pop('id')
         request_d = kwargs.pop('request', None)
         if request_d:
-            kwargs['request'] = EventRequest(**request_d)
+            kwargs['request'] = EventRequest.deserialize(request_d)
         return cls(**kwargs)
 
     def serialize(self, machine_metadata=True):

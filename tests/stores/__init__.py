@@ -1,4 +1,4 @@
-from zentral.core.events.base import EventMetadata, EventRequest, BaseEvent, register_event_type
+from zentral.core.events.base import EventMetadata, EventRequest, EventRequestUser, BaseEvent, register_event_type
 
 
 class TestEvent1(BaseEvent):
@@ -22,7 +22,8 @@ def make_event(idx=0, first_type=True, with_request=True):
         event_cls = TestEvent2
     if with_request:
         request = EventRequest("python_unittest_useragent",
-                               "10.0.0.1")
+                               "10.0.0.1",
+                               EventRequestUser(username="yolo"))
     else:
         request = None
     return event_cls(EventMetadata(event_cls.event_type,

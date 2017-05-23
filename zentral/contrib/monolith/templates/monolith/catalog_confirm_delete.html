@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:catalogs' %}">Monolith catalogs</a></li>
+  <li class="active">Delete catalog {{ object }}</li>
+</ol>
+
+<h2>Delete catalog {{ object }}</h2>
+
+<form method="POST">{% csrf_token %}
+  <p>Do you really want to delete this catalog?</p>
+  <p>
+    <a class="btn btn-default" href="{% url 'monolith:catalogs' %}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Yes</button>
+  </p>
+</form>
+{% endblock %}

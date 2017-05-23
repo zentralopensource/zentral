@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{%  url 'monolith:pkg_infos' %}">Monolith pkg infos</a></li>
+  <li><a href="{% url 'monolith:pkg_info_name' object.name.id %}">{{ object.name }}</a></li>
+  <li class="active">
+    Update version {{ object.version}} catalog
+  </li>
+</ol>
+
+<h2>Update {{ object.name }} {{ object.version }} catalog</h2>
+
+<form method="POST">{% csrf_token %}
+  {{ form|bootstrap }}
+  <a class="btn btn-default" href="{% url 'monolith:pkg_info_name' object.name.id %}">Cancel</a>
+  <button class="btn btn-primary" type="submit">Save</button>
+</form>
+{% endblock %}

@@ -19,6 +19,7 @@ class EventStore(BaseEventStore):
         index                 integer,
         user_agent            text,
         ip                    inet,
+        "user"                jsonb,
         payload               jsonb,
         created_at            timestamp,
         stored_at             timestamp default current_timestamp
@@ -66,9 +67,13 @@ class EventStore(BaseEventStore):
         if metadata.request is not None:
             doc['user_agent'] = metadata.request.user_agent
             doc['ip'] = metadata.request.ip
+            user = metadata.request.user
+            if user:
+                doc['user'] = Json(user.serialize())
         else:
             doc['user_agent'] = None
             doc['ip'] = None
+            doc['user'] = None
         doc['payload'] = Json(event.payload)
         return doc
 
@@ -76,9 +81,9 @@ class EventStore(BaseEventStore):
         doc.pop('stored_at')
         event_type = doc.pop('event_type')
         payload = doc.pop('payload')
-        user_agent, ip = doc.pop('user_agent'), doc.pop('ip')
-        if user_agent or ip:
-            doc['request'] = EventRequest(user_agent, ip)
+        request_d = {k: v for k, v in ((a, doc.pop(a)) for a in ('user_agent', 'ip', 'user')) if v}
+        if request_d:
+            doc['request'] = EventRequest.deserialize(request_d)
         else:
             doc['request'] = None
         event_cls = event_cls_from_type(event_type)
@@ -93,10 +98,10 @@ class EventStore(BaseEventStore):
         with self._conn:
             doc = self._serialize_event(event)
             with self._conn.cursor() as cur:
-                cur.execute("insert into events (machine_serial_number, "
-                            "event_type, uuid, index, user_agent, ip, payload, created_at) "
-                            "values (%(machine_serial_number)s, %(event_type)s, "
-                            "%(uuid)s, %(index)s, %(user_agent)s, %(ip)s, %(payload)s, %(created_at)s)",
+                cur.execute('insert into events (machine_serial_number, '
+                            'event_type, uuid, index, user_agent, ip, "user", payload, created_at) '
+                            'values (%(machine_serial_number)s, %(event_type)s, '
+                            '%(uuid)s, %(index)s, %(user_agent)s, %(ip)s, %(user)s, %(payload)s, %(created_at)s)',
                             doc)
 
     # machine events

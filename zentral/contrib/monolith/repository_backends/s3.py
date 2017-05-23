@@ -8,7 +8,7 @@ from .base import BaseRepository
 
 class Repository(BaseRepository):
     def __init__(self, config):
-        super().__init__()
+        super().__init__(config)
         self.aws_access_key_id = config["aws_access_key_id"]
         self.aws_secret_access_key = config["aws_secret_access_key"]
         self.signature_version = config.get("signature_version", None)

@@ -1,5 +1,5 @@
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
-from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
+from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, EventRequestUser, register_event_type
 
 
 ALL_EVENTS_SEARCH_DICT = {"event_type": ["zentral_login", "zentral_logout", "zentral_failed_login"]}
@@ -34,29 +34,16 @@ register_event_type(FailedLoginEvent)
 # signals callbacks
 
 
-def make_event_metadata_request(request):
-    user_agent = request.META.get("HTTP_USER_AGENT")
-    ip = request.META.get("HTTP_X_REAL_IP")
-    if user_agent or ip:
-        return EventRequest(user_agent, ip)
-
-
-def make_event_payload(user):
-    if not user or not user.is_authenticated:
-        return None
-    return {"user": {"id": user.pk,
-                     "username": user.username,
-                     "email": user.email,
-                     "is_remote": user.is_remote,
-                     "is_superuser": user.is_superuser}}
-
-
 def post_event(event_cls, request, user):
-    payload = make_event_payload(user)
-    if not payload:
-        return
+    request = EventRequest.build_from_request(request)
+    payload = {}
+    # TODO: check if user can be different than request.user
+    # remove the following bit if not
+    eru = EventRequestUser.build_from_user(user)
+    if eru:
+        payload["user"] = eru.serialize()
     metadata = EventMetadata(event_cls.event_type,
-                             request=make_event_metadata_request(request),
+                             request=request,
                              tags=event_cls.tags)
     event = event_cls(metadata, payload)
     event.post()
@@ -79,7 +66,7 @@ user_logged_out.connect(user_logged_out_callback)
 def user_login_failed_callback(sender, credentials, **kwargs):
     request = kwargs.get("request")  # introduced in django 1.11
     if request:
-        request = make_event_metadata_request(request)
+        request = EventRequest.build_from_request(request)
     metadata = EventMetadata(FailedLoginEvent.event_type,
                              request=request,
                              tags=FailedLoginEvent.tags)

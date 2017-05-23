@@ -5,7 +5,7 @@ from .base import BaseRepository
 
 class Repository(BaseRepository):
     def __init__(self, config):
-        super().__init__()
+        super().__init__(config)
         self.root = config["root"]
 
     def serialize_for_event(self):

@@ -5,10 +5,12 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'monolith:catalogs' %}">Monolith catalogs</a></li>
-  <li class="active">Update catalog {{ object }} priority</li>
+  <li class="active">
+    {{ title }}
+  </li>
 </ol>
 
-<h2>Update catalog {{ catalog }} priority</h2>
+<h2>{{ title }}</h2>
 
 <form method="POST">{% csrf_token %}
   {{ form|bootstrap }}

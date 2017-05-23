@@ -10,6 +10,7 @@ from django.views.generic.edit import FormView
 from zentral.conf import settings
 from zentral.contrib.inventory.models import BusinessUnit
 from zentral.core.exceptions import ImproperlyConfigured
+from .http import user_agent_and_ip_address_from_request
 
 logger = logging.getLogger('zentral.utils.api_views')
 
@@ -102,8 +103,7 @@ class JSONPostAPIView(View):
             self.check_request_secret(request, *args, **kwargs)
         except APIAuthError as auth_err:
             return HttpResponseForbidden(str(auth_err))
-        self.user_agent = request.META.get("HTTP_USER_AGENT", "")
-        self.ip = request.META.get("HTTP_X_REAL_IP", "")
+        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
         return super().dispatch(request, *args, **kwargs)
 
     def check_data_secret(self, data):

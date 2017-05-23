@@ -2,11 +2,12 @@ from datetime import datetime
 import logging
 import os.path
 import plistlib
+import urllib.parse
 from django.contrib.postgres.fields import JSONField
 from django.core import signing
-from django.core.urlresolvers import reverse
 from django.db import models, connection
 from django.db.models import Q
+from django.urls import reverse
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
@@ -44,10 +45,25 @@ class Catalog(models.Model):
             pkginfo_list.append(pkginfo.get_signed_pkg_info())
         return plistlib.dumps(pkginfo_list)
 
+    def get_absolute_url(self):
+        return reverse("monolith:catalog", args=(self.pk,))
+
+    def get_pkg_info_url(self):
+        return "{}?{}".format(reverse("monolith:pkg_infos"),
+                              urllib.parse.urlencode({"catalog": self.pk}))
+
+    def can_be_deleted(self):
+        return (monolith_conf.repository.manual_catalog_management
+                and self.pkginfo_set.filter(archived_at__isnull=True).count() == 0
+                and self.manifestcatalog_set.count() == 0)
+
 
 class PkgInfoCategory(models.Model):
     name = models.CharField(max_length=256, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
 
 
 class PkgInfoName(models.Model):
@@ -65,19 +81,30 @@ class PkgInfoName(models.Model):
 
 
 class PkgInfoManager(models.Manager):
-    def alles(self):
-        query = """
-        select pn.id, pn.name, pi.id, pi.version, c.id, c.name
-        from monolith_pkginfoname as pn
-        join monolith_pkginfo as pi on (pi.name_id = pn.id)
-        join monolith_pkginfo_catalogs as pc on (pc.pkginfo_id = pi.id)
-        join monolith_catalog as c on (c.id = pc.catalog_id)
-        where pi.archived_at is null
-        and c.archived_at is null
-        order by pn.name, pn.id, pi.version, pi.id, c.name, c.id
-        """
+    def alles(self, **kwargs):
+        query = (
+            "select pn.id, pn.name, pi.id, pi.version, c.id, c.name "
+            "from monolith_pkginfoname as pn "
+            "join monolith_pkginfo as pi on (pi.name_id = pn.id) "
+            "join monolith_pkginfo_catalogs as pc on (pc.pkginfo_id = pi.id) "
+            "join monolith_catalog as c on (c.id = pc.catalog_id) "
+            "where pi.archived_at is null "
+        )
+        params = []
+        name = kwargs.get("name")
+        if name:
+            params.append("%{}%".format(connection.ops.prep_for_like_query(name)))
+            query = "{} and UPPER(pn.name) LIKE UPPER(%s) ".format(query)
+        catalog = kwargs.get("catalog")
+        if catalog:
+            params.append(catalog.id)
+            query = "{} and c.id = %s ".format(query)
+        query = (
+          "{} and c.archived_at is null "
+          "order by pn.name, pn.id, pi.version, pi.id, c.name, c.id"
+        ).format(query)
         cursor = connection.cursor()
-        cursor.execute(query)
+        cursor.execute(query, params)
         current_pn = current_pn_id = current_pi = current_pi_id = None
         name_c = info_c = 0
         pkg_name_list = []
@@ -96,9 +123,9 @@ class PkgInfoManager(models.Manager):
                     pkg_name_list.append(current_pn)
                     name_c += 1
                 current_pn_id = pn_id
-                current_pn = {'name': None,
+                current_pn = {'id': pn_id,
+                              'name': name,
                               'pkg_infos': []}
-            current_pn['name'] = name
         if current_pi:
             current_pn['pkg_infos'].append(current_pi)
             info_c += 1
@@ -147,6 +174,9 @@ class PkgInfo(models.Model):
                     ext
                 )
         return pkg_info
+
+    def get_absolute_url(self):
+        return "{}#{}".format(reverse("monolith:pkg_info_name", args=(self.name.id,)), self.pk)
 
 
 SUB_MANIFEST_PKG_INFO_KEY_CHOICES = (

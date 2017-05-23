@@ -53,7 +53,13 @@
 <table class="table">
   {% for name, smo in key_list %}
   <tr>
-    <td class="col-md-6">{{ name }}</td>
+    <td class="col-md-6">
+      {% if smo.pkg_info_name %}
+      <a href="{% url 'monolith:pkg_info_name' smo.pkg_info_name.id %}">{{ name }}</a>
+      {% else %}
+      {{ name }}
+      {% endif %}
+    </td>
     {% if smo.type %}
     <td class="col-md-4">{{ smo.get_type_display }}</td>
     <td class="col-md-2">

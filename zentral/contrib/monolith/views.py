@@ -16,14 +16,16 @@ from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.api_views import (API_SECRET,
                                      APIAuthError, make_secret, verify_secret,
                                      SignedRequestHeaderJSONPostAPIView)
+from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
-from .events import post_monolith_munki_request, post_monolith_sync_catalogs_request
+from .events import post_monolith_munki_request, post_monolith_repository_updates, post_monolith_sync_catalogs_request
 from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm, DeleteManifestSubManifestForm,
                     ManifestForm,
+                    PkgInfoSearchForm, UpdatePkgInfoCatalogForm,
                     SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm)
-from .models import (Catalog, Manifest, ManifestEnrollmentPackage, PkgInfo,
+from .models import (Catalog, Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
 from .osx_package.builder import MunkiMonolithConfigPkgBuilder
 from .utils import build_manifest_enrollment_package
@@ -42,13 +44,73 @@ class WebHookView(LoginRequiredMixin, TemplateView):
         return context
 
 
+# Pkg infos
+
+
 class PkgInfosView(LoginRequiredMixin, TemplateView):
     template_name = "monolith/pkg_info_list.html"
 
     def get_context_data(self, **kwargs):
         ctx = super(PkgInfosView, self).get_context_data(**kwargs)
-        ctx['name_number'], ctx['info_number'], ctx['pkg_names'] = PkgInfo.objects.alles()
+        form = PkgInfoSearchForm(self.request.GET)
+        form.is_valid()
+        ctx['form'] = form
+        ctx['name_number'], ctx['info_number'], ctx['pkg_names'] = PkgInfo.objects.alles(**form.cleaned_data)
+        if not form.is_initial():
+            bc = [(reverse("monolith:pkg_infos"), "Monolith pkg infos"),
+                  (None, "Search")]
+        else:
+            bc = [(None, "Monolith pkg infos")]
+        ctx["breadcrumbs"] = bc
         return ctx
+
+
+class UpdatePkgInfoCatalogView(LoginRequiredMixin, UpdateView):
+    model = PkgInfo
+    form_class = UpdatePkgInfoCatalogForm
+
+    def form_valid(self, form):
+        old_catalogs = set(self.model.objects.get(pk=self.object.pk).catalogs.all())
+        response = super().form_valid(form)
+        new_catalogs = set(self.object.catalogs.all())
+        if old_catalogs != new_catalogs:
+            attr_diff = {}
+            removed = old_catalogs - new_catalogs
+            if removed:
+                attr_diff["removed"] = sorted(str(c) for c in removed)
+            added = new_catalogs - old_catalogs
+            if added:
+                attr_diff["added"] = sorted(str(c) for c in added)
+            post_monolith_repository_updates(monolith_conf.repository,
+                                             [{"pkg_info": {"name": self.object.name.name,
+                                                            "version": self.object.version,
+                                                            "diff": {"catalogs": attr_diff}},
+                                               "type": "pkg_info",
+                                               "action": "updated"}],
+                                             self.request)
+        return response
+
+
+class PkgInfoNameView(LoginRequiredMixin, DetailView):
+    model = PkgInfoName
+    template_name = "monolith/pkg_info_name.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        pkg_info_name = ctx["object"]
+        # sub manifests
+        sub_manifests = []
+        for smpi in pkg_info_name.submanifestpkginfo_set.select_related("sub_manifest").order_by("sub_manifest__name"):
+            sub_manifests.append((smpi.sub_manifest, smpi.get_key_display()))
+        ctx["sub_manifests"] = sub_manifests
+        # pkg infos
+        ctx["pkg_infos"] = list(pkg_info_name.pkginfo_set.select_related("name")
+                                                         .prefetch_related("catalogs")
+                                                         .filter(archived_at__isnull=True))
+        # to display update catalog links or not
+        ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
+        return ctx
+
 
 # Catalogs
 
@@ -56,11 +118,132 @@ class PkgInfosView(LoginRequiredMixin, TemplateView):
 class CatalogsView(LoginRequiredMixin, ListView):
     model = Catalog
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
+        if monolith_conf.repository.manual_catalog_management:
+            ctx["edit_catalog_view"] = "monolith:update_catalog"
+        else:
+            ctx["edit_catalog_view"] = "monolith:update_catalog_priority"
+        return ctx
 
-class UpdateCatalogView(LoginRequiredMixin, UpdateView):
+
+class CatalogView(LoginRequiredMixin, DetailView):
+    model = Catalog
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        catalog = ctx["object"]
+        # edit view
+        if monolith_conf.repository.manual_catalog_management:
+            ctx["edit_catalog_view"] = "monolith:update_catalog"
+        else:
+            ctx["edit_catalog_view"] = "monolith:update_catalog_priority"
+        # manifests
+        manifests = []
+        for mc in (catalog.manifestcatalog_set.select_related("manifest__meta_business_unit")
+                                              .prefetch_related("tags")
+                                              .all()
+                                              .order_by("manifest__meta_business_unit__name")):
+            manifests.append((mc.manifest, mc.tags.all()))
+        ctx["manifests"] = manifests
+        # pkg infos
+        ctx["pkg_infos"] = list(catalog.pkginfo_set.filter(archived_at__isnull=True))
+        return ctx
+
+
+class ManualCatalogManagementRequiredMixin(LoginRequiredMixin):
+    def dispatch(self, request, *args, **kwargs):
+        self.manual_catalog_management = monolith_conf.repository.manual_catalog_management
+        if not self.manual_catalog_management:
+            return HttpResponseForbidden("Automatic catalog management. "
+                                         "See configuration. "
+                                         "You can't create catalogs.")
+        return super().dispatch(request, *args, **kwargs)
+
+
+class CreateCatalogView(ManualCatalogManagementRequiredMixin, CreateView):
+    model = Catalog
+    fields = ['name', 'priority']
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['title'] = "Create catalog"
+        return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        post_monolith_repository_updates(monolith_conf.repository,
+                                         [{"catalog": {"name": self.object.name,
+                                                       "id": self.object.id,
+                                                       "priority": self.object.priority},
+                                           "type": "catalog",
+                                           "action": "added"}],
+                                         self.request)
+        return response
+
+
+class UpdateCatalogMixin(object):
+    def form_valid(self, form):
+        before_object = self.model.objects.get(pk=self.object.pk)
+        before = {f: getattr(before_object, f) for f in self.fields}
+        response = super().form_valid(form)
+        diff = {}
+        for f in self.fields:
+            before_val = before[f]
+            after_val = getattr(self.object, f)
+            if after_val != before_val:
+                diff[f] = {"removed": before_val,
+                           "added": after_val}
+        if diff:
+            post_monolith_repository_updates(monolith_conf.repository,
+                                             [{"catalog": {"name": self.object.name,
+                                                           "id": self.object.id,
+                                                           "diff": diff},
+                                               "type": "catalog",
+                                               "action": "updated"}],
+                                             self.request)
+        return response
+
+
+class UpdateCatalogView(ManualCatalogManagementRequiredMixin, UpdateCatalogMixin, UpdateView):
+    model = Catalog
+    fields = ['name', 'priority']
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['title'] = "Update catalog {}".format(ctx["object"])
+        return ctx
+
+
+class UpdateCatalogPriorityView(LoginRequiredMixin, UpdateCatalogMixin, UpdateView):
     model = Catalog
     fields = ['priority']
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['title'] = "Update catalog {} priority".format(ctx["object"])
+        return ctx
+
+
+class DeleteCatalogView(LoginRequiredMixin, DeleteView):
+    model = Catalog
     success_url = reverse_lazy("monolith:catalogs")
+
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        if not obj.can_be_deleted():
+            raise Http404("Catalog {} can't be deleted".format(obj))
+        return obj
+
+    def delete(self, request, *args, **kwargs):
+        response = super().delete(request, *args, **kwargs)
+        post_monolith_repository_updates(monolith_conf.repository,
+                                         [{"catalog": {"name": self.object.name},
+                                           "type": "catalog",
+                                           "action": "deleted"}],
+                                         request)
+        return response
 
 
 # Sub Manifests
@@ -591,8 +774,7 @@ class MRBaseView(View):
         except (KeyError, ValueError, APIAuthError):
             return HttpResponseForbidden("No no no!")
         self.machine_serial_number = api_data.get("machine_serial_number", None)
-        self.user_agent = request.META.get("HTTP_USER_AGENT", "")
-        self.ip = request.META.get("HTTP_X_REAL_IP", "")
+        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
         self.machine = MetaMachine(self.machine_serial_number)
         self.tags = self.machine.tags
         self.meta_business_unit = api_data['business_unit'].meta_business_unit

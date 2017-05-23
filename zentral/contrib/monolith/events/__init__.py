@@ -51,12 +51,15 @@ def post_monolith_sync_catalogs_request(user_agent, ip):
     event.post()
 
 
-def post_monolith_repository_updates(repository, payloads):
+def post_monolith_repository_updates(repository, payloads, request=None):
     event_class = MonolithRepositoryUpdateEvent
     repository_serialized_info = repository.serialize_for_event()
+    if request:
+        request = EventRequest.build_from_request(request)
     for index, payload in enumerate(payloads):
         metadata = EventMetadata(event_class.event_type,
                                  index=index,
+                                 request=request,
                                  tags=event_class.tags)
         payload.update({"repository": repository_serialized_info})
         event = event_class(metadata, payload)
