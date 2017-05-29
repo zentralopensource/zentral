@@ -286,15 +286,27 @@ class OSXApp(AbstractMTObject):
                                        .annotate(machinesnapshot_num=Count('machinesnapshot')))
 
 
+class CertificateManager(MTObjectManager):
+    def search(self, **kwargs):
+        qs = self.all()
+        common_name = kwargs.get("common_name")
+        if not common_name:
+            return []
+        else:
+            return qs.filter(common_name__icontains=common_name).order_by("common_name")
+
+
 class Certificate(AbstractMTObject):
-    common_name = models.TextField()
+    common_name = models.TextField(blank=True, null=True)
     organization = models.TextField(blank=True, null=True)
     organizational_unit = models.TextField(blank=True, null=True)
-    sha_1 = models.CharField(max_length=40)
+    sha_1 = models.CharField(max_length=40, blank=True, null=True)
     sha_256 = models.CharField(max_length=64, db_index=True)
     valid_from = models.DateTimeField()
     valid_until = models.DateTimeField()
     signed_by = models.ForeignKey('self', blank=True, null=True)
+
+    objects = CertificateManager()
 
 
 class OSXAppInstance(AbstractMTObject):

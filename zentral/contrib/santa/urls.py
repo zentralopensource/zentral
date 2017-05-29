@@ -14,6 +14,10 @@ urlpatterns = [
         views.UpdateProbeRuleView.as_view(), name='update_probe_rule'),
     url(r'^probes/(?P<probe_id>\d+)/rules/(?P<rule_id>\d+)/delete/$',
         views.DeleteProbeRuleView.as_view(), name='delete_probe_rule'),
+    url(r'probes/(?P<probe_id>\d+)/rules/pick_application/$',
+        views.PickRuleApplicationView.as_view(), name='pick_rule_app'),
+    url(r'probes/(?P<probe_id>\d+)/rules/pick_certificate/$',
+        views.PickRuleCertificateView.as_view(), name='pick_rule_cert'),
     # API
     url(r'^preflight/(?P<machine_id>\S+)$', csrf_exempt(views.PreflightView.as_view()), name='preflight'),
     url(r'^ruledownload/(?P<machine_id>\S+)$', csrf_exempt(views.RuleDownloadView.as_view()), name='ruledownload'),

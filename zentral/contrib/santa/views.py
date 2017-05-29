@@ -7,14 +7,16 @@ from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView, View
 from django.views.generic.edit import FormView
 from zentral.conf import settings
-from zentral.contrib.inventory.models import MachineSnapshot, MetaBusinessUnit, MetaMachine
+from zentral.contrib.inventory.models import Certificate, MachineSnapshot, MetaBusinessUnit, MetaMachine
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import (make_secret,
                                      SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView)
 from .conf import build_santa_conf
-from .forms import CreateProbeForm, RuleForm
 from .events import post_santa_events, post_santa_preflight
+from .forms import CertificateSearchForm, CollectedApplicationSearchForm, CreateProbeForm, RuleForm
+from .models import CollectedApplication
+from .probes import Rule
 from .osx_package.builder import SantaZentralEnrollPkgBuilder
 
 logger = logging.getLogger('zentral.contrib.santa.views')
@@ -74,6 +76,34 @@ class AddProbeRuleView(LoginRequiredMixin, FormView):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
         self.probe = self.probe_source.load()
         return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        initial = {}
+        self.collected_app = None
+        self.certificate = None
+        if "app_id" in self.request.GET:
+            try:
+                self.collected_app = CollectedApplication.objects.get(pk=self.request.GET["app_id"])
+            except (KeyError, CollectedApplication.DoesNotExist):
+                pass
+            else:
+                initial["rule_type"] = Rule.BINARY
+                initial["sha256"] = self.collected_app.sha_256
+        elif "cert_id" in self.request.GET:
+            try:
+                self.certificate = Certificate.objects.get(pk=self.request.GET["cert_id"])
+            except (KeyError, CollectedApplication.DoesNotExist):
+                pass
+            else:
+                initial["rule_type"] = Rule.CERTIFICATE
+                initial["sha256"] = self.certificate.sha_256
+        return initial
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["collected_app"] = self.collected_app
+        kwargs["certificate"] = self.certificate
+        return kwargs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -161,6 +191,48 @@ class DeleteProbeRuleView(LoginRequiredMixin, TemplateView):
                 probe_d.pop("rules")
         self.probe_source.update_body(func)
         return HttpResponseRedirect(self.probe_source.get_absolute_url("santa"))
+
+
+class PickRuleApplicationView(LoginRequiredMixin, TemplateView):
+    template_name = "santa/pick_rule_app.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['probes'] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("santa")
+        form = CollectedApplicationSearchForm(self.request.GET)
+        form.is_valid()
+        ctx['apps'] = CollectedApplication.objects.search(**form.cleaned_data)
+        ctx['form'] = form
+        return ctx
+
+
+class PickRuleCertificateView(LoginRequiredMixin, TemplateView):
+    template_name = "santa/pick_rule_cert.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
+        self.probe = self.probe_source.load()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['probes'] = True
+        ctx['probe_source'] = self.probe_source
+        ctx['probe'] = self.probe
+        ctx['cancel_url'] = self.probe_source.get_absolute_url("santa")
+        form = CertificateSearchForm(self.request.GET)
+        form.is_valid()
+        ctx['certs'] = Certificate.objects.search(**form.cleaned_data)
+        ctx['form'] = form
+        return ctx
 
 
 # API

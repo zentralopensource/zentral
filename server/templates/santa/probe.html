@@ -4,9 +4,18 @@
 <a name="santa"></a>
 <h3>Rule{{ probe.rules|length|pluralize }}  </h3>
 
-<p>
-  <a class="btn btn-default" href="{% url 'santa:add_probe_rule' object.id %}">Add rule</a>
-</p>
+<div class="dropdown" style="margin: 0 0 10px 0">
+  <button class="btn btn-default dropdown-toggle" type="button" id="addRule"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Add
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="addRule">
+    <li><a href="{% url 'santa:add_probe_rule' object.id %}">Simple rule</a></li>
+    <li><a href="{% url 'santa:pick_rule_app' object.id %}">Collected application rule</a></li>
+    <li><a href="{% url 'santa:pick_rule_cert' object.id %}">Collected certificate rule</a></li>
+  </ul>
+</div>
 
 {% for rule in probe.rules %}
 <div class="panel panel-default">
@@ -21,7 +30,49 @@
     </tr>
     <tr>
       <td>{{ rule.get_rule_type_display }}</td>
-      <td>{{ rule.sha256 }}</td>
+      <td>
+        {{ rule.sha256 }}
+        {% with rule.collected_applications as apps %}
+        {% with rule.collected_certificates as certs %}
+        {% if apps %}
+        {% for app in apps %}
+        <dl class="dl-horizontal">
+          <dt>name</dt>
+          <dd>{{ app.name }}</dd>
+          <dt>path</dt>
+          <dd>{{ app.path }}</dd>
+          {% if app.bundle %}
+          <dt>bundle id</dd>
+          <dd>{{ app.bundle.bundle_id }}</dd>
+          <dt>bundle name</dt>
+          <dd>{{ app.bundle.bundle_name }}</dd>
+          <dt>bundle version</dt>
+          <dd>{{ app.bundle.bundle_version_str }}</dd>
+          {% if app.bundle_path %}
+          <dt>bundle path</dt>
+          <dd>{{ app.bundle_path }}</dd>
+          {% endif %}
+          {% endif %}
+        </dl>
+        {% endfor %}
+        {% endif %}
+        {% if certs %}
+        {% for cert in certs %}
+        <dl class="dl-horizontal">
+          <dt>common name</dt>
+          <dd>{{ cert.common_name|default:"-" }}</dd>
+          <dt>organization</dt>
+          <dd>{{ cert.organization|default:"-" }}</dd>
+          <dt>organizational_unit</dt>
+          <dd>{{ cert.organizational_unit|default:"-" }}</dd>
+          <dt>validity</dt>
+          <dd>{{ cert.valid_from }} - {{ cert.valid_until }}</dd>
+        </dl>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+        {% endwith %}
+      </td>
     </tr>
     {% if rule.custom_msg %}
     <tr>

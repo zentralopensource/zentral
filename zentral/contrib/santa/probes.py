@@ -1,9 +1,12 @@
 import logging
 from django.core.urlresolvers import reverse_lazy
+from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 from rest_framework import serializers
+from zentral.contrib.inventory.models import Certificate
 from zentral.core.probes import register_probe_class
 from zentral.core.probes.base import BaseProbe, BaseProbeSerializer, PayloadFilter
+from .models import CollectedApplication
 
 logger = logging.getLogger("zentral.contrib.santa.probes")
 
@@ -67,6 +70,20 @@ class Rule(object):
             if val is None:
                 del d[key]
         return d
+
+    @cached_property
+    def collected_applications(self):
+        if self.rule_type == self.BINARY:
+            return list(CollectedApplication.objects.select_related("bundle").filter(sha_256=self.sha256))
+        else:
+            return []
+
+    @cached_property
+    def collected_certificates(self):
+        if self.rule_type == self.CERTIFICATE:
+            return list(Certificate.objects.filter(sha_256=self.sha256))
+        else:
+            return []
 
 
 class RuleSerializer(serializers.Serializer):
