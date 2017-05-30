@@ -53,6 +53,8 @@ class BaseNodeView(JSONPostAPIView):
             auth_err = "Missing node_key"
         except MachineSnapshot.DoesNotExist:
             auth_err = "Wrong node_key"
+        except MachineSnapshot.MultipleObjectsReturned:
+            auth_err = "Multiple current osquery machine snapshots for node key '{}'".format(data['node_key'])
         if auth_err:
             logger.error("APIAuthError %s", auth_err, extra=data)
             raise APIAuthError(auth_err)
