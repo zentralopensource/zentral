@@ -9,8 +9,9 @@ from django.views.generic.edit import FormView
 from zentral.conf import settings
 from zentral.contrib.inventory.models import Certificate, MachineSnapshot, MetaBusinessUnit, MetaMachine
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
+from zentral.core.events.base import post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
-from zentral.utils.api_views import (make_secret,
+from zentral.utils.api_views import (make_secret, APIAuthError,
                                      SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView)
 from .conf import build_santa_conf
 from .events import post_santa_events, post_santa_preflight
@@ -247,11 +248,22 @@ class BaseView(SignedRequestJSONPostAPIView):
 
 
 class PreflightView(BaseView):
+    def check_data_secret(self, data):
+        reported_serial_number = data['serial_num']
+        if reported_serial_number != self.machine_serial_number:
+            # the SN reported by osquery is not the one configured in the enrollment secret
+            auth_err = "osquery reported SN {} different from enrollment SN {}".format(reported_serial_number,
+                                                                                       self.machine_serial_number)
+            machine_info = {k: v for k, v in data.items()
+                            if k in ("hostname", "os_build", "os_version", "serial_num", "primary_user") and v}
+            post_machine_conflict_event(self.request, "zentral.contrib.santa",
+                                        reported_serial_number, self.machine_serial_number,
+                                        machine_info)
+            raise APIAuthError(auth_err)
+
     @transaction.non_atomic_requests
     def do_post(self, data):
-        machine_serial_number = data['serial_num']
-        assert(machine_serial_number == self.machine_serial_number)
-        post_santa_preflight(machine_serial_number,
+        post_santa_preflight(self.machine_serial_number,
                              self.user_agent,
                              self.ip,
                              data)
@@ -261,8 +273,8 @@ class PreflightView(BaseView):
                            'build': data['os_build']})
         tree = {'source': {'module': 'zentral.contrib.santa',
                            'name': 'Santa'},
-                'reference': machine_serial_number,
-                'serial_number': machine_serial_number,
+                'reference': self.machine_serial_number,
+                'serial_number': self.machine_serial_number,
                 'os_version': os_version,
                 'system_info': {'computer_name': data['hostname']},
                 'public_ip_address': self.ip,
