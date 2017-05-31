@@ -220,7 +220,7 @@ class OsqueryComplianceProbeTestCase(TestCase):
         # default machine has a subset of the queries
         default_machine = MockMetaMachine([], [], None, None)
         config = build_osquery_conf(default_machine)
-        self.assertCountEqual(["schedule"], config.keys())  # no file_paths, file_accesses or packs
+        self.assertCountEqual(["decorators", "schedule"], config.keys())  # no file_paths, file_accesses or packs
         schedule = config["schedule"]
         self.assertCountEqual([INVENTORY_QUERY_NAME,
                                self.query_pfu_key, self.query_pfg_key,
@@ -230,7 +230,7 @@ class OsqueryComplianceProbeTestCase(TestCase):
         # tag has all the queries
         tag_machine = MockMetaMachine([], [1], None, "SERVER")
         config = build_osquery_conf(tag_machine)
-        self.assertCountEqual(["schedule"], config.keys())  # no file_paths, file_accesses or packs
+        self.assertCountEqual(["decorators", "schedule"], config.keys())  # no file_paths, file_accesses or packs
         schedule = config["schedule"]
         self.assertCountEqual([INVENTORY_QUERY_NAME,
                                self.query_pfu_key, self.query_pfg_key,

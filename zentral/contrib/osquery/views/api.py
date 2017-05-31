@@ -1,9 +1,9 @@
-import json
 import logging
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
 from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
+from zentral.core.events.base import post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import JSONPostAPIView, verify_secret, APIAuthError
 from zentral.contrib.osquery.conf import (build_osquery_conf,
@@ -214,15 +214,29 @@ class DistributedWriteView(BaseNodeView):
 class LogView(BaseNodeView):
     request_type = "log"
 
+    def check_data_secret(self, data):
+        super().check_data_secret(data)
+        self.data_data = data.pop("data")
+        for r in self.data_data:
+            decorations = r.pop("decorations", None)
+            if decorations:
+                hardware_serial = decorations.get("hardware_serial")
+                if hardware_serial and hardware_serial != self.machine_serial_number:
+                    # the SN reported by osquery is not the one configured in the enrollment secret
+                    auth_err = "osquery reported SN {} different from enrollment SN {}".format(
+                        hardware_serial,
+                        self.machine_serial_number
+                    )
+                    post_machine_conflict_event(self.request, "zentral.contrib.osquery",
+                                                hardware_serial, self.machine_serial_number,
+                                                decorations)
+                    raise APIAuthError(auth_err)
+
     @transaction.non_atomic_requests
     def do_node_post(self, data):
         inventory_results = []
         other_results = []
-        data_data = data.pop('data')
-        if not isinstance(data_data, list):
-            # TODO verify. New since osquery 1.6.4 ?
-            data_data = [json.loads(data_data)]
-        for r in data_data:
+        for r in self.data_data:
             if r.get('name', None) == INVENTORY_QUERY_NAME:
                 inventory_results.append((r['unixTime'], r['snapshot']))
             else:

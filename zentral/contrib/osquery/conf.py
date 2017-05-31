@@ -30,6 +30,15 @@ OSX_APP_INSTANCE_QUERY = (
     "from apps;"
 )
 DEB_PACKAGE_QUERY = "select 'deb_packages' as table_name, * from deb_packages;"
+DECORATORS = {
+    "load": [
+        "SELECT computer_name FROM system_info",
+        "SELECT hostname FROM system_info",
+        "SELECT hardware_model FROM system_info",
+        "SELECT hardware_serial FROM system_info",
+        "SELECT uuid AS host_uuid FROM system_info"
+    ]
+}
 
 
 def get_inventory_queries_for_machine(machine):
@@ -91,7 +100,10 @@ def build_osquery_conf(machine):
             if file_path.file_access:
                 file_accesses.append(file_path.category)
 
-    conf = {'schedule': schedule}
+    conf = {
+        'decorators': DECORATORS,
+        'schedule': schedule
+    }
     if packs:
         conf['packs'] = packs
     if file_paths:

@@ -155,7 +155,7 @@ class OsqueryFIMProbeTestCase(TestCase):
         # default machine has a subset of the queries
         default_machine = MockMetaMachine([], [], None, None)
         config = build_osquery_conf(default_machine)
-        self.assertCountEqual(["schedule", "file_accesses", "file_paths"],
+        self.assertCountEqual(["decorators", "schedule", "file_accesses", "file_paths"],
                               config.keys())  # no packs
         schedule = config["schedule"]
         self.assertCountEqual([INVENTORY_QUERY_NAME,
@@ -175,7 +175,7 @@ class OsqueryFIMProbeTestCase(TestCase):
         # mbu has all the queries
         mbu_machine = MockMetaMachine([1], [], None, "SERVER")
         config = build_osquery_conf(mbu_machine)
-        self.assertCountEqual(["schedule", "file_accesses", "file_paths"],
+        self.assertCountEqual(["decorators", "schedule", "file_accesses", "file_paths"],
                               config.keys())  # no packs
         schedule = config["schedule"]
         self.assertCountEqual([INVENTORY_QUERY_NAME,

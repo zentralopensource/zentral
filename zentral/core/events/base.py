@@ -320,3 +320,31 @@ def post_command_events(message, source, tags):
                                              tags=CommandEvent.tags + tags)
                     event = CommandEvent(metadata, payload.copy())
                     event.post()
+
+
+# Zentral machine conflict
+# When the machine posting the data is not the machine which is configured
+
+
+class MachineConflictEvent(BaseEvent):
+    event_type = "zentral_machine_conflict"
+    tags = ["zentral"]
+    payload_aggregations = [
+        ("module", {"type": "terms", "bucket_number": 10, "label": "Modules"}),
+        ("enrollment_serial_number", {"type": "terms", "bucket_number": 10, "label": "Duplicated serial numbers"}),
+    ]
+
+
+register_event_type(MachineConflictEvent)
+
+
+def post_machine_conflict_event(request, module, reported_serial_number, enrollment_serial_number, machine_info):
+    metadata = EventMetadata(MachineConflictEvent.event_type,
+                             machine_serial_number=reported_serial_number,
+                             tags=MachineConflictEvent.tags,
+                             request=EventRequest.build_from_request(request))
+    payload = {"module": module,
+               "reported_machine_info": machine_info,
+               "enrollment_serial_number": enrollment_serial_number}
+    event = MachineConflictEvent(metadata, payload)
+    event.post()
