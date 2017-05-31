@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('monolith', '0022_auto_20170410_1431'),
+        ('inventory', '0020_machinesnapshotcommit_last_seen'),
     ]
 
     operations = [
