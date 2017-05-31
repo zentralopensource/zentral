@@ -23,14 +23,16 @@
   <thead>
     <tr>
       <th>Name</th>
-      <th>Bundle</th>
+      <th>Bundle / Path</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
     {% for app in apps %}
     <tr>
-      <td>{{ app.name }}</td>
+      <td>
+        {{ app.name }}
+      </td>
       <td>
         {% if app.bundle %}
         <dl class="dl-horizontal">
@@ -46,7 +48,7 @@
           {% endif %}
         </dl>
         {% else %}
-        -
+        {{ app.path }}
         {% endif %}
       </td>
       <td><a class="btn btn-default" href="{% url 'santa:add_probe_rule' probe_source.id %}?app_id={{ app.id }}">Create rule</a></td>

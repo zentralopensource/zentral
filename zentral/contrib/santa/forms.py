@@ -5,13 +5,15 @@ from .probes import SantaProbe, Rule
 
 
 class CertificateSearchForm(forms.Form):
-    common_name = forms.CharField(label="Common name", required=False,
-                                  widget=forms.TextInput(attrs={"placeholder": "common name"}))
+    query = forms.CharField(required=False,
+                            widget=forms.TextInput(attrs={"placeholder": "common name, organization",
+                                                          "size": 50}))
 
 
 class CollectedApplicationSearchForm(forms.Form):
     name = forms.CharField(label="Name", required=False,
-                           widget=forms.TextInput(attrs={"placeholder": "name"}))
+                           widget=forms.TextInput(attrs={"placeholder": "name",
+                                                         "size": 50}))
 
 
 class RuleForm(forms.Form):
@@ -25,8 +27,8 @@ class RuleForm(forms.Form):
         certificate = kwargs.pop("certificate", None)
         super().__init__(*args, **kwargs)
         if collected_app or certificate:
-            self.fields["rule_type"].widget.attrs["readonly"] = True
-            self.fields["sha256"].widget.attrs["readonly"] = True
+            self.fields["rule_type"].widget = forms.HiddenInput()
+            self.fields["sha256"].widget = forms.HiddenInput()
 
     def get_rule_d(self):
         return {f: v for f, v in self.cleaned_data.items() if v}

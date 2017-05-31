@@ -113,6 +113,14 @@ class AddProbeRuleView(LoginRequiredMixin, FormView):
         ctx['probe'] = self.probe
         ctx['add_rule'] = True
         ctx['cancel_url'] = self.probe_source.get_absolute_url("santa")
+        ctx['collected_app'] = self.collected_app
+        ctx['certificate'] = self.certificate
+        if self.collected_app:
+            ctx["title"] = "Add collected application santa rule"
+        elif self.certificate:
+            ctx["title"] = "Add collected certificate santa rule"
+        else:
+            ctx["title"] = "Add santa rule"
         return ctx
 
     def form_valid(self, form):
@@ -151,6 +159,7 @@ class UpdateProbeRuleView(LoginRequiredMixin, FormView):
         ctx['probe_source'] = self.probe_source
         ctx['probe'] = self.probe
         ctx['add_rule'] = False
+        ctx['title'] = "Update santa rule"
         ctx['cancel_url'] = self.probe_source.get_absolute_url("santa")
         return ctx
 
@@ -231,7 +240,7 @@ class PickRuleCertificateView(LoginRequiredMixin, TemplateView):
         ctx['cancel_url'] = self.probe_source.get_absolute_url("santa")
         form = CertificateSearchForm(self.request.GET)
         form.is_valid()
-        ctx['certs'] = Certificate.objects.search(**form.cleaned_data)
+        ctx['certs'] = CollectedApplication.objects.search_certificates(**form.cleaned_data)
         ctx['form'] = form
         return ctx
 

@@ -6,12 +6,60 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'probes:index' %}">Probes</a></li>
   <li><a href="{% url 'probes:probe' probe_source.id %}">{{ probe_source.name }}</a></li>
-  <li class="active">{% if add_rule %}Add{% else %}Update{% endif %} santa rule</li>
+  <li class="active">{{ title }}</li>
 </ol>
 
-<h2>{% if add_rule %}Add{% else %}Update{% endif %} santa rule</h2>
+<h2>{{ title }}</h2>
+
 <form method="POST">{% csrf_token %}
-  {{ form|bootstrap }}
+  {% if collected_app or certificate %}
+    {{ form.rule_type }}
+    {{ form.sha256 }}
+    {% if collected_app %}
+      <dl class="dl-horizontal">
+        <dt>name</dt>
+        <dd>{{ collected_app.name }}</dd>
+        <dt>path</dt>
+        <dd>{{ collected_app.path }}</dd>
+        {% if collected_app.bundle %}
+        <dt>bundle id</dd>
+        <dd>{{ collected_app.bundle.bundle_id }}</dd>
+        <dt>bundle name</dt>
+        <dd>{{ collected_app.bundle.bundle_name }}</dd>
+        <dt>bundle version</dt>
+        <dd>{{ collected_app.bundle.bundle_version_str }}</dd>
+        {% if collected_app.bundle_path %}
+        <dt>bundle path</dt>
+        <dd>{{ collected_app.bundle_path }}</dd>
+        {% endif %}
+        {% else %}
+        <dt>path</dt>
+        <dd>{{ collected_app.path }}</dd>
+        {% endif %}
+        <dt>sha 256</dt>
+        <dd>{{ collected_app.sha_256 }}</dt>
+      </dl>
+    {% else %}
+      <dl class="dl-horizontal">
+        <dt>common name</dt>
+        <dd>{{ certificate.common_name|default:"-" }}</dd>
+        <dt>organization</dt>
+        <dd>{{ certificate.organization|default:"-" }}</dd>
+        <dt>organizational unit</dt>
+        <dd>{{ certificate.organizational_unit|default:"-" }}</dd>
+        <dt>validity</dt>
+        <dd>{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
+        <dt>sha 256</dt>
+        <dd>{{ certificate.sha_256 }}</dt>
+      </dl>
+    {% endif %}
+    {{ form.policy|bootstrap }}
+  {% else %}
+  {{ form.policy|bootstrap }}
+  {{ form.rule_type|bootstrap }}
+  {{ form.sha256|bootstrap }}
+  {% endif %}
+  {{ form.custom_msg|bootstrap }}
   <a class="btn btn-default" href="{{ cancel_url }}">Cancel</a>
   <button class="btn btn-primary" type="submit">Save</button>
 </form>
