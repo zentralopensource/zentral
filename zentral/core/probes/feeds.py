@@ -2,6 +2,7 @@ from collections import OrderedDict
 from importlib import import_module
 import json
 import logging
+import os.path
 import pprint
 from urllib.parse import urlparse
 from django.utils import timezone
@@ -67,6 +68,22 @@ def get_feed_serializer_classes():
     yield from feed_serializers
 
 
+def get_feed_serializer_for_path(path):
+    with open(path, 'r') as f:
+        try:
+            feed_data = json.loads(f.read().replace("\\\n", " "))
+        except ValueError:
+            raise FeedError("Invalid JSON")
+    for feed_serializer_cls in get_feed_serializer_classes():
+        feed_serializer = feed_serializer_cls(data=feed_data)
+        if feed_serializer.is_valid():
+            return feed_serializer
+        else:
+            logger.warning("Feed serializer %s errors", feed_serializer_cls)
+            logger.warning(pprint.pformat(feed_serializer.errors))
+    raise FeedError("Unknown feed type")
+
+
 def get_feed_serializer(url):
     try:
         r = requests.get(url, stream=True)
@@ -90,16 +107,32 @@ def get_feed_serializer(url):
     raise FeedError("Unknown feed type")
 
 
-def update_or_create_feed(url):
-    feed_serializer = get_feed_serializer(url)
-    return Feed.objects.update_or_create(url=url, defaults={"name": feed_serializer.get_name(url)})
+def update_or_create_feed(url_or_path):
+    if url_or_path.startswith('https://') or url_or_path.startswith('http://'):
+        feed_serializer = get_feed_serializer(url_or_path)
+        return Feed.objects.update_or_create(url=url_or_path, defaults={"name": feed_serializer.get_name(url_or_path)})
+    else:
+        feed_path = Feed._meta.get_field('path').path
+        full_path = os.path.join(feed_path, url_or_path)
+        if not os.path.isfile(full_path):
+            raise FeedError("File {} not found".format(full_path))
+
+        feed_serializer = get_feed_serializer_for_path(full_path)
+        return Feed.objects.update_or_create(path=url_or_path, defaults={"name": feed_serializer.get_name(full_path)})
 
 
 def sync_feed(feed):
     now = timezone.now()
     # feed
     feed_updated = False
-    feed_serializer = get_feed_serializer(feed.url)
+
+    if feed.url:
+        feed_serializer = get_feed_serializer(feed.url)
+    elif feed.path:
+        feed_path = Feed._meta.get_field('path').path
+        full_path = os.path.join(feed_path, feed.path)
+        feed_serializer = get_feed_serializer_for_path(full_path)
+
     current_feed_name = feed_serializer.get_name(feed.url)
     if not feed.name == current_feed_name:
         feed_updated = True
