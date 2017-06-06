@@ -167,10 +167,16 @@ class InventoryClient(BaseInventory):
                     tree["os_version"] = os_version
                 # system info
                 system_info = dict((t, result[t])
-                                   for t in ("computer_name", "hardware_model",
-                                             "cpu_type", "cpu_logical_cores",
-                                             "physical_memory")
+                                   for t in ("computer_name", "hardware_model", "cpu_type")
                                    if result[t])
+                for t in ("cpu_logical_cores", "physical_memory"):
+                    try:
+                        v = int(result[t])
+                    except (TypeError, ValueError):
+                        pass
+                    else:
+                        if v > 0:
+                            system_info[t] = v
                 if system_info:
                     tree["system_info"] = system_info
                 if result["os_type"] == "OSX":
