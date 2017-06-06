@@ -21,3 +21,4 @@ requests
 setuptools
 sqlparse
 tqdm
+requests-aws4auth

@@ -3,11 +3,12 @@ import random
 import time
 import urllib.parse
 from dateutil import parser
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch.exceptions import ConnectionError, RequestError
 from zentral.core.events import event_from_event_d, event_tags, event_types
 from zentral.core.stores.backends.base import BaseEventStore
 from zentral.utils.rison import dumps as rison_dumps
+from requests_aws4auth import AWS4Auth
 
 logger = logging.getLogger('zentral.core.stores.backends.elasticsearch')
 
@@ -70,6 +71,23 @@ class EventStore(BaseEventStore):
     def __init__(self, config_d, test=False):
         super(EventStore, self).__init__(config_d)
         self._es = Elasticsearch(config_d['servers'])
+        auth = config_d.get("auth", {})
+        if auth.get("auth_id") and auth.get("auth_key") and auth.get("region"):
+            awsauth = AWS4Auth(auth['auth_id'], auth['auth_key'],
+                               auth['region'], 'es')
+
+            # this could break if you mix https and non-https servers
+            use_ssl = config_d['servers'][0].startswith("https://")
+
+            self._es = Elasticsearch(
+                hosts=config_d['servers'],
+                http_auth=awsauth,
+                use_ssl=use_ssl, verify_certs=use_ssl,
+                connection_class=RequestsHttpConnection
+                )
+        else:
+            self._es = Elasticsearch(config_d['servers'])
+
         self.index = config_d['index']
         self.read_index = config_d.get('read_index', self.index)
         self.kibana_base_url = config_d.get('kibana_base_url', None)
