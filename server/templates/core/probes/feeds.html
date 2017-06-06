@@ -34,7 +34,7 @@
   <table class="table">
     <thead>
       <th>Name</th>
-      <th>URL</th>
+      <th>URL/Path</th>
       <th>Created at</th>
       <th>Updated at</th>
     </thead>
@@ -42,7 +42,11 @@
     {% for feed in object_list %}
     <tr>
       <td><a href="{% url 'probes:feed' feed.id %}">{{ feed.name }}</a></td>
+      {% if feed.url %}
       <td><a href="{{ feed.url }}" target="_blank">{{ feed.url }}</a></td>
+      {% elif feed.path %}
+      <td>{{ feed.path }}</td>
+      {% endif %}
       <td>{{ feed.created_at }}</td>
       <td>{{ feed.updated_at }}</td>
     </tr>
