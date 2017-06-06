@@ -214,9 +214,27 @@ class APIClient(object):
 
         # system info
         system_info = {'computer_name': computer['general']['name'],
-                       'hardware_model': hardware['model_identifier'],
-                       'cpu_physical_cores': hardware['number_cores'],
-                       'physical_memory': computer['hardware']['total_ram'] * 2**20}
+                       'hardware_model': hardware['model_identifier']}
+        # cpu physical cores
+        try:
+            cpu_physical_cores = int(hardware['number_cores'])
+        except (TypeError, ValueError):
+            pass
+        else:
+            if cpu_physical_cores > 0:
+                system_info['cpu_physical_cores'] = cpu_physical_cores
+            else:
+                logger.warning("%s computer %s: cpu physical cores <= 0", self.api_base_url, jamf_id)
+        # physical memory
+        try:
+            physical_memory = int(computer['hardware']['total_ram']) * 2**20
+        except (TypeError, ValueError):
+            pass
+        else:
+            if physical_memory > 0:
+                system_info['physical_memory'] = physical_memory
+            else:
+                logger.warning("%s computer %s physical memory <= 0 MB", self.api_base_url, jamf_id)
         # cpu type = processor_type + processor_speed_mhz
         cpu_type_items = []
         processor_type = hardware["processor_type"]
@@ -231,6 +249,8 @@ class APIClient(object):
         else:
             if processor_speed_mhz > 0:
                 cpu_type_items.append("@{}MHZ".format(processor_speed_mhz))
+            else:
+                logger.warning("%s computer %s cpu speed <= 0 MHz", self.api_base_url, jamf_id)
         if cpu_type_items:
             system_info['cpu_type'] = " ".join(cpu_type_items)
         ct['system_info'] = system_info
