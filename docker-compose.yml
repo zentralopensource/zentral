@@ -34,6 +34,7 @@ services:
     volumes:
       - ./conf/start/docker/nginx/conf.d/:/etc/nginx/conf.d/
       - ./conf/start/docker/tls:/etc/nginx/tls
+      - web_static_root:/zentral_static
   web:
     extends:
       file: docker-compose.common.yml
@@ -45,6 +46,7 @@ services:
       - rabbitmq
     volumes:
       - web_media_root:/var/zentral
+      - web_static_root:/zentral_static
   workers:
     extends:
       file: docker-compose.common.yml
@@ -63,3 +65,4 @@ networks:
 volumes:
   prometheus_sd:
   web_media_root:
+  web_static_root:

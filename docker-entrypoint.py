@@ -43,11 +43,17 @@ def django_migrate_db():
 
 def wait_for_db_migration():
     wait_for_db()
+    i = 0
     while not django_migrate_db():
-        retry_delay = 1000 / random.randint(500, 3000)
+        retry_delay = (i + 1) * random.uniform(0.8, 1.2)
         warnings.warn("Can't migrate DB! Sleep {:.2f}s…".format(retry_delay))
         time.sleep(retry_delay)
+        i += 1
     print("DB migration OK")
+
+
+def django_collectstatic():
+    subprocess.check_call(['python', 'server/manage.py', 'collectstatic', '-v0', '--noinput'])
 
 
 KNOWN_COMMANDS = {
@@ -66,6 +72,9 @@ KNOWN_COMMANDS = {
 }
 
 
+KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC = {'runserver', 'gunicorn'}
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         warnings.warn("Not enough arguments.")
@@ -76,6 +85,8 @@ if __name__ == '__main__':
         filename = args[0]
         args.extend(sys.argv[2:])
         wait_for_db_migration()
+        if cmd in KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC:
+            django_collectstatic()
         print('Launch known command "{}"'.format(cmd))
     else:
         filename = cmd

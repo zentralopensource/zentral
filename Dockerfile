@@ -31,6 +31,7 @@ WORKDIR /zentral
 ADD requirements.txt /zentral
 RUN pip install -r requirements.txt
 RUN mkdir /prometheus_sd && chown zentral:zentral /prometheus_sd
+RUN mkdir /zentral_static && chown zentral:zentral /zentral_static
 RUN mkdir /var/zentral && chown zentral:zentral /var/zentral
 ADD . /zentral
 USER zentral

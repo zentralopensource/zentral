@@ -145,8 +145,11 @@ USE_TZ = False
 STATICFILES_DIRS = (
     os.path.join(BASE_DIR, 'static'),
 )
-STATIC_URL = '/static/'
-STATIC_ROOT = '/zentral/static_files/'
+if DEBUG:
+    STATIC_URL = '/static_debug/'
+else:
+    STATIC_URL = '/static/'
+STATIC_ROOT = django_zentral_settings.get("STATIC_ROOT", "/zentral_static")
 STATICFILES_STORAGE = "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
 
 
