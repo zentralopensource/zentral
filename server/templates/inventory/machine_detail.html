@@ -155,6 +155,64 @@
   <dd>{{ ms.teamviewer|yesno }}</dd>
 </dl>
 {% endif %}
+{% if ms.puppetdb_inventory %}
+<h3>Puppet</h3>
+<dl class="dl-horizontal">
+  <dt>Certificate Name</dt>
+  <dd>{{ ms.puppetdb_inventory.certname_trusted }}</dd>
+  <dt>Authenticated</dt>
+  <dd>{{ ms.puppetdb_inventory.authenticated }}</dd>
+  <dt>Environment</dt>
+  <dd>{{ ms.puppetdb_inventory.agent_specified_environment }}</dd>
+  <dt>Agent Version</dt>
+  <dd>{{ ms.puppetdb_inventory.aio_agent_version }}</dd>
+  <dt>Puppet Version</dt>
+  <dd>{{ ms.puppetdb_inventory.clientversion }}</dd>
+  <dt>Timestamp</dt>
+  <dd>{{ ms.puppetdb_inventory.timestamp|date:'r'|default:'-' }}</dd>
+</dl>
+{% endif %}
+
+{% with ms.puppetdb_inventory.extensions.count as cert_ext_count %}
+{% if cert_ext_count %}
+<h3>{{ cert_ext_count }} Extension{{ cert_ext_count|pluralize }}</h3>
+<table class="table table-condensed">
+  <thead>
+    <th>Extension</th>
+    <th>Value</th>
+  <thead>
+  <tbody>
+    {% for cert_extension in ms.puppetdb_inventory.extensions.all %}
+    <tr>
+      <td>{{ cert_extension.extension_key }}</td>
+      <td>{{ cert_extension.extension_value }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endwith %}
+
+{% with ms.puppetdb_inventory.facts.count as fact_count %}
+{% if fact_count %}
+<h3>{{ fact_count }} Fact{{ fact_count|pluralize }}</h3>
+<table class="table table-condensed">
+  <thead>
+    <th>Fact</th>
+    <th>Value</th>
+  <thead>
+  <tbody>
+    {% for fact in ms.puppetdb_inventory.facts.all %}
+    <tr>
+      <td>{{ fact.fact_key_display_name }}</td>
+      <td>{{ fact.fact_value }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endwith %}
+
 {% if ms.groups.count %}
 <h3>Groups</h3>
 <table class="table table-condensed">
