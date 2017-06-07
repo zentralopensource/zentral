@@ -6,12 +6,16 @@ __pycache__
 !/docker-compose.basic-auth.yml
 !/docker-compose.common.yml
 !/docker-compose.logstash.yml
+!/docker-compose.puppet.yml
 !/docker-compose.saml2.yml
+!/docker-compose.syslog.yml
 !/.travis.yml
 /conf/*
 !/conf/start
 !/conf/logstash
+!/conf/puppet
 !/conf/saml2
+!/conf/syslog
 /docs/_build/
 /docs/_static/
 /docs/_templates/

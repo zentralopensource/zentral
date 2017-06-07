@@ -1,0 +1,29 @@
+version: '2'
+
+services:
+  puppet:
+    hostname: puppet
+    image: puppet/puppetserver
+    ports:
+      - "8140:8140"
+  puppetdbpostgres:
+    image: puppet/puppetdb-postgres
+    environment:
+      - POSTGRES_PASSWORD=puppetdb
+      - POSTGRES_USER=puppetdb
+    networks:
+      default:
+        aliases:
+          - postgres  # default puppetdb config
+  puppetdb:
+    hostname: puppetdb
+    image: puppet/puppetdb
+    depends_on:
+      - puppet  # puppet depends on puppetdb but puppetdb needs puppet for setup (ssl)
+      - puppetdbpostgres
+  web:
+    environment:
+      ZENTRAL_CONF_DIR: /zentral/conf/puppet/zentral/
+  workers:
+    environment:
+      ZENTRAL_CONF_DIR: /zentral/conf/puppet/zentral/

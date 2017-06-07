@@ -4,7 +4,7 @@ import operator
 import logging
 import requests
 from requests.packages.urllib3.util import Retry
-from .base import BaseInventory
+from .base import BaseInventory, InventoryError
 
 logger = logging.getLogger('zentral.contrib.inventory.backends.puppetdb')
 
@@ -14,7 +14,7 @@ class InventoryClient(BaseInventory):
 
     def __init__(self, config_d):
         super().__init__(config_d)
-        
+
         # Settings
         self.puppetdb_business_unit_fact_name = config_d.get('business_unit_fact_name', None)
         self.puppetdb_group_fact_names = config_d.get('group_fact_names', [])
@@ -22,7 +22,7 @@ class InventoryClient(BaseInventory):
         self.puppetdb_save_full_inventory = config_d.get('full_inventory', False)
         self.puppetdb_puppetboard_enable = config_d.get('puppetboard_enable', False)
         self.puppetdb_puppetboard_url = config_d.get('puppetboard_url', None)
-        
+
         # Connection settings
         self.puppetdb_host = config_d['puppetdb_host']
         self.puppetdb_port = config_d.get('puppetdb_port', 8081)
@@ -45,25 +45,25 @@ class InventoryClient(BaseInventory):
             self.api_base_url,
             requests.adapters.HTTPAdapter(max_retries=max_retries)
         )
-        
+
     def _get_puppetdb_inventory(self):
         url = "%s%s" % (self.api_base_url, '/inventory')
-        
+
         try:
             r = self.session.get(url,
-            verify=self.puppetdb_ssl_ca,
-            cert=(self.puppetdb_ssl_cert, self.puppetdb_ssl_key),
-            timeout=self.puppetdb_timeout)
+                                 verify=self.puppetdb_ssl_ca,
+                                 cert=(self.puppetdb_ssl_cert, self.puppetdb_ssl_key),
+                                 timeout=self.puppetdb_timeout)
         except requests.exceptions.RequestException as e:
             raise InventoryError("PuppetDB API error: %s" % str(e))
         if r.status_code != requests.codes.ok:
             raise InventoryError("PuppetDB API HTTP response status code %s" % r.status_code)
         return r.json()
-    
+
     def _machine_links_from_id(self, machine_id):
         return [{"anchor_text": "Puppetboard",
                  "url": "{}/node/{}".format(self.puppetdb_puppetboard_url, machine_id)}]
-    
+
     def _deep_get(self, data_dictionary, key_list):
         try:
             return reduce(operator.getitem, key_list, data_dictionary)
@@ -74,17 +74,17 @@ class InventoryClient(BaseInventory):
         for node in self._get_puppetdb_inventory():
             facts = node['facts']
             trusted = node['trusted']
-            
+
             # the node cert subject CN
             certname_trusted = trusted['certname']
             ct = {
                 'reference': certname_trusted,
             }
-            
+
             # Puppetboard link
             if self.puppetdb_puppetboard_enable:
                 ct['links'] = self._machine_links_from_id(certname_trusted)
-            
+
             # Certificate extensions
             extensions = []
             for key, value in trusted.get('extensions', []).items():
@@ -93,8 +93,7 @@ class InventoryClient(BaseInventory):
                     'extension_value': value
                 }
                 extensions.append(extension)
-            
-            
+
             # Puppet facts
             custom_facts = []
             if len(self.puppetdb_facts) > 0:
@@ -108,11 +107,11 @@ class InventoryClient(BaseInventory):
                             'fact_key': fact_key,
                             'fact_key_display_name': fact_name['fact_display_name']
                         })
-            
+
             puppetdb_inventory = {
                 'certname_trusted': certname_trusted,
                 'authenticated': trusted.get('authenticated'),
-                'timestamp': node.get('timestamp'),
+                'timestamp': parser.parse(node.get('timestamp')),
                 'aio_agent_version': facts.get('aio_agent_version'),
                 'clientversion': facts.get('clientversion'),
                 'extensions': extensions,
@@ -121,7 +120,7 @@ class InventoryClient(BaseInventory):
                 'agent_specified_environment': facts.get('agent_specified_environment')
             }
             ct['puppetdb_inventory'] = puppetdb_inventory
-            
+
             # Business unit from puppet fact
             if self.puppetdb_business_unit_fact_name:
                 business_unit_name = self._deep_get(facts, self.puppetdb_business_unit_fact_name.split("."))
@@ -130,7 +129,7 @@ class InventoryClient(BaseInventory):
                         'name': business_unit_name,
                         'reference': business_unit_name
                     }
-            
+
             # Groups from puppet facts
             if len(self.puppetdb_group_fact_names) > 0:
                 groups = []
@@ -138,20 +137,20 @@ class InventoryClient(BaseInventory):
                     group_fact_names_split = group_fact_name['fact_path'].split(".")
                     group_name = self._deep_get(facts, group_fact_names_split)
                     if group_name:
-                        groups.append({ 'name': group_name, 'reference': group_name})
+                        groups.append({'name': group_name, 'reference': group_name})
                 if len(groups) > 0:
                     ct['groups'] = groups
-            
+
             # macOS facts (Darwin)
             os = facts.get('os')
             os_family = os['family']
             if os_family == 'Darwin':
                 system_profiler = facts.get('system_profiler', {})
-                
+
                 serial_number = system_profiler.get('serial_number', None)
                 if serial_number:
                     ct['serial_number'] = serial_number
-                
+
                 # OS version
                 os_macosx = os.get('macosx', {})
                 os_version_full = os_macosx['version']['full']
@@ -161,7 +160,7 @@ class InventoryClient(BaseInventory):
                 os_version['name'] = os_product
                 os_version['build'] = os_build
                 ct['os_version'] = os_version
-                
+
                 # System info
                 hardware_model = system_profiler.get('model_identifier', 'Unknown')
                 computer_name = system_profiler.get('computer_name', 'Unknown')
@@ -170,15 +169,14 @@ class InventoryClient(BaseInventory):
                 if len(processor_models) > 0:
                     processor_name = processor_models[0]
                 sp_processor_name = system_profiler.get('processor_name', 'Unknown')
-                
+
                 processor_logical_count = processors.get('count', 0)
                 processor_physical_count = processors.get('physicalcount', 0)
-                
+
                 memory = facts.get('memory', {})
                 system_memory = memory.get('system', {})
                 system_memory_total_bytes = system_memory.get('total_bytes', 0)
-                
-                
+
                 ct['system_info'] = {'computer_name': computer_name,
                                      'hardware_model': hardware_model,
                                      'cpu_brand': sp_processor_name,
@@ -188,11 +186,8 @@ class InventoryClient(BaseInventory):
                                      'physical_memory': system_memory_total_bytes}
             else:
                 serial_number = 'N/A'
-            
-            
+
             # last seen
-            timestamp = node.get('timestamp')
-            if timestamp:
-                ct['last_seen'] = parser.parse(timestamp)
-            
+            ct['last_seen'] = ct['puppetdb_inventory']['timestamp']
+
             yield ct
