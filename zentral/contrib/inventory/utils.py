@@ -104,7 +104,7 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                     'os_version',
                     'system_info',
                     'teamviewer',
-                    'puppetdb_inventory'):
+                    'puppet_node'):
         event_type = 'inventory_{}_update'.format(fk_attr)
         fk_diff = diff.get(fk_attr, {})
         for action in ['added', 'removed']:

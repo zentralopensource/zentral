@@ -330,36 +330,30 @@ class TeamViewer(AbstractMTObject):
     unattended = models.NullBooleanField(blank=True, null=True)
 
 
-class PuppetCertificateExtension(AbstractMTObject):
-    extension_key = models.TextField(blank=False, null=False)
-    extension_value = models.TextField(blank=False, null=False)
+class PuppetTrustedFacts(AbstractMTObject):
+    authenticated = models.CharField(max_length=16,
+                                     choices=(('remote', 'remote'),
+                                              ('local', 'local'),
+                                              ('false', 'false')))
+    extensions = JSONField(blank=True, null=True)
+    certname = models.TextField()
 
 
-class PuppetFact(AbstractMTObject):
-    fact_key = models.TextField(blank=False, null=False)
-    fact_key_display_name = models.TextField(blank=False, null=False)
-    fact_value = models.TextField(blank=False, null=False)
-
-
-class PuppetDBInventory(AbstractMTObject):
-    # Trusted facts
-    certname_trusted = models.TextField(blank=False, null=False)
-    authenticated = models.TextField(blank=False, null=False)
-    extensions = models.ManyToManyField(PuppetCertificateExtension)
-    
-    # Core Facts
+class PuppetCoreFacts(AbstractMTObject):
     aio_agent_version = models.TextField(blank=True, null=True)
-    
-    # PuppetDB facts
-    environment = models.TextField(blank=True, null=True)
-    timestamp = models.DateTimeField()
-    
-    # Puppet Agent facts
-    agent_specified_environment = models.TextField(blank=True, null=True)
-    clientversion = models.TextField(blank=True, null=True)
-    
-    # User defined facts
-    facts = models.ManyToManyField(PuppetFact)
+    augeas_version = models.TextField(blank=True, null=True)
+    client_version = models.TextField(blank=True, null=True)
+    facter_version = models.TextField(blank=True, null=True)
+    ruby_sitedir = models.TextField(blank=True, null=True)
+    ruby_version = models.TextField(blank=True, null=True)
+    ruby_platform = models.TextField(blank=True, null=True)
+
+
+class PuppetNode(AbstractMTObject):
+    environment = models.TextField()
+    trusted_facts = models.ForeignKey(PuppetTrustedFacts, blank=True, null=True)
+    core_facts = models.ForeignKey(PuppetCoreFacts, blank=True, null=True)
+    extra_facts = JSONField(blank=True, null=True)
 
 
 class MachineSnapshotManager(MTObjectManager):
@@ -368,7 +362,7 @@ class MachineSnapshotManager(MTObjectManager):
                                     'os_version',
                                     'system_info',
                                     'teamviewer',
-                                    'puppetdb_inventory')
+                                    'puppet_node')
                     .filter(currentmachinesnapshot__isnull=False))
 
     def current_platforms(self):
@@ -397,7 +391,7 @@ class MachineSnapshot(AbstractMTObject):
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
     deb_packages = models.ManyToManyField(DebPackage)
     teamviewer = models.ForeignKey(TeamViewer, blank=True, null=True)
-    puppetdb_inventory = models.ForeignKey(PuppetDBInventory, blank=True, null=True)
+    puppet_node = models.ForeignKey(PuppetNode, blank=True, null=True)
     public_ip_address = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
 
     objects = MachineSnapshotManager()

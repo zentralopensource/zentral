@@ -1,4 +1,6 @@
 import copy
+from functools import reduce
+import operator
 
 
 def dict_diff(d1, d2):
@@ -27,3 +29,10 @@ def dict_diff(d1, d2):
             continue
         diff[k2] = {"added": v2}
     return copy.deepcopy(diff)
+
+
+def get_nested_val(d, key, separator="."):
+    try:
+        return reduce(operator.getitem, key.split(separator), d)
+    except KeyError:
+        return None

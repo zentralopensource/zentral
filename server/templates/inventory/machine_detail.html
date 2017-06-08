@@ -155,61 +155,69 @@
   <dd>{{ ms.teamviewer|yesno }}</dd>
 </dl>
 {% endif %}
-{% if ms.puppetdb_inventory %}
+
+{% with ms.puppet_node as puppet_node %}
+{% if puppet_node %}
 <h3>Puppet</h3>
+
+{% with puppet_node.trusted_facts as trusted_facts %}
+{% if trusted_facts %}
+<h4>Trusted facts</h4>
+
 <dl class="dl-horizontal">
   <dt>Certificate Name</dt>
-  <dd>{{ ms.puppetdb_inventory.certname_trusted }}</dd>
+  <dd>{{ trusted_facts.certname }}</dd>
   <dt>Authenticated</dt>
-  <dd>{{ ms.puppetdb_inventory.authenticated }}</dd>
-  <dt>Environment</dt>
-  <dd>{{ ms.puppetdb_inventory.agent_specified_environment }}</dd>
-  <dt>Agent Version</dt>
-  <dd>{{ ms.puppetdb_inventory.aio_agent_version }}</dd>
-  <dt>Puppet Version</dt>
-  <dd>{{ ms.puppetdb_inventory.clientversion }}</dd>
-  <dt>Timestamp</dt>
-  <dd>{{ ms.puppetdb_inventory.timestamp|date:'r'|default:'-' }}</dd>
-</dl>
-{% endif %}
-
-{% with ms.puppetdb_inventory.extensions.count as cert_ext_count %}
-{% if cert_ext_count %}
-<h3>{{ cert_ext_count }} Extension{{ cert_ext_count|pluralize }}</h3>
-<table class="table table-condensed">
-  <thead>
-    <th>Extension</th>
-    <th>Value</th>
-  <thead>
-  <tbody>
-    {% for cert_extension in ms.puppetdb_inventory.extensions.all %}
-    <tr>
-      <td>{{ cert_extension.extension_key }}</td>
-      <td>{{ cert_extension.extension_value }}</td>
-    </tr>
+  <dd>{{ trusted_facts.authenticated }}</dd>
+  {% if trusted_facts.extensions %}
+  <dt>Extensions</dt>
+  <dd>
+    {% for key, val in trusted_facts.extensions.items %}
+    <p><em>{{ key }}</em> - {{ val }}</p>
     {% endfor %}
-  </tbody>
-</table>
+  </dd>
+  {% endif %}
+</dl>
 {% endif %}
 {% endwith %}
 
-{% with ms.puppetdb_inventory.facts.count as fact_count %}
-{% if fact_count %}
-<h3>{{ fact_count }} Fact{{ fact_count|pluralize }}</h3>
-<table class="table table-condensed">
-  <thead>
-    <th>Fact</th>
-    <th>Value</th>
-  <thead>
-  <tbody>
-    {% for fact in ms.puppetdb_inventory.facts.all %}
-    <tr>
-      <td>{{ fact.fact_key_display_name }}</td>
-      <td>{{ fact.fact_value }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% with puppet_node.core_facts as core_facts %}
+{% if core_facts %}
+<h4>Core facts</h4>
+
+<dl class="dl-horizontal">
+  <dt>aio agent version</dt>
+  <dd>{{ core_facts.aio_agent_version }}</dd>
+  <dt>augeas version</dt>
+  <dd>{{ core_facts.augeas_version }}</dd>
+  <dt>client version</dt>
+  <dd>{{ core_facts.client_version }}</dd>
+  <dt>facter version</dt>
+  <dd>{{ core_facts.facter_version }}</dd>
+  <dt>ruby</dt>
+  <dd>
+    {{ core_facts.ruby_platform }}<br>
+    {{ core_facts.ruby_sitedir }}<br>
+    {{ core_facts.ruby_version }}
+  </dd>
+</dl>
+{% endif %}
+{% endwith %}
+
+{% with puppet_node.extra_facts as extra_facts %}
+{% if extra_facts %}
+<h4>Extra facts</h4>
+
+<dl class="dl-horizontal">
+  {% for key, val in extra_facts.items %}
+  <dt>{{ key }}</dt>
+  <dd>{{ val }}</dd>
+  {% endfor %}
+</dl>
+{% endif %}
+{% endwith %}
+
+
 {% endif %}
 {% endwith %}
 

@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">{{ title }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>puppetDB URL</th>
+      <th>Webhook</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for instance, webhook in instances %}
+    <tr>
+      <td>
+        {{ instance.puppetdb_url }}
+      </td>
+      <td>
+        {{ webhook }}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -18,6 +18,9 @@ services:
   puppetdb:
     hostname: puppetdb
     image: puppet/puppetdb
+    ports:
+      - "8080:8080"
+      - "8081:8081"
     depends_on:
       - puppet  # puppet depends on puppetdb but puppetdb needs puppet for setup (ssl)
       - puppetdbpostgres

@@ -5,10 +5,6 @@ services:
     image: postgres:9.6
     env_file:
       - ./conf/start/docker/postgres.env
-    networks:
-      default:
-        aliases:
-          - postgres
   rabbitmq:
   elastic:
     image: elasticsearch:5

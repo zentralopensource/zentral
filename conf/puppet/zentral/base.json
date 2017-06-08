@@ -50,39 +50,33 @@
     }
   },
   "apps": {
+    "zentral.contrib.audit": {},
+    "zentral.contrib.jamf": {},
+    "zentral.contrib.simplemdm": {},
+    "zentral.contrib.munki": {},
+    "zentral.contrib.nagios": {},
     "zentral.contrib.inventory": {
       "prometheus_bearer_token": "CHANGE ME!!!",
-      "clients": [
+      "clients": []
+    },
+    "zentral.contrib.osquery": {},
+    "zentral.contrib.puppet": {
+      "instances": [
         {
-          "backend": "zentral.contrib.inventory.clients.puppetdb",
-          "puppetdb_host": "puppetdb",
-          "puppetdb_port": 8080,
-          "puppetdb_protocol": "http",
-          "puppetboard_enable": true,
+          "puppetdb_url": "http://puppetdb:8080",
           "puppetboard_url": "https://puppetboard.local",
-          "group_fact_names": [
-            { "fact_path": "my_custom_fact_site_id" },
-            { "fact_path": "my_custom_fact_customer_environment" }
+          "business_unit_fact_key": "my_custom_fact_customer",
+          "group_fact_keys": [
+            "my_custom_fact_site_id",
+            "my_custom_fact_customer_environment"
           ],
-          "business_unit_fact_name": "my_custom_fact_customer",
-          "facts": [
-            {
-              "fact_key": "os.hardware",
-              "fact_display_name": "Hardware"
-            },
-            {
-              "fact_key": "system_uptime.uptime",
-              "fact_display_name": "Uptime"
-            },
-            {
-              "fact_key": "kernel",
-              "fact_display_name": "Kernel"
-            }
+          "extra_fact_keys": [
+            "os.hardware",
+            "kernel"
           ]
         }
       ]
     },
-    "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {}
   }
 }
