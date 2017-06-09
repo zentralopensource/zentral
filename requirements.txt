@@ -18,6 +18,7 @@ python-dateutil
 pyyaml
 redis
 requests
+requests_aws4auth
 setuptools
 sqlparse
 tqdm

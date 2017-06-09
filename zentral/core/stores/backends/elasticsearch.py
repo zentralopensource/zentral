@@ -3,9 +3,11 @@ import random
 import time
 import urllib.parse
 from dateutil import parser
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch.exceptions import ConnectionError, RequestError
+from requests_aws4auth import AWS4Auth
 from zentral.core.events import event_from_event_d, event_tags, event_types
+from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.stores.backends.base import BaseEventStore
 from zentral.utils.rison import dumps as rison_dumps
 
@@ -69,7 +71,42 @@ class EventStore(BaseEventStore):
 
     def __init__(self, config_d, test=False):
         super(EventStore, self).__init__(config_d)
-        self._es = Elasticsearch(config_d['servers'])
+        # es kwargs
+        kwargs = {}
+
+        # es kwargs > hosts
+        hosts = []
+        configured_hosts = config_d.get("hosts", config_d.get("servers"))
+        for host in configured_hosts:
+            if not isinstance(host, dict):
+                o = urllib.parse.urlparse(host)
+                host = {k: v for k, v in (('host', o.hostname),
+                                          ('port', o.port),
+                                          ('url_prefix', o.path)) if v}
+                if o.scheme == "https" or o.port == 443:
+                    host['use_ssl'] = True
+            hosts.append(host)
+        kwargs['hosts'] = hosts
+
+        # es kwargs > verify_certs
+        if any(host.get("use_ssl") for host in hosts):
+            kwargs['verify_certs'] = True
+
+        # es kwargs > http_auth (for AWS)
+        aws_auth = config_d.get("aws_auth")
+        if aws_auth:
+            kwargs["connection_class"] = RequestsHttpConnection
+            try:
+                kwargs['http_auth'] = AWS4Auth(aws_auth['access_id'],
+                                               aws_auth['secret_key'],
+                                               aws_auth['region'],
+                                               'es')
+            except KeyError:
+                raise ImproperlyConfigured("access_id, secret_key or region missing "
+                                           "in aws_auth config")
+
+        self._es = Elasticsearch(**kwargs)
+
         self.index = config_d['index']
         self.read_index = config_d.get('read_index', self.index)
         self.kibana_base_url = config_d.get('kibana_base_url', None)
@@ -84,7 +121,7 @@ class EventStore(BaseEventStore):
                     self._es.indices.create(self.index, body=self.INDEX_CONF)
                     logger.info("Index %s created", self.index)
             except ConnectionError as e:
-                s = 1000 / random.randint(200, 1000)
+                s = (i + 1) * random.uniform(0.9, 1.1)
                 logger.warning('Could not connect to server %d/%d. Sleep %ss',
                                i + 1, self.MAX_CONNECTION_ATTEMPTS, s)
                 time.sleep(s)

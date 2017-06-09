@@ -32,7 +32,7 @@
     "elasticsearch": {
       "frontend": true,
       "backend": "zentral.core.stores.backends.elasticsearch",
-      "servers": [
+      "hosts": [
         "http://elastic:9200"
       ],
       "index": "zentral-events",
