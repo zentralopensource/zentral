@@ -34,5 +34,5 @@ def dict_diff(d1, d2):
 def get_nested_val(d, key, separator="."):
     try:
         return reduce(operator.getitem, key.split(separator), d)
-    except KeyError:
+    except (KeyError, TypeError):
         return None

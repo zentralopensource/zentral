@@ -62,29 +62,23 @@ KNOWN_VM_MAC_PREFIXES = {
 def update_ms_tree_platform(tree):
     os_version_t = tree.get("os_version", {})
     os_name = os_version_t.get("name")
-    try:
-        minor = int(os_version_t.get("minor"))
-    except (TypeError, ValueError):
-        minor = None
     if not os_name:
         return
-    os_name = os_name.lower()
-    os_name_split = os_name.split()
-    if len(os_name_split) == 2 and \
-       os_name_split[0][0] == os_name_split[1][0] and \
-       (minor == 4 or minor == 10):
-        # ubuntu
-        tree["platform"] = LINUX
-        return
-    os_name = os_name.replace(" ", "")
-    if "osx" in os_name:
+    os_name = os_name.lower().replace(" ", "")
+    if "macos" in os_name or "osx" in os_name:
         tree["platform"] = MACOS
     elif "ios" in os_name:
         tree["platform"] = IOS
-    elif "ubuntu" in os_name:
-        tree["platform"] = LINUX
     elif "windows" in os_name:
         tree["platform"] = WINDOWS
+    else:
+        for distro in ('centos', 'fedora', 'redhat', 'rehl',
+                       'debian', 'ubuntu',
+                       'gentoo',
+                       'linux'):
+            if distro in os_name:
+                tree["platform"] = LINUX
+                break
 
 
 def update_ms_tree_type(tree):

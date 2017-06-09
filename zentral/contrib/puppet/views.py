@@ -45,6 +45,5 @@ class PostReportView(View):
         if not request.encoding or request.encoding.lower() != "utf-8":
             return HttpResponse("Unsupported encoding", status=415)
         payload = request.body.decode(request.encoding)
-        print(payload)
         post_puppet_report(instance, user_agent, ip, payload)
         return HttpResponse("OK")

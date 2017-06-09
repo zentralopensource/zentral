@@ -172,14 +172,43 @@ class PuppetDBClient(object):
         if network_interfaces:
             ct["network_interfaces"] = network_interfaces
 
-        # macOS facts (Darwin)
-        os_family = facts['os']['family']
-        if os_family == 'Darwin':
+        # system info
+        system_info = {}
+
+        # system info > processors
+        processors = facts["processors"]
+        for attr, key in (("cpu_physical_cores", "physicalcount"),
+                          ("cpu_logical_cores", "count")):
+            try:
+                val = int(processors[key])
+            except (KeyError, TypeError, ValueError):
+                pass
+            else:
+                if val:
+                    system_info[attr] = val
+        processor_models = set(processors.get("models", []))
+        if processor_models:
+            if len(processor_models) > 1:
+                logger.warning("Node {}: more than 1 processor model".format(certname))
+            system_info["cpu_brand"] = processor_models.pop()
+
+        # system info > physical memory
+        try:
+            physical_memory = int(facts["memory"]["system"]["total_bytes"])
+        except (KeyError, TypeError, ValueError):
+            pass
+        else:
+            if physical_memory:
+                system_info["physical_memory"] = physical_memory
+
+        kernel = facts['kernel']
+        if kernel == 'Darwin':
             system_profiler = facts['system_profiler']
 
+            # serial number
             serial_number = system_profiler.get('serial_number')
             if not serial_number:
-                raise PuppetDBError("Node '{}': no serial number".format(certname))
+                raise PuppetDBError("Node '{}', Darwin: no system_profiler>serial_number".format(certname))
             ct['serial_number'] = serial_number
 
             # OS version
@@ -190,42 +219,33 @@ class PuppetDBClient(object):
             os_version['build'] = os_macosx['build']
             ct['os_version'] = os_version
 
-            # system info
-            system_info = {}
+            # system info > hardware model, computer name
             for attr, key in (("hardware_model", "model_identifier"),
                               ("computer_name", "computer_name")):
                 val = system_profiler.get(key)
                 if val:
                     system_info[attr] = val
 
-            processors = facts["processors"]
-            for attr, key in (("cpu_physical_cores", "physicalcount"),
-                              ("cpu_logical_cores", "count")):
-                try:
-                    val = int(processors[key])
-                except (KeyError, TypeError, ValueError):
-                    pass
-                else:
-                    if val:
-                        system_info[attr] = val
-            processor_models = set(processors.get("models", []))
-            if processor_models:
-                if len(processor_models) > 1:
-                    logger.warning("Node {}: more than 1 processor model".format(certname))
-                system_info["cpu_brand"] = processor_models.pop()
-
+        elif kernel == "Linux":
+            # serial number
             try:
-                physical_memory = int(facts["memory"]["system"]["total_bytes"])
-            except (KeyError, TypeError, ValueError):
-                pass
-            else:
-                if physical_memory:
-                    system_info["physical_memory"] = physical_memory
+                ct["serial_number"] = facts["dmi"]["product"]["uuid"]
+            except KeyError:
+                raise PuppetDBError("Node '{}', Linux: no dmi>product>uuid".format(certname))
 
-            if system_info:
-                ct["system_info"] = system_info
+            # OS version
+            os_version = dict(zip(('major', 'minor', 'patch'),
+                                  (int(p) for p in facts['os']['release']['full'].split("."))))
+            os_version["name"] = facts['os']['name']
+            ct['os_version'] = os_version
+
+            # system info > computer name
+            system_info['computer_name'] = facts['hostname']
 
         else:
-            raise PuppetDBError("Node '{}': unknown OS family {}".format(certname, os_family))
+            raise PuppetDBError("Node '{}': unknown kernel {}".format(certname, kernel))
+
+        if system_info:
+            ct["system_info"] = system_info
 
         return ct
