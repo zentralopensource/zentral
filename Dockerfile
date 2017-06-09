@@ -33,6 +33,7 @@ RUN pip install -r requirements.txt
 RUN mkdir /prometheus_sd && chown zentral:zentral /prometheus_sd
 RUN mkdir /zentral_static && chown zentral:zentral /zentral_static
 RUN mkdir /var/zentral && chown zentral:zentral /var/zentral
+RUN chmod 644 ./zentral/contrib/osquery/osx_package/build.tmpl/root/Library/LaunchDaemons/com.facebook.osqueryd.plist
 ADD . /zentral
 USER zentral
 ENTRYPOINT ["/zentral/docker-entrypoint.py"]

@@ -12,7 +12,8 @@ logger = logging.getLogger('zentral.core.probes.models')
 
 
 class Feed(models.Model):
-    url = models.URLField(unique=True)
+    url = models.URLField(unique=True, blank=True, null=True, default=None)
+    path = models.FilePathField(unique=True, blank=True, null=True, default=None, path='/zentral/conf/feeds', recursive=True, match='*.json')
     name = models.TextField()
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
