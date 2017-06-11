@@ -108,6 +108,15 @@ class PuppetDBClient(object):
 
         facts = inventory_d['facts']
 
+        # system uptime
+        try:
+            system_uptime = int(facts["system_uptime"]["seconds"])
+        except (KeyError, TypeError, ValueError):
+            pass
+        else:
+            if system_uptime > 0:
+                ct['system_uptime'] = system_uptime
+
         # core facts
         core_facts = {}
         for attr, key in (('aio_agent_version', 'aio_agent_version'),

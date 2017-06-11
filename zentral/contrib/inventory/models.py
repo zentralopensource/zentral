@@ -1,6 +1,6 @@
 from collections import Counter
 import colorsys
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import re
 from django.contrib.postgres.fields import JSONField
@@ -417,6 +417,12 @@ class MachineSnapshot(AbstractMTObject):
         return self.osx_app_instances.select_related('app').all().order_by('app__bundle_name',
                                                                            'app__bundle_version_str',
                                                                            'bundle_path')
+    @cached_property
+    def last_commit(self):
+        try:
+            return self.machinesnapshotcommit_set.all().order_by("-id")[0]
+        except IndexError:
+            pass
 
 
 class MachineSnapshotCommitManager(models.Manager):
@@ -426,6 +432,7 @@ class MachineSnapshotCommitManager(models.Manager):
             last_seen = datetime.utcnow()
         if is_aware(last_seen):
             last_seen = make_naive(last_seen)
+        system_uptime = tree.pop('system_uptime', None)
         update_ms_tree_platform(tree)
         update_ms_tree_type(tree)
         machine_snapshot, _ = MachineSnapshot.objects.commit(tree)
@@ -440,7 +447,9 @@ class MachineSnapshotCommitManager(models.Manager):
                 except IndexError:
                     new_version = 1
                 else:
-                    if msc.machine_snapshot != machine_snapshot or msc.last_seen != last_seen:
+                    if msc.machine_snapshot != machine_snapshot \
+                       or msc.last_seen != last_seen \
+                       or msc.system_uptime != system_uptime:
                         new_version = msc.version + 1
                         new_parent = msc
                 new_msc = None
@@ -450,7 +459,8 @@ class MachineSnapshotCommitManager(models.Manager):
                                                                    version=new_version,
                                                                    machine_snapshot=machine_snapshot,
                                                                    parent=new_parent,
-                                                                   last_seen=last_seen)
+                                                                   last_seen=last_seen,
+                                                                   system_uptime=system_uptime)
                 CurrentMachineSnapshot.objects.update_or_create(serial_number=serial_number,
                                                                 source=source,
                                                                 defaults={'machine_snapshot': machine_snapshot})
@@ -475,6 +485,7 @@ class MachineSnapshotCommit(models.Model):
     machine_snapshot = models.ForeignKey(MachineSnapshot)
     parent = models.ForeignKey('self', blank=True, null=True)
     last_seen = models.DateTimeField(blank=True, null=True)
+    system_uptime = models.PositiveIntegerField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = MachineSnapshotCommitManager()
@@ -492,6 +503,10 @@ class MachineSnapshotCommit(models.Model):
             if self.last_seen and self.parent.last_seen != self.last_seen:
                 diff.setdefault("last_seen", {})["added"] = self.last_seen
             return diff
+
+    def get_system_update_for_display(self):
+        if self.system_uptime:
+            return str(timedelta(seconds=self.system_uptime)).strip(":0 ,")
 
 
 class CurrentMachineSnapshot(models.Model):

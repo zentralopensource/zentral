@@ -248,11 +248,23 @@
 
 <div class="col-md-12">
 <dl class="dl-horizontal">
-  <dt class="small" style="opacity:0.5">Last update</dt>
+  <dt class="small" style="opacity:0.5">last change</dt>
   <dd class="small" style="opacity:0.5">
     {% if ms.public_ip_address %}{{ ms.public_ip_address }} - {% endif %}
     {{ ms.mt_created_at|date:'r'|default:'-' }}
   </dd>
+  {% if ms.last_commit.last_seen %}
+  <dt class="small" style="opacity:0.5">last seen</dt>
+  <dd class="small" style="opacity:0.5">
+    {{ ms.last_commit.last_seen|date:'r' }}
+  </dd>
+  {% endif %}
+  {% if ms.last_commit.system_uptime %}
+  <dt class="small" style="opacity:0.5">system uptime</dt>
+  <dd class="small" style="opacity:0.5">
+    {{ ms.last_commit.get_system_update_for_display }}
+  </dd>
+  {% endif %}
 </dl>
 </div>
 
