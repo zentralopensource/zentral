@@ -94,13 +94,14 @@ class BaseNodeView(JSONPostAPIView):
                 system_info = clean_dict(t)
                 if system_info:
                     tree['system_info'] = system_info
-            if table_name == 'deb_packages':
-                deb_package = clean_dict(t)
-                if deb_package:
-                    if deb_package not in deb_packages:
-                        deb_packages.append(deb_package)
-                    else:
-                        logger.warning("Duplicated deb package")
+            elif table_name == 'uptime':
+                try:
+                    system_uptime = int(t['total_seconds'])
+                except (KeyError, TypeError, ValueError):
+                    pass
+                else:
+                    if system_uptime > 0:
+                        tree['system_uptime'] = system_uptime
             elif table_name == 'network_interface':
                 network_interface = clean_dict(t)
                 if network_interface:
@@ -108,6 +109,13 @@ class BaseNodeView(JSONPostAPIView):
                         network_interfaces.append(network_interface)
                     else:
                         logger.warning("Duplicated network interface")
+            elif table_name == 'deb_packages':
+                deb_package = clean_dict(t)
+                if deb_package:
+                    if deb_package not in deb_packages:
+                        deb_packages.append(deb_package)
+                    else:
+                        logger.warning("Duplicated deb package")
             elif table_name == 'apps':
                 bundle_path = t.pop('bundle_path')
                 osx_app = clean_dict(t)

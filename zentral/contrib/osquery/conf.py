@@ -15,6 +15,8 @@ INVENTORY_QUERIES = (
      "computer_name, hostname, hardware_model, hardware_serial, "
      "cpu_type, cpu_subtype, cpu_brand, cpu_physical_cores, "
      "cpu_logical_cores, physical_memory from system_info;"),
+    ("uptime",
+     "select 'uptime' as table_name, total_seconds from uptime;"),
     ("network_interface",
      "select 'network_interface' as table_name, "
      "id.interface, id.mac, "
@@ -22,6 +24,7 @@ INVENTORY_QUERIES = (
      "from interface_details as id, interface_addresses as ia "
      "where ia.interface = id.interface and ia.broadcast > '';"),
 )
+DEB_PACKAGE_QUERY = "select 'deb_packages' as table_name, * from deb_packages;"
 OSX_APP_INSTANCE_QUERY = (
     "select 'apps' as table_name, "
     "bundle_identifier as bundle_id, bundle_name, "
@@ -29,7 +32,6 @@ OSX_APP_INSTANCE_QUERY = (
     "path as bundle_path "
     "from apps;"
 )
-DEB_PACKAGE_QUERY = "select 'deb_packages' as table_name, * from deb_packages;"
 DECORATORS = {
     "load": [
         "SELECT computer_name FROM system_info",

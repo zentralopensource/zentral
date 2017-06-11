@@ -186,7 +186,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(response["Content-Type"], "application/json")
         json_response = response.json()
         query_names = ["{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, t)
-                       for t in ("os_version", "system_info", "network_interface")]
+                       for t in ("os_version", "system_info", "uptime", "network_interface")]
         self.assertCountEqual(json_response["queries"], query_names)
 
     def post_default_inventory_query_snapshot(self, node_key, with_app=False):
@@ -222,7 +222,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(response["Content-Type"], "application/json")
         json_response = response.json()
         query_names = ["{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, t)
-                       for t in ("os_version", "system_info", "network_interface")]
+                       for t in ("os_version", "system_info", "uptime", "network_interface")]
         query_names.append(dq_name)
         self.assertCountEqual(json_response["queries"], query_names)
         self.assertEqual(json_response["queries"][dq_name], dq)
@@ -235,7 +235,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(response["Content-Type"], "application/json")
         json_response = response.json()
         query_names = ["{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, t)
-                       for t in ("os_version", "system_info", "network_interface", "apps")]
+                       for t in ("os_version", "system_info", "uptime", "network_interface", "apps")]
         self.assertCountEqual(json_response["queries"], query_names)
         # post default inventory snapshot with one app
         self.post_default_inventory_query_snapshot(node_key, with_app=True)
