@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import os
 import subprocess
+import sys
 
 POSTFLIGHT_SCRIPT = "/usr/local/munki/postflight"
 POSTFLIGHT_DIR = "/usr/local/munki/postflight.d"
@@ -22,7 +23,13 @@ if os.path.exists(zentral_pf_script_install_path):
 os.symlink(ZENTRAL_PF_SCRIPT, zentral_pf_script_install_path)
 
 # call the postflight to send fresh and complete infos to zentral
-subprocess.call([ZENTRAL_PF_SCRIPT, "auto"])
+if subprocess.call([ZENTRAL_PF_SCRIPT, "auto"]):
+    print "Error running the Zentral postflight script"
+    sys.exit(1)
 
-## write zentral base url
-subprocess.call(["defaults", "write",  "/Library/Preferences/io.zentral.plist", "base_url", "https://%TLS_HOSTNAME%"])
+# write zentral base url
+if subprocess.call(["defaults", "write",
+                    "/Library/Preferences/io.zentral.plist",
+                    "base_url", "https://%TLS_HOSTNAME%"]):
+    print "Could not write the io.zentral.plist"
+    sys.exit(1)

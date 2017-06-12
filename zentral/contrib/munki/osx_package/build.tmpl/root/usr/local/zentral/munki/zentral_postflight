@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from datetime import timedelta
 import hashlib
 import json
 import os
@@ -108,7 +109,11 @@ class ApplicationInventory(object):
     APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
     def __init__(self):
-        self.data = plistlib.readPlist(self.APPLICATION_INVENTORY)
+        try:
+            self.data = plistlib.readPlist(self.APPLICATION_INVENTORY)
+        except IOError:
+            print "Could not read application inventory plist"
+            self.data = []
 
     def get_osx_app_instances(self, include_santa_fileinfo=False):
         apps = []
@@ -265,6 +270,14 @@ class SystemProfilerReport(object):
         item_d = data['_items'][0]
 
         system_info['computer_name'] = item_d['local_host_name']
+
+        # uptime
+        # up 7:21:19:44
+        uptime = item_d['uptime'].rsplit(" ", 1)[-1]
+        td_kwargs = dict(zip(("seconds", "minutes", "hours", "days"),
+                             (int(n) for n in uptime.split(":")[::-1])))
+        uptime = int(timedelta(**td_kwargs).total_seconds())
+
         # OS version
         os_version = item_d['os_version']
         os_name, os_version_str, os_build = os_version.rsplit(' ', 2)
@@ -275,7 +288,8 @@ class SystemProfilerReport(object):
                                    (int(s) for s in os_version_str.split('.')))))
         return {'serial_number': serial_number,
                 'system_info': system_info,
-                'os_version': os_version}
+                'os_version': os_version,
+                'system_uptime': uptime}
 
 # Zentral Munki API calls
 
@@ -306,7 +320,9 @@ def post_job(data):
     url = "{}/post_job/".format(ZENTRAL_API_ENDPOINT.strip('/'))
     return make_api_request(url, data)
 
+
 # Main
+
 
 if __name__ == '__main__':
     run_type = None
