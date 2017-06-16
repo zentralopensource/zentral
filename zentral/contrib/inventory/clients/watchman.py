@@ -15,7 +15,6 @@ LINUX_VERSION_RE = re.compile(r'^(?P<name>[^0-9]*) (?P<major>[0-9]{1,3})\.'
                               '(?P<patch>[0-9]{1,3}))?.*$')
 WINDOWS_VERSION_RE = re.compile(r'^(?P<name>[^0-9]* (?P<major>[0-9]{1,3})\.'
                                 '(?P<minor>[0-9]{1,3}).*)$')
-INSTALLED_RAM_RE = re.compile(r'^(?P<val>[0-9\.]+) (?P<unit>(?:GB|kB))$')
 PROCESSOR_RE = re.compile(r'(?P<brand>.*) \((?P<cpu_logical_cores>[0-9]+) core '
                           '(?P<cpu_physical_cores>[0-9]+) processor\)$')
 
@@ -26,7 +25,7 @@ class InventoryClient(BaseInventory):
     def __init__(self, config_d):
         super(InventoryClient, self).__init__(config_d)
         self.base_url = 'https://%(account)s.monitoringclient.com' % config_d
-        self.base_api_url = '{}/v2.2'.format(self.base_url)
+        self.base_api_url = '{}/v2.5'.format(self.base_url)
         # requests session setup
         self.session = requests.Session()
         self.session.headers.update({'user-agent': 'zentral/0.0.1',
@@ -78,16 +77,16 @@ class InventoryClient(BaseInventory):
                        'url': url_tmpl.format(self.base_url, group_d['slug'])})
         return ll
 
-    def _group_machine_links_from_plugin_id(self, pid):
+    def _group_machine_links_from_plugin_slug(self, slug):
         ll = []
         for anchor_text, url_tmpl in (('Plugin History',
                                        '{}/computers/%MACHINE_SNAPSHOT_REFERENCE%/{}/history'),):
             ll.append({'anchor_text': anchor_text,
-                       'url': url_tmpl.format(self.base_url, pid)})
+                       'url': url_tmpl.format(self.base_url, slug)})
         return ll
 
     def get_machines(self):
-        group_cache = {g.pop('id'): g for g in self._groups()}
+        group_cache = {g.pop('uid'): g for g in self._groups()}
         machines = {}
         for c in self._computers():
             platform = c.pop('platform')
@@ -142,10 +141,10 @@ class InventoryClient(BaseInventory):
             groups = []
             for plugin_result in c.get('plugin_results', []):
                 if plugin_result['status'] == 'warning':
-                    pid = plugin_result['id']
+                    slug = plugin_result['slug']
                     groups.append({'name': "{} - Warning".format(plugin_result['name']),
-                                   'reference': pid,
-                                   'machine_links': self._group_machine_links_from_plugin_id(pid)})
+                                   'reference': slug,
+                                   'machine_links': self._group_machine_links_from_plugin_slug(slug)})
             if groups:
                 ct['groups'] = groups
 
@@ -166,24 +165,14 @@ class InventoryClient(BaseInventory):
                 ct['os_version'] = os_version
 
             # system info
-            system_info = {'computer_name': c['machine_name'],
-                           'hardware_model': c['model_identifier'],
-                           'cpu_brand': c['processor'],
-                           }
-            m = INSTALLED_RAM_RE.match(c['installed_ram'])
-            if m:
-                val, unit = m.groups()
-                if "." in val:
-                    val = float(val)
-                else:
-                    val = int(val)
-                if unit == "kB":
-                    mul = 2 ** 10
-                elif unit == "GB":
-                    mul = 2 ** 30
-                else:
-                    raise ValueError('Unknown unit')
-                system_info['physical_memory'] = int(val * mul)
+            system_info = {}
+            for attr, si_attr in (('computer_name', 'computer_name'),
+                                  ('model_identifier', 'hardware_model'),
+                                  ('processor', 'cpu_brand')):
+                val = c.get(attr)
+                if val:
+                    system_info[si_attr] = val
+            system_info['physical_memory'] = int(c['ram_installed_in_bytes'])
             m = PROCESSOR_RE.match(c['processor'])
             if m:
                 system_info.update({'cpu_brand': re.sub(r'\s+', ' ', m.group('brand')),
