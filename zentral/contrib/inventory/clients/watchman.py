@@ -26,7 +26,7 @@ class InventoryClient(BaseInventory):
     def __init__(self, config_d):
         super(InventoryClient, self).__init__(config_d)
         self.base_url = 'https://%(account)s.monitoringclient.com' % config_d
-        self.base_api_url = '{}/v2.2'.format(self.base_url)
+        self.base_api_url = '{}/v2.5'.format(self.base_url)
         # requests session setup
         self.session = requests.Session()
         self.session.headers.update({'user-agent': 'zentral/0.0.1',
@@ -87,7 +87,7 @@ class InventoryClient(BaseInventory):
         return ll
 
     def get_machines(self):
-        group_cache = {g.pop('id'): g for g in self._groups()}
+        group_cache = {g.pop('uid'): g for g in self._groups()}
         machines = {}
         for c in self._computers():
             platform = c.pop('platform')
@@ -142,7 +142,7 @@ class InventoryClient(BaseInventory):
             groups = []
             for plugin_result in c.get('plugin_results', []):
                 if plugin_result['status'] == 'warning':
-                    pid = plugin_result['id']
+                    pid = plugin_result['uid']
                     groups.append({'name': "{} - Warning".format(plugin_result['name']),
                                    'reference': pid,
                                    'machine_links': self._group_machine_links_from_plugin_id(pid)})
