@@ -15,8 +15,8 @@ LINUX_VERSION_RE = re.compile(r'^(?P<name>[^0-9]*) (?P<major>[0-9]{1,3})\.'
                               '(?P<patch>[0-9]{1,3}))?.*$')
 WINDOWS_VERSION_RE = re.compile(r'^(?P<name>[^0-9]* (?P<major>[0-9]{1,3})\.'
                                 '(?P<minor>[0-9]{1,3}).*)$')
-PROCESSOR_RE = re.compile(r'(?P<brand>.*) \((?P<cpu_logical_cores>[0-9]+) core '
-                          '(?P<cpu_physical_cores>[0-9]+) processor\)$')
+PROCESSOR_RE = re.compile(r'(?P<cpu_brand>.*) \((?:(?P<cpu_physical_cores>[0-9]+) core )?'
+                          '(?P<cpus>[0-9]+) processor\)$')
 
 
 class InventoryClient(BaseInventory):
@@ -84,6 +84,26 @@ class InventoryClient(BaseInventory):
             ll.append({'anchor_text': anchor_text,
                        'url': url_tmpl.format(self.base_url, slug)})
         return ll
+
+    @staticmethod
+    def _system_info_update_dict_from_processor(processor):
+        cpu_update_dict = {}
+        processor = processor.strip()
+        m = PROCESSOR_RE.match(processor)
+        if m:
+            cpu_brand = re.sub(r'\s+', ' ', m.group('cpu_brand'))
+            if cpu_brand:
+                cpu_update_dict['cpu_brand'] = cpu_brand
+            cpu_physical_cores = m.group('cpu_physical_cores')
+            if cpu_physical_cores:
+                cpu_physical_cores = int(cpu_physical_cores)
+                if cpu_physical_cores:
+                    cpu_update_dict['cpu_physical_cores'] = cpu_physical_cores
+        else:
+            logger.info('Unknown processor structure "%s"', processor)
+            if processor:
+                cpu_update_dict['cpu_brand'] = processor
+        return cpu_update_dict
 
     def get_machines(self):
         group_cache = {g.pop('uid'): g for g in self._groups()}
@@ -173,14 +193,7 @@ class InventoryClient(BaseInventory):
                 if val:
                     system_info[si_attr] = val
             system_info['physical_memory'] = int(c['ram_installed_in_bytes'])
-            m = PROCESSOR_RE.match(c['processor'])
-            if m:
-                system_info.update({'cpu_brand': re.sub(r'\s+', ' ', m.group('brand')),
-                                    'cpu_logical_cores': int(m.group('cpu_logical_cores')),
-                                    'cpu_physical_cores': int(m.group('cpu_physical_cores'))})
-            else:
-                logger.info('Unknown processor structure "%s"', c['processor'])
-                system_info['cpu_brand'] = c['processor']
+            system_info.update(self._system_info_update_dict_from_processor(c['processor']))
             ct['system_info'] = system_info
 
             # network interfaces
