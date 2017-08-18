@@ -3,12 +3,13 @@ import logging
 import os.path
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core import signing
+from django.core.exceptions import SuspiciousOperation
 from django.core.urlresolvers import reverse_lazy
 from django.db.models import F
 from django.http import (FileResponse,
                          Http404,
                          HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect)
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
@@ -18,14 +19,19 @@ from zentral.utils.api_views import (API_SECRET,
                                      SignedRequestHeaderJSONPostAPIView)
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
-from .events import post_monolith_munki_request, post_monolith_repository_updates, post_monolith_sync_catalogs_request
+from .events import (post_monolith_cache_server_update_request,
+                     post_monolith_munki_request, post_monolith_repository_updates,
+                     post_monolith_sync_catalogs_request)
 from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
-                    AddManifestSubManifestForm, DeleteManifestSubManifestForm,
+                    AddManifestSubManifestForm,
+                    CacheServersPostForm,
+                    ConfigureCacheServerForm,
+                    DeleteManifestSubManifestForm,
                     ManifestForm,
                     PkgInfoSearchForm, UpdatePkgInfoCatalogForm,
                     SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm)
-from .models import (Catalog, Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
+from .models import (Catalog, CacheServer, Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
 from .osx_package.builder import MunkiMonolithConfigPkgBuilder
 from .utils import build_manifest_enrollment_package
@@ -533,6 +539,7 @@ class ManifestView(LoginRequiredMixin, DetailView):
         context['monolith'] = True
         context['manifest_enrollment_packages'] = list(manifest.manifestenrollmentpackage_set.all())
         context['manifest_enrollment_packages'].sort(key=lambda mep: (mep.get_optional(), mep.get_name(), mep.id))
+        context['manifest_cache_servers'] = list(manifest.cacheserver_set.all().order_by("name"))
         context['manifest_catalogs'] = list(manifest.manifestcatalog_set
                                                     .prefetch_related("tags")
                                                     .select_related("catalog").all())
@@ -746,6 +753,34 @@ class DeleteManifestSubManifestView(BaseManifestM2MView):
         return {'sub_manifest': self.m2m_object}
 
 
+class ConfigureManifestCacheServerView(LoginRequiredMixin, FormView):
+    form_class = ConfigureCacheServerForm
+    template_name = "monolith/configure_manifest_cache_server.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.manifest = get_object_or_404(Manifest, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["monolith"] = True
+        ctx["manifest"] = self.manifest
+        return ctx
+
+    def form_valid(self, form):
+        ctx = self.get_context_data()
+        ctx["curl_command"] = form.build_curl_command(self.manifest)
+        return render(self.request, 'monolith/manifest_cache_server_setup.html', ctx)
+
+
+class DeleteManifestCacheServerView(LoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        cache_server = get_object_or_404(CacheServer, pk=kwargs["cs_pk"], manifest__pk=kwargs["pk"])
+        manifest = cache_server.manifest
+        cache_server.delete()
+        return HttpResponseRedirect("{}#cache-servers".format(manifest.get_absolute_url()))
+
+
 # API
 
 
@@ -756,6 +791,23 @@ class SyncCatalogsView(SignedRequestHeaderJSONPostAPIView):
         post_monolith_sync_catalogs_request(self.user_agent, self.ip)
         monolith_conf.repository.sync_catalogs()
         return {'status': 0}
+
+
+class CacheServersView(SignedRequestHeaderJSONPostAPIView):
+    verify_module = "zentral.contrib.monolith"
+
+    def do_post(self, data):
+        form = CacheServersPostForm(data)
+        if form.is_valid():
+            manifest = get_object_or_404(Manifest, meta_business_unit=self.business_unit.meta_business_unit)
+            cache_server = form.save(manifest, self.ip)
+            post_monolith_cache_server_update_request(self.user_agent, self.ip, cache_server=cache_server)
+            return {'status': 0}
+        else:
+            post_monolith_cache_server_update_request(self.user_agent, self.ip, errors=form.errors)
+            # TODO: JSON response with error code and form.errors.as_json()
+            print(form.errors)
+            raise SuspiciousOperation("Posted json data invalid")
 
 
 # managedsoftwareupdate API
@@ -929,8 +981,10 @@ class MRPackageView(MRSignedView):
                 if pkginfo.pk == pk:
                     event_payload["repository_package"].update({"name": pkginfo.name.name,
                                                                 "version": pkginfo.version})
+                    cache_server = CacheServer.objects.get_current_for_manifest_and_ip(self.manifest, self.ip)
                     return monolith_conf.repository.make_munki_repository_response(
-                        "pkgs", pkginfo.data["installer_item_location"]
+                        "pkgs", pkginfo.data["installer_item_location"],
+                        cache_server=cache_server
                     )
 
 

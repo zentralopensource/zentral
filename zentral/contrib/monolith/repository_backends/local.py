@@ -19,7 +19,7 @@ class Repository(BaseRepository):
     def download_all_catalog(self):
         return self.get_all_catalog_local_path()
 
-    def make_munki_repository_response(self, section, name):
+    def make_munki_repository_response(self, section, name, cache_server=None):
         filepath = os.path.join(self.root, section, name)
         if not os.path.isfile(filepath):
             return HttpResponseNotFound("not found")

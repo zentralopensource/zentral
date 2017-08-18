@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
+  <li class="active">Configure cache server</li>
+</ol>
+
+<h2>Configure cache server</h2>
+<form method="POST" class="form">{% csrf_token %}
+  {{ form|bootstrap }}
+  <a href="{{ manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
+  <button type="submit" class="btn btn-primary">Get curl command</button>
+</form>
+{% endblock %}

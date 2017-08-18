@@ -54,11 +54,13 @@ class Repository(BaseRepository):
             raise RepositoryError
         return filepath
 
-    def make_munki_repository_response(self, section, name):
+    def make_munki_repository_response(self, section, name, cache_server=None):
         expires_in = 600  # 10 minutes, max AWS sig v4 = 7 days
         key = os.path.join(self.prefix, section, name)
         url = self.client.generate_presigned_url('get_object',
                                                  Params={'Bucket': self.bucket,
                                                          'Key': key},
                                                  ExpiresIn=expires_in)
+        if cache_server:
+            url = cache_server.get_cache_url(url)
         return HttpResponseRedirect(url)

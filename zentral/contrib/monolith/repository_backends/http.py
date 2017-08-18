@@ -25,5 +25,8 @@ class Repository(BaseRepository):
                 f.write(chunk)
         return filepath
 
-    def make_munki_repository_response(self, section, name):
-        return HttpResponseRedirect(os.path.join(self.root, section, name))
+    def make_munki_repository_response(self, section, name, cache_server=None):
+        url = os.path.join(self.root, section, name)
+        if cache_server:
+            url = cache_server.get_cache_url(url)
+        return HttpResponseRedirect(url)

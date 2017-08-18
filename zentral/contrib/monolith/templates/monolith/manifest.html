@@ -144,4 +144,40 @@
   </tbody>
 </table>
 
+<a name="cache-servers"></a>
+<h3>{{ manifest_cache_servers|length }} Cache server{{ manifest_cache_servers|length|pluralize }}</h3>
+
+<p><a class="btn btn-default" href="{% url 'monolith:configure_manifest_cache_server' object.id %}">Configure</a></p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>name</th>
+      <th>public ip</th>
+      <th>base url</th>
+      <th>created at</th>
+      <th>updated at</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for manifest_cache_server in manifest_cache_servers %}
+    <tr>
+      <td>{{ manifest_cache_server.name }}</td>
+      <td>{{ manifest_cache_server.public_ip_address }}</td>
+      <td>{{ manifest_cache_server.base_url }}</td>
+      <td>{{ manifest_cache_server.created_at }}</td>
+      <td>{{ manifest_cache_server.updated_at }}</td>
+      <td width="15%">
+        <form method="POST" action="{% url 'monolith:delete_manifest_cache_server' object.id manifest_cache_server.id %}">{% csrf_token %}
+          <button class="btn btn-danger">
+            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+          </button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
 {% endblock %}

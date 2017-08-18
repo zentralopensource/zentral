@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
+  <li class="active">Cache server update command</li>
+</ol>
+
+<h2>Cache server update command</h2>
+<p>
+  <pre>{{ curl_command }}</pre>
+</p>
+{% endblock %}

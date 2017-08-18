@@ -1,13 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import os.path
 import plistlib
+import random
 import urllib.parse
 from django.contrib.postgres.fields import JSONField
 from django.core import signing
 from django.db import models, connection
 from django.db.models import Q
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
@@ -593,3 +595,50 @@ class ManifestEnrollmentPackage(models.Model):
     @cached_property
     def tag_set(self):
         return set(self.tags.all())
+
+
+class CacheServerManager(models.Manager):
+    MAX_AGE = timedelta(minutes=5)
+
+    def get_current_for_manifest_and_ip(self, manifest, ip):
+        min_updated_at = timezone.now() - self.MAX_AGE
+        qs = self.filter(manifest=manifest,
+                         public_ip_address=ip,
+                         updated_at__gte=min_updated_at)
+        try:
+            return random.choice(qs)
+        except IndexError:
+            return None
+
+
+class CacheServer(models.Model):
+    name = models.CharField(max_length=256)
+    manifest = models.ForeignKey(Manifest)
+    public_ip_address = models.GenericIPAddressField()
+    base_url = models.URLField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = CacheServerManager()
+
+    class Meta:
+        unique_together = (("name", "manifest"),)
+
+    def get_cache_url(self, url):
+        """Build the cache url to redirect to from the repo url
+
+        Apply the scheme and netloc from the cache server base url to the
+        repository url.
+        """
+        p_url = urllib.parse.urlparse(url)
+        p_base_url = urllib.parse.urlparse(self.base_url)
+        p_url = p_url._replace(scheme=p_base_url.scheme,
+                               netloc=p_base_url.netloc)
+        return p_url.geturl()
+
+    def serialize(self):
+        return {"name": self.name,
+                "manifest": {"id": self.manifest.id,
+                             "name": str(self.manifest)},
+                "public_ip_address": self.public_ip_address,
+                "base_url": self.base_url}
