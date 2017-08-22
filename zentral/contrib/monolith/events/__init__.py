@@ -34,6 +34,9 @@ register_event_type(MonolithUpdateCacheServerRequestEvent)
 class MonolithRepositoryUpdateEvent(BaseEvent):
     event_type = "monolith_repository_update"
     tags = ["monolith"]
+    payload_aggregations = [
+        ("action", {"type": "terms", "bucket_number": 4, "label": "Decisions"}),
+    ]
 
 
 register_event_type(MonolithRepositoryUpdateEvent)
