@@ -26,13 +26,18 @@ class QueryForm(forms.Form):
     value = forms.CharField(required=False,
                             help_text="Why is this query relevant. Can be left empty",
                             widget=forms.Textarea(attrs={'rows': 3}))
-    interval = forms.IntegerField(min_value=10,  # 10 seconds
-                                  max_value=2678400,  # 31 days
-                                  initial=3600)
     removed = forms.BooleanField(label='Include {"action": "removed"} results?',
                                  help_text='If False, only {"action": "added"} results will be in the logs',
                                  initial=True,
                                  required=False)
+    snapshot = forms.BooleanField(label='Run this query in "snapshot" mode?',
+                                  help_text=('If True, osquery will not store differentials '
+                                             'and will not emulate an event stream'),
+                                  initial=False,
+                                  required=False)
+    interval = forms.IntegerField(min_value=10,  # 10 seconds
+                                  max_value=2678400,  # 31 days
+                                  initial=3600)
     shard = forms.IntegerField(min_value=1, max_value=100, required=False,
                                help_text="Restrict this query to a percentage (1-100) of target hosts")
 
@@ -41,6 +46,12 @@ class QueryForm(forms.Form):
         if not remove:
             remove = False
         return remove
+
+    def clean_snapshot(self):
+        snapshot = self.cleaned_data.get("snapshot")
+        if not snapshot:
+            snapshot = False
+        return snapshot
 
     def clean_description(self):
         description = self.cleaned_data.get("description")
@@ -55,6 +66,14 @@ class QueryForm(forms.Form):
             return None
         else:
             return value
+
+    def clean(self):
+        cleaned_data = super().clean()
+        removed = cleaned_data["removed"]
+        snapshot = cleaned_data["snapshot"]
+        if removed and snapshot:
+            raise forms.ValidationError('{"action": "removed"} results are not available in "snapshot" mode')
+        return cleaned_data
 
     def get_item_d(self):
         return {f: v for f, v in self.cleaned_data.items() if v is not None}
@@ -71,7 +90,7 @@ class QueryForm(forms.Form):
 
 class CreateProbeForm(BaseCreateProbeForm, QueryForm):
     model = OsqueryProbe
-    field_order = ("name", "query", "description", "value", "interval", "removed", "shard")
+    field_order = ("name", "query", "description", "value", "removed", "snapshot", "interval", "shard")
 
     def get_body(self):
         return {"queries": [self.get_item_d()]}

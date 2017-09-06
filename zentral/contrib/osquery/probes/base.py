@@ -52,7 +52,8 @@ class OsqueryResultProbe(BaseProbe):
 class OsqueryQuery(object):
     def __init__(self, probe, query, interval=3600,
                  description=None, value=None,
-                 removed=True, platform=None, shard=None, version=None,
+                 removed=True, snapshot=False,
+                 platform=None, shard=None, version=None,
                  prefix="", hash_length=OsqueryResultProbe.hash_length):
         self.probe = probe
         self.query = query
@@ -60,6 +61,7 @@ class OsqueryQuery(object):
         self.description = description
         self.value = value
         self.removed = removed
+        self.snapshot = snapshot
         self.platform = platform
         self.shard = shard
         self.version = version
@@ -133,11 +135,20 @@ class OsqueryQuerySerializer(serializers.Serializer):
                                   help_text="Why is this query relevant. Not required")
     removed = serializers.BooleanField(required=False,
                                        help_text='Include {"action": "removed"} results?')
+    snapshot = serializers.BooleanField(required=False,
+                                        help_text='Run this query in "snapshot" mode')
     platform = serializers.MultipleChoiceField(choices=PLATFORM_CHOICES, required=False)
     shard = serializers.IntegerField(min_value=1, max_value=100, required=False,
                                      help_text="Restrict this query to a percentage (1-100) of target hosts")
     version = serializers.RegexField('^[0-9]+\.[0-9]+\.[0-9]+\Z', required=False,
                                      help_text="Only run on osquery versions greater than or equal-to *")
+
+    def validate(self, data):
+        removed = data.get("removed", False)
+        snapshot = data.get("snapshot", False)
+        if removed and snapshot:
+            raise serializers.ValidationError('{"action": "removed"} results are not available in "snapshot" mode')
+        return data
 
 
 class OsqueryProbeSerializer(BaseProbeSerializer):
