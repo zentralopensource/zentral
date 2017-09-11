@@ -80,7 +80,7 @@ class PreferenceFile(object):
                 "select username, filename, key, value "
                 "from "
                 "(select * from users where directory like '/Users/%') u, "
-                "preferences p, "
+                "plist p, "
                 "file f "
                 "WHERE "
                 "({rel_path_tests}) and ({key_tests}) "
@@ -90,7 +90,7 @@ class PreferenceFile(object):
             query_template = (
                 "select filename, key, value "
                 "from "
-                "preferences p, file f "
+                "plist p, file f "
                 "WHERE "
                 "({rel_path_tests}) and ({key_tests}) "
                 "and f.path = p.path"
