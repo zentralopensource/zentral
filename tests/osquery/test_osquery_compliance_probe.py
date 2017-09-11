@@ -41,7 +41,7 @@ class OsqueryComplianceProbeTestCase(TestCase):
         cls.query_pfu_query = (
             "select username, filename, key, value from "
             "(select * from users where directory like '/Users/%') u, "
-            "preferences p, file f "
+            "plist p, file f "
             "WHERE ("
             "(p.path like u.directory || '/Library/Preferences/%onepassword4%') or "
             "(p.path like u.directory || '/Library/Preferences/%/%onepassword4%')"
@@ -65,7 +65,7 @@ class OsqueryComplianceProbeTestCase(TestCase):
         # probe global preference file
         cls.query_pfg_query = (
             "select filename, key, value from "
-            "preferences p, file f "
+            "plist p, file f "
             "WHERE ("
             "(p.path = '/Library/Preferences/Bluetooth')"
             ") and ("
