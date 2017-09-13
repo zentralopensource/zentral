@@ -944,9 +944,6 @@ class MRPackageView(MRSignedView):
                 mep = ManifestEnrollmentPackage.objects.get(manifest=self.manifest, pk=mep_id)
             except ManifestEnrollmentPackage.DoesNotExist:
                 return
-            if not os.path.exists(mep.file.name):
-                logger.error("Missing enrollment package %s", mep.file.name)
-                build_manifest_enrollment_package(mep)
             event_payload["manifest_enrollment_package"]["filename"] = mep.file.name
             return FileResponse(mep.file)
         elif model == "sub_manifest_attachment":

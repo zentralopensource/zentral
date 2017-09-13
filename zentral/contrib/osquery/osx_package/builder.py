@@ -99,7 +99,7 @@ class OsqueryZentralEnrollPkgBuilder(PackageBuilder):
         extra_prog_args.append("--tls_server_certs={}".format(tls_server_certs_install_path))
 
         # carver
-        disable_carver = kwargs["disable_carver"]
+        disable_carver = kwargs.get("disable_carver", True)
         extra_prog_args.append("--disable_carver={}".format(str(disable_carver).lower()))
         if not disable_carver:
             extra_prog_args.append("--carver_start_endpoint={}".format(reverse('osquery:carver_start')))
