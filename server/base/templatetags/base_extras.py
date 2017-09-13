@@ -28,7 +28,7 @@ def main_menu_app_dropdowns(context):
                 continue
             main_menu_cfg = getattr(url_module, 'main_menu_cfg', None)
             if not main_menu_cfg:
-                logger.warning('App %s w/o main menu config', app_name)
+                logger.info('App %s w/o main menu config', app_name)
                 continue
             link_list = []
             dropdown_cfg = {'app_shortname': app_shortname,
@@ -68,7 +68,7 @@ def setup_dropdown(context):
                 continue
             setup_menu_cfg = getattr(url_module, 'setup_menu_cfg', None)
             if not setup_menu_cfg:
-                logger.warning('App %s w/o setup menu config', app_name)
+                logger.info('App %s w/o setup menu config', app_name)
                 continue
             section_cfg = {'app_shortname': app_shortname,
                            'title': setup_menu_cfg.get('title', None) or app_shortname.title(),
