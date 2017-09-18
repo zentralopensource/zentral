@@ -6,7 +6,7 @@ SERIAL_NUMBER=$(/usr/sbin/ioreg -c IOPlatformExpertDevice -d 2 | awk -F\" '/IOPl
 MACHINE_ID="%API_SECRET%\$SERIAL\$${SERIAL_NUMBER}"
 
 ## set machine_id
-/usr/bin/sed -i '' -e "s/%MACHINE_ID%/$MACHINE_ID/" /var/db/santa/config.plist
+/usr/bin/defaults write /var/db/santa/config.plist MachineID "$MACHINE_ID"
 
 ## load com.google.santad.plist
 /bin/launchctl load -w "/Library/LaunchDaemons/com.google.santad.plist"  >/dev/null 2>&1

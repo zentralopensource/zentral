@@ -4,8 +4,6 @@
 <dict>
 	<key>ClientMode</key>
 	<integer>%MODE%</integer>
-	<key>MachineID</key>
-	<string>%MACHINE_ID%</string>
 	<key>SyncBaseURL</key>
 	<string>https://%TLS_HOSTNAME%/santa/</string>
 </dict>
