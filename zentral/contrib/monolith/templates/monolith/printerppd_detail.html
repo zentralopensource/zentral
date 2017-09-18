@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{%  url 'monolith:ppds' %}">Monolith printer PPDs</a></li>
+  <li class="active">{{ object.model_name }}</li>
+</ol>
+
+<h2>PPD {{ object.model_name }}</h2>
+
+<dl class="dl-horizontal">
+  <dt>Model name</dt>
+  <dd>{{ object.model_name }}</dd>
+  <dt>Short name</dt>
+  <dd>{{ object.short_name }}</dd>
+  <dt>Manufacturer</dt>
+  <dd>{{ object.manufacturer }}</dd>
+  <dt>Product</dt>
+  <dd>
+    <ul class="list-unstyled">
+      {% for product in object.product %}
+      <li>{{ product  }}</li>
+      {% endfor %}
+    </ul>
+  </dd>
+  <dt>File version</dt>
+  <dd>{{ object.file_version }}</dd>
+  <dt>PC file name</dt>
+  <dd>{{ object.pc_file_name }}</dd>
+  <dt>File compressed</dt>
+  <dd>{{ object.file_compressed|yesno }}</dd>
+  <dt>Created at</dt>
+  <dd>{{ object.created_at|default:"-" }}</dd>
+<dl>
+
+<h3>{{ printers|length }} printer{{ printers|length|pluralize }}</h3>
+
+{% if printers %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Manifest</th>
+      <th>Tags</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for printer in printers %}
+    <tr>
+      <td><a href="{% url 'monolith:manifest' printer.manifest.id %}">{{ printer.manifest }}</a></td>
+      <td>
+        {% for tag in printer.tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

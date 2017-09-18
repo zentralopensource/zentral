@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Monolith printer PPDs</li>
+</ol>
+
+<h2>{{ object_list|length }} PPD{{ object_list|length|pluralize }}</h2>
+
+<p><a class="btn btn-default" href="{% url 'monolith:upload_ppd' %}">Upload</a></p>
+
+<table class="table">
+  <thead>
+    <th>Model name</th>
+    <th>Manufacturer</th>
+    <th>Created at</th>
+  </thead>
+  <tbody>
+    {% for ppd in object_list %}
+    <tr>
+      <td>
+        <a href="{% url 'monolith:ppd' ppd.id %}">{{ ppd.model_name }}</a>
+      </td>
+      <td>{{ ppd.manufacturer }}</td>
+      <td>{{ ppd.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

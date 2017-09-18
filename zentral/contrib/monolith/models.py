@@ -4,16 +4,18 @@ import os.path
 import plistlib
 import random
 import urllib.parse
-from django.contrib.postgres.fields import JSONField
+from django.contrib.postgres.fields import ArrayField, JSONField
 from django.core import signing
 from django.db import models, connection
-from django.db.models import Q
+from django.db.models import F, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.text import slugify
+from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from .conf import monolith_conf
+from .utils import make_printer_package_info
 
 
 logger = logging.getLogger("zentral.contrib.monolith.models")
@@ -433,6 +435,16 @@ class Manifest(models.Model):
                     d[ep.builder] = ep
         return d
 
+    def printers(self, tags=None):
+        # Find the existing printers for a given set of tags.
+        if tags is None:
+            tags = []
+        qs = (self.printer_set
+                  .prefetch_related("tags")
+                  .filter(Q(tags__isnull=True) | Q(tags__in=tags))
+                  .filter(trashed_at__isnull=True))
+        return list(qs)
+
     def pkginfos_with_deps_and_updates(self, tags=None):
         """PkgInfos linked to a manifest for a given set of tags"""
         if tags:
@@ -506,6 +518,15 @@ class Manifest(models.Model):
             pkginfo_list.append(enrollment_package.get_signed_pkg_info())
         return plistlib.dumps(pkginfo_list)
 
+    def get_printer_catalog_signed_name(self):
+        return build_signed_name("printer_catalog", self.meta_business_unit.id)
+
+    def serialize_printer_catalog(self):
+        pkginfo_list = []
+        for printer in self.printer_set.all():
+            pkginfo_list.append(printer.pkg_info)
+        return plistlib.dumps(pkginfo_list)
+
     def serialize(self, tags):
         data = {'catalogs': [c.get_signed_name() for c in self.catalogs(tags)],
                 'included_manifests': []}
@@ -531,6 +552,17 @@ class Manifest(models.Model):
                 # TODO: do not remove munki deps
                 key = "managed_uninstalls"
             data.setdefault(key, []).append(builder_config["update_for"])
+
+        # printers
+
+        # include the catalog with all the printers for autoremove
+        all_printers = self.printer_set.all()
+        if all_printers.count():
+            data['catalogs'].append(self.get_printer_catalog_signed_name())
+        # include only the matching active printers as managed installs
+        for printer in self.printers(tags):
+            print("MANAGED INSTALL", printer.get_pkg_info_name())
+            data.setdefault("managed_installs", []).append(printer.get_pkg_info_name())
 
         return plistlib.dumps(data)
 
@@ -642,3 +674,121 @@ class CacheServer(models.Model):
                              "name": str(self.manifest)},
                 "public_ip_address": self.public_ip_address,
                 "base_url": self.base_url}
+
+
+def ppd_path(instance, filename):
+    # TODO overflow ? cleanup ?
+    return 'monolith/PPDs/{0:08d}_{1}'.format(instance.pk, filename)
+
+
+class PrinterPPDManager(models.Manager):
+    def get_with_token(self, token):
+        from zentral.utils.api_views import API_SECRET
+        try:
+            payload = signing.loads(token, salt="monolith", key=API_SECRET)
+        except signing.BadSignature:
+            logger.error("Bad ppd download URL signature")
+            raise ValueError
+        else:
+            if payload["m"] == "ppd":
+                return self.get(pk=payload["k"])
+            else:
+                logger.error("Wrong payload module")
+                raise ValueError
+
+
+class PrinterPPD(models.Model):
+    model_name = models.CharField(max_length=256, editable=False)
+    short_nick_name = models.CharField(max_length=256, editable=False)
+    manufacturer = models.CharField(max_length=256, editable=False)
+    product = ArrayField(models.CharField(max_length=256), editable=False)
+    file_version = models.CharField(max_length=256, editable=False)
+    pc_file_name = models.CharField(max_length=256, editable=False)  # max_length=12 if stick to std
+    file = models.FileField(upload_to=ppd_path, blank=True)
+    file_compressed = models.BooleanField(editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = PrinterPPDManager()
+
+    def __str__(self):
+        return self.model_name or self.short_nick_name
+
+    def get_absolute_url(self):
+        return reverse("monolith:ppd", args=(self.pk,))
+
+    def get_download_url(self):
+        token = build_signed_name("ppd", self.pk)
+        return "{}{}".format(settings["api"]["tls_hostname"],
+                             reverse("monolith:download_printer_ppd", args=(token,)))
+
+    def get_destination(self):
+        if self.file_compressed:
+            extension = ".gz"
+        else:
+            extension = ""
+        destination = "{}_v{}_{}{}".format(self.pk, self.file_version, self.pc_file_name, extension)
+        return os.path.join("/Library/Printers/PPDs/Contents/Resources", destination)
+
+
+class Printer(models.Model):
+    # TODO VALIDATORS
+
+    ERROR_POLICY_ABORT_JOB = "abort-job"
+    ERROR_POLICY_RETRY_JOB = "retry-job"
+    ERROR_POLICY_RETRY_CURRENT_JOB = "retry-current-job"
+    ERROR_POLICY_STOP_PRINTER = "stop-printer"
+    ERROR_POLICY_CHOICES = [(p, p.replace("-", " ").capitalize())
+                            for p in (ERROR_POLICY_ABORT_JOB,
+                                      ERROR_POLICY_RETRY_JOB,
+                                      ERROR_POLICY_RETRY_CURRENT_JOB,
+                                      ERROR_POLICY_STOP_PRINTER)]
+
+    SCHEME_IPP = "ipp"
+    SCHEME_IPPS = "ipps"
+    SCHEME_HTTP = "http"
+    SCHEME_HTTPS = "https"
+    SCHEME_CHOICES = [(s, s) for s in (SCHEME_IPP, SCHEME_IPPS, SCHEME_HTTP, SCHEME_HTTPS)]
+
+    manifest = models.ForeignKey(Manifest)
+    tags = models.ManyToManyField(Tag, blank=True)
+    name = models.CharField(max_length=128, help_text="display name of the printer")
+    location = models.CharField(max_length=256, blank=True, help_text="location of the printer")
+    scheme = models.CharField(max_length=5, choices=SCHEME_CHOICES, default=SCHEME_IPP)
+    address = models.CharField(max_length=256)
+    shared = models.BooleanField(default=False)
+    error_policy = models.CharField(max_length=32, choices=ERROR_POLICY_CHOICES, default=ERROR_POLICY_ABORT_JOB)
+    ppd = models.ForeignKey(PrinterPPD, on_delete=models.PROTECT)
+    version = models.PositiveSmallIntegerField(default=1)
+    required_package = models.ForeignKey(PkgInfoName, blank=True, null=True, on_delete=models.PROTECT)
+    pkg_info = JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    trashed_at = models.DateTimeField(null=True)
+
+    class Meta:
+        ordering = ('name', 'id')
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.version = 1
+        else:
+            self.version = F("version") + 1
+        super().save(*args, **kwargs)
+        self.refresh_from_db()
+        self.pkg_info = make_printer_package_info(self)
+        super().save(*args, **kwargs)
+
+    def mark_as_trashed(self):
+        self.trashed_at = datetime.now()
+        super().save()
+
+    def get_pkg_info_name(self):
+        """for the manifest"""
+        return "manifest {} printer {}".format(self.manifest.id, self.id)
+
+    def get_destination(self):
+        """lpadmin destination. name used as display name => info."""
+        return self.get_pkg_info_name().replace(" ", "_")

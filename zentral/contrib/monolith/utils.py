@@ -1,6 +1,7 @@
 import hashlib
 import logging
 from django.core.files.base import ContentFile
+from django.template.loader import get_template
 
 logger = logging.getLogger('zentral.contrib.monolith.utils')
 
@@ -56,3 +57,31 @@ def build_manifest_enrollment_package(mep):
     mep.file.save(mep.get_installer_item_filename(),
                   ContentFile(package_content),
                   save=True)
+
+
+def make_printer_package_info(printer):
+    pkg_info = {
+        'name': printer.get_pkg_info_name(),
+        'version': "{}.0".format(printer.version),
+        'display_name': "Printer '{}'".format(printer.name),
+        'description': "Printer '{}' installer".format(printer.name),
+        'autoremove': True,
+        'unattended_install': True,
+        'uninstall_method': 'uninstall_script',
+        'installer_type': 'nopkg',
+        'uninstallable': True,
+        'unattended_uninstall': True,
+        'minimum_munki_version': '2.2',
+        'minimum_os_version': '10.6.0',  # TODO: HARDCODED !!!
+    }
+    # installcheck script
+    for template_name, key in (("install_check.sh", "installcheck_script"),
+                               ("postinstall.sh", "postinstall_script"),
+                               ("uninstall_check.sh", "uninstallcheck_script"),  # TODO needed for autoremove, why?
+                               ("uninstall.sh", "uninstall_script")):
+        tmpl = get_template("monolith/printer_pkginfo/{}".format(template_name))
+        pkg_info[key] = tmpl.render({"printer": printer})
+    required_package = printer.required_package
+    if required_package:
+        pkg_info["requires"] = [required_package.name]
+    return pkg_info

@@ -13,6 +13,11 @@ urlpatterns = [
         name='update_pkg_info_catalog'),
     url(r'^pkg_info_names/(?P<pk>\d+)/$', views.PkgInfoNameView.as_view(), name='pkg_info_name'),
 
+    # Printer ppd
+    url(r'^ppds/$', views.PPDsView.as_view(), name='ppds'),
+    url(r'^ppds/upload/$', views.UploadPPDView.as_view(), name='upload_ppd'),
+    url(r'^ppds/(?P<pk>\d+)/$', views.PPDView.as_view(), name='ppd'),
+
     # Catalogs
     url(r'^catalogs/$', views.CatalogsView.as_view(), name='catalogs'),
     url(r'^catalogs/create/$', views.CreateCatalogView.as_view(), name='create_catalog'),
@@ -60,6 +65,14 @@ urlpatterns = [
         views.UpdateManifestEnrollmentPackageView.as_view(), name='update_manifest_enrollment_package'),
     url(r'^manifests/(?P<pk>\d+)/delete_enrollment_package/(?P<mep_pk>\d+)/$',
         views.DeleteManifestEnrollmentPackageView.as_view(), name='delete_manifest_enrollment_package'),
+    # manifest printers
+    url(r'^manifests/(?P<m_pk>\d+)/add_printer/$',
+        views.AddManifestPrinterView.as_view(), name='add_manifest_printer'),
+    url(r'^manifests/(?P<m_pk>\d+)/printers/(?P<pk>\d+)/update/$',
+        views.UpdateManifestPrinterView.as_view(), name='update_manifest_printer'),
+    url(r'^manifests/(?P<m_pk>\d+)/printers/(?P<pk>\d+)/delete/$',
+        views.DeleteManifestPrinterView.as_view(), name='delete_manifest_printer'),
+    # manifest sub manifests
     url(r'^manifests/(?P<pk>\d+)/add_sub_manifest/$',
         views.AddManifestSubManifestView.as_view(), name='add_manifest_sub_manifest'),
     url(r'^manifests/(?P<pk>\d+)/delete_sub_manifest/(?P<m2m_pk>\d+)/$',
@@ -70,8 +83,12 @@ urlpatterns = [
         views.DeleteManifestCacheServerView.as_view(), name='delete_manifest_cache_server'),
 
     # API
-    url(r'^sync_catalogs/$', csrf_exempt(views.SyncCatalogsView.as_view()), name='sync_catalogs'),
-    url(r'^cache_servers/$', csrf_exempt(views.CacheServersView.as_view()), name='cache_servers'),
+    url(r'^sync_catalogs/$', csrf_exempt(views.SyncCatalogsView.as_view()),
+        name='sync_catalogs'),
+    url(r'^cache_servers/$', csrf_exempt(views.CacheServersView.as_view()),
+        name='cache_servers'),
+    url(r'^download_printer_ppd/(?P<token>.*)/$', views.DownloadPrinterPPDView.as_view(),
+        name='download_printer_ppd'),
 
 
     # managedsoftwareupdate API
@@ -89,6 +106,7 @@ main_menu_cfg = {
         ('webhook', 'Webhook'),
         ('catalogs', 'Catalogs'),
         ('pkg_infos', 'PkgInfos'),
+        ('ppds', 'Printer PPDs'),
         ('manifests', 'Manifests'),
         ('sub_manifests', 'Sub manifests'),
     )

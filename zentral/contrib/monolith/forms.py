@@ -9,8 +9,10 @@ from zentral.utils.api_views import make_secret
 from .attachments import MobileconfigFile, PackageFile
 from .exceptions import AttachmentError
 from .models import (CacheServer, Catalog, Manifest, ManifestCatalog, ManifestSubManifest,
+                     Printer, PrinterPPD,
                      PkgInfo, PkgInfoName, SubManifest,
                      SubManifestPkgInfo, SubManifestAttachment)
+from .ppd import get_ppd_information
 
 
 class PkgInfoSearchForm(forms.Form):
@@ -255,6 +257,22 @@ class AddManifestEnrollmentPackageForm(forms.Form):
         field.queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
 
 
+class ManifestPrinterForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        self.manifest = kwargs.pop('manifest')
+        super().__init__(*args, **kwargs)
+        field = self.fields['tags']
+        field.queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
+
+    class Meta:
+        model = Printer
+        fields = ["tags",
+                  "name", "location",
+                  "scheme", "address",
+                  "shared", "error_policy", "ppd",
+                  "required_package"]
+
+
 class AddManifestSubManifestForm(forms.Form):
     sub_manifest = forms.ModelChoiceField(queryset=SubManifest.objects.all())
     tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.none(), required=False)
@@ -326,3 +344,23 @@ class ConfigureCacheServerForm(CacheServerBaseForm):
                                                json_payload=json_payload,
                                                tls_hostname=tls_hostname,
                                                path=path)
+
+
+class UploadPPDForm(forms.ModelForm):
+    class Meta:
+        model = PrinterPPD
+        fields = ['file']
+
+    def clean_file(self):
+        f = self.cleaned_data["file"]
+        try:
+            self.cleaned_data["ppd_info"] = get_ppd_information(f)
+        except:
+            raise forms.ValidationError("Could not parse PPD file %s." % f.name)
+        return f
+
+    def save(self, *args, **kwargs):
+        ppd = PrinterPPD.objects.create(**self.cleaned_data["ppd_info"])
+        uploaded_file = self.cleaned_data["file"]
+        ppd.file.save(uploaded_file.name, uploaded_file)
+        return ppd
