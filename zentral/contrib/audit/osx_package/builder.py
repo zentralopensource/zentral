@@ -52,6 +52,9 @@ class AuditZentralShipperPkgBuilder(PackageBuilder):
     base_package_identifier = "io.zentral.audit_shipper"
     build_tmpl_dir = os.path.join(BASE_DIR, "build.tmpl")
 
+    def get_product_archive_title(self):
+        return self.build_kwargs.get("product_archive_title")
+
     def extra_build_steps(self, release, client_certificate_path, client_certificate_key_path, **kwargs):
         r = Releases()
         local_path = r.get_requested_package(release)
