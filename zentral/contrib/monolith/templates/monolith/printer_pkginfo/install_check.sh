@@ -2,6 +2,8 @@
 
 # Based on 2010 Walter Meyer SUNY Purchase College (c)
 # Modified by Nick McSpadden, 2013
+# Adapted from Graham Gilbert project
+# https://github.com/grahamgilbert/printer-pkginfo, Sept. 2017
 
 # Script to install and setup printers on a Mac OS X system in a "Munki-Friendly" way.
 # Make sure to install the required drivers first!
