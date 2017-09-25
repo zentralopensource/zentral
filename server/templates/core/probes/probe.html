@@ -55,6 +55,9 @@
       <a class="btn btn-default" href="{% url 'probes:update' probe.pk %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
       </a>
+      <a class="btn btn-default" href="{% url 'probes:clone' probe.pk %}">
+        <span class="glyphicon glyphicon-duplicate" aria-hidden="true"></span>
+      </a>
       <a class="btn btn-danger" href="{% url 'probes:delete' probe.pk %}">
         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
       </a>

@@ -12,7 +12,8 @@ from zentral.core.stores import frontend_store
 from .feeds import FeedError, export_feed, sync_feed
 from .forms import (CreateProbeForm, ProbeSearchForm,
                     InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet,
-                    AddFeedForm, ImportFeedProbeForm)
+                    AddFeedForm, ImportFeedProbeForm,
+                    CloneProbeForm)
 from .models import Feed, FeedProbe, ProbeSource
 
 logger = logging.getLogger("zentral.core.probes.views")
@@ -131,7 +132,7 @@ class ProbeDashboardDataView(LoginRequiredMixin, View):
         probe = probe_source.load()
         charts = {}
         for field, results in frontend_store.probe_events_aggregations(probe,
-                **probe.get_extra_event_search_dict()).items():
+                                                                       **probe.get_extra_event_search_dict()).items():
             a_type = results["type"]
             if a_type == "table":
                 aggregation = probe.get_aggregations()[field]
@@ -308,6 +309,27 @@ class ExportProbeView(LoginRequiredMixin, View):
         response = r.json()
         return JsonResponse({"raw_url": response["files"][filename]["raw_url"],
                              "html_url": response["html_url"]})
+
+
+class CloneProbeView(LoginRequiredMixin, FormView):
+    template_name = "core/probes/clone.html"
+    form_class = CloneProbeForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        return {"name": "{} (clone)".format(self.probe_source.name)}
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['probe_source'] = self.probe_source
+        return ctx
+
+    def form_valid(self, form):
+        new_probe = form.save(self.probe_source)
+        return HttpResponseRedirect(new_probe.get_absolute_url())
 
 
 class ReviewProbeUpdateView(LoginRequiredMixin, TemplateView):

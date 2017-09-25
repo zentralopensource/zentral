@@ -12,6 +12,7 @@ urlpatterns = [
     url(r'^(?P<pk>\d+)/update/$', views.UpdateProbeView.as_view(), name='update'),
     url(r'^(?P<pk>\d+)/delete/$', views.DeleteProbeView.as_view(), name='delete'),
     url(r'^(?P<pk>\d+)/export/$', views.ExportProbeView.as_view(), name='export'),
+    url(r'^(?P<pk>\d+)/clone/$', views.CloneProbeView.as_view(), name='clone'),
     url(r'^(?P<pk>\d+)/review_update/$', views.ReviewProbeUpdateView.as_view(), name='review_update'),
     url(r'^(?P<pk>\d+)/actions/(?P<action>\S+)/edit/$', views.EditActionView.as_view(), name='edit_action'),
     url(r'^(?P<pk>\d+)/actions/(?P<action>\S+)/delete/$', views.DeleteActionView.as_view(), name='delete_action'),

@@ -229,3 +229,12 @@ class ImportFeedProbeForm(forms.Form):
             feed_probe_last_synced_at=timezone.now(),
             body=feed_probe.body
         )
+
+
+class CloneProbeForm(forms.Form):
+    name = forms.CharField(max_length=255,
+                           help_text="Name of the new probe")
+
+    def save(self, probe_source):
+        new_probe_name = self.cleaned_data["name"]
+        return ProbeSource.objects.clone(probe_source, name=new_probe_name)

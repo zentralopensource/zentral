@@ -75,6 +75,13 @@ class ProbeSourceManager(models.Manager):
                        for rd in qs),
                       key=lambda t: t[1])
 
+    def clone(self, probe_source, name):
+        probe_source.id = None
+        probe_source.name = name
+        probe_source.status = ProbeSource.INACTIVE
+        probe_source.save()
+        return probe_source
+
 
 class ProbeSource(models.Model):
     ACTIVE = "ACTIVE"
