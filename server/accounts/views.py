@@ -8,6 +8,14 @@ from .forms import AddUserForm, UpdateUserForm
 from .models import User
 
 
+class CanManageUsersMixin(PermissionRequiredMixin):
+    permission_required = ('accounts.add_user', 'accounts.change_user', 'accounts.delete_user')
+
+
+class UsersView(CanManageUsersMixin, ListView):
+    model = User
+
+
 class NginxAuthRequestView(View):
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated():
@@ -20,14 +28,6 @@ class NginxAuthRequestView(View):
             return response
         else:
             return HttpResponse("OK")
-
-
-class CanManageUsersMixin(PermissionRequiredMixin):
-    permission_required = ('accounts.add_user', 'accounts.change_user', 'accounts.delete_user')
-
-
-class UsersView(CanManageUsersMixin, ListView):
-    model = User
 
 
 class AddUserView(CanManageUsersMixin, FormView):

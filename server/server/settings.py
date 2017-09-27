@@ -10,14 +10,14 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/1.8/ref/settings/
 """
 
-# Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 # Import the zentral settings (base.json)
 from zentral.conf import saml2_idp_metadata_file, settings as zentral_settings
+
 django_zentral_settings = zentral_settings['django']
+
+# Build paths inside the project like this: os.path.join(BASE_DIR, ...)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = django_zentral_settings['SECRET_KEY']
@@ -61,11 +61,21 @@ INSTALLED_APPS = [
 
 AUTH_USER_MODEL = 'accounts.User'
 
+AUTH_PASSWORD_VALIDATORS = django_zentral_settings.get("AUTH_PASSWORD_VALIDATORS", [])
+
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 if saml2_idp_metadata_file:
     AUTHENTICATION_BACKENDS.append('accounts.auth_backends.Saml2Backend')
+
+if "SESSION_COOKIE_AGE" in django_zentral_settings:
+    SESSION_COOKIE_AGE = django_zentral_settings["SESSION_COOKIE_AGE"]
+
+if "SESSION_EXPIRE_AT_BROWSER_CLOSE" in django_zentral_settings:
+    SESSION_EXPIRE_AT_BROWSER_CLOSE = django_zentral_settings["SESSION_EXPIRE_AT_BROWSER_CLOSE"]
+
+MAX_PASSWORD_AGE_DAYS = django_zentral_settings.get("MAX_PASSWORD_AGE_DAYS", None)
 
 LOGIN_REDIRECT_URL = '/'
 
@@ -73,7 +83,7 @@ LOGIN_REDIRECT_URL = '/'
 for app_name in zentral_settings.get('apps', []):
     INSTALLED_APPS.append(app_name)
 
-MIDDLEWARE_CLASSES = (
+MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -81,7 +91,11 @@ MIDDLEWARE_CLASSES = (
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-)
+]
+
+if MAX_PASSWORD_AGE_DAYS:
+    MIDDLEWARE.insert(MIDDLEWARE.index("django.contrib.messages.middleware.MessageMiddleware") + 1,
+                      "accounts.middleware.force_password_change_middleware")
 
 ROOT_URLCONF = 'server.urls'
 
