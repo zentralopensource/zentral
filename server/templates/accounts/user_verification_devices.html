@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<h3>Verification device{{ verification_devices|length|pluralize }}</h3>
+
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="addVD"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Add
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="addVD">
+    <li><a href="{% url 'users:add_totp' %}">TOTP</a></li>
+  </ul>
+</div>
+
+
+<table class="table">
+  <thead>
+    <th>Type</th>
+    <th>Name</th>
+    <th></th>
+  </thead>
+  <tbody>
+    {% for verification_device in verification_devices %}
+    <tr>
+      <td>{{ verification_device.get_type_for_display }}</td>
+      <td>{{ verification_device.name }}</td>
+      <td>
+        <a class="btn btn-danger" href="{{ verification_device.get_delete_url }}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

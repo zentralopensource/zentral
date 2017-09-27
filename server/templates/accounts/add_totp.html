@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load bootstrap staticfiles %}
+
+{% block content %}
+<h3>Add TOTP verification device</h3>
+
+
+<form class="form" method="POST">{% csrf_token %}
+  {{ form.secret }}
+  {{ form.name|bootstrap }}
+  <div>
+    <canvas data-uri="{{ form.get_provisioning_uri }}" id="qr"></canvas>
+    <p>Secret: <code>{{ form.initial_secret }}</code></p>
+  </div>
+  {{ form.verification_code|bootstrap }}
+  <p>
+    <a href="{% url 'users:verification_devices' %}" class="btn btn-default">Cancel</a>
+    <button type="submit" class="btn btn-primary">
+      Save
+    </button>
+  </p>
+</form>
+{% endblock %}
+
+{% block extrajs %}
+<script src="{% static 'qrious/qrious.4.0.2.min.js' %}"></script>
+<script>
+  $(document).ready(function(){
+    var $canvas = $("#qr");
+    var qr = new QRious({
+      element: document.getElementById('qr'),
+      size: 200,
+      value: $canvas.data("uri")
+    });
+  });
+</script>
+{% endblock %}

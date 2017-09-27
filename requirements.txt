@@ -13,6 +13,7 @@ pip
 prometheus_client
 psycopg2
 pygments
+pyotp
 pysaml2
 python-dateutil
 pyyaml

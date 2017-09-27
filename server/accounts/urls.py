@@ -13,4 +13,10 @@ urlpatterns = [
         name="update"),
     url(r'^(?P<pk>[0-9]+)/delete/$', views.DeleteUserView.as_view(),
         name="delete"),
+    url(r'^verification_devices/$', views.UserVerificationDevicesView.as_view(),
+        name="verification_devices"),
+    url(r'^add_totp/$', views.AddTOTPView.as_view(),
+        name="add_totp"),
+    url(r'^totp/(?P<pk>[0-9]+)/delete/$', views.DeleteTOTPView.as_view(),
+        name="delete_totp"),
 ]

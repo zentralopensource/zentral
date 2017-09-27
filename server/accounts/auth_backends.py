@@ -10,8 +10,6 @@ logger = logging.getLogger("server.accounts.auth_backends")
 
 class Saml2Backend(ModelBackend):
     def authenticate(self, session_info):
-        import pprint
-        pprint.pprint(session_info)
         username = None
         ava = session_info.get('ava')
         if ava:

@@ -1,13 +1,22 @@
 from django.conf.urls import include, url
+from django.contrib.auth.urls import urlpatterns as auth_urlpatterns
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+from accounts.views import login, VerifyView
 from zentral.conf import saml2_idp_metadata_file, settings as zentral_settings
 
 # base
 urlpatterns = [
     url(r'^', include('base.urls', namespace='base')),
     url(r'^admin/users/', include('accounts.urls', namespace='users')),
-    url(r'^accounts/', include('django.contrib.auth.urls')),
+    # special login view with verification device redirect
+    url(r'^accounts/login/$', login, name='login'),
+    url(r'^accounts/verify/$', VerifyView.as_view(), name='verify'),
 ]
+
+# add all the auth url patterns except the login
+for up in auth_urlpatterns:
+    if up.name != 'login':
+        urlpatterns.append(up)
 
 # zentral apps
 for app_name in zentral_settings.get('apps', []):
