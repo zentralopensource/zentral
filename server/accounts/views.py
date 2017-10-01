@@ -13,6 +13,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic import DetailView, FormView, ListView, TemplateView, View
+from .events import post_failed_verification_event, post_verification_device_event
 from .forms import AddTOTPForm, AddUserForm, CheckPasswordForm, UpdateUserForm, VerifyForm
 from .models import User, UserTOTP
 
@@ -36,7 +37,7 @@ def login(request):
             if not is_safe_url(url=redirect_to, host=request.get_host()):
                 redirect_to = resolve_url(settings.LOGIN_REDIRECT_URL)
 
-            if user.has_verification_device():
+            if user.has_verification_device:
                 # Redirect to verification page
                 token = signing.dumps({"auth_backend": user.backend,
                                        "redirect_to": redirect_to,
@@ -73,6 +74,10 @@ class VerifyView(FormView):
     def form_valid(self, form):
         auth_login(self.request, form.user)  # form.user has the backend (carried by the token from the login view)
         return HttpResponseRedirect(form.redirect_to)
+
+    def form_invalid(self, form):
+        post_failed_verification_event(self.request, form.user)
+        return super().form_invalid(form)
 
 
 class CanManageUsersMixin(PermissionRequiredMixin):
@@ -189,8 +194,15 @@ class AddTOTPView(LoginRequiredMixin, FormView):
         return kwargs
 
     def form_valid(self, form):
-        form.save()
+        user_totp = form.save()
+        post_verification_device_event(self.request, self.request.user,
+                                       "added", user_totp)
         return super().form_valid(form)
+
+    def form_invalid(self, form):
+        post_verification_device_event(self.request, self.request.user,
+                                       "not_added")
+        return super().form_invalid(form)
 
 
 class DeleteTOTPView(LoginRequiredMixin, FormView):
@@ -214,4 +226,11 @@ class DeleteTOTPView(LoginRequiredMixin, FormView):
 
     def form_valid(self, form):
         self.user_totp.delete()
+        post_verification_device_event(self.request, self.request.user,
+                                       "removed", self.user_totp)
         return super().form_valid(form)
+
+    def form_invalid(self, form):
+        post_verification_device_event(self.request, self.request.user,
+                                       "not_removed", self.user_totp)
+        return super().form_invalid(form)

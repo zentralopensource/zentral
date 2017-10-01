@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 import pyotp
 
@@ -45,6 +46,7 @@ class User(AbstractUser):
     def deletable(self):
         return not self.is_superuser
 
+    @cached_property
     def has_verification_device(self):
         return len(self.get_verification_devices()) > 0
 
@@ -64,6 +66,9 @@ class UserTOTP(models.Model):
     secret = models.CharField(max_length=256)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        unique_together = (("user", "name"),)
+
     def __str__(self):
         return "{} {}".format(self.get_type_for_display(), self.name)
 
@@ -75,3 +80,7 @@ class UserTOTP(models.Model):
 
     def verify(self, code):
         return pyotp.TOTP(self.secret).verify(code)
+
+    def serialize_for_event(self):
+        return {"type": "TOTP",
+                "name": self.name}

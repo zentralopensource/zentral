@@ -31,12 +31,29 @@ class FailedLoginEvent(BaseEvent):
 register_event_type(FailedLoginEvent)
 
 
+class FailedVerificationEvent(BaseEvent):
+    event_type = "zentral_failed_verification"
+    tags = ["zentral"]
+
+
+register_event_type(FailedVerificationEvent)
+
+
+class VerificationDeviceEvent(BaseEvent):
+    event_type = "zentral_verification_device"
+    tags = ["zentral"]
+
+
+register_event_type(VerificationDeviceEvent)
+
+
 # signals callbacks
 
 
-def post_event(event_cls, request, user):
+def post_event(event_cls, request, user, payload=None):
     request = EventRequest.build_from_request(request)
-    payload = {}
+    if payload is None:
+        payload = {}
     # TODO: check if user can be different than request.user
     # remove the following bit if not
     eru = EventRequestUser.build_from_user(user)
@@ -75,3 +92,16 @@ def user_login_failed_callback(sender, credentials, **kwargs):
 
 
 user_login_failed.connect(user_login_failed_callback)
+
+
+def post_failed_verification_event(request, user):
+    post_event(FailedVerificationEvent, request, user)
+
+
+def post_verification_device_event(request, user, action, verification_device=None):
+    if verification_device is None:
+        payload = {}
+    else:
+        payload = {"device": verification_device.serialize_for_event()}
+    payload["action"] = action
+    post_event(VerificationDeviceEvent, request, user, payload)
