@@ -210,7 +210,7 @@ class MachineGroup(AbstractMachineGroup):
 class OSVersion(AbstractMTObject):
     name = models.TextField(blank=True, null=True)
     major = models.PositiveIntegerField()
-    minor = models.PositiveIntegerField()
+    minor = models.PositiveIntegerField(blank=True, null=True)
     patch = models.PositiveIntegerField(blank=True, null=True)
     build = models.TextField(blank=True, null=True)
 
@@ -417,6 +417,7 @@ class MachineSnapshot(AbstractMTObject):
         return self.osx_app_instances.select_related('app').all().order_by('app__bundle_name',
                                                                            'app__bundle_version_str',
                                                                            'bundle_path')
+
     @cached_property
     def last_commit(self):
         try:
