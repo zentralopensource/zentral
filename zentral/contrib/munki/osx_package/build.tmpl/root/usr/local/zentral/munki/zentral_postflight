@@ -97,10 +97,14 @@ def get_santa_fileinfo(bundle_path):
         return {}
     stdout = stdout.strip()
     try:
-        stdout = stdout[stdout.index('{'):]
-    except ValueError:
-        return {}
-    fileinfo = json.loads(stdout)
+        fileinfo = json.loads(stdout)[0]
+    except:
+        # workaround for older santa versions
+        try:
+            stdout = stdout[stdout.index('{'):]
+        except ValueError:
+            return {}
+        fileinfo = json.loads(stdout)
     fileinfo = cleanup_santa_fileinfo_dict(fileinfo)
     return fileinfo
 
@@ -342,7 +346,8 @@ if __name__ == '__main__':
     # if it's both an auto run (vs. debug/testing) and we have santa fileinfo collected
     data['include_santa_fileinfo'] = run_type == 'auto' and job_details['include_santa_fileinfo']
     # retain the boolean about whether we've included santa fileinfo, populate w/ info or []
-    data['santa_fileinfo_included'], data['machine_snapshot']['osx_app_instances'] = ai.get_osx_app_instances(data['include_santa_fileinfo'])
+    (data['santa_fileinfo_included'],
+     data['machine_snapshot']['osx_app_instances']) = ai.get_osx_app_instances(data['include_santa_fileinfo'])
     last_seen_sha1sum = job_details.get('last_seen_sha1sum', None)
     data['reports'] = build_reports_payload(last_seen_sha1sum)
     post_job(data)
