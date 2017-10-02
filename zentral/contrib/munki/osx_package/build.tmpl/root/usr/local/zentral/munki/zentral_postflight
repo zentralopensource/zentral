@@ -1,5 +1,6 @@
 #!/usr/bin/python
 from datetime import timedelta
+from decimal import Decimal
 import hashlib
 import json
 import os
@@ -265,7 +266,7 @@ class SystemProfilerReport(object):
         else:
             warnings.warn('Unknown ram amount unit {}'.format(ram_amount_unit))
         if ram_multiplicator:
-            system_info['physical_memory'] = int(ram_amount) * ram_multiplicator
+            system_info['physical_memory'] = int(Decimal(ram_amount.replace(",", ".")) * ram_multiplicator)
 
         # Software
         data = self._get_data_type('SPSoftwareDataType')
