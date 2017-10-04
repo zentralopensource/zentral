@@ -7,7 +7,7 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.utils.api_views import make_secret, BaseEnrollmentView, BaseInstallerPackageView
 from zentral.contrib.osquery.osx_package.builder import OsqueryZentralEnrollPkgBuilder
-from zentral.contrib.osquery.deb_script.builder import OsqueryZentralEnrollScriptBuilder
+from zentral.contrib.osquery.linux_script.builder import OsqueryZentralEnrollScriptBuilder
 
 logger = logging.getLogger('zentral.contrib.osquery.views.setup')
 

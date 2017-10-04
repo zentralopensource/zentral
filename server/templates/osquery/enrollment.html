@@ -15,9 +15,15 @@
      id="get-debugging-tools"
      href="{% url 'osquery:enrollment_debugging' %}">Get enrollment debugging tools</a>
   <a class="btn btn-default download-tool"
-     href="{% url 'osquery:installer_package' %}">Download macOS enrollment pkg</a>
+     href="{% url 'osquery:installer_package' %}">
+    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+    macOS enrollment pkg
+  </a>
   <a class="btn btn-default download-tool"
-     href="{% url 'osquery:setup_script' %}">Download Ubuntu setup script</a>
+     href="{% url 'osquery:setup_script' %}">
+    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+    Linux (apt/yum) setup script
+  </a>
 </form>
 
 <div style="margin:20px 0 0 0">
