@@ -9,8 +9,8 @@ from .models import (MachineSnapshot, MachineTag, MetaMachine,
 
 
 class MachineSearchForm(forms.Form):
-    serial_number = forms.CharField(label="serial number", max_length=32, required=False)
-    name = forms.CharField(label="name", max_length=64, required=False)
+    serial_number = forms.CharField(label="serial number", required=False)
+    name = forms.CharField(label="name", required=False)
     platform = forms.ChoiceField(label="platform", choices=[], required=False,
                                  widget=forms.Select(attrs={'class': 'form-control'}))
     type = forms.ChoiceField(label="type", choices=[], required=False,
