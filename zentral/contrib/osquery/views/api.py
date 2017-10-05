@@ -10,6 +10,7 @@ from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import JSONPostAPIView, verify_secret, APIAuthError
+from zentral.contrib.inventory.conf import MACOS
 from zentral.contrib.osquery.conf import (build_osquery_conf,
                                           get_distributed_inventory_queries,
                                           INVENTORY_QUERY_NAME,
@@ -318,8 +319,11 @@ class LogView(BaseNodeView):
             decorations = r.pop("decorations", None)
             if decorations:
                 hardware_serial = decorations.get("hardware_serial")
-                if hardware_serial and hardware_serial != self.machine_serial_number:
-                    # the SN reported by osquery is not the one configured in the enrollment secret
+                if hardware_serial and self.ms.platform == MACOS and hardware_serial != self.machine_serial_number:
+                    # The SN reported by osquery is not the one configured in the enrollment secret.
+                    # For other platforms than MACOS, it could happen. For example, we take the GCE instance ID as
+                    # serial number in the enrollment secret for linux, if possible.
+                    # Osquery builds one from the SMBIOS/DMI.
                     auth_err = "osquery reported SN {} different from enrollment SN {}".format(
                         hardware_serial,
                         self.machine_serial_number
