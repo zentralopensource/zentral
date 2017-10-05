@@ -1,4 +1,6 @@
+from itertools import chain
 from django.contrib.auth.models import AbstractUser
+from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -48,10 +50,20 @@ class User(AbstractUser):
 
     @cached_property
     def has_verification_device(self):
-        return len(self.get_verification_devices()) > 0
+        return len(self._all_verification_devices) > 0
+
+    @cached_property
+    def _all_verification_devices(self):
+        return list(chain(self.usertotp_set.all(),
+                          self.useru2f_set.all()))
 
     def get_verification_devices(self):
-        return list(self.usertotp_set.all())
+        return sorted(self._all_verification_devices,
+                      key=lambda vd: vd.name)
+
+    def get_prioritized_verification_devices(self):
+        return sorted(self._all_verification_devices,
+                      key=lambda vd: (-1 * vd.PRIORITY, vd.name))
 
 
 class UserPasswordHistory(models.Model):
@@ -60,27 +72,53 @@ class UserPasswordHistory(models.Model):
     created_at = models.DateTimeField(editable=False)
 
 
-class UserTOTP(models.Model):
+class UserVerificationDevice(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=256)
-    secret = models.CharField(max_length=256)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (("user", "name"),)
+        abstract = True
+
+    def get_type_for_display(self):
+        return self.TYPE
 
     def __str__(self):
         return "{} {}".format(self.get_type_for_display(), self.name)
 
-    def get_type_for_display(self):
-        return "TOTP"
-
     def get_delete_url(self):
-        return reverse("users:delete_totp", args=(self.pk,))
+        return reverse(self.delete_url_name, args=(self.pk,))
+
+    def serialize_for_event(self):
+        return {"type": self.TYPE,
+                "name": self.name}
+
+
+class UserTOTP(UserVerificationDevice):
+    TYPE = "TOTP"
+    PRIORITY = 10
+    secret = models.CharField(max_length=256)
+    delete_url_name = "users:delete_totp"
+
+    class Meta:
+        unique_together = (("user", "name"),)
+
+    def get_verification_url(self):
+        return reverse("verify_totp")
 
     def verify(self, code):
         return pyotp.TOTP(self.secret).verify(code)
 
-    def serialize_for_event(self):
-        return {"type": "TOTP",
-                "name": self.name}
+
+class UserU2F(UserVerificationDevice):
+    TYPE = "U2F"
+    PRIORITY = 100
+    delete_url_name = "users:delete_u2f_device"
+    device = JSONField()
+
+    class Meta:
+        unique_together = (("user", "device"), ("user", "name"))
+
+    def get_verification_url(self):
+        return reverse("verify_u2f")

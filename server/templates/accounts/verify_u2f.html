@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% load bootstrap staticfiles %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-4 col-md-offset-4">
+    <form id="u2f_form" action="{% url 'verify_u2f' %}" class="panel panel-default" method="POST">{% csrf_token %}
+      <input type="hidden" id="token_response" name="token_response">
+      <div class="panel-heading">
+        <h3 class="panel-title">
+          Tap your U2F device
+        </h3>
+      </div>
+      <div class="panel-body">
+        <p id="u2f_message">Waiting for device…</p>
+      </div>
+      <div class="panel-footer btn-group btn-group-justified" style="display:none;" role="group" aria-label="retry u2f verification">
+        <div class="btn-group" role="group">
+          <a id="u2f_message_retry" class="btn btn-primary">Retry</a>
+        </div>
+      </div>
+    </form>
+    {% for link, anchor_text in form.get_alternative_verification_links %}
+    <p><a href="{{ link }}"><u>{{ anchor_text }}</u></a></p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+{% if u2f_challenge_json %}
+<script src="{% static 'yubico/u2f-api.js' %}"></script>
+<script>
+  var request = JSON.parse('{{ u2f_challenge_json|safe }}');
+
+  function show_message (message, retry) {
+    $("#u2f_message_retry").parent().parent().toggle(retry);
+    $("#u2f_message").text(message);
+  }
+
+  function sign () {
+    u2f.sign(
+      request.appId,
+      request.challenge,
+      request.registeredKeys,
+      function(data) {
+        if(data.errorCode) {
+          switch (data.errorCode) {
+            case 5:
+              show_message("Timed out waiting for device.", true);
+              break;
+            case 4:
+              show_message("This device is not registered for this account.", true);
+              break;
+            case 3:
+              show_message("Client configuration not supported.", false);
+              break;
+            case 2:
+              show_message("Bad request.", false);  // should not happen
+              break;
+            default:
+              show_message("Something went wrong.", true);
+              break;
+          }
+          return;
+        } else {
+          show_message("OK", false);
+          document.getElementById('token_response').value = JSON.stringify(data);
+          document.getElementById('u2f_form').submit();
+        }
+      }
+    );
+  }
+
+  $(document).ready(function(){
+    if (request.registeredKeys.length > 0) {
+      sign();
+      $("#u2f_message_retry").click(function (event) {
+        event.preventDefault();
+        show_message("Waiting for device…", false);
+        sign();
+      });
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

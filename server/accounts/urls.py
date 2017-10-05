@@ -19,4 +19,8 @@ urlpatterns = [
         name="add_totp"),
     url(r'^totp/(?P<pk>[0-9]+)/delete/$', views.DeleteTOTPView.as_view(),
         name="delete_totp"),
+    url(r'^u2f_devices/register/$', views.RegisterU2FDeviceView.as_view(),
+        name="register_u2f_device"),
+    url(r'^u2f_devices/(?P<pk>[0-9]+)/delete/$', views.DeleteU2FDeviceView.as_view(),
+        name="delete_u2f_device"),
 ]

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load bootstrap staticfiles %}
 
 {% block content %}
 <div class="row">
@@ -7,7 +7,7 @@
     <form class="panel panel-default" method="POST">{% csrf_token %}
       <div class="panel-heading">
         <h3 class="panel-title">
-          Enter verification code
+          Enter TOTP verification code
         </h3>
       </div>
       <div class="panel-body">
@@ -21,6 +21,9 @@
         </div>
       </div>
     </form>
+    {% for link, anchor_text in form.get_alternative_verification_links %}
+    <p><a href="{{ link }}"><u>{{ anchor_text }}</u></a></p>
+    {% endfor %}
   </div>
 </div>
 {% endblock %}

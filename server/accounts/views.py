@@ -1,3 +1,4 @@
+import json
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login
@@ -13,9 +14,12 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic import DetailView, FormView, ListView, TemplateView, View
+from u2flib_server.u2f import begin_registration, complete_registration
+from zentral.conf import settings as zentral_settings
 from .events import post_failed_verification_event, post_verification_device_event
-from .forms import AddTOTPForm, AddUserForm, CheckPasswordForm, UpdateUserForm, VerifyForm
-from .models import User, UserTOTP
+from .forms import (AddTOTPForm, AddUserForm, CheckPasswordForm, RegisterU2FDeviceForm, UpdateUserForm,
+                    VerifyTOTPForm, VerifyU2FForm)
+from .models import User, UserTOTP, UserU2F
 
 
 @sensitive_post_parameters()
@@ -45,7 +49,8 @@ def login(request):
                                       salt="zentral_verify_token",
                                       key=settings.SECRET_KEY)
                 request.session["verification_token"] = token
-                return HttpResponseRedirect(reverse("verify"))
+                verification_device = user.get_prioritized_verification_devices()[0]
+                return HttpResponseRedirect(verification_device.get_verification_url())
             else:
                 # Okay, security check complete. Log the user in.
                 auth_login(request, form.get_user())
@@ -62,13 +67,10 @@ def login(request):
     return TemplateResponse(request, "registration/login.html", context)
 
 
-class VerifyView(FormView):
-    template_name = "registration/verify.html"
-    form_class = VerifyForm
-
+class VerificationMixin(object):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["token"] = self.request.session["verification_token"]
+        kwargs["session"] = self.request.session
         return kwargs
 
     def form_valid(self, form):
@@ -78,6 +80,23 @@ class VerifyView(FormView):
     def form_invalid(self, form):
         post_failed_verification_event(self.request, form.user)
         return super().form_invalid(form)
+
+
+class VerifyTOTPView(VerificationMixin, FormView):
+    template_name = "accounts/verify_totp.html"
+    form_class = VerifyTOTPForm
+
+
+class VerifyU2FView(VerificationMixin, FormView):
+    template_name = "accounts/verify_u2f.html"
+    form_class = VerifyU2FForm
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data()
+        ctx["u2f_challenge_json"] = VerifyU2FForm(session=self.request.session).set_u2f_challenge()
+        if "u2f_challenge" in self.request.session:
+            ctx["u2f_challenge_json"] = json.dumps(self.request.session["u2f_challenge"])
+        return ctx
 
 
 class CanManageUsersMixin(PermissionRequiredMixin):
@@ -205,18 +224,18 @@ class AddTOTPView(LoginRequiredMixin, FormView):
         return super().form_invalid(form)
 
 
-class DeleteTOTPView(LoginRequiredMixin, FormView):
-    template_name = "accounts/delete_totp.html"
+class DeleteVerificationDeviceView(LoginRequiredMixin, FormView):
+    template_name = "accounts/delete_verification_device.html"
     form_class = CheckPasswordForm
     success_url = reverse_lazy("users:verification_devices")
 
     def dispatch(self, request, *args, **kwargs):
-        self.user_totp = get_object_or_404(UserTOTP, user=self.request.user, pk=kwargs["pk"])
+        self.device = get_object_or_404(self.model, user=request.user, pk=kwargs["pk"])
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["object"] = self.user_totp
+        ctx["object"] = self.device
         return ctx
 
     def get_form_kwargs(self):
@@ -225,12 +244,53 @@ class DeleteTOTPView(LoginRequiredMixin, FormView):
         return kwargs
 
     def form_valid(self, form):
-        self.user_totp.delete()
+        self.device.delete()
         post_verification_device_event(self.request, self.request.user,
-                                       "removed", self.user_totp)
+                                       "removed", self.device)
         return super().form_valid(form)
 
     def form_invalid(self, form):
         post_verification_device_event(self.request, self.request.user,
-                                       "not_removed", self.user_totp)
+                                       "not_removed", self.device)
         return super().form_invalid(form)
+
+
+class DeleteTOTPView(DeleteVerificationDeviceView):
+    model = UserTOTP
+
+
+class RegisterU2FDeviceView(LoginRequiredMixin, FormView):
+    template_name = "accounts/register_u2f_device.html"
+    form_class = RegisterU2FDeviceForm
+    success_url = reverse_lazy("users:verification_devices")
+
+    def get(self, request, *args, **kwargs):
+        user_devices = [ud.device for ud in request.user.useru2f_set.all()]
+        register_request = begin_registration(zentral_settings["api"]["tls_hostname"], user_devices)
+        self.request.session["u2f_challenge"] = dict(register_request)
+        return super().get(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data()
+        ctx["u2f_challenge_json"] = json.dumps(self.request.session["u2f_challenge"])
+        return ctx
+
+    def form_valid(self, form):
+        token_response = form.cleaned_data["token_response"]
+        u2f_challenge = self.request.session["u2f_challenge"]
+        device, _ = complete_registration(u2f_challenge, token_response,
+                                          [zentral_settings["api"]["tls_hostname"]])
+        UserU2F.objects.create(user=self.request.user,
+                               name=form.cleaned_data["name"],
+                               device=device)
+        messages.info(self.request, "U2F device registered")
+        return super().form_valid(form)
+
+
+class DeleteU2FDeviceView(DeleteVerificationDeviceView):
+    model = UserU2F

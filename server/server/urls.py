@@ -1,7 +1,7 @@
 from django.conf.urls import include, url
 from django.contrib.auth.urls import urlpatterns as auth_urlpatterns
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-from accounts.views import login, VerifyView
+from accounts.views import login, VerifyTOTPView, VerifyU2FView
 from zentral.conf import saml2_idp_metadata_file, settings as zentral_settings
 
 # base
@@ -10,7 +10,8 @@ urlpatterns = [
     url(r'^admin/users/', include('accounts.urls', namespace='users')),
     # special login view with verification device redirect
     url(r'^accounts/login/$', login, name='login'),
-    url(r'^accounts/verify/$', VerifyView.as_view(), name='verify'),
+    url(r'^accounts/verify_totp/$', VerifyTOTPView.as_view(), name='verify_totp'),
+    url(r'^accounts/verify_u2f/$', VerifyU2FView.as_view(), name='verify_u2f'),
 ]
 
 # add all the auth url patterns except the login

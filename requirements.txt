@@ -16,6 +16,7 @@ pygments
 pyotp
 pysaml2
 python-dateutil
+python-u2flib-server
 pyyaml
 redis
 requests
