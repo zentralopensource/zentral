@@ -18,7 +18,18 @@ process_events_queue = Queue('process_events',
 probes_exchange = Exchange('probes', type='fanout', durable=True)
 
 
-class PreprocessorWorker(ConsumerProducerMixin, PrometheusWorkerMixin):
+class LoggingMixin(object):
+    def log(self, msg, level):
+        logger.log(level, "{} - {}".format(self.name, msg))
+
+    def log_info(self, msg):
+        self.log(msg, logging.INFO)
+
+    def log_debug(self, msg):
+        self.log(msg, logging.DEBUG)
+
+
+class PreprocessorWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
     def __init__(self, connection, event_preprocessor):
         self.connection = connection
         self.event_preprocessor = event_preprocessor
@@ -37,9 +48,6 @@ class PreprocessorWorker(ConsumerProducerMixin, PrometheusWorkerMixin):
             ["event_type"]
         )
 
-    def log_info(self, msg):
-        logger.info("{} - {}".format(self.name, msg))
-
     def run(self, *args, **kwargs):
         self.log_info("run")
         prometheus_port = kwargs.pop("prometheus_port")
@@ -54,7 +62,7 @@ class PreprocessorWorker(ConsumerProducerMixin, PrometheusWorkerMixin):
                          callbacks=[self.process_raw_event])]
 
     def process_raw_event(self, body, message):
-        self.log_info("process raw event")
+        self.log_debug("process raw event")
         for event in self.event_preprocessor.process_raw_event(body):
             self.produced_events_counter.labels(event.event_type).inc()
             self.producer.publish(event.serialize(machine_metadata=False),
@@ -65,7 +73,7 @@ class PreprocessorWorker(ConsumerProducerMixin, PrometheusWorkerMixin):
         self.preprocessed_events_counter.inc()
 
 
-class StoreWorker(ConsumerMixin, PrometheusWorkerMixin):
+class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
     def __init__(self, connection, event_store):
         self.connection = connection
         self.channel2 = None
@@ -81,9 +89,6 @@ class StoreWorker(ConsumerMixin, PrometheusWorkerMixin):
             "Stored events",
             ["event_type"]
         )
-
-    def log_info(self, msg):
-        logger.info("{} - {}".format(self.name, msg))
 
     def run(self, *args, **kwargs):
         self.log_info("run")
@@ -111,7 +116,7 @@ class StoreWorker(ConsumerMixin, PrometheusWorkerMixin):
             self.channel2.close()
 
     def store_event(self, body, message):
-        self.log_info("store event")
+        self.log_debug("store event")
         self.event_store.store(body)
         message.ack()
         self.stored_events_counter.labels(body['_zentral']['type']).inc()
@@ -122,7 +127,7 @@ class StoreWorker(ConsumerMixin, PrometheusWorkerMixin):
         message.ack()
 
 
-class ProcessorWorker(ConsumerMixin, PrometheusWorkerMixin):
+class ProcessorWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
     def __init__(self, connection, event_processor):
         self.connection = connection
         self.channel2 = None
@@ -135,9 +140,6 @@ class ProcessorWorker(ConsumerMixin, PrometheusWorkerMixin):
             "Processed events",
             ["event_type"]
         )
-
-    def log_info(self, msg):
-        logger.info("{} - {}".format(self.name, msg))
 
     def run(self, *args, **kwargs):
         self.log_info("run")
@@ -165,7 +167,7 @@ class ProcessorWorker(ConsumerMixin, PrometheusWorkerMixin):
             self.channel2.close()
 
     def process_event(self, body, message):
-        self.log_info("process event")
+        self.log_debug("process event")
         self.event_processor.process(body)
         message.ack()
         self.processed_events_counter.labels(body['_zentral']['type']).inc()
