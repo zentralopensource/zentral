@@ -83,7 +83,7 @@ class QueryForm(forms.Form):
     @staticmethod
     def get_initial(query):
         initial = {}
-        for attr in ("query", "description", "value", "interval", "removed", "shard"):
+        for attr in ("query", "description", "value", "interval", "removed", "shard", "snapshot"):
             value = getattr(query, attr, None)
             if value is not None:
                 initial[attr] = value

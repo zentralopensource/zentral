@@ -77,10 +77,15 @@
       <td>Interval</td>
       <td>{{ query.interval }}s</td>
     </tr>
-    {% if not query.removed %}
+    {% if query.snapshot %}
+    <tr>
+      <td>Snapshot?</td>
+      <td>{{ query.snapshot|yesno }}
+    </tr>
+    {% else %}
     <tr>
       <td>Removed?</td>
-      <td>No</td>
+      <td>{{ query.removed|yesno }}</td>
     </tr>
     {% endif %}
     {% if query.shard %}
