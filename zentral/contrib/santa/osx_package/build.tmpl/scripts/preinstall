@@ -1,7 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 ## Preinstall script
 
-## unload com.google.santad.plist
-/bin/launchctl unload -w "/Library/LaunchDaemons/com.google.santad.plist" > /dev/null
+set -e
 
-exit 0
+## unload com.google.santad.plist
+launchctl unload -w "/Library/LaunchDaemons/com.google.santad.plist"

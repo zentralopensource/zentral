@@ -1,20 +1,23 @@
-#!/bin/sh
+#!/bin/bash
 ## postinstall
 
+set -e
+
 ## detect client device serial_number
-SERIAL_NUMBER=$(/usr/sbin/ioreg -c IOPlatformExpertDevice -d 2 | awk -F\" '/IOPlatformSerialNumber/{print $(NF-1)}')
+SERIAL_NUMBER=$(ioreg -c IOPlatformExpertDevice -d 2 | awk -F\" '/IOPlatformSerialNumber/{print $(NF-1)}')
 MACHINE_ID="%API_SECRET%\$SERIAL\$${SERIAL_NUMBER}"
 
 ## set machine_id
-/usr/bin/defaults write /var/db/santa/config.plist MachineID "$MACHINE_ID"
+defaults write /var/db/santa/config.plist MachineID "$MACHINE_ID"
 
 ## load com.google.santad.plist
-/bin/launchctl load -w "/Library/LaunchDaemons/com.google.santad.plist"  >/dev/null 2>&1
+launchctl load -w "/Library/LaunchDaemons/com.google.santad.plist"
+
+## fix config.plist permissions
+chmod 0644 /var/db/santa/config.plist
 
 ## force santa sync (=> preflight => machine_id => serial number)
 /usr/local/bin/santactl sync
 
 ## write zentral base url
-/usr/bin/defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"
-
-exit 0
+defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"
