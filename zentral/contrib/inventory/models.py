@@ -215,12 +215,15 @@ class OSVersion(AbstractMTObject):
     build = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        l = [".".join((str(i) for i in (self.major, self.minor, self.patch) if i is not None))]
+        l = [self.get_number_display()]
         if self.name:
             l.insert(0, self.name)
         if self.build:
             l.append("({})".format(self.build))
         return " ".join(l)
+
+    def get_number_display(self):
+        return ".".join((str(i) for i in (self.major, self.minor, self.patch) if i is not None))
 
 
 class SystemInfo(AbstractMTObject):
