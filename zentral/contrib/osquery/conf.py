@@ -38,7 +38,8 @@ DECORATORS = {
         "SELECT hostname FROM system_info",
         "SELECT hardware_model FROM system_info",
         "SELECT hardware_serial FROM system_info",
-        "SELECT uuid AS host_uuid FROM system_info"
+        "SELECT uuid AS host_uuid FROM system_info",
+        "SELECT name AS os_name FROM os_version"
     ]
 }
 
