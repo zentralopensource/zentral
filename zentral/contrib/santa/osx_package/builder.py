@@ -26,7 +26,8 @@ class SantaEnrollmentForm(EnrollmentForm):
                   "In Lockdown mode, only whitelisted binaries will be allowed to run.")
     whitelist_regex = forms.CharField(
         label=_("Whitelist regex"),
-        help_text="In Lockdown mode, executables whose paths are a matched by this regex will be allowed to run.",
+        help_text="Matching binaries will be allowed to run, in both modes."
+                  "Events will be logged with the 'ALLOW_SCOPE' decision.",
         required=False
     )
     blacklist_regex = forms.CharField(
@@ -55,14 +56,13 @@ class SantaEnrollmentForm(EnrollmentForm):
         kwargs["mode"] = mode = int(self.cleaned_data.get("mode", self.MONITOR_MODE))
         if not self.update_for:
             kwargs["release"] = self.cleaned_data["release"]
+        whitelist_regex = self.cleaned_data.get("whitelist_regex")
+        if whitelist_regex:
+            kwargs["whitelist_regex"] = whitelist_regex
         if mode == self.MONITOR_MODE:
             blacklist_regex = self.cleaned_data.get("blacklist_regex")
             if blacklist_regex:
                 kwargs["blacklist_regex"] = blacklist_regex
-        elif mode == self.LOCKDOWN_MODE:
-            whitelist_regex = self.cleaned_data.get("whitelist_regex")
-            if whitelist_regex:
-                kwargs["whitelist_regex"] = whitelist_regex
         return kwargs
 
     def clean(self):
@@ -70,14 +70,10 @@ class SantaEnrollmentForm(EnrollmentForm):
         mode = cleaned_data.get("mode")
         if mode:
             mode = int(mode)
-            whitelist_regex = cleaned_data.get("whitelist_regex")
             blacklist_regex = cleaned_data.get("blacklist_regex")
             if mode == self.LOCKDOWN_MODE and blacklist_regex:
                 self.add_error("blacklist_regex",
                                "Can't use a blacklist regex in Lockdown mode.")
-            elif mode == self.MONITOR_MODE and whitelist_regex:
-                self.add_error("whitelist_regex",
-                               "Can't use a whitelist regex in Monitor mode.")
 
 
 class SantaZentralEnrollPkgBuilder(PackageBuilder):
