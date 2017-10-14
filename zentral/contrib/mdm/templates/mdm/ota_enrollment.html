@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:enrollment' %}">MDM enrollment</a></li>
+  <li><a href="{% url 'mdm:ota_enrollments' %}">OTA MDM enrollments</a></li>
+  <li class="active">{{ object.name }}</li>
+</ol>
+
+<h2>OTA MDM enrollment <i>{{ object.name }}</i></h2>
+
+{% with object.enrollment_secret as secret %}
+<p>
+  <a class="btn btn-default"
+     href="{% url 'mdm:download_profile_service_payload' object.id %}">
+    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+    Profile service payload
+  </a>
+  {% if secret.is_valid|first %}
+  <a class="btn btn-danger"
+     href="{% url 'mdm:revoke_ota_enrollment' object.id %}">
+    <span class="glyphicon glyphicon-remove-circle" aria-hidden="true"></span>
+    Revoke
+  </a>
+  {% endif %}
+</p>
+
+
+<div class="row">
+  <div class="col-md-6">
+    <dl class="dl-horizontal">
+      <dt>Name</dt>
+      <dd>{{ object.name }}</dd>
+      <dt>Business unit</dt>
+      <dd><a href="{% url 'inventory:mbu_machines' secret.meta_business_unit.id %}">{{ secret.meta_business_unit }}</a></dd>
+      <dt>Tags</dt>
+      <dd>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</dd>
+      <dt>Serial number{{ secret.serial_numbers|length|pluralize }}</dt>
+      <dd>{% for serial_number in secret.serial_numbers %}<a href="{% url 'inventory:machine' serial_number %}">{{ serial_number }}</a>{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</dd>
+      <dt>UDID{{ secret.udids|length|pluralize }}</dt>
+      <dd>{% if secret.udids %}{{ secret.udids|join:", " }}{% else %}-{% endif %}</dd>
+    </dl>
+  </div>
+  <div class="col-md-6">
+    <dl class="dl-horizontal">
+      <dt>Request count</dt>
+      <dd class="{% if secret.is_used_up %}bg-danger{% else %}bg-success{% endif %}">{{ secret.request_count }}{% if secret.quota %}/{{ secret.quota }}{% endif %}</dd>
+      <dt>Expired</dt>
+      <dd class="{% if secret.is_expired %}bg-danger{% else %}bg-success{% endif %}">{{ secret.expired_at|date:"r"|default:"-" }}</dd>
+      <dt>Revoked</dt>
+      <dd class="{% if secret.is_revoked %}bg-danger{% else %}bg-success{% endif %}">{{ secret.revoked_at|date:"r"|default:"-" }}</dd>
+    </dl>
+  </div>
+  <div class="col-md-12">
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+    </dl>
+  </div>
+</div>
+{% endwith %}
+
+<h2>{{ ota_enrollment_sessions_count }} Session{{ ota_enrollment_sessions_count|pluralize }}</h2>
+
+<table class="table">
+  <thead>
+    <th>Serial number</th>
+    <th>Status</th>
+    <th>Created at</th>
+    <th>Updated at</th>
+  </thead>
+  <tbody>
+    {% for s in ota_enrollment_sessions %}
+    <tr>
+      <td><a href="{% url 'inventory:machine' s.get_serial_number %}">{{ s.get_serial_number }}</a></td>
+      <td>{{ s.get_status_display }}</td>
+      <td>{{ s.created_at }}</td>
+      <td>{{ s.updated_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,11 +1,14 @@
+asn1crypto
 boto3
 coverage
+cryptography
 django-bootstrap-form
 django<1.11
 djangorestframework
 elasticsearch
 fabric
 gunicorn
+hyper
 ipython
 jinja2
 kombu
@@ -13,6 +16,7 @@ pip
 prometheus_client
 psycopg2
 pygments
+pyopenssl
 pyotp
 pysaml2
 python-dateutil

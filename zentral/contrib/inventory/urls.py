@@ -36,7 +36,11 @@ urlpatterns = [
     url(r'^macos_apps/(?P<pk>\d+)/instance/(?P<osx_app_instance_id>\d+)/machines/$',
         views.OSXAppInstanceMachinesView.as_view(),
         name='macos_app_instance_machines'),
-    url(r'^prometheus_metrics/$', views.PrometheusMetricsView.as_view(), name='prometheus_metrics'),
+
+    # API
+    url(r'^prometheus_metrics/$',
+        views.PrometheusMetricsView.as_view(),
+        name='prometheus_metrics'),
 ]
 
 main_menu_cfg = {

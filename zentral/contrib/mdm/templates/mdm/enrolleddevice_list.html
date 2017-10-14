@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  {% for url, anchor_text in breadcrumbs %}
+  {% if url %}
+  <li><a href="{{ url }}">{{ anchor_text }}</a></li>
+  {% else %}
+  <li class="active">{{ anchor_text }}</li>
+  {% endif %}
+  {% endfor %}
+</ol>
+
+<h2>{{ enrolled_devices_count  }} enrolled device{{ enrolled_devices_count|pluralize }}</h2>
+
+<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
+  <div class="form-group">
+    {{ form.serial_number|bootstrap_inline }}
+  </div>
+  <button type="submit" class="btn btn-default">Search</button>
+</form>
+
+<table class="table">
+  <thead>
+    <th>serial number</th>
+    <th>udid</th>
+  </thead>
+  <tbody>
+    {% for ed in enrolled_devices %}
+    <tr>
+      <td>{{ ed.serial_number }}</td>
+      <td><a href="{% url 'mdm:enrolled_device' ed.pk %}">{{ ed.udid }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

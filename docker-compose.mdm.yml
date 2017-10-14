@@ -1,0 +1,33 @@
+version: '2'
+
+services:
+  scepserver:
+    build: ./conf/mdm/docker/scepserver/
+    entrypoint: /usr/local/bin/docker-entrypoint.py
+    command: runserver
+    environment:
+      SCEP_CA_PASS: "CHANGE THIS, DO NOT USE IN PRODUCTION"
+      SCEP_CERT_RENEW: 0  # Renewal always accepted
+      ZENTRAL_API_SECRET: "eyJtb2R1bGUiOiJ6ZW50cmFsIn0:1eCDAx:ZPeW0awGnI-1iXZ2bzHC2IPMXnM"
+      ZENTRAL_API_BASE_URL: "http://web:8000"
+    volumes:
+      - scep_ca:/var/lib/scep/CA
+  nginx:
+    depends_on:
+      - promsrv
+      - scepserver
+      - web
+    volumes:
+      - ./conf/mdm/docker/nginx/conf.d/:/etc/nginx/conf.d/
+      - scep_ca:/scep_CA
+  web:
+    environment:
+      ZENTRAL_CONF_DIR: /zentral/conf/mdm/zentral/
+    volumes:
+      - scep_ca:/scep_CA
+  workers:
+    environment:
+      ZENTRAL_CONF_DIR: /zentral/conf/mdm/zentral/
+
+volumes:
+  scep_ca:

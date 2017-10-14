@@ -2,9 +2,11 @@ import logging
 from django.db import connection
 from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
                                generate_latest, CONTENT_TYPE_LATEST as prometheus_metrics_content_type)
-from zentral.contrib.inventory.models import MachineSnapshotCommit
-from zentral.contrib.inventory.events import post_inventory_events
 from zentral.utils.json import log_data
+from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
+                     post_inventory_events)
+from .exceptions import EnrollmentSecretVerificationFailed
+from .models import EnrollmentSecret, MachineSnapshotCommit
 
 logger = logging.getLogger("zentral.contrib.inventory.utils")
 
@@ -137,3 +139,24 @@ def commit_machine_snapshot_and_trigger_events(tree):
             post_inventory_events(machine_snapshot_commit.serial_number,
                                   inventory_events_from_machine_snapshot_commit(machine_snapshot_commit))
         return machine_snapshot
+
+
+def verify_enrollment_secret(model, secret,
+                             user_agent, public_ip_address,
+                             serial_number=None, udid=None,
+                             meta_business_unit=None,
+                             **kwargs):
+    try:
+        request = EnrollmentSecret.objects.verify(model, secret,
+                                                  user_agent, public_ip_address,
+                                                  serial_number, udid,
+                                                  meta_business_unit,
+                                                  **kwargs)
+    except EnrollmentSecretVerificationFailed as e:
+        post_enrollment_secret_verification_failure(model,
+                                                    user_agent, public_ip_address, serial_number,
+                                                    e.err_msg, e.enrollment_secret)
+        raise
+    else:
+        post_enrollment_secret_verification_success(request, model)
+        return request

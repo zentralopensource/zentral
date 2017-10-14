@@ -69,6 +69,10 @@
   <dt>Hardware model</dt>
   <dd>{{ system_info.hardware_model }}</dd>
   {% endif %}
+  {% if system_info.hardware_serial %}
+  <dt>Hardware serial</dt>
+  <dd>{{ system_info.hardware_serial }}</dd>
+  {% endif %}
   {% if system_info.cpu_brand %}
   <dt>CPU brand</dt>
   <dd>{{ system_info.cpu_brand }}</dd>

@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:enrollment' %}">MDM enrollment</a></li>
+  <li><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></li>
+  <li class="active">{{ object.name }}</li>
+</ol>
+
+<h2>MDM push certificate <i>{{ object.name }}</i></h2>
+
+<dl class="dl-horizontal">
+  <dt>Name</dt>
+  <dd>{{ object.name }}</dd>
+  <dt>Topic</dt>
+  <dd>{{ object.topic }}</dd>
+  <dt>Not before</dt>
+  <dd>{{ object.not_before }}</dd>
+  <dt>Not after</dt>
+  <dd>{{ object.not_after }}</dd>
+</dl>
+
+<h3>{{ mbu_list|length }} Business unit{{ mbu_list|length|pluralize }}</h3>
+
+<p>
+  <a class="btn btn-default" href="{% url 'mdm:add_push_certificate_business_unit' object.id %}">Add</a>
+</p>
+
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th></th>
+  </thead>
+  <tbody>
+    {% for mbu in mbu_list %}
+    <tr>
+      <td>{{ mbu.name }}</td>
+      <td></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

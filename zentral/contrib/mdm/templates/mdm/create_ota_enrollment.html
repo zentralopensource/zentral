@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:enrollment' %}">MDM enrollment</a></li>
+  <li><a href="{% url 'mdm:ota_enrollments' %}">OTA MDM enrollments</a></li>
+  <li class="active">Create OTA MDM Enrollment</li>
+</ol>
+
+<h2>Create OTA MDM enrollment</h2>
+
+<form class="form" method="POST">{% csrf_token %}
+  {{ ota_enrollment_form|bootstrap }}
+  {{ ota_enrollment_secret_form|bootstrap }}
+  <p>
+    <a href="{% url 'mdm:ota_enrollments' %}" class="btn btn-default">Cancel</a>
+    <button type="submit" class="btn btn-primary">Create</button>
+  </p>
+</form>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:enrolled_devices' %}">MDM enrolled devices</a></li>
+  <li class="active">{{ object.udid }}</li>
+</ol>
+
+
+<h2>Enrolled device</h2>
+
+<form style="margin:0 0 1em 0" class="form" method="POST" action="{% url 'mdm:poke_enrolled_device' object.id %}">{% csrf_token %}
+  <button type="submit" class="btn btn-success">Poke!</button>
+</form>
+
+<dl class="dl-horizontal">
+  <dt>Push certificate</dt>
+  <dd><a href="{% url 'mdm:push_certificate' object.push_certificate.id %}">{{ object.push_certificate.name }}</a></dd>
+  <dt>Serial number</dt>
+  <dd><a href="{% url 'inventory:machine' object.serial_number %}">{{ object.serial_number }}</a></dd>
+  <dt>UDID</dt>
+  <dd>{{ object.udid }}</dd>
+</dl>
+
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">Created at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+  <dt class="small" style="opacity:0.5">Updated at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+</dl>
+
+{% if object.enrolleduser_set.count %}
+<h2>{{ object.enrolleduser_set.count }} enrolled user{{ object.enrolleduser_set.count|pluralize }}</h2>
+{% for enrolled_user in object.enrolleduser_set.all %}
+<dl class="dl-horizontal">
+  <dt>Long name</dt>
+  <dd>{{ enrolled_user.long_name }}</dd>
+  <dt>Short name</dt>
+  <dd>{{ enrolled_user.short_name }}</dd>
+  <dt>ID</dt>
+  <dd>{{ enrolled_user.user_id }}</dd>
+</dl>
+
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">Created at</dt>
+  <dd class="small" style="opacity:0.5">{{ enrolled_user.created_at|date:'r' }}</dd>
+  <dt class="small" style="opacity:0.5">Updated at</dt>
+  <dd class="small" style="opacity:0.5">{{ enrolled_user.updated_at|date:'r' }}</dd>
+</dl>
+{% endfor %}
+{% endif %}
+
+{% endblock %}

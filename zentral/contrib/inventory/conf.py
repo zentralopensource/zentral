@@ -35,7 +35,7 @@ TYPE_CHOICES_DICT = dict(TYPE_CHOICES)
 
 # utils
 
-HARDWARE_MODEL_MACHINE_TYPE_DICT = {
+HARDWARE_MODEL_SERIAL_MACHINE_TYPE_DICT = {
     'imac': DESKTOP,
     'ipad': TABLET,
     'iphone': MOBILE,
@@ -88,13 +88,14 @@ def update_ms_tree_platform(tree):
 
 def update_ms_tree_type(tree):
     system_info_t = tree.get("system_info", {})
-    hardware_model = system_info_t.get("hardware_model")
-    if hardware_model:
-        hardware_model = hardware_model.lower()
-        for prefix, ms_type in HARDWARE_MODEL_MACHINE_TYPE_DICT.items():
-            if hardware_model.startswith(prefix):
-                tree["type"] = ms_type
-                return
+    for attr in ("hardware_model", "hardware_serial"):
+        val = system_info_t.get(attr)
+        if val:
+            val = val.lower()
+            for prefix, ms_type in HARDWARE_MODEL_SERIAL_MACHINE_TYPE_DICT.items():
+                if val.startswith(prefix):
+                    tree["type"] = ms_type
+                    return
     network_interfaces = tree.get("network_interfaces")
     if network_interfaces and \
        all(isinstance(ni.get("mac"), str) and ni["mac"].replace(":", "")[:6].upper() in KNOWN_VM_MAC_PREFIXES

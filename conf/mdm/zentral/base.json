@@ -1,0 +1,69 @@
+{
+  "api": {
+    "tls_hostname": "https://zentral",
+    "tls_hostname_client_certificate_authenticated": "https://zentral-clicertauth",
+    "tls_server_certs": "/zentral/conf/start/docker/tls/zentral_fullchain.crt",
+    "tls_server_key": "/zentral/conf/start/docker/tls/zentral.key",
+    "tls_server_certs_client_certificate_authenticated": "/zentral/conf/start/docker/tls/zentral-clicertauth_fullchain.crt",
+    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
+  },
+  "extra_links": [
+    {"anchor_text": "Prometheus",
+     "url": "https://zentral/prometheus/"}
+  ],
+  "django": {
+    "SECRET_KEY": "DJANGO SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
+    "DEBUG": true,
+    "MEDIA_ROOT": "/var/zentral",
+    "ADMINS": [
+      [
+        "Admin",
+        "changethis@example.com"
+      ]
+    ],
+    "SERVER_EMAIL": "changethis@example.com",
+    "DEFAULT_FROM_EMAIL": "changethis@example.com",
+    "ALLOWED_HOSTS": [
+      "*"
+    ]
+  },
+  "queues": {
+    "backend": "zentral.core.queues.backends.kombu",
+    "backend_url": "amqp://guest:guest@rabbitmq:5672//"
+  },
+  "stores": {
+    "elasticsearch": {
+      "frontend": true,
+      "backend": "zentral.core.stores.backends.elasticsearch",
+      "hosts": [
+        "http://elastic:9200"
+      ],
+      "index": "zentral-events",
+      "kibana_base_url": "https://zentral/kibana/"
+    }
+  },
+  "processor_workers": {
+    "number": 1,
+    "prometheus_server_base_port": "8100"
+  },
+  "actions": {
+    "debug": {
+      "backend": "zentral.core.actions.backends.json_file",
+      "local_dir": "/tmp/zentral_notifications/"
+    }
+  },
+  "apps": {
+    "zentral.contrib.inventory": {
+      "prometheus_bearer_token": "CHANGE ME!!!",
+      "clients": [
+        {
+          "backend": "zentral.contrib.inventory.clients.dummy"
+        }
+      ]
+    },
+    "zentral.contrib.mdm": {},
+    "zentral.contrib.munki": {},
+    "zentral.contrib.osquery": {},
+    "zentral.contrib.santa": {}
+  }
+}

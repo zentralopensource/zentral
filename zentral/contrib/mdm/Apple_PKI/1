@@ -1,0 +1,55 @@
+unknown option help
+usage: x509 args
+ -inform arg     - input format - default PEM (one of DER, NET or PEM)
+ -outform arg    - output format - default PEM (one of DER, NET or PEM)
+ -keyform arg    - private key format - default PEM
+ -CAform arg     - CA format - default PEM
+ -CAkeyform arg  - CA key format - default PEM
+ -in arg         - input file - default stdin
+ -out arg        - output file - default stdout
+ -passin arg     - private key password source
+ -serial         - print serial number value
+ -subject_hash   - print subject hash value
+ -issuer_hash    - print issuer hash value
+ -hash           - synonym for -subject_hash
+ -subject        - print subject DN
+ -issuer         - print issuer DN
+ -email          - print email address(es)
+ -startdate      - notBefore field
+ -enddate        - notAfter field
+ -purpose        - print out certificate purposes
+ -dates          - both Before and After dates
+ -modulus        - print the RSA key modulus
+ -pubkey         - output the public key
+ -fingerprint    - print the certificate fingerprint
+ -alias          - output certificate alias
+ -noout          - no certificate output
+ -ocspid         - print OCSP hash values for the subject name and public key
+ -ocsp_uri       - print OCSP Responder URL(s)
+ -trustout       - output a "trusted" certificate
+ -clrtrust       - clear all trusted purposes
+ -clrreject      - clear all rejected purposes
+ -addtrust arg   - trust certificate for a given purpose
+ -addreject arg  - reject certificate for a given purpose
+ -setalias arg   - set certificate alias
+ -days arg       - How long till expiry of a signed certificate - def 30 days
+ -checkend arg   - check whether the cert expires in the next arg seconds
+                   exit 1 if so, 0 if not
+ -signkey arg    - self sign cert with arg
+ -x509toreq      - output a certification request object
+ -req            - input is a certificate request, sign and output.
+ -CA arg         - set the CA certificate, must be PEM format.
+ -CAkey arg      - set the CA key, must be PEM format
+                   missing, it is assumed to be in the CA file.
+ -CAcreateserial - create serial number file if it does not exist
+ -CAserial arg   - serial file
+ -set_serial     - serial number to use
+ -text           - print the certificate in text form
+ -C              - print out C code forms
+ -md2/-md5/-sha1/-mdc2 - digest to use
+ -extfile        - configuration file with X509V3 extensions to add
+ -extensions     - section from config file with X509V3 extensions to add
+ -clrext         - delete extensions before signing and input certificate
+ -nameopt arg    - various certificate name options
+ -engine e       - use engine e, possibly a hardware device.
+ -certopt arg    - various certificate text options

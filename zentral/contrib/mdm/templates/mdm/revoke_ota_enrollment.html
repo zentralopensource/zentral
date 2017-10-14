@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:enrollment' %}">MDM enrollment</a></li>
+  <li><a href="{% url 'mdm:ota_enrollments' %}">OTA MDM enrollments</a></li>
+  <li><a href="{% url 'mdm:ota_enrollment' ota_enrollment.pk %}">{{ ota_enrollment.name }}</a></li>
+  <li class="active">revoke</li>
+</ol>
+
+<h2>Revoke OTA MDM enrollment <i>{{ ota_enrollment.name }}</i></h2>
+
+<form method="POST">{% csrf_token %}
+  <p>Do you really want to revoke this enrollment?</p>
+  <p>
+    <a class="btn btn-default" href="{% url 'mdm:ota_enrollment' ota_enrollment.pk %}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Yes</button>
+  </p>
+</form>
+
+{% endblock %}

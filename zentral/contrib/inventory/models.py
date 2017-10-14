@@ -3,14 +3,16 @@ import colorsys
 from datetime import datetime, timedelta
 import logging
 import re
-from django.contrib.postgres.fields import JSONField
+from django.contrib.postgres.fields import ArrayField, JSONField
 from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import connection, IntegrityError, models, transaction
 from django.db.models import Count, Q
+from django.utils import timezone
+from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from django.utils.text import slugify
-from django.utils.timezone import is_aware, make_naive
 from django.utils.translation import ugettext_lazy as _
 from zentral.conf import settings
 from zentral.utils.mt_models import AbstractMTObject, prepare_commit_tree, MTObjectManager, MTOError
@@ -18,6 +20,7 @@ from .conf import (has_deb_packages,
                    update_ms_tree_platform, update_ms_tree_type,
                    PLATFORM_CHOICES, PLATFORM_CHOICES_DICT,
                    TYPE_CHOICES, TYPE_CHOICES_DICT)
+from .exceptions import EnrollmentSecretVerificationFailed
 
 logger = logging.getLogger('zentral.contrib.inventory.models')
 
@@ -79,6 +82,10 @@ class MetaBusinessUnit(models.Model):
         tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
         return tags
 
+    def serialize(self):
+        return {"name": self.name,
+                "pk": self.pk}
+
 
 class SourceManager(MTObjectManager):
     def current_machine_group_sources(self):
@@ -116,7 +123,7 @@ class Source(AbstractMTObject):
 
 class Link(AbstractMTObject):
     anchor_text = models.TextField()
-    url = models.URLField()
+    url = models.CharField(max_length=200)
 
 
 class AbstractMachineGroupManager(MTObjectManager):
@@ -383,6 +390,8 @@ class MachineSnapshot(AbstractMTObject):
     source = models.ForeignKey(Source)
     reference = models.TextField(blank=True, null=True)
     serial_number = models.TextField(db_index=True)
+    imei = models.CharField(max_length=18, blank=True, null=True)
+    meid = models.CharField(max_length=18, blank=True, null=True)
     links = models.ManyToManyField(Link)
     business_unit = models.ForeignKey(BusinessUnit, blank=True, null=True)
     groups = models.ManyToManyField(MachineGroup)
@@ -434,8 +443,8 @@ class MachineSnapshotCommitManager(models.Manager):
         last_seen = tree.pop('last_seen', None)
         if not last_seen:
             last_seen = datetime.utcnow()
-        if is_aware(last_seen):
-            last_seen = make_naive(last_seen)
+        if timezone.is_aware(last_seen):
+            last_seen = timezone.make_naive(last_seen)
         system_uptime = tree.pop('system_uptime', None)
         update_ms_tree_platform(tree)
         update_ms_tree_type(tree)
@@ -768,3 +777,113 @@ class MACAddressBlockAssignment(models.Model):
 
     def __str__(self):
         return " ".join((self.registry, self.assignment))
+
+
+class EnrollmentSecretManager(models.Manager):
+    def verify(self, model, secret,
+               user_agent, public_ip_address,
+               serial_number=None, udid=None,
+               meta_business_unit=None,
+               **kwargs):
+        kwargs.update({"{}__isnull".format(model): False,
+                       "secret": secret})
+        qs = self.filter(**kwargs).select_related(model).select_for_update()
+        err_msg = None
+        if not qs.count():
+            raise EnrollmentSecretVerificationFailed("unknown secret")
+        else:
+            es = qs[0]
+            is_valid, err_msg = es.is_valid(serial_number, udid, meta_business_unit)
+            if is_valid:
+                esr = EnrollmentSecretRequest.objects.create(enrollment_secret=es,
+                                                             user_agent=user_agent,
+                                                             public_ip_address=public_ip_address,
+                                                             serial_number=serial_number,
+                                                             udid=udid)
+                es.request_count += 1
+                es.save()
+                return esr
+            else:
+                raise EnrollmentSecretVerificationFailed(err_msg, es)
+
+
+class EnrollmentSecret(models.Model):
+    secret = models.CharField(max_length=256, unique=True)
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit)
+    tags = models.ManyToManyField(Tag, blank=True)
+    serial_numbers = ArrayField(models.TextField(), blank=True, null=True)
+    udids = ArrayField(models.TextField(), blank=True, null=True)
+    quota = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1),
+                                                                   MaxValueValidator(200000)])
+    request_count = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    expired_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = EnrollmentSecretManager()
+
+    @property
+    def is_revoked(self):
+        return self.revoked_at is not None
+
+    @property
+    def is_expired(self):
+        return bool(self.expired_at and self.expired_at <= timezone.now())
+
+    @property
+    def is_used_up(self):
+        return bool(self.quota and self.request_count >= self.quota)
+
+    def is_valid(self, serial_number=None, udid=None, meta_business_unit=None):
+        err_msg = None
+        if self.is_revoked:
+            err_msg = "revoked"
+        elif self.is_expired:
+            err_msg = "expired"
+        elif serial_number and self.serial_numbers and serial_number not in self.serial_numbers:
+            err_msg = "serial number mismatch"
+        elif udid and self.udids and udid not in self.udids:
+            err_msg = "udid mismatch"
+        elif meta_business_unit and meta_business_unit != self.meta_business_unit:
+            err_msg = "business unit mismatch"
+        elif self.is_used_up:
+            err_msg = "quota used up"
+        if err_msg:
+            return False, err_msg
+        else:
+            return True, None
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            self.secret = get_random_string(kwargs.pop("secret_length", 64))
+        super().save(*args, **kwargs)
+
+    def serialize_for_event(self):
+        d = {}
+        for attr in ("pk",
+                     "quota", "request_count", "is_used_up",
+                     "revoked_at", "is_revoked",
+                     "expired_at", "is_expired",
+                     "created_at"):
+            val = getattr(self, attr)
+            if val is not None:
+                d[attr] = val
+        tags = [{"pk": t.pk, "name": t.name} for t in self.tags.all()]
+        if tags:
+            d["tags"] = tags
+        if self.meta_business_unit:
+            d["meta_business_unit"] = self.meta_business_unit.serialize()
+        if self.serial_numbers:
+            d["serial_numbers"] = self.serial_numbers
+        if self.udids:
+            d["udids"] = self.udids
+        return {"enrollment_secret": d}
+
+
+class EnrollmentSecretRequest(models.Model):
+    enrollment_secret = models.ForeignKey(EnrollmentSecret, on_delete=models.CASCADE)
+    user_agent = models.TextField()
+    public_ip_address = models.GenericIPAddressField()
+    serial_number = models.TextField(null=True, blank=True)
+    udid = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
