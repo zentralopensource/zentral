@@ -61,9 +61,14 @@ class User(AbstractUser):
         return sorted(self._all_verification_devices,
                       key=lambda vd: vd.name)
 
-    def get_prioritized_verification_devices(self):
-        return sorted(self._all_verification_devices,
-                      key=lambda vd: (-1 * vd.PRIORITY, vd.name))
+    def get_prioritized_verification_devices(self, user_agent):
+        verification_devices = sorted(self._all_verification_devices,
+                                      key=lambda vd: (-1 * vd.PRIORITY, vd.name))
+        ua_verification_devices = [vd for vd in verification_devices if vd.test_user_agent(user_agent)]
+        if not ua_verification_devices and verification_devices:
+            raise ValueError("No verification devices compatible with this user agent")
+        else:
+            return ua_verification_devices
 
 
 class UserPasswordHistory(models.Model):
@@ -110,6 +115,9 @@ class UserTOTP(UserVerificationDevice):
     def verify(self, code):
         return pyotp.TOTP(self.secret).verify(code)
 
+    def test_user_agent(self, user_agent):
+        return True
+
 
 class UserU2F(UserVerificationDevice):
     TYPE = "U2F"
@@ -122,3 +130,6 @@ class UserU2F(UserVerificationDevice):
 
     def get_verification_url(self):
         return reverse("verify_u2f")
+
+    def test_user_agent(self, user_agent):
+        return user_agent and 'safari' not in user_agent.lower()

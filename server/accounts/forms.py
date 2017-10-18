@@ -1,7 +1,7 @@
 from urllib.parse import urlparse
 from django import forms
 from django.conf import settings as django_settings
-from django.contrib.auth.forms import PasswordResetForm, UsernameField
+from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, UsernameField
 from django.core import signing
 from django.utils.crypto import get_random_string
 from django.utils.translation import ugettext_lazy as _
@@ -9,6 +9,15 @@ import pyotp
 from u2flib_server.u2f import begin_authentication, complete_authentication
 from .models import User, UserTOTP, UserU2F
 from zentral.conf import settings as zentral_settings
+
+
+class ZentralAuthenticationForm(AuthenticationForm):
+    username = UsernameField(
+        max_length=254,
+        widget=forms.TextInput(attrs={'autofocus': '',
+                                      'autocorrect': 'off',
+                                      'autocapitalize': 'none'}),
+    )
 
 
 class AddUserForm(forms.ModelForm):
@@ -85,6 +94,7 @@ class AddTOTPForm(forms.Form):
 class BaseVerifyForm(forms.Form):
     def __init__(self, *args, **kwargs):
         self.session = kwargs.pop("session")
+        self.user_agent = kwargs.pop("user_agent", None)
         token_data = signing.loads(self.session["verification_token"],
                                    salt="zentral_verify_token",
                                    key=django_settings.SECRET_KEY)
@@ -95,7 +105,7 @@ class BaseVerifyForm(forms.Form):
 
     def get_alternative_verification_links(self):
         return set((vd.get_verification_url(), "Use a {} device".format(vd.TYPE))
-                   for vd in self.user.get_prioritized_verification_devices()
+                   for vd in self.user.get_prioritized_verification_devices(self.user_agent)
                    if vd.TYPE != self.device_type)
 
 

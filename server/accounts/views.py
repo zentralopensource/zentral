@@ -2,7 +2,6 @@ import json
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login
-from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core import signing
 from django.http import HttpResponse, HttpResponseRedirect
@@ -16,8 +15,10 @@ from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic import DetailView, FormView, ListView, TemplateView, View
 from u2flib_server.u2f import begin_registration, complete_registration
 from zentral.conf import settings as zentral_settings
+from zentral.utils.http import user_agent_and_ip_address_from_request
 from .events import post_failed_verification_event, post_verification_device_event
-from .forms import (AddTOTPForm, AddUserForm, CheckPasswordForm, RegisterU2FDeviceForm, UpdateUserForm,
+from .forms import (ZentralAuthenticationForm,
+                    AddTOTPForm, AddUserForm, CheckPasswordForm, RegisterU2FDeviceForm, UpdateUserForm,
                     VerifyTOTPForm, VerifyU2FForm)
 from .models import User, UserTOTP, UserU2F
 
@@ -33,7 +34,7 @@ def login(request):
                                    request.GET.get(REDIRECT_FIELD_NAME, ''))
 
     if request.method == "POST":
-        form = AuthenticationForm(request, data=request.POST)
+        form = ZentralAuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
 
@@ -49,15 +50,20 @@ def login(request):
                                       salt="zentral_verify_token",
                                       key=settings.SECRET_KEY)
                 request.session["verification_token"] = token
-                verification_device = user.get_prioritized_verification_devices()[0]
-                return HttpResponseRedirect(verification_device.get_verification_url())
+                user_agent, _ = user_agent_and_ip_address_from_request(request)
+                try:
+                    verification_device = user.get_prioritized_verification_devices(user_agent)[0]
+                except ValueError:
+                    form.add_error(None, "No configured verification devices compatible with your current browser.")
+                else:
+                    return HttpResponseRedirect(verification_device.get_verification_url())
             else:
                 # Okay, security check complete. Log the user in.
                 auth_login(request, form.get_user())
 
                 return HttpResponseRedirect(redirect_to)
     else:
-        form = AuthenticationForm(request)
+        form = ZentralAuthenticationForm(request)
 
     context = {
         'form': form,
@@ -70,7 +76,10 @@ def login(request):
 class VerificationMixin(object):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["session"] = self.request.session
+        request = self.request
+        user_agent, _ = user_agent_and_ip_address_from_request(request)
+        kwargs["session"] = request.session
+        kwargs["user_agent"] = user_agent
         return kwargs
 
     def form_valid(self, form):
