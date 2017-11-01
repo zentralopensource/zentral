@@ -7,15 +7,15 @@
 set -e
 
 get_do_instance_id () {
-  curl -s http://169.254.169.254/metadata/v1/id
+  curl -s --connect-timeout 2 http://169.254.169.254/metadata/v1/id
 }
 
 get_ec2_instance_id () {
-  curl -s http://169.254.169.254/latest/meta-data/instance-id
+  curl -s --connect-timeout 2 http://169.254.169.254/latest/meta-data/instance-id
 }
 
 get_gce_instance_id () {
-  curl -s -H 'Metadata-Flavor:Google' http://metadata.google.internal/computeMetadata/v1/instance/id
+  curl -s --connect-timeout 2 -H 'Metadata-Flavor:Google' http://metadata.google.internal/computeMetadata/v1/instance/id
 }
 
 get_watchman_id () {
@@ -23,6 +23,7 @@ get_watchman_id () {
 }
 
 get_machine_id () {
+  MACHINE_ID=""
   if get_watchman_id; then
     MACHINE_ID=$(get_watchman_id)
   elif get_do_instance_id; then
@@ -33,11 +34,14 @@ get_machine_id () {
     MACHINE_ID="GCE-$(get_gce_instance_id)"
   elif [ -x /usr/sbin/dmidecode ]; then
     MACHINE_ID=$(sudo dmidecode -s system-uuid)
-  elif [ -e /var/lib/dbus/machine-id ]; then
-    MACHINE_ID=$(cat /var/lib/dbus/machine-id)
-  else
-    echo "ERROR: Could not find a MACHINE_ID"
-    exit 10
+  fi
+  if [ -z "$MACHINE" ]; then
+    if [ -e /var/lib/dbus/machine-id ]; then
+        MACHINE_ID=$(cat /var/lib/dbus/machine-id)
+    else
+        echo "ERROR: Could not find a MACHINE_ID"
+        exit 10
+    fi
   fi
 }
 
