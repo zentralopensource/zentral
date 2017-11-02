@@ -58,7 +58,7 @@ restart_osqueryd () {
 restart_rsyslog () {
   if [ -x /bin/systemctl ]; then
     sudo systemctl restart rsyslog
-  elif [ -x /bin/service ]; then
+  elif [ -x /sbin/service ] || [ -x /usr/sbin/service ]; then
     sudo service rsyslog restart
   else
     echo "WARNING: Could not restart rsyslog"
