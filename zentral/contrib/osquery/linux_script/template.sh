@@ -35,7 +35,7 @@ get_machine_id () {
   elif [ -x /usr/sbin/dmidecode ]; then
     MACHINE_ID=$(sudo dmidecode -s system-uuid)
   fi
-  if [ -z "$MACHINE" ]; then
+  if [ -z "$MACHINE_ID" ]; then
     if [ -e /var/lib/dbus/machine-id ]; then
         MACHINE_ID=$(cat /var/lib/dbus/machine-id)
     else
@@ -96,8 +96,8 @@ install_osquery_deb () {
   # update available package list
   sudo apt-get update
 
-  # install osquery
-  sudo apt-get install -y osquery
+  # install osquery and other dependencies
+  sudo apt-get install -y osquery dmidecode
 }
 
 install_osquery_rpm () {
@@ -111,8 +111,8 @@ install_osquery_rpm () {
   sudo yum-config-manager --add-repo https://pkg.osquery.io/rpm/osquery-s3-rpm.repo
   sudo yum-config-manager --enable osquery-s3-rpm
 
-  # install osquery
-  sudo yum install -y osquery
+  # install osquery and other dependencies
+  sudo yum install -y osquery dmidecode
 }
 
 if %INSTALL_OSQUERY%; then
@@ -130,7 +130,7 @@ else
 fi
 
 # rsyslogd pipe for osquery
-if [ -x /usr/sbin/rsyslogd ]; then
+if [ -x /sbin/rsyslogd ] || [ -x /usr/sbin/rsyslogd ]; then
   configure_rsyslogd
 else
   echo "WARNING: Could not configure rsyslogd."
