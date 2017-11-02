@@ -132,6 +132,7 @@ DATABASES = {
         'NAME': os.environ.get('POSTGRES_DB', 'zentral'),
         'USER': os.environ.get('POSTGRES_USER', 'zentral'),
         'ATOMIC_REQUESTS': True,
+        'CONN_MAX_AGE': 3600
     }
 }
 for key in ('HOST', 'PASSWORD', 'PORT'):
