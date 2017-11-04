@@ -282,7 +282,7 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         input_path = self.get_build_path(dirname)
         output_path = self.get_build_path("base.pkg", arch_name)
         check_call('(cd "{}" && find . | '
-                   'cpio -o --quiet --format odc --owner 0:80 | '
+                   'cpio -o --quiet --format odc --owner 0:0 | '
                    'gzip -c) > "{}"'.format(input_path, output_path), shell=True)
 
     def _build_payload(self):
@@ -292,7 +292,7 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         self._build_gziped_cpio_arch("scripts", "Scripts")
 
     def _build_bom(self):
-        check_call(["/usr/bin/mkbom", "-u", "0", "-g", "80",
+        check_call(["/usr/bin/mkbom", "-u", "0", "-g", "0",
                     self.get_root_path(),
                     self.get_build_path("base.pkg", "Bom")])
 
