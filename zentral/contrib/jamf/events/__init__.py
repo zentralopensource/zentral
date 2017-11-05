@@ -68,6 +68,18 @@ class JAMFSoftwareServerEvent(BaseEvent):
 register_event_type(JAMFSoftwareServerEvent)
 
 
+class JAMFAccessEvent(BaseEvent):
+    event_type = "jamf_access"
+    tags = ["jamf", "jamf_beat"]
+    payload_aggregations = [
+        ("status", {"type": "terms", "bucket_number": 10, "label": "Statuses"}),
+        ("entry_point", {"type": "terms", "bucket_number": 10, "label": "Entry points"}),
+    ]
+
+
+register_event_type(JAMFAccessEvent)
+
+
 def post_jamf_event(jamf_instance, user_agent, ip, data):
     jamf_event = data["webhook"]["webhookEvent"]
     event_type = 'jamf_{}'.format(JAMF_EVENTS[jamf_event][0])

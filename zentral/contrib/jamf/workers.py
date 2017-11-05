@@ -7,7 +7,7 @@ from zentral.contrib.inventory.utils import inventory_events_from_machine_snapsh
 from zentral.core.events import event_cls_from_type
 from zentral.core.events.base import EventMetadata
 from zentral.core.queues import queues
-from zentral.contrib.jamf.events import JAMFChangeManagementEvent, JAMFSoftwareServerEvent
+from zentral.contrib.jamf.events import JAMFAccessEvent, JAMFChangeManagementEvent, JAMFSoftwareServerEvent
 from .api_client import APIClient
 
 
@@ -239,6 +239,17 @@ class BeatPreprocessor(object):
                                      tags=JAMFSoftwareServerEvent.tags)
             return JAMFSoftwareServerEvent(metadata, payload)
 
+    def build_access_event(self, raw_event_d):
+        # payload
+        payload = {attr: raw_event_d[attr] for attr in ("entry_point", "username", "status", "ip_address")}
+        # jamf instance
+        self.add_payload_jamf_instance(payload, raw_event_d)
+        # event
+        metadata = EventMetadata(JAMFAccessEvent.event_type,
+                                 created_at=self.get_created_at(raw_event_d),
+                                 tags=JAMFAccessEvent.tags)
+        return JAMFAccessEvent(metadata, payload)
+
     def process_raw_event(self, raw_event):
         raw_event_d = json.loads(raw_event)
         raw_event_type = raw_event_d["type"]
@@ -247,6 +258,8 @@ class BeatPreprocessor(object):
             event = self.build_change_management_event(raw_event_d)
         elif raw_event_type == "jamf_software_server":
             event = self.build_software_server_event(raw_event_d)
+        elif raw_event_type == "jss_access":
+            event = self.build_access_event(raw_event_d)
         else:
             logger.warning("Unknown event type %s", raw_event_type)
             return

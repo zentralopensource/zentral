@@ -21,6 +21,12 @@ filebeat:
       fields:
         jamf_instance:
           host: jamf.instance.host
+    - paths:
+        - /usr/local/jss/logs/JSSAccess.log
+      input_type: log
+      fields:
+        jamf_instance:
+          host: jamf-pro.apfelwerk.io
 
 output:
   logstash:
