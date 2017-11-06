@@ -175,6 +175,7 @@ cat << OSQUERY_FLAGS | sudo tee /etc/osquery/osquery.flags
 --logger_plugin=tls
 --logger_tls_endpoint=/osquery/log
 --logger_tls_period=60
+--logger_tls_compress=true
 --disable_distributed=false
 --distributed_plugin=tls
 --distributed_tls_read_endpoint=/osquery/distributed/read

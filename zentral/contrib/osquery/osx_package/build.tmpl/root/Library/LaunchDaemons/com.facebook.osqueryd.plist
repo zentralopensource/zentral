@@ -21,6 +21,7 @@
     <string>--logger_tls_endpoint=/osquery/log</string>
     <string>--logger_tls_period</string>
     <string>60</string>
+    <string>--logger_tls_compress=true</string>
     <string>--disable_distributed=false</string>
     <string>--distributed_plugin=tls</string>
     <string>--distributed_tls_read_endpoint=/osquery/distributed/read</string>
