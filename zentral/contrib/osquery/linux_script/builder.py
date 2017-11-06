@@ -1,5 +1,6 @@
 import os
 from django.http import HttpResponse
+from django.urls import reverse
 from zentral.utils.osx_package import APIConfigToolsMixin
 from zentral.contrib.osquery.osx_package.builder import OsqueryEnrollmentForm
 
@@ -25,7 +26,11 @@ class OsqueryZentralEnrollScriptBuilder(APIConfigToolsMixin):
         content = content.replace("%ENROLL_SECRET_SECRET%", self.make_api_secret())
         # file carver
         disable_carver = self.build_kwargs.get("disable_carver", True)
-        content = content.replace("%DISABLE_CARVER%", "--disable_carver={}".format(str(disable_carver).lower()))
+        carver_flags = ["--disable_carver={}".format(str(disable_carver).lower())]
+        if not disable_carver:
+            carver_flags.append("--carver_start_endpoint={}".format(reverse('osquery:carver_start')))
+            carver_flags.append("--carver_continue_endpoint={}".format(reverse('osquery:carver_continue')))
+        content = content.replace("%CARVER_FLAGS%", "\n".join(carver_flags))
         # only config or install + config
         # TODO: we can't pin it to a known osquery version if we configure the repos
         # not really coherent with the form

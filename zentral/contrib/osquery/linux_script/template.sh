@@ -183,7 +183,7 @@ cat << OSQUERY_FLAGS | sudo tee /etc/osquery/osquery.flags
 --disable_audit=false
 --audit_allow_config=true
 --audit_persist=true
-%DISABLE_CARVER%
+%CARVER_FLAGS%
 OSQUERY_FLAGS
 
 restart_osqueryd
