@@ -1,5 +1,4 @@
 from gzip import GzipFile
-import io
 import json
 import logging
 import warnings
@@ -128,9 +127,7 @@ class JSONPostAPIView(View):
                    or self.user_agent == "Zentral/mnkpf 0.1" and content_encoding == "gzip":
                     payload = zlib.decompress(payload)
                 elif content_encoding == "gzip":
-                    payload_file_obj = io.BytesIO(payload)
-                    gzip_file = GzipFile(mode='rb', fileobj=payload_file_obj)
-                    payload = gzip_file.read()
+                    payload = GzipFile(fileobj=request).read()
                 else:
                     return HttpResponse("Unsupported Media Type", status=415)
             try:
