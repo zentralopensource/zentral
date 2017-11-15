@@ -8,7 +8,6 @@
     <strict-identifier/>
     <relocate/>
     <scripts>
-        <preinstall file="./preinstall"/>
         <postinstall file="./postinstall"/>
     </scripts>
 </pkg-info>

@@ -1,7 +1,0 @@
-#!/bin/bash
-## Preinstall script
-
-set -e
-
-## unload com.google.santad.plist
-launchctl unload -w "/Library/LaunchDaemons/com.google.santad.plist"

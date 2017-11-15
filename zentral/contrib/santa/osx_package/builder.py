@@ -103,18 +103,11 @@ class SantaZentralEnrollPkgBuilder(PackageBuilder):
             mode = self.form.MONITOR_MODE
         elif mode not in {self.form.MONITOR_MODE, self.form.LOCKDOWN_MODE}:
             raise ValueError("Unknown monitor mode {}".format(mode))
-        config_plist = self.get_root_path("var/db/santa/config.plist")
-        self.replace_in_file(config_plist,
-                             (("%TLS_HOSTNAME%", self.get_tls_hostname()),
-                              ("%MODE%", str(mode))))
         postinstall_script = self.get_build_path("scripts", "postinstall")
         self.replace_in_file(postinstall_script,
-                             (("%API_SECRET%", self.make_api_secret()),
-                              ("%TLS_HOSTNAME%", self.get_tls_hostname())))
-        tls_server_certs_install_path = self.include_tls_server_certs()
-        self.set_plist_keys(config_plist,
-                            [("ServerAuthRootsFile", tls_server_certs_install_path)])
-        if blacklist_regex:
-            self.set_plist_keys(config_plist, [("BlacklistRegex", blacklist_regex)])
-        if whitelist_regex:
-            self.set_plist_keys(config_plist, [("WhitelistRegex", whitelist_regex)])
+                             (("%MODE%", str(mode)),
+                              ("%API_SECRET%", self.make_api_secret()),
+                              ("%TLS_HOSTNAME%", self.get_tls_hostname()),
+                              ("%SERVER_AUTH_ROOTS_FILE%", self.include_tls_server_certs()),
+                              ("%BLACKLIST_REGEX%", blacklist_regex or ""),
+                              ("%WHITELIST_REGEX%", whitelist_regex or "")))
