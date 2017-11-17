@@ -1,5 +1,6 @@
 import os
 from django import forms
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
 from zentral.utils.osx_package import EnrollmentForm, PackageBuilder
@@ -9,6 +10,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class OsqueryEnrollmentForm(EnrollmentForm):
+    buffered_log_max = forms.IntegerField(
+        label=_("Max. buffered log"),
+        initial=0,
+        validators=[MinValueValidator(0), MaxValueValidator(1000000)],
+        help_text=("Maximum number of logs (status and result) "
+                   "kept on disk if Zentral is unavailable "
+                   "(0 = unlimited, max 1000000)"),
+        required=True
+    )
     disable_carver = forms.BooleanField(
         label=_("Disable file carver"),
         initial=True,
@@ -56,6 +66,7 @@ class OsqueryEnrollmentForm(EnrollmentForm):
 
     def get_build_kwargs(self):
         kwargs = super().get_build_kwargs()
+        kwargs["buffered_log_max"] = self.cleaned_data["buffered_log_max"]
         kwargs["disable_carver"] = self.cleaned_data["disable_carver"]
         if not self.update_for:
             kwargs["release"] = self.cleaned_data["release"]
@@ -98,7 +109,12 @@ class OsqueryZentralEnrollPkgBuilder(PackageBuilder):
         tls_server_certs_install_path = self.include_tls_server_certs()
         extra_prog_args.append("--tls_server_certs={}".format(tls_server_certs_install_path))
 
-        # carver
+        # buffered log max
+        buffered_log_max = kwargs.get("buffered_log_max", 0)
+        if buffered_log_max:
+            extra_prog_args.append("--buffered_log_max={}".format(buffered_log_max))
+
+        # file carver
         disable_carver = kwargs.get("disable_carver", True)
         extra_prog_args.append("--disable_carver={}".format(str(disable_carver).lower()))
         if not disable_carver:
