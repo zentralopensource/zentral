@@ -65,14 +65,16 @@ class OsquerySetupViewsTestCase(TestCase):
     def test_installer_package_view(self):
         self.log_user_in()
         # without mbu
-        response = self.client.post(reverse("osquery:installer_package"))
+        response = self.client.post(reverse("osquery:installer_package"),
+                                    {"buffered_log_max": 0})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_osquery_enroll.pkg"')
         # with mbu
         mbu = MetaBusinessUnit.objects.create(name="zu")
         response = self.client.post(reverse("osquery:installer_package"),
-                                    {"meta_business_unit": mbu.pk})
+                                    {"buffered_log_max": 0,
+                                     "meta_business_unit": mbu.pk})
         self.assertEqual(response.status_code, 200)
         self.assertFormError(response, "form", "meta_business_unit",
                              "Select a valid choice. "
@@ -80,7 +82,8 @@ class OsquerySetupViewsTestCase(TestCase):
         # enable api
         mbu.create_enrollment_business_unit()
         response = self.client.post(reverse("osquery:installer_package"),
-                                    {"meta_business_unit": mbu.pk})
+                                    {"buffered_log_max": 0,
+                                     "meta_business_unit": mbu.pk})
         self.assertEqual(response.status_code, 200)
 
     def test_setup_script_view_redirect(self):
@@ -88,14 +91,16 @@ class OsquerySetupViewsTestCase(TestCase):
 
     def test_setup_script_view(self):
         self.log_user_in()
-        response = self.client.post(reverse("osquery:setup_script"))
+        response = self.client.post(reverse("osquery:setup_script"),
+                                    {"buffered_log_max":0})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "text/x-shellscript")
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="osquery_zentral_setup.sh"')
         # with mbu
         mbu = MetaBusinessUnit.objects.create(name="uz")
         response = self.client.post(reverse("osquery:setup_script"),
-                                    {"meta_business_unit": mbu.pk})
+                                    {"buffered_log_max": 0,
+                                     "meta_business_unit": mbu.pk})
         self.assertEqual(response.status_code, 200)
         self.assertFormError(response, "form", "meta_business_unit",
                              "Select a valid choice. "
@@ -103,5 +108,6 @@ class OsquerySetupViewsTestCase(TestCase):
         # enable api
         mbu.create_enrollment_business_unit()
         response = self.client.post(reverse("osquery:setup_script"),
-                                    {"meta_business_unit": mbu.pk})
+                                    {"buffered_log_max": 0,
+                                     "meta_business_unit": mbu.pk})
         self.assertEqual(response.status_code, 200)
