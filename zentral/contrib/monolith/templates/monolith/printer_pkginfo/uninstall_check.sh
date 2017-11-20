@@ -1,10 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 
 printer_name="{{ printer.get_destination }}"
 
-/usr/bin/lpstat -p "$printer_name"
-
-if [ $? -eq 0 ] || [ -e "/private/etc/cups/deployment/receipts/$printer_name.plist" ];
+if /usr/bin/lpstat -p "$printer_name" &> /dev/null || [ -e "/private/etc/cups/deployment/receipts/$printer_name.plist" ];
 then
   exit 0
 else

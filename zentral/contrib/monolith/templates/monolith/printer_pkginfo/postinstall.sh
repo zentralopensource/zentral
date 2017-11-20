@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Based on 2010 Walter Meyer SUNY Purchase College (c)
 # Modified by Nick McSpadden, 2013
@@ -25,8 +25,7 @@ version_comparison=$(echo "$stored_version < $current_version" | bc -l)
 
 ### Printer Install ###
 # If the queue already exists (returns 0), we don't need to reinstall it.
-/usr/bin/lpstat -p "$printer_name"
-if [ $? -eq 0 ]; then
+if /usr/bin/lpstat -p "$printer_name" &> /dev/null; then
     if [ "$version_comparison" -eq 0 ]; then
         # We are at the current or greater version
         exit 1
@@ -36,7 +35,7 @@ if [ $? -eq 0 ]; then
 fi
 
 # Download the PPD
-/usr/bin/curl -o "{{ printer.ppd.get_destination }}" {{ printer.ppd.get_download_url }}
+/usr/bin/curl -o "{{ printer.ppd.get_destination }}" "{{ printer.ppd.get_download_url }}"
 
 # Now we can install the printer.
 /usr/sbin/lpadmin \
