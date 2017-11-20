@@ -388,7 +388,7 @@ class MachineSnapshotManager(MTObjectManager):
 
 class MachineSnapshot(AbstractMTObject):
     source = models.ForeignKey(Source)
-    reference = models.TextField(blank=True, null=True)
+    reference = models.TextField(blank=True, null=True, db_index=True)
     serial_number = models.TextField(db_index=True)
     imei = models.CharField(max_length=18, blank=True, null=True)
     meid = models.CharField(max_length=18, blank=True, null=True)
