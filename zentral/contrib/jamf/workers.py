@@ -241,7 +241,11 @@ class BeatPreprocessor(object):
 
     def build_access_event(self, raw_event_d):
         # payload
-        payload = {attr: raw_event_d[attr] for attr in ("entry_point", "username", "status", "ip_address")}
+        try:
+            payload = {attr: raw_event_d[attr] for attr in ("entry_point", "username", "status", "ip_address")}
+        except KeyError:
+            logger.error("Could not build access event %s", raw_event_d)
+            return
         # jamf instance
         self.add_payload_jamf_instance(payload, raw_event_d)
         # event
