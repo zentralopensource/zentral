@@ -284,10 +284,12 @@ class DistributedWriteView(BaseNodeView):
                     if status > 0:
                         # error
                         payload["error"] = True
+                        payload["empty"] = True
                     elif status == 0:
                         payload["error"] = False
                         if val:
                             payload["result"] = val
+                            payload["empty"] = False
                         else:
                             payload["empty"] = True
                     else:

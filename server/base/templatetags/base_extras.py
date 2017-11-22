@@ -1,8 +1,10 @@
+from datetime import datetime, timedelta
 from importlib import import_module
 import logging
 import pprint
 from django import template
 from django.core.urlresolvers import reverse
+from django.utils import timezone
 from django.utils.html import linebreaks, urlize
 from django.utils.safestring import mark_safe
 from pygments import lexers, highlight
@@ -96,3 +98,16 @@ def pythonprettyprint(val):
     lexer = lexers.get_lexer_by_name('python')
     formatter = HtmlFormatter()
     return mark_safe(highlight(s, lexer, formatter))
+
+
+@register.filter()
+def maybetimestamp(val):
+    try:
+        dt = datetime.utcfromtimestamp(int(val))
+    except (OSError, TypeError, ValueError):
+        pass
+    else:
+        now = timezone.now()
+        if abs(now - dt) < timedelta(days=5*366):
+            return dt
+    return val

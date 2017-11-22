@@ -280,6 +280,32 @@ class CreateDistributedQueryProbeForm(BaseCreateProbeForm, DistributedQueryForm)
     field_order = ("name", "query")
 
 
+class DistributedQueryResultFilterForm(forms.Form):
+    ERROR = "error"
+    EMPTY = "empty"
+    NON_EMPTY = "non_empty"
+    ALL = "all"
+    STATUS_CHOICES = (
+        (ERROR, "Error"),
+        (EMPTY, "Empty"),
+        (NON_EMPTY, "Non-Empty"),
+        (ALL, "All")
+    )
+    status = forms.ChoiceField(choices=STATUS_CHOICES, initial=ALL)
+
+    def get_filter_dict(self):
+        cleaned_data = self.cleaned_data
+        status = cleaned_data.get("status")
+        if status == self.ERROR:
+            return {"error": True, "empty": True}
+        elif status == self.EMPTY:
+            return {"error": False, "empty": True}
+        elif status == self.NON_EMPTY:
+            return {"error": False, "empty": False}
+        else:
+            return {}
+
+
 # OsqueryFileCarveProbe
 
 

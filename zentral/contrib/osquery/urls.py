@@ -47,6 +47,8 @@ urlpatterns = [
         views.CreateDistributedQueryProbeView.as_view(), name='create_distributed_query_probe'),
     url(r'^distributed_query_probes/(?P<probe_id>\d+)/update_query/$',
         views.UpdateDistributedQueryProbeQueryView.as_view(), name='update_distributed_query_probe_query'),
+    url(r'^distributed_query_probes/(?P<probe_id>\d+)/results_table/$',
+        views.DistributedQueryResultsTableView.as_view(), name='distributed_query_results_table'),
     # osquery file carve probes
     url(r'^file_carve_probes/create/$',
         views.CreateFileCarveProbeView.as_view(), name='create_file_carve_probe'),

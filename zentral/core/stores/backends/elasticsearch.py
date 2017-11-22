@@ -387,27 +387,34 @@ class EventStore(BaseEventStore):
             event_type = search_dict.pop('event_type')
             for attribute, values in search_dict.items():
                 attribute = "{et}.{attr}".format(et=event_type, attr=attribute)
-                if not values:
+
+                if values is None:
                     continue
+
                 if not isinstance(values, list):
                     values = [values]
+                elif not values:
+                    continue
+
                 if attribute.endswith('__startswith'):
                     attribute = attribute.replace('__startswith', '')
                     if len(values) > 1:
-                        query_filter.append({'bool': {'should': [{'prefix': {attribute: v}} for v in values]}})
+                        sub_query_filter = {'bool': {'should': [{'prefix': {attribute: v}} for v in values]}}
                     else:
-                        query_filter.append({'prefix': {attribute: values[0]}})
+                        sub_query_filter = {'prefix': {attribute: values[0]}}
                 elif attribute.endswith('__regexp'):
                     attribute = attribute.replace('__regexp', '')
                     if len(values) > 1:
-                        query_filter.append({'bool': {'should': [{'regexp': {attribute: v}} for v in values]}})
+                        sub_query_filter = {'bool': {'should': [{'regexp': {attribute: v}} for v in values]}}
                     else:
-                        query_filter.append({'regexp': {attribute: values[0]}})
+                        sub_query_filter = {'regexp': {attribute: values[0]}}
                 else:
                     if len(values) > 1:
-                        query_filter.append({'terms': {attribute: values}})
+                        sub_query_filter = {'terms': {attribute: values}}
                     else:
-                        query_filter.append({'term': {attribute: values[0]}})
+                        sub_query_filter = {'term': {attribute: values[0]}}
+
+                query_filter.append(sub_query_filter)
 
         return {'query': {'bool': {'filter': query_filter}}}
 
