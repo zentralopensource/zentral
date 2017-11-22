@@ -28,8 +28,8 @@ logger = logging.getLogger('zentral.contrib.inventory.models')
 class MetaBusinessUnitManager(models.Manager):
     def get_or_create_with_bu_key_and_name(self, key, name):
         try:
-            mbu = self.get(businessunit__key=key)
-        except MetaBusinessUnit.DoesNotExist:
+            mbu = self.filter(businessunit__key=key)[0]
+        except IndexError:
             mbu = MetaBusinessUnit(name=name)
             mbu.save()
         return mbu
