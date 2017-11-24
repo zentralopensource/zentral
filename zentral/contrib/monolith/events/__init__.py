@@ -10,6 +10,7 @@ ALL_EVENTS_SEARCH_DICT = {"tag": "monolith"}
 class MonolithMunkiRequestEvent(BaseEvent):
     event_type = "monolith_munki_request"
     tags = ["monolith", "heartbeat"]
+    heartbeat_timeout = 2 * 3600
 
 
 register_event_type(MonolithMunkiRequestEvent)
