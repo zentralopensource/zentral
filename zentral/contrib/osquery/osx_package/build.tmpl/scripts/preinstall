@@ -6,7 +6,10 @@ OSQUERY_ROCKSDB_PATH="$ZENTRAL_OSQUERY_ROOT/db"
 OSQUERY_ENROLL_SECRET_PATH="$ZENTRAL_OSQUERY_ROOT/enroll_secret.txt"
 
 ## unload com.facebook.osqueryd
-/bin/launchctl unload -w "/Library/LaunchDaemons/com.facebook.osqueryd.plist" > /dev/null
+/bin/launchctl unload -w "/Library/LaunchDaemons/com.facebook.osqueryd.plist"
+
+## unload io.zentral.osquery.watchdog.plist
+/bin/launchctl unload -w "/Library/LaunchDaemons/io.zentral.osquery.watchdog.plist"
 
 # delete existing osquery DB to force enrollment
 if [[ -d "$OSQUERY_ROCKSDB_PATH" ]]; then

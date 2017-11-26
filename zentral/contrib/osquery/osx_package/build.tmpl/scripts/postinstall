@@ -2,7 +2,10 @@
 ## postinstall
 
 ## load com.facebook.osqueryd
-/bin/launchctl load -w "/Library/LaunchDaemons/com.facebook.osqueryd.plist"  >/dev/null 2>&1
+/bin/launchctl load -w "/Library/LaunchDaemons/com.facebook.osqueryd.plist"
+
+## load io.zentral.osquery.watchdog.plist
+/bin/launchctl load -w "/Library/LaunchDaemons/io.zentral.osquery.watchdog.plist"
 
 ## write zentral base url
 /usr/bin/defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"
