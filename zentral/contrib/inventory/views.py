@@ -314,6 +314,16 @@ class UpdateMBUView(LoginRequiredMixin, UpdateView):
     fields = ('name',)
 
 
+class DeleteMBUView(LoginRequiredMixin, DeleteView):
+    model = MetaBusinessUnit
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if self.object.can_be_deleted():
+            self.object.delete()
+        return HttpResponseRedirect(reverse('inventory:mbu'))
+
+
 class MBUTagsView(LoginRequiredMixin, FormView):
     template_name = "inventory/mbu_tags.html"
     form_class = AddMBUTagForm

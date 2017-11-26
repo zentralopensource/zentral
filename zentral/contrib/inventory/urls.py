@@ -11,6 +11,7 @@ urlpatterns = [
     url(r'^business_units/merge/$', views.MergeMBUView.as_view(), name='merge_mbu'),
     url(r'^business_units/create/$', views.CreateMBUView.as_view(), name='create_mbu'),
     url(r'^business_units/(?P<pk>\d+)/update/$', views.UpdateMBUView.as_view(), name='update_mbu'),
+    url(r'^business_units/(?P<pk>\d+)/delete/$', views.DeleteMBUView.as_view(), name='delete_mbu'),
     url(r'^business_units/(?P<pk>\d+)/tags/$', views.MBUTagsView.as_view(), name='mbu_tags'),
     url(r'^business_units/(?P<pk>\d+)/tags/(?P<tag_id>\d+)/remove/$',
         views.RemoveMBUTagView.as_view(),

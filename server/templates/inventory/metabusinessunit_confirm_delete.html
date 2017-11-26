@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'inventory:mbu' %}">Inventory business units</a>
+  <li><a href="{% url 'inventory:mbu_machines' object.id %}">{{ object }}</a>
+  <li class="active">Delete</li>
+</ol>
+
+<h2>Delete business unit <i>{{ object }}</i></h2>
+
+<p>Do you really want to delete this business unit ?</p>
+<form method="POST">{% csrf_token %}
+  <a href="{% url 'inventory:mbu_machines' object.id %}" class="btn btn-default">Cancel</a>
+  <button type="submit" class="btn btn-danger">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    Delete
+  </button>
+</form>
+{% endblock %}

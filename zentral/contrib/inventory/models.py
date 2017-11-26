@@ -15,6 +15,7 @@ from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
 from zentral.conf import settings
+from zentral.utils.model_extras import find_all_related_objects
 from zentral.utils.mt_models import AbstractMTObject, prepare_commit_tree, MTObjectManager, MTOError
 from .conf import (has_deb_packages,
                    update_ms_tree_platform, update_ms_tree_type,
@@ -85,6 +86,19 @@ class MetaBusinessUnit(models.Model):
     def serialize(self):
         return {"name": self.name,
                 "pk": self.pk}
+
+    def can_be_deleted(self):
+        for related_objects in find_all_related_objects(self):
+            if len(related_objects.objects):
+                if related_objects.name == "businessunit":
+                    # OK to delete if all the business units can be deleted
+                    for bu in related_objects.objects:
+                        if not bu.can_be_deleted():
+                            return False
+                    continue
+                else:
+                    return False
+        return True
 
 
 class SourceManager(MTObjectManager):
@@ -164,7 +178,7 @@ class AbstractMachineGroup(AbstractMTObject):
 
 
 class BusinessUnit(AbstractMachineGroup):
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit)
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.CASCADE)
     mt_excluded_fields = ('key', 'meta_business_unit')
 
     def __str__(self):
@@ -208,6 +222,9 @@ class BusinessUnit(AbstractMachineGroup):
         new_mbu = MetaBusinessUnit.objects.create(name=self.name)
         self.set_meta_business_unit(new_mbu)
         return new_mbu
+
+    def can_be_deleted(self):
+        return not self.machinesnapshot_set.count()
 
 
 class MachineGroup(AbstractMachineGroup):
