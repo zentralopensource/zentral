@@ -56,6 +56,10 @@ register_event_type(OsqueryResultEvent)
 
 class OsqueryDistributedQueryResultEvent(OsqueryEvent):
     event_type = "osquery_distributed_query_result"
+    payload_aggregations = [
+        ("empty", {"type": "terms", "bucket_number": 2, "label": "Empty?"}),
+        ("error", {"type": "terms", "bucket_number": 2, "label": "Error?"}),
+    ]
 
 
 register_event_type(OsqueryDistributedQueryResultEvent)

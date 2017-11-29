@@ -159,7 +159,7 @@ class ProbeDashboardDataView(LoginRequiredMixin, View):
                 chart_config = {
                     "type": "doughnut",
                     "data": {
-                        "labels": [l or "Other" for l, _ in results["values"]],
+                        "labels": ["Other" if l is None else l for l, _ in results["values"]],
                         "datasets": [
                             {"data": [v for _, v in results["values"]],
                              "backgroundColor": [self.COLORS[i % len(self.COLORS)]
