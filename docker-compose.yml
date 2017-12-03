@@ -7,9 +7,10 @@ services:
       - ./conf/start/docker/postgres.env
   rabbitmq:
   elastic:
-    image: elasticsearch:5
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.0.0
     environment:
       ES_JAVA_OPTS: -Xms512m -Xmx512m
+      discovery.type: single-node
     networks:
       default:
         aliases:

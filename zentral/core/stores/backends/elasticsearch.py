@@ -20,13 +20,14 @@ except NotImplementedError:
 
 
 class EventStore(BaseEventStore):
+    DOC_TYPE = "doc"
     MAX_CONNECTION_ATTEMPTS = 20
     INDEX_CONF = {
         "settings": {
             "number_of_shards": 1
         },
         "mappings": {
-            "_default_": {
+            DOC_TYPE: {
                 "dynamic_templates": [
                     {"zentral_ip_address": {
                         "mapping": {"type": "ip"},
@@ -41,6 +42,9 @@ class EventStore(BaseEventStore):
                     }}
                 ],
                 "properties": {
+                    "type": {
+                        "type": "keyword"
+                    },
                     "created_at": {
                         "type": "date"
                     },
@@ -48,11 +52,7 @@ class EventStore(BaseEventStore):
                         "properties": {
                             "ip": {"type": "ip"}
                         }
-                    }
-                }
-            },
-            "osquery_distributed_query_result": {
-                "properties": {
+                    },
                     "osquery_distributed_query_result": {
                         "properties": {
                             "result": {"enabled": False}
@@ -106,6 +106,7 @@ class EventStore(BaseEventStore):
                                            "in aws_auth config")
 
         self._es = Elasticsearch(**kwargs)
+        self.use_mapping_types = None
 
         self.index = config_d['index']
         self.read_index = config_d.get('read_index', self.index)
@@ -119,6 +120,7 @@ class EventStore(BaseEventStore):
             try:
                 if not self._es.indices.exists(self.index):
                     self._es.indices.create(self.index, body=self.INDEX_CONF)
+                    self.use_mapping_types = False
                     logger.info("Index %s created", self.index)
             except ConnectionError as e:
                 s = (i + 1) * random.uniform(0.9, 1.1)
@@ -133,32 +135,61 @@ class EventStore(BaseEventStore):
                 else:
                     raise
             # wait for index recovery
+            waiting_for_recovery = False
             while True:
                 recovery = self._es.indices.get(self.index, feature="_recovery")
                 shards = recovery.get(self.index, {}).get("shards", [])
                 if any(c["stage"] != "DONE" for c in shards):
+                    waiting_for_recovery = True
                     s = 1000 / random.randint(1000, 3000)
                     time.sleep(s)
                     logger.warning("Elasticsearch index recovering")
                 else:
-                    logger.warning("Elasticsearch index recovery done")
+                    if waiting_for_recovery:
+                        logger.warning("Elasticsearch index recovery done")
                     break
             self.configured = True
             break
         else:
             raise Exception('Could not connect to server')
 
+        # use_mapping_types
+        if self.use_mapping_types is None:
+            doc_types = set(list(self._es.indices.get_mapping(self.index).values())[0]['mappings'])
+            self.use_mapping_types = self.DOC_TYPE not in doc_types
+
+    def _get_type_field(self):
+        if not self.use_mapping_types:
+            return "type"
+        else:
+            return "_type"
+
+    def _get_type_filter(self, event_type):
+        if not self.use_mapping_types:
+            return {"term": {"type": event_type}}
+        else:
+            return {"type": {"value": event_type}}
+
     def _serialize_event(self, event):
         event_d = event.serialize()
         es_event_d = event_d.pop('_zentral')
-        es_event_d.pop('type')  # document type in ES
+        if not self.use_mapping_types:
+            es_doc_type = self.DOC_TYPE
+        else:
+            es_event_d.pop('type')  # document type in ES
+            es_doc_type = event.event_type
         es_event_d[event.event_type] = event_d
-        return event.event_type, es_event_d
+        return es_doc_type, es_event_d
 
-    def _deserialize_event(self, event_type, es_event_d):
+    def _deserialize_event(self, es_doc_type, es_event_d):
+        if es_doc_type == self.DOC_TYPE:
+            # TODO VERIFY self.use_mapping_types == False
+            event_type = es_event_d["type"]
+        else:
+            event_type = es_doc_type
+            es_event_d["type"] = event_type
         event_d = es_event_d.pop(event_type)
         event_d['_zentral'] = es_event_d
-        event_d['_zentral']['type'] = event_type
         return event_from_event_d(event_d)
 
     def store(self, event):
@@ -187,7 +218,7 @@ class EventStore(BaseEventStore):
             }
         }
         if event_type:
-            body['query']['bool']['filter'].append({'type': {'value': event_type}})
+            body['query']['bool']['filter'].append(self._get_type_filter(event_type))
         if tag:
             body['query']['bool']['filter'].append({'term': {'tags': tag}})
         return body
@@ -216,9 +247,9 @@ class EventStore(BaseEventStore):
         body.update({
             'size': 0,
             'aggs': {
-                'doc_types': {
+                'event_types': {
                     'terms': {
-                        'field': '_type',
+                        'field': self._get_type_field(),
                         'size': len(event_types)
                     }
                 }
@@ -226,7 +257,7 @@ class EventStore(BaseEventStore):
         })
         r = self._es.search(index=self.read_index, body=body)
         types_d = {}
-        for bucket in r['aggregations']['doc_types']['buckets']:
+        for bucket in r['aggregations']['event_types']['buckets']:
             types_d[bucket['key']] = bucket['doc_count']
         return types_d
 
@@ -236,7 +267,7 @@ class EventStore(BaseEventStore):
             'size': 0,
             'aggs': {
                 'inventory_heartbeats': {
-                    'filter': {'type': {'value': 'inventory_heartbeat'}},
+                    'filter': self._get_type_filter('inventory_heartbeat'),
                     'aggs': {
                         'sources': {
                             'terms': {
@@ -254,11 +285,11 @@ class EventStore(BaseEventStore):
                     }
                 },
                 'other_events': {
-                    'filter': {'bool': {'must_not': {'type': {'value': 'inventory_heartbeat'}}}},
+                    'filter': {'bool': {'must_not': self._get_type_filter('inventory_heartbeat')}},
                     'aggs': {
                         'event_types': {
                             'terms': {
-                                'field': '_type',
+                                'field': self._get_type_field(),
                                 'size': len([et for et in event_types.values()
                                              if 'heartbeat' in et.tags])
                             },
@@ -326,9 +357,10 @@ class EventStore(BaseEventStore):
                         elif query_type == "type":
                             if len(values) > 1:
                                 section_filter_must.append(
-                                    {'bool': {'should': [{'type': {'value': t}} for t in values]}})
+                                    {'bool': {'should': [self._get_type_filter(t) for t in values]}}
+                                )
                             else:
-                                section_filter_must.append({"type": {"value": list(values)[0]}})
+                                section_filter_must.append(self._get_type_filter(list(values)[0]))
                         else:
                             raise ValueError("Unknown query type")
                 if section_filter_must:
@@ -563,12 +595,12 @@ class EventStore(BaseEventStore):
             if isinstance(event_type, list):
                 filter_list.append({"bool": {
                                         "should": [
-                                            {"type": {"value": et}}
+                                            self._get_type_filter(et)
                                             for et in event_type
                                         ]
                                     }})
             else:
-                filter_list.append({"type": {"value": event_type}})
+                filter_list.append(self._get_type_filter(event_type))
         interval_unit = self.INTERVAL_UNIT[interval]
         gte_range = "now-{q}{u}/{u}".format(q=bucket_number - 1,
                                             u=interval_unit)
