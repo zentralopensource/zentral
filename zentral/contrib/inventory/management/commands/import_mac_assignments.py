@@ -17,21 +17,34 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--update', action='store_true', dest='update', default=False, help='force update')
 
+    def set_options(self, **options):
+        self.update = options["update"]
+        self.verbosity = options["verbosity"]
+
+    def write_to_stderr(self, msg):
+        if self.verbosity:
+            self.stdout.write(msg)
+
     def handle(self, *args, **kwargs):
-        if not kwargs['update']:
+        self.set_options(**kwargs)
+        if not self.update:
             assignment_count = MACAddressBlockAssignment.objects.all().count()
             if assignment_count > 0:
-                print("Found {} MAC assignments. Use --update to update.".format(assignment_count))
+                self.write_to_stderr("Found {} MAC assignments. Use --update to update.".format(assignment_count))
                 return
         for url in self.sources:
-            print("Import {}".format(url))
+            self.write_to_stderr("Import {}".format(url))
             r = requests.get(url)
             if not r.ok:
                 logger.error("Could not download file at %s", url)
                 continue
             lines = r.text.splitlines()
             skip_headers = True
-            for row in tqdm(csv.reader(lines), total=len(lines)):
+            if self.verbosity:
+                row_iterator = tqdm(csv.reader(lines), total=len(lines))
+            else:
+                row_iterator = lines
+            for row in row_iterator:
                 if skip_headers:
                     skip_headers = False
                     continue
