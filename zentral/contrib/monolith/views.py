@@ -664,7 +664,6 @@ class BaseEditManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
     def dispatch(self, request, *args, **kwargs):
         self.manifest = get_object_or_404(Manifest, pk=kwargs["pk"])
         if "mep_pk" in kwargs:
-            print("YO", self.manifest.id, kwargs["mep_pk"])
             self.manifest_enrollment_package = get_object_or_404(ManifestEnrollmentPackage,
                                                                  manifest=self.manifest,
                                                                  pk=kwargs["mep_pk"])
@@ -913,7 +912,6 @@ class CacheServersView(SignedRequestHeaderJSONPostAPIView):
         else:
             post_monolith_cache_server_update_request(self.user_agent, self.ip, errors=form.errors)
             # TODO: JSON response with error code and form.errors.as_json()
-            print(form.errors)
             raise SuspiciousOperation("Posted json data invalid")
 
 
@@ -946,12 +944,28 @@ class MRBaseView(View):
             api_data = verify_secret(token, 'zentral.contrib.monolith')
         except (KeyError, ValueError, APIAuthError):
             return HttpResponseForbidden("No no no!")
-        self.machine_serial_number = api_data.get("machine_serial_number", None)
-        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
-        self.machine = MetaMachine(self.machine_serial_number)
-        self.tags = self.machine.tags
+
+        # machine serial number
+        h_msn = request.META.get("HTTP_X_ZENTRAL_SERIAL_NUMBER")  # new way
+        t_msn = api_data.get("machine_serial_number")  # old way
+        if h_msn and t_msn and h_msn != t_msn:
+            logger.warning("Serial number mismatch. header: %s, token: %s", h_msn, t_msn)
+        self.machine_serial_number = h_msn or t_msn  # priority to h_msn because set in preflight script
+
+        # business unit, manifest
         self.meta_business_unit = api_data['business_unit'].meta_business_unit
         self.manifest = get_object_or_404(Manifest, meta_business_unit=self.meta_business_unit)
+
+        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
+
+        # machine extra infos
+        self.machine = MetaMachine(self.machine_serial_number)
+        self.tags = self.machine.tags
+
+        if not self.machine_serial_number:
+            logger.warning("Missing serial number. mbu: %s %s",
+                           self.meta_business_unit, self.meta_business_unit.pk)
+
         return super().dispatch(request, *args, **kwargs)
 
 

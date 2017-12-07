@@ -60,7 +60,8 @@ class MunkiMonolithConfigPkgBuilder(PackageBuilder):
         self.replace_in_file(postinstall_script,
                              (("%SOFTWARE_REPO_URL%", software_repo_url),))
         # headers
-        headers = {"X-Monolith-Token": "{}\\$SERIAL\\$${{MSN}}".format(self.make_api_secret())}
+        headers = {"X-Monolith-Token": self.make_api_secret(),
+                   "X-Zentral-Serial-Number": "${MSN}"}
         headers_str = " ".join('"%s: %s"' % (k, v) for k, v in headers.items())
         self.replace_in_file(postinstall_script,
                              (("%HEADERS%", headers_str),))
