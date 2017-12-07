@@ -1,24 +1,24 @@
 #!/usr/bin/python
 # Thanks to Graham Gilbert for
-# https://github.com/salsoftware/sal/blob/master/scripts/postflight
+# https://github.com/salsoftware/sal/blob/master/scripts/preflight
 import sys
 import os
 import subprocess
 
-POSTFLIGHT_DIR = '/usr/local/munki/postflight.d'
+PREFLIGHT_DIR = '/usr/local/munki/preflight.d'
 
 
-def iter_postflight_scripts(postflight_dir):
-    for script in os.listdir(postflight_dir):
-        script_path = os.path.join(postflight_dir, script)
+def iter_preflight_scripts(preflight_dir):
+    for script in os.listdir(preflight_dir):
+        script_path = os.path.join(preflight_dir, script)
         if not os.access(script_path, os.X_OK):
             print "'%s' is not executable or has bad permissions" % script_path
         else:
             yield script_path
 
 
-def execute_postflight_scripts(postflight_dir):
-    for script_path in iter_postflight_scripts(postflight_dir):
+def execute_preflight_scripts(preflight_dir):
+    for script_path in iter_preflight_scripts(preflight_dir):
         try:
             subprocess.call([script_path, sys.argv[1]])
         except OSError:
@@ -26,4 +26,4 @@ def execute_postflight_scripts(postflight_dir):
 
 
 if __name__ == '__main__':
-    execute_postflight_scripts(POSTFLIGHT_DIR)
+    execute_preflight_scripts(PREFLIGHT_DIR)

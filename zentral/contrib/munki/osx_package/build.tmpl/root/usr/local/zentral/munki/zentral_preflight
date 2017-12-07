@@ -1,0 +1,47 @@
+#!/usr/bin/python
+from Foundation import (CFPreferencesCopyAppValue,
+                        CFPreferencesSetValue,
+                        kCFPreferencesAnyHost,
+                        kCFPreferencesCurrentUser)
+import subprocess
+
+BUNDLE_ID = 'ManagedInstalls'
+ADDITIONAL_HTTP_HEADERS_KEY = 'AdditionalHttpHeaders'
+SN_HEADER = 'X-Zentral-Serial-Number'
+
+
+def get_serial_number():
+    p = subprocess.Popen(["/usr/sbin/ioreg",
+                          "-c", "IOPlatformExpertDevice",
+                          "-d", "2"],
+                         stdout=subprocess.PIPE)
+    stdoutdata, _ = p.communicate()
+    for line in stdoutdata.splitlines():
+        if "IOPlatformSerialNumber" in line:
+            return line.split("=")[-1].strip('" ')
+
+
+def update_additional_http_headers():
+    # get current headers
+    cfg_headers = CFPreferencesCopyAppValue(ADDITIONAL_HTTP_HEADERS_KEY,
+                                            BUNDLE_ID)
+    if cfg_headers:
+        headers = dict(h.split(":", 1) for h in cfg_headers)
+    else:
+        headers = {}
+    # add s/n header if necessary
+    if SN_HEADER not in headers:
+        serial_number = get_serial_number()
+        if serial_number:
+            headers[SN_HEADER] = serial_number
+            headers = ["{}: {}".format(k, v) for k, v in headers.items()]
+            # save the updated value
+            CFPreferencesSetValue(ADDITIONAL_HTTP_HEADERS_KEY,
+                                  headers, BUNDLE_ID,
+                                  # to write in /var/root
+                                  kCFPreferencesCurrentUser,
+                                  kCFPreferencesAnyHost)
+
+
+if __name__ == "__main__":
+    update_additional_http_headers()
