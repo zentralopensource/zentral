@@ -55,17 +55,17 @@ def reset(database_path, launchd_plist):
 def run(launchd_plist, database_path, log_file, registry_file):
     pr = read_results(registry_file)
     r = inspect_logfile(log_file)
-    if pr:
-        if pr["device"] == r["device"] and pr["inode"] == r["inode"] and pr["err_num"] < r["err_num"]:
-            # same file. more errors. reset
-            reset(database_path, launchd_plist)
-            reset_dict = r.copy()
-            reset_dict["timestamp"] = datetime.utcnow()
-            r["last_reset"] = reset_dict
-        else:
-            r["last_reset"] = pr["last_reset"]
+    if r["err_num"]:
+        # errors. reset
+        reset(database_path, launchd_plist)
+        reset_dict = r.copy()
+        reset_dict["timestamp"] = datetime.utcnow()
+        r["last_reset"] = reset_dict
     else:
-        r["last_reset"] = False
+        if pr:
+            r["last_reset"] = pr.get("last_reset") or False
+        else:
+            r["last_reset"] = False
     write_results(r, registry_file)
 
 
