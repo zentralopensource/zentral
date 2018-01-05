@@ -10,6 +10,17 @@ import time
 LOG_ERR_RE = re.compile("((Too many open files)|(System performance limits exceeded))")
 
 
+def get_last_exit_code():
+    p = subprocess.Popen(["/bin/launchctl", "list", "com.facebook.osqueryd"],
+                         stdout=subprocess.PIPE)
+    stdout = p.communicate()[0]
+    for line in stdout.splitlines():
+        line = line.strip().strip(";")
+        if "LastExitStatus".upper() in line.upper():
+            return int(line.split()[-1])
+    return None
+
+
 def inspect_logfile(filename):
     stat_result = os.stat(filename)
     d = {"filename": os.path.realpath(filename),
@@ -55,7 +66,8 @@ def reset(database_path, launchd_plist):
 def run(launchd_plist, database_path, log_file, registry_file):
     pr = read_results(registry_file)
     r = inspect_logfile(log_file)
-    if r["err_num"]:
+    last_exit_code = get_last_exit_code()
+    if r["err_num"] or last_exit_code > 0:
         # errors. reset
         reset(database_path, launchd_plist)
         reset_dict = r.copy()
