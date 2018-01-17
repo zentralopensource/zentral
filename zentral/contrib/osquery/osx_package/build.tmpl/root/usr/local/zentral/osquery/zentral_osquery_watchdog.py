@@ -22,6 +22,8 @@ def get_last_exit_code():
 
 
 def inspect_logfile(filename):
+    if not os.path.exists(filename):
+        return {}
     stat_result = os.stat(filename)
     d = {"filename": os.path.realpath(filename),
          "device": stat_result.st_dev,
@@ -67,8 +69,8 @@ def run(launchd_plist, database_path, log_file, registry_file):
     pr = read_results(registry_file)
     r = inspect_logfile(log_file)
     last_exit_code = get_last_exit_code()
-    if r["err_num"] or last_exit_code > 0:
-        # errors. reset
+    if r.get("err_num", True) or last_exit_code > 0:
+        # errors in log file or log file not found or last exit with errors => reset
         reset(database_path, launchd_plist)
         reset_dict = r.copy()
         reset_dict["timestamp"] = datetime.utcnow()
