@@ -22,6 +22,12 @@ def get_last_exit_code():
     return None
 
 
+def create_log_dir_if_missing(filename):
+    dir_path = os.path.dirname(filename)
+    if not os.path.isdir(dir_path):
+        os.makedirs(dir_path)
+
+
 def inspect_logfile(filename):
     if not os.path.exists(filename):
         return {}
@@ -105,6 +111,7 @@ def purge_log_files(log_file):
 
 def run(launchd_plist, database_path, log_file, registry_file):
     pr = read_results(registry_file)
+    create_log_dir_if_missing(log_file)
     r = inspect_logfile(log_file)
     last_exit_code = get_last_exit_code()
     if r.get("err_num", True) or last_exit_code > 0:
