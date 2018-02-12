@@ -513,7 +513,7 @@ class MachineSnapshotCommit(models.Model):
     source = models.ForeignKey(Source)
     version = models.PositiveIntegerField(default=1)
     machine_snapshot = models.ForeignKey(MachineSnapshot)
-    parent = models.ForeignKey('self', blank=True, null=True)
+    parent = models.ForeignKey('self', blank=True, null=True, on_delete=models.SET_NULL)
     last_seen = models.DateTimeField(blank=True, null=True)
     system_uptime = models.PositiveIntegerField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -542,7 +542,7 @@ class MachineSnapshotCommit(models.Model):
 class CurrentMachineSnapshot(models.Model):
     serial_number = models.TextField(db_index=True)
     source = models.ForeignKey(Source)
-    machine_snapshot = models.ForeignKey(MachineSnapshot)
+    machine_snapshot = models.ForeignKey(MachineSnapshot, on_delete=models.CASCADE)
 
     class Meta:
         unique_together = ('serial_number', 'source')
