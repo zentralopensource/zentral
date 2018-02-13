@@ -466,7 +466,10 @@ class EventStore(BaseEventStore):
             a_type = aggregation["type"]
             bucket_number = aggregation["bucket_number"]
             event_type = aggregation.get("event_type")
-            es_field = ".".join(s for s in (event_type, field) if s)
+            if field == "event_type":
+                es_field = self._get_type_field()
+            else:
+                es_field = ".".join(s for s in (event_type, field) if s)
             if a_type == "terms":
                 aggs[field] = {
                     "terms": {

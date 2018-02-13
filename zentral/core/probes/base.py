@@ -408,7 +408,7 @@ class BaseProbe(object):
             for field, aggregation in event_type_class.get_payload_aggregations():
                 aggs[field] = aggregation
         else:
-            aggs["_type"] = {
+            aggs["event_type"] = {
                 "type": "terms",
                 "bucket_number": len(event_types),
                 "label": "Event types",

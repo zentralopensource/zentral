@@ -139,7 +139,7 @@ class ProbeViewsTestCase(TestCase):
         response = self.client.get(url)
         self.assertEqual(response["Content-Type"], "application/json")
         data = response.json()
-        self.assertCountEqual(data, ["type", "created_at"])
+        self.assertCountEqual(data, ["event_type", "created_at"])
 
     def test_dashboard_data_single_event_types(self):
         self.log_user_in()
