@@ -10,6 +10,10 @@ get_do_instance_id () {
   curl -s --connect-timeout 2 http://169.254.169.254/metadata/v1/id
 }
 
+get_docker_instance_id () {
+  cat /proc/self/cgroup | grep "docker" | sed s/\\//\\n/g | tail -1 | cut -c-12
+}
+
 get_ec2_instance_id () {
   curl -s --connect-timeout 2 http://169.254.169.254/latest/meta-data/instance-id
 }
@@ -28,6 +32,8 @@ get_machine_id () {
     MACHINE_ID=$(get_watchman_id)
   elif get_do_instance_id; then
     MACHINE_ID="DO-$(get_do_instance_id)"
+  elif get_docker_instance_id; then
+    MACHINE_ID="DKR-$(get_docker_instance_id)"
   elif get_ec2_instance_id; then
     MACHINE_ID="EC2-$(get_ec2_instance_id)"
   elif get_gce_instance_id; then
