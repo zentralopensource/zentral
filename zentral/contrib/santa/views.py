@@ -1,58 +1,154 @@
+import json
 import logging
+from django.core.exceptions import SuspiciousOperation
 from django.core.urlresolvers import reverse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.http import Http404, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.views.generic import TemplateView, View
-from django.views.generic.edit import FormView
-from zentral.conf import settings
-from zentral.contrib.inventory.models import Certificate, MachineSnapshot, MetaBusinessUnit, MetaMachine
-from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
+from django.utils.crypto import get_random_string
+from django.views.generic import DetailView, ListView, TemplateView, View
+from django.views.generic.edit import CreateView, FormView, UpdateView
+from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
+from zentral.contrib.inventory.forms import EnrollmentSecretForm
+from zentral.contrib.inventory.models import Certificate, MachineSnapshot, MachineTag, MetaMachine
+from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_trigger_events,
+                                             verify_enrollment_secret)
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
-from zentral.utils.api_views import (make_secret, APIAuthError,
-                                     SignedRequestJSONPostAPIView, BaseEnrollmentView, BaseInstallerPackageView)
+from zentral.utils.api_views import APIAuthError, verify_secret, JSONPostAPIView
+from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import build_santa_conf
-from .events import post_santa_events, post_santa_preflight
-from .forms import CertificateSearchForm, CollectedApplicationSearchForm, CreateProbeForm, RuleForm
-from .models import CollectedApplication
+from .events import post_enrollment_event, post_events, post_preflight_event
+from .forms import (CertificateSearchForm, CollectedApplicationSearchForm,
+                    ConfigurationForm, CreateProbeForm, EnrollmentForm, RuleForm)
+from .models import CollectedApplication, Configuration, EnrolledMachine, Enrollment
 from .probes import Rule
 from .osx_package.builder import SantaZentralEnrollPkgBuilder
+from .utils import build_config_plist, build_configuration_profile
 
 logger = logging.getLogger('zentral.contrib.santa.views')
 
 
-class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
-    builder = SantaZentralEnrollPkgBuilder
-    template_name = "santa/enrollment.html"
+class ConfigurationListView(LoginRequiredMixin, ListView):
+    model = Configuration
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["configurations_count"] = ctx["object_list"].count()
+        return ctx
 
 
-class EnrollmentDebuggingView(LoginRequiredMixin, View):
-    debugging_template = """machine_serial_number="0123456789"
-machine_id="%(secret)s\$SERIAL\$$machine_serial_number"
-# rule download
-curl -XPOST -k %(tls_hostname)s/santa/ruledownload/$machine_id | jq ."""
+class CreateConfigurationView(LoginRequiredMixin, CreateView):
+    model = Configuration
+    form_class = ConfigurationForm
 
+
+class ConfigurationView(LoginRequiredMixin, DetailView):
+    model = Configuration
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
+        ctx["enrollments"] = enrollments
+        ctx["enrollments_count"] = len(enrollments)
+        return ctx
+
+
+class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
+    model = Configuration
+    form_class = ConfigurationForm
+
+
+class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
+    template_name = "santa/enrollment_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.configuration = get_object_or_404(Configuration, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_forms(self):
+        secret_form_kwargs = {"prefix": "secret"}
+        enrollment_form_kwargs = {"configuration": self.configuration,
+                                  "initial": {"configuration": self.configuration}}
+        if self.request.method == "POST":
+            secret_form_kwargs["data"] = self.request.POST
+            enrollment_form_kwargs["data"] = self.request.POST
+        return (EnrollmentSecretForm(**secret_form_kwargs),
+                EnrollmentForm(**enrollment_form_kwargs))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["configuration"] = self.configuration
+        if "secret_form" not in kwargs or "enrollment_form" not in kwargs:
+            ctx["secret_form"], ctx["enrollment_form"] = self.get_forms()
+        return ctx
+
+    def forms_invalid(self, secret_form, enrollment_form):
+        return self.render_to_response(self.get_context_data(secret_form=secret_form,
+                                                             enrollment_form=enrollment_form))
+
+    def forms_valid(self, secret_form, enrollment_form):
+        secret = secret_form.save()
+        enrollment = enrollment_form.save(commit=False)
+        enrollment.secret = secret
+        if self.configuration:
+            enrollment.configuration = self.configuration
+        enrollment.save()
+        return HttpResponseRedirect(enrollment.get_absolute_url())
+
+    def post(self, request, *args, **kwargs):
+        secret_form, enrollment_form = self.get_forms()
+        if secret_form.is_valid() and enrollment_form.is_valid():
+            return self.forms_valid(secret_form, enrollment_form)
+        else:
+            return self.forms_invalid(secret_form, enrollment_form)
+
+
+class EnrollmentPackageView(View):
     def get(self, request, *args, **kwargs):
+        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
+        builder = SantaZentralEnrollPkgBuilder(enrollment)
+        return builder.build_and_make_response()
+
+
+class EnrollView(View):
+    def post(self, request, *args, **kwargs):
+        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
+        request_json = json.load(request)
+        secret = request_json["secret"]
+        serial_number = request_json["serial_number"]
         try:
-            mbu = MetaBusinessUnit.objects.get(pk=int(request.GET['mbu_id']))
-            # -> BaseInstallerPackageView
-            # TODO Race. The meta_business_unit could maybe be without any api BU.
-            # TODO. Better selection if multiple BU ?
-            bu = mbu.api_enrollment_business_units()[0]
-        except (KeyError, ValueError):
-            bu = None
-        secret = make_secret("zentral.contrib.santa", bu)
-        debugging_tools = self.debugging_template % {'secret': secret,
-                                                     'tls_hostname': settings['api']['tls_hostname']}
-        return HttpResponse(debugging_tools)
+            es_request = verify_enrollment_secret(
+                "santa_enrollment", secret,
+                self.user_agent, self.ip, serial_number
+            )
+        except EnrollmentSecretVerificationFailed as error:
+            raise SuspiciousOperation
+        else:
+            # get or create enrolled machine
+            enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.get_or_create(
+                enrollment=es_request.enrollment_secret.santa_enrollment,
+                serial_number=serial_number,
+                defaults={"machine_id": get_random_string(64)}
+            )
 
+            # apply enrollment secret tags
+            for tag in es_request.enrollment_secret.tags.all():
+                MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
 
-class InstallerPackageView(LoginRequiredMixin, BaseInstallerPackageView):
-    module = "zentral.contrib.santa"
-    builder = SantaZentralEnrollPkgBuilder
-    template_name = "santa/enrollment.html"
+            # response
+            response = {"machine_id": enrolled_machine.machine_id}
+            cp_name, cp_content = build_configuration_profile(enrolled_machine)
+            response["configuration_profile"] = {"name": cp_name, "content": cp_content}
+            cpl_name, cpl_content = build_config_plist(enrolled_machine)
+            response["config_plist"] = {"name": cpl_name, "content": cp_content}
+
+            # post event
+            post_enrollment_event(serial_number, self.user_agent, self.ip,
+                                  {'action': "enrollment" if enrolled_machine_created else "re-enrollment"})
+        return JsonResponse(response)
 
 
 class CreateProbeView(LoginRequiredMixin, FormView):
@@ -248,12 +344,35 @@ class PickRuleCertificateView(LoginRequiredMixin, TemplateView):
 # API
 
 
-class BaseView(SignedRequestJSONPostAPIView):
-    verify_module = "zentral.contrib.santa"
+class BaseView(JSONPostAPIView):
+    def verify_enrolled_machine_id(self):
+        """Find the corresponding enrolled machine"""
+        try:
+            self.enrolled_machine = (EnrolledMachine.objects
+                                                    .select_related("enrollment__secret__meta_business_unit")
+                                                    .get(machine_id=self.machine_id))
+        except EnrolledMachine.DoesNotExist:
+            raise APIAuthError("Could not authorize the request")
+        else:
+            self.machine_serial_number = self.enrolled_machine.serial_number
+            self.business_unit = self.enrolled_machine.enrollment.secret.get_api_enrollment_business_unit()
 
-    def get_request_secret(self, request, *args, **kwargs):
+    def verify_signed_machine_id(self):
+        """Verify the secret signature"""
+        # TODO: deprecate and remove
+        data = verify_secret(self.machine_id, "zentral.contrib.santa")
+        self.machine_serial_number = data.get('machine_serial_number', None)
+        self.business_unit = data.get('business_unit', None)
+
+    def check_request_secret(self, request, *args, **kwargs):
+        self.enrolled_machine = None
         self.machine_id = kwargs['machine_id']
-        return self.machine_id
+        if "$" not in self.machine_id:
+            # new way, machine_id is an attribute of EnrolledMachine
+            self.verify_enrolled_machine_id()
+        else:
+            # old way
+            self.verify_signed_machine_id()
 
 
 class PreflightView(BaseView):
@@ -272,7 +391,7 @@ class PreflightView(BaseView):
 
     @transaction.non_atomic_requests
     def do_post(self, data):
-        post_santa_preflight(self.machine_serial_number,
+        post_preflight_event(self.machine_serial_number,
                              self.user_agent,
                              self.ip,
                              data)
@@ -282,19 +401,30 @@ class PreflightView(BaseView):
                            'build': data['os_build']})
         tree = {'source': {'module': 'zentral.contrib.santa',
                            'name': 'Santa'},
-                'reference': self.machine_serial_number,
+                'reference': self.enrolled_machine.machine_id,
                 'serial_number': self.machine_serial_number,
                 'os_version': os_version,
                 'system_info': {'computer_name': data['hostname']},
                 'public_ip_address': self.ip,
                 }
+        if self.enrolled_machine:
+            # new way
+            tree["reference"] = self.enrolled_machine.machine_id
+        else:
+            # old way
+            # TODO: remove it
+            tree["reference"] = self.machine_serial_number
         if self.business_unit:
             tree['business_unit'] = self.business_unit.serialize()
         commit_machine_snapshot_and_trigger_events(tree)
-        return {'BatchSize': 20,  # TODO: ???
-                'UploadLogsUrl': 'https://{host}{path}'.format(host=self.request.get_host(),
-                                                               path=reverse('santa:logupload',
-                                                                            args=(self.machine_id,)))}
+        config_dict = {'UploadLogsUrl': 'https://{host}{path}'.format(host=self.request.get_host(),
+                                                                      path=reverse('santa:logupload',
+                                                                                   args=(self.machine_id,)))}
+        if self.enrolled_machine:
+            config_dict.update(self.enrolled_machine.enrollment.configuration.get_sync_server_config())
+        else:
+            config_dict['BatchSize'] = Configuration.DEFAULT_BATCH_SIZE
+        return config_dict
 
 
 class RuleDownloadView(BaseView):
@@ -312,10 +442,10 @@ class EventUploadView(BaseView):
             logger.error("Machine ID not found", extra={'request': self.request})
         else:
             machine_serial_number = ms.serial_number
-        post_santa_events(machine_serial_number,
-                          self.user_agent,
-                          self.ip,
-                          data)
+        post_events(machine_serial_number,
+                    self.user_agent,
+                    self.ip,
+                    data)
         return {}
 
 

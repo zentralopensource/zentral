@@ -69,19 +69,23 @@
     <tr>
       <th>name</th>
       <th>version</th>
-      <th>parameters</th>
+      <th>enrollment</th>
       <th>tags</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
     {% for manifest_enrollment_package in manifest_enrollment_packages %}
+    {% with manifest_enrollment_package.get_enrollment as mep_enrollment %}
     <tr>
-      <td>{{ manifest_enrollment_package.get_name }}</td>
+      <td>
+        <a name="mep_{{ manifest_enrollment_package.pk }}"></a>
+        {{ manifest_enrollment_package.get_name }}
+      </td>
       <td>{{ manifest_enrollment_package.version }}</td>
       <td>
-        {% if manifest_enrollment_package.build_kwargs %}
-        {{ manifest_enrollment_package.build_kwargs|pythonprettyprint }}
+        {% if mep_enrollment %}
+        <a href="{{ mep_enrollment.get_absolute_url }}">{{ mep_enrollment.get_description_for_distributor }}</a>
         {% else %}
         -
         {% endif %}
@@ -104,6 +108,7 @@
         {% endif %}
       </td>
     </tr>
+    {% endwith %}
     {% endfor %}
   </tbody>
 </table>

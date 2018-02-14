@@ -1,7 +1,59 @@
 from django import forms
 from zentral.core.probes.forms import BaseCreateProbeForm
 from zentral.utils.forms import validate_sha256
+from .models import Configuration, Enrollment
 from .probes import SantaProbe, Rule
+from .releases import Releases
+
+
+class ConfigurationForm(forms.ModelForm):
+    class Meta:
+        model = Configuration
+        fields = '__all__'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        client_mode = cleaned_data.get("client_mode")
+        blacklist_regex = cleaned_data.get("blacklist_regex")
+        if client_mode == Configuration.LOCKDOWN_MODE and blacklist_regex:
+            self.add_error("blacklist_regex",
+                           "Can't use a blacklist regex in Lockdown mode.")
+        return cleaned_data
+
+
+class EnrollmentForm(forms.ModelForm):
+    configuration = forms.ModelChoiceField(queryset=Configuration.objects.all(), required=True)
+    santa_release = forms.ChoiceField(
+        label="Santa release",
+        choices=[],
+        initial="",
+        help_text="Choose a santa release to be installed by the enrollment package.",
+        required=False
+    )
+
+    class Meta:
+        model = Enrollment
+        fields = ("configuration", "santa_release")
+
+    def __init__(self, *args, **kwargs):
+        self.configuration = kwargs.pop("configuration", None)
+        self.update_for = kwargs.pop("update_for", None)
+        self.standalone = kwargs.pop("standalone", False)
+        super().__init__(*args, **kwargs)
+        # hide configuration dropdown if configuration if fixed
+        if self.configuration:
+            self.fields["configuration"].widget = forms.HiddenInput()
+
+        # release
+        release_field = self.fields["santa_release"]
+        if self.update_for:
+            release_field.widget = forms.HiddenInput()
+        else:
+            r = Releases()
+            release_choices = [(filename, filename) for filename, _, _, _, _ in r.get_versions()]
+            if not self.standalone:
+                release_choices.insert(0, ("", "Do not include santa"))
+            release_field.choices = release_choices
 
 
 class CertificateSearchForm(forms.Form):

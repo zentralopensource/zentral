@@ -1,11 +1,10 @@
 import logging
 import plistlib
-from urllib.parse import urlparse
-import uuid
 from django.http import HttpResponse
 from django.urls import reverse
 from zentral.conf import settings
 from zentral.utils.certificates import split_certificate_chain
+from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
 
 
 logger = logging.getLogger("zentral.contrib.mdm.payloads")
@@ -17,17 +16,9 @@ def build_payload_response(payload, filename):
     return response
 
 
-def get_payload_identifier(suffix):
-    o = urlparse(settings["api"]["tls_hostname"])
-    netloc = o.netloc.split(":")[0].split(".")
-    netloc.reverse()
-    netloc.append(suffix)
-    return ".".join(netloc)
-
-
 def build_payload(display_name, suffix, content,
                   payload_type="Configuration", payload_description=None, merge_content=False):
-    payload = {"PayloadUUID": str(uuid.uuid4()),
+    payload = {"PayloadUUID": generate_payload_uuid(),
                "PayloadIdentifier": get_payload_identifier(suffix),
                "PayloadVersion": 1,
                "PayloadDisplayName": display_name,

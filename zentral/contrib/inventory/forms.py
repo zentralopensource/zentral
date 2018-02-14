@@ -3,7 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db import connection
 from django.utils.text import slugify
 from zentral.utils.forms import validate_sha256
-from .models import (MachineSnapshot, MachineTag, MetaMachine,
+from .models import (EnrollmentSecret,
+                     MachineSnapshot, MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
                      Source, Tag)
 
@@ -239,3 +240,13 @@ class MacOSAppSearchForm(forms.Form):
         cleaned_data = self.cleaned_data
         cleaned_data['page'] = max(1, int(cleaned_data.get('page') or 1))
         return cleaned_data
+
+
+class EnrollmentSecretForm(forms.ModelForm):
+    class Meta:
+        model = EnrollmentSecret
+        fields = ("meta_business_unit", "tags", "serial_numbers", "udids", "quota")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["meta_business_unit"].queryset = MetaBusinessUnit.objects.available_for_api_enrollment()

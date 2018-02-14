@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">{{ configurations_count }} Santa configuration{{ configurations_count|pluralize }}</li>
+</ol>
+
+<h2>{{ configurations_count }} Santa configuration{{ configurations_count|pluralize }}</h2>
+
+<p>
+  <a href="{% url 'santa:create_configuration' %}" class="btn btn-default">Create</a>
+</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for configuration in object_list %}
+    <tr>
+      <td>
+        <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
+      </td>
+      <td>
+        <a class="btn btn-default" href="{% url 'santa:update_configuration' configuration.id %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+          Update
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

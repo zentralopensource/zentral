@@ -64,6 +64,33 @@
     "zentral.contrib.mdm": {},
     "zentral.contrib.munki": {},
     "zentral.contrib.osquery": {},
+    "zentral.contrib.monolith": {
+      "enrollment_package_builders": {
+        "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
+          "update_for": "munkitools_core",
+          "optional": false
+        },
+        "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
+          "update_for": "osquery",
+          "optional": true
+        },
+        "zentral.contrib.santa.osx_package.builder.SantaZentralEnrollPkgBuilder": {
+          "update_for": "santa",
+          "optional": true
+        }
+      },
+      "munki_repository": {
+        "backend": "zentral.contrib.monolith.repository_backends.s3",
+        "manual_catalog_management": true,
+        "default_catalog": "testing",
+        "aws_access_key_id": "AKIAIPB3DHKLKMX33O4A",
+        "aws_secret_access_key": "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",
+        "bucket": "monolith-apfelwerk",
+        "signature_version": "s3v4",
+        "region_name": "eu-central-1",
+        "prefix": "monolith_repo"
+      }
+    },
     "zentral.contrib.santa": {}
   }
 }

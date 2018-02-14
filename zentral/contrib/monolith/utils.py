@@ -14,15 +14,16 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
     installer_item_hash = h.hexdigest()
     installer_item_size = len(package_content)
     installed_size = installer_item_size * 10  # TODO: bug
-    postinstall_script = """#!/usr/bin/python
-import os
-
-RECEIPTS_DIR = "/var/db/receipts/"
-
-for filename in os.listdir(RECEIPTS_DIR):
-    if filename.startswith("%s") and not filename.startswith("%s"):
-        os.unlink(os.path.join(RECEIPTS_DIR, filename))
-""" % (builder.base_package_identifier, builder.package_identifier)
+    postinstall_script = (
+        '#!/usr/bin/python\n'
+        'import os\n'
+        '\n'
+        'RECEIPTS_DIR = "/var/db/receipts/"\n'
+        '\n'
+        'for filename in os.listdir(RECEIPTS_DIR):\n'
+        '    if filename.startswith("{}") and not filename.startswith("{}"):\n'
+        '        os.unlink(os.path.join(RECEIPTS_DIR, filename))\n'
+    ).format(builder.base_package_identifier, builder.package_identifier)
     return {'autoremove': True,
             'description': '{} package'.format(builder.name),
             'display_name': builder.name,
@@ -46,11 +47,7 @@ for filename in os.listdir(RECEIPTS_DIR):
 
 
 def build_manifest_enrollment_package(mep):
-    mbu = mep.manifest.meta_business_unit
-    bu = mbu.api_enrollment_business_units()[0]
-    build_kwargs = mep.build_kwargs.copy()
-    build_kwargs["version"] = "{}.0".format(mep.version)
-    builder = mep.builder_class(bu, package_identifier_suffix="pk_{}".format(mep.id), **build_kwargs)
+    builder = mep.builder_class(mep.get_enrollment(), version=mep.version)
     _, package_content = builder.build()
     mep.pkg_info = make_package_info(builder, mep, package_content)
     mep.file.delete(False)

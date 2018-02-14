@@ -19,6 +19,10 @@ from zentral.utils.api_views import make_secret
 logger = logging.getLogger("zentral.utils.osx_package")
 
 
+TLS_SERVER_CERTS_CLIENT_PATH = "/usr/local/zentral/tls_server_certs.crt"
+TLS_CA_CERT_CLIENT_PATH = "/usr/local/zentral/tls_ca_cert.crt"
+
+
 class EnrollmentForm(forms.Form):
     meta_business_unit = forms.ModelChoiceField(
         label=_("Business unit"),
@@ -262,24 +266,23 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         super().__init__()
         shutil.copytree(self.build_tmpl_dir, self.builddir)
         self.package_dir = self.get_build_path("base.pkg")
-        package_identifier_suffix = kwargs.pop("package_identifier_suffix", None)
-        self.package_identifier = self._get_package_identifier(business_unit,
-                                                               package_identifier_suffix)
-        self.package_version = kwargs.pop("version", "1.0")
         self.business_unit = business_unit
+        self.package_identifier = self._get_package_identifier(**kwargs)
+        self.package_version = kwargs.pop("version", "1.0")
         self.build_kwargs = kwargs
 
     #
     # common build steps
     #
 
-    def _get_package_identifier(self, business_unit, package_identifier_suffix):
-        l = [self.base_package_identifier]
-        if business_unit:
-            l.append("bu_{}".format(business_unit.get_short_key()))
+    def _get_package_identifier(self, **kwargs):
+        elements = [self.base_package_identifier]
+        if self.business_unit:
+            elements.append("bu-{}".format(self.business_unit.get_short_key()))
+        package_identifier_suffix = kwargs.pop("package_identifier_suffix", None)
         if package_identifier_suffix:
-            l.append(package_identifier_suffix)
-        return ".".join(l)
+            elements.append(package_identifier_suffix)
+        return ".".join(elements)
 
     def _prepare_package_info(self):
         number_of_files = install_bytes = 0
@@ -336,7 +339,7 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
 
     def build(self):
         # prepare package content
-        self.extra_build_steps(**self.build_kwargs)
+        self.extra_build_steps()
         self._prepare_package_info()
         self._build_payload()
         self._build_scripts()
@@ -405,10 +408,10 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             plistlib.dump(pl, f)
 
     def include_tls_server_certs(self):
-        tls_server_certs_rel_path = "usr/local/zentral/tls_server_certs.crt"  # TODO: hardcoded
+        tls_server_certs_rel_path = os.path.relpath(TLS_SERVER_CERTS_CLIENT_PATH, "/")
         shutil.copy(self.get_tls_server_certs(),
                     self.get_root_path(tls_server_certs_rel_path))
-        return "/{}".format(tls_server_certs_rel_path)
+        return TLS_SERVER_CERTS_CLIENT_PATH
 
     def include_tls_ca_cert(self):
         # extract root CA cert
@@ -420,10 +423,10 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             fullchain.split(begin_certificate_line)[-1]
         )
         # add it to package
-        tls_ca_cert_rel_path = "usr/local/zentral/tls_ca_cert.crt"  # TODO: hardcoded
+        tls_ca_cert_rel_path = os.path.relpath(TLS_CA_CERT_CLIENT_PATH, "/")
         with open(self.get_root_path(tls_ca_cert_rel_path), "w") as f:
             f.write(tls_ca_cert_content)
-        return "/{}".format(tls_ca_cert_rel_path)
+        return TLS_CA_CERT_CLIENT_PATH
 
     def is_product_archive(self):
         return self.get_product_archive() is not None or len(self.get_extra_packages()) > 0

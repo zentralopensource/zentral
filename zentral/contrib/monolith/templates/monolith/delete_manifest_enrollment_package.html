@@ -6,20 +6,22 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
   <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
-  <li class="active">Add catalog</li>
+  <li class="active">Delete manifest enrollment package</li>
 </ol>
 
-<h2>Add catalog</h2>
+<h2>Delete manifest enrollment package</h2>
 <form method="POST" class="form">{% csrf_token %}
   <dl class="dl-horizontal">
     <dt>Name</dt>
     <dd>{{ manifest_enrollment_package.get_name }}<dd>
-    {% if manifest_enrollment_package.build_kwargs %}
-    <dt>Parameters</dt>
-    <dd>{{ manifest_enrollment_package.build_kwargs|pythonprettyprint }}</dd>
+    {% with manifest_enrollment_package.get_enrollment as enrollment %}
+    {% if enrollment %}
+    <dt>Enrollment</dt>
+    <dd><a href="{{ enrollment.get_absolute_url }}">{{ enrollment.get_description_for_distributor }}</a></dd>
     {% endif %}
+    {% endwith %}
   </dl>
-  <a href="{{ manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
+  <a href="{{ manifest_enrollment_package.get_absolute_url }}" class="btn btn-default">Cancel</a>
   <button type="submit" class="btn btn-danger">Delete</button>
 </form>
 {% endblock %}

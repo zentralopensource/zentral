@@ -1,47 +1,28 @@
 #!/bin/bash
-## postinstall
 
-## unload com.google.santad.plist
+# postinstall
+
+# unload com.google.santad.plist
 /bin/launchctl unload "/Library/LaunchDaemons/com.google.santad.plist"
 
-## sleep, because …
+# sleep, because …
 sleep 1
 
-## detect client device serial_number
-SERIAL_NUMBER=$(ioreg -c IOPlatformExpertDevice -d 2 | awk -F\" '/IOPlatformSerialNumber/{print $(NF-1)}')
-MACHINE_ID="%API_SECRET%\$SERIAL\$${SERIAL_NUMBER}"
+# do enrollment
+/usr/local/zentral/santa/enroll.py
 
-CONFIG_PLIST="/var/db/santa/config.plist"
-
-BLACKLIST_REGEX="%BLACKLIST_REGEX%"
-WHITELIST_REGEX="%WHITELIST_REGEX%"
-
-## config
-defaults write "$CONFIG_PLIST" MachineID "$MACHINE_ID"
-defaults write "$CONFIG_PLIST" ClientMode "%MODE%"
-defaults write "$CONFIG_PLIST" SyncBaseURL "https://%TLS_HOSTNAME%/santa/"
-defaults write "$CONFIG_PLIST" ServerAuthRootsFile "%SERVER_AUTH_ROOTS_FILE%"
-if [ -z "$BLACKLIST_REGEX" ]; then
-    defaults delete "$CONFIG_PLIST" BlacklistRegex
-else
-    defaults write "$CONFIG_PLIST" BlacklistRegex "$BLACKLIST_REGEX"
-fi
-if [ -z "$WHITELIST_REGEX" ]; then
-    defaults delete "$CONFIG_PLIST" WhitelistRegex
-else
-    defaults write "$CONFIG_PLIST" WhitelistRegex "$WHITELIST_REGEX"
-fi
-
-## fix config.plist permissions
+# copy old style configuration
+cp "/usr/local/zentral/santa/config.plist" "/var/db/santa/config.plist"
+# fix old style configuration permissions
 chmod 0644 /var/db/santa/config.plist
 
-## load com.google.santad.plist
+# load com.google.santad.plist
 /bin/launchctl load -w "/Library/LaunchDaemons/com.google.santad.plist"
 
-## write zentral base url
+# write zentral base url
 defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"
 
-## force santa sync (=> preflight => machine_id => serial number)
+# force santa sync (=> preflight => machine_id => serial number)
 /usr/local/bin/santactl sync
 
 exit 0

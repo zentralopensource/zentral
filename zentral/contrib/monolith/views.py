@@ -3,7 +3,6 @@ import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import SuspiciousOperation
 from django.core.urlresolvers import reverse_lazy
-from django.db.models import F
 from django.http import (FileResponse,
                          Http404,
                          HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect)
@@ -11,7 +10,7 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
-from zentral.contrib.inventory.models import MetaMachine
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaMachine
 from zentral.utils.api_views import (APIAuthError, make_secret, verify_secret,
                                      SignedRequestHeaderJSONPostAPIView)
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -687,6 +686,7 @@ class BaseEditManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
             self.builder_config = monolith_conf.optional_enrollment_package_builders[builder]
             self.builder_class = self.manifest_enrollment_package.builder_class
         else:
+            self.manifest_enrollment_package = None
             try:
                 self.builder = request.GET["builder"]
                 self.builder_config = monolith_conf.optional_enrollment_package_builders[self.builder]
@@ -697,7 +697,6 @@ class BaseEditManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
 
     def get_forms(self):
         builder_form_kwargs = {
-            "initial": {"meta_business_unit": self.manifest.meta_business_unit},
             "prefix": "builder",
             "update_for": self.builder_config["update_for"]
         }
@@ -708,8 +707,8 @@ class BaseEditManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
         if self.request.method == "POST":
             for kwargs in (builder_form_kwargs, mep_form_kwargs):
                 kwargs["data"] = self.request.POST
-        elif hasattr(self, "manifest_enrollment_package"):
-            builder_form_kwargs["initial"].update(self.manifest_enrollment_package.build_kwargs)
+        if self.manifest_enrollment_package:
+            builder_form_kwargs["instance"] = self.manifest_enrollment_package.get_enrollment()
             mep_form_kwargs["initial"] = {"tags": self.manifest_enrollment_package.tags.all()}
         return (self.builder_class.form(**builder_form_kwargs),
                 AddManifestEnrollmentPackageForm(**mep_form_kwargs))
@@ -737,25 +736,32 @@ class BaseEditManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
 
 class AddManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView):
     def forms_valid(self, builder_form, mep_form):
+        # enrollment secret
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.manifest.meta_business_unit)
+        # enrollment
+        enrollment = builder_form.save(commit=False)
+        enrollment.version = 0  # will be saved one extra time, and start at 1
+        enrollment.secret = enrollment_secret
+        enrollment.save()
+        # manifest enrollment package
         mep = ManifestEnrollmentPackage.objects.create(
             manifest=self.manifest,
             builder=self.builder,
-            build_kwargs=builder_form.get_build_kwargs(),
-            version=1
+            enrollment_pk=enrollment.pk,
+            version=0  # will be updated by the callback call in enrollment.save()
         )
         mep.tags = mep_form.cleaned_data["tags"]
-        build_manifest_enrollment_package(mep)
+        # link from enrollment to manifest enrollment package, for config update propagation
+        enrollment.distributor = mep
+        enrollment.save()  # bump mep version and build package via callback call
         return HttpResponseRedirect(self.manifest.get_absolute_url())
 
 
 class UpdateManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView):
     def forms_valid(self, builder_form, mep_form):
-        self.manifest_enrollment_package.build_kwargs = builder_form.get_build_kwargs()
         self.manifest_enrollment_package.tags = mep_form.cleaned_data["tags"]
-        self.manifest_enrollment_package.version = F("version") + 1
         self.manifest_enrollment_package.save()
-        self.manifest_enrollment_package.refresh_from_db()
-        build_manifest_enrollment_package(self.manifest_enrollment_package)
+        builder_form.save()  # bump mep version and build package via callback call
         return HttpResponseRedirect(self.manifest.get_absolute_url())
 
 
@@ -780,6 +786,8 @@ class DeleteManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         redirect_url = self.manifest_enrollment_package.manifest.get_absolute_url()
         self.manifest_enrollment_package.file.delete(save=False)
+        enrollment = self.manifest_enrollment_package.get_enrollment()
+        enrollment.delete()
         self.manifest_enrollment_package.delete()
         return HttpResponseRedirect(redirect_url)
 

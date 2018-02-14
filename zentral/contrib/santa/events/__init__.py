@@ -9,6 +9,14 @@ logger = logging.getLogger('zentral.contrib.santa.events')
 ALL_EVENTS_SEARCH_DICT = {"tag": "santa"}
 
 
+class SantaEnrollmentEvent(BaseEvent):
+    event_type = "santa_enrollment"
+    tags = ["santa"]
+
+
+register_event_type(SantaEnrollmentEvent)
+
+
 class SantaPreflightEvent(BaseEvent):
     event_type = "santa_preflight"
     tags = ["santa", "heartbeat"]
@@ -106,7 +114,7 @@ def get_created_at(payload):
     return datetime.utcfromtimestamp(payload['execution_time'])
 
 
-def post_santa_events(msn, user_agent, ip, data):
+def post_events(msn, user_agent, ip, data):
     events = data.get("events", [])
     for event_d in events:
         try:
@@ -123,5 +131,9 @@ def post_santa_events(msn, user_agent, ip, data):
                                                   get_created_at)
 
 
-def post_santa_preflight(msn, user_agent, ip, data):
+def post_preflight_event(msn, user_agent, ip, data):
     SantaPreflightEvent.post_machine_request_payloads(msn, user_agent, ip, [data])
+
+
+def post_enrollment_event(msn, user_agent, ip, data):
+    SantaEnrollmentEvent.post_machine_request_payloads(msn, user_agent, ip, [data])

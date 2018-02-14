@@ -1,0 +1,198 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
+  <li class="active">{{ object.name }}</li>
+</ol>
+
+<h2>Santa configuration <i>{{ object.name }}</i></h2>
+
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th>Attribute</th>
+        <th>Value</th>
+      </thead>
+      <tbody>
+      <tr>
+        <td>Name</td>
+        <td>{{ object.name }}</td>
+      </tr>
+      <tr>
+        <td>Mode</td>
+        <td>
+          {% if object.is_monitor_mode %}
+          <span class="label label-success">Monitor</span>
+          {% else %}
+          <span class="label label-danger">{{ object.get_mode_display }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% if object.file_changes_regex %}
+      <tr>
+        <td>File changes regex</td>
+        <td><code>{{ object.file_changes_regex }}</code></td>
+      </tr>
+      {% endif %}
+      {% if object.whitelist_regex %}
+      <tr>
+        <td>Whitelist regex</td>
+        <td><code>{{ object.whitelist_regex }}</code></td>
+      </tr>
+      {% endif %}
+      {% if object.blacklist_regex %}
+      <tr>
+        <td>Blacklist regex</td>
+        <td><code>{{ object.blacklist_regex }}</code></td>
+      </tr>
+      {% endif %}
+      {% if not object.enable_page_zero_protection %}
+      <tr>
+        <td>Enable page zero protection</td>
+        <td>{{ object.enable_page_zero_protection|yesno }}</td>
+      </tr>
+      {% endif %}
+      {% if object.more_info_url %}
+      <tr>
+        <td>More info URL</td>
+        <td><code>{{ object.more_info_url }}</code></td>
+      </tr>
+      {% endif %}
+      {% if object.event_detail_url %}
+      <tr>
+        <td>Event detail URL</td>
+        <td><code>{{ object.event_detail_url }}</code></td>
+      </tr>
+      {% endif %}
+      {% if object.event_detail_text %}
+      <tr>
+        <td>Event detail text</td>
+        <td>{{ object.event_detail_text }}</td>
+      </tr>
+      {% endif %}
+      <tr>
+        <td>Unknown block message</td>
+        <td>{{ object.unknown_block_message|linebreaksbr }}</td>
+      </tr>
+      <tr>
+        <td>Banned block message</td>
+        <td>{{ object.banned_block_message|linebreaksbr }}</td>
+      </tr>
+      <tr>
+        <td>Mode notification monitor</td>
+        <td>{{ object.mode_notification_monitor|linebreaksbr }}</td>
+      </tr>
+      <tr>
+        <td>Mode notification lockdown</td>
+        <td>{{ object.mode_notification_lockdown|linebreaksbr }}</td>
+      </tr>
+      {% if object.machine_owner_plist %}
+      <tr>
+        <td>Machine owner plist</td>
+        <td>{{ object.machine_owner_plist }}</td>
+      </tr>
+      {% endif %}
+      {% if object.machine_owner_key %}
+      <tr>
+        <td>Machine owner key</td>
+        <td>{{ object.machine_owner_key }}</td>
+      </tr>
+      {% endif %}
+      <tr>
+        <td>Batch size</td>
+        <td>{{ object.batch_size }}</td>
+      </tr>
+      {% if object.bundles_enabled %}
+      <tr>
+        <td>Bundles enables</td>
+        <td>{{ object.bundles_enabled|yesno }}</td>
+      </tr>
+      {% endif %}
+      </tbody>
+    </table>
+
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+    </dl>
+
+  </div>
+</div>
+
+<p>
+  <a class="btn btn-default" href="{% url 'santa:update_configuration' object.id %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Update
+  </a>
+</p>
+
+<h2>{{ enrollments_count }} Enrollment{{ enrollments_count|pluralize }}</h2>
+
+<p>
+  <a class="btn btn-default" href="{% url 'santa:create_enrollment' object.id %}">Create</a>
+</p>
+
+{% if enrollments %}
+<table class="table">
+  <thead>
+    <th>Business unit</th>
+    <th>Tags</th>
+    <th>Created at</th>
+    <th>Request count</th>
+    <th>Santa release</th>
+    <th>Version</th>
+    <th>Distributor</th>
+    <th></th>
+  </thead>
+  <tbody>
+    {% for enrollment in enrollments %}
+    {% with enrollment.secret as secret %}
+    {% with enrollment.distributor as distributor %}
+    <tr>
+      <td><a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a></td>
+      <td>
+        {% for tag in secret.tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+      <td>
+        <a name="enrollment_{{ enrollment.pk }}"></a>
+        {{ secret.created_at }}
+      </td>
+      <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
+      <td>{{ enrollment.santa_release|default:"-" }}</td>
+      <td>{{ enrollment.version }}</td>
+      <td>
+        {% if distributor %}
+        <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      <td>
+        {% if not distributor and not secret.is_used_up %}
+        <a class="btn btn-default download-tool"
+           href="{% url 'santa:enrollment_package' enrollment.configuration.id enrollment.id %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+        </a>
+        {% elif secret.is_used_up %}
+        <span class="text-danger">Enrollment used up.</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

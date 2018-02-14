@@ -17,7 +17,7 @@ from django.utils.text import slugify
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from .conf import monolith_conf
-from .utils import make_printer_package_info
+from .utils import build_manifest_enrollment_package, make_printer_package_info
 
 
 logger = logging.getLogger("zentral.contrib.monolith.models")
@@ -656,11 +656,14 @@ def enrollment_package_path(instance, filename):
 class ManifestEnrollmentPackage(models.Model):
     manifest = models.ForeignKey(Manifest)
     tags = models.ManyToManyField(Tag)
+
     builder = models.CharField(max_length=256)
-    build_kwargs = JSONField('builder parameters')
+    enrollment_pk = models.PositiveIntegerField(null=True)
+
     file = models.FileField(upload_to=enrollment_package_path, blank=True)
     pkg_info = JSONField(blank=True, null=True)
     version = models.PositiveSmallIntegerField(default=0)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -690,6 +693,25 @@ class ManifestEnrollmentPackage(models.Model):
     @cached_property
     def tag_set(self):
         return set(self.tags.all())
+
+    def get_enrollment(self):
+        try:
+            enrollment_model = self.builder_class.form.Meta.model
+            return enrollment_model.objects.get(pk=self.enrollment_pk)
+        except AttributeError:
+            pass
+
+    def enrollment_update_callback(self):
+        self.version = F("version") + 1
+        self.save()
+        self.refresh_from_db()
+        build_manifest_enrollment_package(self)
+
+    def get_description_for_enrollment(self):
+        return "Monolith manifest: {}".format(self.manifest)
+
+    def get_absolute_url(self):
+        return "{}#mep_{}".format(reverse("monolith:manifest", args=(self.manifest.pk,)), self.pk)
 
 
 class CacheServerManager(models.Manager):

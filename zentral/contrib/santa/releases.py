@@ -85,3 +85,11 @@ class Releases(object):
                     self._download_and_extract_package(download_url, local_path)
                     break
         return local_path
+
+    def get_requested_version(self, version):
+        for filename, version, created_at, download_url, is_local in self.get_versions():
+            if version == version:
+                local_path = self._get_local_path(filename)
+                if not is_local:
+                    self._download_and_extract_package(download_url, local_path)
+                return local_path

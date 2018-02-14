@@ -53,10 +53,12 @@ urlpatterns = [
     url(r'^manifests/(?P<pk>\d+)/$', views.ManifestView.as_view(), name='manifest'),
     url(r'^manifests/(?P<pk>\d+)/enrollment/$',
         views.ManifestEnrollmentView.as_view(), name="manifest_enrollment"),
+    # manifest catalogs
     url(r'^manifests/(?P<pk>\d+)/add_catalog/$',
         views.AddManifestCatalogView.as_view(), name='add_manifest_catalog'),
     url(r'^manifests/(?P<pk>\d+)/delete_catalog/(?P<m2m_pk>\d+)/$',
         views.DeleteManifestCatalogView.as_view(), name='delete_manifest_catalog'),
+    # manifest enrollment packages
     url(r'^manifests/(?P<pk>\d+)/add_enrollment_package/$',
         views.AddManifestEnrollmentPackageView.as_view(), name='add_manifest_enrollment_package'),
     url(r'^manifests/(?P<pk>\d+)/update_enrollment_package/(?P<mep_pk>\d+)/$',

@@ -3,12 +3,14 @@ import colorsys
 from datetime import datetime, timedelta
 import logging
 import re
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField, JSONField
 from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import connection, IntegrityError, models, transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
@@ -796,6 +798,9 @@ class MACAddressBlockAssignment(models.Model):
         return " ".join((self.registry, self.assignment))
 
 
+# Enrollment
+
+
 class EnrollmentSecretManager(models.Manager):
     def verify(self, model, secret,
                user_agent, public_ip_address,
@@ -904,3 +909,33 @@ class EnrollmentSecretRequest(models.Model):
     serial_number = models.TextField(null=True, blank=True)
     udid = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class BaseEnrollment(models.Model):
+    secret = models.OneToOneField(EnrollmentSecret,
+                                  on_delete=models.CASCADE,
+                                  related_name="%(app_label)s_%(class)s", editable=False)
+    version = models.PositiveSmallIntegerField(default=1, editable=False)
+    distributor_content_type = models.ForeignKey(ContentType, null=True, on_delete=models.CASCADE, editable=False)
+    distributor_pk = models.PositiveIntegerField(null=True, editable=False)
+    distributor = GenericForeignKey("distributor_content_type", "distributor_pk")
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    def get_description_for_distributor(self):
+        return str(self)
+
+    class Meta:
+        abstract = True
+        unique_together = (("distributor_content_type", "distributor_pk"),)
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            self.version = F("version") + 1
+        super().save(*args, **kwargs)
+        if self.distributor:
+            self.distributor.enrollment_update_callback()
+
+    def delete(self, *args, **kwargs):
+        self.secret.delete()
+        super().delete(*args, **kwargs)
