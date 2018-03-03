@@ -5,7 +5,6 @@ services:
     image: postgres:9.6
     env_file:
       - ./conf/start/docker/postgres.env
-  rabbitmq:
   elastic:
     image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.0.0
     environment:
