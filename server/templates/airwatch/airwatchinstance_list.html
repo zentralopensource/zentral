@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">{{ title }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+<p>
+  <a href="{% url 'airwatch:create_airwatch_instance' %}" class="btn btn-default">Create</a>
+</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Business unit</th>
+      <th>Account name</th>
+      <th>API key</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for airwatch_instance in object_list %}
+    <tr>
+      <td>
+        <a href="{% url 'inventory:mbu_machines' airwatch_instance.business_unit.meta_business_unit.id %}">
+          {{ airwatch_instance.business_unit }}
+        </a>
+      </td>
+      <td>{{ airwatch_instance.account_name }}</td>
+      <td><pre>{{ airwatch_instance.api_key }}</pre></td>
+      <td>
+        <a href="{% url 'airwatch:airwatch_instance' airwatch_instance.pk %}" class="btn btn-default">
+          <span class="glyphicon glyphicon-cog" aria-hidden="true"></span>
+        </a>
+        <a href="{% url 'airwatch:update_airwatch_instance' airwatch_instance.pk %}" class="btn btn-default">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        </a>
+        <a href="{% url 'airwatch:delete_airwatch_instance' airwatch_instance.pk %}" class="btn btn-danger">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

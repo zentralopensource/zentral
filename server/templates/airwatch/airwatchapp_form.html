@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'airwatch:airwatch_instances' %}">airwatch instances</a></li>
+  <li><a href="{% url 'airwatch:airwatch_instance' airwatch_instance.id %}">{{ airwatch_instance }}</a></li>
+  <li class="active">{{ title }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+<h3>{{ builder_name }}</h3>
+
+<form method="POST">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    <a href="{% url 'airwatch:airwatch_instance' airwatch_instance.id %}" class="btn btn-default">Cancel</a>
+    <button class="btn btn-primary">Create and push app</button>
+  </p>
+</form>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% load base_extras bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'airwatch:airwatch_instances' %}">Airwatch instances</a></li>
+  <li class="active">{{ title }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+
+<h3>{{ app_number }} App{{ app_number|pluralize }}</h3>
+
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="createAirwatchApp"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Create
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="createAirwatchApp">
+    {% for link, anchor_text in create_app_links %}
+    <li><a href="{{ link }}">{{ anchor_text }}</a></li>
+    {% endfor %}
+  </ul>
+</div>
+
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Build</th>
+      <th>Created at</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for app in apps %}
+    <tr>
+      <td>
+        <p>{{ app.get_builder_class.name }}</p>
+        {{ app.build_kwargs|pythonprettyprint }}
+      </td>
+      <td>{{ app.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

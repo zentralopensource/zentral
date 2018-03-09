@@ -60,6 +60,7 @@
     },
     "zentral.contrib.jamf": {},
     "zentral.contrib.simplemdm": {},
+    "zentral.contrib.airwatch": {},
     "zentral.contrib.munki": {},
     "zentral.contrib.nagios": {},
     "zentral.contrib.osquery": {},
