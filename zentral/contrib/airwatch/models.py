@@ -24,7 +24,7 @@ class AirwatchInstance(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return "{} Airwatch instance".format(self.account_name)
+        return "{} Airwatch instance".format(self.user)
 
     def base_url(self):
         return "https://{}:{}".format(self.host, self.port)
