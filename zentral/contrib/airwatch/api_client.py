@@ -13,14 +13,14 @@ class APIClientError(Exception):
 
 
 class APIClient(object):
-    BASE_URL = "https://airwatch.vmtestdrive.com/api/mdm"
+    BASE_URL = "https://airwatch.vmtestdrive.com/api"
 
-    def __init__(self, api_key):
+    def __init__(self, user, password):
         # requests session setup
         self.session = requests.Session()
         self.session.headers.update({'user-agent': 'zentral/0.0.1',
                                      'accept': 'application/json'})
-        self.session.auth = (api_key, "")
+        self.session.auth = (user, password)
         max_retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
         self.session.mount(self.BASE_URL,
                            requests.adapters.HTTPAdapter(max_retries=max_retries))
@@ -42,14 +42,15 @@ class APIClient(object):
     def get_account(self):
         return self._make_get_query("/account")["data"]["attributes"]
 
-    def upload_app(self, app_filename, app_content):
-        url = "{}{}".format(self.BASE_URL, "/apps")
+    def upload_app(self, app_filename, app_content, organizationgroupid):
+        url = "{}{}?filename={}&organizationgroupid={}&moduleType=Application".format(self.BASE_URL,
+                                                                                      "/mam/blobs/uploadblob", app_filename, organizationgroupid)
         files = {"binary": (app_filename, app_content)}
         try:
             r = self.session.post(url, files=files)
         except requests.exceptions.RequestException:
             raise APIClientError
-        return r.json()["data"]
+        return r.json()["uuid"]
 
     def delete_app(self, app_id):
         url = "{}{}/{}".format(self.BASE_URL, "/apps", app_id)

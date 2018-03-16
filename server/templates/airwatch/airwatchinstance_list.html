@@ -17,8 +17,8 @@
   <thead>
     <tr>
       <th>Business unit</th>
-      <th>Account name</th>
-      <th>API key</th>
+      <th>URL</th>
+      <th>API User</th>
       <th></th>
     </tr>
   </thead>
@@ -30,8 +30,8 @@
           {{ airwatch_instance.business_unit }}
         </a>
       </td>
-      <td>{{ airwatch_instance.account_name }}</td>
-      <td><pre>{{ airwatch_instance.api_key }}</pre></td>
+      <td>{{ airwatch_instance.api_base_url }}</td>
+      <td>{{ airwatch_instance.user }}</td>
       <td>
         <a href="{% url 'airwatch:airwatch_instance' airwatch_instance.pk %}" class="btn btn-default">
           <span class="glyphicon glyphicon-cog" aria-hidden="true"></span>

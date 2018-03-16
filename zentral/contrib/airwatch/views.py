@@ -52,7 +52,7 @@ class AirwatchInstanceView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
-        ctx["title"] = "{} Airwatch instance".format(self.object.account_name)
+        ctx["title"] = "{} Airwatch instance".format(self.object.user)
         ctx["apps"] = list(self.object.airwatchapp_set.all())
         ctx["app_number"] = len(ctx["apps"])
         create_airwatch_app_path = reverse("airwatch:create_airwatch_app", args=(self.object.id,))
