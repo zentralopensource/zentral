@@ -20,6 +20,8 @@ PROCESSOR_RE = re.compile(r'(?P<cpu_brand>.*) \((?:(?P<cpu_physical_cores>[0-9]+
 
 
 class InventoryClient(BaseInventory):
+    source_config_secret_attributes = ['aw_tenant_code', 'password']
+
     def __init__(self, config_d):
         super(InventoryClient, self).__init__(config_d)
 
@@ -44,22 +46,11 @@ class InventoryClient(BaseInventory):
             raise InventoryError("Airwatch API HTTP response status code %s" % r.status_code)
         return r.json()
 
-    def _make_paginated_get_query(self, path, **params):
-        params['page'] = 0
-        while True:
-            i = 0
-            params['page'] += 1
-            for r in self._make_get_query(path, **params):
-                i += 1
-                yield r
-            if i < 50:
-                break
-
     def _computers(self):
-        return self._make_paginated_get_query('/mdm/devices/search')
+        return self._make_get_query('/mdm/devices/search')
 
     def _groups(self):
-        return self._make_paginated_get_query('/groups')
+        return self._make_get_query('/groups')
 
     def _machine_links_from_id(self, machine_id):
         ll = []
@@ -104,7 +95,7 @@ class InventoryClient(BaseInventory):
         return cpu_update_dict
 
     def get_machines(self):
-        self._parse_json(self._computers())
+        return self._parse_json(self._computers())
 
     def _parse_json(self, d):
 #        group_cache = {g.pop('uid'): g for g in self._groups()}
