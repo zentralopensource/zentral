@@ -30,7 +30,7 @@ class AirwatchInstanceForm(forms.ModelForm):
             if e.status_code == 401:
                 msg = "Invalid API key"
             else:
-                msg = "API Error"
+                msg = e.message
             raise forms.ValidationError(msg)
         return aw_tenant_code
 

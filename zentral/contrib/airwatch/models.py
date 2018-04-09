@@ -9,7 +9,7 @@ logger = logging.getLogger("zentral.contrib.airwatch.models")
 
 class AirwatchInstance(models.Model):
     business_unit = models.ForeignKey("inventory.BusinessUnit", models.PROTECT)
-    host = models.CharField(max_length=256, default="https://airwatch.vmtestdrive.com",
+    host = models.CharField(max_length=256, default="airwatch.vmtestdrive.com",
                             help_text="host name of the server")
     port = models.IntegerField(validators=[MinValueValidator(1),
                                            MaxValueValidator(65535)],

@@ -85,7 +85,7 @@ class DeleteAirwatchInstanceView(LoginRequiredMixin, DeleteView):
 
     def post(self, request, *args, **kwargs):
         airwatch_instance = get_object_or_404(AirwatchInstance, pk=kwargs["pk"])
-        api_client = APIClient(airwatch_instance.api_key)
+        api_client = APIClient(airwatch_instance.host, airwatch_instance.port, airwatch_instance.path, airwatch_instance.user, airwatch_instance.password, airwatch_instance.aw_tenant_code)
         for app in airwatch_instance.airwatchapp_set.all():
             try:
                 if api_client.delete_app(app.airwatch_id):
@@ -132,7 +132,8 @@ class CreateAirwatchAppView(LoginRequiredMixin, FormView):
         b = self.builder(self.airwatch_instance.business_unit,
                          **build_kwargs)
         package_filename, package_content = b.build()
-        api_client = APIClient(self.airwatch_instance.api_key)
+        api_client = APIClient(self.airwatch_instance.host, self.airwatch_instance.port, self.airwatch_instance.path,
+                               self.airwatch_instance.user, self.airwatch_instance.password, self.airwatch_instance.aw_tenant_code)
         try:
             response = api_client.upload_app(package_filename, package_content)
         except APIClientError:
