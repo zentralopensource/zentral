@@ -748,7 +748,11 @@ class Printer(models.Model):
     SCHEME_IPPS = "ipps"
     SCHEME_HTTP = "http"
     SCHEME_HTTPS = "https"
-    SCHEME_CHOICES = [(s, s) for s in (SCHEME_IPP, SCHEME_IPPS, SCHEME_HTTP, SCHEME_HTTPS)]
+    SCHEME_LPD = "lpd"
+    SCHEME_SOCKET = "socket"
+    SCHEME_CHOICES = [(s, s) for s in (SCHEME_IPP, SCHEME_IPPS,
+                                       SCHEME_HTTP, SCHEME_HTTPS,
+                                       SCHEME_LPD, SCHEME_SOCKET)]
 
     manifest = models.ForeignKey(Manifest)
     tags = models.ManyToManyField(Tag, blank=True)
