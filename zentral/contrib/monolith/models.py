@@ -345,7 +345,7 @@ class SubManifestAttachment(models.Model):
         pkg_info['name'] = self.get_name()
         if self.type != "script":
             pkg_info['installer_item_location'] = "{}{}".format(
-                build_signed_name('sub_manifest_attachement',
+                build_signed_name('sub_manifest_attachment',
                                   [self.sub_manifest.id, self.id]),
                 SUB_MANIFEST_ATTACHMENT_TYPES[self.type]['extension']
             )
