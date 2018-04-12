@@ -440,6 +440,7 @@ class Manifest(models.Model):
         if tags is None:
             tags = []
         qs = (self.printer_set
+                  .select_related("required_package")
                   .prefetch_related("tags")
                   .filter(Q(tags__isnull=True) | Q(tags__in=tags))
                   .filter(trashed_at__isnull=True))
@@ -478,10 +479,9 @@ class Manifest(models.Model):
         ).format(manifest_id=int(self.id), m2mt_filter=m2mt_filter)
         return PkgInfo.objects.raw(query)
 
-    def enrollment_packages_pkginfo_deps(self, tags=None):
-        """PkgInfos that enrollment packages are an update for with their dependencies"""
-        update_for_list = ",".join(["'{}'".format(ep.get_update_for())
-                                    for ep in self.enrollment_packages(tags).values()])
+    def _pkginfo_deps_and_updates(self, package_names, tags):
+        if not package_names:
+            return PkgInfo.objects.none()
         if tags:
             m2mt_filter = "OR m2mt.tag_id in ({})".format(",".join(str(int(t.id)) for t in tags))
         else:
@@ -491,7 +491,7 @@ class Manifest(models.Model):
             "SELECT pi.id as pi_id, pi.version as pi_version, pn.id AS pn_id, pn.name as pn_name "
             "FROM monolith_pkginfo pi "
             "JOIN monolith_pkginfoname pn ON (pi.name_id=pn.id) "
-            "WHERE pn.name in ({update_for_list}) "
+            "WHERE pn.name in ({package_names}) "
             "UNION "
             "SELECT pi.id, pi.version, pn.id, pn.name "
             "FROM monolith_pkginfo pi "
@@ -506,8 +506,21 @@ class Manifest(models.Model):
             "LEFT JOIN monolith_manifestcatalog_tags m2mt ON (mc.id=m2mt.manifestcatalog_id) "
             "WHERE mc.manifest_id = {manifest_id} "
             "AND (m2mt.tag_id IS NULL {m2mt_filter});"
-        ).format(update_for_list=update_for_list, manifest_id=int(self.id), m2mt_filter=m2mt_filter)
+        ).format(package_names=package_names, manifest_id=int(self.id), m2mt_filter=m2mt_filter)
         return PkgInfo.objects.raw(query)
+
+    def enrollment_packages_pkginfo_deps(self, tags=None):
+        """PkgInfos that enrollment packages are an update for with their dependencies"""
+        update_for_list = ",".join(set("'{}'".format(ep.get_update_for())
+                                       for ep in self.enrollment_packages(tags).values()))
+        return self._pkginfo_deps_and_updates(update_for_list, tags)
+
+    def printers_pkginfo_deps(self, tags=None):
+        """PkgInfos that printers require, with their dependencies"""
+        required_packages_list = ",".join(set("'{}'".format(p.required_package.name)
+                                              for p in self.printers(tags)
+                                              if p.required_package))
+        return self._pkginfo_deps_and_updates(required_packages_list, tags)
 
     def get_enrollment_catalog_signed_name(self):
         return build_signed_name("enrollment_catalog", self.meta_business_unit.id)

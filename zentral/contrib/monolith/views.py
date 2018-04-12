@@ -1118,7 +1118,8 @@ class MRPackageView(MRSignedView):
             event_payload["repository_package"] = {"id": pk}
             # TODO: cache
             for pkginfo in chain(self.manifest.pkginfos_with_deps_and_updates(self.tags),
-                                 self.manifest.enrollment_packages_pkginfo_deps(self.tags)):
+                                 self.manifest.enrollment_packages_pkginfo_deps(self.tags),
+                                 self.manifest.printers_pkginfo_deps(self.tags)):
                 if pkginfo.pk == pk:
                     event_payload["repository_package"].update({"name": pkginfo.name.name,
                                                                 "version": pkginfo.version})
