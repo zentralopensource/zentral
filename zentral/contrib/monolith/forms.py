@@ -127,6 +127,11 @@ class SubManifestAttachmentForm(forms.ModelForm):
 
 
 class SubManifestScriptForm(forms.Form):
+    DEFAULT_INSTALL_CHECK_SCRIPT = (
+        "#!/bin/bash\n\n"
+        "# WARNING: executed at every Munki run!\n\n"
+        "exit 0"
+    )
     name = forms.CharField(max_length=256, required=True)
     key = forms.ChoiceField(choices=(("managed_installs", "Managed Installs"),
                                      ("managed_uninstalls", "Managed Uninstalls")),
@@ -134,9 +139,10 @@ class SubManifestScriptForm(forms.Form):
     description = forms.CharField(required=True, widget=forms.Textarea())
     installcheck_script = forms.CharField(
         label="install check script",
-        help_text="If present, this script is executed to determine if an item needs to be installed. "
+        help_text="This script is executed to determine if an item needs to be installed. "
                   "A return code of 0 means install is needed.",
-        required=False,
+        required=True,
+        initial=DEFAULT_INSTALL_CHECK_SCRIPT,
         widget=forms.Textarea(),
     )
     postinstall_script = forms.CharField(
@@ -177,11 +183,9 @@ class SubManifestScriptForm(forms.Form):
             'unattended_uninstall': True,
             'minimum_munki_version': '2.2',
             'minimum_os_version': '10.6.0',  # TODO: HARDCODED !!!
+            'installcheck_script': self.cleaned_data["installcheck_script"],
             'postinstall_script': self.cleaned_data["postinstall_script"],
         }
-        installcheck_script = self.cleaned_data["installcheck_script"]
-        if installcheck_script:
-            pkg_info["installcheck_script"] = installcheck_script
         uninstall_script = self.cleaned_data["uninstall_script"]
         if uninstall_script:
             pkg_info["uninstall_method"] = "uninstall_script"
