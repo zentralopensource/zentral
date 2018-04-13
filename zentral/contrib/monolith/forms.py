@@ -81,11 +81,11 @@ class SubManifestSearchForm(forms.Form):
         qs = SubManifest.objects.select_related("meta_business_unit").all()
         keywords = self.cleaned_data.get("keywords")
         if keywords:
-            qs = qs.filter(Q(name__icontains=keywords)
-                           | Q(description__icontains=keywords)
-                           | Q(meta_business_unit__name__icontains=keywords)
-                           | Q(submanifestpkginfo__pkg_info_name__name__icontains=keywords)
-                           | Q(submanifestattachment__name__icontains=keywords))
+            qs = qs.distinct().filter(Q(name__icontains=keywords)
+                                      | Q(description__icontains=keywords)
+                                      | Q(meta_business_unit__name__icontains=keywords)
+                                      | Q(submanifestpkginfo__pkg_info_name__name__icontains=keywords)
+                                      | Q(submanifestattachment__name__icontains=keywords))
         return qs
 
 
