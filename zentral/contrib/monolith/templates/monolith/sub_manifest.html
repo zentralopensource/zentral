@@ -8,7 +8,7 @@
   <li class="active">{{ object }}</li>
 </ol>
 
-<h2>Sub manifest <i>{{ object }}</i></h2>
+<h2>Sub manifest - {% if object.meta_business_unit %}<a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a> / {% endif %}{{ object }}</i></h2>
 
 <p>
   <a href="{% url 'monolith:update_sub_manifest' object.id %}" class="btn btn-default">Update</a>

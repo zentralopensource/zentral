@@ -30,7 +30,8 @@ from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
                     DeleteManifestSubManifestForm,
                     ManifestForm, ManifestPrinterForm, ManifestSearchForm,
                     PkgInfoSearchForm, UpdatePkgInfoCatalogForm,
-                    SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm, SubManifestSearchForm,
+                    SubManifestForm, SubManifestSearchForm,
+                    SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm,
                     UploadPPDForm)
 from .models import (Catalog, CacheServer, Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      Printer, PrinterPPD,
@@ -315,7 +316,7 @@ class SubManifestsView(LoginRequiredMixin, ListView):
 
 class CreateSubManifestView(LoginRequiredMixin, CreateView):
     model = SubManifest
-    fields = ['name', 'description']
+    form_class = SubManifestForm
     template_name = "monolith/edit_sub_manifest.html"
 
     def get_context_data(self, **kwargs):
@@ -341,14 +342,13 @@ class SubManifestView(LoginRequiredMixin, DetailView):
                 sorted_keys.append((value['key_display'], value['key_list']))
         context["keys"] = sorted_keys
         context.update(pkg_info_dict)
-        context['manifests'] = [(msm.tags.all(), msm.manifest)
-                                for msm in sub_manifest.manifestsubmanifest_set.all()]
+        context['manifests'] = sub_manifest.manifests_with_tags()
         return context
 
 
 class UpdateSubManifestView(LoginRequiredMixin, UpdateView):
     model = SubManifest
-    fields = ['name', 'description']
+    form_class = SubManifestForm
     template_name = 'monolith/edit_sub_manifest.html'
 
     def get_context_data(self, **kwargs):

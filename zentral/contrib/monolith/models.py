@@ -263,6 +263,14 @@ class SubManifest(models.Model):
     def can_be_deleted(self):
         return self.manifestsubmanifest_set.all().count() == 0
 
+    def manifests_with_tags(self):
+        mwt = []
+        for msn in (self.manifestsubmanifest_set.select_related("manifest__meta_business_unit")
+                                                .prefetch_related("tags")
+                                                .all()):
+            mwt.append((msn.tags.all(), msn.manifest))
+        return mwt
+
 
 class SubManifestPkgInfo(models.Model):
     sub_manifest = models.ForeignKey(SubManifest)

@@ -89,6 +89,28 @@ class SubManifestSearchForm(forms.Form):
         return qs
 
 
+class SubManifestForm(forms.ModelForm):
+    class Meta:
+        model = SubManifest
+        fields = ('meta_business_unit', 'name', 'description')
+
+    def clean_meta_business_unit(self):
+        mbu = self.cleaned_data.get("meta_business_unit")
+        if mbu and self.instance.pk:
+            linked_mbu = {manifest.meta_business_unit
+                          for _, manifest in self.instance.manifests_with_tags()}
+            if linked_mbu - {mbu}:
+                raise forms.ValidationError(
+                    "Cannot restrict this sub manifest to this business unit. "
+                    "It is already included in some other business units."
+                )
+        return mbu
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['meta_business_unit'].queryset = MetaBusinessUnit.objects.available_for_api_enrollment()
+
+
 class SubManifestPkgInfoForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.sub_manifest = kwargs.pop('sub_manifest')
