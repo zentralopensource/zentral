@@ -167,24 +167,29 @@
   </thead>
   <tbody>
     {% for manifest_sub_manifest in manifest_sub_manifests %}
+    {% with manifest_sub_manifest.sub_manifest as sub_manifest %}
     <tr>
       <td>
-        <a href="{% url 'monolith:sub_manifest' manifest_sub_manifest.sub_manifest.id %}">
-          {{ manifest_sub_manifest.sub_manifest }}
+        <a href="{% url 'monolith:sub_manifest' sub_manifest.id %}">
+          {% if sub_manifest.meta_business_unit %}
+          {{ sub_manifest.meta_business_unit }} /
+          {% endif %}
+          {{ sub_manifest }}
         </a>
       </td>
-      <td>{{ manifest_sub_manifest.sub_manifest.description|default:"-"|linebreaks }}</td>
+      <td>{{ sub_manifest.description|default:"-"|linebreaks }}</td>
       <td>
         {% for tag in manifest_sub_manifest.tags.all %}
         {% inventory_tag tag %}
         {% endfor %}
       </td>
       <td width="15%">
-        <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_sub_manifest' object.id manifest_sub_manifest.sub_manifest.id %}">
+        <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_sub_manifest' object.id sub_manifest.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
       </td>
     </tr>
+    {% endwith %}
     {% endfor %}
   </tbody>
 </table>
