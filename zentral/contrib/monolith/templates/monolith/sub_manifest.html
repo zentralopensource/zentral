@@ -8,16 +8,27 @@
   <li class="active">{{ object }}</li>
 </ol>
 
-<h2>Sub manifest - {% if object.meta_business_unit %}<a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a> / {% endif %}{{ object }}</i></h2>
+<h2>Sub manifest - {{ object }}</i></h2>
 
 <p>
   <a href="{% url 'monolith:update_sub_manifest' object.id %}" class="btn btn-default">Update</a>
   {% if object.can_be_deleted %}
-  <a href="{% url 'monolith:delete_sub_manifest' object.id %}" class="btn btn-danger">Delete</a></p>
+  <a href="{% url 'monolith:delete_sub_manifest' object.id %}" class="btn btn-danger">Delete</a>
   {% endif %}
-<dl>
-<dt>Description</dt>
-<dd>{{ object.description|default:"-"|linebreaks }}</dd>
+</p>
+
+<dl class="dl-horizontal">
+  <dt>Business unit</dt>
+  <dd>
+    {% if object.meta_business_unit %}
+    <span class="text-danger">restricted to </span>
+    <a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a>
+    {% else %}
+    <span class="text-success">not restricted</span>
+    {% endif %}
+  </dd>
+  <dt>Description</dt>
+  <dd>{{ object.description|default:"-"|linebreaks }}</dd>
 </dl>
 
 <h3>

@@ -171,9 +171,6 @@
     <tr>
       <td>
         <a href="{% url 'monolith:sub_manifest' sub_manifest.id %}">
-          {% if sub_manifest.meta_business_unit %}
-          {{ sub_manifest.meta_business_unit }} /
-          {% endif %}
           {{ sub_manifest }}
         </a>
       </td>

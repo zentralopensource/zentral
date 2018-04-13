@@ -335,7 +335,9 @@ class AddManifestSubManifestForm(forms.Form):
         self.manifest = kwargs.pop('manifest')
         super().__init__(*args, **kwargs)
         field = self.fields['sub_manifest']
-        field.queryset = field.queryset.exclude(id__in=[sm.id for sm in self.manifest.sub_manifests()])
+        field.queryset = (field.queryset.filter(Q(meta_business_unit__isnull=True)
+                                                | Q(meta_business_unit=self.manifest.meta_business_unit))
+                                        .exclude(id__in=[sm.id for sm in self.manifest.sub_manifests()]))
         field = self.fields['tags']
         field.queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
 

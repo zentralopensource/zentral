@@ -206,7 +206,10 @@ class SubManifest(models.Model):
         ordering = ('name',)
 
     def __str__(self):
-        return self.name
+        if self.meta_business_unit:
+            return "{} / {}".format(self.meta_business_unit.name, self.name)
+        else:
+            return self.name
 
     def get_absolute_url(self):
         return reverse('monolith:sub_manifest', args=(self.pk,))

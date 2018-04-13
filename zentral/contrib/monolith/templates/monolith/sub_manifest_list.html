@@ -31,24 +31,24 @@
 
 <table class="table">
   <thead>
-    <th>Name</th>
     <th>Business unit</th>
+    <th>Name</th>
     <th>Description</th>
     <th></th>
   </thead>
   <tbody>
     {% for sub_manifest in object_list %}
     <tr>
-      <td><a href="{{ sub_manifest.get_absolute_url }}">{{ sub_manifest.name }}</a></td>
-      {% with sub_manifest.meta_business_unit as mbu %}
       <td>
+        {% with sub_manifest.meta_business_unit as mbu %}
         {% if mbu %}
         <a href="{{ mbu.get_absolute_url }}">{{ mbu }}</a>
         {% else %}
         -
         {% endif %}
+        {% endwith %}
       </td>
-      {% endwith %}
+      <td><a href="{{ sub_manifest.get_absolute_url }}">{{ sub_manifest.name }}</a></td>
       <td>{{ sub_manifest.description|default:"-"|linebreaksbr }}</td>
       <td>
         <a class="btn btn-default" href="{% url 'monolith:update_sub_manifest' sub_manifest.pk %}">
