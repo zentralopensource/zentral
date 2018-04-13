@@ -8,7 +8,7 @@
   <li class="active">{{ object }}</li>
 </ol>
 
-<h2>Manifest <i>{{ object }}</i></h2>
+<h2><a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object }}</a> Manifest</h2>
 
 <p>
   <a href="{% url 'monolith:manifest_enrollment' object.id %}" class="btn btn-default">Enrollment</a>
