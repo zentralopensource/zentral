@@ -28,7 +28,7 @@
     {% endif %}
   </dd>
   <dt>Description</dt>
-  <dd>{{ object.description|default:"-"|linebreaks }}</dd>
+  <dd>{{ object.description|default:"-"|urlize|linebreaks }}</dd>
 </dl>
 
 <h3>
