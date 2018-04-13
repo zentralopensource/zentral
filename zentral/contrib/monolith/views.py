@@ -28,7 +28,7 @@ from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
                     CacheServersPostForm,
                     ConfigureCacheServerForm,
                     DeleteManifestSubManifestForm,
-                    ManifestForm, ManifestPrinterForm,
+                    ManifestForm, ManifestPrinterForm, ManifestSearchForm,
                     PkgInfoSearchForm, UpdatePkgInfoCatalogForm,
                     SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm,
                     UploadPPDForm)
@@ -518,9 +518,18 @@ class ManifestsView(LoginRequiredMixin, ListView):
     template_name = "monolith/manifest_list.html"
     paginate_by = 10
 
+    def get(self, request, *args, **kwargs):
+        self.form = ManifestSearchForm(request.GET)
+        self.form.is_valid()
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return self.form.get_queryset()
+
     def get_context_data(self, **kwargs):
         context = super(ManifestsView, self).get_context_data(**kwargs)
         context['monolith'] = True
+        context['form'] = self.form
         # pagination
         page = context['page_obj']
         if page.has_next():

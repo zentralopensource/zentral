@@ -61,6 +61,18 @@ class ManifestForm(forms.ModelForm):
         self.fields['meta_business_unit'].queryset = mbu_qs
 
 
+class ManifestSearchForm(forms.Form):
+    meta_business_unit_name = forms.CharField(label="Business unit name", required=False,
+                                              widget=forms.TextInput(attrs={"placeholder": "Business unit name…"}))
+
+    def get_queryset(self):
+        qs = Manifest.objects.all()
+        meta_business_unit_name = self.cleaned_data.get("meta_business_unit_name")
+        if meta_business_unit_name:
+            qs = qs.filter(meta_business_unit__name__icontains=meta_business_unit_name)
+        return qs
+
+
 class SubManifestPkgInfoForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.sub_manifest = kwargs.pop('sub_manifest')
