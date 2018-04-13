@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -8,6 +9,13 @@
 
 <h2>{{ paginator.count }} Sub manifest{{ paginator.count|pluralize }}</h2>
 <p><a class="btn btn-default" href="{% url 'monolith:create_sub_manifest' %}">Create</a></p>
+
+<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
+    <div class="form-group">
+      {{ form.keywords|bootstrap_inline }}
+    </div>
+    <button type="submit" class="btn btn-default">Search</button>
+</form>
 
 <nav>
   <ul class="pager">
@@ -24,6 +32,7 @@
 <table class="table">
   <thead>
     <th>Name</th>
+    <th>Business unit</th>
     <th>Description</th>
     <th></th>
   </thead>
@@ -31,6 +40,15 @@
     {% for sub_manifest in object_list %}
     <tr>
       <td><a href="{{ sub_manifest.get_absolute_url }}">{{ sub_manifest.name }}</a></td>
+      {% with sub_manifest.meta_business_unit as mbu %}
+      <td>
+        {% if mbu %}
+        <a href="{{ mbu.get_absolute_url }}">{{ mbu }}</a>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      {% endwith %}
       <td>{{ sub_manifest.description|default:"-"|linebreaksbr }}</td>
       <td>
         <a class="btn btn-default" href="{% url 'monolith:update_sub_manifest' sub_manifest.pk %}">

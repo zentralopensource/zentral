@@ -66,10 +66,26 @@ class ManifestSearchForm(forms.Form):
                                               widget=forms.TextInput(attrs={"placeholder": "Business unit name…"}))
 
     def get_queryset(self):
-        qs = Manifest.objects.all()
+        qs = Manifest.objects.select_related("meta_business_unit").all()
         meta_business_unit_name = self.cleaned_data.get("meta_business_unit_name")
         if meta_business_unit_name:
             qs = qs.filter(meta_business_unit__name__icontains=meta_business_unit_name)
+        return qs
+
+
+class SubManifestSearchForm(forms.Form):
+    keywords = forms.CharField(label="Keywords", required=False,
+                               widget=forms.TextInput(attrs={"placeholder": "Keywords…"}))
+
+    def get_queryset(self):
+        qs = SubManifest.objects.select_related("meta_business_unit").all()
+        keywords = self.cleaned_data.get("keywords")
+        if keywords:
+            qs = qs.filter(Q(name__icontains=keywords)
+                           | Q(description__icontains=keywords)
+                           | Q(meta_business_unit__name__icontains=keywords)
+                           | Q(submanifestpkginfo__pkg_info_name__name__icontains=keywords)
+                           | Q(submanifestattachment__name__icontains=keywords))
         return qs
 
 

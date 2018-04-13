@@ -30,7 +30,7 @@ from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
                     DeleteManifestSubManifestForm,
                     ManifestForm, ManifestPrinterForm, ManifestSearchForm,
                     PkgInfoSearchForm, UpdatePkgInfoCatalogForm,
-                    SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm,
+                    SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm, SubManifestSearchForm,
                     UploadPPDForm)
 from .models import (Catalog, CacheServer, Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      Printer, PrinterPPD,
@@ -288,9 +288,18 @@ class SubManifestsView(LoginRequiredMixin, ListView):
     template_name = "monolith/sub_manifest_list.html"
     paginate_by = 10
 
+    def get(self, request, *args, **kwargs):
+        self.form = SubManifestSearchForm(request.GET)
+        self.form.is_valid()
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return self.form.get_queryset()
+
     def get_context_data(self, **kwargs):
         context = super(SubManifestsView, self).get_context_data(**kwargs)
         context['monolith'] = True
+        context['form'] = self.form
         # pagination
         page = context['page_obj']
         if page.has_next():
