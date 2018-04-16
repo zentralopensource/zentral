@@ -429,24 +429,28 @@ class MachineView(LoginRequiredMixin, TemplateView):
         context = super(MachineView, self).get_context_data(**kwargs)
         context['inventory'] = True
         context['machine'] = machine = MetaMachine(context['serial_number'])
-        heartbeats = []
-        for event_class, source_name, max_date in frontend_store.get_last_machine_heartbeats(machine.serial_number):
+        prepared_heartbeats = []
+        last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(machine.serial_number)
+        for event_class, source_name, ua_max_dates in last_machine_heartbeats:
             heartbeat_timeout = event_class.heartbeat_timeout
             if heartbeat_timeout:
                 heartbeat_timeout = timedelta(seconds=heartbeat_timeout)
-            max_date = make_naive(max_date)
+            ua_max_dates.sort(key=lambda t: (t[1], t[0]), reverse=True)
             date_class = None
-            if heartbeat_timeout:
-                if datetime.utcnow() - max_date > heartbeat_timeout:
-                    date_class = "danger"
-                else:
-                    date_class = "success"
-            heartbeats.append(
+            if ua_max_dates:
+                # should always be the case
+                all_ua_max_date = make_naive(ua_max_dates[0][1])
+                if heartbeat_timeout:
+                    if datetime.utcnow() - all_ua_max_date > heartbeat_timeout:
+                        date_class = "danger"
+                    else:
+                        date_class = "success"
+            prepared_heartbeats.append(
                 (event_class.get_event_type_display(),
-                 source_name, max_date, date_class)
+                 source_name, ua_max_dates, date_class)
             )
-        heartbeats.sort()
-        context['heartbeats'] = heartbeats
+        prepared_heartbeats.sort()
+        context['heartbeats'] = prepared_heartbeats
         return context
 
 

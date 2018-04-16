@@ -294,9 +294,17 @@ class EventStore(BaseEventStore):
                                              if 'heartbeat' in et.tags])
                             },
                             'aggs': {
-                                'max_created_at': {
-                                    'max': {
-                                        'field': 'created_at'
+                                'user_agents': {
+                                    'terms': {
+                                        'field': 'request.user_agent',
+                                        'size': 100,
+                                    },
+                                    'aggs': {
+                                        'max_created_at': {
+                                            'max': {
+                                                'field': 'created_at'
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -310,16 +318,18 @@ class EventStore(BaseEventStore):
         for bucket in r["aggregations"]["inventory_heartbeats"]["sources"]["buckets"]:
             heartbeats.append((event_types["inventory_heartbeat"],
                                bucket["key"],
-                               parser.parse(bucket["max_created_at"]["value_as_string"])))
+                               [(None, parser.parse(bucket["max_created_at"]["value_as_string"]))]))
         for bucket in r["aggregations"]["other_events"]["event_types"]["buckets"]:
             event_type = bucket["key"]
             event_type_class = event_types.get(event_type, None)
             if not event_type_class:
                 logger.error("Unknown event type %s", event_type)
             else:
-                heartbeats.append((event_type_class,
-                                   None,
-                                   parser.parse(bucket["max_created_at"]["value_as_string"])))
+                ua_list = []
+                for sub_bucket in bucket["user_agents"]["buckets"]:
+                    ua = sub_bucket["key"]
+                    ua_list.append((ua, parser.parse(sub_bucket["max_created_at"]["value_as_string"])))
+                heartbeats.append((event_type_class, None, ua_list))
         return heartbeats
 
     # probe events
