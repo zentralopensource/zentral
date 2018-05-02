@@ -22,6 +22,7 @@ from .conf import (has_deb_packages,
                    PLATFORM_CHOICES, PLATFORM_CHOICES_DICT,
                    TYPE_CHOICES, TYPE_CHOICES_DICT)
 from .exceptions import EnrollmentSecretVerificationFailed
+from django.core.validators import RegexValidator
 
 logger = logging.getLogger('zentral.contrib.inventory.models')
 
@@ -584,8 +585,9 @@ def validate_color(value):
 
 
 class Tag(models.Model):
+    alphanumeric_validator = RegexValidator(r'^[-0-9a-zA-Z_]*$', 'Only alphanumeric and _,- characters are allowed.')
     meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True)
-    name = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=50, unique=True, validators=[alphanumeric_validator])
     slug = models.SlugField(unique=True)
     color = models.CharField(max_length=6,
                              default="0079bf",  # blue from UpdateTagView

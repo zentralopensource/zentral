@@ -6,6 +6,7 @@ from zentral.utils.forms import validate_sha256
 from .models import (MachineSnapshot, MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
                      Source, Tag)
+from django.core.validators import RegexValidator
 
 
 class MachineSearchForm(forms.Form):
@@ -85,8 +86,9 @@ class MBUAPIEnrollmentForm(forms.ModelForm):
 
 
 class AddTagForm(forms.Form):
+    alphanumeric_validator = RegexValidator(r'^[-0-9a-zA-Z_]*$', 'Only alphanumeric and _,- characters are allowed.')
     existing_tag = forms.ModelChoiceField(label="existing tag", queryset=Tag.objects.none(), required=False)
-    new_tag_name = forms.CharField(label="new tag name", max_length=50, required=False)
+    new_tag_name = forms.CharField(label="new tag name", max_length=50, required=False, validators=[alphanumeric_validator])
     new_tag_color = forms.CharField(label="color", max_length=6, required=False)
 
     def clean(self):
