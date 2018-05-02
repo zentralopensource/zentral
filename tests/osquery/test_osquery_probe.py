@@ -93,10 +93,7 @@ class OsqueryProbeTestCase(TestCase):
         self.assertEqual(ps.status, ProbeSource.INACTIVE)
         probe = ps.load()
         self.assertEqual(probe.loaded, False)
-        self.assertIsInstance(probe.syntax_errors, dict)
-        self.assertIn("queries", probe.syntax_errors)
-        self.assertIsInstance(probe.syntax_errors["queries"], dict)
-        self.assertIn("version", probe.syntax_errors["queries"])
+        self.assertIn("version", probe.syntax_errors["queries"][0])
 
     def test_probes(self):
         for probe in (self.probe_1,
