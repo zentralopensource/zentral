@@ -1,10 +1,15 @@
+import logging
 import os
-from dateutil import parser
-import requests
 import shutil
 from subprocess import check_call
 import tempfile
+from dateutil import parser
+import requests
+from requests.exceptions import HTTPError
 from zentral.utils.local_dir import get_and_create_local_dir
+
+
+logger = logging.getLogger("zentral.contrib.santa.releases")
 
 
 class Releases(object):
@@ -35,6 +40,7 @@ class Releases(object):
         # download file
         tempdir = tempfile.mkdtemp(suffix=self.__module__)
         resp = requests.get(download_url, stream=True)
+        resp.raise_for_status()
         downloaded_file = os.path.join(tempdir, "downloaded_file")
         with open(downloaded_file, "wb") as f:
             for chunk in resp.iter_content(64 * 2**10):
@@ -55,7 +61,12 @@ class Releases(object):
         shutil.rmtree(tempdir)
 
     def get_versions(self):
-        resp = requests.get(self.GITHUB_API_URL)
+        try:
+            resp = requests.get(self.GITHUB_API_URL)
+            resp.raise_for_status()
+        except (ConnectionError, HTTPError):
+            logger.exception("Could not get versions from Github.")
+            return
         for release in resp.json():
             try:
                 filename, download_url = self._get_release_asset(release)

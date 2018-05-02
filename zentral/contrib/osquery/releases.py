@@ -1,9 +1,14 @@
+import logging
 import os
-from dateutil import parser
-import requests
 import shutil
 import tempfile
+from dateutil import parser
+import requests
+from requests.exceptions import HTTPError
 from zentral.utils.local_dir import get_and_create_local_dir
+
+
+logger = logging.getLogger("zentral.contrib.osquery.releases")
 
 
 class Releases(object):
@@ -35,7 +40,12 @@ class Releases(object):
         shutil.move(tmp_path, local_path)
 
     def get_versions(self):
-        resp = requests.get(self.GITHUB_API_URL)
+        try:
+            resp = requests.get(self.GITHUB_API_URL)
+            resp.raise_for_status()
+        except (ConnectionError, HTTPError):
+            logger.exception("Could not get versions from Github.")
+            return
         for release in resp.json():
             try:
                 filename = self._get_release_filename(release)
