@@ -1,5 +1,6 @@
 from django import template
 from django.urls import reverse
+from django.utils.html import escape
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from zentral.contrib.inventory.conf import IOS, LINUX, MACOS, WINDOWS
@@ -15,7 +16,7 @@ def inventory_tag(tag):
         style['border'] = '1px solid grey'
     sty_str = ";".join(["%s:%s" % (key, val) for key, val in style.items()])
     return mark_safe('<span class="label" style="%s">%s</span>' %
-                     (sty_str, str(tag)))
+                     (sty_str, escape(str(tag))))
 
 
 @register.simple_tag
