@@ -282,7 +282,7 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         input_path = self.get_build_path(dirname)
         output_path = self.get_build_path("base.pkg", arch_name)
         check_call('(cd "{}" && find . | '
-                   'cpio -o --quiet --format odc --owner 0:0 | '
+                   'bsdcpio -o --quiet --format odc --owner 0:0 | '
                    'gzip -c) > "{}"'.format(input_path, output_path), shell=True)
 
     def _build_payload(self):

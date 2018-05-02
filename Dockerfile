@@ -3,10 +3,10 @@ ENV PYTHONUNBUFFERED 1
 
 MAINTAINER Éric Falconnier <eric.falconnier@112hz.com>
 
-# cpio + bomutils + xar to generate the pkg files
+# bsdcpio + bomutils + xar to generate the pkg files
 # as seen in https://github.com/boot2docker/osx-installer/blob/master/Dockerfile
-RUN apt-get update && apt-get autoremove -y && apt-get install -y cpio libbz2-dev
-RUN curl -fsSL https://github.com/hogliux/bomutils/archive/0.2.tar.gz | tar xvz && \
+RUN apt-get update && apt-get autoremove -y && apt-get install -y bsdcpio libbz2-dev
+RUN curl -fsSL https://github.com/zentralopensource/bomutils/archive/master.tar.gz | tar xvz && \
     cd bomutils-* && \
     make && make install && \
     cd .. && rm -rf bomutils-*
