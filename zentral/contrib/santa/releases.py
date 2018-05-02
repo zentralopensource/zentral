@@ -5,7 +5,7 @@ from subprocess import check_call
 import tempfile
 from dateutil import parser
 import requests
-from requests.exceptions import HTTPError
+from requests.exceptions import ConnectionError, HTTPError
 from zentral.utils.local_dir import get_and_create_local_dir
 
 
