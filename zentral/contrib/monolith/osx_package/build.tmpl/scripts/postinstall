@@ -1,40 +1,126 @@
-#!/bin/bash -e
-## postinstall
+#!/usr/bin/python
+from Foundation import (NSData,
+                        NSPropertyListSerialization,
+                        NSPropertyListMutableContainers,
+                        NSPropertyListXMLFormat_v1_0)
+import plistlib
+import subprocess
+import sys
 
-DEFAULT_PLIST=/Library/Preferences/ManagedInstalls
-ROOT_PLIST=/var/root$DEFAULT_PLIST
+# set by the builder
+SOFTWARE_REPO_URL = "%SOFTWARE_REPO_URL%"
+API_SECRET = "%API_SECRET%"
+TLS_CA_CERT = "%TLS_CA_CERT%"
 
-# get machine serial number
-MSN=$(/usr/sbin/ioreg -c IOPlatformExpertDevice -d 2 | awk -F\" '/IOPlatformSerialNumber/{print $(NF-1)}')
+# the two plists
+DEFAULT_PLIST = "/Library/Preferences/ManagedInstalls.plist"
+ROOT_PLIST = "/var/root{}".format(DEFAULT_PLIST)
 
-# Set special client identifier for monolith
-defaults write $DEFAULT_PLIST ClientIdentifier "MONOLITH_MACHINE_SERIAL_NUMBER$MSN"
+# munki daemons
+MUNKI_DAEMONS_CONFIG_FILES = [
+    "/Library/LaunchDaemons/com.googlecode.munki.{}.plist".format(name)
+    for name in ("managedsoftwareupdate-check",
+                 "managedsoftwareupdate-install",
+                 "managedsoftwareupdate-manualcheck",
+                 "logouthelper")
+]
 
-# Set Authorization header to attribute requests to a business unit
-defaults write $ROOT_PLIST AdditionalHttpHeaders -array %HEADERS%
 
-# Set monolith as munki repository
-defaults write $DEFAULT_PLIST SoftwareRepoURL "%SOFTWARE_REPO_URL%"
+# Plist utils from munki
+# Credit goes to Greg Neagle
+# https://github.com/munki/munki/blob/6cf7138c7c5203f376bbe2e16088b33e3608e85f/code/client/munkilib/FoundationPlist.py#L68
 
-# Follow Http redirects to original munki repository
-defaults write $DEFAULT_PLIST FollowHTTPRedirects all
 
-# Remove special ManifestURL
-if defaults read $DEFAULT_PLIST ManifestURL; then
-    defaults delete $DEFAULT_PLIST ManifestURL;
-fi
+def read_plist(filepath):
+    # Credit to Greg Neagle
+    plist_data = NSData.dataWithContentsOfFile_(filepath)
+    data_object, _, error = (
+        NSPropertyListSerialization.
+        propertyListFromData_mutabilityOption_format_errorDescription_(
+            plist_data, NSPropertyListMutableContainers, None, None))
+    if data_object is None:
+        if error:
+            error = error.encode('ascii', 'ignore')
+        else:
+            error = "Unknown error"
+        raise Exception("%s in file %s" % (error, filepath))
+    else:
+        return data_object
 
-# Unset IconURL, force redirect via monolith
-if defaults read $DEFAULT_PLIST IconURL; then
-    defaults delete $DEFAULT_PLIST IconURL;
-fi
 
-# Unset ClientResourceURL, force redirect via monolith
-if defaults read $DEFAULT_PLIST ClientResourceURL; then
-    defaults delete $DEFAULT_PLIST ClientResourceURL;
-fi
+def write_plist(data_object, filepath):
+    plist_data, error = (
+        NSPropertyListSerialization.
+        dataFromPropertyList_format_errorDescription_(
+            data_object, NSPropertyListXMLFormat_v1_0, None))
+    if plist_data is None:
+        if error:
+            error = error.encode('ascii', 'ignore')
+        else:
+            error = "Unknown error"
+        raise Exception(error)
+    else:
+        if plist_data.writeToFile_atomically_(filepath, True):
+            return
+        else:
+            raise Exception("Failed to write plist data to %s" % filepath)
 
-# CA Cert
-defaults write $DEFAULT_PLIST SoftwareRepoCACertificate "%TLS_CA_CERT%"
 
-exit 0
+# End plist utils
+
+
+def get_serial_number():
+    output = subprocess.check_output(["ioreg", "-a", "-c", "IOPlatformExpertDevice", "-d", "2"])
+    return plistlib.readPlistFromString(output)["IORegistryEntryChildren"][0]["IOPlatformSerialNumber"]
+
+
+def update_default_plist(serial_number):
+    data = read_plist(DEFAULT_PLIST)
+    data.update({"ClientIdentifier": "MONOLITH_MACHINE_SERIAL_NUMBER{}".format(serial_number),
+                 "SoftwareRepoURL": SOFTWARE_REPO_URL,
+                 "SoftwareRepoCACertificate": TLS_CA_CERT,
+                 "FollowHTTPRedirects": "all"})
+    # no special Manifest URL with monolith
+    data.pop("ManifestURL", None)
+    # force redirect via monolith for Icon and Client Resource
+    data.pop("IconURL", None)
+    data.pop("ClientResourceURL", None)
+    write_plist(data, DEFAULT_PLIST)
+
+
+def update_root_plist(serial_number):
+    data = read_plist(ROOT_PLIST)
+    data["AdditionalHttpHeaders"] = ["X-Zentral-Serial-Number: {}".format(serial_number),
+                                     "X-Monolith-Token: {}".format(API_SECRET)]
+    write_plist(data, ROOT_PLIST)
+
+
+def get_console_user():
+    from SystemConfiguration import SCDynamicStoreCopyConsoleUser
+    cfuser = SCDynamicStoreCopyConsoleUser(None, None, None)
+    return cfuser[0]
+
+
+def can_launch_munki_daemons():
+    # Destination volume is passed as third arg of the postinstall script
+    # https://developer.apple.com/legacy/library/documentation/DeveloperTools/Conceptual/SoftwareDistribution4/Install_Operations/Install_Operations.html
+    volume = sys.argv[3]
+    # 1. volume is root
+    if volume != "/":
+        # should not happen
+        return False
+    # 2. no real user logged in
+    return get_console_user() in (None, "loginwindow", "_mbsetupuser")
+
+
+def launch_munki_daemons():
+    for config_file in MUNKI_DAEMONS_CONFIG_FILES:
+        subprocess.call(['/bin/launchctl', 'load', config_file])
+
+
+if __name__ == "__main__":
+    serial_number = get_serial_number()
+    update_default_plist(serial_number)
+    update_root_plist(serial_number)
+    if can_launch_munki_daemons():
+        launch_munki_daemons()

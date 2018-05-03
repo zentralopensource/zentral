@@ -58,14 +58,6 @@ class MunkiMonolithConfigPkgBuilder(PackageBuilder):
         # TODO: hardcoded
         software_repo_url = "https://{}/monolith/munki_repo".format(self.get_tls_hostname())
         self.replace_in_file(postinstall_script,
-                             (("%SOFTWARE_REPO_URL%", software_repo_url),))
-        # headers
-        headers = {"X-Monolith-Token": self.make_api_secret(),
-                   "X-Zentral-Serial-Number": "${MSN}"}
-        headers_str = " ".join('"%s: %s"' % (k, v) for k, v in headers.items())
-        self.replace_in_file(postinstall_script,
-                             (("%HEADERS%", headers_str),))
-        # tls_server_certs
-        tls_ca_cert_install_path = self.include_tls_ca_cert()
-        self.replace_in_file(postinstall_script,
-                             (("%TLS_CA_CERT%", tls_ca_cert_install_path),))
+                             (("%SOFTWARE_REPO_URL%", software_repo_url),
+                              ("%API_SECRET%", self.make_api_secret()),
+                              ("%TLS_CA_CERT%", self.include_tls_ca_cert())))
