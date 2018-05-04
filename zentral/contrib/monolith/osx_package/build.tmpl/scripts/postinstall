@@ -82,7 +82,8 @@ def update_default_plist(serial_number):
     data.update({"ClientIdentifier": "MONOLITH_MACHINE_SERIAL_NUMBER{}".format(serial_number),
                  "SoftwareRepoURL": SOFTWARE_REPO_URL,
                  "SoftwareRepoCACertificate": TLS_CA_CERT,
-                 "FollowHTTPRedirects": "all"})
+                 "FollowHTTPRedirects": "all",
+                 "SuppressLoginwindowInstall": True})
     # no special Manifest URL with monolith
     data.pop("ManifestURL", None)
     # force redirect via monolith for Icon and Client Resource
