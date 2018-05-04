@@ -4,6 +4,7 @@ import logging
 import os
 import plistlib
 import shutil
+import stat
 from subprocess import check_call, check_output
 import tempfile
 from urllib.parse import urlparse
@@ -161,6 +162,15 @@ class ProductArchiveBuilder(BasePackageBuilder):
             pkg_tmp_dir = tempfile.mkdtemp(suffix=self.__module__)
             self._extract_xar_archive(package, pkg_tmp_dir)
             pkg_info = os.path.join(pkg_tmp_dir, "PackageInfo")
+            if not os.path.exists(pkg_info):
+                # maybe it is a product archive
+                for pkg_tmp_subdir in os.listdir(pkg_tmp_dir):
+                    # look for included packages
+                    pkg_info = os.path.join(pkg_tmp_dir, pkg_tmp_subdir, "PackageInfo")
+                    if os.path.exists(pkg_info):
+                        self.add_package(os.path.join(pkg_tmp_dir, pkg_tmp_subdir))
+                shutil.rmtree(pkg_tmp_dir)
+                return
         # find a dirname for the package in the product archive
         pkg_info_tree = ET.parse(pkg_info)
         pkg_info_elm = pkg_info_tree.getroot()
@@ -417,6 +427,17 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
 
     def is_product_archive(self):
         return self.get_product_archive() is not None or len(self.get_extra_packages()) > 0
+
+    def create_file_with_content_string(self, rel_path, content, executable=False):
+        filepath = self.get_root_path(rel_path)
+        dirpath = os.path.dirname(filepath)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        with open(filepath, "wb") as f:
+            f.write(content.encode("utf-8"))
+        if executable:
+            f_stat = os.stat(filepath)
+            os.chmod(filepath, f_stat.st_mode | stat.S_IXUSR | stat.S_IWGRP | stat.S_IXOTH)
 
 
 def get_package_builders():

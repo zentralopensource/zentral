@@ -11,7 +11,7 @@
 
 <h2>Manifest <i>{{ object }}</i></h2>
 
-<form action="{% url 'monolith:manifest_enrollment_pkg' object.id %}" method="POST">{% csrf_token %}
+<form method="post">{% csrf_token %}
   {{ form|bootstrap }}
   <div>
     <a href="{% url 'monolith:manifest' object.id %}" class="btn btn-default">Cancel</a>

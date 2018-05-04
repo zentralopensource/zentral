@@ -605,27 +605,25 @@ class ManifestView(LoginRequiredMixin, DetailView):
         return context
 
 
-class ManifestEnrollmentView(LoginRequiredMixin, DetailView):
-    model = Manifest
+class ManifestEnrollmentView(LoginRequiredMixin, FormView):
     template_name = "monolith/enrollment.html"
+    form_class = MunkiMonolithConfigPkgBuilder.form
+
+    def dispatch(self, request, *args, **kwargs):
+        self.object = get_object_or_404(Manifest, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        return {"meta_business_unit": self.object.meta_business_unit}
 
     def get_context_data(self, **kwargs):
         context = super(ManifestEnrollmentView, self).get_context_data(**kwargs)
         context['monolith'] = True
-        context['form'] = MunkiMonolithConfigPkgBuilder.form(
-            initial={"meta_business_unit": self.object.meta_business_unit}
-        )
+        context["object"] = self.object
         return context
 
-
-class ManifestEnrollmentPkgView(LoginRequiredMixin, View):
-    def post(self, request, *args, **kwargs):
-        manifest = get_object_or_404(Manifest, pk=kwargs['pk'])
-        form = MunkiMonolithConfigPkgBuilder.form(request.POST)
-        if not form.is_valid():
-            return HttpResponseRedirect(reverse("monolith:manifest_enrollment"))
-        # monolith auth token
-        business_unit = manifest.meta_business_unit.api_enrollment_business_units()[0]
+    def form_valid(self, form):
+        business_unit = self.object.meta_business_unit.api_enrollment_business_units()[0]
         build_kwargs = form.get_build_kwargs()
         builder = MunkiMonolithConfigPkgBuilder(business_unit, **build_kwargs)
         return builder.build_and_make_response()

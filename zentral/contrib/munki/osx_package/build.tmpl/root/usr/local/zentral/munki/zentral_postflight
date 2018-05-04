@@ -20,7 +20,7 @@ SAL_BUNDLE_ID = "com.salsoftware.sal"
 SAL_KEY_PREFERENCE = "enrolment_key"
 SAL_SERVER_PREFERENCE = "ServerURL"
 
-USER_AGENT = "Zentral/mnkpf 0.2"
+USER_AGENT = "Zentral/mnkpf 0.3"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"
 ZENTRAL_API_SECRET_HEADER = "Zentral-API-Secret"
@@ -28,6 +28,9 @@ ZENTRAL_API_SECRET = "%API_SECRET%"
 
 SANTACTL = "/usr/local/bin/santactl"
 SYSTEM_PROFILER = "/usr/sbin/system_profiler"
+
+DEPNOTIFY_CONTROL_FILE = "/var/tmp/depnotify.log"
+DEPNOTIFY_LAUNCH_AGENT_PLIST = "/Library/LaunchAgents/io.zentral.monolith.depnotify.plist"
 
 # SAL infos
 
@@ -329,6 +332,16 @@ def post_job(data):
     return make_api_request(url, data)
 
 
+def cleanup_depnotify():
+    # write the quit command
+    if os.path.exists(DEPNOTIFY_CONTROL_FILE):
+        with open(DEPNOTIFY_CONTROL_FILE, "a") as f:
+            f.write("Command: Quit\n")
+    # remove the launch agent plist
+    if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST):
+        os.unlink(DEPNOTIFY_LAUNCH_AGENT_PLIST)
+
+
 # Main
 
 
@@ -359,3 +372,7 @@ if __name__ == '__main__':
            'run type %s, fileinfo %s, last sha1sum %s') % (run_type or "-",
                                                            data['include_santa_fileinfo'],
                                                            (last_seen_sha1sum or "-")[:7])
+    try:
+        cleanup_depnotify()
+    except:
+        pass

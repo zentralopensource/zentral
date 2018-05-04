@@ -53,8 +53,6 @@ urlpatterns = [
     url(r'^manifests/(?P<pk>\d+)/$', views.ManifestView.as_view(), name='manifest'),
     url(r'^manifests/(?P<pk>\d+)/enrollment/$',
         views.ManifestEnrollmentView.as_view(), name="manifest_enrollment"),
-    url(r'^manifests/(?P<pk>\d+)/enrollment_pkg/$',
-        views.ManifestEnrollmentPkgView.as_view(), name='manifest_enrollment_pkg'),
     url(r'^manifests/(?P<pk>\d+)/add_catalog/$',
         views.AddManifestCatalogView.as_view(), name='add_manifest_catalog'),
     url(r'^manifests/(?P<pk>\d+)/delete_catalog/(?P<m2m_pk>\d+)/$',

@@ -1,21 +1,27 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 from Foundation import (NSData,
                         NSPropertyListSerialization,
                         NSPropertyListMutableContainers,
                         NSPropertyListXMLFormat_v1_0)
-import os.path
+import os
 import plistlib
 import subprocess
 import sys
 
 # set by the builder
+SETUP_SCRIPT_PATH = "%SETUP_SCRIPT_PATH%"
 SOFTWARE_REPO_URL = "%SOFTWARE_REPO_URL%"
 API_SECRET = "%API_SECRET%"
 TLS_CA_CERT = "%TLS_CA_CERT%"
+DEPNOTIFY_COMMANDS = """%DEPNOTIFY_COMMANDS%"""
 
 # the two plists
 DEFAULT_PLIST = "/Library/Preferences/ManagedInstalls.plist"
 ROOT_PLIST = "/var/root{}".format(DEFAULT_PLIST)
+INCLUDE_DEPNOTIFY = "%INCLUDE_DEPNOTIFY%"
+DEPNOTIFY_LAUNCH_AGENT_PLIST = "/Library/LaunchAgents/io.zentral.monolith.depnotify.plist"
+DEPNOTIFY_CONTROL_FILE = "/var/tmp/depnotify.log"
 
 # munki daemons
 MUNKI_DAEMONS_CONFIG_FILES = [
@@ -70,6 +76,14 @@ def write_plist(data_object, filepath):
 
 
 # End plist utils
+
+
+def execute_setup_script():
+    if SETUP_SCRIPT_PATH and os.path.exists(SETUP_SCRIPT_PATH):
+        try:
+            subprocess.call([SETUP_SCRIPT_PATH])
+        except OSError:
+            pass
 
 
 def get_serial_number():
@@ -127,10 +141,30 @@ def do_munki_run():
                      '/usr/local/zentral/monolith/managedsoftwareupdate_launchd_run_once.plist'])
 
 
+def include_depnotify():
+    return int(INCLUDE_DEPNOTIFY) == 1
+
+
+def prepare_depnotify():
+    if DEPNOTIFY_COMMANDS:
+        with open(DEPNOTIFY_CONTROL_FILE, "ab") as f:
+            f.write(DEPNOTIFY_COMMANDS)
+
+
+def cleanup_depnotify():
+    if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST):
+        os.unlink(DEPNOTIFY_LAUNCH_AGENT_PLIST)
+
+
 if __name__ == "__main__":
+    execute_setup_script()
     serial_number = get_serial_number()
     update_default_plist(serial_number)
     update_root_plist(serial_number)
     if can_launch_munki():
         launch_munki_daemons()
         do_munki_run()
+    if include_depnotify():
+        prepare_depnotify()
+    else:
+        cleanup_depnotify()
