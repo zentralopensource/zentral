@@ -104,7 +104,7 @@ def get_console_user():
     return cfuser[0]
 
 
-def can_launch_munki_daemons():
+def can_launch_munki():
     # Destination volume is passed as third arg of the postinstall script
     # https://developer.apple.com/legacy/library/documentation/DeveloperTools/Conceptual/SoftwareDistribution4/Install_Operations/Install_Operations.html
     volume = sys.argv[3]
@@ -121,9 +121,15 @@ def launch_munki_daemons():
         subprocess.call(['/bin/launchctl', 'load', config_file])
 
 
+def do_munki_run():
+    subprocess.call(['/bin/launchctl', 'load',
+                     '/usr/local/zentral/monolith/managedsoftwareupdate_launchd_run_once.plist'])
+
+
 if __name__ == "__main__":
     serial_number = get_serial_number()
     update_default_plist(serial_number)
     update_root_plist(serial_number)
-    if can_launch_munki_daemons():
+    if can_launch_munki():
         launch_munki_daemons()
+        do_munki_run()
