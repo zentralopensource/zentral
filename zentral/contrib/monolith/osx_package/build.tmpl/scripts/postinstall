@@ -3,6 +3,7 @@ from Foundation import (NSData,
                         NSPropertyListSerialization,
                         NSPropertyListMutableContainers,
                         NSPropertyListXMLFormat_v1_0)
+import os.path
 import plistlib
 import subprocess
 import sys
@@ -32,6 +33,8 @@ MUNKI_DAEMONS_CONFIG_FILES = [
 
 
 def read_plist(filepath):
+    if not os.path.exists(filepath):
+        return {}
     # Credit to Greg Neagle
     plist_data = NSData.dataWithContentsOfFile_(filepath)
     data_object, _, error = (
