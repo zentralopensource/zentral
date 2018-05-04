@@ -626,7 +626,7 @@ class ManifestEnrollmentPkgView(LoginRequiredMixin, View):
             return HttpResponseRedirect(reverse("monolith:manifest_enrollment"))
         # monolith auth token
         business_unit = manifest.meta_business_unit.api_enrollment_business_units()[0]
-        build_kwargs = {"release": form.cleaned_data["release"]}
+        build_kwargs = form.get_build_kwargs()
         builder = MunkiMonolithConfigPkgBuilder(business_unit, **build_kwargs)
         return builder.build_and_make_response()
 

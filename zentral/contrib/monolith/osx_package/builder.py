@@ -15,6 +15,12 @@ class MonolithEnrollmentForm(EnrollmentForm):
         help_text="Choose a munki release to be installed with the enrollment package.",
         required=False
     )
+    no_restart = forms.BooleanField(
+        label=_("No restart"),
+        initial=False,
+        help_text="Remove the launchd package restart requirement.",
+        required=False,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -30,6 +36,7 @@ class MonolithEnrollmentForm(EnrollmentForm):
     def get_build_kwargs(self):
         kwargs = super().get_build_kwargs()
         kwargs["release"] = self.cleaned_data["release"]
+        kwargs["no_restart"] = self.cleaned_data.get("no_restart", False)
         return kwargs
 
 
@@ -61,3 +68,8 @@ class MunkiMonolithConfigPkgBuilder(PackageBuilder):
                              (("%SOFTWARE_REPO_URL%", software_repo_url),
                               ("%API_SECRET%", self.make_api_secret()),
                               ("%TLS_CA_CERT%", self.include_tls_ca_cert())))
+
+    def extra_product_archive_build_steps(self, pa_builder):
+        no_restart = self.build_kwargs.get("no_restart")
+        if no_restart:
+            pa_builder.remove_pkg_ref_on_conclusion("com.googlecode.munki.launchd")

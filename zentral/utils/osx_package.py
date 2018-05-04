@@ -218,6 +218,13 @@ class ProductArchiveBuilder(BasePackageBuilder):
         root.append(pkg_ref)
         tree.write(self.distribution, encoding='utf-8', xml_declaration=True)
 
+    def remove_pkg_ref_on_conclusion(self, pkg_ref_id):
+        tree = ET.parse(self.distribution)
+        root = tree.getroot()
+        for pkg_ref in root.findall('.//pkg-ref[@id="{}"]'.format(pkg_ref_id)):
+            pkg_ref.attrib.pop("onConclusion", None)
+        tree.write(self.distribution, encoding='utf-8', xml_declaration=True)
+
 
 class APIConfigToolsMixin(object):
     def make_api_secret(self):
@@ -305,6 +312,9 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
     def extra_build_steps(self):
         pass
 
+    def extra_product_archive_build_steps(self, product_archive_builder):
+        pass
+
     def get_product_archive(self):
         return None
 
@@ -332,6 +342,7 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             for extra_package in extra_packages:
                 builder.add_package(extra_package)
             builder.add_package(self.package_dir)
+            self.extra_product_archive_build_steps(builder)
             self._clean()
         else:
             # build a component package
