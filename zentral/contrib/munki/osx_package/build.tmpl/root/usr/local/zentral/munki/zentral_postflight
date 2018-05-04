@@ -274,7 +274,10 @@ class SystemProfilerReport(object):
             raise ValueError('0 or more than one item in a SPSoftwareDataType output!')
         item_d = data['_items'][0]
 
-        system_info['computer_name'] = item_d['local_host_name']
+        try:
+            system_info['computer_name'] = item_d['local_host_name']
+        except KeyError:
+            pass
 
         # uptime
         # up 7:21:19:44
