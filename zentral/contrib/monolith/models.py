@@ -3,6 +3,8 @@ import logging
 import os.path
 import plistlib
 import random
+import re
+import unicodedata
 import urllib.parse
 from django.contrib.postgres.fields import ArrayField, JSONField
 from django.core import signing
@@ -21,10 +23,48 @@ from .utils import make_printer_package_info
 logger = logging.getLogger("zentral.contrib.monolith.models")
 
 
-def build_signed_name(model, key):
-    from zentral.utils.api_views import API_SECRET
-    return signing.dumps({"m": model, "k": key},
-                         salt="monolith", key=API_SECRET)
+class MunkiNameError(Exception):
+    pass
+
+
+def build_munki_name(model, key, name, ext=None):
+    # first, the model
+    elements = [model.replace("_", "-")]
+
+    # then, the primary keys
+    if isinstance(key, list):
+        key = "-".join(str(int(pk)) for pk in key)
+    else:
+        key = str(int(key))
+    elements.append(key)
+
+    # then, a meaningful name
+    # to ascii
+    name = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('ascii')
+    # make it a slug, preserve some common separators
+    name = re.sub(r'[^\w\s\._-]', '', name).strip()
+    # replace all common separators by -
+    name = re.sub(r'[\s\._-]+', '-', name).strip("-")
+    elements.append(name or "-")
+
+    # an eventual file extension
+    if ext:
+        elements.append(ext.replace(".", ""))
+
+    return ".".join(elements)
+
+
+def parse_munki_name(name):
+    try:
+        model, key, _ = name.split(".", 2)
+        model = model.replace("-", "_")
+        if "-" in key:
+            key = [int(pk) for pk in key.split("-")]
+        else:
+            key = int(key)
+        return model, key
+    except (TypeError, ValueError):
+        raise MunkiNameError
 
 
 class Catalog(models.Model):
@@ -40,13 +80,13 @@ class Catalog(models.Model):
     def __str__(self):
         return self.name
 
-    def get_signed_name(self):
-        return build_signed_name("catalog", self.id)
+    def get_munki_name(self):
+        return build_munki_name("catalog", self.id, self.name)
 
     def serialize(self):
         pkginfo_list = []
         for pkginfo in self.pkginfo_set.select_related("name").filter(archived_at__isnull=True):
-            pkginfo_list.append(pkginfo.get_signed_pkg_info())
+            pkginfo_list.append(pkginfo.get_pkg_info())
         return plistlib.dumps(pkginfo_list)
 
     def get_absolute_url(self):
@@ -166,17 +206,15 @@ class PkgInfo(models.Model):
     def active_catalogs(self):
         return self.catalogs.filter(archived_at__isnull=True)
 
-    def get_signed_pkg_info(self):
+    def get_pkg_info(self):
         pkg_info = self.data.copy()
         pkg_info.pop("catalogs", None)
         for attr in ("installer_item_location", "uninstaller_item_loc"):
             loc = pkg_info.pop(attr, None)
             if loc:
-                _, ext = os.path.splitext(loc)
-                pkg_info[attr] = "{}{}".format(
-                    build_signed_name("repository_package", self.id),
-                    ext
-                )
+                root, ext = os.path.splitext(loc)
+                name = os.path.basename(root)
+                pkg_info[attr] = build_munki_name("repository_package", self.id, name, ext)
         return pkg_info
 
     def get_absolute_url(self):
@@ -238,11 +276,11 @@ class SubManifest(models.Model):
             key_d['key_list'].sort()
         return d
 
-    def get_signed_name(self):
-        return build_signed_name("sub_manifest", self.id)
+    def get_munki_name(self):
+        return build_munki_name("sub_manifest", self.id, self.name)
 
-    def get_catalog_signed_name(self):
-        return build_signed_name("sub_manifest_catalog", self.id)
+    def get_catalog_munki_name(self):
+        return build_munki_name("sub_manifest_catalog", self.id, self.name)
 
     def serialize(self):
         data = {}
@@ -260,7 +298,7 @@ class SubManifest(models.Model):
         # have to include trashed attachments for autoremove to work
         # therefore newest() and not active()
         for sma in SubManifestAttachment.objects.newest().filter(sub_manifest=self):
-            pkginfo_list.append(sma.get_signed_pkg_info())
+            pkginfo_list.append(sma.get_pkg_info())
         return plistlib.dumps(pkginfo_list)
 
     def can_be_deleted(self):
@@ -351,13 +389,14 @@ class SubManifestAttachment(models.Model):
                                               self.get_type_display(),
                                               self.name)
 
-    def get_signed_pkg_info(self):
+    def get_pkg_info(self):
         pkg_info = self.pkg_info.copy()
         pkg_info['name'] = self.get_name()
         if self.type != "script":
-            pkg_info['installer_item_location'] = "{}{}".format(
-                build_signed_name('sub_manifest_attachment',
-                                  [self.sub_manifest.id, self.id]),
+            pkg_info['installer_item_location'] = build_munki_name(
+                "sub_manifest_attachment",
+                [self.sub_manifest.id, self.id],
+                self.name,
                 SUB_MANIFEST_ATTACHMENT_TYPES[self.type]['extension']
             )
         return pkg_info
@@ -533,18 +572,18 @@ class Manifest(models.Model):
                                               if p.required_package))
         return self._pkginfo_deps_and_updates(required_packages_list, tags)
 
-    def get_enrollment_catalog_signed_name(self):
-        return build_signed_name("enrollment_catalog", self.meta_business_unit.id)
+    def get_enrollment_catalog_munki_name(self):
+        return build_munki_name("enrollment_catalog", self.meta_business_unit.id, self.meta_business_unit.name)
 
     def serialize_enrollment_catalog(self, tags):
         # loop on the enrollment packages for the given set of tags.
         pkginfo_list = []
         for enrollment_package in self.enrollment_packages(tags).values():
-            pkginfo_list.append(enrollment_package.get_signed_pkg_info())
+            pkginfo_list.append(enrollment_package.get_pkg_info())
         return plistlib.dumps(pkginfo_list)
 
-    def get_printer_catalog_signed_name(self):
-        return build_signed_name("printer_catalog", self.meta_business_unit.id)
+    def get_printer_catalog_munki_name(self):
+        return build_munki_name("printer_catalog", self.meta_business_unit.id, self.meta_business_unit.name)
 
     def serialize_printer_catalog(self):
         pkginfo_list = []
@@ -553,20 +592,20 @@ class Manifest(models.Model):
         return plistlib.dumps(pkginfo_list)
 
     def serialize(self, tags):
-        data = {'catalogs': [c.get_signed_name() for c in self.catalogs(tags)],
+        data = {'catalogs': [c.get_munki_name() for c in self.catalogs(tags)],
                 'included_manifests': []}
 
         # include the sub manifests
         for sm in self.sub_manifests(tags):
-            data['included_manifests'].append(sm.get_signed_name())
+            data['included_manifests'].append(sm.get_munki_name())
             if sm.has_attachments():
                 # add the sub manifest catalog to make the attachments available.
                 # include the catalog even if the attachments are all trashed
                 # so that autoremove works.
-                data['catalogs'].append(sm.get_catalog_signed_name())
+                data['catalogs'].append(sm.get_catalog_munki_name())
 
         # add the special catalog for the zentral enrollment packages
-        data['catalogs'].append(self.get_enrollment_catalog_signed_name())
+        data['catalogs'].append(self.get_enrollment_catalog_munki_name())
 
         # loop on the configured enrollment package builders
         enrollment_packages = self.enrollment_packages(tags)
@@ -583,10 +622,9 @@ class Manifest(models.Model):
         # include the catalog with all the printers for autoremove
         all_printers = self.printer_set.all()
         if all_printers.count():
-            data['catalogs'].append(self.get_printer_catalog_signed_name())
+            data['catalogs'].append(self.get_printer_catalog_munki_name())
         # include only the matching active printers as managed installs
         for printer in self.printers(tags):
-            print("MANAGED INSTALL", printer.get_pkg_info_name())
             data.setdefault("managed_installs", []).append(printer.get_pkg_info_name())
 
         return plistlib.dumps(data)
@@ -644,9 +682,9 @@ class ManifestEnrollmentPackage(models.Model):
     def get_update_for(self):
         return monolith_conf.enrollment_package_builders[self.builder]["update_for"]
 
-    def get_signed_pkg_info(self):
+    def get_pkg_info(self):
         pkg_info = self.pkg_info.copy()
-        pkg_info["installer_item_location"] = "{}.pkg".format(build_signed_name("enrollment_pkg", self.id))
+        pkg_info["installer_item_location"] = build_munki_name("enrollment_pkg", self.id, self.get_name(), "pkg")
         return pkg_info
 
     @cached_property
@@ -710,16 +748,12 @@ class PrinterPPDManager(models.Manager):
     def get_with_token(self, token):
         from zentral.utils.api_views import API_SECRET
         try:
-            payload = signing.loads(token, salt="monolith", key=API_SECRET)
-        except signing.BadSignature:
+            pk = int(signing.loads(token, salt="monolith", key=API_SECRET)["pk"])
+        except (AttributeError, KeyError, signing.BadSignature):
             logger.error("Bad ppd download URL signature")
             raise ValueError
         else:
-            if payload["m"] == "ppd":
-                return self.get(pk=payload["k"])
-            else:
-                logger.error("Wrong payload module")
-                raise ValueError
+            return self.get(pk=pk)
 
 
 class PrinterPPD(models.Model):
@@ -742,7 +776,8 @@ class PrinterPPD(models.Model):
         return reverse("monolith:ppd", args=(self.pk,))
 
     def get_download_url(self):
-        token = build_signed_name("ppd", self.pk)
+        from zentral.utils.api_views import API_SECRET
+        token = signing.dumps({"pk": self.pk}, salt="monolith", key=API_SECRET)
         return "{}{}".format(settings["api"]["tls_hostname"],
                              reverse("monolith:download_printer_ppd", args=(token,)))
 

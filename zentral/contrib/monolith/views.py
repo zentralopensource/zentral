@@ -1,8 +1,6 @@
 from itertools import chain
 import logging
-import os.path
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core import signing
 from django.core.exceptions import SuspiciousOperation
 from django.core.urlresolvers import reverse_lazy
 from django.db.models import F
@@ -14,8 +12,7 @@ from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.models import MetaMachine
-from zentral.utils.api_views import (API_SECRET,
-                                     APIAuthError, make_secret, verify_secret,
+from zentral.utils.api_views import (APIAuthError, make_secret, verify_secret,
                                      SignedRequestHeaderJSONPostAPIView)
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
@@ -33,7 +30,8 @@ from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
                     SubManifestForm, SubManifestSearchForm,
                     SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm,
                     UploadPPDForm)
-from .models import (Catalog, CacheServer, Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
+from .models import (MunkiNameError, parse_munki_name,
+                     Catalog, CacheServer, Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      Printer, PrinterPPD,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
 from .osx_package.builder import MunkiMonolithConfigPkgBuilder
@@ -988,12 +986,9 @@ class MRBaseView(View):
 class MRSignedView(MRBaseView):
     def get_request_args(self, name):
         try:
-            data = signing.loads(name, salt="monolith", key=API_SECRET)
-        except signing.BadSignature:
+            model, key = parse_munki_name(name)
+        except MunkiNameError:
             model = key = None
-        else:
-            model = data["m"]
-            key = data["k"]
         return model, key
 
     def get(self, request, *args, **kwargs):
@@ -1060,7 +1055,7 @@ class MRManifestView(MRSignedView):
     def get_request_args(self, name):
         model, key = super().get_request_args(name)
         if model is None or key is None:
-            # No valid signed data.
+            # Not a valid munki name.
             # It is the first request for the main manifest.
             model = "manifest"
             key = self.manifest.id
@@ -1084,13 +1079,6 @@ class MRManifestView(MRSignedView):
 
 class MRPackageView(MRSignedView):
     event_payload_type = "package"
-
-    def get_request_args(self, name):
-        # extension added when building the catalogs
-        # so that munki will download it with the right extension as well
-        # some tests about the installabiliy of some packages depend on the extension
-        signed_payload, _ = os.path.splitext(name)
-        return super().get_request_args(signed_payload)
 
     def do_get(self, model, key, event_payload):
         if model == "enrollment_pkg":
