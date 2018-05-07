@@ -1,5 +1,6 @@
 import os.path
 import subprocess
+import tempfile
 from asn1crypto import cms
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -14,6 +15,18 @@ APPLE_PKI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Apple_
 IPHONE_CA_CN = "Apple iPhone Device CA"
 IPHONE_CA_FULLCHAIN = os.path.join(APPLE_PKI_DIR, "Apple_iPhone_Device_CA_Fullchain.pem")
 SCEP_CA_FULLCHAIN = "/scep_CA/ca.pem"
+
+
+def decrypt_cms_payload(payload, private_key_bytes):
+    tmp_inkey_fd, tmp_inkey = tempfile.mkstemp()
+    with os.fdopen(tmp_inkey_fd, "wb") as f:
+        f.write(private_key_bytes)
+    p = subprocess.Popen(["/usr/bin/openssl", "smime",  "-decrypt", "-inkey", tmp_inkey],
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE)
+    stdout, stderr = p.communicate(payload)
+    os.unlink(tmp_inkey)
+    return stdout
 
 
 def verify_ca_issuer_openssl(ca_fullchain, certificate_bytes, strict=True):

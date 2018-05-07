@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li class="active">DEP virtual servers</li>
+</ol>
+
+<h2>{{ object_list|length }} DEP virtual server{{ object_list|length|pluralize }}</h2>
+
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Organization</th>
+    <th>Token expiry</th>
+  </thead>
+  <tbody>
+    {% for dep_virtual_server in object_list %}
+    <tr>
+      <td><a href="{{ dep_virtual_server.get_absolute_url }}">{{ dep_virtual_server }}</a></td>
+      <td>{{ dep_virtual_server.organization }}</td>
+      <td>
+        {% if dep_virtual_server.token %}
+        {% if dep_virtual_server.token.expires_soon %}
+        <span class="text-danger">{{ dep_virtual_server.token.access_token_expiry|date:'r' }}</span>
+        {% else %}
+        {{ dep_virtual_server.token.access_token_expiry|date:'r' }}
+        {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

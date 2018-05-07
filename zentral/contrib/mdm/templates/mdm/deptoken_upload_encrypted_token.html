@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:dep_tokens' %}">DEP tokens</a></li>
+  <li><a href="{{ object.get_absolute_url }}">{{ object.description }}</a></li>
+  <li class="active">Upload encrypted token</li>
+</ol>
+
+<h2>Upload encrypted token</h2>
+
+<form class="form" method="POST" enctype="multipart/form-data">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    <button type="submit" class="btn btn-primary">Upload</button>
+  </p>
+</form>
+{% endblock %}

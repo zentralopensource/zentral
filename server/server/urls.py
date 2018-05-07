@@ -1,8 +1,11 @@
+import logging
 from django.conf.urls import include, url
 from django.contrib.auth.urls import urlpatterns as auth_urlpatterns
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from accounts.views import login, VerifyTOTPView, VerifyU2FView
 from zentral.conf import saml2_idp_metadata_file, settings as zentral_settings
+
+logger = logging.getLogger(__name__)
 
 # base
 urlpatterns = [
@@ -25,7 +28,8 @@ for app_name in zentral_settings.get('apps', []):
     url_module = "{}.urls".format(app_name)
     try:
         urlpatterns.append(url(r'^{}/'.format(app_shortname), include(url_module, namespace=app_shortname)))
-    except ImportError:
+    except ImportError as error:
+        logger.exception("Could not load app urls %s", app_shortname)
         # TODO use ModuleNotFoundError for python >= 3.6
         pass
 

@@ -1,23 +1,22 @@
-import base64
 import logging
-from asn1crypto import csr
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import SuspiciousOperation
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.views.generic import CreateView, DetailView, ListView, TemplateView, View
-from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
-from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.inventory.utils import verify_enrollment_secret
+from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.mdm.cms import sign_payload_openssl
-from zentral.contrib.mdm.forms import OTAEnrollmentForm, OTAEnrollmentSecretForm, PushCertificateForm
+from zentral.contrib.mdm.dep import add_dep_token_certificate, add_dep_profile, assign_dep_device_profile
+from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
+from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DEPProfileForm, EncryptedDEPTokenForm,
+                                       OTAEnrollmentForm, OTAEnrollmentSecretForm, PushCertificateForm)
 from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate, PushCertificate,
-                                        OTAEnrollment, OTAEnrollmentSession)
+                                        DEPDevice, DEPProfile, DEPToken, DEPVirtualServer,
+                                        OTAEnrollment)
 from zentral.contrib.mdm.payloads import (build_payload_response,
                                           build_root_ca_configuration_profile,
                                           build_profile_service_payload)
-from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView
 
 logger = logging.getLogger('zentral.contrib.mdm.views.setup')
 
@@ -27,13 +26,16 @@ class RootCAView(View):
         return build_payload_response(sign_payload_openssl(build_root_ca_configuration_profile()), "zentral_root_ca")
 
 
-class EnrollmentView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/enrollment.html"
+class IndexView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/index.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
         return ctx
+
+
+# Push certificates
 
 
 class PushCertificatesView(LoginRequiredMixin, ListView):
@@ -88,6 +90,9 @@ class AddPushCertificateBusinessUnitView(LoginRequiredMixin, CreateView):
         mbups.push_certificate = self.push_certificate
         mbups.save()
         return HttpResponseRedirect(self.push_certificate.get_absolute_url())
+
+
+# OTA enrollment
 
 
 class OTAEnrollmentListView(LoginRequiredMixin, ListView):
@@ -181,65 +186,157 @@ class RevokeOTAEnrollmentView(LoginRequiredMixin, TemplateView):
         return HttpResponseRedirect(self.ota_enrollment.get_absolute_url())
 
 
-class VerifySCEPCSRView(SignedRequestHeaderJSONPostAPIView):
-    verify_module = "zentral"
+# DEP Tokens
 
-    def do_post(self, data):
-        csr_data = base64.b64decode(data["csr"].encode("ascii"))
-        csr_info = csr.CertificationRequest.load(csr_data)["certification_request_info"]
 
-        csr_d = {}
+class DEPTokensView(LoginRequiredMixin, ListView):
+    model = DEPToken
 
-        # subject
-        for rdn_idx, rdn in enumerate(csr_info["subject"].chosen):
-            for type_val_idx, type_val in enumerate(rdn):
-                csr_d[type_val["type"].native] = type_val['value'].native
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
 
-        kwargs = {"user_agent": self.user_agent,
-                  "public_ip_address": self.ip}
 
-        # serial number
-        serial_number = csr_d.get("serial_number")
-        if not serial_number:
-            raise SuspiciousOperation("Could not get serial number")
-        kwargs["serial_number"] = serial_number
+class CreateDEPTokenView(LoginRequiredMixin, CreateView):
+    model = DEPToken
+    fields = "__all__"
 
-        # meta business
-        organization_name = csr_d.get("organization_name")
-        if not organization_name or not organization_name.startswith("MBU$"):
-            raise SuspiciousOperation("Unknown organization name format")
-        meta_business_unit_id = int(organization_name.split("$", 1)[-1])
-        kwargs["meta_business_unit"] = get_object_or_404(MetaBusinessUnit, pk=meta_business_unit_id)
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
 
-        # type and session secret
+    def form_valid(self, form):
+        self.object = form.save()
+        add_dep_token_certificate(self.object)
+        return super().form_valid(form)
+
+
+class DEPTokenView(LoginRequiredMixin, DetailView):
+    model = DEPToken
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
+
+
+class DownloadDEPTokenCertificateView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        dep_token = get_object_or_404(DEPToken, pk=kwargs["pk"], consumer_key__isnull=True)
+        filename = "dep_token_{}.pem".format(dep_token.pk)
+        response = HttpResponse(dep_token.certificate, content_type="application/x-pem-file")
+        response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
+        return response
+
+
+class UploadEncryptedDEPTokenView(LoginRequiredMixin, UpdateView):
+    form_class = EncryptedDEPTokenForm
+    model = DEPToken
+    template_name = "mdm/deptoken_upload_encrypted_token.html"
+
+    def form_valid(self, form):
+        dep_token = form.save()
+        return HttpResponseRedirect(reverse("mdm:dep_virtual_server", args=(dep_token.virtual_server.pk,)))
+
+
+# DEP virtual servers
+
+
+class DEPVirtualServersView(LoginRequiredMixin, ListView):
+    model = DEPVirtualServer
+
+
+class DEPVirtualServerView(LoginRequiredMixin, DetailView):
+    model = DEPVirtualServer
+
+
+# DEP profiles
+
+
+class DEPProfilesView(LoginRequiredMixin, ListView):
+    model = DEPProfile
+
+
+class CreateDEPProfileView(LoginRequiredMixin, CreateView):
+    model = DEPProfile
+    form_class = DEPProfileForm
+    pk_url_kwarg = "profile_pk"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.dep_virtual_server = get_object_or_404(DEPVirtualServer, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["dep_virtual_server"] = self.dep_virtual_server
+        return ctx
+
+    def form_valid(self, form):
+        dep_profile = form.save(commit=False)
+        dep_profile.virtual_server = self.dep_virtual_server
         try:
-            cn_prefix, ota_enrollment_session_secret = csr_d["common_name"].split("$")
-        except (KeyError, ValueError, AttributeError):
-            raise SuspiciousOperation("Unknown common name format")
+            add_dep_profile(dep_profile)
+        except DEPClientError as error:
+            form.add_error(None, str(error))
+            return self.form_invalid(form)
+        return HttpResponseRedirect(dep_profile.get_absolute_url())
 
-        # CN prefix => OTA enrollment phase
-        if cn_prefix == "OTA":
-            ota_enrollment_session_status = OTAEnrollmentSession.PHASE_2
-        elif cn_prefix == "MDM":
-            ota_enrollment_session_status = OTAEnrollmentSession.PHASE_3
-        else:
-            raise SuspiciousOperation("Unknown CN prefix {}".format(cn_prefix))
 
-        kwargs["model"] = "ota_enrollment_session"
-        kwargs["ota_enrollment_session__status"] = ota_enrollment_session_status
-        kwargs["secret"] = ota_enrollment_session_secret
+class DEPProfileView(LoginRequiredMixin, DetailView):
+    model = DEPProfile
 
+
+class CheckDEPProfileView(LoginRequiredMixin, DetailView):
+    model = DEPProfile
+    template_name = "mdm/depprofile_check.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        dep_client = DEPClient.from_dep_virtual_server(self.object.virtual_server)
+        ctx["fetched_profile"] = dep_client.get_profile(self.object.uuid)
+        return ctx
+
+
+class UpdateDEPProfileView(LoginRequiredMixin, UpdateView):
+    model = DEPProfile
+    form_class = DEPProfileForm
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["dep_virtual_server"] = self.object.virtual_server
+        return ctx
+
+    def get_initial(self):
+        initial = super().get_initial()
+        if self.object:
+            initial["meta_business_unit"] = self.object.get_meta_business_unit().pk
+        return initial
+
+    def form_valid(self, form):
+        dep_profile = form.save(commit=False)
         try:
-            es_request = verify_enrollment_secret(**kwargs)
-        except EnrollmentSecretVerificationFailed as e:
-            raise SuspiciousOperation("secret verification failed: '{}'".format(e.err_msg))
-        else:
-            # update ota enrollment session
-            ota_enrollment_session = es_request.enrollment_secret.ota_enrollment_session
-            if ota_enrollment_session_status == OTAEnrollmentSession.PHASE_2:
-                ota_enrollment_session.set_phase2_scep_verified_status(es_request)
-            if ota_enrollment_session_status == OTAEnrollmentSession.PHASE_3:
-                ota_enrollment_session.set_phase3_scep_verified_status(es_request)
+            add_dep_profile(dep_profile)
+        except DEPClientError as error:
+            form.add_error(None, str(error))
+            return self.form_invalid(form)
+        return HttpResponseRedirect(dep_profile.get_absolute_url())
 
-        # OK
-        return {"status": 0}
+
+class AssignDEPDeviceProfileView(LoginRequiredMixin, UpdateView):
+    model = DEPDevice
+    form_class = AssignDEPDeviceProfileForm
+
+    def form_valid(self, form):
+        dep_device = form.save(commit=False)
+        try:
+            assign_dep_device_profile(dep_device, dep_device.profile)
+        except DEPClientError as e:
+            form.add_error(None, str(e))
+            return self.form_invalid(form)
+        else:
+            messages.info(self.request, "Profile {} successfully assigned to device {}.".format(
+                dep_device.profile, dep_device.serial_number
+            ))
+            return HttpResponseRedirect(dep_device.get_absolute_url())

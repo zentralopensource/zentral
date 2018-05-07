@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
+  <li><a href="{% url 'mdm:dep_virtual_server' dep_virtual_server.pk %}">{{ dep_virtual_server }}</a></li>
+  <li class="active">
+    {% if object %}
+    Update {{ object }}</i>
+    {% else %}
+    Create DEP profile
+    {% endif %}
+  </li>
+</ol>
+
+<h2>
+  {% if object %}
+  Update <i>{{ object }}</i>
+  {% else %}
+  Create DEP profile
+  {% endif %}
+</h2>
+
+<form class="form" method="post">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    {% if object %}
+    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a></li>
+    {% else %}
+    <a href="{% url 'mdm:dep_virtual_server' dep_virtual_server.pk %}" class="btn btn-default">Cancel</a></li>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save</button>
+  </p>
+</form>
+{% endblock %}

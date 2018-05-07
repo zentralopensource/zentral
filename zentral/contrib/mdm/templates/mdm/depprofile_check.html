@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% load base_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:dep_profiles' %}">DEP profiles</a></li>
+  <li><a href="{% url 'mdm:dep_profile' object.pk %}">{{ object }}</a></li>
+  <li class="active">Check</li>
+</ol>
+
+<h2>{{ object }}</h2>
+
+{{ fetched_profile|pythonprettyprint }}
+{% endblock %}

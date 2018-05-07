@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>DEP virtual server <i>{{ object }}</i></h2>
+
+<div class="row">
+  <div class="col-md-6">
+    <dl class="dl-horizontal">
+      <dt>name</dt>
+      <dd>{{ object.name }}</dd>
+      <dt>uuid</dt>
+      <dd>{{ object.uuid }}</dd>
+    </dl>
+  </div>
+  {% with object.organization as org %}
+  <div class="col-md-6">
+    <h4>DEP organization</h3>
+    <dl class="dl-horizontal">
+      <dt>name</dt>
+      <dd>{{ org.name }}</dd>
+      <dt>admin</dt>
+      <dd>{{ org.admin_id }}</dd>
+      <dt>email</dt>
+      <dd>{{ org.email }}</dd>
+      <dt>phone</dt>
+      <dd>{{ org.phone }}</dd>
+      <dt>address</dt>
+      <dd>{{ org.address_lines|linebreaksbr }}</dd>
+      <dt>type</dt>
+      <dd>{{ org.type }}</dd>
+      <dt>version</dt>
+      <dd>{{ org.version }}</dd>
+    </dl>
+  </div>
+  {% endwith %}
+  <div class="col-md-12">
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+      {% if object.token %}
+      {% if object.token.expires_soon %}
+      <dt class="small text-danger">Token expiry</dt>
+      <dd class="small text-danger">{{ object.token.access_token_expiry|date:'r' }}</dd>
+      {% else %}
+      <dt class="small" style="opacity:0.5">Token expiry</dt>
+      <dd class="small" style="opacity:0.5">{{ object.token.access_token_expiry|date:'r' }}</dd>
+      {% endif %}
+      {% endif %}
+    </dl>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-12">
+    {% with object.depprofile_set.count as profile_count %}
+
+    <h3>{{ profile_count }} Profile{{ profile_count|pluralize }}</h3>
+    {% if object.token %}
+    <p>
+      <a href="{% url 'mdm:create_dep_profile' object.pk %}" class="btn btn-default">
+        Create
+      </a>
+    </p>
+    {% endif %}
+
+    {% if profile_count %}
+    <table class="table">
+      <thead>
+        <th>Name</th>
+        <th>Business unit</th>
+        <th>UUID</th>
+        <th>Devices</th>
+        <th>Created at</th>
+        <th>Updated at</th>
+      </thead>
+      <tbody>
+        {% for profile in object.depprofile_set.all %}
+        {% with profile.get_meta_business_unit as profile_mbu %}
+        <tr>
+          <td><a href="{% url 'mdm:dep_profile' profile.pk %}">{{ profile }}</a></td>
+          <td><a href="{% url 'inventory:mbu_machines' profile_mbu.pk %}">{{ profile_mbu }}</a></td>
+          <td>{{ profile.uuid }}</td>
+          <td>{{ profile.depdevice_set.count }}</td>
+          <td>{{ profile.created_at|date:"r" }}</td>
+          <td>{{ profile.updated_at|date:"r" }}</td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% endwith %}
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-12">
+    {% with object.depdevice_set.count as device_count %}
+
+    <h3>{{ device_count }} Device{{ device_count|pluralize }}</h3>
+
+    {% if device_count %}
+    <table class="table">
+      <thead>
+        <th>Serial number</th>
+        <th>Assigned by</th>
+        <th>Assigned date</th>
+        <th>Profile</th>
+        <th></th>
+      </thead>
+      <tbody>
+        {% for device in object.depdevice_set.all %}
+        <tr>
+          <td><a name="{{ device.serial_number }}"></a>{{ device.serial_number }}</td>
+          <td>{{ device.device_assigned_by|default:"-" }}</td>
+          <td>{{ device.device_assigned_date|date:"r" }}</td>
+          <td>
+            {{ device.profile_status }}
+            {% if device.profile %} - <a href="{{ device.profile.get_absolute_url }}">{{ device.profile }}</a>{% endif %}
+          </td>
+          <td>
+            <a href="{% url 'mdm:assign_dep_device_profile' device.pk %}" class="btn btn-default">
+              <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% endwith %}
+  </div>
+</div>
+{% endblock %}

@@ -4,12 +4,15 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">MDM enrollment</li>
+  <li class="active">MDM setup</li>
 </ol>
 
-<h2>MDM enrollment</h2>
+<h2>MDM setup</h2>
 
 <p><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></p>
 <p><a href="{% url 'mdm:root_ca' %}">Trusted Root CA configuration profile</a></p>
 <p><a href="{% url 'mdm:ota_enrollments' %}">OTA MDM Enrollments</a></p>
+<p><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></p>
+<p><a href="{% url 'mdm:dep_tokens' %}">DEP tokens</a></p>
+<p><a href="{% url 'mdm:dep_profiles' %}">DEP profiles</a></p>
 {% endblock %}

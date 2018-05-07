@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li class="active">DEP tokens</li>
+</ol>
+
+<h2>{{ object_list|length }} DEP token{{ object_list|length|pluralize }}</h2>
+
+<p>
+  <a href="{% url 'mdm:create_dep_token' %}" class="btn btn-default">Create</a>
+</p>
+
+<table class="table">
+  <thead>
+    <th>Virtual Server</th>
+    <th>Expiry</th>
+  </thead>
+  <tbody>
+    {% for dep_token in object_list %}
+    <tr>
+      <td><a href="{{ dep_token.virtual_server.get_absolute_url }}">{{ dep_token.virtual_server }}</a></td>
+      <td>
+        {% if dep_token.expires_soon %}
+        <span class="text-danger">{{ dep_token.access_token_expiry|date:'r' }}</span>
+        {% else %}
+        {{ dep_token.access_token_expiry|date:'r' }}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

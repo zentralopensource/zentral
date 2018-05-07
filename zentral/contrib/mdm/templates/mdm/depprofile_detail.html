@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:dep_profiles' %}">DEP profiles</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>{{ object }}</h2>
+
+<p>
+  <a href="{% url 'mdm:check_dep_profile' object.pk %}" class="btn btn-default">
+    <span class="glyphicon glyphicon-cloud-download" aria-hidden="true"></span>
+  </a>
+  <a href="{% url 'mdm:update_dep_profile' object.pk %}" class="btn btn-default">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+  </a>
+</p>
+
+<div class="row">
+  <div class="col-md-4">
+    <h3>Org info</h3>
+    <dl class="dl-horizontal">
+      <dt>Business unit</dt>
+      {% with object.get_meta_business_unit as mbu %}
+      <dd><a href="{{ mbu.get_absolute_url }}">{{ mbu }}</a></dd>
+      {% endwith %}
+      <dt>Support phone number</dt>
+      <dd>{{ object.support_phone_number|default:"-" }}</dd>
+      <dt>Support email</dt>
+      <dd>{{ object.support_email_address|default:"-" }}</dd>
+      <dt>Org magic</dt>
+      <dd>{{ object.org_magic|default:"-" }}</dd>
+      <dt>Department</dt>
+      <dd>{{ object.department }}</dd>
+    </dl>
+  </div>
+  <div class="col-md-4">
+    <h3>Settings</h3>
+    <dl class="dl-horizontal">
+      <dt>allow pairing</dt>
+      <dd>{{ object.allow_pairing|yesno }}</dd>
+      <dt>supervised</dt>
+      <dd>{{ object.is_supervised|yesno }}</dd>
+      <dt>multi-user</dt>
+      <dd>{{ object.is_multi_user|yesno }}</dd>
+      <dt>mandatory</dt>
+      <dd>{{ object.is_mandatory|yesno }}</dd>
+      <dt>await device configured</dt>
+      <dd>{{ object.await_device_configured|yesno }}</dd>
+      <dt>auto advance setup</dt>
+      <dd>{{ object.auto_advance_setup|yesno }}</dd>
+      <dt>mdm removable</dt>
+      <dd>{{ object.is_mdm_removable|yesno }}</dd>
+      <dt>include tls certificates</dt>
+      <dd>{{ object.include_tls_certificates|yesno }}</dd>
+    </dl>
+  </div>
+  <div class="col-md-4">
+    <h3>Skip setup items</h3>
+    <ul>
+      {% for pane in object.skip_setup_items %}
+      <li>{{ pane }}</li>
+      {% endfor %}
+    <ul>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-12">
+    {% with object.depdevice_set.count as device_count %}
+
+    <h3>Assigned to {{ device_count }} device{{ device_count|pluralize }}</h3>
+
+    {% if device_count %}
+    <table class="table">
+      <thead>
+        <th>Serial number</th>
+        <th>Profile status</th>
+        <th>Profile assign time</th>
+        <th>Profile push time</th>
+      </thead>
+      <tbody>
+        {% for device in object.depdevice_set.all %}
+        <tr>
+          <td>
+            <a name="{{ device.serial_number }}"></a>
+            <a href="{{ device.get_absolute_url }}">{{ device.serial_number }}</a>
+          </td>
+          <td>{{ device.profile_status }}</td>
+          <td>{{ device.profile_assign_time|date:"r" }}</td>
+          <td>{{ device.profile_push_time|date:"r" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% endwith %}
+  </div>
+</div>
+{% endblock %}

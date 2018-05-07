@@ -25,6 +25,7 @@ pyyaml
 redis
 requests
 requests_aws4auth
+requests_oauthlib
 setuptools
 sqlparse
 tqdm

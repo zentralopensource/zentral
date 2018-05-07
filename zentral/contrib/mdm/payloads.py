@@ -5,6 +5,7 @@ import uuid
 from django.http import HttpResponse
 from django.urls import reverse
 from zentral.conf import settings
+from zentral.utils.certificates import split_certificate_chain
 
 
 logger = logging.getLogger("zentral.contrib.mdm.payloads")
@@ -43,22 +44,17 @@ def build_payload(display_name, suffix, content,
 def build_root_ca_payloads():
     root_certificates = []
     payloads = []
-    begin_certificate_line = "-----BEGIN CERTIFICATE-----"
     for api_settings_attr, name, suffix in (("tls_server_certs",
                                              "Zentral - root CA",
                                              "tls-root-ca-cert"),
-                                            ("tls_server_certs_client_certificate_authenticed",
+                                            ("tls_server_certs_client_certificate_authenticated",
                                              "Zentral client certificate authenticated - root CA",
                                              "tls-clicertauth-root-ca")):
         if api_settings_attr not in settings["api"]:
             logger.warning("Missing %s key in api settings", api_settings_attr)
             continue
-        with open(settings["api"][api_settings_attr]) as f:
-            fullchain = f.read()
-        root_certificate = "{}{}".format(
-            begin_certificate_line,
-            fullchain.split(begin_certificate_line)[-1]
-        )
+        certificate_chain_filename = settings["api"][api_settings_attr]
+        root_certificate = split_certificate_chain(certificate_chain_filename)[-1]
         if root_certificate not in root_certificates:
             payloads.append(build_payload(name, suffix,
                                           root_certificate.encode("utf-8"),
@@ -72,14 +68,14 @@ def build_root_ca_configuration_profile():
                                         build_root_ca_payloads()))
 
 
-def build_scep_payload(ota_enrollment_session):
-    return build_payload(ota_enrollment_session.get_payload_name(),
+def build_scep_payload(enrollment_session):
+    return build_payload(enrollment_session.get_payload_name(),
                          "scep",
                          {"URL": "{}/scep".format(settings["api"]["tls_hostname"]),
-                          "Subject": [[["CN", ota_enrollment_session.get_common_name()]],
-                                      [["2.5.4.5", ota_enrollment_session.get_serial_number()]],
-                                      [["O", ota_enrollment_session.get_organization()]]],
-                          "Challenge": ota_enrollment_session.get_challenge(),
+                          "Subject": [[["CN", enrollment_session.get_common_name()]],
+                                      [["2.5.4.5", enrollment_session.get_serial_number()]],
+                                      [["O", enrollment_session.get_organization()]]],
+                          "Challenge": enrollment_session.get_challenge(),
                           "Keysize": 2048,
                           "KeyType": "RSA",
                           "KeyUsage": 5,  # 1 is signing, 4 is encryption, 5 is both signing and encryption
@@ -110,8 +106,8 @@ def build_ota_scep_payload(ota_enrollment_session):
     return plistlib.dumps(build_payload(ota_enrollment_session.get_payload_name(), "scep", content))
 
 
-def build_mdm_payload(ota_enrollment_session, push_certificate):
-    scep_payload = build_scep_payload(ota_enrollment_session)
+def build_mdm_payload(enrollment_session, push_certificate):
+    scep_payload = build_scep_payload(enrollment_session)
     content = build_root_ca_payloads()
     content.extend([
         scep_payload,

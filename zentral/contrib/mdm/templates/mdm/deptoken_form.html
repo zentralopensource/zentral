@@ -5,17 +5,17 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
-  <li><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></li>
-  <li class="active">Add</li>
+  <li><a href="{% url 'mdm:dep_tokens' %}">DEP tokens</a></li>
+  <li class="active">Create</li>
 </ol>
 
-<h2>Add a MDM push certificate</h2>
+<h2>Create a DEP token</h2>
 
 <form class="form" method="POST" enctype="multipart/form-data">{% csrf_token %}
   {{ form|bootstrap }}
   <p>
-    <a href="{% url 'mdm:push_certificates' %}" class="btn btn-default">Cancel</a>
-    <button type="submit" class="btn btn-primary">Add</button>
+    <a href="{% url 'mdm:dep_tokens' %}" class="btn btn-default">Cancel</a>
+    <button type="submit" class="btn btn-primary">Create</button>
   </p>
 </form>
 {% endblock %}

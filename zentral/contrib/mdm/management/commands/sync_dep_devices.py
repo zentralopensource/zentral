@@ -1,0 +1,28 @@
+from django.core.management.base import BaseCommand
+from zentral.contrib.mdm.models import DEPVirtualServer
+from zentral.contrib.mdm.dep import sync_dep_virtual_server_devices
+
+
+class Command(BaseCommand):
+    help = 'Sync DEP devices'
+
+    def add_arguments(self, parser):
+        parser.add_argument('--list-servers', action='store_true', dest='list_servers', default=False,
+                            help='list existing DEP virtual servers')
+        parser.add_argument('--server', dest='server_ids', type=int, nargs=1,
+                            help='sync DEP virtual server devices')
+        parser.add_argument('--full-sync', action='store_true', dest='full_sync', default=False,
+                            help='force a full sync')
+
+    def handle(self, *args, **kwargs):
+        if kwargs.get('list_servers'):
+            print("Existing DEP virtual servers:")
+            for server in DEPVirtualServer.objects.all():
+                print(server.id, server)
+        server_ids = kwargs.get("server_ids")
+        if server_ids:
+            full_sync = kwargs.get("full_sync")
+            for server_id in server_ids:
+                server = DEPVirtualServer.objects.get(pk=server_id)
+                for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
+                    print("Created" if created else "Updated", dep_device)

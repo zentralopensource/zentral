@@ -10,7 +10,7 @@ from zentral.contrib.mdm.cms import (sign_payload_openssl,
                                      verify_apple_iphone_device_ca_issuer_openssl,
                                      verify_zentral_scep_ca_issuer_openssl)
 from zentral.contrib.mdm.events import OTAEnrollmentRequestEvent
-from zentral.contrib.mdm.exceptions import OTAEnrollmentSessionStatusError
+from zentral.contrib.mdm.exceptions import EnrollmentSessionStatusError
 from zentral.contrib.mdm.models import OTAEnrollmentSession
 from zentral.contrib.mdm.payloads import (build_payload_response,
                                           build_ota_scep_payload,
@@ -96,7 +96,7 @@ class OTAEnrollView(PostEventMixin, View):
             # verify and update ota enrollment session status
             try:
                 ota_enrollment_session.set_phase3_status()
-            except OTAEnrollmentSessionStatusError:
+            except EnrollmentSessionStatusError:
                 self.abort("ota enrollment session has wrong status", phase=phase)
 
             # verify DN mbu

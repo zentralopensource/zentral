@@ -6,7 +6,9 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.contrib.mdm.commands import build_device_information_command_response
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.models import EnrolledDevice, EnrolledUser, OTAEnrollmentSession, PushCertificate
+from zentral.contrib.mdm.models import (EnrolledDevice, EnrolledUser,
+                                        DEPEnrollmentSession, OTAEnrollmentSession,
+                                        PushCertificate)
 from zentral.contrib.mdm.utils import parse_dn, tree_from_payload
 from .base import PostEventMixin
 
@@ -33,7 +35,7 @@ class MDMView(PostEventMixin, View):
 
         cn = dn_d.get("CN")
         try:
-            cn_prefix, ota_enrollment_session_secret = cn.split("$")
+            cn_prefix, enrollment_type, enrollment_secret_secret = cn.split("$")
         except (AttributeError, ValueError):
             self.abort("missing or bad CN in client certificate DN")
 
@@ -41,16 +43,27 @@ class MDMView(PostEventMixin, View):
         if cn_prefix != "MDM":
             self.abort("bad CN prefix in client certificate")
 
-        # verify ota enrollment session
-        try:
-            self.ota_enrollment_session = (
-                OTAEnrollmentSession.objects
-                .select_related("enrolled_device",
-                                "ota_enrollment__enrollment_secret__meta_business_unit")
-                .get(enrollment_secret__secret=ota_enrollment_session_secret)
-            )
-        except OTAEnrollmentSession.DoesNotExist:
-            self.abort("Bad ota enrollment session secret in client certificate CN")
+        # verify enrollment
+        if enrollment_type == "OTA":
+            try:
+                self.enrollment_session = (
+                    OTAEnrollmentSession.objects
+                    .select_related("enrolled_device")
+                    .get(enrollment_secret__secret=enrollment_secret_secret)
+                )
+            except OTAEnrollmentSession.DoesNotExist:
+                self.abort("Bad OTA enrollment session secret in client certificate CN")
+        elif enrollment_type == "DEP":
+            try:
+                self.enrollment_session = (
+                    DEPEnrollmentSession.objects
+                    .select_related("enrolled_device")
+                    .get(enrollment_secret__secret=enrollment_secret_secret)
+                )
+            except DEPEnrollmentSession.DoesNotExist:
+                self.abort("Bad DEP enrollment session secret in client certificate CN")
+        else:
+            self.abort("unknown MDM enrollment type {}".format(enrollment_type))
 
         # verify serial number
         self.serial_number = dn_d.get("serialNumber")
@@ -63,8 +76,9 @@ class MDMView(PostEventMixin, View):
             self.abort("missing or bad O in client certificate DN")
         else:
             try:
-                self.meta_business_unit = MetaBusinessUnit.objects.get(pk=int(o[4:]))
-            except MetaBusinessUnit.DoesNotExist:
+                mbu_pk = int(o[4:])
+                self.meta_business_unit = MetaBusinessUnit.objects.get(pk=mbu_pk)
+            except (MetaBusinessUnit.DoesNotExist, ValueError):
                 self.abort("unknown meta business unit in client certificate DN")
 
         # read payload
@@ -97,8 +111,8 @@ class CheckinView(MDMView):
         enrolled_device, created = EnrolledDevice.objects.update_or_create(udid=self.udid,
                                                                            defaults=enrolled_device_defaults)
 
-        # update ota enrollment session
-        self.ota_enrollment_session.set_authenticated_status(enrolled_device)
+        # update enrollment session
+        self.enrollment_session.set_authenticated_status(enrolled_device)
 
         # post events
         if created:
@@ -138,9 +152,9 @@ class CheckinView(MDMView):
                 enrolled_device.save()
                 updated_device_attr.sort()
 
-        # Update ota enrollment session
-        if enrolled_device.token and not self.ota_enrollment_session.status == OTAEnrollmentSession.COMPLETED:
-            self.ota_enrollment_session.set_completed_status(enrolled_device)
+        # Update enrollment session
+        if enrolled_device.token and not self.enrollment_session.is_completed():
+            self.enrollment_session.set_completed_status(enrolled_device)
 
         # enrolled user
         updated_user_attr = []
