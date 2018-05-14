@@ -24,6 +24,9 @@ urlpatterns = [
     url(r'^push_certificates/(?P<pk>\d+)/add_business_unit/$',
         views.AddPushCertificateBusinessUnitView.as_view(),
         name='add_push_certificate_business_unit'),
+    url(r'^push_certificates/(?P<pk>\d+)/remove_business_unit/$',
+        views.RemovePushCertificateBusinessUnitView.as_view(),
+        name='remove_push_certificate_business_unit'),
 
     # OTA enrollment / setup views
     url(r'^enrollment/ota/$',

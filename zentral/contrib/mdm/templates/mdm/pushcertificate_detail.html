@@ -37,7 +37,13 @@
     {% for mbu in mbu_list %}
     <tr>
       <td>{{ mbu.name }}</td>
-      <td></td>
+      <td>
+        <form method="post" action="{% url 'mdm:remove_push_certificate_business_unit' object.id %}">{% csrf_token %}
+          <button type="submit" class="btn btn-danger" name="meta_business_unit" value="{{ mbu.pk }}">
+            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+          </button>
+        </form>
+      </td>
     </tr>
     {% endfor %}
   </tbody>

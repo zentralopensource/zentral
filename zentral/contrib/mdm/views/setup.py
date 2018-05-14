@@ -92,6 +92,20 @@ class AddPushCertificateBusinessUnitView(LoginRequiredMixin, CreateView):
         return HttpResponseRedirect(self.push_certificate.get_absolute_url())
 
 
+class RemovePushCertificateBusinessUnitView(LoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        mbups = get_object_or_404(
+            MetaBusinessUnitPushCertificate,
+            push_certificate__pk=kwargs["pk"],
+            meta_business_unit__pk=request.POST["meta_business_unit"]
+        )
+        meta_business_unit = mbups.meta_business_unit
+        push_certificate = mbups.push_certificate
+        mbups.delete()
+        messages.info(request, "Removed business unit {} from push certificate".format(meta_business_unit))
+        return HttpResponseRedirect(push_certificate.get_absolute_url())
+
+
 # OTA enrollment
 
 
