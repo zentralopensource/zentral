@@ -14,7 +14,7 @@ jinja2
 kombu
 pip
 prometheus_client
-psycopg2
+psycopg2-binary
 pygments
 pyopenssl
 pyotp
