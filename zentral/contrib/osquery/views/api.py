@@ -206,7 +206,7 @@ class CarverContinueView(BaseNodeView):
         block_id = data["block_id"]
         cb = CarveBlock.objects.create(carve_session=self.carve_session,
                                        block_id=int(block_id))
-        cb.file.save(block_id, SimpleUploadedFile(block_id, b64decode(data_data)))
+        cb.file.save(str(block_id), SimpleUploadedFile(str(block_id), b64decode(data_data)))
 
         session_finished = (CarveBlock.objects.filter(carve_session=self.carve_session).count()
                             == self.carve_session.block_count)
