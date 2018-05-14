@@ -18,11 +18,14 @@ logger = logging.getLogger('zentral.contrib.mdm.views.mdm')
 class MDMView(PostEventMixin, View):
     event_class = MDMRequestEvent
     push_certificate = None
+    enrollment_session = None
 
     def post_event(self, *args, **kwargs):
         view_name = self.request.resolver_match.view_name
         if view_name:
             kwargs["view_name"] = view_name.split(":")[-1]
+        if self.enrollment_session:
+            kwargs.update(self.enrollment_session.serialize_for_event())
         super().post_event(*args, **kwargs)
 
     def put(self, request, *args, **kwargs):

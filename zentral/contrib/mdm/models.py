@@ -197,8 +197,8 @@ class OTAEnrollmentSession(models.Model, EnrollmentSessionMixin):
              "created_at": self.created_at,
              "updated_at": self.updated_at}
         d.update(self.enrollment_secret.serialize_for_event())
-        return {"ota_enrollment": self.ota_enrollment.serialize_for_event(),
-                "ota_enrollment_session": d}
+        d.update(self.ota_enrollment.serialize_for_event())
+        return {"ota_enrollment_session": d}
 
     # status update methods
 
@@ -404,11 +404,11 @@ class DEPProfile(models.Model):
         return self.enrollment_secret.meta_business_unit
 
     def serialize_for_event(self):
-        return {"pk": self.pk,
-                "uuid": self.uuid,
-                "name": self.name,
-                "created_at": self.created_at,
-                "updated_at": self.updated_at}
+        return {"dep_profile": {"pk": self.pk,
+                                "uuid": str(self.uuid),
+                                "name": self.name,
+                                "created_at": self.created_at,
+                                "updated_at": self.updated_at}}
 
 
 class DEPDevice(models.Model):
@@ -530,8 +530,8 @@ class DEPEnrollmentSession(models.Model, EnrollmentSessionMixin):
              "created_at": self.created_at,
              "updated_at": self.updated_at}
         d.update(self.enrollment_secret.serialize_for_event())
-        return {"dep_profile": self.dep_profile.serialize_for_event(),
-                "dep_enrollment_session": d}
+        d.update(self.dep_profile.serialize_for_event())
+        return {"dep_enrollment_session": d}
 
     # status update methods
 

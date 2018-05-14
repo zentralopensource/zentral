@@ -57,5 +57,5 @@ class DEPEnrollView(PostEventMixin, View):
 
         payload = build_mdm_payload(dep_enrollment_session, push_certificate)
         filename = "zentral_mdm"
-        self.post_event("success")
+        self.post_event("success", **dep_enrollment_session.serialize_for_event())
         return build_payload_response(sign_payload_openssl(payload), filename)
