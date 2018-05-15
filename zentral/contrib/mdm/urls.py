@@ -97,6 +97,26 @@ urlpatterns = [
         views.PokeEnrolledDeviceView.as_view(),
         name="poke_enrolled_device"),
 
+    # kernel extensions / management views
+    url(r'^kernel_extensions/$',
+        views.KernelExtensionsIndexView.as_view(),
+        name="kernel_extensions_index"),
+    url(r'^kernel_extensions/create_team/$',
+        views.CreateKernelExtensionTeamView.as_view(),
+        name="create_kernel_extension_team"),
+    url(r'^kernel_extensions/create/$',
+        views.CreateKernelExtensionView.as_view(),
+        name="create_kernel_extension"),
+    url(r'^kernel_extensions/policies/create/$',
+        views.CreateKernelExtensionPolicyView.as_view(),
+        name="create_kernel_extension_policy"),
+    url(r'^kernel_extensions/policies/(?P<pk>\d+)/$',
+        views.KernelExtensionPolicyView.as_view(),
+        name="kernel_extension_policy"),
+    url(r'^kernel_extensions/policies/(?P<pk>\d+)/update/$',
+        views.UpdateKernelExtensionPolicyView.as_view(),
+        name="update_kernel_extension_policy"),
+
     # SCEP verification / scep view
     url(r'^verify_scep_csr/$',
         csrf_exempt(views.VerifySCEPCSRView.as_view()),

@@ -1,8 +1,12 @@
 import base64
 from datetime import timedelta
 import logging
+import uuid
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.models import F
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
@@ -591,3 +595,115 @@ class DEPEnrollmentSession(EnrollmentSession):
                 and self.scep_request is not None
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.COMPLETED, test)
+
+
+# MDM artifacts
+
+
+# Pushed artifacts
+
+
+class DeviceArtifactCommand(models.Model):
+    ACTION_INSTALL = "INSTALL"
+    ACTION_REMOVE = "REMOVE"
+    ACTION_CHOICES = (
+        (ACTION_INSTALL, "Install"),
+        (ACTION_REMOVE, "Remove"),
+    )
+
+    STATUS_CODE_ACKNOWLEDGED = "Acknowledged"
+    STATUS_CODE_ERROR = "Error"
+    STATUS_CODE_COMMAND_FORMAT_ERROR = "CommandFormatError"
+    STATUS_CODE_NOT_NOW = "NotNow"
+    STATUS_CODE_CHOICES = (
+        (STATUS_CODE_ACKNOWLEDGED, "Acknowledged"),
+        (STATUS_CODE_ERROR, "Error"),
+        (STATUS_CODE_COMMAND_FORMAT_ERROR, "Command format error"),
+        (STATUS_CODE_NOT_NOW, "Not now"),
+    )
+
+    enrolled_device = models.ForeignKey(EnrolledDevice)
+    artifact_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    artifact_id = models.PositiveIntegerField()
+    artifact = GenericForeignKey("artifact_content_type", "artifact_id")
+    artifact_version = models.PositiveIntegerField()
+    action = models.CharField(max_length=64, choices=ACTION_CHOICES)
+    command_uuid = models.UUIDField(unique=True, default=uuid.uuid4)
+    command_time = models.DateTimeField()
+    result_time = models.DateTimeField(null=True)
+    status_code = models.CharField(max_length=64, choices=STATUS_CODE_CHOICES, null=True)
+
+
+# Kernel extension policy
+
+
+class KernelExtensionTeam(models.Model):
+    name = models.TextField(unique=True)
+    identifier = models.CharField(max_length=10, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self):
+        return "{} {}".format(self.name, self.identifier)
+
+    def get_absolute_url(self):
+        return "{}#team_{}".format(reverse("mdm:kernel_extensions_index"), self.identifier)
+
+
+class KernelExtension(models.Model):
+    team = models.ForeignKey(KernelExtensionTeam)
+    name = models.TextField(unique=True)
+    identifier = models.TextField(unique=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    class Meta:
+        ordering = ("team__name", "name")
+
+    def __str__(self):
+        return "{} - {} {}".format(self.team, self.name, self.identifier)
+
+    def get_absolute_url(self):
+        return "{}#kext_{}".format(reverse("mdm:kernel_extensions_index"), self.identifier)
+
+
+class KernelExtensionPolicy(models.Model):
+    artifact_type = "ConfigurationProfile"
+    configuration_profile_payload_type = "com.apple.syspolicy.kernel-extension-policy"
+
+    version = models.PositiveIntegerField(default=1, editable=False)
+    meta_business_unit = models.OneToOneField(MetaBusinessUnit, related_name="kernel_extension_policy")
+    allow_user_overrides = models.BooleanField(help_text=("If set to true, users can approve additional kernel "
+                                                          "extensions not explicitly allowed by configuration "
+                                                          "profiles"),
+                                               default=True)
+    allowed_teams = models.ManyToManyField(KernelExtensionTeam, blank=True)
+    allowed_kernel_extensions = models.ManyToManyField(KernelExtension, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+    trashed_at = models.DateTimeField(null=True, editable=False)
+
+    def get_absolute_url(self):
+        return reverse("mdm:kernel_extension_policy", args=(self.pk,))
+
+    def __str__(self):
+        return "{} kernel extension policy".format(self.meta_business_unit)
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            self.version = F("version") + 1
+        super().save(*args, **kwargs)
+
+    def get_configuration_profile_payload_identifier_suffix(self):
+        return "kext-policy.{}".format(self.pk)
+
+    def get_configuration_profile_payload_content(self):
+        allowed_kernel_extensions_d = {}
+        for kext in self.allowed_kernel_extensions.all():
+            allowed_kernel_extensions_d.setdefault(kext.team.identifier, []).append(kext.identifier)
+        return {"AllowUserOverrides": self.allow_user_overrides,
+                "AllowedTeamIdentifiers": [team.identifier for team in self.allowed_teams.all()],
+                "AllowedKernelExtensions": allowed_kernel_extensions_d}

@@ -1,13 +1,15 @@
 import plistlib
 import uuid
 from django.http import HttpResponse
+from .cms import sign_payload_openssl
+from .payloads import build_payload
 
 
 def build_command_response(request_type, content, command_uuid=None):
     if command_uuid is None:
-        command_uuid = str(uuid.uuid4())
+        command_uuid = uuid.uuid4()
     content["RequestType"] = request_type
-    command = {"CommandUUID": command_uuid,
+    command = {"CommandUUID": str(command_uuid),
                "Command": content}
     return HttpResponse(plistlib.dumps(command),
                         content_type="application/xml; charset=UTF-8")
@@ -74,3 +76,17 @@ DEVICE_INFORMATION_QUERIES = [
 
 def build_device_information_command_response():
     return build_command_response("DeviceInformation", {"Queries": DEVICE_INFORMATION_QUERIES})
+
+
+def build_install_profile_command_response(artifact, command_uuid):
+    artifact_suffix = artifact.get_configuration_profile_payload_identifier_suffix()
+    artifact_payload = build_payload(str(artifact),
+                                     "{}.0".format(artifact_suffix),
+                                     artifact.get_configuration_profile_payload_content(),
+                                     payload_type=artifact.configuration_profile_payload_type,
+                                     merge_content=True)
+    payload = build_payload(str(artifact),
+                            artifact_suffix,
+                            [artifact_payload])
+    data = sign_payload_openssl(plistlib.dumps(payload))
+    return build_command_response("InstallProfile", {"Payload": data}, command_uuid)
