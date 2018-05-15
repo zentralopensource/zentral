@@ -6,7 +6,6 @@ django-bootstrap-form
 django<1.11
 djangorestframework
 elasticsearch
-fabric
 gunicorn
 hyper
 ipython
