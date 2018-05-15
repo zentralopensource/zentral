@@ -7,7 +7,8 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.mdm.cms import sign_payload_openssl
-from zentral.contrib.mdm.dep import add_dep_token_certificate, add_dep_profile, assign_dep_device_profile
+from zentral.contrib.mdm.dep import (add_dep_token_certificate, add_dep_profile, assign_dep_device_profile,
+                                     refresh_dep_device)
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DEPProfileForm, EncryptedDEPTokenForm,
                                        OTAEnrollmentForm, OTAEnrollmentSecretForm, PushCertificateForm)
@@ -354,3 +355,15 @@ class AssignDEPDeviceProfileView(LoginRequiredMixin, UpdateView):
                 dep_device.profile, dep_device.serial_number
             ))
             return HttpResponseRedirect(dep_device.get_absolute_url())
+
+
+class RefreshDEPDeviceView(LoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        dep_device = get_object_or_404(DEPDevice, pk=kwargs["pk"])
+        try:
+            refresh_dep_device(dep_device)
+        except DEPClientError as error:
+            messages.error(request, str(error))
+        else:
+            messages.info(request, "DEP device refreshed")
+        return HttpResponseRedirect("{}#dep_device".format(reverse("mdm:device", args=(dep_device.serial_number,))))

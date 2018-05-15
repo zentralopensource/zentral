@@ -56,8 +56,14 @@ class EnrolledDevice(models.Model):
     token = models.BinaryField(blank=True, null=True)
     push_magic = models.TextField(blank=True, null=True)
     unlock_token = models.BinaryField(blank=True, null=True)
+    checkout_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def do_checkout(self):
+        self.token = self.push_magic = self.unlock_token = None
+        self.checkout_at = timezone.now()
+        self.save()
 
 
 class EnrolledUser(models.Model):
@@ -70,11 +76,32 @@ class EnrolledUser(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
-# Common mixin for OTA and DEP enrollments
-# Manage the SCEP certificates and some state
+# Common base model for the OTA and DEP enrollment sessions
 
 
-class EnrollmentSessionMixin(object):
+class EnrollmentSession(models.Model):
+    product = models.TextField()
+    version = models.TextField()
+    imei = models.TextField(max_length=18, null=True)
+    meid = models.CharField(max_length=18, null=True)
+    language = models.CharField(max_length=3, null=True)
+
+    enrolled_device = models.ForeignKey(EnrolledDevice, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+    def update_with_payload(self, payload, commit=True):
+        for attr in ("product", "version", "imei", "meid", "language"):
+            val = payload.get(attr.upper(), None)
+            if val:
+                setattr(self, attr, val)
+        if commit:
+            self.save()
+
     def get_common_name(self):
         return "{prefix}${secret}".format(prefix=self.get_prefix(),
                                           secret=self.enrollment_secret.secret)
@@ -95,6 +122,23 @@ class EnrollmentSessionMixin(object):
     def is_completed(self):
         return self.status == self.COMPLETED
 
+    def serialize_for_event(self, enrollment_session_type, extra_dict):
+        d = {"pk": self.pk,
+             "type": enrollment_session_type,
+             "status": self.status,
+             "product": self.product,
+             "version": self.version,
+             "language": self.language,
+             "enrollment_secret": self.enrollment_secret.serialize_for_event(),
+             "created_at": self.created_at,
+             "updated_at": self.updated_at}
+        if self.imei:
+            d["imei"] = self.imei
+        if self.meid:
+            d["meid"] = self.meid
+        d.update(extra_dict)
+        return {"enrollment_session": d}
+
     # status update methods
 
     def _set_next_status(self, next_status, test, **update_dict):
@@ -113,11 +157,15 @@ class EnrollmentSessionMixin(object):
 class OTAEnrollment(models.Model):
     name = models.CharField(max_length=256, unique=True)
     enrollment_secret = models.OneToOneField(EnrollmentSecret, related_name="ota_enrollment")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ("-created_at",)
+
+    def __str__(self):
+        return self.name
 
     def serialize_for_event(self):
         d = {"pk": self.pk,
@@ -139,7 +187,7 @@ class OTAEnrollment(models.Model):
 
 
 class OTAEnrollmentSessionManager(models.Manager):
-    def create_from_ota_enrollment(self, ota_enrollment, serial_number, udid):
+    def create_from_ota_enrollment(self, ota_enrollment, serial_number, udid, payload):
         # Build a new secret that can be used only by one specific machine
         enrollment_secret = ota_enrollment.enrollment_secret
         tags = list(enrollment_secret.tags.all())
@@ -152,12 +200,14 @@ class OTAEnrollmentSessionManager(models.Manager):
         )
         new_es.save(secret_length=56)  # CN max 64 - $ separator - prefix, ota or mdm$ota
         new_es.tags = tags
-        return self.create(status=self.model.PHASE_2,
-                           ota_enrollment=ota_enrollment,
-                           enrollment_secret=new_es)
+        enrollment_session = self.model(status=self.model.PHASE_2,
+                                        ota_enrollment=ota_enrollment,
+                                        enrollment_secret=new_es)
+        enrollment_session.update_with_payload(payload)
+        return enrollment_session
 
 
-class OTAEnrollmentSession(models.Model, EnrollmentSessionMixin):
+class OTAEnrollmentSession(EnrollmentSession):
     PHASE_2 = "PHASE_2"
     PHASE_2_SCEP_VERIFIED = "PHASE_2_SCEP_VERIFIED"
     PHASE_3 = "PHASE_3"
@@ -177,9 +227,6 @@ class OTAEnrollmentSession(models.Model, EnrollmentSessionMixin):
     enrollment_secret = models.OneToOneField(EnrollmentSecret, related_name="ota_enrollment_session")
     phase2_scep_request = models.ForeignKey(EnrollmentSecretRequest, null=True, related_name="+")
     phase3_scep_request = models.ForeignKey(EnrollmentSecretRequest, null=True, related_name="+")
-    enrolled_device = models.ForeignKey(EnrolledDevice, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     objects = OTAEnrollmentSessionManager()
 
@@ -192,13 +239,7 @@ class OTAEnrollmentSession(models.Model, EnrollmentSessionMixin):
             raise ValueError("Wrong enrollment sessions status")
 
     def serialize_for_event(self):
-        d = {"pk": self.pk,
-             "status": self.status,
-             "created_at": self.created_at,
-             "updated_at": self.updated_at}
-        d.update(self.enrollment_secret.serialize_for_event())
-        d.update(self.ota_enrollment.serialize_for_event())
-        return {"ota_enrollment_session": d}
+        return super().serialize_for_event("ota", self.ota_enrollment.serialize_for_event())
 
     # status update methods
 
@@ -463,12 +504,14 @@ class DEPDevice(models.Model):
         return self.serial_number
 
     def get_absolute_url(self):
-        return "{}#{}".format(reverse("mdm:dep_virtual_server", args=(self.virtual_server.pk,)),
-                              self.serial_number)
+        return "{}#dep_device".format(reverse("mdm:device", args=(self.serial_number,)))
+
+    def is_deleted(self):
+        return self.last_op_type == self.OP_TYPE_DELETED
 
 
 class DEPEnrollmentSessionManager(models.Manager):
-    def create_from_dep_profile(self, dep_profile, serial_number, udid):
+    def create_from_dep_profile(self, dep_profile, serial_number, udid, payload):
         # Build a new secret, only for one enrollment, only for this machine
         # scep server.
 
@@ -492,12 +535,14 @@ class DEPEnrollmentSessionManager(models.Manager):
         )
         new_es.save(secret_length=56)  # CN max 64 - $ separator - prefix MDM$DEP
         new_es.tags = tags
-        return self.create(status=self.model.STARTED,
-                           dep_profile=dep_profile,
-                           enrollment_secret=new_es)
+        enrollment_session = self.model(status=self.model.STARTED,
+                                        dep_profile=dep_profile,
+                                        enrollment_secret=new_es)
+        enrollment_session.update_with_payload(payload)
+        return enrollment_session
 
 
-class DEPEnrollmentSession(models.Model, EnrollmentSessionMixin):
+class DEPEnrollmentSession(EnrollmentSession):
     STARTED = "STARTED"
     SCEP_VERIFIED = "SCEP_VERIFIED"
     AUTHENTICATED = "AUTHENTICATED"
@@ -508,13 +553,10 @@ class DEPEnrollmentSession(models.Model, EnrollmentSessionMixin):
         (AUTHENTICATED, _("Authenticated")),  # first MDM Checkin Authenticate call
         (COMPLETED, _("Completed")),  # first MDM Checkin TokenUpdate call
     )
-    dep_profile = models.ForeignKey(DEPProfile, on_delete=models.CASCADE)
     status = models.CharField(max_length=64, choices=STATUS_CHOICES)
+    dep_profile = models.ForeignKey(DEPProfile, on_delete=models.CASCADE)
     enrollment_secret = models.OneToOneField(EnrollmentSecret, related_name="dep_enrollment_session")
     scep_request = models.ForeignKey(EnrollmentSecretRequest, null=True, related_name="+")
-    enrolled_device = models.ForeignKey(EnrolledDevice, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     objects = DEPEnrollmentSessionManager()
 
@@ -525,13 +567,7 @@ class DEPEnrollmentSession(models.Model, EnrollmentSessionMixin):
             raise ValueError("Wrong enrollment sessions status")
 
     def serialize_for_event(self):
-        d = {"pk": self.pk,
-             "status": self.status,
-             "created_at": self.created_at,
-             "updated_at": self.updated_at}
-        d.update(self.enrollment_secret.serialize_for_event())
-        d.update(self.dep_profile.serialize_for_event())
-        return {"dep_enrollment_session": d}
+        return super().serialize_for_event("dep", self.dep_profile.serialize_for_event())
 
     # status update methods
 

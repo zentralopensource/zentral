@@ -1,9 +1,10 @@
 from django import forms
+from django.db import connection
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .models import (DEPDevice, DEPOrganization, DEPProfile, DEPToken, DEPVirtualServer,
-                     EnrolledDevice, OTAEnrollment, PushCertificate)
+                     OTAEnrollment, PushCertificate)
 from .pkcs12 import load_push_certificate
 
 
@@ -54,19 +55,64 @@ class PushCertificateForm(forms.ModelForm):
             setattr(self.instance, key, val)
 
 
-class EnrolledDeviceSearchForm(forms.Form):
+class DeviceSearchForm(forms.Form):
     serial_number = forms.CharField(label="serial number", required=False,
-                                    widget=forms.TextInput(attrs={"placeholder": "serial number"}))
+                                    widget=forms.TextInput(attrs={"placeholder": "serial number",
+                                                                  "autofocus": True}))
 
     def is_initial(self):
         return not {k: v for k, v in self.cleaned_data.items() if v}
 
-    def search_qs(self):
-        qs = EnrolledDevice.objects.all()
+    def build_query(self):
+        query = (
+            "WITH devices AS ("
+
+            "SELECT serial_number, NULL AS product, udid AS udid, checkout_at, created_at, updated_at "
+            "FROM mdm_enrolleddevice "
+
+            "UNION "
+
+            "SELECT sec.serial_numbers[1], sess.product, sec.udids[1], NULL, sess.created_at, sess.updated_at "
+            "FROM mdm_depenrollmentsession as sess "
+            "JOIN inventory_enrollmentsecret as sec ON (sec.id = sess.enrollment_secret_id) "
+
+            "UNION "
+
+            "SELECT sec.serial_numbers[1], sess.product, sec.udids[1], NULL, sess.created_at, sess.updated_at "
+            "FROM mdm_otaenrollmentsession as sess "
+            "JOIN inventory_enrollmentsecret as sec ON (sec.id = sess.enrollment_secret_id) "
+
+            "UNION "
+
+            "SELECT serial_number, NULL, NULL, NULL, created_at, updated_at "
+            "FROM mdm_depdevice"
+
+            ") SELECT serial_number, max(product) AS product, array_agg(DISTINCT udid) AS udids, "
+            "max(checkout_at) AS checkout_at, min(created_at) AS created_at, max(updated_at) AS updated_at "
+            "FROM devices "
+        )
+        args = []
+
+        # serial number ?
         serial_number = self.cleaned_data.get("serial_number")
         if serial_number:
-            qs = qs.filter(serial_number__icontains=serial_number)
-        return qs
+            query = "{} WHERE serial_number LIKE UPPER(%s) ".format(query)
+            args.append("%{}%".format(connection.ops.prep_for_like_query(serial_number)))
+
+        # group by and order
+        query = "{} GROUP BY serial_number ORDER BY max(updated_at) DESC;".format(query)
+
+        return query, args
+
+    def fetch_devices(self):
+        query, args = self.build_query()
+        with connection.cursor() as cursor:
+            cursor.execute(query, args)
+            attributes = [col.name for col in cursor.description]
+            for row in cursor.fetchall():
+                device = dict(zip(attributes, row))
+                device["udids"] = sorted(udid for udid in device["udids"] if udid)
+                yield device
 
 
 class EncryptedDEPTokenForm(forms.ModelForm):

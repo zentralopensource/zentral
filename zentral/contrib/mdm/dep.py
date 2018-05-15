@@ -240,3 +240,16 @@ def add_dep_profile(dep_profile):
     if not_accessible_devices:
         (DEPDevice.objects.filter(serial_number__in=not_accessible_devices)
                           .update(last_op_type=DEPDevice.OP_TYPE_DELETED))
+
+
+def refresh_dep_device(dep_device):
+    dep_client = DEPClient.from_dep_virtual_server(dep_device.virtual_server)
+    devices = dep_client.get_devices([dep_device.serial_number])
+    if dep_device.serial_number not in devices:
+        dep_device.last_op_type = DEPDevice.OP_TYPE_DELETED
+        dep_device.save()
+        raise DEPClientError("Could not find device.")
+    else:
+        for attr, val in dep_device_update_dict(devices[dep_device.serial_number]).items():
+            setattr(dep_device, attr, val)
+        dep_device.save()

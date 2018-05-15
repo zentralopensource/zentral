@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:devices' %}">Devices</a></li>
+  <li class="active">{{ serial_number }}</li>
+</ol>
+
+
+<h2>Device <a href="{% url 'inventory:machine' serial_number %}">{{ serial_number }}</a></h2>
+
+<h3>{{ enrolled_devices_count }} Enrolled device{{ enrolled_devices_count|pluralize }}</h3>
+
+{% if enrolled_devices_count %}
+<table class="table">
+  <thead>
+    <th>push certificate</th>
+    <th>udid</th>
+    <th>checkout at</th>
+    <th>updated at</th>
+    <th></th>
+  </thead>
+  <tbody>
+    {% for enrolled_device in enrolled_devices %}
+    <tr>
+      <td><a href="{% url 'mdm:push_certificate' enrolled_device.push_certificate.id %}">{{ enrolled_device.push_certificate.name }}</a></td>
+      <td>{{ enrolled_device.udid }}</td>
+      <td>{{ enrolled_device.checkout_at|date:"r" }}</td>
+      <td>{{ enrolled_device.updated_at|date:"r" }}</td>
+      <td>
+        {% if not enrolled_device.checkout_at %}
+        <form method="POST" action="{% url 'mdm:poke_enrolled_device' enrolled_device.id %}">{% csrf_token %}
+          <button type="submit" class="btn btn-success">Poke!</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if dep_device %}
+<a name="dep_device"></a>
+<h3>DEP Device{% if dep_device.is_deleted %} <span class="label label-danger">DELETED</span>{% endif %}</h3>
+
+<form action="{% url 'mdm:refresh_dep_device' dep_device.pk %}" method="post">{% csrf_token %}
+  <a href="{% url 'mdm:assign_dep_device_profile' dep_device.pk %}" class="btn btn-default">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+  </a>
+  <button type="submit" class="btn btn-default">
+    <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
+  </button>
+</form>
+
+<dl class="dl-horizontal">
+  <dt>Virtual server</dt>
+  <dd><a href="{{ dep_device.virtual_server.get_absolute_url }}">{{ dep_device.virtual_server }}</a></dd>
+  <dt>Assigned by</dt>
+  <dd>{{ dep_device.device_assigned_by }}</dd>
+  <dt>Assigned date</dt>
+  <dd>{{ dep_device.device_assigned_date|date:"r" }}</dd>
+  <dt>Profile</dt>
+  <dd>
+    {% if dep_device.profile %}
+    <a href="{{ dep_device.profile.get_absolute_url }}">{{ dep_device.profile }}</a>
+    {% else %}
+    -
+    {% endif %}
+  </dd>
+  <dt>Profile status</dt>
+  <dd>{{ dep_device.get_profile_status_display }}</dd>
+  <dt>Profile assign time</dt>
+  <dd>{{ dep_device.profile_assign_time|date:"r" }}</dd>
+  <dt>Profile push time</dt>
+  <dd>{{ dep_device.profile_push_time|date:"r" }}</dd>
+</dl>
+{% endif %}
+
+
+<h3>{{ dep_enrollment_sessions_count }} DEP enrollment session{{ dep_enrollment_sessions_count|pluralize }}</h3>
+
+{% if dep_enrollment_sessions_count %}
+<table class="table">
+  <thead>
+    <th>profile</th>
+    <th>status</th>
+    <th>created at</th>
+    <th>updated at</th>
+  </thead>
+  <tbody>
+    {% for dep_enrollment_session in dep_enrollment_sessions %}
+    <tr>
+      <td><a href="{% url 'mdm:dep_profile' dep_enrollment_session.dep_profile.id %}">{{ dep_enrollment_session.dep_profile }}</a></td>
+      <td>{{ dep_enrollment_session.get_status_display }}</td>
+      <td>{{ dep_enrollment_session.created_at|date:"r" }}</td>
+      <td>{{ dep_enrollment_session.updated_at|date:"r" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h3>{{ ota_enrollment_sessions_count }} OTA enrollment session{{ ota_enrollment_sessions_count|pluralize }}</h3>
+
+{% if ota_enrollment_sessions_count %}
+<table class="table">
+  <thead>
+    <th>ota enrollment</th>
+    <th>status</th>
+    <th>created at</th>
+    <th>updated at</th>
+  </thead>
+  <tbody>
+    {% for ota_enrollment_session in ota_enrollment_sessions %}
+    <tr>
+      <td><a href="{% url 'mdm:ota_enrollment' ota_enrollment_session.ota_enrollment.id %}">{{ ota_enrollment_session.ota_enrollment }}</a></td>
+      <td>{{ ota_enrollment_session.get_status_display }}</td>
+      <td>{{ ota_enrollment_session.created_at|date:"r" }}</td>
+      <td>{{ ota_enrollment_session.updated_at|date:"r" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if object.enrolleduser_set.count %}
+<h2>{{ object.enrolleduser_set.count }} enrolled user{{ object.enrolleduser_set.count|pluralize }}</h2>
+{% for enrolled_user in object.enrolleduser_set.all %}
+<dl class="dl-horizontal">
+  <dt>Long name</dt>
+  <dd>{{ enrolled_user.long_name }}</dd>
+  <dt>Short name</dt>
+  <dd>{{ enrolled_user.short_name }}</dd>
+  <dt>ID</dt>
+  <dd>{{ enrolled_user.user_id }}</dd>
+</dl>
+
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">Created at</dt>
+  <dd class="small" style="opacity:0.5">{{ enrolled_user.created_at|date:'r' }}</dd>
+  <dt class="small" style="opacity:0.5">Updated at</dt>
+  <dd class="small" style="opacity:0.5">{{ enrolled_user.updated_at|date:'r' }}</dd>
+</dl>
+{% endfor %}
+{% endif %}
+
+{% endblock %}

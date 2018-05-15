@@ -45,8 +45,8 @@ class DEPEnrollView(PostEventMixin, View):
         # Start a DEP enrollment session
         dep_enrollment_session = DEPEnrollmentSession.objects.create_from_dep_profile(
             es_request.enrollment_secret.dep_profile,
-            self.serial_number,
-            self.udid
+            self.serial_number, self.udid,
+            payload
         )
 
         # Get the MDM push certificate

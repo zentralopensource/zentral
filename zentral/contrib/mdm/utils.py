@@ -2,13 +2,12 @@ from django.urls import reverse
 
 
 def tree_from_payload(udid, serial_number, meta_business_unit, payload):
-    url = "{}?serial_number={}".format(reverse("mdm:enrolled_devices"),
-                                       serial_number)
+    url = reverse("mdm:device", args=(serial_number,))
     tree = {"source": {"module": "zentral.contrib.mdm",
                        "name": "MDM"},
             "reference": udid,
             "serial_number": serial_number,
-            "links": [{"anchor_text": "enrolled device", "url": url}]}
+            "links": [{"anchor_text": "info", "url": url}]}
 
     # Mobile device IDs
     for attr in ("IMEI", "MEID"):

@@ -190,8 +190,16 @@ class CheckinView(MDMView):
                         updated_user_attr=updated_user_attr)
 
     def do_checkout(self):
-        # TODO: mark as gone
-        self.post_event("success")
+        try:
+            enrolled_device = EnrolledDevice.objects.get(push_certificate=self.push_certificate,
+                                                         udid=self.udid)
+        except EnrolledDevice.DoesNotExist:
+            self.abort("Could not do checkout. Unknown enrolled device",
+                       push_certificate_topic=self.push_certificate.topic,
+                       device_udid=self.udid)
+        else:
+            enrolled_device.do_checkout()
+            self.post_event("success")
 
     def commit_tree(self):
         commit_machine_snapshot_and_trigger_events(tree_from_payload(self.udid,

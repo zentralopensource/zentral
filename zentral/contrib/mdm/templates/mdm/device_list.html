@@ -13,7 +13,7 @@
   {% endfor %}
 </ol>
 
-<h2>{{ enrolled_devices_count  }} enrolled device{{ enrolled_devices_count|pluralize }}</h2>
+<h2>{{ devices_count  }} device{{ devices_count|pluralize }}</h2>
 
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
   <div class="form-group">
@@ -25,13 +25,26 @@
 <table class="table">
   <thead>
     <th>serial number</th>
-    <th>udid</th>
+    <th>product</th>
+    <th>udids</th>
+    <th>created at</th>
+    <th>updated at</th>
   </thead>
   <tbody>
-    {% for ed in enrolled_devices %}
+    {% for device in devices %}
     <tr>
-      <td>{{ ed.serial_number }}</td>
-      <td><a href="{% url 'mdm:enrolled_device' ed.pk %}">{{ ed.udid }}</a></td>
+      <td><a href="{% url 'mdm:device' device.serial_number %}">{{ device.serial_number }}</a></td>
+      <td>{{ device.product|default:"" }}</td>
+      <td>
+        {% if device.udids %}
+        <ul>
+          {% for udid in device.udids %}
+          <li>{{ udid }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      <td>{{ device.created_at|date:"r" }}</td>
+      <td>{{ device.updated_at|date:"r" }}</td>
     </tr>
     {% endfor %}
   </tbody>

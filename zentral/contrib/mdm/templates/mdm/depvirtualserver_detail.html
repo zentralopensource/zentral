@@ -117,22 +117,16 @@
         <th>Assigned by</th>
         <th>Assigned date</th>
         <th>Profile</th>
-        <th></th>
       </thead>
       <tbody>
         {% for device in object.depdevice_set.all %}
         <tr>
-          <td><a name="{{ device.serial_number }}"></a>{{ device.serial_number }}</td>
+          <td><a href="{{ device.get_absolute_url }}">{{ device }}</a>{% if device.is_deleted %} <span class="label label-danger">DELETED</span>{% endif %}</td>
           <td>{{ device.device_assigned_by|default:"-" }}</td>
           <td>{{ device.device_assigned_date|date:"r" }}</td>
           <td>
             {{ device.profile_status }}
             {% if device.profile %} - <a href="{{ device.profile.get_absolute_url }}">{{ device.profile }}</a>{% endif %}
-          </td>
-          <td>
-            <a href="{% url 'mdm:assign_dep_device_profile' device.pk %}" class="btn btn-default">
-              <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-            </a>
           </td>
         </tr>
         {% endfor %}

@@ -77,6 +77,9 @@ urlpatterns = [
     url(r'^dep/devices/(?P<pk>\d+)/assign_profile/$',
         views.AssignDEPDeviceProfileView.as_view(),
         name="assign_dep_device_profile"),
+    url(r'^dep/devices/(?P<pk>\d+)/refresh/$',
+        views.RefreshDEPDeviceView.as_view(),
+        name="refresh_dep_device"),
 
     # DEP profiles / setup views
     url(r'^dep/profiles/$',
@@ -93,12 +96,12 @@ urlpatterns = [
         name='update_dep_profile'),
 
     # enrolled devices / management views
-    url(r'^enrolled_devices/$',
-        views.EnrolledDevicesView.as_view(),
-        name="enrolled_devices"),
-    url(r'^enrolled_devices/(?P<pk>\d+)/$',
-        views.EnrolledDeviceView.as_view(),
-        name="enrolled_device"),
+    url(r'^devices/$',
+        views.DevicesView.as_view(),
+        name="devices"),
+    url(r'^devices/(?P<serial_number>\S+)/$',
+        views.DeviceView.as_view(),
+        name="device"),
     url(r'^enrolled_devices/(?P<pk>\d+)/poke/$',
         views.PokeEnrolledDeviceView.as_view(),
         name="poke_enrolled_device"),

@@ -67,8 +67,8 @@ class OTAEnrollView(PostEventMixin, View):
             # Start an OTA enrollment session
             ota_enrollment_session = OTAEnrollmentSession.objects.create_from_ota_enrollment(
                 es_request.enrollment_secret.ota_enrollment,
-                self.serial_number,
-                self.udid
+                self.serial_number, self.udid,
+                payload
             )
 
             payload = build_ota_scep_payload(ota_enrollment_session)
