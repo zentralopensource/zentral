@@ -116,7 +116,7 @@ class DeviceSearchForm(forms.Form):
 
 
 class EncryptedDEPTokenForm(forms.ModelForm):
-    encrypted_token = forms.FileField(required=True)
+    encrypted_token = forms.FileField(label="Server token", required=False)
 
     class Meta:
         model = DEPToken
@@ -132,10 +132,12 @@ class EncryptedDEPTokenForm(forms.ModelForm):
                                                    "access_token", "access_secret")}
                 account_d = DEPClient(**kwargs).get_account()
             except:
-                raise forms.ValidationError("Could not read or use encrypted token")
+                self.add_error("encrypted_token", "Could not read or use encrypted token")
             else:
                 self.cleaned_data["decrypted_dep_token"] = data
                 self.cleaned_data["account"] = account_d
+        else:
+            self.add_error("encrypted_token", "This field is mandatory")
         return self.cleaned_data
 
     def save(self, *args, **kwargs):
@@ -172,11 +174,12 @@ class EncryptedDEPTokenForm(forms.ModelForm):
             virtual_server = DEPVirtualServer.objects.create(uuid=server_uuid, **defaults)
         else:
             # we do not use update_or_create to be able to remove the old dep token
-            if virtual_server.token:
-                virtual_server.token.delete()
+            old_token = virtual_server.token
             for attr, val in defaults.items():
                 setattr(virtual_server, attr, val)
             virtual_server.save()
+            if old_token and old_token != dep_token:
+                old_token.delete()
 
         return dep_token
 

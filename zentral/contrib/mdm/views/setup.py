@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.mdm.cms import sign_payload_openssl
@@ -204,56 +204,17 @@ class RevokeOTAEnrollmentView(LoginRequiredMixin, TemplateView):
 # DEP Tokens
 
 
-class DEPTokensView(LoginRequiredMixin, ListView):
-    model = DEPToken
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
-
-
-class CreateDEPTokenView(LoginRequiredMixin, CreateView):
-    model = DEPToken
-    fields = "__all__"
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
-
-    def form_valid(self, form):
-        self.object = form.save()
-        add_dep_token_certificate(self.object)
-        return super().form_valid(form)
-
-
-class DEPTokenView(LoginRequiredMixin, DetailView):
-    model = DEPToken
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
-
-
-class DownloadDEPTokenCertificateView(LoginRequiredMixin, View):
+class DownloadDEPTokenPublicKeyView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         dep_token = get_object_or_404(DEPToken, pk=kwargs["pk"], consumer_key__isnull=True)
-        filename = "dep_token_{}.pem".format(dep_token.pk)
+        filename = "{}_public_key_{}_{}.pem".format(
+            request.get_host(),
+            dep_token.pk,
+            dep_token.created_at.strftime("%Y%m%d%H%M%S")
+        )
         response = HttpResponse(dep_token.certificate, content_type="application/x-pem-file")
         response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
         return response
-
-
-class UploadEncryptedDEPTokenView(LoginRequiredMixin, UpdateView):
-    form_class = EncryptedDEPTokenForm
-    model = DEPToken
-    template_name = "mdm/deptoken_upload_encrypted_token.html"
-
-    def form_valid(self, form):
-        dep_token = form.save()
-        return HttpResponseRedirect(reverse("mdm:dep_virtual_server", args=(dep_token.virtual_server.pk,)))
 
 
 # DEP virtual servers
@@ -261,6 +222,64 @@ class UploadEncryptedDEPTokenView(LoginRequiredMixin, UpdateView):
 
 class DEPVirtualServersView(LoginRequiredMixin, ListView):
     model = DEPVirtualServer
+
+
+class ConnectDEPVirtualServerView(LoginRequiredMixin, View):
+    template_name = "mdm/depvirtualserver_connect.html"
+
+    def get_or_create_current_dep_token(self, request):
+        self.current_dep_token = None
+        current_dep_token_id = request.session.get("current_dep_token_id")
+        if current_dep_token_id:
+            try:
+                self.current_dep_token = DEPToken.objects.get(pk=current_dep_token_id)
+            except DEPToken.DoesNotExist:
+                # the token id in the session is invalid. remove it.
+                request.session.pop("current_dep_token_id")
+            else:
+                # verify that the current dep token has no attached server.
+                try:
+                    virtual_server = self.current_dep_token.virtual_server
+                except DEPVirtualServer.DoesNotExist:
+                    pass
+                else:
+                    # the current token already has a server.
+                    # remove it from the session and redirect to the server.
+                    request.session.pop("current_dep_token_id")
+                    return HttpResponseRedirect(virtual_server.get_absolute_url())
+        if not self.current_dep_token:
+            # create a new one, and attach it to the session
+            self.current_dep_token = DEPToken.objects.create()
+            add_dep_token_certificate(self.current_dep_token)
+            request.session["current_dep_token_id"] = self.current_dep_token.pk
+
+    def do_cancel(self, request):
+        self.current_dep_token.delete()
+        request.session.pop("current_dep_token_id")
+        return HttpResponseRedirect(reverse("mdm:dep_virtual_servers"))
+
+    def post(self, request, *args, **kwargs):
+        self.get_or_create_current_dep_token(request)
+        action = request.POST.get("action", None)
+        if action == "cancel":
+            return self.do_cancel(request)
+        elif action == "upload":
+            form = EncryptedDEPTokenForm(instance=self.current_dep_token,
+                                         data=request.POST, files=request.FILES)
+            if form.is_valid():
+                dep_token = form.save()
+                request.session.pop("current_dep_token_id")
+                return HttpResponseRedirect(dep_token.virtual_server.get_absolute_url())
+        else:
+            # start
+            form = EncryptedDEPTokenForm(instance=self.current_dep_token)
+        return render(request, "mdm/depvirtualserver_connect.html",
+                      {"setup": True,
+                       "dep_token": self.current_dep_token,
+                       "form": form})
+
+    def get(self, request, *args, **kwargs):
+        return HttpResponseRedirect(reverse("mdm:dep_virtual_servers"))
 
 
 class DEPVirtualServerView(LoginRequiredMixin, DetailView):

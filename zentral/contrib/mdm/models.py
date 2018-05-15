@@ -340,7 +340,7 @@ class DEPToken(models.Model):
         ordering = ("-created_at",)
 
     def __str__(self):
-        return "{} - DEP token".format(self.meta_business_unit.name)
+        return "DEP token {}".format(self.pk)
 
     def get_absolute_url(self):
         return reverse("mdm:dep_token", args=(self.pk,))

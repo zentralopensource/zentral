@@ -12,12 +12,18 @@
 <h2>DEP virtual server <i>{{ object }}</i></h2>
 
 <div class="row">
-  <div class="col-md-6">
+  <div class="col-md-12">
     <dl class="dl-horizontal">
       <dt>name</dt>
       <dd>{{ object.name }}</dd>
       <dt>uuid</dt>
       <dd>{{ object.uuid }}</dd>
+    </dl>
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
     </dl>
   </div>
   {% with object.organization as org %}
@@ -41,23 +47,23 @@
     </dl>
   </div>
   {% endwith %}
-  <div class="col-md-12">
+  {% with object.token as token %}
+  <div class="col-md-6">
+    <h4>DEP Token</h3>
+    {% if token %}
     <dl class="dl-horizontal">
-      <dt class="small" style="opacity:0.5">Created at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
-      <dt class="small" style="opacity:0.5">Updated at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
-      {% if object.token %}
-      {% if object.token.expires_soon %}
-      <dt class="small text-danger">Token expiry</dt>
-      <dd class="small text-danger">{{ object.token.access_token_expiry|date:'r' }}</dd>
-      {% else %}
-      <dt class="small" style="opacity:0.5">Token expiry</dt>
-      <dd class="small" style="opacity:0.5">{{ object.token.access_token_expiry|date:'r' }}</dd>
-      {% endif %}
-      {% endif %}
+      <dt>expiry</dt>
+      <dd>
+        {% if token.expires_soon %}
+        <span class="text-danger">{{ token.access_token_expiry|date:'r' }}</span>
+        {% else %}
+        {{ token.access_token_expiry|date:'r' }}
+        {% endif %}
+      </dd>
     </dl>
+    {% endif %}
   </div>
+  {% endwith %}
 </div>
 
 <div class="row">

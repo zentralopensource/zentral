@@ -10,6 +10,12 @@
 
 <h2>{{ object_list|length }} DEP virtual server{{ object_list|length|pluralize }}</h2>
 
+<form action="{% url 'mdm:connect_dep_virtual_server' %}" method="post">{% csrf_token %}
+  <button class="btn btn-default" name="action" value="start">
+    Connect an existing server
+  </button>
+</form>
+
 <table class="table">
   <thead>
     <th>Name</th>
