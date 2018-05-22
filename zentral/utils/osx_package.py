@@ -180,7 +180,10 @@ class ProductArchiveBuilder(BasePackageBuilder):
         pkg_info_elm = pkg_info_tree.getroot()
         pkg_identifier = pkg_info_elm.attrib["identifier"]
         pkg_version = pkg_info_elm.attrib["version"]
-        pkg_short_identifier = pkg_identifier.rsplit(".", 1)[-1]
+        for split_idx in range(2, -1, -1):
+            pkg_short_identifier = "-".join(pkg_identifier.split(".")[split_idx:])
+            if pkg_short_identifier:
+                break
         pa_pkg_dirname = "{}-{}.pkg".format(pkg_short_identifier, pkg_version)
         pa_pkg_path = os.path.join(self.builddir, pa_pkg_dirname)
         if pkg_tmp_dir:
