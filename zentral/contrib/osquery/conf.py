@@ -64,7 +64,7 @@ def get_distributed_inventory_queries(machine, ms):
             yield "{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, table_name), query
 
 
-def build_osquery_conf(machine):
+def build_osquery_conf(machine, enrollment):
     schedule = {
         INVENTORY_QUERY_NAME: {
             'query': get_inventory_query_for_machine(machine),
@@ -107,6 +107,8 @@ def build_osquery_conf(machine):
         'decorators': DECORATORS,
         'schedule': schedule
     }
+    if enrollment:
+        conf['options'] = enrollment.configuration.get_dynamic_flags()
     if packs:
         conf['packs'] = packs
     if file_paths:

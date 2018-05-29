@@ -3,12 +3,29 @@ from django.views.decorators.csrf import csrf_exempt
 from . import views
 
 urlpatterns = [
-    # setup
-    url(r'^enrollment/$', views.EnrollmentView.as_view(), name='enrollment'),
-    url(r'^enrollment/debugging/$',
-        views.EnrollmentDebuggingView.as_view(), name='enrollment_debugging'),
-    url(r'^installer_package/$', views.InstallerPackageView.as_view(), name='installer_package'),
-    url(r'^setup_script/$', views.SetupScriptView.as_view(), name='setup_script'),
+    # enrollment
+    url(r'^configurations/$',
+        views.ConfigurationListView.as_view(),
+        name="configuration_list"),
+    url(r'^configurations/create/$',
+        views.CreateConfigurationView.as_view(),
+        name='create_configuration'),
+    url(r'^configurations/(?P<pk>\d+)/$',
+        views.ConfigurationView.as_view(),
+        name='configuration'),
+    url(r'^configurations/(?P<pk>\d+)/update/$',
+        views.UpdateConfigurationView.as_view(),
+        name='update_configuration'),
+    url(r'^configurations/(?P<pk>\d+)/enrollments/create/$',
+        views.CreateEnrollmentView.as_view(),
+        name='create_enrollment'),
+    url(r'^configurations/(?P<configuration_pk>\d+)/enrollments/(?P<pk>\d+)/package/$',
+        views.EnrollmentPackageView.as_view(),
+        name='enrollment_package'),
+    url(r'^configurations/(?P<configuration_pk>\d+)/enrollments/(?P<pk>\d+)/script/$',
+        views.EnrollmentScriptView.as_view(),
+        name='enrollment_script'),
+
     # osquery probes
     url(r'^probes/create/$', views.CreateProbeView.as_view(), name='create_probe'),
     # osquery probe discovery
@@ -68,6 +85,7 @@ urlpatterns = [
         views.UpdateFIMProbeFilePathView.as_view(), name='update_fim_probe_file_path'),
     url(r'^probes/(?P<probe_id>\d+)/file_paths/(?P<file_path_id>\d+)/delete/$',
         views.DeleteFIMProbeFilePathView.as_view(), name='delete_fim_probe_file_path'),
+
     # API
     url(r'^enroll$', csrf_exempt(views.EnrollView.as_view()), name='enroll'),
     url(r'^config$', csrf_exempt(views.ConfigView.as_view()), name='config'),
@@ -81,6 +99,6 @@ urlpatterns = [
 
 setup_menu_cfg = {
     'items': (
-        ('enrollment', 'Enrollment'),
+        ('configuration_list', 'Configurations'),
     )
 }

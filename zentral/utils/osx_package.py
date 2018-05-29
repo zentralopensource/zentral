@@ -446,6 +446,20 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             os.chmod(filepath, f_stat.st_mode | stat.S_IXUSR | stat.S_IWGRP | stat.S_IXOTH)
 
 
+class EnrollmentPackageBuilder(PackageBuilder):
+    def __init__(self, enrollment, version=None, **extra_build_kwargs):
+        # build kwargs
+        build_kwargs = {"version": "{}.0".format(version or enrollment.version),
+                        "package_identifier_suffix": "pk-{}".format(enrollment.pk),
+                        "enrollment_secret_secret": enrollment.secret.secret}
+        build_kwargs.update(extra_build_kwargs)
+
+        # business unit
+        business_unit = enrollment.secret.get_api_enrollment_business_unit()
+
+        return super().__init__(business_unit, **build_kwargs)
+
+
 def get_package_builders():
     d = {}
     for app in settings['apps']:

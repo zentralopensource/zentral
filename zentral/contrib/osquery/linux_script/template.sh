@@ -26,26 +26,26 @@ get_watchman_id () {
   python -c 'import json;print json.load(open("/etc/monitoringclient/client_settings.conf", "r"))["WatchmanID"]'
 }
 
-get_machine_id () {
-  MACHINE_ID=""
+get_host_identifier () {
+  HOST_IDENTIFIER=""
   if get_watchman_id; then
-    MACHINE_ID=$(get_watchman_id)
+    HOST_IDENTIFIER=$(get_watchman_id)
   elif get_do_instance_id; then
-    MACHINE_ID="DO-$(get_do_instance_id)"
+    HOST_IDENTIFIER="DO-$(get_do_instance_id)"
   elif get_docker_instance_id; then
-    MACHINE_ID="DKR-$(get_docker_instance_id)"
+    HOST_IDENTIFIER="DKR-$(get_docker_instance_id)"
   elif get_ec2_instance_id; then
-    MACHINE_ID="EC2-$(get_ec2_instance_id)"
+    HOST_IDENTIFIER="EC2-$(get_ec2_instance_id)"
   elif get_gce_instance_id; then
-    MACHINE_ID="GCE-$(get_gce_instance_id)"
+    HOST_IDENTIFIER="GCE-$(get_gce_instance_id)"
   elif [ -x /usr/sbin/dmidecode ]; then
-    MACHINE_ID=$(sudo dmidecode -s system-uuid)
+    HOST_IDENTIFIER=$(sudo dmidecode -s system-uuid)
   fi
-  if [ -z "$MACHINE_ID" ]; then
+  if [ -z "$HOST_IDENTIFIER" ]; then
     if [ -e /var/lib/dbus/machine-id ]; then
-        MACHINE_ID=$(cat /var/lib/dbus/machine-id)
+        HOST_IDENTIFIER=$(cat /var/lib/dbus/machine-id)
     else
-        echo "ERROR: Could not find a MACHINE_ID"
+        echo "ERROR: Could not find a HOST_IDENTIFIER"
         exit 10
     fi
   fi
@@ -151,9 +151,8 @@ cat << TLS_SERVER_CERT | sudo tee /etc/zentral/tls_server_certs.crt
 TLS_SERVER_CERT
 
 # enroll secret
-get_machine_id
 cat << ENROLL_SECRET | sudo tee /etc/zentral/osquery/enroll_secret.txt
-%ENROLL_SECRET_SECRET%\$SERIAL\$$MACHINE_ID
+%ENROLL_SECRET_SECRET%
 ENROLL_SECRET
 
 # config info
@@ -169,6 +168,7 @@ sudo rm -rf /var/osquery/zentral
 sudo mkdir -p /var/osquery/zentral
 
 # flags file
+get_host_identifier
 cat << OSQUERY_FLAGS | sudo tee /etc/osquery/osquery.flags
 --tls_hostname=%TLS_HOSTNAME%
 --tls_server_certs=/etc/zentral/tls_server_certs.crt
@@ -190,6 +190,8 @@ cat << OSQUERY_FLAGS | sudo tee /etc/osquery/osquery.flags
 --disable_audit=false
 --audit_allow_config=true
 --audit_persist=true
+--host_identifier=specified
+--specified_identifier="$HOST_IDENTIFIER"
 %EXTRA_FLAGS%
 OSQUERY_FLAGS
 

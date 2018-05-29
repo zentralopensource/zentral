@@ -161,7 +161,7 @@ class Enrollment(BaseEnrollment):
     santa_release = models.CharField(max_length=64, blank=True, null=False)
 
     def get_description_for_distributor(self):
-        return "santa configuration: {}".format(self.configuration)
+        return "Santa configuration: {}".format(self.configuration)
 
     def serialize_for_event(self):
         enrollment_dict = {"pk": self.pk,

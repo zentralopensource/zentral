@@ -1,52 +1,102 @@
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.urlresolvers import reverse
-from django.http import HttpResponse
-from django.views.generic import View
-from zentral.conf import settings
-from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.utils.api_views import make_secret, BaseEnrollmentView, BaseInstallerPackageView
-from zentral.contrib.osquery.osx_package.builder import OsqueryZentralEnrollPkgBuilder
+from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404
+from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
+from zentral.contrib.inventory.forms import EnrollmentSecretForm
+from zentral.contrib.osquery.forms import ConfigurationForm, EnrollmentForm
 from zentral.contrib.osquery.linux_script.builder import OsqueryZentralEnrollScriptBuilder
+from zentral.contrib.osquery.models import Configuration, Enrollment
+from zentral.contrib.osquery.osx_package.builder import OsqueryZentralEnrollPkgBuilder
 
 logger = logging.getLogger('zentral.contrib.osquery.views.setup')
 
 
-class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
-    builder = OsqueryZentralEnrollPkgBuilder
-    template_name = "osquery/enrollment.html"
+class ConfigurationListView(LoginRequiredMixin, ListView):
+    model = Configuration
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["configurations_count"] = ctx["object_list"].count()
+        return ctx
 
 
-class EnrollmentDebuggingView(LoginRequiredMixin, View):
-    debugging_template = """machine_serial_number="0123456789"
-enroll_secret="%(secret)s\$SERIAL\$$machine_serial_number"
-node_key_json=$(curl -XPOST -k -d '{"enroll_secret":"'"$enroll_secret"'"}' %(tls_hostname)s%(enroll_path)s)
-echo $node_key_json | jq .
-curl -XPOST -k -d "$node_key_json"  %(tls_hostname)s%(config_path)s | jq ."""
+class CreateConfigurationView(LoginRequiredMixin, CreateView):
+    model = Configuration
+    form_class = ConfigurationForm
 
+
+class ConfigurationView(LoginRequiredMixin, DetailView):
+    model = Configuration
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
+        ctx["enrollments"] = enrollments
+        ctx["enrollments_count"] = len(enrollments)
+        return ctx
+
+
+class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
+    model = Configuration
+    form_class = ConfigurationForm
+
+
+class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
+    template_name = "osquery/enrollment_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.configuration = get_object_or_404(Configuration, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_forms(self):
+        secret_form_kwargs = {"prefix": "secret"}
+        enrollment_form_kwargs = {"configuration": self.configuration,
+                                  "initial": {"configuration": self.configuration}}
+        if self.request.method == "POST":
+            secret_form_kwargs["data"] = self.request.POST
+            enrollment_form_kwargs["data"] = self.request.POST
+        return (EnrollmentSecretForm(**secret_form_kwargs),
+                EnrollmentForm(**enrollment_form_kwargs))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["configuration"] = self.configuration
+        if "secret_form" not in kwargs or "enrollment_form" not in kwargs:
+            ctx["secret_form"], ctx["enrollment_form"] = self.get_forms()
+        return ctx
+
+    def forms_invalid(self, secret_form, enrollment_form):
+        return self.render_to_response(self.get_context_data(secret_form=secret_form,
+                                                             enrollment_form=enrollment_form))
+
+    def forms_valid(self, secret_form, enrollment_form):
+        secret = secret_form.save()
+        enrollment = enrollment_form.save(commit=False)
+        enrollment.secret = secret
+        if self.configuration:
+            enrollment.configuration = self.configuration
+        enrollment.save()
+        return HttpResponseRedirect(enrollment.get_absolute_url())
+
+    def post(self, request, *args, **kwargs):
+        secret_form, enrollment_form = self.get_forms()
+        if secret_form.is_valid() and enrollment_form.is_valid():
+            return self.forms_valid(secret_form, enrollment_form)
+        else:
+            return self.forms_invalid(secret_form, enrollment_form)
+
+
+class EnrollmentPackageView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
-        try:
-            mbu = MetaBusinessUnit.objects.get(pk=int(request.GET['mbu_id']))
-            # -> BaseInstallerPackageView
-            # TODO Race. The meta_business_unit could maybe be without any api BU.
-            # TODO. Better selection if multiple BU ?
-            bu = mbu.api_enrollment_business_units()[0]
-        except (KeyError, ValueError):
-            bu = None
-        debugging_tools = self.debugging_template % {'config_path': reverse("osquery:config"),
-                                                     'enroll_path': reverse("osquery:enroll"),
-                                                     'secret': make_secret("zentral.contrib.osquery", bu),
-                                                     'tls_hostname': settings['api']['tls_hostname']}
-        return HttpResponse(debugging_tools)
+        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
+        builder = OsqueryZentralEnrollPkgBuilder(enrollment)
+        return builder.build_and_make_response()
 
 
-class InstallerPackageView(LoginRequiredMixin, BaseInstallerPackageView):
-    builder = OsqueryZentralEnrollPkgBuilder
-    module = "zentral.contrib.osquery"
-    template_name = "osquery/enrollment.html"
-
-
-class SetupScriptView(LoginRequiredMixin, BaseInstallerPackageView):
-    builder = OsqueryZentralEnrollScriptBuilder
-    module = "zentral.contrib.osquery"
-    template_name = "osquery/enrollment.html"
+class EnrollmentScriptView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
+        builder = OsqueryZentralEnrollScriptBuilder(enrollment)
+        return builder.build_and_make_response()

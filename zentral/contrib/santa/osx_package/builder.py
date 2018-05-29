@@ -1,13 +1,13 @@
 import os
 from django.urls import reverse
-from zentral.utils.osx_package import PackageBuilder
+from zentral.utils.osx_package import EnrollmentPackageBuilder
 from zentral.contrib.santa.forms import EnrollmentForm
 from zentral.contrib.santa.releases import Releases
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-class SantaZentralEnrollPkgBuilder(PackageBuilder):
+class SantaZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
     name = "Zentral Santa Enrollment"
     package_name = "zentral_santa_enroll.pkg"
     base_package_identifier = "io.zentral.santa_enroll"
@@ -16,18 +16,8 @@ class SantaZentralEnrollPkgBuilder(PackageBuilder):
     standalone = True
 
     def __init__(self, enrollment, version=None):
-        build_kwargs = {"release": enrollment.santa_release,
-                        "version": "{}.0".format(version or enrollment.version),
-                        "package_identifier_suffix": "pk-{}".format(enrollment.pk),
-                        "enrollment_secret_secret": enrollment.secret.secret}
-        business_unit = None
-        mbu = enrollment.secret.meta_business_unit
-        if mbu:
-            try:
-                business_unit = mbu.api_enrollment_business_units()[0]
-            except IndexError:
-                pass
-        return super().__init__(business_unit, **build_kwargs)
+        super().__init__(enrollment, version,
+                         release=enrollment.santa_release)
 
     def get_product_archive_title(self):
         if self.build_kwargs.get("release"):

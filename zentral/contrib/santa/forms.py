@@ -22,7 +22,6 @@ class ConfigurationForm(forms.ModelForm):
 
 
 class EnrollmentForm(forms.ModelForm):
-    configuration = forms.ModelChoiceField(queryset=Configuration.objects.all(), required=True)
     santa_release = forms.ChoiceField(
         label="Santa release",
         choices=[],

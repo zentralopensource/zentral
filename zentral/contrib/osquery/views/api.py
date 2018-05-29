@@ -5,8 +5,10 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.db.models import Q
 from django.utils.crypto import get_random_string
+from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
-from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
+from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_trigger_events,
+                                             verify_enrollment_secret)
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import JSONPostAPIView, verify_secret, APIAuthError
@@ -18,66 +20,125 @@ from zentral.contrib.osquery.conf import (build_osquery_conf,
 from zentral.contrib.osquery.events import (post_distributed_query_result, post_enrollment_event,
                                             post_file_carve_events, post_finished_file_carve_session,
                                             post_events_from_osquery_log, post_request_event)
-from zentral.contrib.osquery.models import (enroll,
+from zentral.contrib.osquery.models import (CarveBlock, CarveSession,
                                             DistributedQueryProbeMachine,
-                                            CarveBlock, CarveSession)
+                                            enroll, EnrolledMachine,
+                                            SOURCE_MODULE)
 
 logger = logging.getLogger('zentral.contrib.osquery.views.api')
 
 
 class EnrollView(JSONPostAPIView):
+    def get_enroll_secret(self, data):
+        try:
+            return data["enroll_secret"]
+        except KeyError:
+            raise SuspiciousOperation("Missing enroll_secret key in osquery enroll request")
+
+    def get_serial_number(self, data):
+        try:
+            serial_number = data["host_details"]["system_info"]["hardware_serial"].strip()
+        except (KeyError, AttributeError):
+            serial_number = None
+        if serial_number is None:
+            # special configuration for linux machines. see install script.
+            serial_number = data["host_identifier"]
+        return serial_number
+
+    def verify_enrollment_secret(self, enroll_secret, serial_number):
+        try:
+            es_request = verify_enrollment_secret(
+                "osquery_enrollment", enroll_secret,
+                self.user_agent, self.ip, serial_number
+            )
+        except EnrollmentSecretVerificationFailed:
+            raise APIAuthError("Unknown enrolled machine")
+        else:
+            self.enrollment = es_request.enrollment_secret.osquery_enrollment
+            self.machine_serial_number = serial_number
+            self.business_unit = self.enrollment.secret.get_api_enrollment_business_unit()
+
+    def verify_signed_secret(self, enroll_secret):
+        api_secret_data = verify_secret(enroll_secret, SOURCE_MODULE)
+        self.machine_serial_number = api_secret_data['machine_serial_number']
+        self.business_unit = api_secret_data.get("business_unit", None)
+
     def check_data_secret(self, data):
-        try:
-            data = verify_secret(data['enroll_secret'], "zentral.contrib.osquery")
-        except KeyError:
-            raise SuspiciousOperation("Osquery enroll request without enroll secret")
-        try:
-            self.machine_serial_number = data['machine_serial_number']
-        except KeyError:
-            raise SuspiciousOperation("Osquery enroll secret without machine serial number")
-        self.business_unit = data.get('business_unit', None)
+        enroll_secret = self.get_enroll_secret(data)
+        self.enrollment = None
+        if "$" not in enroll_secret:
+            # new way, with Enrollment model
+            serial_number = self.get_serial_number(data)
+            self.verify_enrollment_secret(enroll_secret, serial_number)
+        else:
+            # old way, with a signed enroll_secret
+            self.verify_signed_secret(enroll_secret)
 
     def do_post(self, data):
-        ms, action = enroll(self.machine_serial_number,
-                            self.business_unit,
-                            data.get("host_identifier"),
-                            self.ip)
-        if ms and action:
-            post_enrollment_event(ms.serial_number,
+        machine_snapshot, action = enroll(self.enrollment,
+                                          self.machine_serial_number,
+                                          self.business_unit,
+                                          data.get("host_identifier"),
+                                          self.ip)
+        if machine_snapshot and action:
+            post_enrollment_event(machine_snapshot.serial_number,
                                   self.user_agent, self.ip,
                                   {'action': action})
-            return {'node_key': ms.reference}
+            return {'node_key': machine_snapshot.reference}
         else:
-            raise RuntimeError("Could not enroll client")
+            raise SuspiciousOperation("Could not enroll machine")
 
 
 class BaseNodeView(JSONPostAPIView):
+    enrollment = None
+    machine_snapshot = None
+
+    def get_machine_snapshot(self):
+        if not self.machine_snapshot:
+            auth_err = None
+            try:
+                self.machine_snapshot = MachineSnapshot.objects.current().get(source__module=SOURCE_MODULE,
+                                                                              reference=self.node_key)
+            except MachineSnapshot.DoesNotExist:
+                auth_err = "Wrong node_key"
+            except MachineSnapshot.MultipleObjectsReturned:
+                auth_err = "Multiple current osquery machine snapshots for node key '{}'".format(self.node_key)
+            if auth_err:
+                logger.error("APIAuthError %s", auth_err)
+                raise APIAuthError(auth_err)
+        return self.machine_snapshot
+
     def check_data_secret(self, data):
-        auth_err = None
+        # get the node_key
         try:
-            self.ms = MachineSnapshot.objects.current().get(source__module='zentral.contrib.osquery',
-                                                            reference=data['node_key'])
+            self.node_key = data["node_key"]
         except KeyError:
-            auth_err = "Missing node_key"
-        except MachineSnapshot.DoesNotExist:
-            auth_err = "Wrong node_key"
-        except MachineSnapshot.MultipleObjectsReturned:
-            auth_err = "Multiple current osquery machine snapshots for node key '{}'".format(data['node_key'])
-        if auth_err:
-            logger.error("APIAuthError %s", auth_err, extra=data)
-            raise APIAuthError(auth_err)
-        # TODO: Better verification ?
-        self.machine_serial_number = self.ms.serial_number
-        self.business_unit = self.ms.business_unit
+            raise SuspiciousOperation("Missing node_key in osquery request")
+
+        try:
+            # new way, try to find an EnrolledMachine
+            enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__configuration",
+                                                                       "enrollment__secret__meta_business_unit")
+                                                       .get(node_key=self.node_key))
+        except EnrolledMachine.DoesNotExist:
+            # old way, look for a MachineSnapshot with the node_key as reference
+            machine_snapshot = self.get_machine_snapshot()
+            self.machine_serial_number = machine_snapshot.serial_number
+            self.business_unit = machine_snapshot.business_unit
+        else:
+            self.enrollment = enrolled_machine.enrollment
+            self.machine_serial_number = enrolled_machine.serial_number
+            self.business_unit = self.enrollment.secret.get_api_enrollment_business_unit()
 
     def do_post(self, data):
         post_request_event(self.machine_serial_number,
                            self.user_agent, self.ip,
-                           self.request_type)
+                           self.request_type,
+                           self.enrollment)
         return self.do_node_post(data)
 
     def commit_inventory_query_result(self, snapshot):
-        tree = self.ms.serialize()
+        tree = self.get_machine_snapshot().serialize()
         tree["serial_number"] = self.machine_serial_number
         tree["public_ip_address"] = self.ip
         if self.business_unit:
@@ -147,10 +208,7 @@ class ConfigView(BaseNodeView):
     request_type = "config"
 
     def do_node_post(self, data):
-        # TODO: The machine serial number is included in the string used to authenticate the requests
-        # This is done in the osx pkg builder. The machine serial number should always be present here.
-        # Maybe we could code a fallback to the available mbu probes if the serial number is not present.
-        return build_osquery_conf(MetaMachine(self.machine_serial_number))
+        return build_osquery_conf(MetaMachine(self.machine_serial_number), self.enrollment)
 
 
 class CarverStartView(BaseNodeView):
@@ -179,26 +237,20 @@ class CarverContinueView(BaseNodeView):
     request_type = "carve_continue"
 
     def check_data_secret(self, data):
-        # no node id => check carve session id
+        # no node_key, use the session_id
+        # TODO: better?
         auth_err = None
         try:
             self.session_id = data["session_id"]
             self.carve_session = CarveSession.objects.get(session_id=self.session_id)
             self.machine_serial_number = self.carve_session.machine_serial_number
-            self.ms = MachineSnapshot.objects.current().get(
-                source__module='zentral.contrib.osquery',
-                serial_number=self.machine_serial_number
-            )
         except KeyError:
             auth_err = "Missing session id"
         except CarveSession.DoesNotExist:
             auth_err = "Unknown session id"
-        except MachineSnapshot.DoesNotExist:
-            auth_err = "Unknown machine serial number"
         if auth_err:
             logger.error("APIAuthError %s", auth_err, extra=data)
             raise APIAuthError(auth_err)
-        self.business_unit = self.ms.business_unit
 
     def do_node_post(self, data):
         data_data = data.pop("data")
@@ -232,7 +284,7 @@ class DistributedReadView(BaseNodeView):
         if self.machine_serial_number:
             machine = MetaMachine(self.machine_serial_number)
             queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(machine)
-            for query_name, query in get_distributed_inventory_queries(machine, self.ms):
+            for query_name, query in get_distributed_inventory_queries(machine, self.get_machine_snapshot()):
                 if query_name in queries:
                     logger.error("Conflict on the distributed query name %s", query_name)
                 else:
@@ -332,7 +384,7 @@ class LogView(BaseNodeView):
                             hardware_serial,
                             self.machine_serial_number
                         )
-                        post_machine_conflict_event(self.request, "zentral.contrib.osquery",
+                        post_machine_conflict_event(self.request, SOURCE_MODULE,
                                                     hardware_serial, self.machine_serial_number,
                                                     decorations)
                         raise APIAuthError(auth_err)

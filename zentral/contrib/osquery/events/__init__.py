@@ -114,6 +114,11 @@ def post_enrollment_event(msn, user_agent, ip, data):
     OsqueryEnrollmentEvent.post_machine_request_payloads(msn, user_agent, ip, [data])
 
 
-def post_request_event(msn, user_agent, ip, request_type):
-    OsqueryRequestEvent.post_machine_request_payloads(msn, user_agent, ip,
-                                                      [{'request_type': request_type}])
+def post_request_event(msn, user_agent, ip, request_type, enrollment):
+    data = {"request_type": request_type}
+    if enrollment:
+        configuration = enrollment.configuration
+        data["enrollment"] = {"pk": enrollment.pk,
+                              "configuration": {"pk": configuration.pk,
+                                                "name": configuration.name}}
+    OsqueryRequestEvent.post_machine_request_payloads(msn, user_agent, ip, [data])

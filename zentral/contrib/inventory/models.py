@@ -901,6 +901,12 @@ class EnrollmentSecret(models.Model):
             d["udids"] = self.udids
         return {"enrollment_secret": d}
 
+    def get_api_enrollment_business_unit(self):
+        try:
+            return self.meta_business_unit.api_enrollment_business_units()[0]
+        except (AttributeError, IndexError):
+            pass
+
 
 class EnrollmentSecretRequest(models.Model):
     enrollment_secret = models.ForeignKey(EnrollmentSecret, on_delete=models.CASCADE)
@@ -916,7 +922,8 @@ class BaseEnrollment(models.Model):
                                   on_delete=models.CASCADE,
                                   related_name="%(app_label)s_%(class)s", editable=False)
     version = models.PositiveSmallIntegerField(default=1, editable=False)
-    distributor_content_type = models.ForeignKey(ContentType, null=True, on_delete=models.CASCADE, editable=False)
+    distributor_content_type = models.ForeignKey(ContentType, related_name="+", on_delete=models.CASCADE,
+                                                 null=True, editable=False)
     distributor_pk = models.PositiveIntegerField(null=True, editable=False)
     distributor = GenericForeignKey("distributor_content_type", "distributor_pk")
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
