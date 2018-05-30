@@ -7,6 +7,14 @@ logger = logging.getLogger('zentral.contrib.monolith.events')
 ALL_EVENTS_SEARCH_DICT = {"tag": "monolith"}
 
 
+class MonolithEnrollmentEvent(BaseEvent):
+    event_type = "monolith_enrollment"
+    tags = ["monolith"]
+
+
+register_event_type(MonolithEnrollmentEvent)
+
+
 class MonolithMunkiRequestEvent(BaseEvent):
     event_type = "monolith_munki_request"
     tags = ["monolith", "heartbeat"]
@@ -96,3 +104,7 @@ def post_monolith_repository_updates(repository, payloads, request=None):
         payload.update({"repository": repository_serialized_info})
         event = event_class(metadata, payload)
         event.post()
+
+
+def post_monolith_enrollment_event(msn, user_agent, ip, data):
+    MonolithEnrollmentEvent.post_machine_request_payloads(msn, user_agent, ip, [data])

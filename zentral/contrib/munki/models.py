@@ -1,4 +1,27 @@
 from django.db import models
+from django.urls import reverse
+from zentral.contrib.inventory.models import BaseEnrollment
+
+
+# enrollment
+
+
+class Enrollment(BaseEnrollment):
+    def get_absolute_url(self):
+        return "{}#enrollment_{}".format(reverse("munki:enrollment_list"), self.pk)
+
+    def get_description_for_distributor(self):
+        return "Munki enrollment"
+
+
+class EnrolledMachine(models.Model):
+    enrollment = models.ForeignKey(Enrollment)
+    serial_number = models.TextField(db_index=True)
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+# munki state
 
 
 class MunkiState(models.Model):

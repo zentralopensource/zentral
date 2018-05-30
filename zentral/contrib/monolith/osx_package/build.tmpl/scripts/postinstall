@@ -4,15 +4,21 @@ from Foundation import (NSData,
                         NSPropertyListSerialization,
                         NSPropertyListMutableContainers,
                         NSPropertyListXMLFormat_v1_0)
+import json
 import os
 import plistlib
+import ssl
 import subprocess
 import sys
+import urllib2
+
+USER_AGENT = "Zentral/monolithpostinstall 0.1"
 
 # set by the builder
 SETUP_SCRIPT_PATH = "%SETUP_SCRIPT_PATH%"
 SOFTWARE_REPO_URL = "%SOFTWARE_REPO_URL%"
-API_SECRET = "%API_SECRET%"
+ENROLLMENT_SECRET = "%ENROLLMENT_SECRET%"
+ENROLLMENT_URL = "%ENROLLMENT_URL%"
 TLS_CA_CERT = "%TLS_CA_CERT%"
 DEPNOTIFY_COMMANDS = """%DEPNOTIFY_COMMANDS%"""
 
@@ -91,9 +97,20 @@ def get_serial_number():
     return plistlib.readPlistFromString(output)["IORegistryEntryChildren"][0]["IOPlatformSerialNumber"]
 
 
+def enroll(serial_number):
+    req = urllib2.Request(ENROLLMENT_URL)
+    req.add_header("User-Agent", USER_AGENT)
+    req.add_header("Content-Type", "application/json")
+    ctx = ssl.create_default_context(cafile=TLS_CA_CERT)
+    data = json.dumps({"secret": ENROLLMENT_SECRET,
+                       "serial_number": serial_number})
+    resp = urllib2.urlopen(req, data=data, context=ctx)
+    return json.load(resp)["token"]
+
+
 def update_default_plist(serial_number):
     data = read_plist(DEFAULT_PLIST)
-    data.update({"ClientIdentifier": "MONOLITH_MACHINE_SERIAL_NUMBER{}".format(serial_number),
+    data.update({"ClientIdentifier": serial_number,
                  "SoftwareRepoURL": SOFTWARE_REPO_URL,
                  "SoftwareRepoCACertificate": TLS_CA_CERT,
                  "FollowHTTPRedirects": "all",
@@ -106,10 +123,10 @@ def update_default_plist(serial_number):
     write_plist(data, DEFAULT_PLIST)
 
 
-def update_root_plist(serial_number):
+def update_root_plist(serial_number, token):
     data = read_plist(ROOT_PLIST)
     data["AdditionalHttpHeaders"] = ["X-Zentral-Serial-Number: {}".format(serial_number),
-                                     "X-Monolith-Token: {}".format(API_SECRET)]
+                                     "X-Monolith-Token: {}".format(token)]
     write_plist(data, ROOT_PLIST)
 
 
@@ -159,8 +176,9 @@ def cleanup_depnotify():
 if __name__ == "__main__":
     execute_setup_script()
     serial_number = get_serial_number()
+    token = enroll(serial_number)
     update_default_plist(serial_number)
-    update_root_plist(serial_number)
+    update_root_plist(serial_number, token)
     if can_launch_munki():
         launch_munki_daemons()
         do_munki_run()

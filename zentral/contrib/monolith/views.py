@@ -1,42 +1,56 @@
 from itertools import chain
+import json
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import SuspiciousOperation
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.core.urlresolvers import reverse_lazy
 from django.http import (FileResponse,
                          Http404,
-                         HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect)
+                         HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect,
+                         JsonResponse)
 from django.shortcuts import get_object_or_404, render
+from django.utils.crypto import get_random_string
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaMachine
+from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
+from zentral.contrib.inventory.forms import EnrollmentSecretForm
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine
+from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.utils.api_views import (APIAuthError, make_secret, verify_secret,
                                      SignedRequestHeaderJSONPostAPIView)
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import (post_monolith_cache_server_update_request,
+                     post_monolith_enrollment_event,
                      post_monolith_munki_request, post_monolith_repository_updates,
                      post_monolith_sync_catalogs_request)
 from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm,
                     CacheServersPostForm,
+                    ConfigurationForm,
                     ConfigureCacheServerForm,
                     DeleteManifestSubManifestForm,
+                    EnrollmentForm,
                     ManifestForm, ManifestPrinterForm, ManifestSearchForm,
                     PkgInfoSearchForm, UpdatePkgInfoCatalogForm,
                     SubManifestForm, SubManifestSearchForm,
                     SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm,
                     UploadPPDForm)
 from .models import (MunkiNameError, parse_munki_name,
-                     Catalog, CacheServer, Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
+                     Catalog, CacheServer,
+                     Configuration, EnrolledMachine, Enrollment,
+                     Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      Printer, PrinterPPD,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
-from .osx_package.builder import MunkiMonolithConfigPkgBuilder
+from .osx_package.builder import MonolithZentralEnrollPkgBuilder
 from .utils import build_manifest_enrollment_package
 
 logger = logging.getLogger('zentral.contrib.monolith.views')
+
+
+# repository sync configuration
 
 
 class WebHookView(LoginRequiredMixin, TemplateView):
@@ -50,7 +64,74 @@ class WebHookView(LoginRequiredMixin, TemplateView):
         return context
 
 
-# Pkg infos
+# configuration
+
+
+class ConfigurationListView(LoginRequiredMixin, ListView):
+    model = Configuration
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["configurations_count"] = ctx["object_list"].count()
+        return ctx
+
+
+class CreateConfigurationView(LoginRequiredMixin, CreateView):
+    model = Configuration
+    form_class = ConfigurationForm
+
+
+class ConfigurationView(LoginRequiredMixin, DetailView):
+    model = Configuration
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
+        ctx["enrollments"] = enrollments
+        ctx["enrollments_count"] = len(enrollments)
+        return ctx
+
+
+class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
+    model = Configuration
+    form_class = ConfigurationForm
+
+
+# enrollment endpoint called by the postinstall script
+
+
+class EnrollView(View):
+    def post(self, request, *args, **kwargs):
+        user_agent, ip = user_agent_and_ip_address_from_request(request)
+        request_json = json.load(request)
+        secret = request_json["secret"]
+        serial_number = request_json["serial_number"]
+        try:
+            es_request = verify_enrollment_secret(
+                "monolith_enrollment", secret,
+                user_agent, ip, serial_number
+            )
+        except EnrollmentSecretVerificationFailed as error:
+            raise SuspiciousOperation
+        else:
+            # get or create enrolled machine
+            enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.get_or_create(
+                enrollment=es_request.enrollment_secret.monolith_enrollment,
+                serial_number=serial_number,
+                defaults={"token": get_random_string(64)}
+            )
+
+            # apply enrollment secret tags
+            for tag in es_request.enrollment_secret.tags.all():
+                MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
+
+            # post event
+            post_monolith_enrollment_event(serial_number, user_agent, ip,
+                                           {'action': "enrollment" if enrolled_machine_created else "re-enrollment"})
+        return JsonResponse({"token": enrolled_machine.token})
+
+
+# pkg infos
 
 
 class PkgInfosView(LoginRequiredMixin, TemplateView):
@@ -144,7 +225,7 @@ class PPDView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-# Catalogs
+# catalogs
 
 
 class CatalogsView(LoginRequiredMixin, ListView):
@@ -278,7 +359,7 @@ class DeleteCatalogView(LoginRequiredMixin, DeleteView):
         return response
 
 
-# Sub Manifests
+# sub manifests
 
 
 class SubManifestsView(LoginRequiredMixin, ListView):
@@ -516,7 +597,7 @@ class DeleteSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
         return HttpResponseRedirect(success_url)
 
 
-# Manifests
+# manifests
 
 
 class ManifestsView(LoginRequiredMixin, ListView):
@@ -580,6 +661,7 @@ class ManifestView(LoginRequiredMixin, DetailView):
         context = super(ManifestView, self).get_context_data(**kwargs)
         manifest = context["object"]
         context['monolith'] = True
+        context['enrollments'] = list(manifest.enrollment_set.all())
         context['manifest_enrollment_packages'] = list(manifest.manifestenrollmentpackage_set.all())
         context['manifest_enrollment_packages'].sort(key=lambda mep: (mep.get_optional(), mep.get_name(), mep.id))
         context['manifest_cache_servers'] = list(manifest.cacheserver_set.all().order_by("name"))
@@ -602,28 +684,61 @@ class ManifestView(LoginRequiredMixin, DetailView):
         return context
 
 
-class ManifestEnrollmentView(LoginRequiredMixin, FormView):
-    template_name = "monolith/enrollment.html"
-    form_class = MunkiMonolithConfigPkgBuilder.form
+class AddManifestEnrollmentView(LoginRequiredMixin, TemplateView):
+    template_name = "monolith/enrollment_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        self.object = get_object_or_404(Manifest, pk=kwargs["pk"])
+        self.manifest = get_object_or_404(Manifest, pk=kwargs["pk"])
         return super().dispatch(request, *args, **kwargs)
 
-    def get_initial(self):
-        return {"meta_business_unit": self.object.meta_business_unit}
+    def get_forms(self):
+        secret_form_kwargs = {"prefix": "secret",
+                              "meta_business_unit": self.manifest.meta_business_unit,
+                              "initial": {"meta_business_unit": self.manifest.meta_business_unit}}
+        enrollment_form_kwargs = {"manifest": self.manifest,
+                                  "initial": {"manifest": self.manifest}}
+        if self.request.method == "POST":
+            secret_form_kwargs["data"] = self.request.POST
+            enrollment_form_kwargs["data"] = self.request.POST
+        return (EnrollmentSecretForm(**secret_form_kwargs),
+                EnrollmentForm(**enrollment_form_kwargs))
 
     def get_context_data(self, **kwargs):
-        context = super(ManifestEnrollmentView, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context['monolith'] = True
-        context["object"] = self.object
+        context["manifest"] = self.manifest
+        if "secret_form" not in kwargs or "enrollment_form" not in kwargs:
+            context["secret_form"], context["enrollment_form"] = self.get_forms()
         return context
 
-    def form_valid(self, form):
-        business_unit = self.object.meta_business_unit.api_enrollment_business_units()[0]
-        build_kwargs = form.get_build_kwargs()
-        builder = MunkiMonolithConfigPkgBuilder(business_unit, **build_kwargs)
+    def forms_invalid(self, secret_form, enrollment_form):
+        return self.render_to_response(self.get_context_data(secret_form=secret_form,
+                                                             enrollment_form=enrollment_form))
+
+    def forms_valid(self, secret_form, enrollment_form):
+        secret = secret_form.save()
+        enrollment = enrollment_form.save(commit=False)
+        enrollment.secret = secret
+        enrollment.manifest = self.manifest
+        enrollment.save()
+        return HttpResponseRedirect(enrollment.get_absolute_url())
+
+    def post(self, request, *args, **kwargs):
+        secret_form, enrollment_form = self.get_forms()
+        if secret_form.is_valid() and enrollment_form.is_valid():
+            return self.forms_valid(secret_form, enrollment_form)
+        else:
+            return self.forms_invalid(secret_form, enrollment_form)
+
+
+class ManifestEnrollmentPackageView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], manifest__pk=kwargs["manifest_pk"])
+        builder = MonolithZentralEnrollPkgBuilder(enrollment)
         return builder.build_and_make_response()
+
+
+# manifest catalogs
 
 
 class BaseManifestM2MView(LoginRequiredMixin, FormView):
@@ -669,6 +784,9 @@ class DeleteManifestCatalogView(BaseManifestM2MView):
 
     def get_initial(self):
         return {'catalog': self.m2m_object}
+
+
+# manifest enrollment packages
 
 
 class BaseEditManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
@@ -787,7 +905,9 @@ class DeleteManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
         redirect_url = self.manifest_enrollment_package.manifest.get_absolute_url()
         self.manifest_enrollment_package.file.delete(save=False)
         enrollment = self.manifest_enrollment_package.get_enrollment()
-        enrollment.delete()
+        if enrollment:
+            # should always be the case
+            enrollment.delete()
         self.manifest_enrollment_package.delete()
         return HttpResponseRedirect(redirect_url)
 
@@ -960,38 +1080,67 @@ class MRBaseView(View):
                                "name": str(self.manifest)}
         post_monolith_munki_request(self.machine_serial_number, self.user_agent, self.ip, **payload)
 
-    def dispatch(self, request, *args, **kwargs):
+    def get_token(self, request):
         try:
-            token = request.META['HTTP_X_MONOLITH_TOKEN'].strip()
+            return request.META['HTTP_X_MONOLITH_TOKEN'].strip()
+        except (KeyError, AttributeError):
+            raise PermissionDenied("Could not read token header")
+
+    def verify_enrolled_machine_token(self, token):
+        """Find the corresponding enrolled machine"""
+        try:
+            enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__manifest__meta_business_unit")
+                                                       .get(token=token))
+        except EnrolledMachine.DoesNotExist:
+            raise PermissionDenied("Enrolled machine does not exist")
+        else:
+            self.token_machine_serial_number = enrolled_machine.serial_number
+            self.manifest = enrolled_machine.enrollment.manifest
+            self.meta_business_unit = self.manifest.meta_business_unit
+
+    def verify_signed_token(self, token):
+        """Verify the token signature"""
+        # TODO: deprecate and remove
+        try:
             api_data = verify_secret(token, 'zentral.contrib.monolith')
-        except (KeyError, ValueError, APIAuthError):
-            return HttpResponseForbidden("No no no!")
+        except APIAuthError:
+            raise PermissionDenied("Invalid API secret")
+        else:
+            self.token_machine_serial_number = api_data.get("machine_serial_number")
+            self.meta_business_unit = api_data['business_unit'].meta_business_unit
+            self.manifest = get_object_or_404(Manifest, meta_business_unit=self.meta_business_unit)
 
-        # machine serial number
-        h_msn = request.META.get("HTTP_X_ZENTRAL_SERIAL_NUMBER")  # new way
-        t_msn = api_data.get("machine_serial_number")  # old way
-        if h_msn and t_msn and h_msn != t_msn:
-            logger.warning("Serial number mismatch. header: %s, token: %s", h_msn, t_msn)
-        self.machine_serial_number = h_msn or t_msn  # priority to h_msn because set in preflight script
-
-        # business unit, manifest
-        self.meta_business_unit = api_data['business_unit'].meta_business_unit
-        self.manifest = get_object_or_404(Manifest, meta_business_unit=self.meta_business_unit)
-
-        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
-
+    def set_machine(self, request):
+        header_machine_serial_number = request.META.get("HTTP_X_ZENTRAL_SERIAL_NUMBER")
+        if header_machine_serial_number and \
+           self.token_machine_serial_number and \
+           header_machine_serial_number != self.token_machine_serial_number:
+            logger.warning("Serial number mismatch. header: %s, token: %s",
+                           header_machine_serial_number,
+                           self.token_machine_serial_number)
+        self.machine_serial_number = header_machine_serial_number or self.token_machine_serial_number
+        if not self.machine_serial_number:
+            raise PermissionDenied("Unknown machine serial number")
         # machine extra infos
         self.machine = MetaMachine(self.machine_serial_number)
         self.tags = self.machine.tags
 
-        if not self.machine_serial_number:
-            logger.warning("Missing serial number. mbu: %s %s",
-                           self.meta_business_unit, self.meta_business_unit.pk)
+    def authenticate(self, request):
+        self.token_msn = None
+        token = self.get_token(request)
+        if "$" not in token:
+            self.verify_enrolled_machine_token(token)
+        else:
+            self.verify_signed_token(token)
+        self.set_machine(request)
+        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
 
+    def dispatch(self, request, *args, **kwargs):
+        self.authenticate(request)
         return super().dispatch(request, *args, **kwargs)
 
 
-class MRSignedView(MRBaseView):
+class MRNameView(MRBaseView):
     def get_request_args(self, name):
         try:
             model, key = parse_munki_name(name)
@@ -1018,7 +1167,7 @@ class MRSignedView(MRBaseView):
         return response
 
 
-class MRCatalogView(MRSignedView):
+class MRCatalogView(MRNameView):
     event_payload_type = "catalog"
 
     def do_get(self, model, key, event_payload):
@@ -1057,7 +1206,7 @@ class MRCatalogView(MRSignedView):
             return HttpResponse(catalog_data, content_type="application/xml")
 
 
-class MRManifestView(MRSignedView):
+class MRManifestView(MRNameView):
     event_payload_type = "manifest"
 
     def get_request_args(self, name):
@@ -1085,7 +1234,7 @@ class MRManifestView(MRSignedView):
             return HttpResponse(manifest_data, content_type="application/xml")
 
 
-class MRPackageView(MRSignedView):
+class MRPackageView(MRNameView):
     event_payload_type = "package"
 
     def do_get(self, model, key, event_payload):

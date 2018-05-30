@@ -248,5 +248,9 @@ class EnrollmentSecretForm(forms.ModelForm):
         fields = ("meta_business_unit", "tags", "serial_numbers", "udids", "quota")
 
     def __init__(self, *args, **kwargs):
+        meta_business_unit = kwargs.pop("meta_business_unit")
         super().__init__(*args, **kwargs)
-        self.fields["meta_business_unit"].queryset = MetaBusinessUnit.objects.available_for_api_enrollment()
+        mbu_field = self.fields["meta_business_unit"]
+        mbu_field.queryset = MetaBusinessUnit.objects.available_for_api_enrollment()
+        if meta_business_unit:
+            mbu_field.widget = forms.HiddenInput()

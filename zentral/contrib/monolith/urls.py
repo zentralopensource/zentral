@@ -3,22 +3,40 @@ from django.views.decorators.csrf import csrf_exempt
 from . import views
 
 urlpatterns = [
-    # Sync
+    # repository sync configuration
     url(r'^webhook/$', views.WebHookView.as_view(), name='webhook'),
 
-    # Pkg infos
+    # configurations
+    url(r'^configurations/$',
+        views.ConfigurationListView.as_view(),
+        name='configuration_list'),
+    url(r'^configurations/create/$',
+        views.CreateConfigurationView.as_view(),
+        name='create_configuration'),
+    url(r'^configurations/(?P<pk>\d+)/$',
+        views.ConfigurationView.as_view(),
+        name='configuration'),
+    url(r'^configurations/(?P<pk>\d+)/update/$',
+        views.UpdateConfigurationView.as_view(),
+        name='update_configuration'),
+
+    # enrollment endpoint called by the postinstall script
+    url(r'^enroll/$', csrf_exempt(views.EnrollView.as_view()),
+        name='enroll'),
+
+    # pkg infos
     url(r'^pkg_infos/$', views.PkgInfosView.as_view(), name='pkg_infos'),
     url(r'^pkg_infos/(?P<pk>\d+)/update_catalog/$',
         views.UpdatePkgInfoCatalogView.as_view(),
         name='update_pkg_info_catalog'),
     url(r'^pkg_info_names/(?P<pk>\d+)/$', views.PkgInfoNameView.as_view(), name='pkg_info_name'),
 
-    # Printer ppd
+    # PPDs
     url(r'^ppds/$', views.PPDsView.as_view(), name='ppds'),
     url(r'^ppds/upload/$', views.UploadPPDView.as_view(), name='upload_ppd'),
     url(r'^ppds/(?P<pk>\d+)/$', views.PPDView.as_view(), name='ppd'),
 
-    # Catalogs
+    # catalogs
     url(r'^catalogs/$', views.CatalogsView.as_view(), name='catalogs'),
     url(r'^catalogs/create/$', views.CreateCatalogView.as_view(), name='create_catalog'),
     url(r'^catalogs/(?P<pk>\d+)/$', views.CatalogView.as_view(), name='catalog'),
@@ -28,7 +46,7 @@ urlpatterns = [
         name='update_catalog_priority'),
     url(r'^catalogs/(?P<pk>\d+)/delete/$', views.DeleteCatalogView.as_view(), name='delete_catalog'),
 
-    # Sub manifests
+    # sub manifests
     url(r'^sub_manifests/$', views.SubManifestsView.as_view(), name='sub_manifests'),
     url(r'^sub_manifests/create/$', views.CreateSubManifestView.as_view(), name='create_sub_manifest'),
     url(r'^sub_manifests/(?P<pk>\d+)/$', views.SubManifestView.as_view(), name='sub_manifest'),
@@ -47,17 +65,23 @@ urlpatterns = [
     url(r'^sub_manifests_attachment/(?P<pk>\d+)/delete/$',
         views.DeleteSubManifestAttachmentView.as_view(), name='delete_sub_manifest_attachment'),
 
-    # Manifests
+    # manifests
     url(r'^manifests/$', views.ManifestsView.as_view(), name='manifests'),
     url(r'^manifests/create/$', views.CreateManifestView.as_view(), name='create_manifest'),
     url(r'^manifests/(?P<pk>\d+)/$', views.ManifestView.as_view(), name='manifest'),
-    url(r'^manifests/(?P<pk>\d+)/enrollment/$',
-        views.ManifestEnrollmentView.as_view(), name="manifest_enrollment"),
+    url(r'^manifests/(?P<pk>\d+)/add_enrollment/$',
+        views.AddManifestEnrollmentView.as_view(),
+        name="add_manifest_enrollment"),
+    url(r'^manifests/(?P<manifest_pk>\d+)/enrollment/(?P<pk>\d+)/package/$',
+        views.ManifestEnrollmentPackageView.as_view(),
+        name="manifest_enrollment_package"),
+
     # manifest catalogs
     url(r'^manifests/(?P<pk>\d+)/add_catalog/$',
         views.AddManifestCatalogView.as_view(), name='add_manifest_catalog'),
     url(r'^manifests/(?P<pk>\d+)/delete_catalog/(?P<m2m_pk>\d+)/$',
         views.DeleteManifestCatalogView.as_view(), name='delete_manifest_catalog'),
+
     # manifest enrollment packages
     url(r'^manifests/(?P<pk>\d+)/add_enrollment_package/$',
         views.AddManifestEnrollmentPackageView.as_view(), name='add_manifest_enrollment_package'),
@@ -65,6 +89,7 @@ urlpatterns = [
         views.UpdateManifestEnrollmentPackageView.as_view(), name='update_manifest_enrollment_package'),
     url(r'^manifests/(?P<pk>\d+)/delete_enrollment_package/(?P<mep_pk>\d+)/$',
         views.DeleteManifestEnrollmentPackageView.as_view(), name='delete_manifest_enrollment_package'),
+
     # manifest printers
     url(r'^manifests/(?P<m_pk>\d+)/add_printer/$',
         views.AddManifestPrinterView.as_view(), name='add_manifest_printer'),
@@ -72,6 +97,7 @@ urlpatterns = [
         views.UpdateManifestPrinterView.as_view(), name='update_manifest_printer'),
     url(r'^manifests/(?P<m_pk>\d+)/printers/(?P<pk>\d+)/delete/$',
         views.DeleteManifestPrinterView.as_view(), name='delete_manifest_printer'),
+
     # manifest sub manifests
     url(r'^manifests/(?P<pk>\d+)/add_sub_manifest/$',
         views.AddManifestSubManifestView.as_view(), name='add_manifest_sub_manifest'),
@@ -109,5 +135,6 @@ main_menu_cfg = {
         ('ppds', 'Printer PPDs'),
         ('manifests', 'Manifests'),
         ('sub_manifests', 'Sub manifests'),
+        ('configuration_list', 'Configurations'),
     )
 }

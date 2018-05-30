@@ -8,6 +8,7 @@ import unicodedata
 import urllib.parse
 from django.contrib.postgres.fields import ArrayField, JSONField
 from django.core import signing
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models, connection
 from django.db.models import F, Q
 from django.urls import reverse
@@ -15,12 +16,15 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.conf import settings
-from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
+from zentral.contrib.inventory.models import BaseEnrollment, MetaBusinessUnit, Tag
 from .conf import monolith_conf
 from .utils import build_manifest_enrollment_package, make_printer_package_info
 
 
 logger = logging.getLogger("zentral.contrib.monolith.models")
+
+
+# PkgInfo / Catalog / Manifest
 
 
 class MunkiNameError(Exception):
@@ -698,7 +702,7 @@ class ManifestEnrollmentPackage(models.Model):
         try:
             enrollment_model = self.builder_class.form.Meta.model
             return enrollment_model.objects.get(pk=self.enrollment_pk)
-        except AttributeError:
+        except (AttributeError, ObjectDoesNotExist):
             pass
 
     def enrollment_update_callback(self):
@@ -712,6 +716,9 @@ class ManifestEnrollmentPackage(models.Model):
 
     def get_absolute_url(self):
         return "{}#mep_{}".format(reverse("monolith:manifest", args=(self.manifest.pk,)), self.pk)
+
+
+# Cache server
 
 
 class CacheServerManager(models.Manager):
@@ -759,6 +766,9 @@ class CacheServer(models.Model):
                              "name": str(self.manifest)},
                 "public_ip_address": self.public_ip_address,
                 "base_url": self.base_url}
+
+
+# Printers
 
 
 def ppd_path(instance, filename):
@@ -878,3 +888,76 @@ class Printer(models.Model):
     def get_destination(self):
         """lpadmin destination. name used as display name => info."""
         return self.get_pkg_info_name().replace(" ", "_")
+
+
+# Configuration / Enrollment
+
+
+class Configuration(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+
+    no_restart = models.BooleanField(
+        default=False,
+        help_text="Remove the launchd package restart requirement"
+    )
+    depnotify_release = models.CharField(
+        max_length=64, blank=True, null=False,
+        help_text="Choose a DEPNotify release to be installed"
+    )
+    depnotify_commands = models.TextField(
+        help_text="Configure DEPNotify with some commands",
+        blank=True, null=False
+    )
+    eula = models.TextField(
+        help_text="This text will be displayed in DEPNotify, and the user will be asked to accept it",
+        blank=True, null=False
+    )
+    setup_script = models.TextField(
+        help_text="A script that will be run when this enrollment package is installed",
+        blank=True, null=False
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("monolith:configuration", args=(self.pk,))
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        for enrollment in self.enrollment_set.all():
+            # per default, will bump the enrollment version
+            # and notify their distributors
+            enrollment.save()
+
+
+class Enrollment(BaseEnrollment):
+    manifest = models.ForeignKey(Manifest, on_delete=models.CASCADE)
+    configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
+    munki_release = models.CharField(max_length=64, blank=True, null=False)
+
+    def get_description_for_distributor(self):
+        return "Monolith manifest {}, configuration {}".format(self.manifest, self.configuration)
+
+    def serialize_for_event(self):
+        enrollment_dict = {"pk": self.pk,
+                           "configuration": {"pk": self.configuration.pk,
+                                             "name": self.configuration.name},
+                           "manifest": {"pk": self.manifest.pk,
+                                        "name": str(self.manifest)},
+                           "created_at": self.created_at}
+        if self.munki_release:
+            enrollment_dict["munki_release"] = self.munki_release
+        return enrollment_dict
+
+    def get_absolute_url(self):
+        return "{}#enrollment_{}".format(reverse("monolith:manifest", args=(self.manifest.pk,)), self.pk)
+
+
+class EnrolledMachine(models.Model):
+    enrollment = models.ForeignKey(Enrollment)
+    serial_number = models.TextField(db_index=True)
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)

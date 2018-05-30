@@ -16,7 +16,7 @@
     <dd>{{ manifest_enrollment_package.get_name }}<dd>
     {% with manifest_enrollment_package.get_enrollment as enrollment %}
     {% if enrollment %}
-    <dt>Enrollment</dt>
+    <dt>Description</dt>
     <dd><a href="{{ enrollment.get_absolute_url }}">{{ enrollment.get_description_for_distributor }}</a></dd>
     {% endif %}
     {% endwith %}

@@ -6,7 +6,7 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
   <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
-  <li class="active">Add enrollment package</li>
+  <li class="active">
   {% if manifest_enrollment_package %}
   Update enrollment package
   {% else %}
@@ -17,7 +17,7 @@
 
 <h2>
   {% if manifest_enrollment_package %}
-  Update {{ manifest_enrollment_package }}
+  Update {{ builder_name }}
   {% else %}
   Add {{ builder_name }}
   {% endif %}
