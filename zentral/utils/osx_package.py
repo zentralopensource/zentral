@@ -14,7 +14,6 @@ from django.utils.translation import ugettext_lazy as _
 from django.http import HttpResponse
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.utils.api_views import make_secret
 
 logger = logging.getLogger("zentral.utils.osx_package")
 
@@ -244,9 +243,6 @@ class ProductArchiveBuilder(BasePackageBuilder):
 
 
 class APIConfigToolsMixin(object):
-    def make_api_secret(self):
-        return make_secret(self.zentral_module, self.business_unit)
-
     def get_tls_hostname(self):
         if not hasattr(self, "tls_hostname"):
             tls_hostname_p = urlparse(settings['api']['tls_hostname'])
@@ -259,7 +255,6 @@ class APIConfigToolsMixin(object):
 
 class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
     standalone = False
-    zentral_module = None
     package_name = None
     base_package_identifier = None
     build_tmpl_dir = None
