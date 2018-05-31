@@ -45,7 +45,6 @@ from .models import (MunkiNameError, parse_munki_name,
                      Printer, PrinterPPD,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
 from .osx_package.builder import MonolithZentralEnrollPkgBuilder
-from .utils import build_manifest_enrollment_package
 
 logger = logging.getLogger('zentral.contrib.monolith.views')
 
@@ -72,6 +71,7 @@ class ConfigurationListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx['monolith'] = True
         ctx["configurations_count"] = ctx["object_list"].count()
         return ctx
 
@@ -80,12 +80,18 @@ class CreateConfigurationView(LoginRequiredMixin, CreateView):
     model = Configuration
     form_class = ConfigurationForm
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['monolith'] = True
+        return ctx
+
 
 class ConfigurationView(LoginRequiredMixin, DetailView):
     model = Configuration
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx['monolith'] = True
         enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
         ctx["enrollments"] = enrollments
         ctx["enrollments_count"] = len(enrollments)
@@ -95,6 +101,11 @@ class ConfigurationView(LoginRequiredMixin, DetailView):
 class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
     model = Configuration
     form_class = ConfigurationForm
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['monolith'] = True
+        return ctx
 
 
 # enrollment endpoint called by the postinstall script

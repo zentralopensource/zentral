@@ -5,10 +5,15 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'monolith:configuration_list' %}">Monolith configurations</a></li>
+  {% if object %}
+  <li><a href="{% url 'monolith:configuration' object.pk %}">{{ object }}</a></li>
+  <li class="active">Update</li>
+  {% else %}
   <li class="active">Create</li>
+  {% endif %}
 </ol>
 
-<h2>Create Monolith configuration</h2>
+<h2>{% if object %}Update{% else %}Create{% endif %} Monolith configuration</h2>
 
 <form method="post" class="form">{% csrf_token %}
   {{ form|bootstrap }}
