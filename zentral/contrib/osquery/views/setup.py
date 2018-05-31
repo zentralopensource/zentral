@@ -17,6 +17,7 @@ class ConfigurationListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
         ctx["configurations_count"] = ctx["object_list"].count()
         return ctx
 
@@ -25,12 +26,17 @@ class CreateConfigurationView(LoginRequiredMixin, CreateView):
     model = Configuration
     form_class = ConfigurationForm
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
 
 class ConfigurationView(LoginRequiredMixin, DetailView):
     model = Configuration
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
         enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
         ctx["enrollments"] = enrollments
         ctx["enrollments_count"] = len(enrollments)
@@ -41,6 +47,10 @@ class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
     model = Configuration
     form_class = ConfigurationForm
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
 
 class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
     template_name = "osquery/enrollment_form.html"
