@@ -4,13 +4,24 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">Munki enrollment</li>
+  <li><a href="{% url 'munki:enrollment_list' %}">Munki enrollments</a></li>
+  <li class="active">Create</li>
 </ol>
 
-<h2>Munki enrollment</h2>
+<h2>Create Munki enrollment</h2>
 
-<form action="{% url 'munki:installer_package' %}" method="POST">{% csrf_token %}
-  {{ form|bootstrap }}
-  <button class="btn btn-default" type="submit">Download enrollment pkg</button>
+<form method="post" class="form">{% csrf_token %}
+  {% if secret_form %}
+  {{ secret_form|bootstrap }}
+  {% endif %}
+  {% if enrollment_form %}
+  {{ enrollment_form|bootstrap }}
+  {% endif %}
+  <p>
+    <a class="btn btn-default" href="{% url 'munki:enrollment_list' %}">
+      Cancel
+    </a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
 </form>
 {% endblock %}

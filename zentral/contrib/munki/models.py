@@ -13,7 +13,6 @@ class Enrollment(BaseEnrollment):
     def get_description_for_distributor(self):
         return "Munki enrollment"
 
-
 class EnrolledMachine(models.Model):
     enrollment = models.ForeignKey(Enrollment)
     serial_number = models.TextField(db_index=True)

@@ -16,15 +16,11 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 
 SAL_BUNDLE_ID = "com.salsoftware.sal"
-# Currently not used
-SAL_KEY_PREFERENCE = "enrolment_key"
-SAL_SERVER_PREFERENCE = "ServerURL"
 
-USER_AGENT = "Zentral/mnkpf 0.3"
-ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"
-ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"
-ZENTRAL_API_SECRET_HEADER = "Zentral-API-Secret"
-ZENTRAL_API_SECRET = "%API_SECRET%"
+USER_AGENT = "Zentral/munkipostflight 0.4"
+ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
+ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
+ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
 
 SANTACTL = "/usr/local/bin/santactl"
 SYSTEM_PROFILER = "/usr/sbin/system_profiler"
@@ -308,7 +304,7 @@ class SystemProfilerReport(object):
 def make_api_request(url, data=None):
     req = urllib2.Request(url)
     req.add_header('User-Agent', USER_AGENT)
-    req.add_header(ZENTRAL_API_SECRET_HEADER, ZENTRAL_API_SECRET)
+    req.add_header('Authorization', 'MunkiEnrolledMachine {}'.format(ZENTRAL_API_AUTH_TOKEN))
     if data:
         data = json.dumps(data)
         req.add_header('Content-Type', 'application/json')

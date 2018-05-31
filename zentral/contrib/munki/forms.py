@@ -1,7 +1,19 @@
 from django import forms
 from zentral.core.probes.forms import BaseCreateProbeForm
 from zentral.utils.forms import CommaSeparatedQuotedStringField
+from .models import Enrollment
 from .probes import MunkiInstallProbe
+
+
+class EnrollmentForm(forms.ModelForm):
+    class Meta:
+        model = Enrollment
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("update_for", None)
+        kwargs.pop("standalone", None)
+        super().__init__(*args, **kwargs)
 
 
 class UpdateInstallProbeForm(forms.Form):

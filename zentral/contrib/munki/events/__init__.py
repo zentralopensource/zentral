@@ -8,6 +8,14 @@ logger = logging.getLogger('zentral.contrib.munki.events')
 ALL_EVENTS_SEARCH_DICT = {"tag": "munki"}
 
 
+class MunkiEnrollmentEvent(BaseEvent):
+    event_type = "munki_enrollment"
+    tags = ["munki"]
+
+
+register_event_type(MunkiEnrollmentEvent)
+
+
 class MunkiRequestEvent(BaseEvent):
     event_type = "munki_request"
     tags = ["munki", "heartbeat"]
@@ -50,3 +58,7 @@ def post_munki_events(msn, user_agent, ip, data):
             payload.update(report)
             event = MunkiEvent(metadata, payload)
             event.post()
+
+
+def post_munki_enrollment_event(msn, user_agent, ip, data):
+    MunkiEnrollmentEvent.post_machine_request_payloads(msn, user_agent, ip, [data])
