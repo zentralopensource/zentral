@@ -11,7 +11,7 @@ from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, FormView, UpdateView
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
-from zentral.contrib.inventory.models import Certificate, MachineSnapshot, MachineTag, MetaMachine
+from zentral.contrib.inventory.models import Certificate, MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_trigger_events,
                                              verify_enrollment_secret)
 from zentral.core.events.base import post_machine_conflict_event
@@ -30,11 +30,15 @@ from .utils import build_config_plist, build_configuration_profile
 logger = logging.getLogger('zentral.contrib.santa.views')
 
 
+# configuration / enrollment
+
+
 class ConfigurationListView(LoginRequiredMixin, ListView):
     model = Configuration
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
         ctx["configurations_count"] = ctx["object_list"].count()
         return ctx
 
@@ -43,12 +47,18 @@ class CreateConfigurationView(LoginRequiredMixin, CreateView):
     model = Configuration
     form_class = ConfigurationForm
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
+
 
 class ConfigurationView(LoginRequiredMixin, DetailView):
     model = Configuration
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
         enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
         ctx["enrollments"] = enrollments
         ctx["enrollments_count"] = len(enrollments)
@@ -58,6 +68,11 @@ class ConfigurationView(LoginRequiredMixin, DetailView):
 class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
     model = Configuration
     form_class = ConfigurationForm
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
 
 
 class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
@@ -106,11 +121,14 @@ class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
             return self.forms_invalid(secret_form, enrollment_form)
 
 
-class EnrollmentPackageView(View):
+class EnrollmentPackageView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
         builder = SantaZentralEnrollPkgBuilder(enrollment)
         return builder.build_and_make_response()
+
+
+# enrollment endpoint called by enrollment script
 
 
 class EnrollView(View):
@@ -149,6 +167,9 @@ class EnrollView(View):
             post_enrollment_event(serial_number, self.user_agent, self.ip,
                                   {'action': "enrollment" if enrolled_machine_created else "re-enrollment"})
         return JsonResponse(response)
+
+
+# probes
 
 
 class CreateProbeView(LoginRequiredMixin, FormView):
@@ -380,8 +401,8 @@ class PreflightView(BaseView):
         reported_serial_number = data['serial_num']
         if reported_serial_number != self.machine_serial_number:
             # the SN reported by osquery is not the one configured in the enrollment secret
-            auth_err = "osquery reported SN {} different from enrollment SN {}".format(reported_serial_number,
-                                                                                       self.machine_serial_number)
+            auth_err = "santa reported SN {} different from enrollment SN {}".format(reported_serial_number,
+                                                                                     self.machine_serial_number)
             machine_info = {k: v for k, v in data.items()
                             if k in ("hostname", "os_build", "os_version", "serial_num", "primary_user") and v}
             post_machine_conflict_event(self.request, "zentral.contrib.santa",
@@ -434,15 +455,7 @@ class RuleDownloadView(BaseView):
 
 class EventUploadView(BaseView):
     def do_post(self, data):
-        try:
-            ms = MachineSnapshot.objects.current().get(source__module='zentral.contrib.santa',
-                                                       reference=self.machine_serial_number)
-        except MachineSnapshot.DoesNotExist:
-            machine_serial_number = "UNKNOWN"
-            logger.error("Machine ID not found", extra={'request': self.request})
-        else:
-            machine_serial_number = ms.serial_number
-        post_events(machine_serial_number,
+        post_events(self.machine_serial_number,
                     self.user_agent,
                     self.ip,
                     data)

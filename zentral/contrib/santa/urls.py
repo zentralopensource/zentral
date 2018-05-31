@@ -3,7 +3,7 @@ from django.views.decorators.csrf import csrf_exempt
 from . import views
 
 urlpatterns = [
-    # enrollment
+    # configuration / enrollment
     url(r'^configurations/$',
         views.ConfigurationListView.as_view(),
         name='configuration_list'),
