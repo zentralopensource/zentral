@@ -164,10 +164,9 @@ class Enrollment(BaseEnrollment):
         return "Santa configuration: {}".format(self.configuration)
 
     def serialize_for_event(self):
-        enrollment_dict = {"pk": self.pk,
-                           "configuration": {"pk": self.configuration.pk,
-                                             "name": self.configuration.name},
-                           "created_at": self.created_at}
+        enrollment_dict = super().serialize_for_event()
+        enrollment_dict["configuration"] = {"pk": self.configuration.pk,
+                                            "name": self.configuration.name}
         if self.santa_release:
             enrollment_dict["santa_release"] = self.santa_release
         return enrollment_dict

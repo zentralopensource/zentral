@@ -717,6 +717,12 @@ class ManifestEnrollmentPackage(models.Model):
     def get_absolute_url(self):
         return "{}#mep_{}".format(reverse("monolith:manifest", args=(self.manifest.pk,)), self.pk)
 
+    def serialize_for_event(self):
+        """used for the enrollment secret verification events, via the enrollment"""
+        return {"monolith_manifest_enrollment_package": {"pk": self.pk,
+                                                         "manifest": {"pk": self.manifest.pk,
+                                                                      "name": str(self.manifest)}}}
+
 
 # Cache server
 
@@ -942,12 +948,11 @@ class Enrollment(BaseEnrollment):
         return "Monolith manifest {}, configuration {}".format(self.manifest, self.configuration)
 
     def serialize_for_event(self):
-        enrollment_dict = {"pk": self.pk,
-                           "configuration": {"pk": self.configuration.pk,
-                                             "name": self.configuration.name},
-                           "manifest": {"pk": self.manifest.pk,
-                                        "name": str(self.manifest)},
-                           "created_at": self.created_at}
+        enrollment_dict = super().serialize_for_event()
+        enrollment_dict.update({"configuration": {"pk": self.configuration.pk,
+                                                  "name": self.configuration.name},
+                                "manifest": {"pk": self.manifest.pk,
+                                             "name": str(self.manifest)}})
         if self.munki_release:
             enrollment_dict["munki_release"] = self.munki_release
         return enrollment_dict

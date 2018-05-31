@@ -248,7 +248,7 @@ class EnrollmentSecretForm(forms.ModelForm):
         fields = ("meta_business_unit", "tags", "serial_numbers", "udids", "quota")
 
     def __init__(self, *args, **kwargs):
-        meta_business_unit = kwargs.pop("meta_business_unit")
+        meta_business_unit = kwargs.pop("meta_business_unit", None)
         super().__init__(*args, **kwargs)
         mbu_field = self.fields["meta_business_unit"]
         mbu_field.queryset = MetaBusinessUnit.objects.available_for_api_enrollment()

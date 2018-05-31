@@ -946,3 +946,12 @@ class BaseEnrollment(models.Model):
     def delete(self, *args, **kwargs):
         self.secret.delete()
         super().delete(*args, **kwargs)
+
+    def serialize_for_event(self):
+        enrollment_dict = {"pk": self.pk,
+                           "created_at": self.created_at}
+        enrollment_dict.update(self.secret.serialize_for_event())
+        distributor = self.distributor
+        if distributor and hasattr(distributor, "serialize_for_event"):
+            enrollment_dict.update(distributor.serialize_for_event())
+        return enrollment_dict
