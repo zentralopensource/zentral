@@ -25,17 +25,5 @@ class MonolithConf(object):
             enrollment_package_builders[builder] = builder_cfg
         return enrollment_package_builders
 
-    @cached_property
-    def mandatory_enrollment_package_builders(self):
-        return {builder: builder_cfg
-                for builder, builder_cfg in self.enrollment_package_builders.items()
-                if not builder_cfg["optional"]}
-
-    @cached_property
-    def optional_enrollment_package_builders(self):
-        return {builder: builder_cfg
-                for builder, builder_cfg in self.enrollment_package_builders.items()
-                if builder_cfg["optional"]}
-
 
 monolith_conf = MonolithConf()

@@ -640,18 +640,6 @@ class CreateManifestView(LoginRequiredMixin, CreateView):
         context['monolith'] = True
         return context
 
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        for builder, builder_config in monolith_conf.mandatory_enrollment_package_builders.items():
-            mep = ManifestEnrollmentPackage.objects.create(
-                manifest=self.object,
-                builder=builder,
-                build_kwargs=builder_config.get("build_kwargs", {}),
-                version=1
-            )
-            build_manifest_enrollment_package(mep)
-        return response
-
 
 class ManifestView(LoginRequiredMixin, DetailView):
     model = Manifest
@@ -663,7 +651,7 @@ class ManifestView(LoginRequiredMixin, DetailView):
         context['monolith'] = True
         context['enrollments'] = list(manifest.enrollment_set.all())
         context['manifest_enrollment_packages'] = list(manifest.manifestenrollmentpackage_set.all())
-        context['manifest_enrollment_packages'].sort(key=lambda mep: (mep.get_optional(), mep.get_name(), mep.id))
+        context['manifest_enrollment_packages'].sort(key=lambda mep: (mep.get_name(), mep.id))
         context['manifest_cache_servers'] = list(manifest.cacheserver_set.all().order_by("name"))
         context['manifest_catalogs'] = list(manifest.manifestcatalog_set
                                                     .prefetch_related("tags")
@@ -678,7 +666,7 @@ class ManifestView(LoginRequiredMixin, DetailView):
         add_enrollment_package_path = reverse("monolith:add_manifest_enrollment_package", args=(manifest.id,))
         context['add_enrollment_package_links'] = [
             ("{}?builder={}".format(add_enrollment_package_path, k),
-             v["class"].name) for k, v in monolith_conf.optional_enrollment_package_builders.items()
+             v["class"].name) for k, v in monolith_conf.enrollment_package_builders.items()
         ]
         context['add_enrollment_package_links'].sort(key=lambda t: t[1])
         return context
@@ -798,16 +786,14 @@ class BaseEditManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
             self.manifest_enrollment_package = get_object_or_404(ManifestEnrollmentPackage,
                                                                  manifest=self.manifest,
                                                                  pk=kwargs["mep_pk"])
-            if not self.manifest_enrollment_package.get_optional():
-                raise Http404
             builder = self.manifest_enrollment_package.builder
-            self.builder_config = monolith_conf.optional_enrollment_package_builders[builder]
+            self.builder_config = monolith_conf.enrollment_package_builders[builder]
             self.builder_class = self.manifest_enrollment_package.builder_class
         else:
             self.manifest_enrollment_package = None
             try:
                 self.builder = request.GET["builder"]
-                self.builder_config = monolith_conf.optional_enrollment_package_builders[self.builder]
+                self.builder_config = monolith_conf.enrollment_package_builders[self.builder]
                 self.builder_class = self.builder_config["class"]
             except KeyError:
                 raise Http404
@@ -891,8 +877,6 @@ class DeleteManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
             ManifestEnrollmentPackage,
             manifest__id=kwargs["pk"], pk=kwargs["mep_pk"]
         )
-        if not self.manifest_enrollment_package.get_optional():
-            raise Http404
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):

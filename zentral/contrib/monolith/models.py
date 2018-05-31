@@ -683,9 +683,6 @@ class ManifestEnrollmentPackage(models.Model):
     def get_name(self):
         return self.builder_class.name
 
-    def get_optional(self):
-        return monolith_conf.enrollment_package_builders[self.builder]["optional"]
-
     def get_update_for(self):
         return monolith_conf.enrollment_package_builders[self.builder]["update_for"]
 

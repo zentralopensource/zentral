@@ -157,14 +157,12 @@
         {% endfor %}
       </td>
       <td width="15%">
-        {% if manifest_enrollment_package.get_optional %}
         <a class="btn btn-default" href="{% url 'monolith:update_manifest_enrollment_package' object.id manifest_enrollment_package.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
         <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_enrollment_package' object.id manifest_enrollment_package.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
-        {% endif %}
       </td>
     </tr>
     {% endwith %}
