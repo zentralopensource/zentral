@@ -254,3 +254,19 @@ class EnrollmentSecretForm(forms.ModelForm):
         mbu_field.queryset = MetaBusinessUnit.objects.available_for_api_enrollment()
         if meta_business_unit:
             mbu_field.widget = forms.HiddenInput()
+            self.fields['tags'].queryset = Tag.objects.available_for_meta_business_unit(meta_business_unit)
+
+    def clean(self):
+        super().clean()
+        meta_business_unit = self.cleaned_data["meta_business_unit"]
+        if meta_business_unit:
+            tag_set = set(self.cleaned_data['tags'])
+            wrong_tag_set = tag_set - set(Tag.objects.available_for_meta_business_unit(meta_business_unit))
+            if wrong_tag_set:
+                raise forms.ValidationError(
+                    "Tag{} {} not available for this business unit".format(
+                        "" if len(wrong_tag_set) == 1 else "s",
+                        ", ".join(str(t) for t in wrong_tag_set)
+                    )
+                )
+        return self.cleaned_data
