@@ -248,20 +248,24 @@ class EnrollmentSecretForm(forms.ModelForm):
         fields = ("meta_business_unit", "tags", "serial_numbers", "udids", "quota")
 
     def __init__(self, *args, **kwargs):
-        meta_business_unit = kwargs.pop("meta_business_unit", None)
+        self.no_restrictions = kwargs.pop("no_restrictions", False)
+        self.meta_business_unit = kwargs.pop("meta_business_unit", None)
         super().__init__(*args, **kwargs)
         mbu_field = self.fields["meta_business_unit"]
         mbu_field.queryset = MetaBusinessUnit.objects.available_for_api_enrollment()
-        if meta_business_unit:
+        if self.meta_business_unit:
+            mbu_field.initial = self.meta_business_unit.pk
             mbu_field.widget = forms.HiddenInput()
-            self.fields['tags'].queryset = Tag.objects.available_for_meta_business_unit(meta_business_unit)
+            self.fields['tags'].queryset = Tag.objects.available_for_meta_business_unit(self.meta_business_unit)
+        if self.no_restrictions:
+            for field_name in ("serial_numbers", "udids", "quota"):
+                self.fields[field_name].widget = forms.HiddenInput()
 
     def clean(self):
         super().clean()
-        meta_business_unit = self.cleaned_data["meta_business_unit"]
-        if meta_business_unit:
+        if self.meta_business_unit:
             tag_set = set(self.cleaned_data['tags'])
-            wrong_tag_set = tag_set - set(Tag.objects.available_for_meta_business_unit(meta_business_unit))
+            wrong_tag_set = tag_set - set(Tag.objects.available_for_meta_business_unit(self.meta_business_unit))
             if wrong_tag_set:
                 raise forms.ValidationError(
                     "Tag{} {} not available for this business unit".format(
@@ -270,3 +274,13 @@ class EnrollmentSecretForm(forms.ModelForm):
                     )
                 )
         return self.cleaned_data
+
+    def save(self, *args, **kwargs):
+        commit = kwargs.pop("commit", True)
+        kwargs["commit"] = False
+        enrollment_secret = super().save(*args, **kwargs)
+        if self.meta_business_unit:
+            enrollment_secret.meta_business_unit = self.meta_business_unit
+        if commit:
+            enrollment_secret.save()
+        return enrollment_secret

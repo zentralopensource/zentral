@@ -49,7 +49,14 @@ class APIClient(object):
             r = self.session.post(url, files=files)
         except requests.exceptions.RequestException:
             raise APIClientError
-        return r.json()["data"]
+        response_data = r.json()
+        errors = response_data.get("errors", None)
+        error_msg = None
+        if errors:
+            error_msg = ", ".join(error.get("title", "") for error in errors)
+        if error_msg or r.status_code != 201:
+            raise APIClientError(error_msg)
+        return response_data["data"]
 
     def delete_app(self, app_id):
         url = "{}{}/{}".format(self.BASE_URL, "/apps", app_id)

@@ -20,11 +20,14 @@ urlpatterns = [
     url(r'instances/(?P<pk>\d+)/create_app/$',
         views.CreateSimpleMDMAppView.as_view(),
         name="create_simplemdm_app"),
+    url(r'instances/(?P<instance_pk>\d+)/delete_app/(?P<pk>\d+)/$',
+        views.DeleteSimpleMDMAppView.as_view(),
+        name="delete_simplemdm_app"),
 ]
 
 
 setup_menu_cfg = {
     'items': (
-        ('simplemdm_instances', 'SimpleMDM instances'),
+        ('simplemdm_instances', 'Instances'),
     )
 }

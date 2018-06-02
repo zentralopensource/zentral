@@ -4,8 +4,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'simplemdm:simplemdm_instances' %}">simplemdm instances</a></li>
-  <li><a href="{% url 'simplemdm:simplemdm_instance' simplemdm_instance.id %}">{{ simplemdm_instance }}</a></li>
+  <li><a href="{% url 'simplemdm:simplemdm_instances' %}">SimpleMDM instances</a></li>
+  <li><a href="{{ simplemdm_instance.get_absolute_url }}">{{ simplemdm_instance }}</a></li>
   <li class="active">{{ title }}</li>
 </ol>
 
@@ -14,9 +14,10 @@
 <h3>{{ builder_name }}</h3>
 
 <form method="POST">{% csrf_token %}
-  {{ form|bootstrap }}
+  {{ secret_form|bootstrap }}
+  {{ enrollment_form|bootstrap }}
   <p>
-    <a href="{% url 'simplemdm:simplemdm_instance' simplemdm_instance.id %}" class="btn btn-default">Cancel</a>
+    <a href="{{ simplemdm_instance.get_absolute_url }}" class="btn btn-default">Cancel</a>
     <button class="btn btn-primary">Create and push app</button>
   </p>
 </form>
