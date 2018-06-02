@@ -1,17 +1,21 @@
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
-from zentral.utils.api_views import BaseEnrollmentView, BaseInstallerPackageView
+from django.views.generic import FormView
+from .forms import AuditShipperForm
 from .osx_package.builder import AuditZentralShipperPkgBuilder
 
 logger = logging.getLogger('zentral.contrib.audit.views')
 
 
-class EnrollmentView(LoginRequiredMixin, BaseEnrollmentView):
-    builder = AuditZentralShipperPkgBuilder
-    template_name = "audit/enrollment.html"
+class InstallerView(LoginRequiredMixin, FormView):
+    form_class = AuditShipperForm
+    template_name = "audit/installer.html"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        return context
 
-class InstallerPackageView(LoginRequiredMixin, BaseInstallerPackageView):
-    module = "zentral.contrib.audit"
-    builder = AuditZentralShipperPkgBuilder
-    template_name = "santa/enrollment.html"
+    def form_valid(self, form):
+        builder = AuditZentralShipperPkgBuilder(None, **form.get_build_kwargs())
+        return builder.build_and_make_response()
