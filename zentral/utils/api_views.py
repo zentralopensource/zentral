@@ -6,8 +6,7 @@ import zlib
 from django.core import signing
 from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
-from django.views.generic import TemplateView, View
-from django.views.generic.edit import FormView
+from django.views.generic import View
 from zentral.conf import settings
 from zentral.contrib.inventory.models import BusinessUnit
 from zentral.core.exceptions import ImproperlyConfigured
@@ -74,14 +73,14 @@ def verify_secret(secret, module):
     if bu_k:
         # TODO: cache
         qs = BusinessUnit.objects.select_related('source')
-        l = list(qs.filter(key__startswith=bu_k,
-                           source__module='zentral.contrib.inventory').order_by('-id'))
-        if not l:
+        bu_list = list(qs.filter(key__startswith=bu_k,
+                                 source__module='zentral.contrib.inventory').order_by('-id'))
+        if not bu_list:
             logger.error('Unknown BU %s', bu_k)
         else:
-            if len(l) > 1:
+            if len(bu_list) > 1:
                 logger.error('Found multiple BU for key %s', bu_k)
-            data['business_unit'] = l[0]
+            data['business_unit'] = bu_list[0]
     return data
 
 
@@ -178,29 +177,3 @@ class SignedRequestHeaderJSONPostAPIView(SignedRequestJSONPostAPIView):
         if auth_err:
             raise APIAuthError(auth_err)
         return req_sec
-
-# Enrollment
-
-
-class BaseEnrollmentView(TemplateView):
-    def get_context_data(self, **kwargs):
-        context = super(BaseEnrollmentView, self).get_context_data(**kwargs)
-        context['setup'] = True
-        context['form'] = self.builder.form()
-        return context
-
-
-class BaseInstallerPackageView(FormView):
-    def get_form_class(self):
-        return self.builder.form
-
-    def form_valid(self, form):
-        build_kwargs = form.get_build_kwargs()
-        business_unit = None
-        meta_business_unit = form.cleaned_data['meta_business_unit']
-        if meta_business_unit:
-            # TODO Race. The meta_business_unit could maybe be without any api BU.
-            # TODO. Better selection if multiple BU ?
-            business_unit = meta_business_unit.api_enrollment_business_units()[0]
-        builder = self.builder(business_unit, **build_kwargs)
-        return builder.build_and_make_response()

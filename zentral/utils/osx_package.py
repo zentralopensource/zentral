@@ -9,41 +9,14 @@ from subprocess import check_call, check_output
 import tempfile
 from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
-from django import forms
-from django.utils.translation import ugettext_lazy as _
 from django.http import HttpResponse
 from zentral.conf import settings
-from zentral.contrib.inventory.models import MetaBusinessUnit
 
 logger = logging.getLogger("zentral.utils.osx_package")
 
 
 TLS_SERVER_CERTS_CLIENT_PATH = "/usr/local/zentral/tls_server_certs.crt"
 TLS_CA_CERT_CLIENT_PATH = "/usr/local/zentral/tls_ca_cert.crt"
-
-
-class EnrollmentForm(forms.Form):
-    meta_business_unit = forms.ModelChoiceField(
-        label=_("Business unit"),
-        queryset=MetaBusinessUnit.objects.available_for_api_enrollment(),
-        required=False,
-    )
-
-    def __init__(self, *args, **kwargs):
-        self.standalone = kwargs.pop("standalone", False)
-        self.update_for = kwargs.pop("update_for", None)
-        super().__init__(*args, **kwargs)
-        if "initial" in kwargs and "meta_business_unit" in kwargs["initial"]:
-            self.fields["meta_business_unit"].widget = forms.HiddenInput()
-        if self.standalone:
-            self.fields["product_archive_title"] = forms.CharField(label="name", required=True, max_length=256)
-
-    def get_build_kwargs(self):
-        kwargs = {}
-        pat = self.cleaned_data.get("product_archive_title")
-        if pat:
-            kwargs["product_archive_title"] = pat
-        return kwargs
 
 
 class BasePackageBuilder(object):
