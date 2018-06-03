@@ -611,15 +611,21 @@ class Manifest(models.Model):
         # add the special catalog for the zentral enrollment packages
         data['catalogs'].append(self.get_enrollment_catalog_munki_name())
 
+        # add default managed installs
+        data['managed_installs'] = monolith_conf.default_managed_installs
+
         # loop on the configured enrollment package builders
         enrollment_packages = self.enrollment_packages(tags)
         for builder, builder_config in monolith_conf.enrollment_package_builders.items():
+            update_for = builder_config["update_for"]
             if builder in enrollment_packages:
-                key = "managed_installs"
+                # add the package it is an update_for to the managed_installs
+                if update_for not in data['managed_installs']:
+                    data['managed_installs'].append(update_for)
             else:
-                # TODO: do not remove munki deps
-                key = "managed_uninstalls"
-            data.setdefault(key, []).append(builder_config["update_for"])
+                if update_for not in data['managed_installs']:
+                    # the package it is an update_for is not in the managed_installs, remove it.
+                    data.setdefault('managed_uninstalls', []).append(update_for)
 
         # printers
 
