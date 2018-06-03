@@ -898,11 +898,6 @@ class DeleteManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         redirect_url = self.manifest_enrollment_package.manifest.get_absolute_url()
-        self.manifest_enrollment_package.file.delete(save=False)
-        enrollment = self.manifest_enrollment_package.get_enrollment()
-        if enrollment:
-            # should always be the case
-            enrollment.delete()
         self.manifest_enrollment_package.delete()
         return HttpResponseRedirect(redirect_url)
 

@@ -671,6 +671,13 @@ class ManifestEnrollmentPackage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def delete(self, *args, **kwargs):
+        self.file.delete(save=False)
+        enrollment = self.get_enrollment()
+        super().delete(*args, **kwargs)
+        if enrollment:
+            enrollment.delete()
+
     def get_installer_item_filename(self):
         return "{}.pkg".format(slugify("{} pk{} v{}".format(self.get_name(),
                                                             self.id,
