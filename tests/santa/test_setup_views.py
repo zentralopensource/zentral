@@ -1,6 +1,9 @@
+import json
 from django.core.urlresolvers import reverse
 from django.test import TestCase, override_settings
+from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.santa.models import EnrolledMachine
 from accounts.models import User
 
 
@@ -28,71 +31,110 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["user"].is_authenticated(), False)
 
-    def test_enrollment_redirect(self):
-        self.login_redirect(reverse("santa:enrollment"))
+    def post_as_json(self, url_name, data):
+        return self.client.post(reverse("santa:{}".format(url_name)),
+                                json.dumps(data),
+                                content_type="application/json")
 
-    def test_enrollment_view(self):
+    def test_configurations_redirect(self):
+        self.login_redirect(reverse("santa:configuration_list"))
+        self.login_redirect(reverse("santa:create_configuration"))
+
+    def test_get_create_configuration_view(self):
         self.log_user_in()
-        response = self.client.get(reverse("santa:enrollment"))
+        response = self.client.get(reverse("santa:create_configuration"))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "santa/enrollment.html")
-        self.assertContains(response, "Santa enrollment")
-        # doesn't list mbu without api enrollment
-        mbu_name = "Moby-Dick"
-        mbu = MetaBusinessUnit.objects.create(name=mbu_name)
-        response = self.client.get(reverse("santa:enrollment"))
-        self.assertNotContains(response, mbu_name)
-        # list mbu with api enrollment
-        mbu.create_enrollment_business_unit()
-        response = self.client.get(reverse("santa:enrollment"))
-        self.assertContains(response, mbu_name)
+        self.assertTemplateUsed(response, "santa/configuration_form.html")
+        self.assertContains(response, "Santa configuration")
 
-    def test_enrollment_debugging_view_redirect(self):
-        self.login_redirect(reverse("santa:enrollment_debugging"))
+    def create_configuration(self):
+        response = self.client.post(reverse("santa:create_configuration"),
+                                    {"name": get_random_string(64),
+                                     "batch_size": 50,
+                                     "client_mode": "1",
+                                     "banned_block_message": "yo",
+                                     "enable_page_zero_protection": "on",
+                                     "mode_notification_lockdown": "lockdown",
+                                     "mode_notification_monitor": "monitor",
+                                     "unknown_block_message": "block",
+                                     }, follow=True)
+        configuration = response.context["object"]
+        return response, configuration
 
-    def test_enrollment_debugging_view(self):
-        self.log_user_in()
-        response = self.client.get(reverse("santa:enrollment_debugging"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "curl -XPOST -k https://")
-        self.assertContains(response, "machine_id=")
-
-    def test_installer_package_view_redirect(self):
-        url = reverse("santa:installer_package")
-        response = self.client.post(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def test_installer_package_view(self):
+    def test_post_create_configuration_view(self):
         self.log_user_in()
         # without mbu
-        response = self.client.post(reverse("santa:installer_package"),
-                                    {"mode": 1})
+        response, configuration = self.create_configuration()
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertContains(response, configuration.name)
+
+    def test_get_create_enrollment_view(self):
+        self.log_user_in()
+        _, configuration = self.create_configuration()
+        response = self.client.get(reverse("santa:create_enrollment", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/enrollment_form.html")
+        self.assertContains(response, "Create enrollment")
+        self.assertContains(response, configuration.name)
+
+    def create_enrollment(self, configuration):
+        mbu = MetaBusinessUnit.objects.create(name="{} MBU".format(configuration.name))
+        mbu.create_enrollment_business_unit()
+        response = self.client.post(reverse("santa:create_enrollment", args=(configuration.pk,)),
+                                    {"secret-meta_business_unit": mbu.pk,
+                                     "configuration": configuration.pk,
+                                     "santa_release": ""}, follow=True)
+        enrollment = response.context["enrollments"][0]
+        self.assertEqual(enrollment.version, 1)
+        return response, enrollment
+
+    def test_post_create_enrollment_view(self):
+        self.log_user_in()
+        _, configuration = self.create_configuration()
+        response, enrollment = self.create_enrollment(configuration)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertEqual(response.context["object"], configuration)
+        # response contains enrollment secret meta business unit name
+        self.assertContains(response, enrollment.secret.meta_business_unit.name)
+        # response contains link to download enrollment package
+        self.assertContains(response, reverse("santa:enrollment_package", args=(configuration.pk, enrollment.pk)))
+
+    def test_enrollment_package_view(self):
+        self.log_user_in()
+        _, configuration = self.create_configuration()
+        _, enrollment = self.create_enrollment(configuration)
+        self.log_user_out()
+        enrollment_package_url = reverse("santa:enrollment_package", args=(configuration.pk, enrollment.pk))
+        self.login_redirect(enrollment_package_url)
+        self.log_user_in()
+        response = self.client.get(enrollment_package_url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_santa_enroll.pkg"')
-        # without mode
-        response = self.client.post(reverse("santa:installer_package"))
+
+    def test_enroll_view(self):
+        self.log_user_in()
+        _, configuration = self.create_configuration()
+        _, enrollment = self.create_enrollment(configuration)
+        self.log_user_out()
+        response = self.post_as_json("enroll", {})
+        self.assertEqual(response.status_code, 400)
+        machine_serial_number = get_random_string(32)
+        response = self.post_as_json("enroll",
+                                     {"secret": "yolo",
+                                      "serial_number": machine_serial_number})
+        self.assertEqual(response.status_code, 400)
+        response = self.post_as_json("enroll",
+                                     {"secret": enrollment.secret.secret,
+                                      "serial_number": machine_serial_number})
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(response, "form", "mode", "This field is required.")
-        # with wrong mode
-        response = self.client.post(reverse("santa:installer_package"),
-                                    {"mode": 3})
-        self.assertEqual(response.status_code, 200)
-        self.assertFormError(response, "form", "mode",
-                             "Select a valid choice. "
-                             "3 is not one of the available choices.")
-        # with mbu
-        mbu = MetaBusinessUnit.objects.create(name="zu")
-        response = self.client.post(reverse("santa:installer_package"),
-                                    {"meta_business_unit": mbu.pk,
-                                     "mode": 1})
-        self.assertEqual(response.status_code, 200)
-        self.assertFormError(response, "form", "meta_business_unit",
-                             "Select a valid choice. "
-                             "That choice is not one of the available choices.")
-        # enable api
-        mbu.create_enrollment_business_unit()
-        response = self.client.post(reverse("santa:installer_package"),
-                                    {"meta_business_unit": mbu.pk,
-                                     "mode": 2})
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], "application/json")
+        json_response = response.json()
+        self.assertCountEqual(["machine_id", "config_plist", "configuration_profile"],
+                              json_response.keys())
+        machine_id = json_response["machine_id"]
+        enrolled_machine = EnrolledMachine.objects.get(enrollment=enrollment,
+                                                       serial_number=machine_serial_number)
+        self.assertEqual(machine_id, enrolled_machine.machine_id)

@@ -134,15 +134,15 @@ class EnrollmentPackageView(LoginRequiredMixin, View):
 class EnrollView(View):
     def post(self, request, *args, **kwargs):
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
-        request_json = json.load(request)
-        secret = request_json["secret"]
-        serial_number = request_json["serial_number"]
         try:
+            request_json = json.load(request)
+            secret = request_json["secret"]
+            serial_number = request_json["serial_number"]
             es_request = verify_enrollment_secret(
                 "santa_enrollment", secret,
                 self.user_agent, self.ip, serial_number
             )
-        except EnrollmentSecretVerificationFailed as error:
+        except (ValueError, KeyError, EnrollmentSecretVerificationFailed):
             raise SuspiciousOperation
         else:
             # get or create enrolled machine
@@ -422,7 +422,6 @@ class PreflightView(BaseView):
                            'build': data['os_build']})
         tree = {'source': {'module': 'zentral.contrib.santa',
                            'name': 'Santa'},
-                'reference': self.enrolled_machine.machine_id,
                 'serial_number': self.machine_serial_number,
                 'os_version': os_version,
                 'system_info': {'computer_name': data['hostname']},
