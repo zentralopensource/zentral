@@ -1,5 +1,6 @@
 import logging
 from django.contrib.contenttypes.models import ContentType
+from django.http import HttpResponse
 from django.urls import reverse
 from django.utils import timezone
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
@@ -168,7 +169,7 @@ def get_next_device_artifact_action(meta_business_unit, enrolled_device):
     return None, None, None
 
 
-def get_next_device_artifact_command(meta_business_unit, enrolled_device):
+def get_next_device_artifact_command_response(meta_business_unit, enrolled_device):
     action, artifact_ct, artifact = get_next_device_artifact_action(meta_business_unit, enrolled_device)
     if action is None and artifact_ct is None and artifact is None:
         return None
@@ -192,8 +193,11 @@ def get_next_device_artifact_command(meta_business_unit, enrolled_device):
                 return build_remove_profile_command_response(artifact, command_uuid)
 
 
-def get_next_device_command(meta_business_unit, enrolled_device):
-    return get_next_device_artifact_command(meta_business_unit, enrolled_device)
+def get_next_device_command_response(meta_business_unit, enrolled_device):
+    response = get_next_device_artifact_command_response(meta_business_unit, enrolled_device)
+    if not response:
+        response = HttpResponse()
+    return response
 
 
 # process result payload
