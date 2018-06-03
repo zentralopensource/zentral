@@ -14,6 +14,7 @@ from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFai
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MachineTag
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events, verify_enrollment_secret
+from zentral.core.events.base import post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView, SignedRequestHeaderJSONPostAPIView, verify_secret
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -86,15 +87,15 @@ class EnrollmentPackageView(LoginRequiredMixin, View):
 class EnrollView(View):
     def post(self, request, *args, **kwargs):
         user_agent, ip = user_agent_and_ip_address_from_request(request)
-        request_json = json.load(request)
-        secret = request_json["secret"]
-        serial_number = request_json["serial_number"]
         try:
+            request_json = json.load(request)
+            secret = request_json["secret"]
+            serial_number = request_json["serial_number"]
             es_request = verify_enrollment_secret(
                 "munki_enrollment", secret,
                 user_agent, ip, serial_number
             )
-        except EnrollmentSecretVerificationFailed as error:
+        except (KeyError, ValueError, EnrollmentSecretVerificationFailed):
             raise SuspiciousOperation
         else:
             # get or create enrolled machine
@@ -220,15 +221,24 @@ class BaseView(JSONPostAPIView):
 class JobDetailsView(BaseView):
     max_fileinfo_age = timedelta(hours=1)
 
-    def do_post(self, data):
+    def check_data_secret(self, data):
         msn = data['machine_serial_number']
+        if msn != self.machine_serial_number:
+            # the serial number reported by the zentral postflight is not the one in the enrollment secret.
+            auth_err = "Zentral postflight reported SN {} different from enrollment SN {}".format(
+                msn, self.machine_serial_number
+            )
+            post_machine_conflict_event(self.request, "zentral.contrib.munki", msn, self.machine_serial_number, {})
+            raise APIAuthError(auth_err)
+
+    def do_post(self, data):
         event_data = {"request_type": "job_details"}
         if self.enrollment:
             event_data["enrollment"] = {"pk": self.enrollment.pk}
-        post_munki_request_event(msn, self.user_agent, self.ip, **event_data)
+        post_munki_request_event(self.machine_serial_number, self.user_agent, self.ip, **event_data)
         response_d = {'include_santa_fileinfo': True}
         try:
-            munki_state = MunkiState.objects.get(machine_serial_number=msn)
+            munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
         except MunkiState.DoesNotExist:
             pass
         else:

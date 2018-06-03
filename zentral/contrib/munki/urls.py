@@ -25,8 +25,8 @@ urlpatterns = [
         views.UpdateInstallProbeView.as_view(), name='update_install_probe'),
 
     # API
-    url(r'^job_details/$', csrf_exempt(views.JobDetailsView.as_view())),
-    url(r'^post_job/$', csrf_exempt(views.PostJobView.as_view()))
+    url(r'^job_details/$', csrf_exempt(views.JobDetailsView.as_view()), name="job_details"),
+    url(r'^post_job/$', csrf_exempt(views.PostJobView.as_view()), name="post_job")
 ]
 
 
