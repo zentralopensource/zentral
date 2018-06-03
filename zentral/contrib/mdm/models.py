@@ -603,6 +603,19 @@ class DEPEnrollmentSession(EnrollmentSession):
 # Pushed artifacts
 
 
+class InstalledDeviceArtifact(models.Model):
+    enrolled_device = models.ForeignKey(EnrolledDevice)
+    artifact_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    artifact_id = models.PositiveIntegerField()
+    artifact = GenericForeignKey("artifact_content_type", "artifact_id")
+    artifact_version = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    class Meta:
+        unique_together = ("enrolled_device", "artifact_content_type", "artifact_id")
+
+
 class DeviceArtifactCommand(models.Model):
     ACTION_INSTALL = "INSTALL"
     ACTION_REMOVE = "REMOVE"

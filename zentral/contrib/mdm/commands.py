@@ -2,7 +2,7 @@ import plistlib
 import uuid
 from django.http import HttpResponse
 from .cms import sign_payload_openssl
-from .payloads import build_payload
+from .payloads import build_payload, get_payload_identifier
 
 
 def build_command_response(request_type, content, command_uuid=None):
@@ -90,3 +90,9 @@ def build_install_profile_command_response(artifact, command_uuid):
                             [artifact_payload])
     data = sign_payload_openssl(plistlib.dumps(payload))
     return build_command_response("InstallProfile", {"Payload": data}, command_uuid)
+
+
+def build_remove_profile_command_response(artifact, command_uuid):
+    artifact_suffix = artifact.get_configuration_profile_payload_identifier_suffix()
+    identifier = get_payload_identifier(artifact_suffix)
+    return build_command_response("RemoveProfile", {"Identifier": identifier}, command_uuid)

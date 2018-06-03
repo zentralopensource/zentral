@@ -1,19 +1,14 @@
 import logging
 import plistlib
-from django.contrib.contenttypes.models import ContentType
 from django.http import HttpResponse
-from django.utils import timezone
 from django.views.generic import View
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.contrib.mdm.commands import (build_device_information_command_response,
-                                          build_install_profile_command_response)
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.models import (EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
-                                        PushCertificate,
-                                        KernelExtensionPolicy, DeviceArtifactCommand)
-from zentral.contrib.mdm.utils import parse_dn, tree_from_payload
+                                        PushCertificate)
+from zentral.contrib.mdm.utils import get_next_device_command, parse_dn, process_result_payload, tree_from_payload
 from .base import PostEventMixin
 
 logger = logging.getLogger('zentral.contrib.mdm.views.mdm')
@@ -242,128 +237,34 @@ class CheckinView(MDMView):
 
 
 class ConnectView(MDMView):
-    def post_event(self, *args, **kwargs):
-        if self.payload_status:
-            kwargs["payload_status"] = self.payload_status
-        super().post_event(*args, **kwargs)
-
-    def build_next_command_response(self):
-        artifact_content_type = ContentType.objects.get_for_model(KernelExtensionPolicy)
-        try:
-            kernel_extension_policy = KernelExtensionPolicy.objects.get(meta_business_unit=self.meta_business_unit,
-                                                                        trashed_at__isnull=True)
-        except KernelExtensionPolicy.DoesNotExist:
-            # TODO: ACTION_REMOVE !
-            # remove the installed ones. Special case, there is only one here.
-            # DeviceArtifactCommand.objects.filter(artifact_content_type=artifact_content_type,
-            #                                      enrolled_device=self.enrolled_device,
-            #                                      action=DeviceArtifactCommand.ACTION_INSTALL,
-            #                                      status_code=DeviceArtifactCommand.STATUS_CODE_ACKNOWLEDGED):
-            # remove if we find a successful install action
-            # not followed by successful remove action
-            pass
+    @staticmethod
+    def get_success(payload_status):
+        if payload_status in ["Error", "CommandFormatError"]:
+            return "failure"
         else:
-            dac_qs = DeviceArtifactCommand.objects.filter(artifact_content_type=artifact_content_type,
-                                                          artifact_id=kernel_extension_policy.pk,
-                                                          artifact_version=kernel_extension_policy.version,
-                                                          enrolled_device=self.enrolled_device,
-                                                          action=DeviceArtifactCommand.ACTION_INSTALL)
-            # install if no command found or
-            # we cannot find a successful install not followed by successful uninstall
-            last_dac_status_code = None
-            dac_count = dac_qs.count()
-            for dac in dac_qs.order_by("-id"):
-                last_dac_status_code = dac.status_code
-            if not dac_count or last_dac_status_code in [DeviceArtifactCommand.STATUS_CODE_NOT_NOW, None]:
-                # no device artifact command found or the last one had no answer or was a not now
-                # we do not want to repeat an install it they are some errors.
-
-                # we generate a command
-                device_artifact_command, created = DeviceArtifactCommand.objects.get_or_create(
-                    enrolled_device=self.enrolled_device,
-                    artifact_content_type=artifact_content_type,
-                    artifact_id=kernel_extension_policy.pk,
-                    artifact_version=kernel_extension_policy.version,
-                    action=DeviceArtifactCommand.ACTION_INSTALL,
-                    status_code__isnull=False,
-                    defaults={
-                        "command_time": timezone.now()
-                    }
-                )
-                if created:
-                    return build_install_profile_command_response(kernel_extension_policy,
-                                                                  device_artifact_command.command_uuid)
-                else:
-                    #  TODO: race?
-                    pass
-
-    def do_idle(self):
-        response = self.build_next_command_response()
-        if response is None:
-            response = build_device_information_command_response()
-        self.post_event("success")
-        return response
-
-    def update_device_artifact_command(self):
-        command_uuid = self.payload["CommandUUID"]
-        try:
-            device_artifact_command = DeviceArtifactCommand.objects.get(command_uuid=command_uuid)
-        except DeviceArtifactCommand.DoesNotExist:
-            pass
-        else:
-            device_artifact_command.status_code = self.payload_status
-            device_artifact_command.result_time = timezone.now()
-            device_artifact_command.save()
-            return device_artifact_command
-
-    def do_acknowledged(self):
-        device_artifact_command = self.update_device_artifact_command()
-
-        # TODO: QUICK AND DIRTY
-        # old quick command
-        query_responses = self.payload.get("QueryResponses")
-        if query_responses:
-            commit_machine_snapshot_and_trigger_events(tree_from_payload(self.udid,
-                                                                         self.serial_number,
-                                                                         self.meta_business_unit,
-                                                                         query_responses))
-
-        self.post_event("success", command_uuid=self.payload["CommandUUID"])
-
-        # TODO: return device_artifact_command if not None ?
-        return HttpResponse()
-
-    def do_error(self):
-        self.update_device_artifact_command()
-
-        self.post_event("failure")
-        return HttpResponse()
-
-    def do_command_format_error(self):
-        self.update_device_artifact_command()
-
-        self.post_event("failure")
-        return HttpResponse()
-
-    def do_not_now(self):
-        self.update_device_artifact_command()
-
-        self.post_event("success")
-        return HttpResponse()
+            return "success"
 
     def do_put(self):
-        self.payload_status = self.payload["Status"]
-        # TODO: more ?
-        self.enrolled_device = self.enrollment_session.enrolled_device
-        if self.payload_status == "Acknowledged":
-            return self.do_acknowledged()
-        elif self.payload_status == "Error":
-            return self.do_error()
-        elif self.payload_status == "CommandFormatError":
-            return self.do_command_format_error()
-        elif self.payload_status == "Idle":
-            return self.do_idle()
-        elif self.payload_status == "NotNow":
-            return self.do_not_now()
+        enrolled_device = self.enrollment_session.enrolled_device
+        command_uuid = self.payload.get("CommandUUID", None)
+        payload_status = self.payload["Status"]
+
+        self.post_event(self.get_success(payload_status),
+                        command_uuid=command_uuid,
+                        payload_status=payload_status)
+
+        # result
+        if self.payload_status != "Idle":
+            process_result_payload(self.meta_business_unit, enrolled_device,
+                                   command_uuid, payload_status,
+                                   self.payload)
+
+        # response
+        if self.payload_status in ["Idle", "Acknowledged"]:
+            # we can send another command
+            return get_next_device_command(self.meta_business_unit, enrolled_device)
+        elif self.payload_status in ["Error", "CommandFormatError", "NotNow"]:
+            # we stop for now TODO: better?
+            return HttpResponse()
         else:
-            self.abort("unknown payload status")
+            self.abort("unknown payload status {}".format(payload_status))
