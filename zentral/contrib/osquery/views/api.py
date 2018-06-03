@@ -42,7 +42,9 @@ class EnrollView(JSONPostAPIView):
             serial_number = None
         if serial_number is None:
             # special configuration for linux machines. see install script.
-            serial_number = data["host_identifier"]
+            serial_number = data.get("host_identifier", None)
+        if not serial_number:
+            raise APIAuthError("No serial number")
         return serial_number
 
     def verify_enrollment_secret(self, enroll_secret, serial_number):
@@ -60,7 +62,9 @@ class EnrollView(JSONPostAPIView):
 
     def verify_signed_secret(self, enroll_secret):
         api_secret_data = verify_secret(enroll_secret, SOURCE_MODULE)
-        self.machine_serial_number = api_secret_data['machine_serial_number']
+        self.machine_serial_number = api_secret_data.get('machine_serial_number', None)
+        if not self.machine_serial_number:
+            raise APIAuthError("No serial number")
         self.business_unit = api_secret_data.get("business_unit", None)
 
     def check_data_secret(self, data):
@@ -93,6 +97,14 @@ class BaseNodeView(JSONPostAPIView):
     enrollment = None
     machine_snapshot = None
 
+    def get_enrolled_machine(self):
+        try:
+            return (EnrolledMachine.objects.select_related("enrollment__configuration",
+                                                           "enrollment__secret__meta_business_unit")
+                                           .get(node_key=self.node_key))
+        except EnrolledMachine.DoesNotExist:
+            pass
+
     def get_machine_snapshot(self):
         if not self.machine_snapshot:
             auth_err = None
@@ -113,22 +125,20 @@ class BaseNodeView(JSONPostAPIView):
         try:
             self.node_key = data["node_key"]
         except KeyError:
-            raise SuspiciousOperation("Missing node_key in osquery request")
+            raise APIAuthError("Missing node_key in osquery request")
 
-        try:
-            # new way, try to find an EnrolledMachine
-            enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__configuration",
-                                                                       "enrollment__secret__meta_business_unit")
-                                                       .get(node_key=self.node_key))
-        except EnrolledMachine.DoesNotExist:
-            # old way, look for a MachineSnapshot with the node_key as reference
-            machine_snapshot = self.get_machine_snapshot()
-            self.machine_serial_number = machine_snapshot.serial_number
-            self.business_unit = machine_snapshot.business_unit
-        else:
+        enrolled_machine = self.get_enrolled_machine()
+        if enrolled_machine:
+            # new way
             self.enrollment = enrolled_machine.enrollment
             self.machine_serial_number = enrolled_machine.serial_number
             self.business_unit = self.enrollment.secret.get_api_enrollment_business_unit()
+        if not enrolled_machine:
+            # old way, look for a MachineSnapshot with the node_key as reference
+            # TODO: deprecate and remove
+            machine_snapshot = self.get_machine_snapshot()
+            self.machine_serial_number = machine_snapshot.serial_number
+            self.business_unit = machine_snapshot.business_unit
 
     def do_post(self, data):
         post_request_event(self.machine_serial_number,

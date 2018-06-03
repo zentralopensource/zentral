@@ -1,9 +1,11 @@
 import json
 from django.core.urlresolvers import reverse
 from django.test import TestCase, override_settings
-from zentral.contrib.inventory.models import MachineSnapshot
+from django.utils.crypto import get_random_string
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit
 from zentral.contrib.osquery.conf import (INVENTORY_QUERY_NAME,
                                           INVENTORY_DISTRIBUTED_QUERY_PREFIX)
+from zentral.contrib.osquery.models import Configuration, Enrollment
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import make_secret
 
@@ -46,6 +48,15 @@ OSX_APP_INSTANCE = {
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class OsqueryAPIViewsTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.configuration = Configuration.objects.create(name=get_random_string(256))
+        cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(64))
+        cls.business_unit = cls.meta_business_unit.create_enrollment_business_unit()
+        cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit)
+        cls.enrollment = Enrollment.objects.create(configuration=cls.configuration,
+                                                   secret=cls.enrollment_secret)
+
     def post_as_json(self, url_name, data):
         return self.client.post(reverse("osquery:{}".format(url_name)),
                                 json.dumps(data),
@@ -68,22 +79,27 @@ class OsqueryAPIViewsTestCase(TestCase):
         response = self.post_as_json("enroll", {"no_enroll_secret_key": True})
         self.assertEqual(response.status_code, 400)
 
-    def test_enroll_bad_enroll_secret_signature(self):
-        response = self.post_as_json("enroll", {"enroll_secret": "INVALID ENROLL SECRET"})
-        self.assertContains(response, "Bad secret signature", status_code=403)
+    def test_enroll_bad_secret(self):
+        response = self.post_as_json(
+            "enroll",
+            {"enroll_secret": "INVALID ENROLL SECRET",
+             "host_details": {"system_info": {"hardware_serial": get_random_string(32)}}}
+        )
+        self.assertContains(response, "Unknown enrolled machine", status_code=403)
 
-    def test_enroll_enroll_secret_bad_module(self):
-        secret = make_secret("zentral.inexisting.module")
+    def test_enroll_enroll_secret_bad_module_old_way(self):
+        # TODO: deprecate and remove
+        secret = "{}$SERIAL${}".format(make_secret("zentral.inexisting.module"), get_random_string(32))
         response = self.post_as_json("enroll", {"enroll_secret": secret})
         self.assertContains(response, "Invalid module", status_code=403)
 
     def test_enroll_not_machine_serial_number(self):
-        secret = make_secret("zentral.contrib.osquery")
-        response = self.post_as_json("enroll", {"enroll_secret": secret})
-        self.assertEqual(response.status_code, 400)
+        response = self.post_as_json("enroll", {"enroll_secret": self.enrollment.secret.secret})
+        self.assertContains(response, "No serial number", status_code=403)
 
-    def test_enroll_ok(self):
-        machine_serial_number = "210923091238731290"
+    def test_enroll_ok_old_way(self):
+        # TODO: deprecate and remove
+        machine_serial_number = get_random_string(32)
         machine_test_qs = MachineSnapshot.objects.filter(source__module="zentral.contrib.osquery",
                                                          serial_number=machine_serial_number)
         # no machine
@@ -99,7 +115,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(machine.reference, json_response["node_key"])
 
     def test_enroll_with_host_identifier_ok(self):
-        machine_serial_number = "210923091238731290"
+        machine_serial_number = get_random_string(32)
         machine_test_qs = MachineSnapshot.objects.filter(source__module="zentral.contrib.osquery",
                                                          serial_number=machine_serial_number)
         # no machine
@@ -117,7 +133,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(machine.system_info.computer_name, "godzilla")
 
     def test_re_enroll(self):
-        machine_serial_number = "2130982103971203"
+        machine_serial_number = get_random_string(32)
         # enroll machine
         secret = "{}$SERIAL${}".format(make_secret("zentral.contrib.osquery"),
                                        machine_serial_number)
@@ -144,15 +160,18 @@ class OsqueryAPIViewsTestCase(TestCase):
         response = self.post_as_json("config", {"node_key": "godzilla"})
         self.assertContains(response, "Wrong node_key", status_code=403)
 
-    def enroll_machine(self, machine_serial_number):
-        secret = "{}$SERIAL${}".format(make_secret("zentral.contrib.osquery"),
-                                       machine_serial_number)
-        response = self.post_as_json("enroll", {"enroll_secret": secret})
-        json_response = response.json()
-        return json_response["node_key"]
+    def enroll_machine(self):
+        machine_serial_number = get_random_string(64)
+        response = self.post_as_json(
+            "enroll",
+            {"enroll_secret": self.enrollment.secret.secret,
+             "host_details": {"system_info": {"hardware_serial": machine_serial_number}}}
+        )
+        self.assertEqual(response.status_code, 200)
+        return machine_serial_number, response.json()["node_key"]
 
     def test_config_ok(self):
-        node_key = self.enroll_machine("0123456789")
+        _, node_key = self.enroll_machine()
         response = self.post_as_json("config", {"node_key": node_key})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
@@ -162,7 +181,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertIn(INVENTORY_QUERY_NAME, schedule)
 
     def test_osx_app_instance_schedule(self):
-        node_key = self.enroll_machine("0123456789")
+        _, node_key = self.enroll_machine()
         self.post_default_inventory_query_snapshot(node_key)
         # machine platform = MACOS now
         response = self.post_as_json("config", {"node_key": node_key})
@@ -180,7 +199,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertCountEqual(["POST", "OPTIONS"], (m.strip() for m in response["Allow"].split(",")))
 
     def test_distributed_read_default_inventory_query(self):
-        node_key = self.enroll_machine("0123456789")
+        _, node_key = self.enroll_machine()
         response = self.post_as_json("distributed_read", {"node_key": node_key})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
@@ -200,13 +219,13 @@ class OsqueryAPIViewsTestCase(TestCase):
                            })
 
     def test_default_inventory_query_snapshot(self):
-        node_key = self.enroll_machine("0123456789")
+        machine_serial_number, node_key = self.enroll_machine()
         self.post_default_inventory_query_snapshot(node_key)
-        ms = MachineSnapshot.objects.current().get(serial_number="0123456789")
+        ms = MachineSnapshot.objects.current().get(serial_number=machine_serial_number)
         self.assertEqual(ms.os_version.build, INVENTORY_QUERY_SNAPSHOT[0]["build"])
 
     def test_distributed_read_one_query_plus_default_inventory_query(self):
-        node_key = self.enroll_machine("0123456789")
+        _, node_key = self.enroll_machine()
         # one distributed query probe
         dq = "select * from users;"
         probe_source = ProbeSource.objects.create(
@@ -252,7 +271,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertCountEqual(["POST", "OPTIONS"], (m.strip() for m in response["Allow"].split(",")))
 
     def test_distributed_write(self):
-        node_key = self.enroll_machine("0123456789")
+        _, node_key = self.enroll_machine()
         # query
         probe_source = ProbeSource.objects.create(
             name="Shellac",
@@ -272,7 +291,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertCountEqual(["POST", "OPTIONS"], (m.strip() for m in response["Allow"].split(",")))
 
     def test_log_default_inventory_query(self):
-        node_key = self.enroll_machine("0123456789")
+        machine_serial_number, node_key = self.enroll_machine()
         snapshot = [
             {
                 "build": "15G1108",
@@ -290,7 +309,7 @@ class OsqueryAPIViewsTestCase(TestCase):
                 "cpu_subtype": "Intel x86-64h Haswell",
                 "cpu_type": "x86_64h",
                 "hardware_model": "MacBookPro11,1",
-                "hardware_serial": "0123456789",
+                "hardware_serial": machine_serial_number,
                 "hostname": "godzilla",
                 "physical_memory": "17179869184",
                 "table_name": "system_info"
@@ -332,7 +351,7 @@ class OsqueryAPIViewsTestCase(TestCase):
             osx_app_instances__app__bundle_name="1Password Updater").count(), 1)
 
     def test_log_status(self):
-        node_key = self.enroll_machine("0123456789")
+        _, node_key = self.enroll_machine()
         post_data = {
             "node_key": node_key,
             "log_type": "status",
@@ -351,7 +370,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(json_response, {})
 
     def test_log_event_format_result(self):
-        node_key = self.enroll_machine("0123456789")
+        _, node_key = self.enroll_machine()
         post_data = {
             "node_key": node_key,
             "log_type": "result",
@@ -369,7 +388,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(json_response, {})
 
     def test_log_snapshot_format_result(self):
-        node_key = self.enroll_machine("0123456789")
+        _, node_key = self.enroll_machine()
         post_data = {
             "node_key": node_key,
             "log_type": "result",

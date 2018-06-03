@@ -31,6 +31,7 @@ class CreateConfigurationView(LoginRequiredMixin, CreateView):
         ctx["setup"] = True
         return ctx
 
+
 class ConfigurationView(LoginRequiredMixin, DetailView):
     model = Configuration
 
@@ -51,6 +52,7 @@ class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
         return ctx
+
 
 class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
     template_name = "osquery/enrollment_form.html"

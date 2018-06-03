@@ -9,7 +9,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class OsqueryZentralEnrollScriptBuilder(APIConfigToolsMixin):
     form = EnrollmentForm
-    script_name = "osquery_zentral_setup.sh"
+    script_name = "zentral_osquery_setup.sh"
 
     def __init__(self, enrollment):
         self.business_unit = enrollment.secret.get_api_enrollment_business_unit()

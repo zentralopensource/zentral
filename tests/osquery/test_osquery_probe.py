@@ -168,7 +168,7 @@ class OsqueryProbeTestCase(TestCase):
     def test_osquery_conf(self):
         # default machine has a subset of the queries
         default_machine = MockMetaMachine([], [], None, None)
-        config = build_osquery_conf(default_machine)
+        config = build_osquery_conf(default_machine, enrollment=None)
         # schedule with query 1
         schedule = config["schedule"]
         self.assertIsInstance(schedule, dict)
@@ -186,7 +186,7 @@ class OsqueryProbeTestCase(TestCase):
 
         # windows has all the queries
         windows = MockMetaMachine([1], [1], "WINDOWS", None)
-        config = build_osquery_conf(windows)
+        config = build_osquery_conf(windows, enrollment=None)
         # schedule with query 1
         schedule = config["schedule"]
         self.assertIsInstance(schedule, dict)
