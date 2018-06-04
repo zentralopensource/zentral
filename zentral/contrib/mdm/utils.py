@@ -131,7 +131,7 @@ def get_configured_device_artifact_dict(meta_business_unit, serial_number):
 
 def get_installed_device_artifact_dict(enrolled_device):
     artifact_version_dict = {}
-    for ida in (InstalledDeviceArtifact.objects.select_related("artifact_ct")
+    for ida in (InstalledDeviceArtifact.objects.select_related("artifact_content_type")
                                                .filter(enrolled_device=enrolled_device)):
         artifact_ct = ida.artifact_content_type
         if artifact_ct not in artifact_version_dict:
@@ -224,7 +224,8 @@ def update_device_artifact_command(enrolled_device, command_uuid, payload_status
             # a new version of the artifact has been installed on the device
             InstalledDeviceArtifact.objects.update_or_create(
                 enrolled_device=enrolled_device,
-                artifact=device_artifact_command.artifact,
+                artifact_content_type=device_artifact_command.artifact_content_type,
+                artifact_id=device_artifact_command.artifact_id,
                 artifact_version=device_artifact_command.artifact_version
             )
         else:
