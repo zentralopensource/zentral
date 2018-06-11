@@ -38,7 +38,7 @@ class MetaBusinessUnitManager(models.Manager):
         return mbu
 
     def available_for_api_enrollment(self):
-        return self.filter(businessunit__source__module='zentral.contrib.inventory')
+        return self.distinct().filter(businessunit__source__module='zentral.contrib.inventory')
 
 
 class MetaBusinessUnit(models.Model):
