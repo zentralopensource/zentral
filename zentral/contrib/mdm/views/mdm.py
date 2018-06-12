@@ -8,9 +8,9 @@ from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.models import (EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
                                         PushCertificate)
-from zentral.contrib.mdm.utils import (get_next_device_command_response,
-                                       parse_dn, process_result_payload, tree_from_payload)
 from .base import PostEventMixin
+from .utils import (get_next_device_command_response,
+                    parse_dn, process_result_payload, tree_from_payload)
 
 logger = logging.getLogger('zentral.contrib.mdm.views.mdm')
 
@@ -255,16 +255,16 @@ class ConnectView(MDMView):
                         payload_status=payload_status)
 
         # result
-        if self.payload_status != "Idle":
+        if payload_status != "Idle":
             process_result_payload(self.meta_business_unit, enrolled_device,
                                    command_uuid, payload_status,
                                    self.payload)
 
         # response
-        if self.payload_status in ["Idle", "Acknowledged"]:
+        if payload_status in ["Idle", "Acknowledged"]:
             # we can send another command
             return get_next_device_command_response(self.meta_business_unit, enrolled_device)
-        elif self.payload_status in ["Error", "CommandFormatError", "NotNow"]:
+        elif payload_status in ["Error", "CommandFormatError", "NotNow"]:
             # we stop for now TODO: better?
             return HttpResponse()
         else:
