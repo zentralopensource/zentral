@@ -117,10 +117,11 @@ class EnrollView(View):
         request_json = json.load(request)
         secret = request_json["secret"]
         serial_number = request_json["serial_number"]
+        uuid = request_json["uuid"]
         try:
             es_request = verify_enrollment_secret(
                 "monolith_enrollment", secret,
-                user_agent, ip, serial_number
+                user_agent, ip, serial_number, uuid
             )
         except EnrollmentSecretVerificationFailed as error:
             raise SuspiciousOperation
