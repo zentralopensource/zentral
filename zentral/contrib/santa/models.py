@@ -142,11 +142,14 @@ class Configuration(models.Model):
         return self.client_mode == self.MONITOR_MODE
 
     def get_sync_server_config(self):
-        return {k: getattr(self, k) for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
+        return {k: getattr(self, k)
+                for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES
+                if getattr(self, k) != ""}
 
     def get_local_config(self):
         return {"".join(s.capitalize() for s in k.split("_")): getattr(self, k)
-                for k in self.LOCAL_CONFIGURATION_ATTRIBUTES}
+                for k in self.LOCAL_CONFIGURATION_ATTRIBUTES
+                if getattr(self, k) != ""}
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
