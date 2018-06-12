@@ -86,9 +86,9 @@ class EnrolledUser(models.Model):
 class EnrollmentSession(models.Model):
     product = models.TextField()
     version = models.TextField()
-    imei = models.TextField(max_length=18, null=True)
+    imei = models.CharField(max_length=18, null=True)
     meid = models.CharField(max_length=18, null=True)
-    language = models.CharField(max_length=3, null=True)
+    language = models.CharField(max_length=64, null=True)
 
     enrolled_device = models.ForeignKey(EnrolledDevice, null=True)
 
@@ -102,6 +102,11 @@ class EnrollmentSession(models.Model):
         for attr in ("product", "version", "imei", "meid", "language"):
             val = payload.get(attr.upper(), None)
             if val:
+                field = self._meta.get_field(attr)
+                field_max_length = getattr(field, "max_length", None)
+                if field_max_length and len(val) > field_max_length:
+                    logger.error("Value %s for field %s too long. Will be truncated.", val, attr)
+                    val = val[:field_max_length]
                 setattr(self, attr, val)
         if commit:
             self.save()
