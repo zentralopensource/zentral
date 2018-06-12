@@ -8,12 +8,12 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import (DeviceArtifactCommand, EnrolledDevice,
                                         InstalledDeviceArtifact, KernelExtensionPolicy,
                                         MetaBusinessUnitPushCertificate, PushCertificate)
-from zentral.contrib.mdm.utils import (get_configured_device_artifact_dict,
-                                       get_installed_device_artifact_dict,
-                                       get_next_device_artifact_action,
-                                       get_next_device_artifact_command_response,
-                                       get_next_device_command_response,
-                                       update_device_artifact_command)
+from zentral.contrib.mdm.views.utils import (get_configured_device_artifact_dict,
+                                             get_installed_device_artifact_dict,
+                                             get_next_device_artifact_action,
+                                             get_next_device_artifact_command_response,
+                                             get_next_device_command_response,
+                                             update_device_artifact_command)
 
 
 class TestMDMArtifacts(TestCase):
