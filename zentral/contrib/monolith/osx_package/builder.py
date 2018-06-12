@@ -38,7 +38,7 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
             yield depnotify_releases.get_requested_package(depnotify_release)
 
     def get_product_archive_title(self):
-        if self.build_kwargs.get("release"):
+        if self.build_kwargs.get("release") or self.build_kwargs.get("depnotify_release"):
             return self.build_kwargs.get("product_archive_title", self.name)
 
     def extra_build_steps(self):
