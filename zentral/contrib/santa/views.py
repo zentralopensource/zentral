@@ -161,7 +161,7 @@ class EnrollView(View):
             cp_name, cp_content = build_configuration_profile(enrolled_machine)
             response["configuration_profile"] = {"name": cp_name, "content": cp_content}
             cpl_name, cpl_content = build_config_plist(enrolled_machine)
-            response["config_plist"] = {"name": cpl_name, "content": cp_content}
+            response["config_plist"] = {"name": cpl_name, "content": cpl_content}
 
             # post event
             post_enrollment_event(serial_number, self.user_agent, self.ip,
