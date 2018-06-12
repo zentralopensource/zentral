@@ -91,9 +91,11 @@ class EnrollView(View):
             request_json = json.load(request)
             secret = request_json["secret"]
             serial_number = request_json["serial_number"]
+            uuid = request_json["uuid"]
             es_request = verify_enrollment_secret(
                 "munki_enrollment", secret,
-                user_agent, ip, serial_number
+                user_agent, ip,
+                serial_number, uuid
             )
         except (KeyError, ValueError, EnrollmentSecretVerificationFailed):
             raise SuspiciousOperation
@@ -208,12 +210,13 @@ class BaseView(JSONPostAPIView):
         enrolled_machine_token = self.get_enrolled_machine_token(request)
         if enrolled_machine_token:
             # new way
+            self.request_secret = enrolled_machine_token
             self.verify_enrolled_machine_token(enrolled_machine_token)
         else:
             # old way
-            request_secret = self.get_request_secret(request)
-            if request_secret:
-                self.verify_request_secret(request_secret)
+            self.request_secret = self.get_request_secret(request)
+            if self.request_secret:
+                self.verify_request_secret(self.request_secret)
             else:
                 raise APIAuthError("Could not authenticate the request")
 
@@ -222,7 +225,13 @@ class JobDetailsView(BaseView):
     max_fileinfo_age = timedelta(hours=1)
 
     def check_data_secret(self, data):
+        if not self.machine_serial_number:
+            logger.error("No machine serial number. Request secret %s", self.request_secret)
+            return
         msn = data['machine_serial_number']
+        if not msn:
+            logger.error("No reported machine serial number. Request secret %s", self.request_secret)
+            return
         if msn != self.machine_serial_number:
             # the serial number reported by the zentral postflight is not the one in the enrollment secret.
             auth_err = "Zentral postflight reported SN {} different from enrollment SN {}".format(

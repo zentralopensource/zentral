@@ -19,9 +19,10 @@ ZENTRAL_MUNKI_DIR = "/usr/local/zentral/munki/"
 ZENTRAL_MUNKI_POSTFLIGHT_FILE = os.path.join(ZENTRAL_MUNKI_DIR, "zentral_postflight")
 
 
-def get_serial_number():
+def get_serial_number_and_uuid():
     output = subprocess.check_output(["ioreg", "-a", "-c", "IOPlatformExpertDevice", "-d", "2"])
-    return plistlib.readPlistFromString(output)["IORegistryEntryChildren"][0]["IOPlatformSerialNumber"]
+    ioreg_result = plistlib.readPlistFromString(output)["IORegistryEntryChildren"][0]
+    return ioreg_result["IOPlatformSerialNumber"], ioreg_result["IOPlatformUUID"]
 
 
 def enroll():
@@ -29,8 +30,10 @@ def enroll():
     req.add_header("User-Agent", USER_AGENT)
     req.add_header("Content-Type", "application/json")
     ctx = ssl.create_default_context(cafile=TLS_CA_CERT)
+    serial_number, uuid = get_serial_number_and_uuid()
     data = json.dumps({"secret": ENROLLMENT_SECRET,
-                       "serial_number": get_serial_number()})
+                       "serial_number": serial_number,
+                       "uuid": uuid})
     resp = urllib2.urlopen(req, data=data, context=ctx)
     return json.load(resp)["token"]
 

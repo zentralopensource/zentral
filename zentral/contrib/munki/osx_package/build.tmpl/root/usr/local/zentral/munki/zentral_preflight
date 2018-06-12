@@ -1,24 +1,22 @@
 #!/usr/bin/python
-from Foundation import (CFPreferencesCopyAppValue,
+from Foundation import (CFPreferencesAppSynchronize,
+                        CFPreferencesCopyAppValue,
                         CFPreferencesSetValue,
                         kCFPreferencesAnyHost,
                         kCFPreferencesCurrentUser)
+import plistlib
 import subprocess
 
 BUNDLE_ID = 'ManagedInstalls'
 ADDITIONAL_HTTP_HEADERS_KEY = 'AdditionalHttpHeaders'
 SN_HEADER = 'X-Zentral-Serial-Number'
+UUID_HEADER = 'X-Zentral-UUID'
 
 
-def get_serial_number():
-    p = subprocess.Popen(["/usr/sbin/ioreg",
-                          "-c", "IOPlatformExpertDevice",
-                          "-d", "2"],
-                         stdout=subprocess.PIPE)
-    stdoutdata, _ = p.communicate()
-    for line in stdoutdata.splitlines():
-        if "IOPlatformSerialNumber" in line:
-            return line.split("=")[-1].strip('" ')
+def get_serial_number_and_uuid():
+    output = subprocess.check_output(["ioreg", "-a", "-c", "IOPlatformExpertDevice", "-d", "2"])
+    ioreg_result = plistlib.readPlistFromString(output)["IORegistryEntryChildren"][0]
+    return ioreg_result["IOPlatformSerialNumber"], ioreg_result["IOPlatformUUID"]
 
 
 def update_additional_http_headers():
@@ -26,21 +24,21 @@ def update_additional_http_headers():
     cfg_headers = CFPreferencesCopyAppValue(ADDITIONAL_HTTP_HEADERS_KEY,
                                             BUNDLE_ID)
     if cfg_headers:
-        headers = dict(h.split(":", 1) for h in cfg_headers)
+        headers = dict(h.split(": ", 1) for h in cfg_headers)
     else:
         headers = {}
-    # add s/n header if necessary
-    if SN_HEADER not in headers:
-        serial_number = get_serial_number()
-        if serial_number:
-            headers[SN_HEADER] = serial_number
-            headers = ["{}: {}".format(k, v) for k, v in headers.items()]
-            # save the updated value
-            CFPreferencesSetValue(ADDITIONAL_HTTP_HEADERS_KEY,
-                                  headers, BUNDLE_ID,
-                                  # to write in /var/root
-                                  kCFPreferencesCurrentUser,
-                                  kCFPreferencesAnyHost)
+    serial_number, uuid = get_serial_number_and_uuid()
+    headers[SN_HEADER] = serial_number
+    headers[UUID_HEADER] = uuid
+    # save the updated headers
+    serialized_headers = ["{}: {}".format(k, v) for k, v in headers.items()]
+    CFPreferencesSetValue(ADDITIONAL_HTTP_HEADERS_KEY,
+                          serialized_headers,
+                          BUNDLE_ID,
+                          # to write in /var/root
+                          kCFPreferencesCurrentUser,
+                          kCFPreferencesAnyHost)
+    CFPreferencesAppSynchronize(BUNDLE_ID)
 
 
 if __name__ == "__main__":
