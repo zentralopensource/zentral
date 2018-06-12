@@ -8,9 +8,8 @@ class MonolithConf(object):
     def app_config(self):
         return settings['apps']['zentral.contrib.monolith'].copy()
 
-    @cached_property
-    def default_managed_installs(self):
-        return self.app_config().get("default_managed_installs", [])
+    def get_default_managed_installs(self):
+        return list(self.app_config().get("default_managed_installs", []))
 
     @cached_property
     def repository(self):

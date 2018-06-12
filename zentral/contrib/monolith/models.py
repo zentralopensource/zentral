@@ -612,7 +612,7 @@ class Manifest(models.Model):
         data['catalogs'].append(self.get_enrollment_catalog_munki_name())
 
         # add default managed installs
-        data['managed_installs'] = monolith_conf.default_managed_installs
+        data['managed_installs'] = monolith_conf.get_default_managed_installs()
 
         # loop on the configured enrollment package builders
         enrollment_packages = self.enrollment_packages(tags)
