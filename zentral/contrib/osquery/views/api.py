@@ -47,11 +47,18 @@ class EnrollView(JSONPostAPIView):
             raise APIAuthError("No serial number")
         return serial_number
 
-    def verify_enrollment_secret(self, enroll_secret, serial_number):
+    def get_uuid(self, data):
+        try:
+            return data["host_details"]["system_info"]["uuid"].strip()
+        except (KeyError, AttributeError):
+            pass
+
+    def verify_enrollment_secret(self, enroll_secret, serial_number, uuid):
         try:
             es_request = verify_enrollment_secret(
                 "osquery_enrollment", enroll_secret,
-                self.user_agent, self.ip, serial_number
+                self.user_agent, self.ip,
+                serial_number, uuid
             )
         except EnrollmentSecretVerificationFailed:
             raise APIAuthError("Unknown enrolled machine")
@@ -73,7 +80,8 @@ class EnrollView(JSONPostAPIView):
         if "$" not in enroll_secret:
             # new way, with Enrollment model
             serial_number = self.get_serial_number(data)
-            self.verify_enrollment_secret(enroll_secret, serial_number)
+            uuid = self.get_uuid(data)
+            self.verify_enrollment_secret(enroll_secret, serial_number, uuid)
         else:
             # old way, with a signed enroll_secret
             self.verify_signed_secret(enroll_secret)
