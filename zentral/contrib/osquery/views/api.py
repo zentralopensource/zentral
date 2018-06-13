@@ -77,7 +77,7 @@ class EnrollView(JSONPostAPIView):
     def check_data_secret(self, data):
         enroll_secret = self.get_enroll_secret(data)
         self.enrollment = None
-        if "$" not in enroll_secret:
+        if ":" not in enroll_secret:
             # new way, with Enrollment model
             serial_number = self.get_serial_number(data)
             uuid = self.get_uuid(data)
