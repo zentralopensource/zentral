@@ -1119,7 +1119,7 @@ class MRBaseView(View):
     def authenticate(self, request):
         self.token_msn = None
         token = self.get_token(request)
-        if "$" not in token:
+        if ":" not in token:
             self.verify_enrolled_machine_token(token)
         else:
             self.verify_signed_token(token)
