@@ -1,10 +1,11 @@
 import logging
 import plistlib
+from django.db import transaction
 from django.http import HttpResponse
 from django.views.generic import View
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.contrib.mdm.events import MDMRequestEvent
+from zentral.contrib.mdm.events import MDMRequestEvent, send_device_notification
 from zentral.contrib.mdm.models import (EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
                                         PushCertificate)
@@ -51,7 +52,7 @@ class MDMView(PostEventMixin, View):
             try:
                 self.enrollment_session = (
                     OTAEnrollmentSession.objects
-                    .select_related("enrolled_device")
+                    .select_for_update()
                     .get(enrollment_secret__secret=enrollment_secret_secret)
                 )
             except OTAEnrollmentSession.DoesNotExist:
@@ -60,7 +61,7 @@ class MDMView(PostEventMixin, View):
             try:
                 self.enrollment_session = (
                     DEPEnrollmentSession.objects
-                    .select_related("enrolled_device")
+                    .select_for_update()
                     .get(enrollment_secret__secret=enrollment_secret_secret)
                 )
             except DEPEnrollmentSession.DoesNotExist:
@@ -92,6 +93,7 @@ class MDMView(PostEventMixin, View):
 
 class CheckinView(MDMView):
     message_type = None
+    first_device_notification_delay = 5  # in seconds, TODO: empirical!!!
 
     def post_event(self, *args, **kwargs):
         if self.message_type:
@@ -126,7 +128,6 @@ class CheckinView(MDMView):
 
     def do_token_update(self):
         # TODO: do something with AwaitingConfiguration. Part of the DEP setup.
-
         enrolled_device_defaults = {"push_certificate": self.push_certificate,
                                     "serial_number": self.serial_number,
                                     "push_magic": self.payload.get("PushMagic"),
@@ -141,55 +142,36 @@ class CheckinView(MDMView):
             enrolled_device_defaults["token"] = payload_token
 
         # enrolled device
-        enrolled_device, device_created = EnrolledDevice.objects.get_or_create(
+        enrolled_device, device_created = EnrolledDevice.objects.update_or_create(
             udid=self.udid,
             defaults=enrolled_device_defaults
         )
 
-        updated_device_attr = []
-        if not device_created:
-            for attr, val in enrolled_device_defaults.items():
-                current_val = getattr(enrolled_device, attr)
-                if current_val != val:
-                    setattr(enrolled_device, attr, val)
-                    updated_device_attr.append(attr)
-            if updated_device_attr:
-                enrolled_device.save()
-                updated_device_attr.sort()
+        if not user_id and enrolled_device.can_be_poked():
+            transaction.on_commit(lambda: send_device_notification(enrolled_device,
+                                                                   delay=self.first_device_notification_delay))
 
         # Update enrollment session
         if enrolled_device.token and not self.enrollment_session.is_completed():
             self.enrollment_session.set_completed_status(enrolled_device)
 
         # enrolled user
-        updated_user_attr = []
         user_created = False
         if user_id:
             enrolled_user_defaults = {"long_name": self.payload.get("UserLongName"),
                                       "short_name": self.payload.get("UserShortName"),
                                       "token": payload_token,
                                       "enrolled_device": enrolled_device}
-            enrolled_user, user_created = EnrolledUser.objects.get_or_create(
+            enrolled_user, user_created = EnrolledUser.objects.update_or_create(
                 user_id=user_id,
                 defaults=enrolled_user_defaults
             )
-            if not user_created:
-                for attr, val in enrolled_user_defaults.items():
-                    current_val = getattr(enrolled_user, attr)
-                    if current_val != val:
-                        setattr(enrolled_device, attr, val)
-                        updated_user_attr.append(attr)
-                    if updated_user_attr:
-                        enrolled_user.save()
-                        updated_user_attr.sort()
 
         self.post_event("success",
                         token_type="user" if user_id else "device",
                         user_id=user_id,
                         device_created=device_created,
-                        updated_device_attr=updated_device_attr,
-                        user_created=user_created,
-                        updated_user_attr=updated_user_attr)
+                        user_created=user_created)
 
     def do_checkout(self):
         try:

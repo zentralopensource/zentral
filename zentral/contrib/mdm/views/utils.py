@@ -226,7 +226,9 @@ def update_device_artifact_command(enrolled_device, command_uuid, payload_status
                 enrolled_device=enrolled_device,
                 artifact_content_type=device_artifact_command.artifact_content_type,
                 artifact_id=device_artifact_command.artifact_id,
-                artifact_version=device_artifact_command.artifact_version
+                defaults={
+                  "artifact_version": device_artifact_command.artifact_version
+                }
             )
         else:
             # the artifact has been removed from the device

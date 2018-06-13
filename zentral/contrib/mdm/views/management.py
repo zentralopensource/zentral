@@ -1,11 +1,12 @@
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
+from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView, TemplateView, UpdateView, View
-from zentral.contrib.mdm.apns import send_device_notification
+from zentral.contrib.mdm.events import send_device_notification, send_mbu_device_notifications
 from zentral.contrib.mdm.forms import DeviceSearchForm
 from zentral.contrib.mdm.models import (EnrolledDevice, DEPDevice, DEPEnrollmentSession, OTAEnrollmentSession,
                                         KernelExtensionPolicy, KernelExtensionTeam, KernelExtension)
@@ -117,6 +118,11 @@ class CreateKernelExtensionPolicyView(LoginRequiredMixin, CreateView):
     model = KernelExtensionPolicy
     fields = "__all__"
 
+    def form_valid(self, form):
+        kext_policy = form.save()
+        transaction.on_commit(lambda: send_mbu_device_notifications(kext_policy.meta_business_unit))
+        return HttpResponseRedirect(kext_policy.get_absolute_url())
+
 
 class KernelExtensionPolicyView(LoginRequiredMixin, DetailView):
     model = KernelExtensionPolicy
@@ -125,3 +131,8 @@ class KernelExtensionPolicyView(LoginRequiredMixin, DetailView):
 class UpdateKernelExtensionPolicyView(LoginRequiredMixin, UpdateView):
     model = KernelExtensionPolicy
     fields = "__all__"
+
+    def form_valid(self, form):
+        kext_policy = form.save()
+        transaction.on_commit(lambda: send_mbu_device_notifications(kext_policy.meta_business_unit))
+        return HttpResponseRedirect(kext_policy.get_absolute_url())

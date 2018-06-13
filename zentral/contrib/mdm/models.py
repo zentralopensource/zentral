@@ -4,14 +4,19 @@ import logging
 import uuid
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.fields import ArrayField, JSONField
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from django.db.models import F
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
 from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaBusinessUnit
+from zentral.utils.osx_package import get_standalone_package_builders
 from .exceptions import EnrollmentSessionStatusError
+from .utils import build_mdm_enrollment_package
+
 
 logger = logging.getLogger("zentral.contrib.mdm.models")
 
@@ -53,6 +58,18 @@ class MetaBusinessUnitPushCertificate(models.Model):
 # Enrollment
 
 
+class EnrolledDeviceManager(models.Manager):
+    def active_in_mbu(self, meta_business_unit):
+        try:
+            push_certificate = meta_business_unit.metabusinessunitpushcertificate.push_certificate
+        except ObjectDoesNotExist:
+            return self.none()
+        return self.filter(checkout_at__isnull=True,
+                           token__isnull=False,
+                           push_magic__isnull=False,
+                           push_certificate=push_certificate)
+
+
 class EnrolledDevice(models.Model):
     push_certificate = models.ForeignKey(PushCertificate, on_delete=models.CASCADE)
     serial_number = models.TextField(db_index=True)
@@ -64,10 +81,17 @@ class EnrolledDevice(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = EnrolledDeviceManager()
+
     def do_checkout(self):
         self.token = self.push_magic = self.unlock_token = None
         self.checkout_at = timezone.now()
+        self.installeddeviceartifact_set.all().delete()
+        self.deviceartifactcommand_set.all().delete()
         self.save()
+
+    def can_be_poked(self):
+        return self.checkout_at is None and self.token is not None and self.push_magic is not None
 
 
 class EnrolledUser(models.Model):
@@ -692,14 +716,22 @@ class KernelExtensionPolicy(models.Model):
     artifact_type = "ConfigurationProfile"
     configuration_profile_payload_type = "com.apple.syspolicy.kernel-extension-policy"
 
-    version = models.PositiveIntegerField(default=1, editable=False)
+    # devices
+    # TODO: add tags
     meta_business_unit = models.OneToOneField(MetaBusinessUnit, related_name="kernel_extension_policy")
+
+    # content
     allow_user_overrides = models.BooleanField(help_text=("If set to true, users can approve additional kernel "
                                                           "extensions not explicitly allowed by configuration "
                                                           "profiles"),
                                                default=True)
     allowed_teams = models.ManyToManyField(KernelExtensionTeam, blank=True)
     allowed_kernel_extensions = models.ManyToManyField(KernelExtension, blank=True)
+
+    # version
+    version = models.PositiveIntegerField(default=1, editable=False)
+
+    # timestamps
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True, editable=False)
     trashed_at = models.DateTimeField(null=True, editable=False)
@@ -725,3 +757,73 @@ class KernelExtensionPolicy(models.Model):
         return {"AllowUserOverrides": self.allow_user_overrides,
                 "AllowedTeamIdentifiers": [team.identifier for team in self.allowed_teams.all()],
                 "AllowedKernelExtensions": allowed_kernel_extensions_d}
+
+
+# Enrollment packages
+
+
+def enrollment_package_path(instance, filename):
+    # TODO overflow ?
+    return 'mdm/meta_business_unit/{0:08d}/enrollment_packages/{1}'.format(
+        instance.meta_business_unit.id,
+        filename
+    )
+
+
+class MDMEnrollmentPackage(models.Model):
+    artifact_type = "Application"
+
+    # devices
+    # TODO: add tags
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit)
+
+    # content
+    builder = models.CharField(max_length=256)
+    enrollment_pk = models.PositiveIntegerField()
+    file = models.FileField(upload_to=enrollment_package_path, blank=True)
+    manifest = JSONField(blank=True, null=True)
+
+    # version
+    version = models.PositiveIntegerField(default=0)
+
+    # timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    trashed_at = models.DateTimeField(null=True, editable=False)
+
+    def enrollment_update_callback(self):
+        self.version = F("version") + 1
+        self.save()
+        self.refresh_from_db()
+        build_mdm_enrollment_package(self)
+
+    def get_builder_class(self):
+        return get_standalone_package_builders()[self.builder]
+
+    def get_enrollment(self):
+        try:
+            enrollment_model = self.get_builder_class().form.Meta.model
+            return enrollment_model.objects.get(pk=self.enrollment_pk)
+        except (AttributeError, ObjectDoesNotExist):
+            pass
+
+    def delete(self, *args, **kwargs):
+        self.file.delete(save=False)
+        enrollment = self.get_enrollment()
+        if enrollment:
+            enrollment.delete()
+
+    def get_description_for_enrollment(self):
+        return "MDM enrollment package"
+
+    def serialize_for_event(self):
+        """used for the enrollment secret verification events, via the enrollment"""
+        return {"mdm_enrollment_package": {"pk": self.pk,
+                                           "version": self.version,
+                                           "meta_business_unit": {"pk": self.meta_business_unit.pk,
+                                                                  "name": str(self.meta_business_unit)}}}
+
+    def get_enrollment_package_filename(self):
+        return "{}.pkg".format(slugify("{} pk{} v{}".format(self.get_builder_class().name,
+                                                            self.id,
+                                                            self.version)))

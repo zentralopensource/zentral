@@ -1,4 +1,5 @@
 import logging
+import time
 from kombu import Connection, Consumer, Exchange, Queue
 from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 from kombu.pools import producers
@@ -63,14 +64,20 @@ class PreprocessorWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMi
 
     def process_raw_event(self, body, message):
         self.log_debug("process raw event")
-        for event in self.event_preprocessor.process_raw_event(body):
-            self.produced_events_counter.labels(event.event_type).inc()
-            self.producer.publish(event.serialize(machine_metadata=False),
-                                  serializer='json',
-                                  exchange=events_exchange,
-                                  declare=[events_exchange])
-        message.ack()
-        self.preprocessed_events_counter.inc()
+        try:
+            for event in self.event_preprocessor.process_raw_event(body):
+                self.produced_events_counter.labels(event.event_type).inc()
+                self.producer.publish(event.serialize(machine_metadata=False),
+                                      serializer='json',
+                                      exchange=events_exchange,
+                                      declare=[events_exchange])
+        except Exception as exception:
+            logger.warning("Requing message with 1s delay: %s", exception)
+            time.sleep(1)
+            message.requeue()
+        else:
+            message.ack()
+            self.preprocessed_events_counter.inc()
 
 
 class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):

@@ -31,11 +31,9 @@
       <td>{{ enrolled_device.checkout_at|date:"r" }}</td>
       <td>{{ enrolled_device.updated_at|date:"r" }}</td>
       <td>
-        {% if not enrolled_device.checkout_at %}
         <form method="POST" action="{% url 'mdm:poke_enrolled_device' enrolled_device.id %}">{% csrf_token %}
-          <button type="submit" class="btn btn-success">Poke!</button>
+          <button type="submit" class="btn btn-success" {% if not enrolled_device.can_be_poked %}disabled="disabled"{% endif %}>Poke!</button>
         </form>
-        {% endif %}
       </td>
     </tr>
     {% endfor %}
