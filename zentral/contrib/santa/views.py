@@ -138,9 +138,11 @@ class EnrollView(View):
             request_json = json.load(request)
             secret = request_json["secret"]
             serial_number = request_json["serial_number"]
+            uuid = request_json["uuid"]
             es_request = verify_enrollment_secret(
                 "santa_enrollment", secret,
-                self.user_agent, self.ip, serial_number
+                self.user_agent, self.ip,
+                serial_number, uuid
             )
         except (ValueError, KeyError, EnrollmentSecretVerificationFailed):
             raise SuspiciousOperation

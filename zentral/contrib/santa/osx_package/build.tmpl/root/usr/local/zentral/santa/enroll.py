@@ -38,9 +38,10 @@ def get_max_santa_version():
         return None
 
 
-def get_serial_number():
+def get_serial_number_and_uuid():
     output = subprocess.check_output(["ioreg", "-a", "-c", "IOPlatformExpertDevice", "-d", "2"])
-    return plistlib.readPlistFromString(output)["IORegistryEntryChildren"][0]["IOPlatformSerialNumber"]
+    ioreg_result = plistlib.readPlistFromString(output)["IORegistryEntryChildren"][0]
+    return ioreg_result["IOPlatformSerialNumber"], ioreg_result["IOPlatformUUID"]
 
 
 def install_configuration_profile(path):
@@ -53,8 +54,10 @@ def post_enrollment_secret():
     req.add_header("Content-Type", "application/json")
     # TODO hardcoded
     ctx = ssl.create_default_context(cafile=os.path.join(ZENTRAL_DIR, "tls_server_certs.crt"))
+    serial_number, uuid = get_serial_number_and_uuid()
     data = json.dumps({"secret": ENROLLMENT_SECRET,
-                       "serial_number": get_serial_number()})
+                       "serial_number": serial_number,
+                       "uuid": uuid})
     resp = urllib2.urlopen(req, data=data, context=ctx)
     return json.load(resp)
 

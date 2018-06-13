@@ -1,4 +1,5 @@
 import json
+import uuid
 from django.core.urlresolvers import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
@@ -124,10 +125,12 @@ class SantaSetupViewsTestCase(TestCase):
         machine_serial_number = get_random_string(32)
         response = self.post_as_json("enroll",
                                      {"secret": "yolo",
+                                      "uuid": str(uuid.uuid4()),
                                       "serial_number": machine_serial_number})
         self.assertEqual(response.status_code, 400)
         response = self.post_as_json("enroll",
                                      {"secret": enrollment.secret.secret,
+                                      "uuid": str(uuid.uuid4()),
                                       "serial_number": machine_serial_number})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/json")
