@@ -390,7 +390,7 @@ class BaseView(JSONPostAPIView):
     def check_request_secret(self, request, *args, **kwargs):
         self.enrolled_machine = None
         self.machine_id = kwargs['machine_id']
-        if "$" not in self.machine_id:
+        if ":" not in self.machine_id:
             # new way, machine_id is an attribute of EnrolledMachine
             self.verify_enrolled_machine_id()
         else:
