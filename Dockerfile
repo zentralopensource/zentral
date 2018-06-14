@@ -23,7 +23,7 @@ RUN apt-get install -y xmlsec1
 RUN apt-get install -y p7zip-full
 
 # extra dependencies for python crypto / u2f
-RUN apt-get install -y libssl-dev libffi-dev python-dev
+RUN apt-get install -y libssl1.0-dev libffi-dev python-dev
 
 # zentral user and group
 RUN groupadd -r zentral --gid=999 && useradd -r -s /bin/false -g zentral --uid=999 zentral
