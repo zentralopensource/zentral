@@ -6,6 +6,16 @@ MAINTAINER Éric Falconnier <eric.falconnier@112hz.com>
 # bsdcpio + bomutils + xar to generate the pkg files
 # as seen in https://github.com/boot2docker/osx-installer/blob/master/Dockerfile
 RUN apt-get update && apt-get autoremove -y && apt-get install -y bsdcpio libbz2-dev
+
+# xmlsec1 for PySAML2
+RUN apt-get install -y xmlsec1
+
+# p7zip to extract dmg
+RUN apt-get install -y p7zip-full
+
+# extra dependencies for python crypto / u2f
+RUN apt-get install -y libssl1.0-dev libffi-dev python-dev
+
 RUN curl -fsSL https://github.com/zentralopensource/bomutils/archive/master.tar.gz | tar xvz && \
     cd bomutils-* && \
     make && make install && \
@@ -15,16 +25,7 @@ RUN curl -fsSL https://github.com/mackyle/xar/archive/xar-1.6.1.tar.gz | tar xvz
     ./autogen.sh && ./configure --with-bzip2 && \
     make && make install && \
     cd ../.. && rm -rf xar-*
-
-# xmlsec1 for PySAML2
-RUN apt-get install -y xmlsec1
-
-# p7zip to extract dmg
-RUN apt-get install -y p7zip-full
-
-# extra dependencies for python crypto / u2f
-RUN apt-get install -y libssl-dev libffi-dev python-dev
-
+    
 # zentral user and group
 RUN groupadd -r zentral --gid=999 && useradd -r -s /bin/false -g zentral --uid=999 zentral
 
