@@ -5,7 +5,7 @@ MAINTAINER Éric Falconnier <eric.falconnier@112hz.com>
 
 # bsdcpio + bomutils + xar to generate the pkg files
 # as seen in https://github.com/boot2docker/osx-installer/blob/master/Dockerfile
-RUN apt-get update && apt-get autoremove -y && apt-get install -y bsdcpio libbz2-dev
+RUN apt-get update && apt-get autoremove -y && apt-get install -y bsdcpio libbz2-dev libssl1.0-dev
 RUN curl -fsSL https://github.com/zentralopensource/bomutils/archive/master.tar.gz | tar xvz && \
     cd bomutils-* && \
     make && make install && \
