@@ -80,10 +80,16 @@ class DEPNotifyReleases(object):
 
     def get_versions(self):
         # TODO: Dynamic!!!
-        filename = "DEPNotify-1.0.3.pkg"
-        yield (filename, "1.0.3", datetime(2017, 11, 28, 7, 37, 33),
-               "https://gitlab.com/Mactroll/DEPNotify/uploads/4904f7d5fbed5920308876ef28480531/DEPNotify-1.0.3.pkg",
-               os.path.exists(self._get_local_path(filename)))
+        return [("DEPNotify-1.1.0.pkg",
+                 "1.1.0",
+                 datetime(2018, 5, 20, 3, 35, 00),
+                 "https://gitlab.com/Mactroll/DEPNotify/uploads/bb828a261a0fdce50861031ffda3061d/DEPNotify-1.1.0.pkg",
+                 os.path.exists(self._get_local_path("DEPNotify-1.1.0.pkg"))),
+                ("DEPNotify-1.0.3.pkg",
+                 "1.0.3",
+                 datetime(2017, 11, 28, 7, 37, 33),
+                 "https://gitlab.com/Mactroll/DEPNotify/uploads/4904f7d5fbed5920308876ef28480531/DEPNotify-1.0.3.pkg",
+                 os.path.exists(self._get_local_path("DEPNotify-1.0.3.pkg")))]
 
     def get_requested_package(self, requested_filename):
         local_path = self._get_local_path(requested_filename)
