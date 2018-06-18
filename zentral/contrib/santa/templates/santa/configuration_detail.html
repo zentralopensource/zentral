@@ -25,11 +25,9 @@
       <tr>
         <td>Mode</td>
         <td>
-          {% if object.is_monitor_mode %}
-          <span class="label label-success">Monitor</span>
-          {% else %}
-          <span class="label label-danger">{{ object.get_mode_display }}</span>
-          {% endif %}
+          <span class="label {% if object.is_monitor_mode %}label-success{% else %}label-danger{% endif %}">
+            {{ object.get_client_mode_display }}
+          </span>
         </td>
       </tr>
       {% if object.file_changes_regex %}
