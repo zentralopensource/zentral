@@ -1,14 +1,127 @@
 import logging
 from django.db import connection
+from django.db.models import Count
 from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
                                generate_latest, CONTENT_TYPE_LATEST as prometheus_metrics_content_type)
+from zentral.utils.charts import make_dataset
 from zentral.utils.json import log_data
+from .conf import PLATFORM_CHOICES_DICT, TYPE_CHOICES_DICT
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      post_inventory_events)
 from .exceptions import EnrollmentSecretVerificationFailed
-from .models import EnrollmentSecret, MachineSnapshotCommit
+from .models import EnrollmentSecret, MachineSnapshot, MachineSnapshotCommit
 
 logger = logging.getLogger("zentral.contrib.inventory.utils")
+
+
+def mbu_dashboard_machine_data(mbu):
+    # platform
+    platform_qs = (MachineSnapshot.objects.filter(currentmachinesnapshot__isnull=False,
+                                                  business_unit__meta_business_unit=mbu,
+                                                  source=mbu.dashboard_source)
+                                          .values("platform").annotate(count=Count("platform")))
+    platforms = sorted(((d["platform"], d["count"]) for d in platform_qs),
+                       key=lambda t: (-1 * t[1], t[0]))
+    yield "platform", "Plaforms", {
+        "type": "doughnut",
+        "data": {
+            "labels": [PLATFORM_CHOICES_DICT.get(p, "Unknown") for p, _ in platforms],
+            "datasets": [
+                make_dataset([c for _, c in platforms])
+            ]
+        }
+    }
+    # type
+    type_qs = (MachineSnapshot.objects.filter(currentmachinesnapshot__isnull=False,
+                                              business_unit__meta_business_unit=mbu,
+                                              source=mbu.dashboard_source)
+                                      .values("type").annotate(count=Count("type")))
+    types = sorted(((d["type"], d["count"]) for d in type_qs),
+                   key=lambda t: (-1 * t[1], t[0]))
+    yield "type", "Types", {
+        "type": "doughnut",
+        "data": {
+            "labels": [TYPE_CHOICES_DICT.get(t, "Unknown") for t, _ in types],
+            "datasets": [
+                make_dataset([c for _, c in types])
+            ]
+        }
+    }
+    # os
+    query = (
+        "select osv.name as name, osv.major as major, osv.minor as minor, osv.patch as patch, "
+        "count(*) as count from inventory_osversion as osv "
+        "join inventory_machinesnapshot as ms on (osv.id = ms.os_version_id) "
+        "join inventory_currentmachinesnapshot as cms on (cms.id = ms.id) "
+        "join inventory_businessunit as bu on (bu.id = ms.business_unit_id) "
+        "where bu.meta_business_unit_id = %s and ms.source_id = %s "
+        "group by osv.name, osv.major, osv.minor, osv.patch"
+    )
+    cursor = connection.cursor()
+    cursor.execute(query, [mbu.pk, mbu.dashboard_source.pk])
+    columns = [col[0] for col in cursor.description]
+    os_list = []
+    for row in cursor.fetchall():
+        os_version = dict(zip(columns, row))
+        version_str = ".".join(str(os_version[a]) for a in ("major", "minor", "patch") if os_version.get(a))
+        value = "{} {}".format(os_version["name"], version_str).strip()
+        os_list.append((value, os_version["count"]))
+    os_list.sort(key=lambda t: (-1 * t[1], t[0]))
+    yield "os", "OS", {
+        "type": "doughnut",
+        "data": {
+            "labels": [n for n, _ in os_list],
+            "datasets": [
+                make_dataset([c for _, c in os_list])
+            ]
+        }
+    }
+
+
+def mbu_dashboard_bundle_data(mbu):
+    query = (
+        "select a.bundle_id as id, a.bundle_name as name, a.bundle_version_str as version_str, foo.count as count "
+        "from ("
+        "  select ai.app_id, count(*) as count "
+        "  from inventory_osxappinstance as ai "
+        "  join inventory_machinesnapshot_osx_app_instances as msai on (msai.osxappinstance_id = ai.id) "
+        "  join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = msai.machinesnapshot_id) "
+        "  join inventory_machinesnapshot as ms on (cms.machine_snapshot_id = ms.id) "
+        "  join inventory_businessunit as bu on (ms.business_unit_id = bu.id) "
+        "  where bu.meta_business_unit_id = %s and cms.source_id = %s "
+        "  group by ai.app_id"
+        ") as foo "
+        "join inventory_osxapp as a on (foo.app_id = a.id) "
+        "where a.bundle_id IN %s"
+    )
+    cursor = connection.cursor()
+    bundle_id_tuple = tuple(mbu.dashboard_osx_app_bundle_id_list)
+    cursor.execute(query, [mbu.pk, mbu.dashboard_source.pk, bundle_id_tuple])
+    columns = [col[0] for col in cursor.description]
+    # group versions and counts by bundle_id
+    bundles = {}
+    for row in cursor.fetchall():
+        bundle = dict(zip(columns, row))
+        if bundle["id"] not in bundles:
+            bundles[bundle["id"]] = {"name": bundle["name"],
+                                     "versions": {}}
+        bundles[bundle["id"]]["versions"][bundle["version_str"]] = bundle["count"]
+    # build charts config
+    for bundle_id in bundle_id_tuple:
+        bundle = bundles.get(bundle_id, None)
+        if bundle is None:
+            continue
+        versions = sorted(bundle["versions"].items(), key=lambda t: (-1 * t[1], t[0]), reverse=True)
+        config = {
+            "type": "doughnut",
+            "data": {
+                "labels": [v[0] for v in versions],
+                "datasets": [
+                    make_dataset([v[1] for v in versions])
+                ]
+            }
+        }
+        yield bundle_id, bundle["name"], config
 
 
 def osx_app_count():
@@ -131,7 +244,7 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
 def commit_machine_snapshot_and_trigger_events(tree):
     try:
         machine_snapshot_commit, machine_snapshot = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
-    except:
+    except Exception:
         logger.exception("Could not commit machine snapshot")
         log_data(tree, "/tmp", "snapshot_errors")
     else:

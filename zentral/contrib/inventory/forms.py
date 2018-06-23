@@ -54,6 +54,13 @@ class MetaBusinessUnitSearchForm(forms.Form):
                                  widget=forms.Select(attrs={'class': 'form-control'}))
 
 
+class MetaBusinessUnitForm(forms.ModelForm):
+    class Meta:
+        model = MetaBusinessUnit
+        fields = ("name", "dashboard_source", "dashboard_osx_app_bundle_id_list")
+        widgets = {"name": forms.TextInput}
+
+
 class MergeMBUForm(forms.Form):
     mbu = forms.ModelMultipleChoiceField(queryset=MetaBusinessUnit.objects.all())
     dest_mbu = forms.ModelChoiceField(queryset=MetaBusinessUnit.objects.all())

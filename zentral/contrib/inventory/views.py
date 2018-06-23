@@ -3,13 +3,14 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core.urlresolvers import reverse, reverse_lazy
 from django.db import connection
-from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.timezone import make_naive
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.core.stores import frontend_store
 from zentral.conf import settings
-from .forms import (MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
+from .forms import (MetaBusinessUnitForm,
+                    MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
                     MacOSAppSearchForm)
 from .models import (BusinessUnit,
@@ -17,7 +18,9 @@ from .models import (BusinessUnit,
                      MachineSnapshot, MetaMachine,
                      MetaBusinessUnitTag, MachineTag, Tag,
                      OSXApp, OSXAppInstance)
-from .utils import get_prometheus_inventory_metrics, prometheus_metrics_content_type
+from .utils import (get_prometheus_inventory_metrics,
+                    mbu_dashboard_bundle_data, mbu_dashboard_machine_data,
+                    prometheus_metrics_content_type)
 
 
 class MachineListView(LoginRequiredMixin, TemplateView):
@@ -305,13 +308,13 @@ class MergeMBUView(LoginRequiredMixin, FormView):
 class CreateMBUView(LoginRequiredMixin, CreateView):
     template_name = "inventory/edit_mbu.html"
     model = MetaBusinessUnit
-    fields = ('name',)
+    form_class = MetaBusinessUnitForm
 
 
 class UpdateMBUView(LoginRequiredMixin, UpdateView):
     template_name = "inventory/edit_mbu.html"
     model = MetaBusinessUnit
-    fields = ('name',)
+    form_class = MetaBusinessUnitForm
 
 
 class DeleteMBUView(LoginRequiredMixin, DeleteView):
@@ -420,6 +423,24 @@ class MBUMachinesView(MachineListView):
         else:
             l.append((None, self.object.name))
         return l
+
+
+class MBUDashboardBundleDataView(View):
+    def get(self, request, *args, **kwargs):
+        mbu = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
+        return JsonResponse({bundle_id: {"name": bundle_name,
+                                         "config": chart_config}
+                             for bundle_id, bundle_name, chart_config
+                             in mbu_dashboard_bundle_data(mbu)})
+
+
+class MBUDashboardMachineDataView(View):
+    def get(self, request, *args, **kwargs):
+        mbu = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
+        return JsonResponse({doughnut_id: {"name": doughnut_name,
+                                           "config": chart_config}
+                             for doughnut_id, doughnut_name, chart_config
+                             in mbu_dashboard_machine_data(mbu)})
 
 
 class MachineView(LoginRequiredMixin, TemplateView):

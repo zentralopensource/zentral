@@ -9,6 +9,7 @@ from django.views.generic import View, DetailView, ListView, TemplateView
 from django.views.generic.edit import DeleteView, FormView, UpdateView
 import requests
 from zentral.core.stores import frontend_store
+from zentral.utils.charts import make_dataset
 from .feeds import FeedError, export_feed, sync_feed
 from .forms import (CreateProbeForm, ProbeSearchForm,
                     InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet,
@@ -121,11 +122,6 @@ class ProbeDashboardDataView(LoginRequiredMixin, View):
         "week": "%d/%m",
         "month": "%m/%y",
     }
-    COLORS = [
-        '#3366CC', '#DC3912', '#FF9900', '#109618', '#990099', '#3B3EAC', '#0099C6',
-        '#DD4477', '#66AA00', '#B82E2E', '#316395', '#994499', '#22AA99', '#AAAA11',
-        '#6633CC', '#E67300', '#8B0707', '#329262', '#5574A6', '#3B3EAC'
-    ]
 
     def get(self, response, *args, **kwargs):
         probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -160,11 +156,7 @@ class ProbeDashboardDataView(LoginRequiredMixin, View):
                     "type": "doughnut",
                     "data": {
                         "labels": ["Other" if l is None else l for l, _ in results["values"]],
-                        "datasets": [
-                            {"data": [v for _, v in results["values"]],
-                             "backgroundColor": [self.COLORS[i % len(self.COLORS)]
-                                                 for i in range(len(results["values"]))]}
-                        ]
+                        "datasets": [make_dataset([v for _, v in results["values"]])],
                     }
                 }
             elif a_type == "date_histogram":
@@ -173,11 +165,9 @@ class ProbeDashboardDataView(LoginRequiredMixin, View):
                     "type": "bar",
                     "data": {
                         "labels": [l.strftime(date_format) for l, _ in results["values"]],
-                        "datasets": [
-                            {"label": "event number",
-                             "backgroundColor": [self.COLORS[0] for i in range(len(results["values"]))],
-                             "data": [v for _, v in results["values"]]}
-                        ]
+                        "datasets": [make_dataset([v for _, v in results["values"]],
+                                                  cycle_colors=False,
+                                                  label="event number")]
                     }
                 }
             else:
