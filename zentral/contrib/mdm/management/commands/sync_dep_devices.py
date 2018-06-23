@@ -21,8 +21,11 @@ class Command(BaseCommand):
                 print(server.id, server)
         server_ids = kwargs.get("server_ids")
         if server_ids:
-            full_sync = kwargs.get("full_sync")
-            for server_id in server_ids:
-                server = DEPVirtualServer.objects.get(pk=server_id)
-                for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
-                    print("Created" if created else "Updated", dep_device)
+            depvs_qs = DEPVirtualServer.objects.filter(pk__in=server_ids)
+        else:
+            depvs_qs = DEPVirtualServer.objects.all()
+        full_sync = kwargs.get("full_sync")
+        for server in depvs_qs:
+            print("Sync server", server.pk, server)
+            for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
+                print("Created" if created else "Updated", dep_device)
