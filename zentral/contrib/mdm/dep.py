@@ -157,6 +157,8 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         if not fetch:
             op_type = device["op_type"]
             op_date = parser.parse(device["op_date"])
+            if timezone.is_aware(op_date):
+                op_date = timezone.make_naive(op_date)
             try:
                 dep_device = DEPDevice.objects.get(serial_number=serial_number)
             except DEPDevice.DoesNotExist:
