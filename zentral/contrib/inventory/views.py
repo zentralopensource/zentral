@@ -425,7 +425,7 @@ class MBUMachinesView(MachineListView):
         return l
 
 
-class MBUDashboardBundleDataView(View):
+class MBUDashboardBundleDataView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         mbu = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
         return JsonResponse({bundle_id: {"name": bundle_name,
@@ -434,7 +434,7 @@ class MBUDashboardBundleDataView(View):
                              in mbu_dashboard_bundle_data(mbu)})
 
 
-class MBUDashboardMachineDataView(View):
+class MBUDashboardMachineDataView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         mbu = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
         return JsonResponse({doughnut_id: {"name": doughnut_name,
