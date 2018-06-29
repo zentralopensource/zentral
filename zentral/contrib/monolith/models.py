@@ -534,6 +534,8 @@ class Manifest(models.Model):
         return PkgInfo.objects.raw(query)
 
     def _pkginfo_deps_and_updates(self, package_names, tags):
+        package_names = ",".join("'{}'".format(package_name)
+                                 for package_name in set(package_names))
         if not package_names:
             return PkgInfo.objects.none()
         if tags:
@@ -565,16 +567,20 @@ class Manifest(models.Model):
 
     def enrollment_packages_pkginfo_deps(self, tags=None):
         """PkgInfos that enrollment packages are an update for with their dependencies"""
-        update_for_list = ",".join(set("'{}'".format(ep.get_update_for())
-                                       for ep in self.enrollment_packages(tags).values()))
-        return self._pkginfo_deps_and_updates(update_for_list, tags)
+        update_for_gen = (ep.get_update_for()
+                          for ep in self.enrollment_packages(tags).values())
+        return self._pkginfo_deps_and_updates(update_for_gen, tags)
 
     def printers_pkginfo_deps(self, tags=None):
         """PkgInfos that printers require, with their dependencies"""
-        required_packages_list = ",".join(set("'{}'".format(p.required_package.name)
-                                              for p in self.printers(tags)
-                                              if p.required_package))
-        return self._pkginfo_deps_and_updates(required_packages_list, tags)
+        required_packages_gen = (p.required_package.name
+                                 for p in self.printers(tags)
+                                 if p.required_package)
+        return self._pkginfo_deps_and_updates(required_packages_gen, tags)
+
+    def default_managed_installs_deps(self, tags=None):
+        """PkgInfos installed per default, with their dependencies"""
+        return self._pkginfo_deps_and_updates(monolith_conf.get_default_managed_installs(), tags)
 
     def get_enrollment_catalog_munki_name(self):
         return build_munki_name("enrollment_catalog", self.meta_business_unit.id, self.meta_business_unit.name)
