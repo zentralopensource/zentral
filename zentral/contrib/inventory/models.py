@@ -49,7 +49,7 @@ class MetaBusinessUnit(models.Model):
                                          on_delete=models.SET_NULL,
                                          related_name="+",
                                          null=True, blank=True)
-    dashboard_osx_app_bundle_id_list = ArrayField(models.TextField(), default=list)
+    dashboard_osx_app_bundle_id_list = ArrayField(models.TextField(), default=list, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
