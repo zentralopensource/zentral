@@ -49,8 +49,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
-        self.assertEqual(json_response["blacklist_regex"], "")
-        self.assertEqual(json_response["whitelist_regex"], "")
+        self.assertTrue(json_response["blacklist_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
+        self.assertTrue(json_response["whitelist_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
         # LOCKDOWN mode
         Configuration.objects.update(client_mode=Configuration.LOCKDOWN_MODE)
         response = self.post_as_json(url, data)

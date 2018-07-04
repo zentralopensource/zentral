@@ -2,6 +2,7 @@ import logging
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import connection, models
 from django.urls import reverse
+from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import BaseEnrollment, Certificate, OSXApp
 from zentral.utils.mt_models import AbstractMTObject, MTObjectManager
 
@@ -146,17 +147,24 @@ class Configuration(models.Model):
     def get_sync_server_config(self):
         config = {k: getattr(self, k)
                   for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
+        # translate client mode
         if self.client_mode == self.MONITOR_MODE:
             config["client_mode"] = self.PREFLIGHT_MONITOR_MODE
         elif self.client_mode == self.LOCKDOWN_MODE:
             config["client_mode"] = self.PREFLIGHT_LOCKDOWN_MODE
         else:
             raise NotImplementedError("Unknown santa client mode: {}".format(self.client_mode))
+        # provide non matching regexp if the regexp are empty
+        for attr in ("blacklist_regex",
+                     "whitelist_regex"):
+            if not config.get(attr):
+                config[attr] = "NON_MATCHING_PLACEHOLDER_{}".format(get_random_string(8))
         return config
 
     def get_local_config(self):
         return {"".join(s.capitalize() for s in k.split("_")): getattr(self, k)
-                for k in self.LOCAL_CONFIGURATION_ATTRIBUTES}
+                for k in self.LOCAL_CONFIGURATION_ATTRIBUTES
+                if getattr(self, k)}
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
