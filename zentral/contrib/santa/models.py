@@ -18,6 +18,8 @@ class Configuration(models.Model):
         (MONITOR_MODE, "Monitor"),
         (LOCKDOWN_MODE, "Lockdown"),
     )
+    PREFLIGHT_MONITOR_MODE = "MONITOR"
+    PREFLIGHT_LOCKDOWN_MODE = "LOCKDOWN"
     DEFAULT_BATCH_SIZE = 50
     LOCAL_CONFIGURATION_ATTRIBUTES = {
         'client_mode',
@@ -36,7 +38,7 @@ class Configuration(models.Model):
         'machine_owner_key',
     }
     SYNC_SERVER_CONFIGURATION_ATTRIBUTES = {
-        'client_mode',
+        # 'client_mode', has to be translated to a string value
         'batch_size',
         'whitelist_regex',
         'blacklist_regex',
@@ -142,9 +144,16 @@ class Configuration(models.Model):
         return self.client_mode == self.MONITOR_MODE
 
     def get_sync_server_config(self):
-        return {k: getattr(self, k)
-                for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES
-                if getattr(self, k) != ""}
+        config = {k: getattr(self, k)
+                  for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES
+                  if getattr(self, k) != ""}
+        if self.client_mode == self.MONITOR_MODE:
+            config["client_mode"] = self.PREFLIGHT_MONITOR_MODE
+        elif self.client_mode == self.LOCKDOWN_MODE:
+            config["client_mode"] = self.PREFLIGHT_LOCKDOWN_MODE
+        else:
+            raise NotImplementedError("Unknown santa client mode: {}".format(self.client_mode))
+        return config
 
     def get_local_config(self):
         return {"".join(s.capitalize() for s in k.split("_")): getattr(self, k)
