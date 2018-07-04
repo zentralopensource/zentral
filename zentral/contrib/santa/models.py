@@ -145,8 +145,7 @@ class Configuration(models.Model):
 
     def get_sync_server_config(self):
         config = {k: getattr(self, k)
-                  for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES
-                  if getattr(self, k) != ""}
+                  for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
         if self.client_mode == self.MONITOR_MODE:
             config["client_mode"] = self.PREFLIGHT_MONITOR_MODE
         elif self.client_mode == self.LOCKDOWN_MODE:
@@ -157,8 +156,7 @@ class Configuration(models.Model):
 
     def get_local_config(self):
         return {"".join(s.capitalize() for s in k.split("_")): getattr(self, k)
-                for k in self.LOCAL_CONFIGURATION_ATTRIBUTES
-                if getattr(self, k) != ""}
+                for k in self.LOCAL_CONFIGURATION_ATTRIBUTES}
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
