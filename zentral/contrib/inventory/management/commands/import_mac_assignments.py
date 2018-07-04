@@ -48,5 +48,8 @@ class Command(BaseCommand):
                 if skip_headers:
                     skip_headers = False
                     continue
-                args = [a.strip() for a in row]
-                MACAddressBlockAssignment.objects.import_assignment(*args)
+                attrs = [a.strip() for a in row]
+                if len(attrs) != 4:
+                    logger.error("Invalid row with %s columns", len(attrs))
+                else:
+                    MACAddressBlockAssignment.objects.import_assignment(*attrs)
