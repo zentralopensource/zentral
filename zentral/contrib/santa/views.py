@@ -135,7 +135,7 @@ class EnrollView(View):
     def post(self, request, *args, **kwargs):
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
         try:
-            request_json = json.load(request)
+            request_json = json.loads(request.body.decode("utf-8"))
             secret = request_json["secret"]
             serial_number = request_json["serial_number"]
             uuid = request_json["uuid"]
