@@ -122,15 +122,16 @@ class EventStore(BaseEventStore):
                     self._es.indices.create(self.index, body=self.INDEX_CONF)
                     self.use_mapping_types = False
                     logger.info("Index %s created", self.index)
-            except ConnectionError as e:
+            except ConnectionError:
                 s = (i + 1) * random.uniform(0.9, 1.1)
                 logger.warning('Could not connect to server %d/%d. Sleep %ss',
                                i + 1, self.MAX_CONNECTION_ATTEMPTS, s)
                 time.sleep(s)
                 continue
-            except RequestError as e:
-                if e.info['status'] == 400 and \
-                   "IndexAlreadyExists".upper() in e.info['error']:  # Race
+            except RequestError as exception:
+                error = exception.error.lower()
+                if "already" in error and "exist" in error:
+                    # race
                     logger.info('Index %s exists', self.index)
                 else:
                     raise
@@ -201,7 +202,7 @@ class EventStore(BaseEventStore):
             self._es.index(index=self.index, doc_type=doc_type, body=body)
             if self.test:
                 self._es.indices.refresh(self.index)
-        except:
+        except Exception:
             logger.exception('Could not add event to elasticsearch index')
 
     # machine events
