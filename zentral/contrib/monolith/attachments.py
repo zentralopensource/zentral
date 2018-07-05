@@ -134,9 +134,9 @@ class PackageFile(AttachmentFile):
         if not installer_script:
             return
         for pkg_ref in installer_script.findall("pkg-ref"):
-            if not pkg_ref.text:
+            if not pkg_ref.text or not pkg_ref.text.strip():
                 continue
-            product_subdir = pkg_ref.text.strip("#")
+            product_subdir = pkg_ref.text.strip().strip("#")
             pkg_info = self.get_package_xml_file_root(
                 os.path.join(product_subdir, "PackageInfo"),
                 "pkg-info")
