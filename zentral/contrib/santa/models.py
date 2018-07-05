@@ -162,7 +162,7 @@ class Configuration(models.Model):
         return config
 
     def get_local_config(self):
-        return {"".join(s.capitalize() for s in k.split("_")): getattr(self, k)
+        return {"".join("URL" if s == "url" else s.capitalize() for s in k.split("_")): getattr(self, k)
                 for k in self.LOCAL_CONFIGURATION_ATTRIBUTES
                 if getattr(self, k)}
 
