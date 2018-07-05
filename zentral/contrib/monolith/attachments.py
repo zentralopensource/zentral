@@ -130,10 +130,12 @@ class PackageFile(AttachmentFile):
 
     def iter_product_archive_items(self):
         installer_script = self.get_package_xml_file_root("Distribution",
-                                                          "installer-script")
+                                                          "installer-gui-script")
         if not installer_script:
             return
         for pkg_ref in installer_script.findall("pkg-ref"):
+            if not pkg_ref.text:
+                continue
             product_subdir = pkg_ref.text.strip("#")
             pkg_info = self.get_package_xml_file_root(
                 os.path.join(product_subdir, "PackageInfo"),
