@@ -10,7 +10,8 @@ from zentral.contrib.mdm.models import (EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
                                         PushCertificate)
 from .base import PostEventMixin
-from .utils import (get_next_device_command_response,
+from .utils import (build_application_download_response, build_application_manifest_response,
+                    get_next_device_command_response,
                     parse_dn, process_result_payload, tree_from_payload)
 
 logger = logging.getLogger('zentral.contrib.mdm.views.mdm')
@@ -251,3 +252,13 @@ class ConnectView(MDMView):
             return HttpResponse()
         else:
             self.abort("unknown payload status {}".format(payload_status))
+
+
+class InstallApplicationManifestView(View):
+    def get(self, response, *args, **kwargs):
+        return build_application_manifest_response(kwargs["uuid"])
+
+
+class InstallApplicationDownloadView(View):
+    def get(self, response, *args, **kwargs):
+        return build_application_download_response(kwargs["uuid"])

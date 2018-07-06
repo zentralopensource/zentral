@@ -4,7 +4,7 @@ from .api_client import APIClient, APIClientError
 def build_and_upload_app(api_key, builder, enrollment):
     # build package
     b = builder(enrollment)
-    package_filename, package_content = b.build()
+    package_filename, _, package_content = b.build()
     # upload package
     api_client = APIClient(api_key)
     try:

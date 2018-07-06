@@ -117,6 +117,15 @@ urlpatterns = [
         views.UpdateKernelExtensionPolicyView.as_view(),
         name="update_kernel_extension_policy"),
 
+    # enrollment packages / management
+    url(r'^enrollment_packages/$',
+        views.EnrollmentPackagesIndexView.as_view(),
+        name="enrollment_packages_index"),
+    url(r'^enrollment_packages/create/$',
+        views.CreateEnrollmentPackageView.as_view(),
+        name="create_enrollment_package"),
+
+
     # SCEP verification / scep view
     url(r'^verify_scep_csr/$',
         csrf_exempt(views.VerifySCEPCSRView.as_view()),
@@ -131,6 +140,13 @@ urlpatterns = [
     # MDM protocol / mdm views
     url(r'^checkin/$', csrf_exempt(views.CheckinView.as_view()), name='checkin'),
     url(r'^connect/$', csrf_exempt(views.ConnectView.as_view()), name='connect'),
+    # MDM protocol / InstallApplication command
+    url(r'^device_artifact_commands/(?P<uuid>[0-9a-f-]+)/manifest/$',
+        views.InstallApplicationManifestView.as_view(),
+        name="install_application_manifest"),
+    url(r'^device_artifact_commands/(?P<uuid>[0-9a-f-]+)/download/$',
+        views.InstallApplicationDownloadView.as_view(),
+        name="install_application_download"),
 ]
 
 setup_menu_cfg = {

@@ -2,11 +2,12 @@ from datetime import datetime
 from django.contrib.contenttypes.models import ContentType
 from django.http import HttpResponse
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import (DeviceArtifactCommand, EnrolledDevice,
-                                        InstalledDeviceArtifact, KernelExtensionPolicy,
+                                        InstalledDeviceArtifact, KernelExtensionPolicy, MDMEnrollmentPackage,
                                         MetaBusinessUnitPushCertificate, PushCertificate)
 from zentral.contrib.mdm.views.utils import (get_configured_device_artifact_dict,
                                              get_installed_device_artifact_dict,
@@ -43,6 +44,14 @@ class TestMDMArtifacts(TestCase):
         )
         cls.serial_number = cls.enrolled_device.serial_number
 
+    def create_mdm_enrollment_package(self):
+        return MDMEnrollmentPackage.objects.create(
+            meta_business_unit=self.meta_business_unit,
+            builder=get_random_string(256),
+            enrollment_pk=17,  # better than 42
+            manifest={"yolo": get_random_string(256)}
+        )
+
     def test_no_configured_device_artifacts(self):
         self.assertEqual({}, get_configured_device_artifact_dict(self.meta_business_unit, self.serial_number))
 
@@ -73,6 +82,12 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual((DeviceArtifactCommand.ACTION_INSTALL, kext_policy_ct, kext_policy),
                          get_next_device_artifact_action(self.meta_business_unit, self.enrolled_device))
 
+    def test_install_application_next_device_artifact_action(self):
+        mdm_enrollment_package = self.create_mdm_enrollment_package()
+        mdm_enrollment_package_ct = ContentType.objects.get_for_model(mdm_enrollment_package)
+        self.assertEqual((DeviceArtifactCommand.ACTION_INSTALL, mdm_enrollment_package_ct, mdm_enrollment_package),
+                         get_next_device_artifact_action(self.meta_business_unit, self.enrolled_device))
+
     def test_no_next_device_artifact_command_response(self):
         self.assertEqual(None,
                          get_next_device_artifact_command_response(self.meta_business_unit, self.enrolled_device))
@@ -96,6 +111,28 @@ class TestMDMArtifacts(TestCase):
         response = get_next_device_command_response(self.meta_business_unit, self.enrolled_device)
         device_artifact_command = DeviceArtifactCommand.objects.all()[0]
         self.check_install_profile_command(kext_policy, device_artifact_command, response)
+
+    def check_install_application_command(self, artifact, device_artifact_command, response):
+        self.assertIsInstance(response, HttpResponse)
+        self.assertEqual(response["Content-Type"], "application/xml; charset=UTF-8")
+        self.assertEqual(device_artifact_command.action, DeviceArtifactCommand.ACTION_INSTALL)
+        self.assertEqual(device_artifact_command.artifact, artifact)
+        self.assertContains(response, "InstallApplication")
+        self.assertContains(response, device_artifact_command.command_uuid)
+        self.assertContains(response, reverse("mdm:install_application_manifest",
+                                              args=(device_artifact_command.command_uuid,)))
+
+    def test_install_application_next_devive_artifact_command_response(self):
+        mdm_enrollment_package = self.create_mdm_enrollment_package()
+        response = get_next_device_artifact_command_response(self.meta_business_unit, self.enrolled_device)
+        device_artifact_command = DeviceArtifactCommand.objects.all()[0]
+        self.check_install_application_command(mdm_enrollment_package, device_artifact_command, response)
+
+    def test_install_application_next_device_command_response(self):
+        mdm_enrollment_package = self.create_mdm_enrollment_package()
+        response = get_next_device_command_response(self.meta_business_unit, self.enrolled_device)
+        device_artifact_command = DeviceArtifactCommand.objects.all()[0]
+        self.check_install_application_command(mdm_enrollment_package, device_artifact_command, response)
 
     def test_update_device_artifact_command_acknowledged(self):
         kext_policy = KernelExtensionPolicy.objects.create(meta_business_unit=self.meta_business_unit)
@@ -133,6 +170,22 @@ class TestMDMArtifacts(TestCase):
         kext_policy.save()
         # verify that a remove command would be scheduled
         self.assertEqual((DeviceArtifactCommand.ACTION_REMOVE, kext_policy_ct, kext_policy),
+                         get_next_device_artifact_action(self.meta_business_unit, self.enrolled_device))
+
+    def test_no_remove_application_next_device_artifact_action(self):
+        mdm_enrollment_package = self.create_mdm_enrollment_package()
+        mdm_enrollment_package_ct = ContentType.objects.get_for_model(mdm_enrollment_package)
+        InstalledDeviceArtifact.objects.create(
+            enrolled_device=self.enrolled_device,
+            artifact_content_type=mdm_enrollment_package_ct,
+            artifact_id=mdm_enrollment_package.pk,
+            artifact_version=mdm_enrollment_package.version
+        )
+        # trash the enrollment package
+        mdm_enrollment_package.trashed_at = timezone.now()
+        mdm_enrollment_package.save()
+        # verify that no remove command would be scheduled, because it is not implemented
+        self.assertEqual((None, None, None),
                          get_next_device_artifact_action(self.meta_business_unit, self.enrolled_device))
 
     def check_remove_profile_command(self, artifact, device_artifact_command, response):
@@ -193,7 +246,24 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual((DeviceArtifactCommand.ACTION_INSTALL, kext_policy_ct, kext_policy),
                          get_next_device_artifact_action(self.meta_business_unit, self.enrolled_device))
 
+    def test_update_enrollment_package_next_device_artifact_action(self):
+        mdm_enrollment_package = self.create_mdm_enrollment_package()
+        mdm_enrollment_package.refresh_from_db()
+        mdm_enrollment_package.version += 1  # bump version
+        mdm_enrollment_package.save()
+        mdm_enrollment_package_ct = ContentType.objects.get_for_model(mdm_enrollment_package)
+        InstalledDeviceArtifact.objects.create(
+            enrolled_device=self.enrolled_device,
+            artifact_content_type=mdm_enrollment_package_ct,
+            artifact_id=mdm_enrollment_package.pk,
+            artifact_version=mdm_enrollment_package.version - 1
+        )
+        # verify that an install command would be scheduled
+        self.assertEqual((DeviceArtifactCommand.ACTION_INSTALL, mdm_enrollment_package_ct, mdm_enrollment_package),
+                         get_next_device_artifact_action(self.meta_business_unit, self.enrolled_device))
+
     def tearDown(self):
         DeviceArtifactCommand.objects.all().delete()
         InstalledDeviceArtifact.objects.all().delete()
         KernelExtensionPolicy.objects.all().delete()
+        MDMEnrollmentPackage.objects.all().delete()

@@ -1,11 +1,18 @@
+import copy
 import logging
+import plistlib
 from django.contrib.contenttypes.models import ContentType
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
+from zentral.conf import settings
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.contrib.mdm.commands import build_install_profile_command_response, build_remove_profile_command_response
-from zentral.contrib.mdm.models import DeviceArtifactCommand, InstalledDeviceArtifact, KernelExtensionPolicy
+from zentral.contrib.mdm.commands import (build_install_application_command_response,
+                                          build_install_profile_command_response,
+                                          build_remove_profile_command_response)
+from zentral.contrib.mdm.models import (DeviceArtifactCommand, InstalledDeviceArtifact,
+                                        KernelExtensionPolicy, MDMEnrollmentPackage)
 
 
 logger = logging.getLogger("zentral.contrib.mdm.views.utils")
@@ -115,6 +122,7 @@ def parse_dn(dn):
 
 def get_configured_device_artifact_dict(meta_business_unit, serial_number):
     artifact_version_dict = {}
+
     # MBU KernelExtensionPolicy
     try:
         artifact = KernelExtensionPolicy.objects.get(meta_business_unit=meta_business_unit,
@@ -126,6 +134,15 @@ def get_configured_device_artifact_dict(meta_business_unit, serial_number):
         if artifact_ct not in artifact_version_dict:
             artifact_version_dict[artifact_ct] = {}
         artifact_version_dict[artifact_ct][artifact.pk] = artifact.version
+
+    # MBU MDMEnrollmentPackage
+    for artifact in MDMEnrollmentPackage.objects.filter(meta_business_unit=meta_business_unit,
+                                                        trashed_at__isnull=True):
+        artifact_ct = ContentType.objects.get_for_model(artifact)
+        if artifact_ct not in artifact_version_dict:
+            artifact_version_dict[artifact_ct] = {}
+        artifact_version_dict[artifact_ct][artifact.pk] = artifact.version
+
     return artifact_version_dict
 
 
@@ -158,6 +175,10 @@ def get_next_device_artifact_action(meta_business_unit, enrolled_device):
 
     # find all installed artifacts that need to be removed
     for artifact_ct, artifact_ct_version_dict in installed_device_artifact_dict.items():
+        artifact_model_class = artifact_ct.model_class()
+        if not getattr(artifact_model_class, "artifact_can_be_removed", True):
+            # skip these artifacts, because they cannot be removed
+            continue
         configured_artifact_ct_dict = configured_device_artifact_dict.get(artifact_ct, {})
         for artifact_id in artifact_ct_version_dict.keys():
             if artifact_id not in configured_artifact_ct_dict:
@@ -191,6 +212,10 @@ def get_next_device_artifact_command_response(meta_business_unit, enrolled_devic
                 return build_install_profile_command_response(artifact, command_uuid)
             elif action == DeviceArtifactCommand.ACTION_REMOVE:
                 return build_remove_profile_command_response(artifact, command_uuid)
+        elif artifact.artifact_type == "Application":
+            if action == DeviceArtifactCommand.ACTION_INSTALL:
+                return build_install_application_command_response(command_uuid)
+        raise NotImplementedError("Missing command {} {}".format(artifact.artifact_type, action))
 
 
 def get_next_device_command_response(meta_business_unit, enrolled_device):
@@ -198,6 +223,26 @@ def get_next_device_command_response(meta_business_unit, enrolled_device):
     if not response:
         response = HttpResponse()
     return response
+
+
+# InstallApplication
+
+
+def build_application_manifest_response(command_uuid):
+    device_artifact_command = get_object_or_404(DeviceArtifactCommand, command_uuid=command_uuid)
+    manifest = copy.deepcopy(device_artifact_command.artifact.manifest)
+    download_url = "{}{}".format(settings["api"]["tls_hostname"],
+                                 reverse("mdm:install_application_download",
+                                         args=(str(device_artifact_command.command_uuid),)))
+    manifest["items"][0]["assets"][0]["url"] = download_url
+    return HttpResponse(plistlib.dumps(manifest),
+                        content_type="text/xml; charset=UTF-8")
+
+
+def build_application_download_response(command_uuid):
+    device_artifact_command = get_object_or_404(DeviceArtifactCommand, command_uuid=command_uuid)
+    return FileResponse(device_artifact_command.artifact.file,
+                        content_type="application/octet-stream")
 
 
 # process result payload

@@ -2,14 +2,17 @@ import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.db import transaction
-from django.http import HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.views.generic import CreateView, DetailView, TemplateView, UpdateView, View
+from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
+from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.mdm.events import send_device_notification, send_mbu_device_notifications
 from zentral.contrib.mdm.forms import DeviceSearchForm
 from zentral.contrib.mdm.models import (EnrolledDevice, DEPDevice, DEPEnrollmentSession, OTAEnrollmentSession,
-                                        KernelExtensionPolicy, KernelExtensionTeam, KernelExtension)
+                                        KernelExtensionPolicy, KernelExtensionTeam, KernelExtension,
+                                        MDMEnrollmentPackage)
+from zentral.utils.osx_package import get_standalone_package_builders
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
 
@@ -136,3 +139,104 @@ class UpdateKernelExtensionPolicyView(LoginRequiredMixin, UpdateView):
         kext_policy = form.save()
         transaction.on_commit(lambda: send_mbu_device_notifications(kext_policy.meta_business_unit))
         return HttpResponseRedirect(kext_policy.get_absolute_url())
+
+
+# Enrollment Packages
+
+
+class EnrollmentPackagesIndexView(LoginRequiredMixin, ListView):
+    model = MDMEnrollmentPackage
+    paginate_by = 20
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        # create enrollment package links
+        create_enrollment_package_url = reverse("mdm:create_enrollment_package")
+        context["create_enrollment_package_links"] = [("{}?builder={}".format(create_enrollment_package_url, k),
+                                                       v.name) for k, v in get_standalone_package_builders().items()]
+        # pagination
+        page = context['page_obj']
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            context['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            context['previous_url'] = "?{}".format(qd.urlencode())
+        # breadcrumbs
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop("page", None)
+            reset_link = "?{}".format(qd.urlencode())
+        else:
+            reset_link = None
+        context["breadcrumbs"] = [
+            (reset_link, "Enrollment package{}".format("" if page.paginator.count == 1 else "s")),
+            (None, "page {} of {}".format(page.number, page.paginator.num_pages))
+        ]
+        return context
+
+
+class CreateEnrollmentPackageView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/mdmenrollmentpackage_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        standalone_builders = get_standalone_package_builders()
+        try:
+            self.builder_key = request.GET["builder"]
+            self.builder = standalone_builders[self.builder_key]
+        except KeyError:
+            raise Http404
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_forms(self):
+        secret_form_kwargs = {"prefix": "secret",
+                              "no_restrictions": True}
+        enrollment_form_kwargs = {"standalone": True}  # w/o dependencies. all in the package.
+        if self.request.method == "POST":
+            secret_form_kwargs["data"] = self.request.POST
+            enrollment_form_kwargs["data"] = self.request.POST
+        return (EnrollmentSecretForm(**secret_form_kwargs),
+                self.builder.form(**enrollment_form_kwargs))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        context["title"] = "Create enrollment package"
+        context["builder_name"] = self.builder.name
+        if "secret_form" not in kwargs or "enrollment_form" not in kwargs:
+            context["secret_form"], context["enrollment_form"] = self.get_forms()
+        return context
+
+    def forms_invalid(self, secret_form, enrollment_form):
+        return self.render_to_response(self.get_context_data(secret_form=secret_form,
+                                                             enrollment_form=enrollment_form))
+
+    def forms_valid(self, secret_form, enrollment_form):
+        # make secret
+        secret = secret_form.save()
+        # make enrollment
+        enrollment = enrollment_form.save(commit=False)
+        enrollment.version = 0
+        enrollment.secret = secret
+        enrollment.save()
+        # MDM enrollment package
+        mep = MDMEnrollmentPackage.objects.create(
+            meta_business_unit=secret.meta_business_unit,
+            builder=self.builder_key,
+            enrollment_pk=enrollment.pk
+        )
+        # link from enrollment to mdm enrollment package, for config update propagation
+        enrollment.distributor = mep
+        enrollment.save()  # build package and package manifest via callback call
+        transaction.on_commit(lambda: send_mbu_device_notifications(mep.meta_business_unit))
+        return HttpResponseRedirect(mep.get_absolute_url())
+
+    def post(self, request, *args, **kwargs):
+        secret_form, enrollment_form = self.get_forms()
+        if secret_form.is_valid() and enrollment_form.is_valid():
+            return self.forms_valid(secret_form, enrollment_form)
+        else:
+            return self.forms_invalid(secret_form, enrollment_form)

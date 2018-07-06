@@ -15,7 +15,7 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
     form = EnrollmentForm
     standalone = True
 
-    def __init__(self, enrollment):
+    def __init__(self, enrollment, version=None):
         configuration = enrollment.configuration
         kwargs = {"release": enrollment.munki_release,
                   "no_restart": configuration.no_restart,
@@ -23,7 +23,7 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
                   "depnotify_commands": configuration.depnotify_commands,
                   "eula": configuration.eula,
                   "setup_script": configuration.setup_script}
-        super().__init__(enrollment, **kwargs)
+        super().__init__(enrollment, version, **kwargs)
 
     def get_product_archive(self):
         release = self.build_kwargs.get("release")

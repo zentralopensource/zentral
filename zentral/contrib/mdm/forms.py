@@ -42,7 +42,7 @@ class PushCertificateForm(forms.ModelForm):
             try:
                 push_certificate_d = load_push_certificate(certificate_file.read(),
                                                            password)
-            except:
+            except Exception:
                 raise forms.ValidationError("Could not process push certificate")
             else:
                 cleaned_data.update(push_certificate_d)
@@ -131,7 +131,7 @@ class EncryptedDEPTokenForm(forms.ModelForm):
                 kwargs = {k: data.get(k) for k in ("consumer_key", "consumer_secret",
                                                    "access_token", "access_secret")}
                 account_d = DEPClient(**kwargs).get_account()
-            except:
+            except Exception:
                 self.add_error("encrypted_token", "Could not read or use encrypted token")
             else:
                 self.cleaned_data["decrypted_dep_token"] = data

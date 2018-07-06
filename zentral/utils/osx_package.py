@@ -23,6 +23,7 @@ class BasePackageBuilder(object):
     def __init__(self):
         self.tempdir = tempfile.mkdtemp(suffix=self.__module__)
         self.builddir = os.path.join(self.tempdir, "build")
+        self.pkg_refs = []
 
     def _extract_xar_archive(self, xar_archive, destination):
         check_call(["/usr/local/bin/xar", "-x", "-C", destination, "-f", xar_archive])
@@ -99,16 +100,19 @@ class ProductArchiveBuilder(BasePackageBuilder):
         os.makedirs(self.builddir)
         if product_archive:
             self._extract_xar_archive(product_archive, self.builddir)
-            self._set_distribution_title()
+            self._init_distribution()
         else:
             self._build_empty_distribution()
         self.package_dir = self.builddir
 
-    def _set_distribution_title(self):
+    def _init_distribution(self):
         tree = ET.parse(self.distribution)
         title = tree.find("title")
         title.text = self.title
         tree.write(self.distribution, encoding="utf-8", xml_declaration=True)
+        for pkg_ref in tree.findall(".//pkg-ref[@version]"):
+            self.pkg_refs.append({"id": pkg_ref.get("id"),
+                                  "version": pkg_ref.get("version")})
 
     def _build_empty_distribution(self):
         root = ET.Element("installer-gui-script")
@@ -206,6 +210,8 @@ class ProductArchiveBuilder(BasePackageBuilder):
         pkg_ref.append(bundle_version)
         root.append(pkg_ref)
         tree.write(self.distribution, encoding='utf-8', xml_declaration=True)
+        # Update pkg-refs
+        self.pkg_refs.append({"id": pkg_identifier, "version": pkg_version})
 
     def remove_pkg_ref_on_conclusion(self, pkg_ref_id):
         tree = ET.parse(self.distribution)
@@ -241,6 +247,7 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         self.package_identifier = self._get_package_identifier(**kwargs)
         self.package_version = kwargs.pop("version", "1.0")
         self.build_kwargs = kwargs
+        self.pkg_refs.append({"id": self.package_identifier, "version": self.package_version})
 
     #
     # common build steps
@@ -332,10 +339,10 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             # build a component package
             builder = self
 
-        return builder.package_name, builder._build_pkg()
+        return builder.package_name, builder.pkg_refs, builder._build_pkg()
 
     def build_and_make_response(self):
-        package_name, content = self.build()
+        package_name, _, content = self.build()
         # TODO: memory
         response = HttpResponse(content, "application/octet-stream")
         response['Content-Length'] = len(content)

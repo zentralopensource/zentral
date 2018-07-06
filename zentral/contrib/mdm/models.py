@@ -714,6 +714,7 @@ class KernelExtension(models.Model):
 
 class KernelExtensionPolicy(models.Model):
     artifact_type = "ConfigurationProfile"
+    artifact_can_be_removed = True
     configuration_profile_payload_type = "com.apple.syspolicy.kernel-extension-policy"
 
     # devices
@@ -772,6 +773,7 @@ def enrollment_package_path(instance, filename):
 
 class MDMEnrollmentPackage(models.Model):
     artifact_type = "Application"
+    artifact_can_be_removed = False  # TODO: not implemented. Verify if possible.
 
     # devices
     # TODO: add tags
@@ -790,6 +792,9 @@ class MDMEnrollmentPackage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     trashed_at = models.DateTimeField(null=True, editable=False)
+
+    class Meta:
+        unique_together = (("meta_business_unit", "builder"),)
 
     def enrollment_update_callback(self):
         self.version = F("version") + 1
@@ -827,3 +832,6 @@ class MDMEnrollmentPackage(models.Model):
         return "{}.pkg".format(slugify("{} pk{} v{}".format(self.get_builder_class().name,
                                                             self.id,
                                                             self.version)))
+
+    def get_absolute_url(self):
+        return "{}#enrollment_package_{}".format(reverse("mdm:enrollment_packages_index"), self.pk)

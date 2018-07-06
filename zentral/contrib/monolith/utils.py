@@ -48,7 +48,7 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
 
 def build_manifest_enrollment_package(mep):
     builder = mep.builder_class(mep.get_enrollment(), version=mep.version)
-    _, package_content = builder.build()
+    _, _, package_content = builder.build()
     mep.pkg_info = make_package_info(builder, mep, package_content)
     mep.file.delete(False)
     mep.file.save(mep.get_installer_item_filename(),

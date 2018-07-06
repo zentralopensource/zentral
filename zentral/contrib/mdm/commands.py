@@ -1,6 +1,8 @@
 import plistlib
 import uuid
 from django.http import HttpResponse
+from django.urls import reverse
+from zentral.conf import settings
 from .cms import sign_payload_openssl
 from .payloads import build_payload, get_payload_identifier
 
@@ -96,3 +98,14 @@ def build_remove_profile_command_response(artifact, command_uuid):
     artifact_suffix = artifact.get_configuration_profile_payload_identifier_suffix()
     identifier = get_payload_identifier(artifact_suffix)
     return build_command_response("RemoveProfile", {"Identifier": identifier}, command_uuid)
+
+
+def build_install_application_command_response(command_uuid):
+    manifest_url = "{}{}".format(settings["api"]["tls_hostname"],
+                                 reverse("mdm:install_application_manifest", args=(str(command_uuid),)))
+    return build_command_response("InstallApplication",
+                                  {"ManifestURL": manifest_url,
+                                   # Remove app when MDM profile is removed:
+                                   # TODO: make it configurable ?
+                                   "ManagementFlags": 1},
+                                  command_uuid)
