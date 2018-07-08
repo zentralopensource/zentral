@@ -72,7 +72,7 @@ class PreprocessorWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMi
                                       exchange=events_exchange,
                                       declare=[events_exchange])
         except Exception as exception:
-            logger.warning("Requing message with 1s delay: %s", exception)
+            logger.exception("Requeuing message with 1s delay: %s", exception)
             time.sleep(1)
             message.requeue()
         else:
