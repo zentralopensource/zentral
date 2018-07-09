@@ -114,16 +114,16 @@ class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
 class EnrollView(View):
     def post(self, request, *args, **kwargs):
         user_agent, ip = user_agent_and_ip_address_from_request(request)
-        request_json = json.load(request)
-        secret = request_json["secret"]
-        serial_number = request_json["serial_number"]
-        uuid = request_json["uuid"]
         try:
+            request_json = json.loads(request.body.decode("utf-8"))
+            secret = request_json["secret"]
+            serial_number = request_json["serial_number"]
+            uuid = request_json["uuid"]
             es_request = verify_enrollment_secret(
                 "monolith_enrollment", secret,
                 user_agent, ip, serial_number, uuid
             )
-        except EnrollmentSecretVerificationFailed as error:
+        except (KeyError, ValueError, EnrollmentSecretVerificationFailed):
             raise SuspiciousOperation
         else:
             # get or create enrolled machine
