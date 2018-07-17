@@ -20,9 +20,7 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
                          serialized_flags=enrollment.configuration.get_serialized_flag_list())
 
     def get_product_archive_title(self):
-        if self.build_kwargs.get("release"):
-            return self.build_kwargs.get("product_archive_title",
-                                         self.name)
+        return self.name
 
     def get_extra_packages(self):
         extra_packages = []

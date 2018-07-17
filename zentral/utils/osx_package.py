@@ -324,12 +324,12 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         self._build_bom()
 
         product_archive = self.get_product_archive()
-        product_archive_title = self.get_product_archive_title()
         extra_packages = self.get_extra_packages()
 
-        if product_archive or product_archive_title or extra_packages:
+        if product_archive or extra_packages:
             # build a product archive
-            builder = ProductArchiveBuilder(product_archive_title, product_archive)
+            builder = ProductArchiveBuilder(self.get_product_archive_title(),
+                                            product_archive)
             for extra_package in extra_packages:
                 builder.add_package(extra_package)
             builder.add_package(self.package_dir)
