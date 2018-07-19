@@ -19,6 +19,7 @@ class Command(BaseCommand):
             print("Existing DEP virtual servers:")
             for server in DEPVirtualServer.objects.all():
                 print(server.id, server)
+            return
         server_ids = kwargs.get("server_ids")
         if server_ids:
             depvs_qs = DEPVirtualServer.objects.filter(pk__in=server_ids)
