@@ -519,7 +519,10 @@ class DEPDevice(models.Model):
     last_op_date = models.DateTimeField(null=True, editable=False)
 
     # profile
-    profile_status = models.CharField(max_length=64, choices=PROFILE_STATUS_CHOICES, editable=False)
+    profile_status = models.CharField(max_length=64,
+                                      choices=PROFILE_STATUS_CHOICES,
+                                      default=PROFILE_STATUS_EMPTY,
+                                      editable=False)
     profile_uuid = models.UUIDField(null=True, editable=False)
     profile_assign_time = models.DateTimeField(null=True, editable=False)
     profile_push_time = models.DateTimeField(null=True, editable=False)
