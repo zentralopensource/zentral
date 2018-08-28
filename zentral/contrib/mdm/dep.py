@@ -124,7 +124,10 @@ def dep_device_update_dict(device):
     for attr in ("device_assigned_by",
                  "profile_status",
                  "profile_uuid"):
-        update_d[attr] = device.get(attr, None)
+        try:
+            update_d[attr] = device[attr]
+        except KeyError:
+            pass
 
     # datetime nullable attributes
     for attr in ("device_assigned_date",
