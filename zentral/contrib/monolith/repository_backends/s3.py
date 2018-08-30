@@ -11,7 +11,8 @@ class Repository(BaseRepository):
         super().__init__(config)
         self.aws_access_key_id = config["aws_access_key_id"]
         self.aws_secret_access_key = config["aws_secret_access_key"]
-        self.signature_version = config.get("signature_version", None)
+        self.signature_version = config.get("signature_version")
+        self.endpoint_url = config.get("endpoint_url")
         self.bucket = config["bucket"]
         self.config = {}
         for attr in ("signature_version", "region_name"):
@@ -40,6 +41,7 @@ class Repository(BaseRepository):
             self._client = boto3.client('s3',
                                         aws_access_key_id=self.aws_access_key_id,
                                         aws_secret_access_key=self.aws_secret_access_key,
+                                        endpoint_url=self.endpoint_url,
                                         config=config)
         return self._client
 
