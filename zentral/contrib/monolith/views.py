@@ -34,7 +34,7 @@ from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
                     DeleteManifestSubManifestForm,
                     EnrollmentForm,
                     ManifestForm, ManifestPrinterForm, ManifestSearchForm,
-                    PkgInfoSearchForm, UpdatePkgInfoCatalogForm,
+                    PkgInfoSearchForm,
                     SubManifestForm, SubManifestSearchForm,
                     SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm,
                     UploadPPDForm)
@@ -166,7 +166,7 @@ class PkgInfosView(LoginRequiredMixin, TemplateView):
 
 class UpdatePkgInfoCatalogView(LoginRequiredMixin, UpdateView):
     model = PkgInfo
-    form_class = UpdatePkgInfoCatalogForm
+    fields = ['catalogs']
 
     def form_valid(self, form):
         old_catalogs = set(self.model.objects.get(pk=self.object.pk).catalogs.all())
