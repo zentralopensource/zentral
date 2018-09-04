@@ -232,7 +232,7 @@
     {% with manifest_sub_manifest.sub_manifest as sub_manifest %}
     <tr>
       <td>
-        <a href="{% url 'monolith:sub_manifest' sub_manifest.id %}">
+        <a name="sm_{{ sub_manifest.id }}" href="{% url 'monolith:sub_manifest' sub_manifest.id %}">
           {{ sub_manifest }}
         </a>
       </td>

@@ -104,7 +104,7 @@ class SubManifestPkgInfoForm(forms.ModelForm):
 
     class Meta:
         model = SubManifestPkgInfo
-        fields = ('key', 'pkg_info_name')
+        fields = ('key', 'condition', 'featured_item', 'pkg_info_name')
 
 
 class SubManifestAttachmentForm(forms.ModelForm):
@@ -114,7 +114,7 @@ class SubManifestAttachmentForm(forms.ModelForm):
 
     class Meta:
         model = SubManifestAttachment
-        fields = ('key', 'file',)
+        fields = ('key', 'condition', 'featured_item', 'file',)
 
     def clean_file(self):
         f = self.cleaned_data["file"]

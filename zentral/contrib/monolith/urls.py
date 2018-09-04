@@ -46,6 +46,13 @@ urlpatterns = [
         name='update_catalog_priority'),
     url(r'^catalogs/(?P<pk>\d+)/delete/$', views.DeleteCatalogView.as_view(), name='delete_catalog'),
 
+    # conditions
+    url(r'^conditions/$', views.ConditionsView.as_view(), name='conditions'),
+    url(r'^conditions/create/$', views.CreateConditionView.as_view(), name='create_condition'),
+    url(r'^conditions/(?P<pk>\d+)/$', views.ConditionView.as_view(), name='condition'),
+    url(r'^conditions/(?P<pk>\d+)/update/$', views.UpdateConditionView.as_view(), name='update_condition'),
+    url(r'^conditions/(?P<pk>\d+)/delete/$', views.DeleteConditionView.as_view(), name='delete_condition'),
+
     # sub manifests
     url(r'^sub_manifests/$', views.SubManifestsView.as_view(), name='sub_manifests'),
     url(r'^sub_manifests/create/$', views.CreateSubManifestView.as_view(), name='create_sub_manifest'),
@@ -133,6 +140,7 @@ main_menu_cfg = {
         ('catalogs', 'Catalogs'),
         ('pkg_infos', 'PkgInfos'),
         ('ppds', 'Printer PPDs'),
+        ('conditions', 'Conditions'),
         ('manifests', 'Manifests'),
         ('sub_manifests', 'Sub manifests'),
         ('configuration_list', 'Configurations'),

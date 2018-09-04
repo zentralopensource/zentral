@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Monolith conditions</li>
+</ol>
+
+<h2>{{ object_list|length }} Condition{{ object_list|length|pluralize }}</h2>
+
+<p><a class="btn btn-default" href="{% url 'monolith:create_condition' %}">Create</a></p>
+
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Predicate</th>
+    <th>Updated at</th>
+  </thead>
+  <tbody>
+    {% for condition in object_list %}
+    <tr>
+      <td>
+        <a href="{{ condition.get_absolute_url }}">{{ condition.name }}</a>
+      </td>
+      <td><pre>{{ condition.predicate }}</pre></td>
+      <td>{{ condition.updated_at|date:"r"|default:"-" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

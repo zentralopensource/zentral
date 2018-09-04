@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{%  url 'monolith:conditions' %}">Monolith conditions</a></li>
+  <li class="active">{{ object.name }}</li>
+</ol>
+
+<h2>Condition <i>{{ object.name }}</i></h2>
+
+<p>
+    <a class="btn btn-default" href="{% url 'monolith:update_condition' object.pk %}">
+      <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    </a>
+    {% if object.can_be_deleted %}
+    <a class="btn btn-danger" href="{% url 'monolith:delete_condition' object.pk %}">
+      <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    </a>
+    {% endif %}
+</p>
+
+<dl class="dl-horizontal">
+  <dt>Name</dt>
+  <dd>{{ object.name }}</dd>
+  <dt>Predicate</dt>
+  <dd><pre>{{ object.predicate }}</pre></dd>
+<dl>
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">created at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+  <dt class="small" style="opacity:0.5">last change</dt>
+  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+</dl>
+
+<h3>{{ pkg_infos|length }} package{{ pkg_infos|length|pluralize }}</h3>
+
+{% if pkg_infos %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Sub manifest</th>
+      <th>Package</th>
+      <th>Type</th>
+      <th>Key</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for sub_manifest, name, link, type, key in pkg_infos %}
+    <tr>
+      <td><a href="{{ link }}">{{ sub_manifest }}</a></td>
+      <td>{{ name }}</td>
+      <td>{{ type }}</td>
+      <td>{{ key }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

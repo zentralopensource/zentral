@@ -260,25 +260,25 @@ class SubManifest(models.Model):
         return SubManifestAttachment.objects.filter(sub_manifest=self).count() > 0
 
     def pkg_info_dict(self):
-        d = {'keys': {},
-             'total': {'pkginfo': 0}}
+        pkg_info_d = {'keys': {},
+                      'total': {'pkginfo': 0}}
         for sma_type in SUB_MANIFEST_ATTACHMENT_TYPES:
-            d['total'][sma_type] = 0
-        for smpi in self.submanifestpkginfo_set.select_related('pkg_info_name'):
-            key_dict = d['keys'].setdefault(smpi.key,
-                                            {'key_display': smpi.get_key_display(),
-                                             'key_list': []})
+            pkg_info_d['total'][sma_type] = 0
+        for smpi in self.submanifestpkginfo_set.select_related('pkg_info_name', 'condition'):
+            key_dict = pkg_info_d['keys'].setdefault(smpi.key,
+                                                     {'key_display': smpi.get_key_display(),
+                                                      'key_list': []})
             key_dict['key_list'].append((smpi.pkg_info_name.name, smpi))
-            d['total']['pkginfo'] += 1
-        for sma in SubManifestAttachment.objects.active().filter(sub_manifest=self):
-            key_dict = d['keys'].setdefault(sma.key,
-                                            {'key_display': sma.get_key_display(),
-                                             'key_list': []})
+            pkg_info_d['total']['pkginfo'] += 1
+        for sma in SubManifestAttachment.objects.active().select_related('condition').filter(sub_manifest=self):
+            key_dict = pkg_info_d['keys'].setdefault(sma.key,
+                                                     {'key_display': sma.get_key_display(),
+                                                      'key_list': []})
             key_dict['key_list'].append((sma.name, sma))
-            d['total'][sma.type] += 1
-        for key, key_d in d['keys'].items():
+            pkg_info_d['total'][sma.type] += 1
+        for key, key_d in pkg_info_d['keys'].items():
             key_d['key_list'].sort()
-        return d
+        return pkg_info_d
 
     def get_munki_name(self):
         return build_munki_name("sub_manifest", self.id, self.name)
@@ -287,13 +287,32 @@ class SubManifest(models.Model):
         return build_munki_name("sub_manifest_catalog", self.id, self.name)
 
     def serialize(self):
-        data = {}
-        included_names = set([])
+        condition_d = {}
+        featured_items = set()
+        included_sma_names = set()
         for key, key_d in self.pkg_info_dict()['keys'].items():
-            data[key] = [smo.get_name() for _, smo in key_d['key_list']]
-            included_names.update(smo.name for _, smo in key_d['key_list'] if isinstance(smo, SubManifestAttachment))
+            for _, smo in key_d['key_list']:
+                if smo.condition:
+                    condition = smo.condition.predicate
+                else:
+                    condition = None
+                name = smo.get_name()
+                condition_d.setdefault(condition, {}).setdefault(key, []).append(name)
+                if key != "managed_uninstalls" and smo.featured_item:
+                    featured_items.add(name)
+                if isinstance(smo, SubManifestAttachment):
+                    included_sma_names.add(name)
+        data = {}
+        if featured_items:
+            data["featured_items"] = sorted(featured_items)
+        for condition, condition_key_d in condition_d.items():
+            if condition is None:
+                data.update(condition_key_d)
+            else:
+                condition_key_d["condition"] = condition
+                data.setdefault("conditional_items", []).append(condition_key_d)
         # force uninstall on the not included attachments
-        qs = SubManifestAttachment.objects.filter(sub_manifest=self).exclude(name__in=included_names)
+        qs = SubManifestAttachment.objects.filter(sub_manifest=self).exclude(name__in=included_sma_names)
         data.setdefault('managed_uninstalls', []).extend({sma.get_name() for sma in qs})
         return plistlib.dumps(data)
 
@@ -317,10 +336,28 @@ class SubManifest(models.Model):
         return mwt
 
 
+class Condition(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+    predicate = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("monolith:condition", args=(self.pk,))
+
+    def can_be_deleted(self):
+        return not self.submanifestpkginfo_set.count() and not self.submanifestattachment_set.count()
+
+
 class SubManifestPkgInfo(models.Model):
     sub_manifest = models.ForeignKey(SubManifest)
     key = models.CharField(max_length=32, choices=SUB_MANIFEST_PKG_INFO_KEY_CHOICES)
     pkg_info_name = models.ForeignKey(PkgInfoName)
+    featured_item = models.BooleanField(default=False)
+    condition = models.ForeignKey(Condition, null=True, blank=True, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -329,7 +366,7 @@ class SubManifestPkgInfo(models.Model):
         unique_together = (('sub_manifest', 'pkg_info_name'),)
 
     def get_absolute_url(self):
-        return reverse('monolith:sub_manifest', args=(self.sub_manifest.pk,))
+        return "{}#smp_{}".format(reverse('monolith:sub_manifest', args=(self.sub_manifest.pk,)), self.pk)
 
     def get_name(self):
         return self.pkg_info_name.name
@@ -375,6 +412,8 @@ class SubManifestAttachment(models.Model):
     key = models.CharField(max_length=32, choices=SUB_MANIFEST_PKG_INFO_KEY_CHOICES)
     type = models.CharField(max_length=32, choices=SUB_MANIFEST_ATTACHMENT_TYPE_CHOICES)
     name = models.CharField(max_length=256)
+    featured_item = models.BooleanField(default=False)
+    condition = models.ForeignKey(Condition, null=True, blank=True, on_delete=models.PROTECT)
     identifier = models.TextField(blank=True, null=True)
     version = models.PositiveSmallIntegerField(default=0)
     file = models.FileField(upload_to=attachment_path, blank=True)
@@ -387,6 +426,9 @@ class SubManifestAttachment(models.Model):
 
     class Meta:
         unique_together = (('sub_manifest', 'name', 'version'),)
+
+    def get_absolute_url(self):
+        return "{}#sma_{}".format(reverse('monolith:sub_manifest', args=(self.sub_manifest.pk,)), self.pk)
 
     def get_name(self):
         return "sub manifest {} {} {}".format(self.sub_manifest.id,

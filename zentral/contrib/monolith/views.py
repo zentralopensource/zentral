@@ -43,6 +43,7 @@ from .models import (MunkiNameError, parse_munki_name,
                      Configuration, EnrolledMachine, Enrollment,
                      Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      Printer, PrinterPPD,
+                     Condition,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
 from .osx_package.builder import MonolithZentralEnrollPkgBuilder
 
@@ -369,6 +370,73 @@ class DeleteCatalogView(LoginRequiredMixin, DeleteView):
                                            "action": "deleted"}],
                                          request)
         return response
+
+
+# conditions
+
+
+class ConditionsView(LoginRequiredMixin, ListView):
+    model = Condition
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['monolith'] = True
+        return context
+
+
+class CreateConditionView(LoginRequiredMixin, CreateView):
+    model = Condition
+    fields = ["name", "predicate"]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['monolith'] = True
+        context['title'] = "Create condition"
+        return context
+
+
+class ConditionView(LoginRequiredMixin, DetailView):
+    model = Condition
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['monolith'] = True
+        condition = context["object"]
+        pkg_infos = []
+        for smp in condition.submanifestpkginfo_set.select_related("sub_manifest", "pkg_info_name"):
+            pkg_infos.append((smp.sub_manifest, smp.pkg_info_name.name,
+                              smp.get_absolute_url(),
+                              "repository package", smp.get_key_display()))
+        for sma in condition.submanifestattachment_set.select_related("sub_manifest"):
+            pkg_infos.append((sma.sub_manifest, sma.name,
+                              sma.get_absolute_url(),
+                              sma.get_type_display(), sma.get_key_display()))
+        pkg_infos.sort(key=lambda t: (t[0].name, t[1], t[3], t[4]))
+        context['pkg_infos'] = pkg_infos
+        return context
+
+
+class UpdateConditionView(LoginRequiredMixin, UpdateView):
+    model = Condition
+    fields = ["name", "predicate"]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['monolith'] = True
+        condition = context["object"]
+        context['title'] = "Update condition {}".format(condition.name)
+        return context
+
+
+class DeleteConditionView(LoginRequiredMixin, DeleteView):
+    model = Condition
+    success_url = reverse_lazy("monolith:conditions")
+    # TODO: can_be_deleted?
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['monolith'] = True
+        return context
 
 
 # sub manifests

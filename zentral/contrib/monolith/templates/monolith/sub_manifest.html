@@ -62,17 +62,40 @@
 {% for key_display, key_list in keys %}
 <h4>{{ key_display }}</h4>
 <table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Type</th>
+    <th>Condition</th>
+    <th>Featured?</th>
+    <th></th>
+  </thead>
   {% for name, smo in key_list %}
   <tr>
-    <td class="col-md-6">
+    <td class="col-md-4">
       {% if smo.pkg_info_name %}
-      <a href="{% url 'monolith:pkg_info_name' smo.pkg_info_name.id %}">{{ name }}</a>
+      <a name="smp_{{ smo.pk }}" href="{% url 'monolith:pkg_info_name' smo.pkg_info_name.id %}">{{ name }}</a>
       {% else %}
-      {{ name }}
+      <a name="sma_{{ smo.pk }}"></a>{{ name }}
       {% endif %}
     </td>
     {% if smo.type %}
-    <td class="col-md-4">{{ smo.get_type_display }}</td>
+    <td class="col-md-2">{{ smo.get_type_display }}</td>
+    {% else %}
+    <td class="col-md-2">repository package</td>
+    {% endif %}
+    <td class="col-md-3">
+      {% if smo.condition %}
+      <a href="{{ smo.condition.get_absolute_url }}"
+         data-toggle="tooltip" data-placement="top"
+         title="{{ smo.condition.predicate }}">{{ smo.condition }}</a>
+      {% else %}
+      -
+      {% endif %}
+    </td>
+    <td class="col-md-1">
+      {{ smo.featured_item|yesno:"★,-" }}
+    </td>
+    {% if smo.type %}
     <td class="col-md-2">
       {% if smo.type == 'script' %}
       <a class="btn btn-default" href="{% url 'monolith:sub_manifest_update_script' object.id smo.id %}">
@@ -84,9 +107,10 @@
       </a>
     </td>
     {% else %}
-    <td class="col-md-4">repository package</td>
     <td class="col-md-2">
-      <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_pkg_info' smo.id %}">Delete</a>
+      <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_pkg_info' smo.id %}">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
     </td>
     {% endif %}
   </tr>
@@ -98,7 +122,7 @@
 <table class="table">
   {% for tags, manifest in manifests %}
   <tr>
-    <td><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></td>
+    <td><a href="{{ manifest.get_absolute_url }}#sm_{{ object.id }}">{{ manifest }}</a></td>
     <td>
       {% for tag in tags %}{% inventory_tag tag %}{% endfor %}
     </td>
