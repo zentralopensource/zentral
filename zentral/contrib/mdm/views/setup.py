@@ -2,10 +2,12 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import SuspiciousOperation
+from django.db.models import Count
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
+from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.cms import sign_payload_openssl
 from zentral.contrib.mdm.dep import (add_dep_token_certificate, add_dep_profile, assign_dep_device_profile,
                                      refresh_dep_device)
@@ -14,7 +16,8 @@ from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DEPProfileFor
                                        OTAEnrollmentForm, OTAEnrollmentSecretForm, PushCertificateForm)
 from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate, PushCertificate,
                                         DEPDevice, DEPProfile, DEPToken, DEPVirtualServer,
-                                        OTAEnrollment)
+                                        OTAEnrollment,
+                                        KernelExtensionPolicy, MDMEnrollmentPackage)
 from zentral.contrib.mdm.payloads import (build_payload_response,
                                           build_root_ca_configuration_profile,
                                           build_profile_service_payload)
@@ -34,6 +37,43 @@ class IndexView(LoginRequiredMixin, TemplateView):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
         return ctx
+
+
+# Meta business units
+
+
+class MetaBusinessUnitListView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/metabusinessunit_list.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mbu_list"] = sorted(set(
+            mbupc.meta_business_unit
+            for mbupc in MetaBusinessUnitPushCertificate.objects.select_related("meta_business_unit").all()
+        ), key=lambda mbu: mbu.name)
+        return context
+
+
+class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
+    model = MetaBusinessUnit
+    template_name = "mdm/metabusinessunit_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data()
+        mbu = context["object"]
+        context["dep_profile_list"] = (DEPProfile.objects.select_related("virtual_server")
+                                                         .filter(enrollment_secret__meta_business_unit=mbu)
+                                                         .annotate(num_devices=Count("depdevice"))
+                                                         .order_by("name", "pk"))
+        context["ota_enrollment_list"] = (OTAEnrollment.objects.filter(enrollment_secret__meta_business_unit=mbu)
+                                                               .order_by("name", "pk"))
+        try:
+            context["kext_policy"] = KernelExtensionPolicy.objects.get(meta_business_unit=mbu)
+        except KernelExtensionPolicy.DoesNotExist:
+            pass
+        context["enrollment_package_list"] = (MDMEnrollmentPackage.objects.filter(meta_business_unit=mbu)
+                                                                          .order_by("builder", "pk"))
+        return context
 
 
 # Push certificates

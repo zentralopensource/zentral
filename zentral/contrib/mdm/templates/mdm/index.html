@@ -9,12 +9,21 @@
 
 <h2>MDM setup</h2>
 
+
+<p><a href="{% url 'mdm:mbu_list' %}">Business units</a></p>
+
 <p><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></p>
-<p><a href="{% url 'mdm:root_ca' %}">Trusted Root CA configuration profile</a></p>
-<p><a href="{% url 'mdm:ota_enrollments' %}">OTA MDM Enrollments</a></p>
 <p><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></p>
+
+<p><a href="{% url 'mdm:ota_enrollments' %}">OTA MDM Enrollments</a></p>
 <p><a href="{% url 'mdm:dep_profiles' %}">DEP profiles</a></p>
+
 <p><a href="{% url 'mdm:devices' %}">Devices</a></p>
+
 <p><a href="{% url 'mdm:kernel_extensions_index' %}">Manage kernel extensions</a></p>
 <p><a href="{% url 'mdm:enrollment_packages_index' %}">Manage enrollment packages</a></p>
+
+
+<p>---</p>
+<p><a href="{% url 'mdm:root_ca' %}">Trusted Root CA configuration profile</a></p>
 {% endblock %}

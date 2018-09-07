@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>Business unit <i>{{ object }}</i></h2>
+
+<h3>{{ dep_profile_list|length }} DEP profile{{ dep_profile_list|length|pluralize }}</h3>
+
+{% if dep_profile_list %}
+<table class="table">
+  <thead>
+    <th>Virtual server</th>
+    <th>Name</th>
+    <th>UUID</th>
+    <th>Devices</th>
+    <th>Created at</th>
+    <th>Updated at</th>
+    <th></th>
+  </thead>
+  <tbody>
+    {% for dep_profile in dep_profile_list %}
+    <tr>
+      <td><a href="{{ dep_profile.virtual_server.get_absolute_url }}">{{ dep_profile.virtual_server }}</a></td>
+      <td><a href="{{ dep_profile.get_absolute_url }}">{{ dep_profile }}</a></td>
+      <td>{{ dep_profile.uuid }}</td>
+      <td>{{ dep_profile.num_devices }}</td>
+      <td>{{ dep_profile.created_at }}</td>
+      <td>{{ dep_profile.updated_at }}</td>
+      <td>
+        <a href="{% url 'mdm:update_dep_profile' dep_profile.pk %}" class="btn btn-default">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h3>{{ ota_enrollment_list|length }} OTA enrollment{{ ota_enrollment_list|length|pluralize }}</h3>
+
+{% if ota_enrollment_list %}
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Validity</th>
+    <th>Created at</th>
+  </thead>
+  <tbody>
+    {% for ota_enrollment in ota_enrollment_list %}
+    {% with ota_enrollment.enrollment_secret.is_valid|first as is_valid %}
+    {% with ota_enrollment.enrollment_secret.is_valid|last as err_msg %}
+    <tr>
+      <td><a href="{% url 'mdm:ota_enrollment' ota_enrollment.pk %}">{{ ota_enrollment.name }}</a></td>
+      <td class="{% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
+      <td>{{ ota_enrollment.created_at }}</td>
+    </tr>
+    {% endwith %}
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h3>Artifacts</h3>
+
+<h4>Kernel extension policy</h4>
+{% if kext_policy %}
+<table class="table">
+  <thead>
+    <th>Identifier</th>
+    <th>Version</th>
+    <th>Updated at</th>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="{{ kext_policy.get_absolute_url }}">{{ kext_policy }}</a></td>
+      <td>{{ kext_policy.version }}</td>
+      <td>{{ kext_policy.updated_at }}</td>
+    </tr>
+  </tbody>
+</table>
+{% endif %}
+
+<h4>{{ enrollment_package_list|length }} enrollment package{{ enrollment_package_list|length|pluralize }}</h4>
+
+{% if enrollment_package_list %}
+<table class="table">
+  <thead>
+    <th>Description</th>
+    <th>Request count</th>
+    <th>Created at</th>
+    <th></th>
+  </thead>
+  <tbody>
+    {% for enrollment_package in enrollment_package_list %}
+    {% with enrollment_package.get_enrollment as enrollment %}
+    {% with enrollment.secret as secret %}
+    <tr>
+      <td>
+        <a name="enrollment_package_{{ enrollment_package.pk }}"></a>
+        <a href="{{ enrollment.get_absolute_url }}">{{ enrollment.get_description_for_distributor }}</a>
+      </td>
+      <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
+      <td>
+        {{ enrollment_package.created_at }}
+      </td>
+      <td></td>
+    </tr>
+    {% endwith %}
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

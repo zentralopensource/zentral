@@ -11,6 +11,13 @@ urlpatterns = [
         views.RootCAView.as_view(),
         name='root_ca'),
 
+    url(r'^business_units/$',
+        views.MetaBusinessUnitListView.as_view(),
+        name='mbu_list'),
+    url(r'^business_units/(?P<pk>\d+)/$',
+        views.MetaBusinessUnitDetailView.as_view(),
+        name='mbu'),
+
     # push certificate / setup views
     url(r'^push_certificates/$',
         views.PushCertificatesView.as_view(),
