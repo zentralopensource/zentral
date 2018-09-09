@@ -13,7 +13,8 @@ from zentral.contrib.mdm.dep import (add_dep_token_certificate, add_dep_profile,
                                      refresh_dep_device)
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DEPProfileForm, EncryptedDEPTokenForm,
-                                       OTAEnrollmentForm, OTAEnrollmentSecretForm, PushCertificateForm)
+                                       OTAEnrollmentForm, OTAEnrollmentSecretForm, PushCertificateForm,
+                                       AddPushCertificateBusinessUnitForm)
 from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate, PushCertificate,
                                         DEPDevice, DEPProfile, DEPToken, DEPVirtualServer,
                                         OTAEnrollment,
@@ -114,11 +115,16 @@ class PushCertificateView(LoginRequiredMixin, DetailView):
 
 class AddPushCertificateBusinessUnitView(LoginRequiredMixin, CreateView):
     model = MetaBusinessUnitPushCertificate
-    fields = ("meta_business_unit",)
+    form_class = AddPushCertificateBusinessUnitForm
 
     def dispatch(self, request, *args, **kwargs):
         self.push_certificate = get_object_or_404(PushCertificate, pk=kwargs["pk"])
         return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["push_certificate"] = self.push_certificate
+        return kwargs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

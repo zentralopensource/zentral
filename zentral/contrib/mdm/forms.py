@@ -4,7 +4,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .models import (DEPDevice, DEPOrganization, DEPProfile, DEPToken, DEPVirtualServer,
-                     OTAEnrollment, PushCertificate)
+                     OTAEnrollment, PushCertificate, MetaBusinessUnitPushCertificate)
 from .pkcs12 import load_push_certificate
 
 
@@ -53,6 +53,20 @@ class PushCertificateForm(forms.ModelForm):
         super()._post_clean()
         for key, val in self.cleaned_data.items():
             setattr(self.instance, key, val)
+
+
+class AddPushCertificateBusinessUnitForm(forms.ModelForm):
+    class Meta:
+        model = MetaBusinessUnitPushCertificate
+        fields = ('meta_business_unit',)
+
+    def __init__(self, *args, **kwargs):
+        push_certificate = kwargs.pop("push_certificate")
+        super().__init__(*args, **kwargs)
+        mbu_f = self.fields["meta_business_unit"]
+        mbu_id_list = [mbupc.meta_business_unit_id
+                       for mbupc in push_certificate.metabusinessunitpushcertificate_set.all()]
+        mbu_f.queryset = mbu_f.queryset.exclude(pk__in=mbu_id_list)
 
 
 class DeviceSearchForm(forms.Form):
