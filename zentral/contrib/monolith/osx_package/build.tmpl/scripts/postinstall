@@ -1,9 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from Foundation import (CFPreferencesAppSynchronize,
-                        CFPreferencesSetValue,
+                        CFPreferencesSetMultiple,
                         kCFPreferencesAnyHost,
-                        kCFPreferencesAnyUser,
                         kCFPreferencesCurrentUser)
 import json
 import os
@@ -68,29 +67,25 @@ def enroll(serial_number, uuid):
     return json.load(resp)["token"]
 
 
-def update_default_prefs(serial_number):
-    for key, val in (("ClientIdentifier", serial_number),
-                     ("SoftwareRepoURL", SOFTWARE_REPO_URL),
-                     ("SoftwareRepoCACertificate", TLS_CA_CERT),
-                     ("FollowHTTPRedirects", "all"),
-                     ("SuppressLoginwindowInstall", True),
-                     ("ManifestURL", None),  # no special Manifest URL with monolith
-                     # force redirect via monolith for Icon and Client Resource
-                     ("IconURL", None),
-                     ("ClientResourceURL", None)):
-        CFPreferencesSetValue(key, val,
-                              BUNDLE_ID,
-                              kCFPreferencesAnyUser,
-                              kCFPreferencesAnyHost)
-
-
 def update_root_prefs(serial_number, token):
-    CFPreferencesSetValue("AdditionalHttpHeaders",
-                          ["X-Zentral-Serial-Number: {}".format(serial_number),
-                           "X-Monolith-Token: {}".format(token)],
-                          BUNDLE_ID,
-                          kCFPreferencesCurrentUser,  # to write in the /var/root plist
-                          kCFPreferencesAnyHost)
+    config_d = {"ClientIdentifier": serial_number,
+                "SoftwareRepoURL": SOFTWARE_REPO_URL,
+                "SoftwareRepoCACertificate": TLS_CA_CERT,
+                "FollowHTTPRedirects": "all",
+                "SuppressLoginwindowInstall": True,
+                "ManifestURL": None,  # no special Manifest URL with monolith
+                # force redirect via monolith for Icon and Client Resource
+                "IconURL": None,
+                "ClientResourceURL": None,
+                "AdditionalHttpHeaders": [
+                    "X-Zentral-Serial-Number: {}".format(serial_number),
+                    "X-Monolith-Token: {}".format(token)
+                ],
+                }
+    CFPreferencesSetMultiple(config_d, None,
+                             BUNDLE_ID,
+                             kCFPreferencesCurrentUser,  # to write in the /var/root plist
+                             kCFPreferencesAnyHost)
 
 
 def sync_prefs():
@@ -144,7 +139,6 @@ if __name__ == "__main__":
     execute_setup_script()
     serial_number, uuid = get_serial_number_and_uuid()
     token = enroll(serial_number, uuid)
-    update_default_prefs(serial_number)
     update_root_prefs(serial_number, token)
     sync_prefs()
     if can_launch_munki():
