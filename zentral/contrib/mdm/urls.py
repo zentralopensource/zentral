@@ -17,6 +17,9 @@ urlpatterns = [
     url(r'^business_units/(?P<pk>\d+)/$',
         views.MetaBusinessUnitDetailView.as_view(),
         name='mbu'),
+    url(r'^business_units/(?P<pk>\d+)/enrollment_packages/create/$',
+        views.CreateEnrollmentPackageView.as_view(),
+        name="create_enrollment_package"),
 
     # push certificate / setup views
     url(r'^push_certificates/$',
@@ -123,15 +126,6 @@ urlpatterns = [
     url(r'^kernel_extensions/policies/(?P<pk>\d+)/update/$',
         views.UpdateKernelExtensionPolicyView.as_view(),
         name="update_kernel_extension_policy"),
-
-    # enrollment packages / management
-    url(r'^enrollment_packages/$',
-        views.EnrollmentPackagesIndexView.as_view(),
-        name="enrollment_packages_index"),
-    url(r'^enrollment_packages/create/$',
-        views.CreateEnrollmentPackageView.as_view(),
-        name="create_enrollment_package"),
-
 
     # SCEP verification / scep view
     url(r'^verify_scep_csr/$',

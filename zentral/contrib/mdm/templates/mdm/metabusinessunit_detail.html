@@ -91,6 +91,21 @@
 
 <h4>{{ enrollment_package_list|length }} enrollment package{{ enrollment_package_list|length|pluralize }}</h4>
 
+{% if create_enrollment_package_links %}
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="createMDMEnrollmentPackage"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Create
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="createMDMEnrollmentPackage">
+    {% for link, anchor_text in create_enrollment_package_links %}
+    <li><a href="{{ link }}">{{ anchor_text }}</a></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 {% if enrollment_package_list %}
 <table class="table">
   <thead>

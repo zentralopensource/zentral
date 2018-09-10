@@ -5,7 +5,7 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
-  <li><a href="{% url 'mdm:enrollment_packages_index' %}">Enrollment packages</a></li>
+  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
   <li class="active">{{ title }}</li>
 </ol>
 
@@ -17,7 +17,7 @@
   {{ secret_form|bootstrap }}
   {{ enrollment_form|bootstrap }}
   <p>
-    <a href="{% url 'mdm:enrollment_packages_index' %}" class="btn btn-default">Cancel</a>
+    <a href="{% url 'mdm:mbu' meta_business_unit.pk %}" class="btn btn-default">Cancel</a>
     <button class="btn btn-primary">Create enrollment package</button>
   </p>
 </form>

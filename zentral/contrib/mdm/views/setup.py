@@ -22,6 +22,7 @@ from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate, PushCer
 from zentral.contrib.mdm.payloads import (build_payload_response,
                                           build_root_ca_configuration_profile,
                                           build_profile_service_payload)
+from zentral.utils.osx_package import get_standalone_package_builders
 
 logger = logging.getLogger('zentral.contrib.mdm.views.setup')
 
@@ -74,6 +75,12 @@ class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
             pass
         context["enrollment_package_list"] = (MDMEnrollmentPackage.objects.filter(meta_business_unit=mbu)
                                                                           .order_by("builder", "pk"))
+        existing_enrollment_package_builders = [ep.builder for ep in context["enrollment_package_list"]]
+        create_enrollment_package_url = reverse("mdm:create_enrollment_package", args=(mbu.pk,))
+        context["create_enrollment_package_links"] = [("{}?builder={}".format(create_enrollment_package_url, k),
+                                                       v.name)
+                                                      for k, v in get_standalone_package_builders().items()
+                                                      if k not in existing_enrollment_package_builders]
         return context
 
 
