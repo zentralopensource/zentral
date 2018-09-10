@@ -837,4 +837,5 @@ class MDMEnrollmentPackage(models.Model):
                                                             self.version)))
 
     def get_absolute_url(self):
-        return "{}#enrollment_package_{}".format(reverse("mdm:enrollment_packages_index"), self.pk)
+        return "{}#enrollment_package_{}".format(reverse("mdm:enrollment_packages_index",
+                                                         args=(self.meta_business_unit.pk,)), self.pk)
