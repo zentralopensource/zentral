@@ -73,7 +73,7 @@ class SimpleMDMApp(models.Model):
     def serialize_for_event(self):
         """used for the enrollment secret verification events, via the enrollment"""
         instance = self.simplemdm_instance
-        meta_business_unit = self.instance.business_unit.meta_business_unit
+        meta_business_unit = instance.business_unit.meta_business_unit
         return {"simplemdm_app": {"pk": self.pk,
                                   "instance": {"pk": instance.pk,
                                                "account_name": instance.account_name,
