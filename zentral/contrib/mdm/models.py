@@ -418,8 +418,12 @@ class DEPProfile(models.Model):
         ("TOS", True),
         ("Zoom", True),
         ("Android", True),
+        ("Appearance", True),
         ("HomeButtonSensitivity", True),
+        ("iMessageAndFaceTime", True),
         ("OnBoarding", True),
+        ("ScreenTime", True),
+        ("SoftwareUpdate", True),
         ("WatchMigration", True),
         ("FileVault", True),
         ("iCloudDiagnostics", True),
@@ -441,7 +445,8 @@ class DEPProfile(models.Model):
     name = models.CharField(max_length=125, unique=True)  # see CONFIG_NAME_INVALID error
     allow_pairing = models.BooleanField(default=False)
     is_supervised = models.BooleanField(default=True)
-    is_multi_user = models.BooleanField(default=True)
+    # cf doc: Only available for Apple School Manager
+    # is_multi_user = models.BooleanField(default=True)
     is_mandatory = models.BooleanField(default=True)
     await_device_configured = models.BooleanField(default=False)
     auto_advance_setup = models.BooleanField(default=False)

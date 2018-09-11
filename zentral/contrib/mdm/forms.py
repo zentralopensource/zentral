@@ -216,6 +216,13 @@ class DEPProfileForm(forms.ModelForm):
         model = DEPProfile
         fields = "__all__"
 
+    def clean_is_mdm_removable(self):
+        is_mdm_removable = self.cleaned_data.get("is_mdm_removable")
+        is_supervised = self.cleaned_data.get("is_supervised")
+        if not is_mdm_removable and not is_supervised:
+            raise forms.ValidationError("Can only be set to False if 'Is supervised' is set to True")
+        return is_mdm_removable
+
     def clean(self):
         super().clean()
         skip_setup_items = []

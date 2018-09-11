@@ -84,7 +84,6 @@ def serialize_dep_profile(dep_profile):
     # standard attibutes
     for attr in ("allow_pairing",
                  "is_supervised",
-                 "is_multi_user",
                  "is_mandatory",
                  "await_device_configured",
                  "is_mdm_removable",
