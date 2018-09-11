@@ -117,6 +117,8 @@ class CheckinView(MDMView):
                                     "checkout_at": None}
         enrolled_device, created = EnrolledDevice.objects.update_or_create(udid=self.udid,
                                                                            defaults=enrolled_device_defaults)
+        # delete installed device artifacts, to retrigger the installs
+        enrolled_device.installeddeviceartifact_set.all().delete()
 
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)
