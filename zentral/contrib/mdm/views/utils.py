@@ -1,6 +1,7 @@
 import copy
 import logging
 import plistlib
+import os.path
 from django.contrib.contenttypes.models import ContentType
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -230,10 +231,12 @@ def get_next_device_command_response(meta_business_unit, enrolled_device):
 
 def build_application_manifest_response(command_uuid):
     device_artifact_command = get_object_or_404(DeviceArtifactCommand, command_uuid=command_uuid)
-    manifest = copy.deepcopy(device_artifact_command.artifact.manifest)
+    artifact = device_artifact_command.artifact
+    manifest = copy.deepcopy(artifact.manifest)
     download_url = "{}{}".format(settings["api"]["tls_hostname"],
                                  reverse("mdm:install_application_download",
-                                         args=(str(device_artifact_command.command_uuid),)))
+                                         args=(str(device_artifact_command.command_uuid),
+                                               os.path.basename(artifact.file.name))))
     manifest["items"][0]["assets"][0]["url"] = download_url
     return HttpResponse(plistlib.dumps(manifest),
                         content_type="text/xml; charset=UTF-8")
@@ -241,8 +244,11 @@ def build_application_manifest_response(command_uuid):
 
 def build_application_download_response(command_uuid):
     device_artifact_command = get_object_or_404(DeviceArtifactCommand, command_uuid=command_uuid)
-    return FileResponse(device_artifact_command.artifact.file,
-                        content_type="application/octet-stream")
+    package_file = device_artifact_command.artifact.file
+    response = FileResponse(package_file, content_type="application/octet-stream")
+    response["Content-Length"] = package_file.size
+    response["Content-Disposition"] = 'attachment;filename="{}"'.format(os.path.basename(package_file.name))
+    return response
 
 
 # process result payload

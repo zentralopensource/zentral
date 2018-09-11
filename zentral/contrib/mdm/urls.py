@@ -148,7 +148,7 @@ urlpatterns = [
     url(r'^device_artifact_commands/(?P<uuid>[0-9a-f-]+)/manifest/$',
         views.InstallApplicationManifestView.as_view(),
         name="install_application_manifest"),
-    url(r'^device_artifact_commands/(?P<uuid>[0-9a-f-]+)/download/$',
+    url(r'^device_artifact_commands/(?P<uuid>[0-9a-f-]+)/download/(?P<filename>\S*)$',
         views.InstallApplicationDownloadView.as_view(),
         name="install_application_download"),
 ]
