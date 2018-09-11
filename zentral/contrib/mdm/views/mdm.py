@@ -234,10 +234,11 @@ class ConnectView(MDMView):
         enrolled_device = self.enrollment_session.enrolled_device
         command_uuid = self.payload.get("CommandUUID", None)
         payload_status = self.payload["Status"]
-
+        user_id = self.payload.get("UserID")
         self.post_event(self.get_success(payload_status),
                         command_uuid=command_uuid,
-                        payload_status=payload_status)
+                        payload_status=payload_status,
+                        user_id=user_id)
 
         # result
         if payload_status != "Idle":
@@ -246,7 +247,10 @@ class ConnectView(MDMView):
                                    self.payload)
 
         # response
-        if payload_status in ["Idle", "Acknowledged"]:
+        if user_id:
+            # TODO: do something!!!
+            return HttpResponse()
+        elif payload_status in ["Idle", "Acknowledged"]:
             # we can send another command
             return get_next_device_command_response(self.meta_business_unit, enrolled_device)
         elif payload_status in ["Error", "CommandFormatError", "NotNow"]:
