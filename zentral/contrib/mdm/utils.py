@@ -24,6 +24,8 @@ def get_md5s(package_file, md5_size=MD5_SIZE):
             current_size = 0
     if current_size:
         md5s.append(h.hexdigest())
+        if len(md5s) == 1:
+            md5_size = current_size
     return md5_size, md5s
 
 
