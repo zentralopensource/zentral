@@ -35,6 +35,8 @@ class EnrollmentForm(forms.ModelForm):
         fields = ("configuration", "santa_release")
 
     def __init__(self, *args, **kwargs):
+        # meta business unit not used in this enrollment form
+        self.meta_business_unit = kwargs.pop("meta_business_unit", None)
         self.configuration = kwargs.pop("configuration", None)
         self.update_for = kwargs.pop("update_for", None)
         self.standalone = kwargs.pop("standalone", False)
