@@ -81,7 +81,7 @@
   </thead>
   <tbody>
     <tr>
-      <td><a href="{{ kext_policy.get_absolute_url }}">{{ kext_policy }}</a></td>
+      <td><a name="kext_policy_{{ kext_policy.id }}" href="{{ kext_policy.get_absolute_url }}">{{ kext_policy }}</a></td>
       <td>{{ kext_policy.version }}</td>
       <td>{{ kext_policy.updated_at }}</td>
     </tr>

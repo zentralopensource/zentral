@@ -106,6 +106,9 @@ urlpatterns = [
     url(r'^enrolled_devices/(?P<pk>\d+)/poke/$',
         views.PokeEnrolledDeviceView.as_view(),
         name="poke_enrolled_device"),
+    url(r'^enrolled_devices/(?P<pk>\d+)/artifacts/$',
+        views.EnrolledDeviceArtifactsView.as_view(),
+        name="enrolled_device_artifacts"),
 
     # kernel extensions / management views
     url(r'^kernel_extensions/$',

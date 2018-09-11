@@ -801,6 +801,14 @@ class MDMEnrollmentPackage(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     trashed_at = models.DateTimeField(null=True, editable=False)
 
+    def __str__(self):
+        enrollment = self.get_enrollment()
+        if enrollment:
+            return enrollment.get_description_for_distributor()
+        else:
+            return "{} {}".format(self.get_description_for_enrollment(),
+                                  self.builder.split(".")[-1])
+
     class Meta:
         unique_together = (("meta_business_unit", "builder"),)
 

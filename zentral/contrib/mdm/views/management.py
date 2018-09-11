@@ -50,8 +50,9 @@ class DeviceView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         serial_number = kwargs["serial_number"]
         ctx = super().get_context_data(**kwargs)
-        ctx["serial_number"] = serial_number
+        ctx["setup"] = True
         ctx["mdm"] = True
+        ctx["serial_number"] = serial_number
         # enrolled devices
         ctx["enrolled_devices"] = EnrolledDevice.objects.filter(serial_number=serial_number).order_by("-updated_at")
         ctx["enrolled_devices_count"] = ctx["enrolled_devices"].count()
@@ -79,6 +80,20 @@ class PokeEnrolledDeviceView(LoginRequiredMixin, View):
         send_device_notification(enrolled_device)
         messages.info(request, "Device poked!")
         return HttpResponseRedirect(reverse("mdm:device", args=(enrolled_device.serial_number,)))
+
+
+class EnrolledDeviceArtifactsView(LoginRequiredMixin, DetailView):
+    model = EnrolledDevice
+    template_name = "mdm/enrolled_device_artifacts.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        context["installed_device_artifacts"] = sorted(self.object.installeddeviceartifact_set.all(),
+                                                       key=lambda ida: ida.created_at, reverse=True)
+        context["device_artifact_commands"] = sorted(self.object.deviceartifactcommand_set.all(),
+                                                     key=lambda dac: dac.id, reverse=True)
+        return context
 
 
 # Kernel extensions
