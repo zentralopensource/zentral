@@ -763,7 +763,7 @@ class AddManifestEnrollmentView(LoginRequiredMixin, TemplateView):
         secret_form_kwargs = {"prefix": "secret",
                               "meta_business_unit": self.manifest.meta_business_unit,
                               "initial": {"meta_business_unit": self.manifest.meta_business_unit}}
-        enrollment_form_kwargs = {"manifest": self.manifest,
+        enrollment_form_kwargs = {"meta_business_unit": self.manifest.meta_business_unit,
                                   "initial": {"manifest": self.manifest}}
         if self.request.method == "POST":
             secret_form_kwargs["data"] = self.request.POST

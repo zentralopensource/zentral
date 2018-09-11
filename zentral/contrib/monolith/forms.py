@@ -467,12 +467,15 @@ class EnrollmentForm(forms.ModelForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
-        self.manifest = kwargs.pop("manifest", None)
+        self.meta_business_unit = kwargs.pop("meta_business_unit", None)
         self.standalone = kwargs.pop("standalone", False)
         super().__init__(*args, **kwargs)
-        # hide configuration dropdown if manifest is fixed
-        if self.manifest:
+        # hide manifest dropdown if manifest/mbu is fixed
+        # the value will be set in the clean_manifest method
+        # TODO: kind of a hack
+        if self.meta_business_unit:
             self.fields["manifest"].widget = forms.HiddenInput()
+            self.fields["manifest"].required = False
 
         # munki release
         choices = []
@@ -482,3 +485,9 @@ class EnrollmentForm(forms.ModelForm):
         for filename, version, created_at, download_url, is_local in munki_releases.get_versions():
             choices.append((filename, filename))
         self.fields["munki_release"].choices = choices
+
+    def clean_manifest(self):
+        if self.meta_business_unit:
+            return self.meta_business_unit.manifest
+        else:
+            return self.cleaned_data.get("manifest")

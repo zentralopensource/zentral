@@ -114,7 +114,8 @@ class CreateSimpleMDMAppView(LoginRequiredMixin, TemplateView):
         secret_form_kwargs = {"prefix": "secret",
                               "no_restrictions": True,
                               "meta_business_unit": self.meta_business_unit}
-        enrollment_form_kwargs = {"standalone": True}  # w/o dependencies. all in the package.
+        enrollment_form_kwargs = {"meta_business_unit": self.meta_business_unit,
+                                  "standalone": True}  # w/o dependencies. all in the package.
         if self.request.method == "POST":
             secret_form_kwargs["data"] = self.request.POST
             enrollment_form_kwargs["data"] = self.request.POST
