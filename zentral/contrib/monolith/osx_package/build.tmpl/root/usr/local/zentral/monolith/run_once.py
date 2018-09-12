@@ -62,6 +62,7 @@ def cleanup_depnotify():
             with open(DEPNOTIFY_CONTROL_FILE, "a") as f:
                 f.write("{}\n".format(DEPNOTIFY_QUIT_COMMAND))
     if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST):
+        subprocess.call(["/bin/launchctl", "unload", DEPNOTIFY_LAUNCH_AGENT_PLIST])
         os.unlink(DEPNOTIFY_LAUNCH_AGENT_PLIST)
 
 
