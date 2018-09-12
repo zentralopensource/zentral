@@ -61,10 +61,13 @@ def cleanup_depnotify():
         if not last_line_quit:
             with open(DEPNOTIFY_CONTROL_FILE, "a") as f:
                 f.write("{}\n".format(DEPNOTIFY_QUIT_COMMAND))
+    if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST):
+        os.unlink(DEPNOTIFY_LAUNCH_AGENT_PLIST)
 
 
 def launch_depnotify():
     if os.path.isdir(DEPNOTIFY_APP_DIR):
+        # can fail if too early. usefull if not in a setup phase.
         subprocess.call(["/usr/bin/open", DEPNOTIFY_APP_DIR, "--args", "-munki"])
 
 
