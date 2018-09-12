@@ -119,6 +119,7 @@ class CheckinView(MDMView):
                                                                            defaults=enrolled_device_defaults)
         # delete installed device artifacts, to retrigger the installs
         enrolled_device.installeddeviceartifact_set.all().delete()
+        enrolled_device.deviceartifactcommand_set.all().delete()
 
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)
