@@ -5,7 +5,7 @@
     <key>Disabled</key>
     <false/>
     <key>Label</key>
-    <string>io.zentral.monolith.managedsoftwareupdate_first_run</string>
+    <string>io.zentral.monolith.run-once</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/zentral/monolith/run_once.py</string>
