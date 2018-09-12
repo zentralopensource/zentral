@@ -115,11 +115,6 @@ def launch_munki_daemons():
         subprocess.call(['/bin/launchctl', 'load', config_file])
 
 
-def do_munki_run():
-    subprocess.call(['/bin/launchctl', 'load',
-                     '/usr/local/zentral/monolith/managedsoftwareupdate_launchd_run_once.plist'])
-
-
 def include_depnotify():
     return int(INCLUDE_DEPNOTIFY) == 1
 
@@ -141,9 +136,7 @@ if __name__ == "__main__":
     token = enroll(serial_number, uuid)
     update_root_prefs(serial_number, token)
     sync_prefs()
-    if can_launch_munki():
-        launch_munki_daemons()
-        do_munki_run()
+    launch_munki_daemons()
     if include_depnotify():
         prepare_depnotify()
     else:
