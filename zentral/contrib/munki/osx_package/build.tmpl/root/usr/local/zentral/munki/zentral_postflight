@@ -25,8 +25,6 @@ ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinsta
 SANTACTL = "/usr/local/bin/santactl"
 SYSTEM_PROFILER = "/usr/sbin/system_profiler"
 
-DEPNOTIFY_CONTROL_FILE = "/var/tmp/depnotify.log"
-DEPNOTIFY_LAUNCH_AGENT_PLIST = "/Library/LaunchAgents/io.zentral.monolith.depnotify.plist"
 
 # SAL infos
 
@@ -98,7 +96,7 @@ def get_santa_fileinfo(bundle_path):
     stdout = stdout.strip()
     try:
         fileinfo = json.loads(stdout)[0]
-    except:
+    except Exception:
         # workaround for older santa versions
         try:
             stdout = stdout[stdout.index('{'):]
@@ -328,16 +326,6 @@ def post_job(data):
     return make_api_request(url, data)
 
 
-def cleanup_depnotify():
-    # write the quit command
-    if os.path.exists(DEPNOTIFY_CONTROL_FILE):
-        with open(DEPNOTIFY_CONTROL_FILE, "a") as f:
-            f.write("Command: Quit\n")
-    # remove the launch agent plist
-    if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST):
-        os.unlink(DEPNOTIFY_LAUNCH_AGENT_PLIST)
-
-
 # Main
 
 
@@ -368,7 +356,3 @@ if __name__ == '__main__':
            'run type %s, fileinfo %s, last sha1sum %s') % (run_type or "-",
                                                            data['include_santa_fileinfo'],
                                                            (last_seen_sha1sum or "-")[:7])
-    try:
-        cleanup_depnotify()
-    except:
-        pass

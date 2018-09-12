@@ -9,7 +9,6 @@ import os
 import plistlib
 import ssl
 import subprocess
-import sys
 import urllib2
 
 USER_AGENT = "Zentral/monolithpostinstall 0.1"
@@ -92,41 +91,18 @@ def sync_prefs():
     CFPreferencesAppSynchronize(BUNDLE_ID)
 
 
-def get_console_user():
-    from SystemConfiguration import SCDynamicStoreCopyConsoleUser
-    cfuser = SCDynamicStoreCopyConsoleUser(None, None, None)
-    return cfuser[0]
-
-
-def can_launch_munki():
-    # Destination volume is passed as third arg of the postinstall script
-    # https://developer.apple.com/legacy/library/documentation/DeveloperTools/Conceptual/SoftwareDistribution4/Install_Operations/Install_Operations.html
-    volume = sys.argv[3]
-    # 1. volume is root
-    if volume != "/":
-        # should not happen
-        return False
-    # 2. no real user logged in
-    return get_console_user() in (None, "loginwindow", "_mbsetupuser")
-
-
-def launch_munki_daemons():
-    for config_file in MUNKI_DAEMONS_CONFIG_FILES:
-        subprocess.call(['/bin/launchctl', 'load', config_file])
-
-
-def do_munki_run():
+def launch_run_once():
     subprocess.call(['/bin/launchctl', 'load',
-                     '/usr/local/zentral/monolith/managedsoftwareupdate_launchd_run_once.plist'])
+                     '/usr/local/zentral/monolith/io.zentral.monolith.run-once.plist'])
 
 
 def include_depnotify():
     return int(INCLUDE_DEPNOTIFY) == 1
 
 
-def prepare_depnotify():
+def configure_depnotify_commands():
     if DEPNOTIFY_COMMANDS:
-        with open(DEPNOTIFY_CONTROL_FILE, "ab") as f:
+        with open(DEPNOTIFY_CONTROL_FILE, "wb") as f:
             f.write(DEPNOTIFY_COMMANDS)
 
 
@@ -141,10 +117,8 @@ if __name__ == "__main__":
     token = enroll(serial_number, uuid)
     update_root_prefs(serial_number, token)
     sync_prefs()
-    if can_launch_munki():
-        launch_munki_daemons()
-        do_munki_run()
+    launch_run_once()
     if include_depnotify():
-        prepare_depnotify()
+        configure_depnotify_commands()
     else:
         cleanup_depnotify()
