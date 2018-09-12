@@ -154,6 +154,8 @@ class CheckinView(MDMView):
         if not user_id and enrolled_device.can_be_poked():
             transaction.on_commit(lambda: send_device_notification(enrolled_device,
                                                                    delay=self.first_device_notification_delay))
+            transaction.on_commit(lambda: send_device_notification(enrolled_device,
+                                                                   delay=2 * self.first_device_notification_delay))
 
         # Update enrollment session
         if enrolled_device.token and not self.enrollment_session.is_completed():
