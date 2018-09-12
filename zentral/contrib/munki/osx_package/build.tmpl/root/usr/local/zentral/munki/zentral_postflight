@@ -26,9 +26,7 @@ SANTACTL = "/usr/local/bin/santactl"
 SYSTEM_PROFILER = "/usr/sbin/system_profiler"
 
 DEPNOTIFY_CONTROL_FILE = "/var/tmp/depnotify.log"
-DEPNOTIFY_QUIT_COMMAND = "Command: Quit"
 DEPNOTIFY_LAUNCH_AGENT_PLIST = "/Library/LaunchAgents/io.zentral.monolith.depnotify.plist"
-RUN_ONCE_LAUNCH_AGENT_PLIST = "/Library/LaunchAgents/io.zentral.monolith.run-once.plist"
 
 # SAL infos
 
@@ -100,7 +98,7 @@ def get_santa_fileinfo(bundle_path):
     stdout = stdout.strip()
     try:
         fileinfo = json.loads(stdout)[0]
-    except Exception:
+    except:
         # workaround for older santa versions
         try:
             stdout = stdout[stdout.index('{'):]
@@ -333,22 +331,11 @@ def post_job(data):
 def cleanup_depnotify():
     # write the quit command
     if os.path.exists(DEPNOTIFY_CONTROL_FILE):
-        with open(DEPNOTIFY_CONTROL_FILE, "r") as f:
-            last_line_quit = False
-            for line in f.readline():
-                last_line_quit = line.startswith(DEPNOTIFY_QUIT_COMMAND)
-        if not last_line_quit:
-            with open(DEPNOTIFY_CONTROL_FILE, "a") as f:
-                f.write("{}\n".format(DEPNOTIFY_QUIT_COMMAND))
+        with open(DEPNOTIFY_CONTROL_FILE, "a") as f:
+            f.write("Command: Quit\n")
     # remove the launch agent plist
     if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST):
         os.unlink(DEPNOTIFY_LAUNCH_AGENT_PLIST)
-
-
-def cleanup_run_once():
-    # remove the launch agent plist
-    if os.path.exists(RUN_ONCE_LAUNCH_AGENT_PLIST):
-        os.unlink(RUN_ONCE_LAUNCH_AGENT_PLIST)
 
 
 # Main
@@ -382,7 +369,6 @@ if __name__ == '__main__':
                                                            data['include_santa_fileinfo'],
                                                            (last_seen_sha1sum or "-")[:7])
     try:
-        cleanup_run_once()
         cleanup_depnotify()
-    except Exception:
+    except:
         pass
