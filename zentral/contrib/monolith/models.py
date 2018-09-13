@@ -431,9 +431,12 @@ class SubManifestAttachment(models.Model):
         return "{}#sma_{}".format(reverse('monolith:sub_manifest', args=(self.sub_manifest.pk,)), self.pk)
 
     def get_name(self):
+        # remove the "-" from the name, because munki thinks it is a separator for a version number,
+        # and will split it to get the name of the package info, before searching for it in the catalogs.
+        name = re.sub(r'-+', '_', self.name)
         return "sub manifest {} {} {}".format(self.sub_manifest.id,
                                               self.get_type_display(),
-                                              self.name)
+                                              name)
 
     def get_pkg_info(self):
         pkg_info = self.pkg_info.copy()
