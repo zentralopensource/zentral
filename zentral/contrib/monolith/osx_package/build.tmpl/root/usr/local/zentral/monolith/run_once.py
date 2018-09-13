@@ -67,7 +67,7 @@ def cleanup_depnotify():
 
 
 def launch_depnotify():
-    if os.path.isdir(DEPNOTIFY_APP_DIR):
+    if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST) and os.path.isdir(DEPNOTIFY_APP_DIR):
         # can fail if too early. usefull if not in a setup phase.
         subprocess.call(["/usr/bin/open", DEPNOTIFY_APP_DIR, "--args", "-munki"])
 

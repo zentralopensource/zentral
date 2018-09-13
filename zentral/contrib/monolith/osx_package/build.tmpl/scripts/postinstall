@@ -108,6 +108,7 @@ def configure_depnotify_commands():
 
 def cleanup_depnotify():
     if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST):
+        subprocess.call(["/bin/launchctl", "unload", DEPNOTIFY_LAUNCH_AGENT_PLIST])
         os.unlink(DEPNOTIFY_LAUNCH_AGENT_PLIST)
 
 
