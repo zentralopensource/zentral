@@ -442,17 +442,30 @@ class SubManifestAttachment(models.Model):
                                               self.get_type_display(),
                                               name)
 
-    def get_pkg_info(self):
-        pkg_info = self.pkg_info.copy()
-        pkg_info['name'] = self.get_name()
-        if self.type != "script":
-            pkg_info['installer_item_location'] = build_munki_name(
+    def can_be_downloaded(self):
+        return self.type in ("package", "configuration_profile")
+
+    def get_download_name(self):
+        if self.can_be_downloaded():
+            return build_munki_name(
                 "sub_manifest_attachment",
                 [self.sub_manifest.id, self.id],
                 self.name,
                 SUB_MANIFEST_ATTACHMENT_TYPES[self.type]['extension']
             )
+
+    def get_pkg_info(self):
+        pkg_info = self.pkg_info.copy()
+        pkg_info['name'] = self.get_name()
+        if self.can_be_downloaded():
+            pkg_info['installer_item_location'] = self.get_download_name()
         return pkg_info
+
+    def get_content_type(self):
+        if self.type == "package":
+            return "application/octet-stream"
+        elif self.type == "configuration_profile":
+            return "application/x-apple-aspen-config"
 
     def mark_as_trashed(self):
         self.trashed_at = datetime.now()

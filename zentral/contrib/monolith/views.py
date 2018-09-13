@@ -687,6 +687,21 @@ class PurgeSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
         return self.object.sub_manifest.get_absolute_url()
 
 
+class DownloadSubManifestAttachmentView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        sma = get_object_or_404(SubManifestAttachment, pk=kwargs["pk"])
+        if not sma.can_be_downloaded():
+            raise Http404
+        response = FileResponse(sma.file)
+        content_type = sma.get_content_type()
+        if content_type:
+            response["Content-Type"] = content_type
+        download_name = sma.get_download_name()
+        if download_name:
+            response["Content-Disposition"] = 'attachment;filename="{}"'.format(download_name)
+        return response
+
+
 # manifests
 
 

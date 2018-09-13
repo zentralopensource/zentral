@@ -73,6 +73,8 @@ urlpatterns = [
         views.DeleteSubManifestAttachmentView.as_view(), name='delete_sub_manifest_attachment'),
     url(r'^sub_manifests_attachment/(?P<pk>\d+)/purge/$',
         views.PurgeSubManifestAttachmentView.as_view(), name='purge_sub_manifest_attachment'),
+    url(r'^sub_manifests_attachment/(?P<pk>\d+)/download/$',
+        views.DownloadSubManifestAttachmentView.as_view(), name='download_sub_manifest_attachment'),
 
     # manifests
     url(r'^manifests/$', views.ManifestsView.as_view(), name='manifests'),

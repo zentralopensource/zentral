@@ -75,7 +75,11 @@
       {% if smo.pkg_info_name %}
       <a name="smp_{{ smo.pk }}" href="{% url 'monolith:pkg_info_name' smo.pkg_info_name.id %}">{{ name }}</a>
       {% else %}
+      {% if smo.can_be_downloaded %}
+      <a name="sma_{{ smo.pk }}" href="{% url 'monolith:download_sub_manifest_attachment' smo.id %}" >{{ name }}</a>
+      {% else %}
       <a name="sma_{{ smo.pk }}"></a>{{ name }}
+      {% endif %}
       <br><b>uploaded: </b>{{ smo.created_at|date:"r" }}
       {% if smo.trashed_at %}
       <br><b class="text-danger">trashed: </b><span class="text-danger">{{ smo.trashed_at|timesince }} ago</span>
