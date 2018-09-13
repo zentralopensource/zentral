@@ -301,7 +301,7 @@ class SubManifest(models.Model):
                 if key != "managed_uninstalls" and smo.featured_item:
                     featured_items.add(name)
                 if isinstance(smo, SubManifestAttachment):
-                    included_sma_names.add(name)
+                    included_sma_names.add(smo.name)
         data = {}
         if featured_items:
             data["featured_items"] = sorted(featured_items)
