@@ -274,7 +274,7 @@ class SubManifest(models.Model):
             key_dict = pkg_info_d['keys'].setdefault(sma.key,
                                                      {'key_display': sma.get_key_display(),
                                                       'key_list': []})
-            key_dict['key_list'].append((sma.name, sma))
+            key_dict['key_list'].append((sma.get_name(), sma))
             pkg_info_d['total'][sma.type] += 1
         for key, key_d in pkg_info_d['keys'].items():
             key_d['key_list'].sort()
