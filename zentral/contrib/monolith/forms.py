@@ -118,6 +118,8 @@ class SubManifestAttachmentForm(forms.ModelForm):
 
     def clean_file(self):
         f = self.cleaned_data["file"]
+        if not f:
+            raise forms.ValidationError("You need to select a file.")
         error_messages = []
         for file_class in (MobileconfigFile, PackageFile):
             try:
@@ -149,11 +151,16 @@ class SubManifestAttachmentForm(forms.ModelForm):
                     sma.save()
             except IntegrityError:
                 raise
-                pass
             else:
                 break
         else:
             raise Exception("Could not find valid version #")
+        # trash other versions
+        for sma_with_different_version in (SubManifestAttachment.objects.filter(
+                                               sub_manifest=self.sub_manifest,
+                                               name=sma.name
+                                           ).exclude(version=sma.version)):
+            sma_with_different_version.mark_as_trashed()
         return sma
 
 
@@ -392,7 +399,7 @@ class UploadPPDForm(forms.ModelForm):
         f = self.cleaned_data["file"]
         try:
             self.cleaned_data["ppd_info"] = get_ppd_information(f)
-        except:
+        except Exception:
             raise forms.ValidationError("Could not parse PPD file %s." % f.name)
         return f
 

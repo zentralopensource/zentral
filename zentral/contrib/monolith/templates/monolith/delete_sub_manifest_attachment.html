@@ -8,10 +8,18 @@
   <li class="active">Remove {{ object.get_type_display }} {{ object.name }}</li>
 </ol>
 
-<h2>Remove {{ object.get_type_display }} from sub manifest </h2>
-<p>Do you really want to remove {{ object.name }} from the sub manifest {{ object.sub_manifest }} ?</p>
+<h2>Remove {{ object.get_type_display }} from sub manifest</h2>
 <form method="POST">{% csrf_token %}
-  <a class="btn btn-default" href="{{ object.sub_manifest.get_absolute_url }}">No</a>
-  <button class="btn btn-danger" type="submit">Yes</a>
+<dl>
+  <dt>Name</dt>
+  <dd>{{ object.name }}</dd>
+  <dt>Uploaded at</dt>
+  <dd>{{ object.created_at|date:"r" }}</dd>
+</dl>
+<p>Do you really want to remove this sub manifest {{ object.get_type_display }} ?
+<p>
+  <a class="btn btn-default" href="{{ object.get_absolute_url }}">No</a>
+  <button class="btn btn-danger" type="submit">Yes</button>
+</p>
 </form>
 {% endblock %}

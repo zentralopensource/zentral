@@ -24,6 +24,6 @@
 <form method="POST" enctype="multipart/form-data" class="form">{% csrf_token %}
   {{ form|bootstrap }}
   <a href="{{ sub_manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
-  <button type="submit" class="btn btn-default">{% if object %}Update{% else %}Add{% endif %}</button>
+  <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Add{% endif %}</button>
 </form>
 {% endblock %}

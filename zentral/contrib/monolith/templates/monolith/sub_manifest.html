@@ -70,12 +70,16 @@
     <th></th>
   </thead>
   {% for name, smo in key_list %}
-  <tr>
+  <tr{% if smo.type and smo.trashed_at %} class="warning"{% endif %}>
     <td class="col-md-4">
       {% if smo.pkg_info_name %}
       <a name="smp_{{ smo.pk }}" href="{% url 'monolith:pkg_info_name' smo.pkg_info_name.id %}">{{ name }}</a>
       {% else %}
       <a name="sma_{{ smo.pk }}"></a>{{ name }}
+      <br><b>uploaded: </b>{{ smo.created_at|date:"r" }}
+      {% if smo.trashed_at %}
+      <br><b class="text-danger">trashed: </b><span class="text-danger">{{ smo.trashed_at|timesince }} ago</span>
+      {% endif %}
       {% endif %}
     </td>
     {% if smo.type %}
@@ -97,6 +101,11 @@
     </td>
     {% if smo.type %}
     <td class="col-md-2">
+      {% if smo.trashed_at %}
+      <a class="btn btn-danger" href="{% url 'monolith:purge_sub_manifest_attachment' smo.id %}">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+      {% else %}
       {% if smo.type == 'script' %}
       <a class="btn btn-default" href="{% url 'monolith:sub_manifest_update_script' object.id smo.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
@@ -105,6 +114,7 @@
       <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_attachment' smo.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
       </a>
+      {% endif %}
     </td>
     {% else %}
     <td class="col-md-2">

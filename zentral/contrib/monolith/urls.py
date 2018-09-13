@@ -71,6 +71,8 @@ urlpatterns = [
         views.SubManifestUpdateScriptView.as_view(), name='sub_manifest_update_script'),
     url(r'^sub_manifests_attachment/(?P<pk>\d+)/delete/$',
         views.DeleteSubManifestAttachmentView.as_view(), name='delete_sub_manifest_attachment'),
+    url(r'^sub_manifests_attachment/(?P<pk>\d+)/purge/$',
+        views.PurgeSubManifestAttachmentView.as_view(), name='purge_sub_manifest_attachment'),
 
     # manifests
     url(r'^manifests/$', views.ManifestsView.as_view(), name='manifests'),

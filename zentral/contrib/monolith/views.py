@@ -491,7 +491,7 @@ class SubManifestView(LoginRequiredMixin, DetailView):
         context = super(SubManifestView, self).get_context_data(**kwargs)
         sub_manifest = context['object']
         context['monolith'] = True
-        pkg_info_dict = sub_manifest.pkg_info_dict()
+        pkg_info_dict = sub_manifest.pkg_info_dict(include_trashed_attachments=True)
         keys = pkg_info_dict.pop("keys")
         sorted_keys = []
         for key, _ in SUB_MANIFEST_PKG_INFO_KEY_CHOICES:
@@ -585,10 +585,7 @@ class SubManifestAddAttachmentView(LoginRequiredMixin, FormView):
         smpi = form.save(commit=False)
         smpi.sub_manifest = self.sub_manifest
         smpi.save()
-        return HttpResponseRedirect(self.get_success_url())
-
-    def get_success_url(self):
-        return self.sub_manifest.get_absolute_url()
+        return HttpResponseRedirect(smpi.get_absolute_url())
 
 
 class SubManifestAddScriptView(LoginRequiredMixin, FormView):
@@ -667,7 +664,7 @@ class DeleteSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
         return context
 
     def get_success_url(self):
-        return self.object.sub_manifest.get_absolute_url()
+        return self.object.get_absolute_url()
 
     def delete(self, request, *args, **kwargs):
         # TODO we can't just use the DeleteView delete method, but can we do better than that ?
@@ -675,6 +672,19 @@ class DeleteSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
         success_url = self.get_success_url()
         SubManifestAttachment.objects.trash(self.object.sub_manifest, self.object.name)
         return HttpResponseRedirect(success_url)
+
+
+class PurgeSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
+    model = SubManifestAttachment
+    template_name = "monolith/purge_sub_manifest_attachment.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['monolith'] = True
+        return context
+
+    def get_success_url(self):
+        return self.object.sub_manifest.get_absolute_url()
 
 
 # manifests

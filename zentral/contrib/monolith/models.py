@@ -259,7 +259,7 @@ class SubManifest(models.Model):
     def has_attachments(self):
         return SubManifestAttachment.objects.filter(sub_manifest=self).count() > 0
 
-    def pkg_info_dict(self):
+    def pkg_info_dict(self, include_trashed_attachments=False):
         pkg_info_d = {'keys': {},
                       'total': {'pkginfo': 0}}
         for sma_type in SUB_MANIFEST_ATTACHMENT_TYPES:
@@ -270,14 +270,18 @@ class SubManifest(models.Model):
                                                       'key_list': []})
             key_dict['key_list'].append((smpi.pkg_info_name.name, smpi))
             pkg_info_d['total']['pkginfo'] += 1
-        for sma in SubManifestAttachment.objects.active().select_related('condition').filter(sub_manifest=self):
+        if not include_trashed_attachments:
+            sma_qs = SubManifestAttachment.objects.active()
+        else:
+            sma_qs = SubManifestAttachment.objects.all()
+        for sma in sma_qs.select_related('condition').filter(sub_manifest=self):
             key_dict = pkg_info_d['keys'].setdefault(sma.key,
                                                      {'key_display': sma.get_key_display(),
                                                       'key_list': []})
-            key_dict['key_list'].append((sma.get_name(), sma))
+            key_dict['key_list'].append((sma.name, sma))
             pkg_info_d['total'][sma.type] += 1
         for key, key_d in pkg_info_d['keys'].items():
-            key_d['key_list'].sort()
+            key_d['key_list'].sort(key=lambda t: (t[0], -1 * t[1].pk))
         return pkg_info_d
 
     def get_munki_name(self):
