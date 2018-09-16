@@ -8,7 +8,6 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.cms import sign_payload_openssl
 from zentral.contrib.mdm.dep import (add_dep_token_certificate, add_dep_profile, assign_dep_device_profile,
                                      refresh_dep_device)
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
@@ -18,10 +17,10 @@ from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DEPProfileFor
 from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate, PushCertificate,
                                         DEPDevice, DEPProfile, DEPToken, DEPVirtualServer,
                                         OTAEnrollment,
-                                        KernelExtensionPolicy, MDMEnrollmentPackage)
-from zentral.contrib.mdm.payloads import (build_payload_response,
+                                        KernelExtensionPolicy, MDMEnrollmentPackage, ConfigurationProfile)
+from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_root_ca_configuration_profile,
-                                          build_profile_service_payload)
+                                          build_profile_service_configuration_profile)
 from zentral.utils.osx_package import get_standalone_package_builders
 
 logger = logging.getLogger('zentral.contrib.mdm.views.setup')
@@ -29,7 +28,7 @@ logger = logging.getLogger('zentral.contrib.mdm.views.setup')
 
 class RootCAView(View):
     def get(self, request, *args, **kwargs):
-        return build_payload_response(sign_payload_openssl(build_root_ca_configuration_profile()), "zentral_root_ca")
+        return build_configuration_profile_response(build_root_ca_configuration_profile(), "zentral_root_ca")
 
 
 class IndexView(LoginRequiredMixin, TemplateView):
@@ -69,11 +68,11 @@ class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
                                                          .order_by("name", "pk"))
         context["ota_enrollment_list"] = (OTAEnrollment.objects.filter(enrollment_secret__meta_business_unit=mbu)
                                                                .order_by("name", "pk"))
-        try:
-            context["kext_policy"] = KernelExtensionPolicy.objects.get(meta_business_unit=mbu)
-        except KernelExtensionPolicy.DoesNotExist:
-            pass
-        context["enrollment_package_list"] = (MDMEnrollmentPackage.objects.filter(meta_business_unit=mbu)
+        context["kext_policy_list"] = (KernelExtensionPolicy.objects.filter(meta_business_unit=mbu,
+                                                                            trashed_at__isnull=True)
+                                                                    .order_by("pk"))
+        context["enrollment_package_list"] = (MDMEnrollmentPackage.objects.filter(meta_business_unit=mbu,
+                                                                                  trashed_at__isnull=True)
                                                                           .order_by("builder", "pk"))
         existing_enrollment_package_builders = [ep.builder for ep in context["enrollment_package_list"]]
         create_enrollment_package_url = reverse("mdm:create_enrollment_package", args=(mbu.pk,))
@@ -81,6 +80,9 @@ class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
                                                        v.name)
                                                       for k, v in get_standalone_package_builders().items()
                                                       if k not in existing_enrollment_package_builders]
+        context["configuration_profile_list"] = (ConfigurationProfile.objects.filter(meta_business_unit=mbu,
+                                                                                     trashed_at__isnull=True)
+                                                                             .order_by("payload_description", "pk"))
         return context
 
 
@@ -232,8 +234,8 @@ class DownloadProfileServicePayloadView(LoginRequiredMixin, View):
         if not ota_enrollment.enrollment_secret.is_valid():
             # should not happen
             raise SuspiciousOperation
-        return build_payload_response(sign_payload_openssl(build_profile_service_payload(ota_enrollment)),
-                                      "zentral_profile_service")
+        return build_configuration_profile_response(build_profile_service_configuration_profile(ota_enrollment),
+                                                    "zentral_profile_service")
 
 
 class RevokeOTAEnrollmentView(LoginRequiredMixin, TemplateView):

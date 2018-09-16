@@ -58,31 +58,4 @@
 </table>
 {% endif %}
 
-<h3>{{ kernel_extension_policies_count }} Kernel extension polic{{ kernel_extension_policies_count|pluralize:"y,ies" }}</h3>
-
-<p>
-  <a href="{% url 'mdm:create_kernel_extension_policy' %}" class="btn btn-default">Create</a>
-</p>
-
-{% if kernel_extension_policies_count %}
-<table class="table">
-  <thead>
-    <th>Business unit</th>
-    <th>Identifier</th>
-    <th>Version</th>
-    <th>Updated at</th>
-  </thead>
-  <tbody>
-    {% for kernel_extension_policy in kernel_extension_policies %}
-    <tr>
-      <td><a href="{{ kernel_extension_policies.meta_business_unit.get_absolute_url }}">{{ kernel_extension_policy.meta_business_unit }}</a></td>
-      <td><a href="{{ kernel_extension_policy.get_absolute_url }}">{{ kernel_extension_policy }}</a></td>
-      <td>{{ kernel_extension_policy.version }}</td>
-      <td>{{ kernel_extension_policy.updated_at }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-
 {% endblock %}

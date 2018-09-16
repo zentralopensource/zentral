@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
+  <li><a href="{% url 'mdm:mbu' object.meta_business_unit.pk %}">{{ object.meta_business_unit }}</a></li>
+  <li class="active">Delete {{ object }}</li>
+</ol>
+
+<h2>Delete {{ object }}</h2>
+
+<form method="post">{% csrf_token %}
+  <p>Do you really want to delete the enrollment package <i>{{ object }}</i>?</p>
+  <p>
+    <a class="btn btn-default" href="{% url 'mdm:mbu' object.meta_business_unit.pk %}">No</a>
+    <button class="btn btn-danger" type="submit">
+      Yes
+    </button>
+  </p>
+</form>
+
+{% endblock %}

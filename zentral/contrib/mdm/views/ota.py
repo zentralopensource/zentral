@@ -1,20 +1,18 @@
 import logging
 import plistlib
 from cryptography.x509.oid import NameOID
-from django.http import HttpResponse
 from django.views.generic import View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.utils import verify_enrollment_secret
-from zentral.contrib.mdm.cms import (sign_payload_openssl,
-                                     verify_signed_payload,
+from zentral.contrib.mdm.cms import (verify_signed_payload,
                                      verify_apple_iphone_device_ca_issuer_openssl,
                                      verify_zentral_scep_ca_issuer_openssl)
 from zentral.contrib.mdm.events import OTAEnrollmentRequestEvent
 from zentral.contrib.mdm.exceptions import EnrollmentSessionStatusError
 from zentral.contrib.mdm.models import OTAEnrollmentSession
-from zentral.contrib.mdm.payloads import (build_payload_response,
-                                          build_ota_scep_payload,
-                                          build_mdm_payload)
+from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
+                                          build_ota_scep_configuration_profile,
+                                          build_mdm_configuration_profile)
 from .base import PostEventMixin
 
 logger = logging.getLogger('zentral.contrib.mdm.views.ota')
@@ -71,8 +69,8 @@ class OTAEnrollView(PostEventMixin, View):
                 payload
             )
 
-            payload = build_ota_scep_payload(ota_enrollment_session)
-            filename = "zentral_ota_scep"
+            configuration_profile = build_ota_scep_configuration_profile(ota_enrollment_session)
+            configuration_profile_filename = "zentral_ota_scep"
 
         elif phase == 3:
             # get the serial number from the DN of the payload signing certificate
@@ -108,10 +106,9 @@ class OTAEnrollView(PostEventMixin, View):
             # Get the MDM push certificate
             push_certificate = ota_enrollment_session_mbu.metabusinessunitpushcertificate.push_certificate
 
-            payload = build_mdm_payload(ota_enrollment_session, push_certificate)
-            filename = "zentral_mdm"
+            configuration_profile = build_mdm_configuration_profile(ota_enrollment_session, push_certificate)
+            configuration_profile_filename = "zentral_mdm"
 
         self.post_event("success", phase=phase)
 
-        return build_payload_response(sign_payload_openssl(payload), filename)
-        return HttpResponse()
+        return build_configuration_profile_response(configuration_profile, configuration_profile_filename)

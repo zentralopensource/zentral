@@ -3,8 +3,7 @@ import uuid
 from django.http import HttpResponse
 from django.urls import reverse
 from zentral.conf import settings
-from .cms import sign_payload_openssl
-from .payloads import build_payload, get_payload_identifier
+from .payloads import build_payload, build_profile, get_payload_identifier
 
 
 def build_command_response(request_type, content, command_uuid=None):
@@ -82,16 +81,13 @@ def build_device_information_command_response():
 
 def build_install_profile_command_response(artifact, command_uuid):
     artifact_suffix = artifact.get_configuration_profile_payload_identifier_suffix()
-    artifact_payload = build_payload(str(artifact),
-                                     "{}.0".format(artifact_suffix),
-                                     artifact.get_configuration_profile_payload_content(),
-                                     payload_type=artifact.configuration_profile_payload_type,
-                                     merge_content=True)
-    payload = build_payload(str(artifact),
-                            artifact_suffix,
-                            [artifact_payload])
-    data = sign_payload_openssl(plistlib.dumps(payload))
-    return build_command_response("InstallProfile", {"Payload": data}, command_uuid)
+    payloads = []
+    for idx, (payload_type, payload_name, payload_content) in enumerate(artifact.get_payloads()):
+        payloads.append(build_payload(payload_type, payload_name,
+                                      "{}.{}".format(artifact_suffix, idx + 1), payload_content,
+                                      payload_version=artifact.version))
+    command_payload = build_profile(str(artifact), artifact_suffix, payloads)
+    return build_command_response("InstallProfile", {"Payload": command_payload}, command_uuid)
 
 
 def build_remove_profile_command_response(artifact, command_uuid):

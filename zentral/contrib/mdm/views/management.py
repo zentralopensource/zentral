@@ -5,13 +5,14 @@ from django.db import transaction
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.views.generic import CreateView, DetailView, TemplateView, UpdateView, View
+from django.utils import timezone
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm, MetaBusinessUnit
 from zentral.contrib.mdm.events import send_device_notification, send_mbu_device_notifications
-from zentral.contrib.mdm.forms import DeviceSearchForm
+from zentral.contrib.mdm.forms import DeviceSearchForm, CreateConfigurationProfileForm
 from zentral.contrib.mdm.models import (EnrolledDevice, DEPDevice, DEPEnrollmentSession, OTAEnrollmentSession,
                                         KernelExtensionPolicy, KernelExtensionTeam, KernelExtension,
-                                        MDMEnrollmentPackage)
+                                        MDMEnrollmentPackage, ConfigurationProfile)
 from zentral.utils.osx_package import get_standalone_package_builders
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
@@ -109,8 +110,6 @@ class KernelExtensionsIndexView(LoginRequiredMixin, TemplateView):
         ctx["kernel_extension_teams_count"] = ctx["kernel_extension_teams"].count()
         ctx["kernel_extensions"] = KernelExtension.objects.all()
         ctx["kernel_extensions_count"] = ctx["kernel_extensions"].count()
-        ctx["kernel_extension_policies"] = KernelExtensionPolicy.objects.all()
-        ctx["kernel_extension_policies_count"] = ctx["kernel_extension_policies"].count()
         return ctx
 
 
@@ -136,8 +135,30 @@ class CreateKernelExtensionPolicyView(LoginRequiredMixin, CreateView):
     model = KernelExtensionPolicy
     fields = "__all__"
 
+    def dispatch(self, request, *args, **kwargs):
+        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        context["meta_business_unit"] = self.meta_business_unit
+        return context
+
     def form_valid(self, form):
-        kext_policy = form.save()
+        existing_kext_policies = (KernelExtensionPolicy.objects.select_for_update()
+                                                               .filter(meta_business_unit=self.meta_business_unit))
+        # there should be at most a trashed one.
+        try:
+            instance = existing_kext_policies[0]
+        except IndexError:
+            pass
+        else:
+            form.instance = instance
+        kext_policy = form.save(commit=False)
+        kext_policy.meta_business_unit = self.meta_business_unit
+        kext_policy.trashed_at = None
+        kext_policy.save()
         transaction.on_commit(lambda: send_mbu_device_notifications(kext_policy.meta_business_unit))
         return HttpResponseRedirect(kext_policy.get_absolute_url())
 
@@ -150,10 +171,33 @@ class UpdateKernelExtensionPolicyView(LoginRequiredMixin, UpdateView):
     model = KernelExtensionPolicy
     fields = "__all__"
 
+    def dispatch(self, request, *args, **kwargs):
+        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["mbu_pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        context["meta_business_unit"] = self.meta_business_unit
+        return context
+
     def form_valid(self, form):
-        kext_policy = form.save()
+        kext_policy = form.save(commit=False)
+        kext_policy.meta_business_unit = self.meta_business_unit
+        kext_policy.save()
         transaction.on_commit(lambda: send_mbu_device_notifications(kext_policy.meta_business_unit))
         return HttpResponseRedirect(kext_policy.get_absolute_url())
+
+
+class TrashKernelExtensionPolicyView(LoginRequiredMixin, DeleteView):
+    model = KernelExtensionPolicy
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        self.object.trashed_at = timezone.now()
+        self.object.save()
+        transaction.on_commit(lambda: send_mbu_device_notifications(self.object.meta_business_unit))
+        return HttpResponseRedirect(reverse("mdm:mbu", args=(self.object.meta_business_unit.pk,)))
 
 
 # Enrollment Packages
@@ -224,3 +268,57 @@ class CreateEnrollmentPackageView(LoginRequiredMixin, TemplateView):
             return self.forms_valid(secret_form, enrollment_form)
         else:
             return self.forms_invalid(secret_form, enrollment_form)
+
+
+class TrashEnrollmentPackageView(LoginRequiredMixin, DeleteView):
+    model = MDMEnrollmentPackage
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        self.object.trashed_at = timezone.now()
+        self.object.save()
+        return HttpResponseRedirect(reverse("mdm:mbu", args=(self.object.meta_business_unit.pk,)))
+
+
+# Configuration Profiles
+
+
+class CreateConfigurationProfileView(LoginRequiredMixin, FormView):
+    model = ConfigurationProfile
+    form_class = CreateConfigurationProfileForm
+    template_name = "mdm/configurationprofile_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["meta_business_unit"] = self.meta_business_unit
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        context["title"] = "upload a configuration profile"
+        context["meta_business_unit"] = self.meta_business_unit
+        return context
+
+    def form_valid(self, form):
+        self.configuration_profile = form.save()
+        transaction.on_commit(lambda: send_mbu_device_notifications(self.meta_business_unit))
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return self.configuration_profile.get_absolute_url()
+
+
+class TrashConfigurationProfileView(LoginRequiredMixin, DeleteView):
+    model = ConfigurationProfile
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        self.object.trashed_at = timezone.now()
+        self.object.save()
+        transaction.on_commit(lambda: send_mbu_device_notifications(self.object.meta_business_unit))
+        return HttpResponseRedirect(reverse("mdm:mbu", args=(self.object.meta_business_unit.pk,)))

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
+  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
+  <li class="active">{{ title }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+<form method="POST" enctype="multipart/form-data">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    <a href="{% url 'mdm:mbu' meta_business_unit.pk %}" class="btn btn-default">Cancel</a>
+    <button class="btn btn-primary">Upload</button>
+  </p>
+</form>
+{% endblock %}

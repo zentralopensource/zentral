@@ -13,7 +13,7 @@ from zentral.contrib.mdm.commands import (build_install_application_command_resp
                                           build_install_profile_command_response,
                                           build_remove_profile_command_response)
 from zentral.contrib.mdm.models import (DeviceArtifactCommand, InstalledDeviceArtifact,
-                                        KernelExtensionPolicy, MDMEnrollmentPackage)
+                                        KernelExtensionPolicy, MDMEnrollmentPackage, ConfigurationProfile)
 
 
 logger = logging.getLogger("zentral.contrib.mdm.views.utils")
@@ -131,18 +131,20 @@ def get_configured_device_artifact_dict(meta_business_unit, serial_number):
     except KernelExtensionPolicy.DoesNotExist:
         pass
     else:
-        artifact_ct = ContentType.objects.get_for_model(artifact)
-        if artifact_ct not in artifact_version_dict:
-            artifact_version_dict[artifact_ct] = {}
-        artifact_version_dict[artifact_ct][artifact.pk] = artifact.version
+        kext_policy_ct = ContentType.objects.get_for_model(artifact)
+        artifact_version_dict.setdefault(kext_policy_ct, {})[artifact.pk] = artifact.version
 
     # MBU MDMEnrollmentPackage
+    mdm_enrollment_package_ct = ContentType.objects.get_for_model(MDMEnrollmentPackage)
     for artifact in MDMEnrollmentPackage.objects.filter(meta_business_unit=meta_business_unit,
                                                         trashed_at__isnull=True):
-        artifact_ct = ContentType.objects.get_for_model(artifact)
-        if artifact_ct not in artifact_version_dict:
-            artifact_version_dict[artifact_ct] = {}
-        artifact_version_dict[artifact_ct][artifact.pk] = artifact.version
+        artifact_version_dict.setdefault(mdm_enrollment_package_ct, {})[artifact.pk] = artifact.version
+
+    # MBU ConfigurationProfile
+    configuration_profile_ct = ContentType.objects.get_for_model(ConfigurationProfile)
+    for artifact in ConfigurationProfile.objects.filter(meta_business_unit=meta_business_unit,
+                                                        trashed_at__isnull=True):
+        artifact_version_dict.setdefault(configuration_profile_ct, {})[artifact.pk] = artifact.version
 
     return artifact_version_dict
 
@@ -283,11 +285,11 @@ def update_device_artifact_command(enrolled_device, command_uuid, payload_status
             )
         else:
             # the artifact has been removed from the device
-            InstalledDeviceArtifact.objects.delete(
+            InstalledDeviceArtifact.objects.filter(
                 enrolled_device=enrolled_device,
                 artifact_content_type=device_artifact_command.artifact_content_type,
                 artifact_id=device_artifact_command.artifact_id
-            )
+            ).delete()
 
     return device_artifact_command
 

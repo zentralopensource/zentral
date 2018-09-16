@@ -723,11 +723,12 @@ class KernelExtension(models.Model):
 class KernelExtensionPolicy(models.Model):
     artifact_type = "ConfigurationProfile"
     artifact_can_be_removed = True
-    configuration_profile_payload_type = "com.apple.syspolicy.kernel-extension-policy"
 
     # devices
     # TODO: add tags
-    meta_business_unit = models.OneToOneField(MetaBusinessUnit, related_name="kernel_extension_policy")
+    meta_business_unit = models.OneToOneField(MetaBusinessUnit,
+                                              related_name="kernel_extension_policy",
+                                              editable=False)
 
     # content
     allow_user_overrides = models.BooleanField(help_text=("If set to true, users can approve additional kernel "
@@ -746,7 +747,7 @@ class KernelExtensionPolicy(models.Model):
     trashed_at = models.DateTimeField(null=True, editable=False)
 
     def get_absolute_url(self):
-        return reverse("mdm:kernel_extension_policy", args=(self.pk,))
+        return reverse("mdm:kernel_extension_policy", args=(self.meta_business_unit.pk, self.pk))
 
     def __str__(self):
         return "{} kernel extension policy".format(self.meta_business_unit)
@@ -759,13 +760,14 @@ class KernelExtensionPolicy(models.Model):
     def get_configuration_profile_payload_identifier_suffix(self):
         return "kext-policy.{}".format(self.pk)
 
-    def get_configuration_profile_payload_content(self):
+    def get_payloads(self):
         allowed_kernel_extensions_d = {}
         for kext in self.allowed_kernel_extensions.all():
             allowed_kernel_extensions_d.setdefault(kext.team.identifier, []).append(kext.identifier)
-        return {"AllowUserOverrides": self.allow_user_overrides,
-                "AllowedTeamIdentifiers": [team.identifier for team in self.allowed_teams.all()],
-                "AllowedKernelExtensions": allowed_kernel_extensions_d}
+        payload = {"AllowUserOverrides": self.allow_user_overrides,
+                   "AllowedTeamIdentifiers": [team.identifier for team in self.allowed_teams.all()],
+                   "AllowedKernelExtensions": allowed_kernel_extensions_d}
+        yield "com.apple.syspolicy.kernel-extension-policy", str(self), payload
 
 
 # Enrollment packages
@@ -852,3 +854,56 @@ class MDMEnrollmentPackage(models.Model):
     def get_absolute_url(self):
         return "{}#enrollment_package_{}".format(reverse("mdm:mbu",
                                                          args=(self.meta_business_unit.pk,)), self.pk)
+
+
+# Configuration profiles
+
+
+class ConfigurationProfile(models.Model):
+    artifact_type = "ConfigurationProfile"
+    artifact_can_be_removed = True
+
+    # devices
+    # TODO: add tags
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit)
+
+    # content
+    source = JSONField()
+    source_payload_identifier = models.TextField(editable=False)
+    payload_display_name = models.TextField(blank=True, null=True, editable=False)
+    payload_description = models.TextField(blank=True, null=True, editable=False)
+
+    # version
+    version = models.PositiveIntegerField(default=0)
+
+    # timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    trashed_at = models.DateTimeField(null=True, editable=False)
+
+    def __str__(self):
+        if self.payload_display_name:
+            return self.payload_display_name
+        else:
+            return "Configuration Profile {}".format(self.pk)
+
+    class Meta:
+        unique_together = (("meta_business_unit", "source_payload_identifier"),)
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            self.version = F("version") + 1
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return "{}#configuration_profile_{}".format(reverse("mdm:mbu",
+                                                            args=(self.meta_business_unit.pk,)), self.pk)
+
+    def get_configuration_profile_payload_identifier_suffix(self):
+        return "configuration-profile.{}".format(self.pk)
+
+    def get_payloads(self):
+        for idx, payload in enumerate(self.source.get("PayloadContent", [])):
+            payload_name = payload.get("PayloadDisplayName", "{} #{}".format(self, idx + 1))
+            payload_content = {k: v for k, v in payload.items() if not k.startswith("Payload")}
+            yield payload["PayloadType"], payload_name, payload_content

@@ -71,20 +71,35 @@
 
 <h3>Artifacts</h3>
 
-<h4>Kernel extension policy</h4>
-{% if kext_policy %}
+<h4>{{ kext_policy_list|length }} Kernel extension polic{{ kext_policy_list|length|pluralize:"y,ies" }}</h4>
+
+<p>
+  <a class="btn btn-default{% if kext_policy_list %} disabled{% endif %}" href="{% url 'mdm:create_kernel_extension_policy' object.id %}">
+    Create
+  </a>
+</p>
+
+{% if kext_policy_list %}
 <table class="table">
   <thead>
     <th>Identifier</th>
     <th>Version</th>
     <th>Updated at</th>
+    <th></th>
   </thead>
   <tbody>
+    {% for kext_policy in kext_policy_list %}
     <tr>
       <td><a name="kext_policy_{{ kext_policy.id }}" href="{{ kext_policy.get_absolute_url }}">{{ kext_policy }}</a></td>
       <td>{{ kext_policy.version }}</td>
       <td>{{ kext_policy.updated_at }}</td>
+      <td>
+        <a class="btn btn-danger" href="{% url 'mdm:trash_kernel_extension_policy' object.pk kext_policy.pk %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+      </td>
     </tr>
+    {% endfor %}
   </tbody>
 </table>
 {% endif %}
@@ -127,10 +142,57 @@
       <td>
         {{ enrollment_package.created_at }}
       </td>
-      <td></td>
+      <td>
+        <a class="btn btn-danger" href="{% url 'mdm:trash_enrollment_package' object.pk enrollment_package.pk %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+      </td>
     </tr>
     {% endwith %}
     {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h4>{{ configuration_profile_list|length }} configuration profile{{ configuration_profile_list|length|pluralize }}</h4>
+
+<p>
+  <a class="btn btn-default" href="{% url 'mdm:create_configuration_profile' object.id %}">
+    Upload
+  </a>
+</p>
+
+{% if configuration_profile_list %}
+<table class="table">
+  <thead>
+    <th>Source ID</th>
+    <th>Name</th>
+    <th>Version</th>
+    <th>Payloads</th>
+    <th>Created at</th>
+    <th></th>
+  </thead>
+  <tbody>
+    {% for configuration_profile in configuration_profile_list %}
+    <tr>
+      <td>{{ configuration_profile.source_payload_identifier }}</td>
+      <td>{{ configuration_profile.payload_display_name|default:"-" }}</td>
+      <td>{{ configuration_profile.version }}</td>
+      <td>
+        <ul>
+          {% for payload_type, payload_name, payload in configuration_profile.get_payloads %}
+          <li>{{ payload_type }}{% if payload_name %} - {{ payload_name }}{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </td>
+      <td>{{ configuration_profile.created_at|date:"r" }}</td>
+      <td>
+        <a class="btn btn-danger" href="{% url 'mdm:trash_configuration_profile' object.pk configuration_profile.pk %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+      </td>
+    </tr>
     {% endfor %}
   </tbody>
 </table>

@@ -1,10 +1,12 @@
+import plistlib
 from django import forms
 from django.db import connection
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .models import (DEPDevice, DEPOrganization, DEPProfile, DEPToken, DEPVirtualServer,
-                     OTAEnrollment, PushCertificate, MetaBusinessUnitPushCertificate)
+                     OTAEnrollment, PushCertificate, MetaBusinessUnitPushCertificate,
+                     ConfigurationProfile)
 from .pkcs12 import load_push_certificate
 
 
@@ -254,3 +256,43 @@ class AssignDEPDeviceProfileForm(forms.ModelForm):
         if self.instance.pk:
             profile_f = self.fields["profile"]
             profile_f.queryset = profile_f.queryset.filter(virtual_server=self.instance.virtual_server)
+
+
+class CreateConfigurationProfileForm(forms.Form):
+    source_file = forms.FileField(required=True,
+                                  help_text="configuration profile file (.mobileconfig)")
+
+    def __init__(self, *args, **kwargs):
+        self.meta_business_unit = kwargs.pop("meta_business_unit")
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        source_file = self.cleaned_data.get("source_file")
+        if source_file:
+            try:
+                source = plistlib.load(source_file)
+            except Exception:
+                raise forms.ValidationError("This file is not a plist.")
+            self.cleaned_data["source"] = source
+            try:
+                self.cleaned_data["source_payload_identifier"] = source["PayloadIdentifier"]
+            except KeyError:
+                raise forms.ValidationError("Missing PayloadIdentifier")
+
+            for source_key, obj_key in (("PayloadDisplayName", "payload_display_name"),
+                                        ("PayloadDescription", "payload_description")):
+                self.cleaned_data[obj_key] = source.get(source_key) or ""
+            return self.cleaned_data
+
+    def save(self):
+        cleaned_data = self.cleaned_data
+        source_payload_identifier = cleaned_data["source_payload_identifier"]
+        configuration_profile, _ = ConfigurationProfile.objects.update_or_create(
+            meta_business_unit=self.meta_business_unit,
+            source_payload_identifier=source_payload_identifier,
+            defaults={"source": cleaned_data["source"],
+                      "payload_display_name": cleaned_data["payload_display_name"],
+                      "payload_description": cleaned_data["payload_description"],
+                      "trashed_at": None}
+        )
+        return configuration_profile
