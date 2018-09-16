@@ -160,7 +160,7 @@ def get_installed_device_artifact_dict(enrolled_device):
     return artifact_version_dict
 
 
-def get_next_device_artifact_action(meta_business_unit, enrolled_device):
+def iter_next_device_artifact_actions(meta_business_unit, enrolled_device):
     """Compute the actions necessary to achieve the configured device state"""
     configured_device_artifact_dict = get_configured_device_artifact_dict(meta_business_unit,
                                                                           enrolled_device.serial_number)
@@ -172,9 +172,9 @@ def get_next_device_artifact_action(meta_business_unit, enrolled_device):
         for configured_artifact_id, configured_artifact_version in artifact_ct_version_dict.items():
             installed_artifact_version = installed_artifact_ct_dict.get(configured_artifact_id, -1)
             if installed_artifact_version < configured_artifact_version:
-                return (DeviceArtifactCommand.ACTION_INSTALL,
-                        artifact_ct,
-                        artifact_ct.get_object_for_this_type(pk=configured_artifact_id))
+                yield (DeviceArtifactCommand.ACTION_INSTALL,
+                       artifact_ct,
+                       artifact_ct.get_object_for_this_type(pk=configured_artifact_id))
 
     # find all installed artifacts that need to be removed
     for artifact_ct, artifact_ct_version_dict in installed_device_artifact_dict.items():
@@ -185,31 +185,31 @@ def get_next_device_artifact_action(meta_business_unit, enrolled_device):
         configured_artifact_ct_dict = configured_device_artifact_dict.get(artifact_ct, {})
         for artifact_id in artifact_ct_version_dict.keys():
             if artifact_id not in configured_artifact_ct_dict:
-                return (DeviceArtifactCommand.ACTION_REMOVE,
-                        artifact_ct,
-                        artifact_ct.get_object_for_this_type(pk=artifact_id))
-
-    # nothing to do
-    return None, None, None
+                yield (DeviceArtifactCommand.ACTION_REMOVE,
+                       artifact_ct,
+                       artifact_ct.get_object_for_this_type(pk=artifact_id))
 
 
 def get_next_device_artifact_command_response(meta_business_unit, enrolled_device):
-    action, artifact_ct, artifact = get_next_device_artifact_action(meta_business_unit, enrolled_device)
-    if action is None and artifact_ct is None and artifact is None:
-        return None
-    device_artifact_command, created = DeviceArtifactCommand.objects.get_or_create(
-        enrolled_device=enrolled_device,
-        artifact_content_type=artifact_ct,
-        artifact_id=artifact.pk,
-        artifact_version=artifact.version,
-        action=action,
-        status_code__isnull=False,
-        defaults={
-            "command_time": timezone.now()
-        }
-    )
-    if created:
+    for action, artifact_ct, artifact in iter_next_device_artifact_actions(meta_business_unit, enrolled_device):
+        # If we have an error with this artifact, we skip it.
+        # In order to try again, we will have to bump the artifact version.
+        # We do not care if we already have a command without an answer.
+        # TODO: really OK ???
+        device_artifact_command_d = {"enrolled_device": enrolled_device,
+                                     "artifact_content_type": artifact_ct,
+                                     "artifact_id": artifact.pk,
+                                     "artifact_version": artifact.version,
+                                     "action": action}
+        if DeviceArtifactCommand.objects.filter(**device_artifact_command_d,
+                                                status_code__in=("Error", "CommandFormatError")).count():
+            # skip this one
+            continue
+        # create the command
+        device_artifact_command_d["command_time"] = timezone.now()
+        device_artifact_command = DeviceArtifactCommand.objects.create(**device_artifact_command_d)
         command_uuid = device_artifact_command.command_uuid
+        # return the adequate response
         if artifact.artifact_type == "ConfigurationProfile":
             if action == DeviceArtifactCommand.ACTION_INSTALL:
                 return build_install_profile_command_response(artifact, command_uuid)
