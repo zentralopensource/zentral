@@ -143,7 +143,7 @@ for key in ('HOST', 'PASSWORD', 'PORT'):
 # Internationalization
 # https://docs.djangoproject.com/en/1.8/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = django_zentral_settings.get("LANGUAGE_CODE", "en-us")
 
 TIME_ZONE = 'UTC'
 

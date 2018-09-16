@@ -18,7 +18,6 @@
 {% if installed_device_artifacts %}
 <table class="table">
   <thead>
-    <th>Type</th>
     <th>Artifact</th>
     <th>Version</th>
     <th>Created at</th>
@@ -28,11 +27,13 @@
     {% for ida in installed_device_artifacts %}
     {% with ida.artifact as artifact %}
     <tr>
-      <td>{{ artifact.artifact_type }}</td>
-      <td><a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a></td>
-      <td>{{ artifact.version }}</td>
-      <td>{{ artifact.created_at|date:"r" }}</td>
-      <td>{{ artifact.updated_at|date:"r" }}</td>
+      <td>
+        {{ artifact.artifact_type }}<br>
+        <a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a>
+      <td>
+      <td>{{ ida.artifact_version }}</td>
+      <td>{{ ida.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ ida.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
     {% endwith %}
     {% endfor %}
@@ -45,8 +46,8 @@
 {% if device_artifact_commands %}
 <table class="table">
   <thead>
-    <th>Type</th>
     <th>Artifact</th>
+    <th>Version</th>
     <th>Action</th>
     <th>Status</th>
     <th>Created at</th>
@@ -56,12 +57,15 @@
     {% for dac in device_artifact_commands %}
     {% with dac.artifact as artifact %}
     <tr>
-      <td>{{ artifact.artifact_type }}</td>
-      <td><a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a></td>
+      <td>
+        {{ artifact.artifact_type }}<br>
+        <a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a>
+      </td>
+      <td>{{ dac.artifact_version }}</td>
       <td>{{ dac.get_action_display }}</td>
       <td>{{ dac.get_status_code_display }}</td>
-      <td>{{ dac.command_time|date:"r" }}</td>
-      <td>{{ dac.result_time|date:"r" }}</td>
+      <td>{{ dac.command_time|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ dac.result_time|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
     {% endwith %}
     {% endfor %}

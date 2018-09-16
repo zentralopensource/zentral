@@ -28,13 +28,13 @@
     <tr>
       <td><a href="{% url 'mdm:push_certificate' enrolled_device.push_certificate.id %}">{{ enrolled_device.push_certificate.name }}</a></td>
       <td>{{ enrolled_device.udid }}</td>
-      <td>{{ enrolled_device.checkout_at|date:"r" }}</td>
-      <td>{{ enrolled_device.updated_at|date:"r" }}</td>
+      <td>{{ enrolled_device.checkout_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ enrolled_device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>
         <a class="btn btn-default" href="{% url 'mdm:enrolled_device_artifacts' enrolled_device.id %}">
           Artifacts
         </a>
-        <form method="POST" action="{% url 'mdm:poke_enrolled_device' enrolled_device.id %}">{% csrf_token %}
+        <form style="display:inline-block" method="POST" action="{% url 'mdm:poke_enrolled_device' enrolled_device.id %}">{% csrf_token %}
           <button type="submit" class="btn btn-success" {% if not enrolled_device.can_be_poked %}disabled="disabled"{% endif %}>Poke!</button>
         </form>
       </td>
@@ -63,7 +63,7 @@
   <dt>Assigned by</dt>
   <dd>{{ dep_device.device_assigned_by }}</dd>
   <dt>Assigned date</dt>
-  <dd>{{ dep_device.device_assigned_date|date:"r" }}</dd>
+  <dd>{{ dep_device.device_assigned_date|date:"SHORT_DATETIME_FORMAT" }}</dd>
   <dt>Profile</dt>
   <dd>
     {% if dep_device.profile %}
@@ -75,9 +75,9 @@
   <dt>Profile status</dt>
   <dd>{{ dep_device.get_profile_status_display }}</dd>
   <dt>Profile assign time</dt>
-  <dd>{{ dep_device.profile_assign_time|date:"r" }}</dd>
+  <dd>{{ dep_device.profile_assign_time|date:"SHORT_DATETIME_FORMAT" }}</dd>
   <dt>Profile push time</dt>
-  <dd>{{ dep_device.profile_push_time|date:"r" }}</dd>
+  <dd>{{ dep_device.profile_push_time|date:"SHORT_DATETIME_FORMAT" }}</dd>
 </dl>
 {% endif %}
 
@@ -97,8 +97,8 @@
     <tr>
       <td><a href="{% url 'mdm:dep_profile' dep_enrollment_session.dep_profile.id %}">{{ dep_enrollment_session.dep_profile }}</a></td>
       <td>{{ dep_enrollment_session.get_status_display }}</td>
-      <td>{{ dep_enrollment_session.created_at|date:"r" }}</td>
-      <td>{{ dep_enrollment_session.updated_at|date:"r" }}</td>
+      <td>{{ dep_enrollment_session.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ dep_enrollment_session.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -120,8 +120,8 @@
     <tr>
       <td><a href="{% url 'mdm:ota_enrollment' ota_enrollment_session.ota_enrollment.id %}">{{ ota_enrollment_session.ota_enrollment }}</a></td>
       <td>{{ ota_enrollment_session.get_status_display }}</td>
-      <td>{{ ota_enrollment_session.created_at|date:"r" }}</td>
-      <td>{{ ota_enrollment_session.updated_at|date:"r" }}</td>
+      <td>{{ ota_enrollment_session.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ ota_enrollment_session.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -142,9 +142,9 @@
 
 <dl class="dl-horizontal">
   <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ enrolled_user.created_at|date:'r' }}</dd>
+  <dd class="small" style="opacity:0.5">{{ enrolled_user.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
   <dt class="small" style="opacity:0.5">Updated at</dt>
-  <dd class="small" style="opacity:0.5">{{ enrolled_user.updated_at|date:'r' }}</dd>
+  <dd class="small" style="opacity:0.5">{{ enrolled_user.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
 </dl>
 {% endfor %}
 {% endif %}
