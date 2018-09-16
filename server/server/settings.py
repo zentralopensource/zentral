@@ -34,6 +34,9 @@ ALLOWED_HOSTS = django_zentral_settings['ALLOWED_HOSTS']
 
 MEDIA_ROOT = django_zentral_settings.get("MEDIA_ROOT", "")
 
+# django default is 2.5MB. increased to 10MB.
+DATA_UPLOAD_MAX_MEMORY_SIZE = django_zentral_settings.get('DATA_UPLOAD_MAX_MEMORY_SIZE', 10485760)
+
 EMAIL_BACKEND = django_zentral_settings.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 EMAIL_HOST = django_zentral_settings.get("EMAIL_HOST", 'localhost')
 EMAIL_PORT = django_zentral_settings.get("EMAIL_PORT", 25)
