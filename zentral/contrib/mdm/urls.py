@@ -4,43 +4,14 @@ from . import views
 
 urlpatterns = [
     # setup views
+
+
     url(r'^$',
         views.IndexView.as_view(),
         name='index'),
     url(r'^root_ca/$',
         views.RootCAView.as_view(),
         name='root_ca'),
-
-    url(r'^business_units/$',
-        views.MetaBusinessUnitListView.as_view(),
-        name='mbu_list'),
-    url(r'^business_units/(?P<pk>\d+)/$',
-        views.MetaBusinessUnitDetailView.as_view(),
-        name='mbu'),
-    url(r'^business_units/(?P<pk>\d+)/kernel_extensions_policies/create/$',
-        views.CreateKernelExtensionPolicyView.as_view(),
-        name="create_kernel_extension_policy"),
-    url(r'^business_units/(?P<mbu_pk>\d+)/kernel_extensions_policies/(?P<pk>\d+)/$',
-        views.KernelExtensionPolicyView.as_view(),
-        name="kernel_extension_policy"),
-    url(r'^business_units/(?P<mbu_pk>\d+)/kernel_extensions_policies/(?P<pk>\d+)/update/$',
-        views.UpdateKernelExtensionPolicyView.as_view(),
-        name="update_kernel_extension_policy"),
-    url(r'^business_units/(?P<mbu_pk>\d+)/kernel_extensions_policies/(?P<pk>\d+)/trash/$',
-        views.TrashKernelExtensionPolicyView.as_view(),
-        name="trash_kernel_extension_policy"),
-    url(r'^business_units/(?P<pk>\d+)/enrollment_packages/create/$',
-        views.CreateEnrollmentPackageView.as_view(),
-        name="create_enrollment_package"),
-    url(r'^business_units/(?P<mbu_pk>\d+)/enrollment_packages/(?P<pk>\d+)/trash/$',
-        views.TrashEnrollmentPackageView.as_view(),
-        name="trash_enrollment_package"),
-    url(r'^business_units/(?P<pk>\d+)/configuration_profiles/create/$',
-        views.CreateConfigurationProfileView.as_view(),
-        name="create_configuration_profile"),
-    url(r'^business_units/(?P<mbu_pk>\d+)/configuration_profiles/(?P<pk>\d+)/trash/$',
-        views.TrashConfigurationProfileView.as_view(),
-        name="trash_configuration_profile"),
 
     # push certificate / setup views
     url(r'^push_certificates/$',
@@ -117,6 +88,53 @@ urlpatterns = [
         views.UpdateDEPProfileView.as_view(),
         name='update_dep_profile'),
 
+    # kernel extensions / setup views
+    url(r'^kernel_extensions/$',
+        views.KernelExtensionsIndexView.as_view(),
+        name="kernel_extensions_index"),
+    url(r'^kernel_extensions/create_team/$',
+        views.CreateKernelExtensionTeamView.as_view(),
+        name="create_kernel_extension_team"),
+    url(r'^kernel_extensions/create/$',
+        views.CreateKernelExtensionView.as_view(),
+        name="create_kernel_extension"),
+
+
+    # management views
+
+
+    # business unites / management views
+    url(r'^business_units/$',
+        views.MetaBusinessUnitListView.as_view(),
+        name='mbu_list'),
+    url(r'^business_units/(?P<pk>\d+)/$',
+        views.MetaBusinessUnitDetailView.as_view(),
+        name='mbu'),
+    url(r'^business_units/(?P<pk>\d+)/kernel_extensions_policies/create/$',
+        views.CreateKernelExtensionPolicyView.as_view(),
+        name="create_kernel_extension_policy"),
+    url(r'^business_units/(?P<mbu_pk>\d+)/kernel_extensions_policies/(?P<pk>\d+)/$',
+        views.KernelExtensionPolicyView.as_view(),
+        name="kernel_extension_policy"),
+    url(r'^business_units/(?P<mbu_pk>\d+)/kernel_extensions_policies/(?P<pk>\d+)/update/$',
+        views.UpdateKernelExtensionPolicyView.as_view(),
+        name="update_kernel_extension_policy"),
+    url(r'^business_units/(?P<mbu_pk>\d+)/kernel_extensions_policies/(?P<pk>\d+)/trash/$',
+        views.TrashKernelExtensionPolicyView.as_view(),
+        name="trash_kernel_extension_policy"),
+    url(r'^business_units/(?P<pk>\d+)/enrollment_packages/create/$',
+        views.CreateEnrollmentPackageView.as_view(),
+        name="create_enrollment_package"),
+    url(r'^business_units/(?P<mbu_pk>\d+)/enrollment_packages/(?P<pk>\d+)/trash/$',
+        views.TrashEnrollmentPackageView.as_view(),
+        name="trash_enrollment_package"),
+    url(r'^business_units/(?P<pk>\d+)/configuration_profiles/upload/$',
+        views.UploadConfigurationProfileView.as_view(),
+        name="upload_configuration_profile"),
+    url(r'^business_units/(?P<mbu_pk>\d+)/configuration_profiles/(?P<pk>\d+)/trash/$',
+        views.TrashConfigurationProfileView.as_view(),
+        name="trash_configuration_profile"),
+
     # enrolled devices / management views
     url(r'^devices/$',
         views.DevicesView.as_view(),
@@ -130,17 +148,6 @@ urlpatterns = [
     url(r'^enrolled_devices/(?P<pk>\d+)/artifacts/$',
         views.EnrolledDeviceArtifactsView.as_view(),
         name="enrolled_device_artifacts"),
-
-    # kernel extensions / management views
-    url(r'^kernel_extensions/$',
-        views.KernelExtensionsIndexView.as_view(),
-        name="kernel_extensions_index"),
-    url(r'^kernel_extensions/create_team/$',
-        views.CreateKernelExtensionTeamView.as_view(),
-        name="create_kernel_extension_team"),
-    url(r'^kernel_extensions/create/$',
-        views.CreateKernelExtensionView.as_view(),
-        name="create_kernel_extension"),
 
     # SCEP verification / scep view
     url(r'^verify_scep_csr/$',
@@ -164,6 +171,14 @@ urlpatterns = [
         views.InstallApplicationDownloadView.as_view(),
         name="install_application_download"),
 ]
+
+main_menu_cfg = {
+    'weight': 20,
+    'items': (
+        ('mbu_list', 'Business units'),
+        ('devices', 'Devices')
+    )
+}
 
 setup_menu_cfg = {
     'items': (

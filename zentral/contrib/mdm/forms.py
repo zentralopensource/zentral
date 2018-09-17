@@ -258,7 +258,7 @@ class AssignDEPDeviceProfileForm(forms.ModelForm):
             profile_f.queryset = profile_f.queryset.filter(virtual_server=self.instance.virtual_server)
 
 
-class CreateConfigurationProfileForm(forms.Form):
+class UploadConfigurationProfileForm(forms.Form):
     source_file = forms.FileField(required=True,
                                   help_text="configuration profile file (.mobileconfig)")
 

@@ -4,15 +4,11 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li class="active">MDM</li>
   <li class="active">Business units</li>
 </ol>
 
 <h2>{{ mbu_list|length }} Business unit{{ mbu_list|length|pluralize }}</h2>
-
-<p>
-  <a href="{% url 'mdm:add_push_certificate' %}" class="btn btn-default">Add</a>
-</p>
 
 <table class="table">
   <thead>

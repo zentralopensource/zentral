@@ -4,7 +4,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li class="active">MDM</li>
   <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
   <li class="active">{{ object }}</li>
 </ol>
@@ -165,7 +165,7 @@
 <h4>{{ configuration_profile_list|length }} configuration profile{{ configuration_profile_list|length|pluralize }}</h4>
 
 <p>
-  <a class="btn btn-default" href="{% url 'mdm:create_configuration_profile' object.id %}">
+  <a class="btn btn-default" href="{% url 'mdm:upload_configuration_profile' object.id %}">
     Upload
   </a>
 </p>

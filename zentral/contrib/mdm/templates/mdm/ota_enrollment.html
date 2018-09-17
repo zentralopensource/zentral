@@ -34,7 +34,7 @@
       <dt>Name</dt>
       <dd>{{ object.name }}</dd>
       <dt>Business unit</dt>
-      <dd><a href="{% url 'inventory:mbu_machines' secret.meta_business_unit.id %}">{{ secret.meta_business_unit }}</a></dd>
+      <dd><a href="{% url 'mdm:mbu' secret.meta_business_unit.id %}">{{ secret.meta_business_unit }}</a></dd>
       <dt>Tags</dt>
       <dd>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</dd>
       <dt>Serial number{{ secret.serial_numbers|length|pluralize }}</dt>

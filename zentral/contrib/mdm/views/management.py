@@ -2,20 +2,75 @@ import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Count
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, TemplateView, UpdateView, View
-from zentral.contrib.inventory.forms import EnrollmentSecretForm, MetaBusinessUnit
+from zentral.contrib.inventory.forms import EnrollmentSecretForm
+from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.events import send_device_notification, send_mbu_device_notifications
-from zentral.contrib.mdm.forms import DeviceSearchForm, CreateConfigurationProfileForm
-from zentral.contrib.mdm.models import (EnrolledDevice, DEPDevice, DEPEnrollmentSession, OTAEnrollmentSession,
-                                        KernelExtensionPolicy, KernelExtensionTeam, KernelExtension,
-                                        MDMEnrollmentPackage, ConfigurationProfile)
+from zentral.contrib.mdm.forms import DeviceSearchForm, UploadConfigurationProfileForm
+from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate,
+                                        EnrolledDevice,
+                                        DEPDevice, DEPEnrollmentSession, DEPProfile,
+                                        OTAEnrollment, OTAEnrollmentSession,
+                                        KernelExtensionPolicy, MDMEnrollmentPackage, ConfigurationProfile)
 from zentral.utils.osx_package import get_standalone_package_builders
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
+
+
+# Meta business units
+
+
+class MetaBusinessUnitListView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/metabusinessunit_list.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mdm"] = True
+        context["mbu_list"] = sorted(set(
+            mbupc.meta_business_unit
+            for mbupc in MetaBusinessUnitPushCertificate.objects.select_related("meta_business_unit").all()
+        ), key=lambda mbu: mbu.name)
+        return context
+
+
+class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
+    model = MetaBusinessUnit
+    template_name = "mdm/metabusinessunit_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data()
+        context["mdm"] = True
+        mbu = context["object"]
+        context["dep_profile_list"] = (DEPProfile.objects.select_related("virtual_server")
+                                                         .filter(enrollment_secret__meta_business_unit=mbu)
+                                                         .annotate(num_devices=Count("depdevice"))
+                                                         .order_by("name", "pk"))
+        context["ota_enrollment_list"] = (OTAEnrollment.objects.filter(enrollment_secret__meta_business_unit=mbu)
+                                                               .order_by("name", "pk"))
+        context["kext_policy_list"] = (KernelExtensionPolicy.objects.filter(meta_business_unit=mbu,
+                                                                            trashed_at__isnull=True)
+                                                                    .order_by("pk"))
+        context["enrollment_package_list"] = (MDMEnrollmentPackage.objects.filter(meta_business_unit=mbu,
+                                                                                  trashed_at__isnull=True)
+                                                                          .order_by("builder", "pk"))
+        existing_enrollment_package_builders = [ep.builder for ep in context["enrollment_package_list"]]
+        create_enrollment_package_url = reverse("mdm:create_enrollment_package", args=(mbu.pk,))
+        context["create_enrollment_package_links"] = [("{}?builder={}".format(create_enrollment_package_url, k),
+                                                       v.name)
+                                                      for k, v in get_standalone_package_builders().items()
+                                                      if k not in existing_enrollment_package_builders]
+        context["configuration_profile_list"] = (ConfigurationProfile.objects.filter(meta_business_unit=mbu,
+                                                                                     trashed_at__isnull=True)
+                                                                             .order_by("payload_description", "pk"))
+        return context
+
+
+# Devices
 
 
 class DevicesView(LoginRequiredMixin, TemplateView):
@@ -35,7 +90,7 @@ class DevicesView(LoginRequiredMixin, TemplateView):
         ctx["form"] = self.form
         ctx["devices"] = self.devices
         ctx["devices_count"] = len(self.devices)
-        bc = [(reverse("mdm:index"), "MDM setup")]
+        bc = [(None, "MDM")]
         if not self.form.is_initial():
             bc.extend([(reverse("mdm:devices"), "Devices"),
                        (None, "Search")])
@@ -51,7 +106,6 @@ class DeviceView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         serial_number = kwargs["serial_number"]
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["mdm"] = True
         ctx["serial_number"] = serial_number
         # enrolled devices
@@ -89,7 +143,7 @@ class EnrolledDeviceArtifactsView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["setup"] = True
+        context["mdm"] = True
         context["installed_device_artifacts"] = sorted(self.object.installeddeviceartifact_set.all(),
                                                        key=lambda ida: ida.created_at, reverse=True)
         context["device_artifact_commands"] = sorted(self.object.deviceartifactcommand_set.all(),
@@ -97,38 +151,7 @@ class EnrolledDeviceArtifactsView(LoginRequiredMixin, DetailView):
         return context
 
 
-# Kernel extensions
-
-
-class KernelExtensionsIndexView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/kernel_extensions_index.html"
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        ctx["kernel_extension_teams"] = KernelExtensionTeam.objects.all()
-        ctx["kernel_extension_teams_count"] = ctx["kernel_extension_teams"].count()
-        ctx["kernel_extensions"] = KernelExtension.objects.all()
-        ctx["kernel_extensions_count"] = ctx["kernel_extensions"].count()
-        return ctx
-
-
-class CreateKernelExtensionTeamView(LoginRequiredMixin, CreateView):
-    model = KernelExtensionTeam
-    fields = "__all__"
-
-    def form_valid(self, form):
-        messages.info(self.request, "Kernel extension team created.")
-        return super().form_valid(form)
-
-
-class CreateKernelExtensionView(LoginRequiredMixin, CreateView):
-    model = KernelExtension
-    fields = "__all__"
-
-    def form_valid(self, form):
-        messages.info(self.request, "Kernel extension created.")
-        return super().form_valid(form)
+# kernel extension policies
 
 
 class CreateKernelExtensionPolicyView(LoginRequiredMixin, CreateView):
@@ -141,7 +164,7 @@ class CreateKernelExtensionPolicyView(LoginRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["setup"] = True
+        context["mdm"] = True
         context["meta_business_unit"] = self.meta_business_unit
         return context
 
@@ -166,6 +189,11 @@ class CreateKernelExtensionPolicyView(LoginRequiredMixin, CreateView):
 class KernelExtensionPolicyView(LoginRequiredMixin, DetailView):
     model = KernelExtensionPolicy
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mdm"] = True
+        return context
+
 
 class UpdateKernelExtensionPolicyView(LoginRequiredMixin, UpdateView):
     model = KernelExtensionPolicy
@@ -177,7 +205,7 @@ class UpdateKernelExtensionPolicyView(LoginRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["setup"] = True
+        context["mdm"] = True
         context["meta_business_unit"] = self.meta_business_unit
         return context
 
@@ -191,6 +219,11 @@ class UpdateKernelExtensionPolicyView(LoginRequiredMixin, UpdateView):
 
 class TrashKernelExtensionPolicyView(LoginRequiredMixin, DeleteView):
     model = KernelExtensionPolicy
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mdm"] = True
+        return context
 
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
@@ -230,7 +263,7 @@ class CreateEnrollmentPackageView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["setup"] = True
+        context["mdm"] = True
         context["title"] = "Create enrollment package"
         context["meta_business_unit"] = self.meta_business_unit
         context["builder_name"] = self.builder.name
@@ -273,6 +306,11 @@ class CreateEnrollmentPackageView(LoginRequiredMixin, TemplateView):
 class TrashEnrollmentPackageView(LoginRequiredMixin, DeleteView):
     model = MDMEnrollmentPackage
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mdm"] = True
+        return context
+
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
         self.object.trashed_at = timezone.now()
@@ -283,9 +321,9 @@ class TrashEnrollmentPackageView(LoginRequiredMixin, DeleteView):
 # Configuration Profiles
 
 
-class CreateConfigurationProfileView(LoginRequiredMixin, FormView):
+class UploadConfigurationProfileView(LoginRequiredMixin, FormView):
     model = ConfigurationProfile
-    form_class = CreateConfigurationProfileForm
+    form_class = UploadConfigurationProfileForm
     template_name = "mdm/configurationprofile_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -299,7 +337,7 @@ class CreateConfigurationProfileView(LoginRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["setup"] = True
+        context["mdm"] = True
         context["title"] = "upload a configuration profile"
         context["meta_business_unit"] = self.meta_business_unit
         return context
@@ -315,6 +353,11 @@ class CreateConfigurationProfileView(LoginRequiredMixin, FormView):
 
 class TrashConfigurationProfileView(LoginRequiredMixin, DeleteView):
     model = ConfigurationProfile
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mdm"] = True
+        return context
 
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()

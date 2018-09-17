@@ -4,10 +4,10 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li class="active">MDM</li>
   <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
   <li><a href="{% url 'mdm:mbu' object.meta_business_unit.pk %}">{{ object.meta_business_unit }}</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="active">kernel extension policy</li>
 </ol>
 
 <h2>{{ object }}</h2>
@@ -15,6 +15,9 @@
 <p>
   <a href="{% url 'mdm:update_kernel_extension_policy' object.meta_business_unit.pk object.pk %}" class="btn btn-default">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+  </a>
+  <a class="btn btn-danger" href="{% url 'mdm:trash_kernel_extension_policy' object.meta_business_unit.pk object.pk %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
   </a>
 </p>
 

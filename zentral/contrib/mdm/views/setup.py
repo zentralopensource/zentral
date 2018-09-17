@@ -2,12 +2,10 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import SuspiciousOperation
-from django.db.models import Count
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
-from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep import (add_dep_token_certificate, add_dep_profile, assign_dep_device_profile,
                                      refresh_dep_device)
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
@@ -16,19 +14,13 @@ from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DEPProfileFor
                                        AddPushCertificateBusinessUnitForm)
 from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate, PushCertificate,
                                         DEPDevice, DEPProfile, DEPToken, DEPVirtualServer,
-                                        OTAEnrollment,
-                                        KernelExtensionPolicy, MDMEnrollmentPackage, ConfigurationProfile)
+                                        KernelExtensionTeam, KernelExtension,
+                                        OTAEnrollment)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_root_ca_configuration_profile,
                                           build_profile_service_configuration_profile)
-from zentral.utils.osx_package import get_standalone_package_builders
 
 logger = logging.getLogger('zentral.contrib.mdm.views.setup')
-
-
-class RootCAView(View):
-    def get(self, request, *args, **kwargs):
-        return build_configuration_profile_response(build_root_ca_configuration_profile(), "zentral_root_ca")
 
 
 class IndexView(LoginRequiredMixin, TemplateView):
@@ -40,50 +32,9 @@ class IndexView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-# Meta business units
-
-
-class MetaBusinessUnitListView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/metabusinessunit_list.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mbu_list"] = sorted(set(
-            mbupc.meta_business_unit
-            for mbupc in MetaBusinessUnitPushCertificate.objects.select_related("meta_business_unit").all()
-        ), key=lambda mbu: mbu.name)
-        return context
-
-
-class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
-    model = MetaBusinessUnit
-    template_name = "mdm/metabusinessunit_detail.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data()
-        mbu = context["object"]
-        context["dep_profile_list"] = (DEPProfile.objects.select_related("virtual_server")
-                                                         .filter(enrollment_secret__meta_business_unit=mbu)
-                                                         .annotate(num_devices=Count("depdevice"))
-                                                         .order_by("name", "pk"))
-        context["ota_enrollment_list"] = (OTAEnrollment.objects.filter(enrollment_secret__meta_business_unit=mbu)
-                                                               .order_by("name", "pk"))
-        context["kext_policy_list"] = (KernelExtensionPolicy.objects.filter(meta_business_unit=mbu,
-                                                                            trashed_at__isnull=True)
-                                                                    .order_by("pk"))
-        context["enrollment_package_list"] = (MDMEnrollmentPackage.objects.filter(meta_business_unit=mbu,
-                                                                                  trashed_at__isnull=True)
-                                                                          .order_by("builder", "pk"))
-        existing_enrollment_package_builders = [ep.builder for ep in context["enrollment_package_list"]]
-        create_enrollment_package_url = reverse("mdm:create_enrollment_package", args=(mbu.pk,))
-        context["create_enrollment_package_links"] = [("{}?builder={}".format(create_enrollment_package_url, k),
-                                                       v.name)
-                                                      for k, v in get_standalone_package_builders().items()
-                                                      if k not in existing_enrollment_package_builders]
-        context["configuration_profile_list"] = (ConfigurationProfile.objects.filter(meta_business_unit=mbu,
-                                                                                     trashed_at__isnull=True)
-                                                                             .order_by("payload_description", "pk"))
-        return context
+class RootCAView(View):
+    def get(self, request, *args, **kwargs):
+        return build_configuration_profile_response(build_root_ca_configuration_profile(), "zentral_root_ca")
 
 
 # Push certificates
@@ -441,3 +392,47 @@ class RefreshDEPDeviceView(LoginRequiredMixin, View):
         else:
             messages.info(request, "DEP device refreshed")
         return HttpResponseRedirect("{}#dep_device".format(reverse("mdm:device", args=(dep_device.serial_number,))))
+
+
+# Kernel extensions
+
+
+class KernelExtensionsIndexView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/kernel_extensions_index.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["kernel_extension_teams"] = KernelExtensionTeam.objects.all()
+        ctx["kernel_extension_teams_count"] = ctx["kernel_extension_teams"].count()
+        ctx["kernel_extensions"] = KernelExtension.objects.all()
+        ctx["kernel_extensions_count"] = ctx["kernel_extensions"].count()
+        return ctx
+
+
+class CreateKernelExtensionTeamView(LoginRequiredMixin, CreateView):
+    model = KernelExtensionTeam
+    fields = "__all__"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
+
+    def form_valid(self, form):
+        messages.info(self.request, "Kernel extension team created.")
+        return super().form_valid(form)
+
+
+class CreateKernelExtensionView(LoginRequiredMixin, CreateView):
+    model = KernelExtension
+    fields = "__all__"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
+
+    def form_valid(self, form):
+        messages.info(self.request, "Kernel extension created.")
+        return super().form_valid(form)
