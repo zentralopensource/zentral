@@ -31,8 +31,8 @@
       <td><a href="{{ dep_profile.get_absolute_url }}">{{ dep_profile }}</a></td>
       <td>{{ dep_profile.uuid }}</td>
       <td>{{ dep_profile.num_devices }}</td>
-      <td>{{ dep_profile.created_at }}</td>
-      <td>{{ dep_profile.updated_at }}</td>
+      <td>{{ dep_profile.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ dep_profile.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>
         <a href="{% url 'mdm:update_dep_profile' dep_profile.pk %}" class="btn btn-default">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
@@ -52,15 +52,22 @@
     <th>Name</th>
     <th>Validity</th>
     <th>Created at</th>
+    <th></th>
   </thead>
   <tbody>
     {% for ota_enrollment in ota_enrollment_list %}
     {% with ota_enrollment.enrollment_secret.is_valid|first as is_valid %}
     {% with ota_enrollment.enrollment_secret.is_valid|last as err_msg %}
     <tr>
-      <td><a href="{% url 'mdm:ota_enrollment' ota_enrollment.pk %}">{{ ota_enrollment.name }}</a></td>
-      <td class="{% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
-      <td>{{ ota_enrollment.created_at }}</td>
+      <td class="col-md-5"><a href="{% url 'mdm:ota_enrollment' ota_enrollment.pk %}">{{ ota_enrollment.name }}</a></td>
+      <td class="col-md-4 {% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
+      <td class="col-md-2">{{ ota_enrollment.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td class="col-md-1">
+        <a class="btn btn-default"
+           href="{% url 'mdm:download_profile_service_payload' ota_enrollment.id %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+        </a>
+      </td>
     </tr>
     {% endwith %}
     {% endwith %}
@@ -92,7 +99,7 @@
     <tr>
       <td><a name="kext_policy_{{ kext_policy.id }}" href="{{ kext_policy.get_absolute_url }}">{{ kext_policy }}</a></td>
       <td>{{ kext_policy.version }}</td>
-      <td>{{ kext_policy.updated_at }}</td>
+      <td>{{ kext_policy.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>
         <a class="btn btn-danger" href="{% url 'mdm:trash_kernel_extension_policy' object.pk kext_policy.pk %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
@@ -140,7 +147,7 @@
       </td>
       <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
       <td>
-        {{ enrollment_package.created_at }}
+        {{ enrollment_package.created_at|date:"SHORT_DATETIME_FORMAT" }}
       </td>
       <td>
         <a class="btn btn-danger" href="{% url 'mdm:trash_enrollment_package' object.pk enrollment_package.pk %}">
@@ -186,7 +193,7 @@
           {% endfor %}
         </ul>
       </td>
-      <td>{{ configuration_profile.created_at|date:"r" }}</td>
+      <td>{{ configuration_profile.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>
         <a class="btn btn-danger" href="{% url 'mdm:trash_configuration_profile' object.pk configuration_profile.pk %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
