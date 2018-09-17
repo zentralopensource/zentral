@@ -253,11 +253,11 @@ class ConnectView(MDMView):
         if user_id:
             # TODO: do something!!!
             return HttpResponse()
-        elif payload_status in ["Idle", "Acknowledged"]:
+        elif payload_status in ["Idle", "Acknowledged", "Error", "CommandFormatError"]:
             # we can send another command
             return get_next_device_command_response(self.meta_business_unit, enrolled_device)
-        elif payload_status in ["Error", "CommandFormatError", "NotNow"]:
-            # we stop for now TODO: better?
+        elif payload_status in ["NotNow"]:
+            # we let the device contact us again
             return HttpResponse()
         else:
             self.abort("unknown payload status {}".format(payload_status))
