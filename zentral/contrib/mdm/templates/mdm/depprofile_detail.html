@@ -1,21 +1,22 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
-  <li><a href="{% url 'mdm:dep_profiles' %}">DEP profiles</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="active">MDM</li>
+  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
+  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
+  <li class="active">DEP profile {{ object }}</li>
 </ol>
 
-<h2>{{ object }}</h2>
+<h2>DEP profile {{ object }}</h2>
 
 <p>
-  <a href="{% url 'mdm:check_dep_profile' object.pk %}" class="btn btn-default">
+  <a href="{% url 'mdm:check_dep_profile' meta_business_unit.pk object.pk %}" class="btn btn-default">
     <span class="glyphicon glyphicon-cloud-download" aria-hidden="true"></span>
   </a>
-  <a href="{% url 'mdm:update_dep_profile' object.pk %}" class="btn btn-default">
+  <a href="{% url 'mdm:update_dep_profile' meta_business_unit.pk object.pk %}" class="btn btn-default">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
   </a>
 </p>
@@ -25,9 +26,9 @@
     <h3>Org info</h3>
     <dl class="dl-horizontal">
       <dt>Business unit</dt>
-      {% with object.get_meta_business_unit as mbu %}
-      <dd><a href="{% url 'mdm:mbu' mbu.pk %}">{{ mbu }}</a></dd>
-      {% endwith %}
+      <dd><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></dd>
+      <dt>Enrollment tags</dt>
+      <dd>{% for tag in object.enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</dd>
       <dt>Support phone number</dt>
       <dd>{{ object.support_phone_number|default:"-" }}</dd>
       <dt>Support email</dt>

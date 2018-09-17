@@ -3,7 +3,6 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
-from django.db.models import Count
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -11,9 +10,11 @@ from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
+from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.events import send_device_notification, send_mbu_device_notifications
-from zentral.contrib.mdm.forms import (DeviceSearchForm,
-                                       OTAEnrollmentForm,
+from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DeviceSearchForm,
+                                       CreateDEPProfileForm, UpdateDEPProfileForm, OTAEnrollmentForm,
                                        UploadConfigurationProfileForm)
 from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate,
                                         EnrolledDevice,
@@ -53,7 +54,6 @@ class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
         mbu = context["object"]
         context["dep_profile_list"] = (DEPProfile.objects.select_related("virtual_server")
                                                          .filter(enrollment_secret__meta_business_unit=mbu)
-                                                         .annotate(num_devices=Count("depdevice"))
                                                          .order_by("name", "pk"))
         context["ota_enrollment_list"] = (OTAEnrollment.objects.filter(enrollment_secret__meta_business_unit=mbu)
                                                                .order_by("name", "pk"))
@@ -75,15 +75,153 @@ class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
+# DEP Profiles
+
+
+class CreateDEPProfileView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/depprofile_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mdm"] = True
+        context["meta_business_unit"] = self.meta_business_unit
+        dep_profile_form = kwargs.get("dep_profile_form")
+        if not dep_profile_form:
+            dep_profile_form = CreateDEPProfileForm(prefix="dp")
+        context["dep_profile_form"] = dep_profile_form
+        enrollment_secret_form = kwargs.get("enrollment_secret_form")
+        if not enrollment_secret_form:
+            enrollment_secret_form = EnrollmentSecretForm(
+                prefix="es",
+                no_restrictions=True,
+                meta_business_unit=self.meta_business_unit,
+            )
+        context["enrollment_secret_form"] = enrollment_secret_form
+        return context
+
+    def post(self, request, *args, **kwargs):
+        dep_profile_form = CreateDEPProfileForm(request.POST, prefix="dp")
+        enrollment_secret_form = EnrollmentSecretForm(
+            request.POST,
+            prefix="es",
+            no_restrictions=True,
+            meta_business_unit=self.meta_business_unit,
+        )
+        if dep_profile_form.is_valid() and enrollment_secret_form.is_valid():
+            dep_profile = dep_profile_form.save(commit=False)
+            dep_profile.enrollment_secret = enrollment_secret_form.save()
+            enrollment_secret_form.save_m2m()
+            try:
+                add_dep_profile(dep_profile)
+            except DEPClientError as error:
+                dep_profile_form.add_error(None, str(error))
+            else:
+                return HttpResponseRedirect(dep_profile.get_absolute_url())
+        return self.render_to_response(
+            self.get_context_data(dep_profile_form=dep_profile_form,
+                                  enrollment_secret_form=enrollment_secret_form)
+        )
+
+
+class DEPProfileView(LoginRequiredMixin, DetailView):
+    model = DEPProfile
+
+    def get_queryset(self):
+        return DEPProfile.objects.filter(enrollment_secret__meta_business_unit__pk=self.kwargs["mbu_pk"])
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["mdm"] = True
+        ctx["meta_business_unit"] = self.object.get_meta_business_unit()
+        return ctx
+
+
+class CheckDEPProfileView(LoginRequiredMixin, DetailView):
+    model = DEPProfile
+    template_name = "mdm/depprofile_check.html"
+
+    def get_queryset(self):
+        return DEPProfile.objects.filter(enrollment_secret__meta_business_unit__pk=self.kwargs["mbu_pk"])
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["mdm"] = True
+        ctx["meta_business_unit"] = self.object.get_meta_business_unit()
+        dep_client = DEPClient.from_dep_virtual_server(self.object.virtual_server)
+        ctx["fetched_profile"] = dep_client.get_profile(self.object.uuid)
+        return ctx
+
+
+class UpdateDEPProfileView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/depprofile_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.object = get_object_or_404(
+            DEPProfile,
+            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
+            pk=kwargs["pk"]
+        )
+        self.meta_business_unit = self.object.get_meta_business_unit()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mdm"] = True
+        context["object"] = self.object
+        context["meta_business_unit"] = self.meta_business_unit
+        dep_profile_form = kwargs.get("dep_profile_form")
+        if not dep_profile_form:
+            dep_profile_form = UpdateDEPProfileForm(prefix="dp",
+                                                    instance=self.object)
+        context["dep_profile_form"] = dep_profile_form
+        enrollment_secret_form = kwargs.get("enrollment_secret_form")
+        if not enrollment_secret_form:
+            enrollment_secret_form = EnrollmentSecretForm(
+                prefix="es",
+                instance=self.object.enrollment_secret,
+                no_restrictions=True,
+                meta_business_unit=self.meta_business_unit,
+            )
+        context["enrollment_secret_form"] = enrollment_secret_form
+        return context
+
+    def post(self, request, *args, **kwargs):
+        dep_profile_form = UpdateDEPProfileForm(
+            request.POST,
+            prefix="dp",
+            instance=self.object
+        )
+        enrollment_secret_form = EnrollmentSecretForm(
+            request.POST,
+            prefix="es",
+            instance=self.object.enrollment_secret,
+            no_restrictions=True,
+            meta_business_unit=self.meta_business_unit,
+        )
+        if dep_profile_form.is_valid() and enrollment_secret_form.is_valid():
+            dep_profile = dep_profile_form.save(commit=False)
+            dep_profile.enrollment_secret = enrollment_secret_form.save()
+            enrollment_secret_form.save_m2m()
+            try:
+                add_dep_profile(dep_profile)
+            except DEPClientError as error:
+                dep_profile_form.add_error(None, str(error))
+            else:
+                return HttpResponseRedirect(dep_profile.get_absolute_url())
+        return self.render_to_response(
+            self.get_context_data(dep_profile_form=dep_profile_form,
+                                  enrollment_secret_form=enrollment_secret_form)
+        )
+
 # OTA Enrollments
 
 
 class CreateOTAEnrollmentView(LoginRequiredMixin, TemplateView):
     template_name = "mdm/create_ota_enrollment.html"
-    model = OTAEnrollment
-    fields = ("tags",
-              "serial_numbers", "udids",
-              "quota", "expired_at")
 
     def dispatch(self, request, *args, **kwargs):
         self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
@@ -179,87 +317,6 @@ class RevokeOTAEnrollmentView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         self.ota_enrollment.revoke()
         return HttpResponseRedirect(self.ota_enrollment.get_absolute_url())
-
-
-# Devices
-
-
-class DevicesView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/device_list.html"
-
-    def get(self, request, *args, **kwargs):
-        self.form = DeviceSearchForm(request.GET)
-        self.form.is_valid()
-        self.devices = list(self.form.fetch_devices())
-        if len(self.devices) == 1:
-            return HttpResponseRedirect(reverse("mdm:device", args=(self.devices[0]["serial_number"],)))
-        return super().get(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["mdm"] = True
-        ctx["form"] = self.form
-        ctx["devices"] = self.devices
-        ctx["devices_count"] = len(self.devices)
-        bc = [(None, "MDM")]
-        if not self.form.is_initial():
-            bc.extend([(reverse("mdm:devices"), "Devices"),
-                       (None, "Search")])
-        else:
-            bc.extend([(None, "Devices")])
-        ctx["breadcrumbs"] = bc
-        return ctx
-
-
-class DeviceView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/device_info.html"
-
-    def get_context_data(self, **kwargs):
-        serial_number = kwargs["serial_number"]
-        ctx = super().get_context_data(**kwargs)
-        ctx["mdm"] = True
-        ctx["serial_number"] = serial_number
-        # enrolled devices
-        ctx["enrolled_devices"] = EnrolledDevice.objects.filter(serial_number=serial_number).order_by("-updated_at")
-        ctx["enrolled_devices_count"] = ctx["enrolled_devices"].count()
-        # dep device?
-        try:
-            ctx["dep_device"] = DEPDevice.objects.get(serial_number=serial_number)
-        except DEPDevice.DoesNotExist:
-            pass
-        # dep enrollment sessions
-        ctx["dep_enrollment_sessions"] = DEPEnrollmentSession.objects.filter(
-            enrollment_secret__serial_numbers__contains=[serial_number]
-        ).order_by("-updated_at")
-        ctx["dep_enrollment_sessions_count"] = ctx["dep_enrollment_sessions"].count()
-        # ota enrollment sessions
-        ctx["ota_enrollment_sessions"] = OTAEnrollmentSession.objects.filter(
-            enrollment_secret__serial_numbers__contains=[serial_number]
-        ).order_by("-updated_at")
-        ctx["ota_enrollment_sessions_count"] = ctx["ota_enrollment_sessions"].count()
-        return ctx
-
-
-class PokeEnrolledDeviceView(LoginRequiredMixin, View):
-    def post(self, request, *args, **kwargs):
-        enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
-        send_device_notification(enrolled_device)
-        messages.info(request, "Device poked!")
-        return HttpResponseRedirect(reverse("mdm:device", args=(enrolled_device.serial_number,)))
-
-
-class EnrolledDeviceArtifactsView(LoginRequiredMixin, DetailView):
-    model = EnrolledDevice
-    template_name = "mdm/enrolled_device_artifacts.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        context["installed_device_artifacts"] = sorted(self.object.installeddeviceartifact_set.all(),
-                                                       key=lambda ida: ida.created_at, reverse=True)
-        context["device_artifact_commands"] = sorted(self.object.deviceartifactcommand_set.all(),
-                                                     key=lambda dac: dac.id, reverse=True)
-        return context
 
 
 # kernel extension policies
@@ -476,3 +533,114 @@ class TrashConfigurationProfileView(LoginRequiredMixin, DeleteView):
         self.object.save()
         transaction.on_commit(lambda: send_mbu_device_notifications(self.object.meta_business_unit))
         return HttpResponseRedirect(reverse("mdm:mbu", args=(self.object.meta_business_unit.pk,)))
+
+
+# Devices
+
+
+class DevicesView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/device_list.html"
+
+    def get(self, request, *args, **kwargs):
+        self.form = DeviceSearchForm(request.GET)
+        self.form.is_valid()
+        self.devices = list(self.form.fetch_devices())
+        if len(self.devices) == 1:
+            return HttpResponseRedirect(reverse("mdm:device", args=(self.devices[0]["serial_number"],)))
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["mdm"] = True
+        ctx["form"] = self.form
+        ctx["devices"] = self.devices
+        ctx["devices_count"] = len(self.devices)
+        bc = [(None, "MDM")]
+        if not self.form.is_initial():
+            bc.extend([(reverse("mdm:devices"), "Devices"),
+                       (None, "Search")])
+        else:
+            bc.extend([(None, "Devices")])
+        ctx["breadcrumbs"] = bc
+        return ctx
+
+
+class DeviceView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/device_info.html"
+
+    def get_context_data(self, **kwargs):
+        serial_number = kwargs["serial_number"]
+        ctx = super().get_context_data(**kwargs)
+        ctx["mdm"] = True
+        ctx["serial_number"] = serial_number
+        # enrolled devices
+        ctx["enrolled_devices"] = EnrolledDevice.objects.filter(serial_number=serial_number).order_by("-updated_at")
+        ctx["enrolled_devices_count"] = ctx["enrolled_devices"].count()
+        # dep device?
+        try:
+            ctx["dep_device"] = DEPDevice.objects.get(serial_number=serial_number)
+        except DEPDevice.DoesNotExist:
+            pass
+        # dep enrollment sessions
+        ctx["dep_enrollment_sessions"] = DEPEnrollmentSession.objects.filter(
+            enrollment_secret__serial_numbers__contains=[serial_number]
+        ).order_by("-updated_at")
+        ctx["dep_enrollment_sessions_count"] = ctx["dep_enrollment_sessions"].count()
+        # ota enrollment sessions
+        ctx["ota_enrollment_sessions"] = OTAEnrollmentSession.objects.filter(
+            enrollment_secret__serial_numbers__contains=[serial_number]
+        ).order_by("-updated_at")
+        ctx["ota_enrollment_sessions_count"] = ctx["ota_enrollment_sessions"].count()
+        return ctx
+
+
+class PokeEnrolledDeviceView(LoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
+        send_device_notification(enrolled_device)
+        messages.info(request, "Device poked!")
+        return HttpResponseRedirect(reverse("mdm:device", args=(enrolled_device.serial_number,)))
+
+
+class EnrolledDeviceArtifactsView(LoginRequiredMixin, DetailView):
+    model = EnrolledDevice
+    template_name = "mdm/enrolled_device_artifacts.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mdm"] = True
+        context["installed_device_artifacts"] = sorted(self.object.installeddeviceartifact_set.all(),
+                                                       key=lambda ida: ida.created_at, reverse=True)
+        context["device_artifact_commands"] = sorted(self.object.deviceartifactcommand_set.all(),
+                                                     key=lambda dac: dac.id, reverse=True)
+        return context
+
+
+class AssignDEPDeviceProfileView(LoginRequiredMixin, UpdateView):
+    model = DEPDevice
+    form_class = AssignDEPDeviceProfileForm
+
+    def form_valid(self, form):
+        dep_device = form.save(commit=False)
+        try:
+            assign_dep_device_profile(dep_device, dep_device.profile)
+        except DEPClientError as e:
+            form.add_error(None, str(e))
+            return self.form_invalid(form)
+        else:
+            messages.info(self.request, "Profile {} successfully assigned to device {}.".format(
+                dep_device.profile, dep_device.serial_number
+            ))
+            return HttpResponseRedirect(dep_device.get_absolute_url())
+
+
+class RefreshDEPDeviceView(LoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        dep_device = get_object_or_404(DEPDevice, pk=kwargs["pk"])
+        try:
+            refresh_dep_device(dep_device)
+        except DEPClientError as error:
+            messages.error(request, str(error))
+        else:
+            messages.info(request, "DEP device refreshed")
+        return HttpResponseRedirect("{}#dep_device".format(reverse("mdm:device", args=(dep_device.serial_number,))))

@@ -438,7 +438,7 @@ class DEPProfile(models.Model):
     SKIPPABLE_SETUP_PANE_CHOICES = [(name, name) for name, __ in SKIPPABLE_SETUP_PANES]
 
     # link with the Apple DEP web services
-    virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE, editable=False)
+    virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE)
     uuid = models.UUIDField(unique=True, editable=False)
 
     # standard DEP profile configuration
@@ -477,7 +477,10 @@ class DEPProfile(models.Model):
         return self.name
 
     def get_absolute_url(self):
-        return reverse("mdm:dep_profile", args=(self.pk,))
+        return reverse("mdm:dep_profile", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
+
+    def assigned_devices(self):
+        return self.depdevice_set.exclude(last_op_type=DEPDevice.OP_TYPE_DELETED)
 
     def get_meta_business_unit(self):
         return self.enrollment_secret.meta_business_unit

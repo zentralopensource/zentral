@@ -4,9 +4,10 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
-  <li><a href="{% url 'mdm:dep_profiles' %}">DEP profiles</a></li>
-  <li><a href="{% url 'mdm:dep_profile' object.pk %}">{{ object }}</a></li>
+  <li class="active">MDM</li>
+  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
+  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
+  <li><a href="{{ object.get_absolute_url }}">DEP profile {{ object }}</a></li>
   <li class="active">Check</li>
 </ol>
 

@@ -1,7 +1,6 @@
 import plistlib
 from django import forms
 from django.db import connection
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .models import (DEPDevice, DEPOrganization, DEPProfile, DEPToken, DEPVirtualServer,
@@ -188,13 +187,7 @@ class EncryptedDEPTokenForm(forms.ModelForm):
         return dep_token
 
 
-class DEPProfileForm(forms.ModelForm):
-    meta_business_unit = forms.ModelChoiceField(
-        label="Business unit",
-        queryset=MetaBusinessUnit.objects.available_for_api_enrollment(),
-        required=True
-    )
-
+class CreateDEPProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for pane, initial in self.Meta.model.SKIPPABLE_SETUP_PANES:
@@ -226,12 +219,15 @@ class DEPProfileForm(forms.ModelForm):
         kwargs["commit"] = False
         dep_profile = super().save(**kwargs)
         dep_profile.skip_setup_items = self.cleaned_data["skip_setup_items"]
-        dep_profile.enrollment_secret = EnrollmentSecret.objects.create(
-            meta_business_unit=self.cleaned_data["meta_business_unit"]
-        )
         if commit:
             dep_profile.save()
         return dep_profile
+
+
+class UpdateDEPProfileForm(CreateDEPProfileForm):
+    class Meta:
+        model = DEPProfile
+        exclude = ("virtual_server",)
 
 
 class AssignDEPDeviceProfileForm(forms.ModelForm):

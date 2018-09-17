@@ -50,9 +50,6 @@ urlpatterns = [
     url(r'^dep/virtual-servers/(?P<pk>\d+)/$',
         views.DEPVirtualServerView.as_view(),
         name="dep_virtual_server"),
-    url(r'^dep/virtual-servers/(?P<pk>\d+)/profiles/create/$',
-        views.CreateDEPProfileView.as_view(),
-        name="create_dep_profile"),
 
     # DEP devices / setup views
     url(r'^dep/devices/(?P<pk>\d+)/assign_profile/$',
@@ -66,15 +63,6 @@ urlpatterns = [
     url(r'^dep/profiles/$',
         views.DEPProfilesView.as_view(),
         name='dep_profiles'),
-    url(r'^dep/profiles/(?P<pk>\d+)/$',
-        views.DEPProfileView.as_view(),
-        name='dep_profile'),
-    url(r'^dep/profiles/(?P<pk>\d+)/check/$',
-        views.CheckDEPProfileView.as_view(),
-        name='check_dep_profile'),
-    url(r'^dep/profiles/(?P<pk>\d+)/update/$',
-        views.UpdateDEPProfileView.as_view(),
-        name='update_dep_profile'),
 
     # kernel extensions / setup views
     url(r'^kernel_extensions/$',
@@ -99,6 +87,34 @@ urlpatterns = [
         views.MetaBusinessUnitDetailView.as_view(),
         name='mbu'),
 
+    # business units / dep profiles
+    url(r'^business_units/(?P<pk>\d+)/dep_profiles/create/$',
+        views.CreateDEPProfileView.as_view(),
+        name="create_dep_profile"),
+    url(r'^business_units/(?P<mbu_pk>\d+)/dep_profiles/(?P<pk>\d+)/$',
+        views.DEPProfileView.as_view(),
+        name='dep_profile'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/dep_profiles/(?P<pk>\d+)/check/$',
+        views.CheckDEPProfileView.as_view(),
+        name='check_dep_profile'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/dep_profiles/(?P<pk>\d+)/update/$',
+        views.UpdateDEPProfileView.as_view(),
+        name='update_dep_profile'),
+
+    # business units / ota enrollments
+    url(r'^business_units/(?P<pk>\d+)/ota_enrollments/create/$',
+        views.CreateOTAEnrollmentView.as_view(),
+        name='create_ota_enrollment'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/$',
+        views.OTAEnrollmentView.as_view(),
+        name='ota_enrollment'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/download/$',
+        views.DownloadProfileServicePayloadView.as_view(),
+        name='download_profile_service_payload'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/revoke/$',
+        views.RevokeOTAEnrollmentView.as_view(),
+        name='revoke_ota_enrollment'),
+
     # business_units / management views / kernel extension policies
     url(r'^business_units/(?P<pk>\d+)/kernel_extensions_policies/create/$',
         views.CreateKernelExtensionPolicyView.as_view(),
@@ -112,19 +128,6 @@ urlpatterns = [
     url(r'^business_units/(?P<mbu_pk>\d+)/kernel_extensions_policies/(?P<pk>\d+)/trash/$',
         views.TrashKernelExtensionPolicyView.as_view(),
         name="trash_kernel_extension_policy"),
-
-    url(r'^business_units/(?P<pk>\d+)/ota_enrollments/create/$',
-        views.CreateOTAEnrollmentView.as_view(),
-        name='create_ota_enrollment'),
-    url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/$',
-        views.OTAEnrollmentView.as_view(),
-        name='ota_enrollment'),
-    url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/download/$',
-        views.DownloadProfileServicePayloadView.as_view(),
-        name='download_profile_service_payload'),
-    url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/revoke/$',
-        views.RevokeOTAEnrollmentView.as_view(),
-        name='revoke_ota_enrollment'),
 
     # business_units / management views / enrollment packages
     url(r'^business_units/(?P<pk>\d+)/enrollment_packages/create/$',
