@@ -34,18 +34,6 @@ urlpatterns = [
     url(r'^enrollment/ota/$',
         views.OTAEnrollmentListView.as_view(),
         name='ota_enrollments'),
-    url(r'^enrollment/ota/create/$',
-        views.CreateOTAEnrollmentView.as_view(),
-        name='create_ota_enrollment'),
-    url(r'^enrollment/ota/(?P<pk>\d+)/$',
-        views.OTAEnrollmentView.as_view(),
-        name='ota_enrollment'),
-    url(r'^enrollment/ota/(?P<pk>\d+)/download/$',
-        views.DownloadProfileServicePayloadView.as_view(),
-        name='download_profile_service_payload'),
-    url(r'^enrollment/ota/(?P<pk>\d+)/revoke/$',
-        views.RevokeOTAEnrollmentView.as_view(),
-        name='revoke_ota_enrollment'),
 
     # DEP tokens / setup views
     url(r'^dep/tokens/(?P<pk>\d+)/download_public_key/$',
@@ -110,6 +98,8 @@ urlpatterns = [
     url(r'^business_units/(?P<pk>\d+)/$',
         views.MetaBusinessUnitDetailView.as_view(),
         name='mbu'),
+
+    # business_units / management views / kernel extension policies
     url(r'^business_units/(?P<pk>\d+)/kernel_extensions_policies/create/$',
         views.CreateKernelExtensionPolicyView.as_view(),
         name="create_kernel_extension_policy"),
@@ -122,12 +112,29 @@ urlpatterns = [
     url(r'^business_units/(?P<mbu_pk>\d+)/kernel_extensions_policies/(?P<pk>\d+)/trash/$',
         views.TrashKernelExtensionPolicyView.as_view(),
         name="trash_kernel_extension_policy"),
+
+    url(r'^business_units/(?P<pk>\d+)/ota_enrollments/create/$',
+        views.CreateOTAEnrollmentView.as_view(),
+        name='create_ota_enrollment'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/$',
+        views.OTAEnrollmentView.as_view(),
+        name='ota_enrollment'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/download/$',
+        views.DownloadProfileServicePayloadView.as_view(),
+        name='download_profile_service_payload'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/revoke/$',
+        views.RevokeOTAEnrollmentView.as_view(),
+        name='revoke_ota_enrollment'),
+
+    # business_units / management views / enrollment packages
     url(r'^business_units/(?P<pk>\d+)/enrollment_packages/create/$',
         views.CreateEnrollmentPackageView.as_view(),
         name="create_enrollment_package"),
     url(r'^business_units/(?P<mbu_pk>\d+)/enrollment_packages/(?P<pk>\d+)/trash/$',
         views.TrashEnrollmentPackageView.as_view(),
         name="trash_enrollment_package"),
+
+    # business_units / management views / configuration profiles
     url(r'^business_units/(?P<pk>\d+)/configuration_profiles/upload/$',
         views.UploadConfigurationProfileView.as_view(),
         name="upload_configuration_profile"),

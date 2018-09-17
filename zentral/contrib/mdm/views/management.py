@@ -1,6 +1,7 @@
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
+from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
 from django.db.models import Count
 from django.http import Http404, HttpResponseRedirect
@@ -11,12 +12,16 @@ from django.views.generic import CreateView, DeleteView, DetailView, FormView, T
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.events import send_device_notification, send_mbu_device_notifications
-from zentral.contrib.mdm.forms import DeviceSearchForm, UploadConfigurationProfileForm
+from zentral.contrib.mdm.forms import (DeviceSearchForm,
+                                       OTAEnrollmentForm,
+                                       UploadConfigurationProfileForm)
 from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate,
                                         EnrolledDevice,
                                         DEPDevice, DEPEnrollmentSession, DEPProfile,
                                         OTAEnrollment, OTAEnrollmentSession,
                                         KernelExtensionPolicy, MDMEnrollmentPackage, ConfigurationProfile)
+from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
+                                          build_profile_service_configuration_profile)
 from zentral.utils.osx_package import get_standalone_package_builders
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
@@ -68,6 +73,112 @@ class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
                                                                                      trashed_at__isnull=True)
                                                                              .order_by("payload_description", "pk"))
         return context
+
+
+# OTA Enrollments
+
+
+class CreateOTAEnrollmentView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/create_ota_enrollment.html"
+    model = OTAEnrollment
+    fields = ("tags",
+              "serial_numbers", "udids",
+              "quota", "expired_at")
+
+    def dispatch(self, request, *args, **kwargs):
+        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mdm"] = True
+        context["meta_business_unit"] = self.meta_business_unit
+        ota_enrollment_form = kwargs.get("ota_enrollment_form")
+        if not ota_enrollment_form:
+            ota_enrollment_form = OTAEnrollmentForm(prefix="oe")
+        context["ota_enrollment_form"] = ota_enrollment_form
+        enrollment_secret_form = kwargs.get("enrollment_secret_form")
+        if not enrollment_secret_form:
+            enrollment_secret_form = EnrollmentSecretForm(
+                prefix="es",
+                meta_business_unit=self.meta_business_unit,
+            )
+        context["enrollment_secret_form"] = enrollment_secret_form
+        return context
+
+    def post(self, request, *args, **kwargs):
+        ota_enrollment_form = OTAEnrollmentForm(request.POST, prefix="oe")
+        enrollment_secret_form = EnrollmentSecretForm(
+            request.POST,
+            prefix="es",
+            meta_business_unit=self.meta_business_unit,
+        )
+        if ota_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
+            ota_enrollment = ota_enrollment_form.save(commit=False)
+            ota_enrollment.enrollment_secret = enrollment_secret_form.save()
+            enrollment_secret_form.save_m2m()
+            ota_enrollment.save()
+            return HttpResponseRedirect(ota_enrollment.get_absolute_url())
+        else:
+            return self.render_to_response(
+                self.get_context_data(ota_enrollment_form=ota_enrollment_form,
+                                      enrollment_secret_form=enrollment_secret_form)
+            )
+
+
+class OTAEnrollmentView(LoginRequiredMixin, DetailView):
+    template_name = "mdm/ota_enrollment.html"
+    model = OTAEnrollment
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["mdm"] = True
+        ctx["meta_business_unit"] = ctx["object"].enrollment_secret.meta_business_unit
+        # TODO: pagination
+        ctx["ota_enrollment_sessions"] = (ctx["object"].otaenrollmentsession_set.all()
+                                                       .select_related("enrollment_secret")
+                                                       .order_by("-created_at"))
+        ctx["ota_enrollment_sessions_count"] = ctx["ota_enrollment_sessions"].count()
+        return ctx
+
+
+class DownloadProfileServicePayloadView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        ota_enrollment = get_object_or_404(
+            OTAEnrollment,
+            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
+            pk=kwargs["pk"]
+        )
+        if not ota_enrollment.enrollment_secret.is_valid():
+            # should not happen
+            raise SuspiciousOperation
+        return build_configuration_profile_response(
+            build_profile_service_configuration_profile(ota_enrollment),
+            "zentral_profile_service"
+        )
+
+
+class RevokeOTAEnrollmentView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/revoke_ota_enrollment.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.ota_enrollment = get_object_or_404(
+            OTAEnrollment,
+            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
+            pk=kwargs["pk"]
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["mdm"] = True
+        ctx["ota_enrollment"] = self.ota_enrollment
+        ctx["meta_business_unit"] = self.ota_enrollment.enrollment_secret.meta_business_unit
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        self.ota_enrollment.revoke()
+        return HttpResponseRedirect(self.ota_enrollment.get_absolute_url())
 
 
 # Devices

@@ -209,7 +209,7 @@ class OTAEnrollment(models.Model):
         return {"ota_enrollment": d}
 
     def get_absolute_url(self):
-        return reverse("mdm:ota_enrollment", args=(self.pk,))
+        return reverse("mdm:ota_enrollment", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
 
     def revoke(self):
         if not self.enrollment_secret.revoked_at:

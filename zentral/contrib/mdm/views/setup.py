@@ -1,7 +1,6 @@
 import logging
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
@@ -10,15 +9,14 @@ from zentral.contrib.mdm.dep import (add_dep_token_certificate, add_dep_profile,
                                      refresh_dep_device)
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DEPProfileForm, EncryptedDEPTokenForm,
-                                       OTAEnrollmentForm, OTAEnrollmentSecretForm, PushCertificateForm,
+                                       PushCertificateForm,
                                        AddPushCertificateBusinessUnitForm)
 from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate, PushCertificate,
                                         DEPDevice, DEPProfile, DEPToken, DEPVirtualServer,
                                         KernelExtensionTeam, KernelExtension,
                                         OTAEnrollment)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
-                                          build_root_ca_configuration_profile,
-                                          build_profile_service_configuration_profile)
+                                          build_root_ca_configuration_profile)
 
 logger = logging.getLogger('zentral.contrib.mdm.views.setup')
 
@@ -123,88 +121,6 @@ class OTAEnrollmentListView(LoginRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
         return ctx
-
-
-class CreateOTAEnrollmentView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/create_ota_enrollment.html"
-    model = OTAEnrollment
-    fields = ("meta_business_unit", "tags",
-              "serial_numbers", "udids",
-              "quota", "expired_at")
-
-    def get_context_data(self, **kwargs):
-        ota_enrollment_form = kwargs.get("ota_enrollment_form")
-        if not ota_enrollment_form:
-            ota_enrollment_form = OTAEnrollmentForm(prefix="oe")
-        ota_enrollment_secret_form = kwargs.get("ota_enrollment_secret_form")
-        if not ota_enrollment_secret_form:
-            ota_enrollment_secret_form = OTAEnrollmentSecretForm(prefix="oes")
-        return {"setup": True,
-                "ota_enrollment_form": ota_enrollment_form,
-                "ota_enrollment_secret_form": ota_enrollment_secret_form}
-
-    def post(self, request, *args, **kwargs):
-        ota_enrollment_form = OTAEnrollmentForm(request.POST, prefix="oe")
-        ota_enrollment_secret_form = OTAEnrollmentSecretForm(request.POST, prefix="oes")
-        if ota_enrollment_form.is_valid() and ota_enrollment_secret_form.is_valid():
-            ota_enrollment = ota_enrollment_form.save(commit=False)
-            ota_enrollment.enrollment_secret = ota_enrollment_secret_form.save()
-            ota_enrollment.save()
-            return HttpResponseRedirect(reverse("mdm:ota_enrollment",
-                                                args=(ota_enrollment.pk,)))
-        else:
-            return self.render_to_response(
-                self.get_context_data(ota_enrollment_form=ota_enrollment_form,
-                                      ota_enrollment_secret_form=ota_enrollment_secret_form)
-            )
-
-    def form_valid(self, form):
-        ota_enrollment = form.save(commit=False)
-        ota_enrollment.save()
-        return HttpResponseRedirect(ota_enrollment.get_absolute_url())
-
-
-class OTAEnrollmentView(LoginRequiredMixin, DetailView):
-    template_name = "mdm/ota_enrollment.html"
-    model = OTAEnrollment
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        # TODO: pagination
-        ctx["ota_enrollment_sessions"] = (ctx["object"].otaenrollmentsession_set.all()
-                                                       .select_related("enrollment_secret")
-                                                       .order_by("-created_at"))
-        ctx["ota_enrollment_sessions_count"] = ctx["ota_enrollment_sessions"].count()
-        return ctx
-
-
-class DownloadProfileServicePayloadView(LoginRequiredMixin, View):
-    def get(self, request, *args, **kwargs):
-        ota_enrollment = get_object_or_404(OTAEnrollment, pk=kwargs["pk"])
-        if not ota_enrollment.enrollment_secret.is_valid():
-            # should not happen
-            raise SuspiciousOperation
-        return build_configuration_profile_response(build_profile_service_configuration_profile(ota_enrollment),
-                                                    "zentral_profile_service")
-
-
-class RevokeOTAEnrollmentView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/revoke_ota_enrollment.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.ota_enrollment = get_object_or_404(OTAEnrollment, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        ctx["ota_enrollment"] = self.ota_enrollment
-        return ctx
-
-    def post(self, request, *args, **kwargs):
-        self.ota_enrollment.revoke()
-        return HttpResponseRedirect(self.ota_enrollment.get_absolute_url())
 
 
 # DEP Tokens

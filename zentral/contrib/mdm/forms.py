@@ -16,18 +16,6 @@ class OTAEnrollmentForm(forms.ModelForm):
         fields = ("name",)
 
 
-class OTAEnrollmentSecretForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["meta_business_unit"].queryset = MetaBusinessUnit.objects.filter(
-            metabusinessunitpushcertificate__isnull=False
-        )
-
-    class Meta:
-        model = EnrollmentSecret
-        fields = ("meta_business_unit", "tags", "serial_numbers", "udids", "quota")
-
-
 class PushCertificateForm(forms.ModelForm):
     certificate_file = forms.FileField(required=True)
     password = forms.CharField(widget=forms.PasswordInput, required=False)

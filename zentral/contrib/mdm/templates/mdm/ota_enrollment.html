@@ -4,23 +4,24 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
-  <li><a href="{% url 'mdm:ota_enrollments' %}">OTA MDM enrollments</a></li>
-  <li class="active">{{ object.name }}</li>
+  <li class="active">MDM</li>
+  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
+  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
+  <li class="active">OTA enrollment {{ object.name }}</li>
 </ol>
 
-<h2>OTA MDM enrollment <i>{{ object.name }}</i></h2>
+<h2>OTA enrollment <i>{{ object.name }}</i></h2>
 
 {% with object.enrollment_secret as secret %}
 <p>
   <a class="btn btn-default"
-     href="{% url 'mdm:download_profile_service_payload' object.id %}">
+     href="{% url 'mdm:download_profile_service_payload' meta_business_unit.id object.id %}">
     <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
     Profile service payload
   </a>
   {% if secret.is_valid|first %}
   <a class="btn btn-danger"
-     href="{% url 'mdm:revoke_ota_enrollment' object.id %}">
+     href="{% url 'mdm:revoke_ota_enrollment' meta_business_unit.id object.id %}">
     <span class="glyphicon glyphicon-remove-circle" aria-hidden="true"></span>
     Revoke
   </a>
@@ -35,7 +36,7 @@
       <dd>{{ object.name }}</dd>
       <dt>Business unit</dt>
       <dd><a href="{% url 'mdm:mbu' secret.meta_business_unit.id %}">{{ secret.meta_business_unit }}</a></dd>
-      <dt>Tags</dt>
+      <dt>Enrollment tags</dt>
       <dd>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</dd>
       <dt>Serial number{{ secret.serial_numbers|length|pluralize }}</dt>
       <dd>{% for serial_number in secret.serial_numbers %}<a href="{% url 'mdm:device' serial_number %}">{{ serial_number }}</a>{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</dd>
@@ -46,17 +47,23 @@
   <div class="col-md-6">
     <dl class="dl-horizontal">
       <dt>Request count</dt>
-      <dd class="{% if secret.is_used_up %}bg-danger{% else %}bg-success{% endif %}">{{ secret.request_count }}{% if secret.quota %}/{{ secret.quota }}{% endif %}</dd>
+      <dd class="{% if secret.is_used_up %}bg-danger{% else %}bg-success{% endif %}">
+        {{ secret.request_count }}{% if secret.quota %}/{{ secret.quota }}{% endif %}
+      </dd>
       <dt>Expired</dt>
-      <dd class="{% if secret.is_expired %}bg-danger{% else %}bg-success{% endif %}">{{ secret.expired_at|date:"r"|default:"-" }}</dd>
+      <dd class="{% if secret.is_expired %}bg-danger{% else %}bg-success{% endif %}">
+        {{ secret.expired_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
+      </dd>
       <dt>Revoked</dt>
-      <dd class="{% if secret.is_revoked %}bg-danger{% else %}bg-success{% endif %}">{{ secret.revoked_at|date:"r"|default:"-" }}</dd>
+      <dd class="{% if secret.is_revoked %}bg-danger{% else %}bg-success{% endif %}">
+        {{ secret.revoked_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
+      </dd>
     </dl>
   </div>
   <div class="col-md-12">
     <dl class="dl-horizontal">
       <dt class="small" style="opacity:0.5">Created at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
     </dl>
   </div>
 </div>
@@ -76,8 +83,8 @@
     <tr>
       <td><a href="{% url 'mdm:device' s.get_serial_number %}">{{ s.get_serial_number }}</a></td>
       <td>{{ s.get_status_display }}</td>
-      <td>{{ s.created_at }}</td>
-      <td>{{ s.updated_at }}</td>
+      <td>{{ s.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ s.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
     {% endfor %}
   </tbody>

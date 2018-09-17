@@ -4,20 +4,20 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
-  <li><a href="{% url 'mdm:ota_enrollments' %}">OTA MDM enrollments</a></li>
-  <li><a href="{% url 'mdm:ota_enrollment' ota_enrollment.pk %}">{{ ota_enrollment.name }}</a></li>
+  <li class="active">MDM</li>
+  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
+  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
+  <li><a href="{{ ota_enrollment.get_absolute_url }}">OTA enrollment {{ ota_enrollment }}</a></li>
   <li class="active">revoke</li>
 </ol>
 
-<h2>Revoke OTA MDM enrollment <i>{{ ota_enrollment.name }}</i></h2>
+<h2>Revoke OTA enrollment <i>{{ ota_enrollment }}</i></h2>
 
 <form method="POST">{% csrf_token %}
   <p>Do you really want to revoke this enrollment?</p>
   <p>
-    <a class="btn btn-default" href="{% url 'mdm:ota_enrollment' ota_enrollment.pk %}">Cancel</a>
+    <a class="btn btn-default" href="{{ ota_enrollment.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Yes</button>
   </p>
 </form>
-
 {% endblock %}
