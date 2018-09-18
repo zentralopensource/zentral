@@ -76,10 +76,12 @@
       <td class="col-md-2 {% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
       <td class="col-md-2">{{ ota_enrollment.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td class="col-md-1">
+        {% if is_valid %}
         <a class="btn btn-default"
            href="{% url 'mdm:download_profile_service_payload' object.pk ota_enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
         </a>
+        {% endif %}
       </td>
     </tr>
     {% endwith %}
