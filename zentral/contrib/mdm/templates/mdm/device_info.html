@@ -95,7 +95,7 @@
   <tbody>
     {% for dep_enrollment_session in dep_enrollment_sessions %}
     <tr>
-      <td><a href="{% url 'mdm:dep_profile' dep_enrollment_session.dep_profile.id %}">{{ dep_enrollment_session.dep_profile }}</a></td>
+      <td><a href="{{ dep_enrollment_session.dep_profile.get_absolute_url }}">{{ dep_enrollment_session.dep_profile }}</a></td>
       <td>{{ dep_enrollment_session.get_status_display }}</td>
       <td>{{ dep_enrollment_session.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>{{ dep_enrollment_session.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
@@ -118,7 +118,7 @@
   <tbody>
     {% for ota_enrollment_session in ota_enrollment_sessions %}
     <tr>
-      <td><a href="{% url 'mdm:ota_enrollment' ota_enrollment_session.ota_enrollment.id %}">{{ ota_enrollment_session.ota_enrollment }}</a></td>
+      <td><a href="{{ ota_enrollment_session.ota_enrollment.get_absolute_url }}">{{ ota_enrollment_session.ota_enrollment }}</a></td>
       <td>{{ ota_enrollment_session.get_status_display }}</td>
       <td>{{ ota_enrollment_session.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>{{ ota_enrollment_session.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
