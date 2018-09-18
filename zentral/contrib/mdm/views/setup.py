@@ -113,7 +113,10 @@ class RemovePushCertificateBusinessUnitView(LoginRequiredMixin, View):
 
 
 class OTAEnrollmentListView(LoginRequiredMixin, ListView):
-    model = OTAEnrollment
+    def get_queryset(self):
+        return (OTAEnrollment.objects.select_related("enrollment_secret__meta_business_unit")
+                                     .order_by("name")
+                                     .all())
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -143,9 +146,19 @@ class DownloadDEPTokenPublicKeyView(LoginRequiredMixin, View):
 class DEPVirtualServersView(LoginRequiredMixin, ListView):
     model = DEPVirtualServer
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        return context
+
 
 class ConnectDEPVirtualServerView(LoginRequiredMixin, View):
     template_name = "mdm/depvirtualserver_connect.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        return context
 
     def get_or_create_current_dep_token(self, request):
         self.current_dep_token = None
@@ -205,13 +218,24 @@ class ConnectDEPVirtualServerView(LoginRequiredMixin, View):
 class DEPVirtualServerView(LoginRequiredMixin, DetailView):
     model = DEPVirtualServer
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        return context
 
 # DEP profiles
 
 
 class DEPProfilesView(LoginRequiredMixin, ListView):
-    model = DEPProfile
+    def get_queryset(self):
+        return (DEPProfile.objects.select_related("enrollment_secret__meta_business_unit")
+                                  .order_by("name")
+                                  .all())
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
 
 # Kernel extensions
 

@@ -23,7 +23,7 @@
     {% with ota_enrollment.enrollment_secret.is_valid|last as err_msg %}
     <tr>
       <td><a href="{{ ota_enrollment.get_absolute_url }}">{{ ota_enrollment.name }}</a></td>
-      <td><a href="{% url 'inventory:mbu_machines' ota_enrollment.enrollment_secret.meta_business_unit.id %}">{{ ota_enrollment.enrollment_secret.meta_business_unit }}</a></td>
+      <td><a href="{% url 'mdm:mbu' ota_enrollment.enrollment_secret.meta_business_unit.id %}">{{ ota_enrollment.enrollment_secret.meta_business_unit }}</a></td>
       <td class="{% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
       <td>{{ ota_enrollment.created_at }}</td>
     </tr>
