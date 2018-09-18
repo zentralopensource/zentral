@@ -22,20 +22,21 @@
 {% if dep_profile_list %}
 <table class="table">
   <thead>
-    <th>Name</th>
-    <th>Enrollment tags</th>
-    <th>Assigned devices</th>
-    <th>Created at</th>
+    <th class="col-md-4">Name</th>
+    <th class="col-md-3">Enrollment tags</th>
+    <th class="col-md-2">Assigned devices</th>
+    <th class="col-md-2">Created at</th>
+    <th class="col-md-1"></th>
   </thead>
   <tbody>
     {% for dep_profile in dep_profile_list %}
     {% with dep_profile.enrollment_secret as enrollment_secret %}
     <tr>
-      <td class="col-md-4"><a href="{{ dep_profile.get_absolute_url }}">{{ dep_profile }}</a></td>
-      <td class="col-md-3">
+      <td><a href="{{ dep_profile.get_absolute_url }}">{{ dep_profile }}</a></td>
+      <td>
         {% for tag in enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}
       </td>
-      <td class="col-md-2">{{ dep_profile.assigned_devices.count }}</td>
+      <td>{{ dep_profile.assigned_devices.count }}</td>
       <td>{{ dep_profile.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>
       </td>
@@ -57,11 +58,11 @@
 {% if ota_enrollment_list %}
 <table class="table">
   <thead>
-    <th>Name</th>
-    <th>Enrollment tags</th>
-    <th>Validity</th>
-    <th>Created at</th>
-    <th></th>
+    <th class="col-md-4">Name</th>
+    <th class="col-md-3">Enrollment tags</th>
+    <th class="col-md-2">Validity</th>
+    <th class="col-md-2">Created at</th>
+    <th class="col-md-1"></th>
   </thead>
   <tbody>
     {% for ota_enrollment in ota_enrollment_list %}
@@ -69,13 +70,13 @@
     {% with enrollment_secret.is_valid|first as is_valid %}
     {% with enrollment_secret.is_valid|last as err_msg %}
     <tr>
-      <td class="col-md-4"><a href="{{ ota_enrollment.get_absolute_url }}">{{ ota_enrollment.name }}</a></td>
-      <td class="col-md-3">
+      <td><a href="{{ ota_enrollment.get_absolute_url }}">{{ ota_enrollment.name }}</a></td>
+      <td>
         {% for tag in enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}
       </td>
-      <td class="col-md-2 {% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
-      <td class="col-md-2">{{ ota_enrollment.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-      <td class="col-md-1">
+      <td class="{% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
+      <td>{{ ota_enrollment.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>
         {% if is_valid %}
         <a class="btn btn-default"
            href="{% url 'mdm:download_profile_service_payload' object.pk ota_enrollment.id %}">
@@ -105,15 +106,19 @@
 {% if kext_policy_list %}
 <table class="table">
   <thead>
-    <th>Identifier</th>
-    <th>Version</th>
-    <th>Updated at</th>
-    <th></th>
+    <th class="col-md-8">Identifier</th>
+    <th class="col-md-1">Version</th>
+    <th class="col-md-2">Updated at</th>
+    <th class="col-md-1"></th>
   </thead>
   <tbody>
     {% for kext_policy in kext_policy_list %}
     <tr>
-      <td><a name="kext_policy_{{ kext_policy.id }}" href="{{ kext_policy.get_absolute_url }}">{{ kext_policy }}</a></td>
+      <td>
+        <a name="kext_policy_{{ kext_policy.id }}" href="{{ kext_policy.get_absolute_url }}">
+          {{ kext_policy }}
+        </a>
+      </td>
       <td>{{ kext_policy.version }}</td>
       <td>{{ kext_policy.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>
@@ -147,10 +152,10 @@
 {% if enrollment_package_list %}
 <table class="table">
   <thead>
-    <th>Description</th>
-    <th>Request count</th>
-    <th>Created at</th>
-    <th></th>
+    <th class="col-md-7">Description</th>
+    <th class="col-md-2">Request count</th>
+    <th class="col-md-2">Created at</th>
+    <th class="col-md-1"></th>
   </thead>
   <tbody>
     {% for enrollment_package in enrollment_package_list %}
@@ -189,26 +194,29 @@
 {% if configuration_profile_list %}
 <table class="table">
   <thead>
-    <th>Source ID</th>
-    <th>Name</th>
-    <th>Version</th>
-    <th>Payloads</th>
-    <th>Created at</th>
-    <th></th>
+    <th class="col-md-4">Name</th>
+    <th class="col-md-4">Payloads</th>
+    <th class="col-md-1">Version</th>
+    <th class="col-md-2">Created at</th>
+    <th class="col-md-1"></th>
   </thead>
   <tbody>
     {% for configuration_profile in configuration_profile_list %}
     <tr>
-      <td>{{ configuration_profile.source_payload_identifier }}</td>
-      <td>{{ configuration_profile.payload_display_name|default:"-" }}</td>
-      <td>{{ configuration_profile.version }}</td>
       <td>
-        <ul>
+        <b>ID:</b> {{ configuration_profile.source_payload_identifier }}<br>
+        {% if configuration_profile.payload_display_name %}
+        {{ configuration_profile.payload_display_name }}
+        {% endif %}
+      </td>
+      <td>
+        <ul class="list-unstyled">
           {% for payload_type, payload_name, payload in configuration_profile.get_payloads %}
-          <li>{{ payload_type }}{% if payload_name %} - {{ payload_name }}{% endif %}</li>
+          <li><code>{{ payload_type }}</code>{% if payload_name %} - {{ payload_name }}{% endif %}</li>
           {% endfor %}
         </ul>
       </td>
+      <td>{{ configuration_profile.version }}</td>
       <td>{{ configuration_profile.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>
         <a class="btn btn-danger" href="{% url 'mdm:trash_configuration_profile' object.pk configuration_profile.pk %}">
