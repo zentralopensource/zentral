@@ -620,6 +620,11 @@ class AssignDEPDeviceProfileView(LoginRequiredMixin, UpdateView):
     model = DEPDevice
     form_class = AssignDEPDeviceProfileForm
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["mdm"] = True
+        return context
+
     def form_valid(self, form):
         dep_device = form.save(commit=False)
         try:

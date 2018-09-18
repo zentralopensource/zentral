@@ -43,8 +43,8 @@
           {% endfor %}
         </ul>
         {% endif %}
-      <td>{{ device.created_at|date:"r" }}</td>
-      <td>{{ device.updated_at|date:"r" }}</td>
+      <td>{{ device.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
     {% endfor %}
   </tbody>

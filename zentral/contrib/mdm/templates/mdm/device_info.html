@@ -48,6 +48,7 @@
 <a name="dep_device"></a>
 <h3>DEP Device{% if dep_device.is_deleted %} <span class="label label-danger">DELETED</span>{% endif %}</h3>
 
+{% if not dep_device.is_deleted %}
 <form action="{% url 'mdm:refresh_dep_device' dep_device.pk %}" method="post">{% csrf_token %}
   <a href="{% url 'mdm:assign_dep_device_profile' dep_device.pk %}" class="btn btn-default">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
@@ -56,6 +57,7 @@
     <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
   </button>
 </form>
+{% endif %}
 
 <dl class="dl-horizontal">
   <dt>Virtual server</dt>
@@ -77,7 +79,7 @@
   <dt>Profile assign time</dt>
   <dd>{{ dep_device.profile_assign_time|date:"SHORT_DATETIME_FORMAT" }}</dd>
   <dt>Profile push time</dt>
-  <dd>{{ dep_device.profile_push_time|date:"SHORT_DATETIME_FORMAT" }}</dd>
+  <dd>{{ dep_device.profile_push_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</dd>
 </dl>
 {% endif %}
 
@@ -87,16 +89,18 @@
 {% if dep_enrollment_sessions_count %}
 <table class="table">
   <thead>
-    <th>profile</th>
-    <th>status</th>
-    <th>created at</th>
-    <th>updated at</th>
+    <th class="col-md-6">profile</th>
+    <th class="col-md-2">status</th>
+    <th class="col-md-2">created at</th>
+    <th class="col-md-2">updated at</th>
   </thead>
   <tbody>
     {% for dep_enrollment_session in dep_enrollment_sessions %}
     <tr>
       <td><a href="{{ dep_enrollment_session.dep_profile.get_absolute_url }}">{{ dep_enrollment_session.dep_profile }}</a></td>
-      <td>{{ dep_enrollment_session.get_status_display }}</td>
+      <td class="{% if dep_enrollment_session.is_completed %}bg-success{% else %}bg-warning{% endif %}">
+        {{ dep_enrollment_session.get_status_display }}
+      </td>
       <td>{{ dep_enrollment_session.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>{{ dep_enrollment_session.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
@@ -110,16 +114,18 @@
 {% if ota_enrollment_sessions_count %}
 <table class="table">
   <thead>
-    <th>ota enrollment</th>
-    <th>status</th>
-    <th>created at</th>
-    <th>updated at</th>
+    <th class="col-md-6">ota enrollment</th>
+    <th class="col-md-2">status</th>
+    <th class="col-md-2">created at</th>
+    <th class="col-md-2">updated at</th>
   </thead>
   <tbody>
     {% for ota_enrollment_session in ota_enrollment_sessions %}
     <tr>
       <td><a href="{{ ota_enrollment_session.ota_enrollment.get_absolute_url }}">{{ ota_enrollment_session.ota_enrollment }}</a></td>
-      <td>{{ ota_enrollment_session.get_status_display }}</td>
+      <td class="{% if ota_enrollment_session.is_completed %}bg-success{% else %}bg-warning{% endif %}">
+        {{ ota_enrollment_session.get_status_display }}
+      </td>
       <td>{{ ota_enrollment_session.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>{{ ota_enrollment_session.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
