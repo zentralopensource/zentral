@@ -21,6 +21,17 @@
   </a>
 </p>
 
+<h3>DEP virtual server</h3>
+
+{% with object.virtual_server as virtual_server %}
+<dl class="dl-horizontal">
+  <dt>Virtal server</dt>
+  <dd><a href="{{ virtual_server.get_absolute_url }}">{{ virtual_server }}</a> / {{ virtual_server.uuid }}</dd>
+  <dt>Organization</dt>
+  <dd>{{ virtual_server.organization }}</dd>
+</dl>
+{% endwith %}
+
 <div class="row">
   <div class="col-md-4">
     <h3>Org info</h3>
@@ -93,7 +104,7 @@
             {% endif %}
           </td>
           <td>{{ device.profile_status }}</td>
-          <td>{{ device.profile_assign_time|date:"SHORT_DATETIME_FORMAT" }}</td>
+          <td>{{ device.profile_assign_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
           <td>{{ device.profile_push_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
         </tr>
         {% endfor %}
