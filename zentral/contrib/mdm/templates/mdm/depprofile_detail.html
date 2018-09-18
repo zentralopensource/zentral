@@ -71,33 +71,37 @@
 <div class="row">
   <div class="col-md-12">
     {% with object.depdevice_set.count as device_count %}
+    {% with object.assigned_devices.count as assigned_device_count %}
 
-    <h3>Assigned to {{ device_count }} device{{ device_count|pluralize }}</h3>
+    <h3>Assigned to {{ assigned_device_count }} device{{ assigned_device_count|pluralize }} ({{ device_count }} total)</h3>
 
     {% if device_count %}
     <table class="table">
       <thead>
-        <th>Serial number</th>
-        <th>Profile status</th>
-        <th>Profile assign time</th>
-        <th>Profile push time</th>
+        <th class="col-md-4">Serial number</th>
+        <th class="col-md-4">Profile status</th>
+        <th class="col-md-2">Profile assign time</th>
+        <th class="col-md-2">Profile push time</th>
       </thead>
       <tbody>
         {% for device in object.depdevice_set.all %}
         <tr>
           <td>
-            <a name="{{ device.serial_number }}"></a>
-            <a href="{{ device.get_absolute_url }}">{{ device.serial_number }}</a>
+            <a name="{{ device.serial_number }}" href="{{ device.get_absolute_url }}">{{ device.serial_number }}</a>
+            {% if device.is_deleted %}
+            <span class="label label-danger">DELETED</span>
+            {% endif %}
           </td>
           <td>{{ device.profile_status }}</td>
-          <td>{{ device.profile_assign_time|date:"r" }}</td>
-          <td>{{ device.profile_push_time|date:"r" }}</td>
+          <td>{{ device.profile_assign_time|date:"SHORT_DATETIME_FORMAT" }}</td>
+          <td>{{ device.profile_push_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% endif %}
 
+    {% endwith %}
     {% endwith %}
   </div>
 </div>
