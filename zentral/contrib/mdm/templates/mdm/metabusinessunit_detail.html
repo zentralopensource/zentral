@@ -152,9 +152,10 @@
 {% if enrollment_package_list %}
 <table class="table">
   <thead>
-    <th class="col-md-7">Description</th>
+    <th class="col-md-6">Description</th>
     <th class="col-md-2">Request count</th>
-    <th class="col-md-2">Created at</th>
+    <th class="col-md-1">Version</th>
+    <th class="col-md-2">Updated at</th>
     <th class="col-md-1"></th>
   </thead>
   <tbody>
@@ -167,8 +168,9 @@
         <a href="{{ enrollment.get_absolute_url }}">{{ enrollment.get_description_for_distributor }}</a>
       </td>
       <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
+      <td>{{ enrollment_package.version }}</td>
       <td>
-        {{ enrollment_package.created_at|date:"SHORT_DATETIME_FORMAT" }}
+        {{ enrollment_package.updated_at|date:"SHORT_DATETIME_FORMAT" }}
       </td>
       <td>
         <a class="btn btn-danger" href="{% url 'mdm:trash_enrollment_package' object.pk enrollment_package.pk %}">
@@ -197,7 +199,7 @@
     <th class="col-md-4">Name</th>
     <th class="col-md-4">Payloads</th>
     <th class="col-md-1">Version</th>
-    <th class="col-md-2">Created at</th>
+    <th class="col-md-2">Updated at</th>
     <th class="col-md-1"></th>
   </thead>
   <tbody>
@@ -217,7 +219,7 @@
         </ul>
       </td>
       <td>{{ configuration_profile.version }}</td>
-      <td>{{ configuration_profile.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ configuration_profile.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>
         <a class="btn btn-danger" href="{% url 'mdm:trash_configuration_profile' object.pk configuration_profile.pk %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
