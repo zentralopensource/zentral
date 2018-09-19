@@ -15,6 +15,17 @@
 
 <h2>{% if object %}Update{% else %}Create{% endif %} Tag</h2>
 <form method="POST" class="form">{% csrf_token %}
+  {% if object %}
+  <dl>
+    <dt>Taxonomy</dt>
+    <dd>{{ object.taxonomy|default:"-" }}</dd>
+    <dt>Meta business unit</dt>
+    <dd>{{ object.meta_business_unit|default:"-" }}</dd>
+  </dl>
+  {% else %}
+  {{ form.taxonomy|bootstrap }}
+  {{ form.meta_business_unit|bootstrap }}
+  {% endif %}
   {{ form.name|bootstrap }}
   <div class="form-group">
     <label for="id_color">{{ form.color.label|title }}</label>

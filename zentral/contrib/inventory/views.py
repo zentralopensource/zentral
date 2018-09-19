@@ -12,11 +12,12 @@ from zentral.conf import settings
 from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
+                    CreateTagForm,
                     MacOSAppSearchForm)
 from .models import (BusinessUnit,
                      MetaBusinessUnit, MachineGroup,
                      MachineSnapshot, MetaMachine,
-                     MetaBusinessUnitTag, MachineTag, Tag,
+                     MetaBusinessUnitTag, MachineTag, Tag, Taxonomy,
                      OSXApp, OSXAppInstance)
 from .utils import (get_prometheus_inventory_metrics,
                     mbu_dashboard_bundle_data, mbu_dashboard_machine_data,
@@ -615,19 +616,20 @@ TAG_COLOR_PRESETS = {
 }
 
 
-class TagsView(LoginRequiredMixin, ListView):
-    model = Tag
+class TagsView(LoginRequiredMixin, TemplateView):
+    template_name = "inventory/tag_index.html"
 
     def get_context_data(self, **kwargs):
         ctx = super(TagsView, self).get_context_data(**kwargs)
         ctx['inventory'] = True
+        ctx['tag_list'] = list(Tag.objects.all())
+        ctx['taxonomy_list'] = list(Taxonomy.objects.all())
         return ctx
 
 
 class CreateTagView(LoginRequiredMixin, CreateView):
-    template_name = "inventory/edit_tag.html"
     model = Tag
-    fields = ('name', 'color')
+    form_class = CreateTagForm
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -640,7 +642,6 @@ class CreateTagView(LoginRequiredMixin, CreateView):
 
 
 class UpdateTagView(LoginRequiredMixin, UpdateView):
-    template_name = "inventory/edit_tag.html"
     model = Tag
     fields = ('name', 'color')
 
@@ -660,6 +661,42 @@ class DeleteTagView(LoginRequiredMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         ctx = super(DeleteTagView, self).get_context_data(**kwargs)
+        ctx['links'] = self.object.links()
+        return ctx
+
+
+class CreateTaxonomyView(LoginRequiredMixin, CreateView):
+    model = Taxonomy
+    fields = ('meta_business_unit', 'name')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['inventory'] = True
+        return ctx
+
+    def get_success_url(self):
+        return reverse('inventory:tags')
+
+
+class UpdateTaxonomyView(LoginRequiredMixin, UpdateView):
+    model = Taxonomy
+    fields = ('name',)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['inventory'] = True
+        return ctx
+
+    def get_success_url(self):
+        return reverse('inventory:tags')
+
+
+class DeleteTaxonomyView(LoginRequiredMixin, DeleteView):
+    model = Taxonomy
+    success_url = reverse_lazy("inventory:tags")
+
+    def get_context_data(self, **kwargs):
+        ctx = super(DeleteTaxonomyView, self).get_context_data(**kwargs)
         ctx['links'] = self.object.links()
         return ctx
 

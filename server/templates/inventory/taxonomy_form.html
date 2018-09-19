@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'inventory:tags' %}">Inventory tags</a>
+  {% if object %}
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a>
+  <li class="active">Update</li>
+  {% else %}
+  <li class="active">Create</li>
+  {% endif %}
+</ol>
+
+<h2>{% if object %}Update{% else %}Create{% endif %} Taxonomy</h2>
+<form method="post" class="form">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    <a href="{% url 'inventory:tags' %}" class="btn btn-default">Cancel</a>
+    <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Create{% endif %}</button>
+  </p>
+</form>
+{% endblock %}

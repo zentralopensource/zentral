@@ -92,6 +92,21 @@ class MBUAPIEnrollmentForm(forms.ModelForm):
         return self.instance
 
 
+class CreateTagForm(forms.ModelForm):
+    class Meta:
+        model = Tag
+        fields = ("meta_business_unit", "taxonomy", "name", "color")
+
+    def clean(self):
+        super().clean()
+        taxonomy = self.cleaned_data["taxonomy"]
+        meta_business_unit = self.cleaned_data["meta_business_unit"]
+        if taxonomy and taxonomy.meta_business_unit and meta_business_unit \
+           and taxonomy.meta_business_unit != meta_business_unit:
+            self.add_error("meta_business_unit", "Should be either the taxonomy business unit or left empty")
+        return self.cleaned_data
+
+
 class AddTagForm(forms.Form):
     existing_tag = forms.ModelChoiceField(label="existing tag", queryset=Tag.objects.none(), required=False)
     new_tag_name = forms.CharField(label="new tag name", max_length=50, required=False)

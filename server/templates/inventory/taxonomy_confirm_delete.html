@@ -4,13 +4,13 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'inventory:tags' %}">Inventory tags</a>
-  <li class="active">Delete tag {{ object }}</li>
+  <li class="active">Delete taxonomy {{ object }}</li>
 </ol>
 
-<h2>Delete tag {{ object }}</h2>
+<h2>Delete taxonomy {{ object }}</h2>
 
 {% if links %}
-<p>This tag is used:</p>
+<p>This taxonomy is used:</p>
 <ul>
 {% for label, link in object.links %}
 <li>
@@ -24,7 +24,7 @@
 </ul>
 {% endif %}
 
-<p>Do you really want to delete this tag ?</p>
+<p>Do you really want to delete this taxonomy ?</p>
 <form method="POST">{% csrf_token %}
   <a href="{% url 'inventory:tags' %}" class="btn btn-default">Cancel</a>
   <button type="submit" class="btn btn-danger">Delete</button>

@@ -2,7 +2,7 @@ from collections import namedtuple
 
 
 RelatedObjects = namedtuple('RelatedObjects',
-                            ["name", "concrete", "to_name", "to_model", "objects"])
+                            ["name", "concrete", "to_name", "to_model", "objects", "objects_count"])
 
 
 def find_all_related_objects(obj):
@@ -19,12 +19,12 @@ def find_all_related_objects(obj):
         if field.many_to_one:
             related_obj = getattr(obj, field.name)
             if related_obj is not None:
-                t.append([related_obj])
+                t.extend([[related_obj], 1])
             else:
                 continue
         elif field.one_to_one:
             try:
-                t.append([getattr(obj, field.name)])
+                t.extend([[getattr(obj, field.name)], 1])
             except field.field.model.DoesNotExist:
                 continue
         else:
@@ -33,8 +33,9 @@ def find_all_related_objects(obj):
                 qs = getattr(obj, field.name)
             else:
                 qs = getattr(obj, field.get_accessor_name())
-            if not qs.count():
+            objects_count = qs.count()
+            if not objects_count:
                 continue
             else:
-                t.append(qs.all())
+                t.extend([qs.all(), objects_count])
         yield RelatedObjects._make(t)

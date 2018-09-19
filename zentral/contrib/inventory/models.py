@@ -98,7 +98,7 @@ class MetaBusinessUnit(models.Model):
 
     def can_be_deleted(self):
         for related_objects in find_all_related_objects(self):
-            if len(related_objects.objects):
+            if related_objects.objects_count:
                 if related_objects.name == "businessunit":
                     # OK to delete if all the business units can be deleted
                     for bu in related_objects.objects:
@@ -248,12 +248,12 @@ class OSVersion(AbstractMTObject):
     build = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        l = [self.get_number_display()]
+        items = [self.get_number_display()]
         if self.name:
-            l.insert(0, self.name)
+            items.insert(0, self.name)
         if self.build:
-            l.append("({})".format(self.build))
-        return " ".join(l)
+            items.append("({})".format(self.build))
+        return " ".join(items)
 
     def get_number_display(self):
         return ".".join((str(i) for i in (self.major, self.minor, self.patch) if i is not None))
@@ -557,6 +557,43 @@ class CurrentMachineSnapshot(models.Model):
         unique_together = ('serial_number', 'source')
 
 
+class Taxonomy(models.Model):
+    """A bag of tags, can be restricted to a MBU"""
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True)
+    name = models.CharField(max_length=256, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        if self.meta_business_unit:
+            return "{}/{}".format(self.meta_business_unit, self.name)
+        else:
+            return self.name
+
+    class Meta:
+        ordering = ("meta_business_unit__name", "name")
+
+    def links(self):
+        known_models = {
+            Tag: ("tag", "tags", None)  # TODO: filter?
+        }
+        link_list = []
+        for related_objects in find_all_related_objects(self):
+            if related_objects.name == "meta_business_unit":
+                continue
+            if related_objects.objects_count:
+                if related_objects.to_model in known_models:
+                    label, label_plural, url = known_models[related_objects.to_model]
+                    link_list.append(("{} {}".format(related_objects.objects_count,
+                                                     label if related_objects.objects_count == 1 else label_plural),
+                                      url))
+                else:
+                    link_list.append(("{} {}".format(related_objects.objects_count,
+                                                     related_objects.name),
+                                      None))
+        return link_list
+
+
 class TagManager(models.Manager):
     def available_for_meta_business_unit(self, meta_business_unit):
         return self.filter(Q(meta_business_unit=meta_business_unit) | Q(meta_business_unit__isnull=True))
@@ -593,6 +630,7 @@ def validate_color(value):
 
 
 class Tag(models.Model):
+    taxonomy = models.ForeignKey(Taxonomy, blank=True, null=True)
     meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True)
     name = models.CharField(max_length=50, unique=True)
     slug = models.SlugField(unique=True)
@@ -603,6 +641,8 @@ class Tag(models.Model):
     objects = TagManager()
 
     def __str__(self):
+        if self.taxonomy:
+            return "{}: {}".format(self.taxonomy, self.name)
         if self.meta_business_unit:
             return "{}/{}".format(self.meta_business_unit, self.name)
         else:
@@ -632,18 +672,28 @@ class Tag(models.Model):
         return self.color.upper() in ['FFFFFF', 'FFF']
 
     def links(self):
-        l = []
-        for model, label, attribute, base_url in ((MachineTag,
-                                                   "machines", "tag",
-                                                   reverse("inventory:index")),
-                                                  (MetaBusinessUnitTag,
-                                                   "business units", "tag",
-                                                   reverse("inventory:mbu"))):
-            obj_count = model.objects.filter(**{attribute: self.id}).count()
-            if obj_count:
-                l.append(("{} {}".format(obj_count, label),
-                          "{}?tag={}".format(base_url, self.id)))
-        return l
+        known_models = {
+            EnrollmentSecret: ("enrollment secret", "enrollment secrets", None),
+            MachineTag: ("machine", "machines",
+                         "{}?tag={}".format(reverse("inventory:index"), self.id)),
+            MetaBusinessUnitTag: ("business unit", "business units",
+                                  "{}?tag={}".format(reverse("inventory:mbu"), self.id))
+        }
+        link_list = []
+        for related_objects in find_all_related_objects(self):
+            if related_objects.name in ("taxonomy", "meta_business_unit"):
+                continue
+            if related_objects.objects_count:
+                if related_objects.to_model in known_models:
+                    label, label_plural, url = known_models[related_objects.to_model]
+                    link_list.append(("{} {}".format(related_objects.objects_count,
+                                                     label if related_objects.objects_count == 1 else label_plural),
+                                      url))
+                else:
+                    link_list.append(("{} {}".format(related_objects.objects_count,
+                                                     related_objects.name),
+                                      None))
+        return link_list
 
 
 class MachineTag(models.Model):
@@ -743,11 +793,17 @@ class MetaMachine(object):
     @cached_property
     def tags_with_types(self):
         tags = [('machine', mt.tag)
-                for mt in MachineTag.objects.select_related('tag').filter(
-                    serial_number=self.serial_number
-                )]
+                for mt in (MachineTag.objects.select_related('tag',
+                                                             'tag__meta_business_unit',
+                                                             'tag__taxonomy',
+                                                             'tag__taxonomy__meta_business_unit')
+                                             .filter(serial_number=self.serial_number))]
         tags.extend(('meta_business_unit', mbut.tag)
-                    for mbut in MetaBusinessUnitTag.objects.filter(meta_business_unit__in=self.meta_business_units))
+                    for mbut in (MetaBusinessUnitTag.objects.select_related('tag',
+                                                                            'tag__meta_business_unit',
+                                                                            'tag__taxonomy',
+                                                                            'tag__taxonomy__meta_business_unit')
+                                                            .filter(meta_business_unit__in=self.meta_business_units)))
         tags.sort(key=lambda t: (t[1].meta_business_unit is None, str(t[1]).upper()))
         return tags
 
