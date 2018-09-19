@@ -483,6 +483,9 @@ class EnrollmentForm(forms.ModelForm):
         if self.meta_business_unit:
             self.fields["manifest"].widget = forms.HiddenInput()
             self.fields["manifest"].required = False
+            self.fields["taxonomies"].queryset = self.fields["taxonomies"].queryset.filter(
+                meta_business_unit=self.meta_business_unit
+            )
 
         # munki release
         choices = []

@@ -23,6 +23,9 @@ urlpatterns = [
     # enrollment endpoint called by the postinstall script
     url(r'^enroll/$', csrf_exempt(views.EnrollView.as_view()),
         name='enroll'),
+    # registration endpoint called by the munki preflight or the run_once.py script
+    url(r'^register/$', csrf_exempt(views.RegisterView.as_view()),
+        name='register'),
 
     # pkg infos
     url(r'^pkg_infos/$', views.PkgInfosView.as_view(), name='pkg_infos'),

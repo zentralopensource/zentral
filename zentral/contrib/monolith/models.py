@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.conf import settings
-from zentral.contrib.inventory.models import BaseEnrollment, MetaBusinessUnit, Tag
+from zentral.contrib.inventory.models import BaseEnrollment, MetaBusinessUnit, Tag, Taxonomy
 from .conf import monolith_conf
 from .utils import build_manifest_enrollment_package, make_printer_package_info
 
@@ -1021,6 +1021,11 @@ class Enrollment(BaseEnrollment):
     manifest = models.ForeignKey(Manifest, on_delete=models.CASCADE)
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
     munki_release = models.CharField(max_length=64, blank=True, null=False)
+    # taxonomies here, to be able to prompt for extra tags during the enrollment
+    taxonomies = models.ManyToManyField(
+        Taxonomy, blank=True,
+        help_text="The user will be asked to pick a tag of each one of the selected taxonomies during the enrollment."
+    )
 
     def get_description_for_distributor(self):
         return "Monolith manifest {}, configuration {}".format(self.manifest, self.configuration)
@@ -1038,9 +1043,14 @@ class Enrollment(BaseEnrollment):
     def get_absolute_url(self):
         return "{}#enrollment_{}".format(reverse("monolith:manifest", args=(self.manifest.pk,)), self.pk)
 
+    def has_registration_steps(self):
+        return self.taxonomies.count() > 0
+
 
 class EnrolledMachine(models.Model):
     enrollment = models.ForeignKey(Enrollment)
     serial_number = models.TextField(db_index=True)
     token = models.CharField(max_length=64, unique=True)
+    registered = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    registered_at = models.DateTimeField(blank=True, null=True)

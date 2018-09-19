@@ -15,6 +15,14 @@ class MonolithEnrollmentEvent(BaseEvent):
 register_event_type(MonolithEnrollmentEvent)
 
 
+class MonolithRegistrationEvent(BaseEvent):
+    event_type = "monolith_registration"
+    tags = ["monolith"]
+
+
+register_event_type(MonolithRegistrationEvent)
+
+
 class MonolithMunkiRequestEvent(BaseEvent):
     event_type = "monolith_munki_request"
     tags = ["monolith", "heartbeat"]
@@ -108,3 +116,7 @@ def post_monolith_repository_updates(repository, payloads, request=None):
 
 def post_monolith_enrollment_event(msn, user_agent, ip, data):
     MonolithEnrollmentEvent.post_machine_request_payloads(msn, user_agent, ip, [data])
+
+
+def post_monolith_registration_event(msn, user_agent, ip, data):
+    MonolithRegistrationEvent.post_machine_request_payloads(msn, user_agent, ip, [data])

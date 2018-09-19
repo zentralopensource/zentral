@@ -894,8 +894,14 @@ class EnrollmentSecretManager(models.Manager):
 
 class EnrollmentSecret(models.Model):
     secret = models.CharField(max_length=256, unique=True)
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit)
-    tags = models.ManyToManyField(Tag, blank=True)
+    meta_business_unit = models.ForeignKey(
+        MetaBusinessUnit,
+        help_text="The business unit the machine will be assigned to at enrollment"
+    )
+    tags = models.ManyToManyField(
+        Tag, blank=True,
+        help_text="The tags that the machine will get at enrollment"
+    )
     serial_numbers = ArrayField(models.TextField(), blank=True, null=True)
     udids = ArrayField(models.TextField(), blank=True, null=True)
     quota = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1),

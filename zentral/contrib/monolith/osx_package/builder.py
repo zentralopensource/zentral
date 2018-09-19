@@ -41,8 +41,6 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         return self.name
 
     def extra_build_steps(self):
-        postinstall_script = self.get_build_path("scripts", "postinstall")
-
         # setup script
         setup_script_path = ""
         setup_script = self.build_kwargs.get("setup_script")
@@ -64,12 +62,13 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         else:
             include_depnotify = 0
 
-        # EULA
+        # depnotify / EULA
         eula = self.build_kwargs.get("eula")
         if eula:
             self.create_file_with_content_string("Users/Shared/eula.txt", eula)
 
-        self.replace_in_file(postinstall_script,
+        # postinstall script
+        self.replace_in_file(self.get_build_path("scripts", "postinstall"),
                              (("%SETUP_SCRIPT_PATH%", setup_script_path),
                               ("%SOFTWARE_REPO_URL%", software_repo_url),
                               ("%ENROLLMENT_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
@@ -77,7 +76,6 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
                               ("%TLS_CA_CERT%", self.include_tls_ca_cert()),
                               ("%INCLUDE_DEPNOTIFY%", str(include_depnotify)),
                               ("%DEPNOTIFY_COMMANDS%", self.build_kwargs.get("depnotify_commands") or "")))
-        setup_script = self.build_kwargs.get("setup_script")
 
     def extra_product_archive_build_steps(self, pa_builder):
         no_restart = self.build_kwargs.get("no_restart")

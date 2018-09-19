@@ -3,10 +3,12 @@
 from SystemConfiguration import SCDynamicStoreCopyConsoleUser
 import subprocess
 import os
+import plistlib
 import time
 
 CAFFEINATE = "/usr/bin/caffeinate"
 MANAGED_SOFTWARE_UPDATE = "/usr/local/munki/managedsoftwareupdate"
+MAX_REGISTRATION_WAIT = 7200  # 2 hours
 
 # munki daemons
 MUNKI_DAEMONS_CONFIG_FILES = [
@@ -22,6 +24,8 @@ DEPNOTIFY_CONTROL_FILE = "/var/tmp/depnotify.log"
 DEPNOTIFY_QUIT_COMMAND = "Command: Quit"
 DEPNOTIFY_LAUNCH_AGENT_PLIST = "/Library/LaunchAgents/io.zentral.monolith.depnotify.plist"
 DEPNOTIFY_APP_DIR = "/Applications/Utilities/DEPNotify.app"
+DEPNOTIFY_CONFIG_SOURCE_PATH = "/usr/local/zentral/monolith/menu.nomad.DEPNotify.plist"
+DEPNOTIFY_REGISTRATION_DATA_PATH = "/Users/Shared/DEPNotify.plist"
 
 
 def get_console_user():
@@ -47,8 +51,30 @@ def do_munki_run():
     args = [MANAGED_SOFTWARE_UPDATE, "-a"]
     if os.path.isfile(CAFFEINATE) and os.access(CAFFEINATE, os.X_OK):
         args[0:0] = [CAFFEINATE, "-dium"]
-    print " ".join(args)
     subprocess.call(args)
+
+
+def register():
+    """Wait for the DEPNotify registration data and post them.
+
+    returns a boolean to indicate if a new munki run is needed.
+    """
+    if not os.path.exists(DEPNOTIFY_CONFIG_SOURCE_PATH):
+        # no form configured for this run.
+        # do not wait, do not trigger another munki run.
+        return False
+    start_t = time.time()
+    while time.time() - start_t < MAX_REGISTRATION_WAIT:
+        if os.path.exists(DEPNOTIFY_REGISTRATION_DATA_PATH):
+            registration_data = plistlib.readPlist(DEPNOTIFY_REGISTRATION_DATA_PATH)
+            # get the token
+            # post the data
+            # remove the depnotify config if registered = true in the response
+            do_munki_run = True  # get the value from the HTTP json response
+            return do_munki_run
+        else:
+            time.sleep(5)
+    return False
 
 
 def cleanup_depnotify():
@@ -77,4 +103,8 @@ if __name__ == "__main__":
     launch_depnotify()
     launch_munki_daemons()
     do_munki_run()
+    if register():
+        # do another munki run after the registration if the server tells us to do it.
+        # we may have tagged the machine and unlock the access to extra software.
+        do_munki_run()
     cleanup_depnotify()

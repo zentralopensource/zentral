@@ -26,9 +26,11 @@ DEPNOTIFY_COMMANDS = """%DEPNOTIFY_COMMANDS%"""
 # the two plists
 DEFAULT_PLIST = "/Library/Preferences/ManagedInstalls.plist"
 ROOT_PLIST = "/var/root{}".format(DEFAULT_PLIST)
+
 INCLUDE_DEPNOTIFY = "%INCLUDE_DEPNOTIFY%"
 DEPNOTIFY_LAUNCH_AGENT_PLIST = "/Library/LaunchAgents/io.zentral.monolith.depnotify.plist"
 DEPNOTIFY_CONTROL_FILE = "/var/tmp/depnotify.log"
+DEPNOTIFY_CONFIG_SOURCE_PATH = "/usr/local/zentral/monolith/menu.nomad.DEPNotify.plist"
 
 # munki daemons
 MUNKI_DAEMONS_CONFIG_FILES = [
@@ -63,7 +65,8 @@ def enroll(serial_number, uuid):
                        "serial_number": serial_number,
                        "uuid": uuid})
     resp = urllib2.urlopen(req, data=data, context=ctx)
-    return json.load(resp)["token"]
+    resp_data = json.load(resp)
+    return (resp_data["token"], resp_data.get("taxonomies", []))
 
 
 def update_root_prefs(serial_number, token):
@@ -100,13 +103,35 @@ def include_depnotify():
     return int(INCLUDE_DEPNOTIFY) == 1
 
 
-def configure_depnotify_commands():
-    if DEPNOTIFY_COMMANDS:
-        with open(DEPNOTIFY_CONTROL_FILE, "wb") as f:
-            f.write(DEPNOTIFY_COMMANDS)
+def configure_depnotify(taxonomies):
+    # plist (copied in place by run_once.py)
+    depnotify_config = {}
+    for menu_item_placement, taxonomy in zip(("Upper", "Lower"), taxonomies):
+        # select box name
+        depnotify_config["UIPopUpMenu{}Label".format(menu_item_placement)] = taxonomy["name"]
+        # select box choices
+        depnotify_config["UIPopUpMenu{}".format(menu_item_placement)] = taxonomy["tags"]
+    if depnotify_config:
+        plistlib.writePlist(depnotify_config, DEPNOTIFY_CONFIG_SOURCE_PATH)
+    elif os.path.exists(DEPNOTIFY_CONFIG_SOURCE_PATH):
+        os.unlink(DEPNOTIFY_CONFIG_SOURCE_PATH)
+
+    # commands
+    depnotify_commands = [l.strip() for l in DEPNOTIFY_COMMANDS.splitlines()]
+    if depnotify_config:
+        if not any("ContinueButtonRegister" in l for l in depnotify_commands):
+            depnotify_commands.append("Command: ContinueButtonRegister: Register")
+    else:
+        depnotify_commands = [l for l in DEPNOTIFY_COMMANDS if "ContinueButtonRegister" not in l]
+    with open(DEPNOTIFY_CONTROL_FILE, "wb") as f:
+        f.write("\n".join(depnotify_commands))
 
 
 def cleanup_depnotify():
+    # config
+    if os.path.exists(DEPNOTIFY_CONFIG_SOURCE_PATH):
+        os.unlink(DEPNOTIFY_CONFIG_SOURCE_PATH)
+    # launch agent
     if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST):
         subprocess.call(["/bin/launchctl", "unload", DEPNOTIFY_LAUNCH_AGENT_PLIST])
         os.unlink(DEPNOTIFY_LAUNCH_AGENT_PLIST)
@@ -115,11 +140,11 @@ def cleanup_depnotify():
 if __name__ == "__main__":
     execute_setup_script()
     serial_number, uuid = get_serial_number_and_uuid()
-    token = enroll(serial_number, uuid)
+    token, taxonomies = enroll(serial_number, uuid)
     update_root_prefs(serial_number, token)
     sync_prefs()
-    launch_run_once()
     if include_depnotify():
-        configure_depnotify_commands()
+        configure_depnotify(taxonomies)
     else:
         cleanup_depnotify()
+    launch_run_once()

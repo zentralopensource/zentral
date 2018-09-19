@@ -1,6 +1,7 @@
 from itertools import chain
 import json
 import logging
+import dateutil.parser
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.core.urlresolvers import reverse_lazy
@@ -9,20 +10,21 @@ from django.http import (FileResponse,
                          HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect,
                          JsonResponse)
 from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
-from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine, Tag
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.utils.api_views import (APIAuthError, make_secret, verify_secret,
                                      SignedRequestHeaderJSONPostAPIView)
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import (post_monolith_cache_server_update_request,
-                     post_monolith_enrollment_event,
+                     post_monolith_enrollment_event, post_monolith_registration_event,
                      post_monolith_munki_request, post_monolith_repository_updates,
                      post_monolith_sync_catalogs_request)
 from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
@@ -124,24 +126,81 @@ class EnrollView(View):
                 "monolith_enrollment", secret,
                 user_agent, ip, serial_number, uuid
             )
-        except (KeyError, ValueError, EnrollmentSecretVerificationFailed):
+        except (KeyError, ValueError, EnrollmentSecretVerificationFailed) as e:
             raise SuspiciousOperation
-        else:
-            # get or create enrolled machine
-            enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.get_or_create(
-                enrollment=es_request.enrollment_secret.monolith_enrollment,
-                serial_number=serial_number,
-                defaults={"token": get_random_string(64)}
-            )
+        enrollment = es_request.enrollment_secret.monolith_enrollment
+        # get or create enrolled machine
+        enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.get_or_create(
+            enrollment=enrollment,
+            serial_number=serial_number,
+            defaults={"token": get_random_string(64)}
+        )
 
-            # apply enrollment secret tags
-            for tag in es_request.enrollment_secret.tags.all():
-                MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
+        # apply enrollment secret tags
+        for tag in es_request.enrollment_secret.tags.all():
+            MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
 
-            # post event
-            post_monolith_enrollment_event(serial_number, user_agent, ip,
-                                           {'action': "enrollment" if enrolled_machine_created else "re-enrollment"})
-        return JsonResponse({"token": enrolled_machine.token})
+        action = "enrollment" if enrolled_machine_created else "re-enrollment"
+        post_monolith_enrollment_event(serial_number, user_agent, ip, {'action': action})
+
+        response_d = {"token": enrolled_machine.token,
+                      "action": action}
+        if enrollment.has_registration_steps() and not enrolled_machine.registered:
+            taxonomies = []
+            for taxonomy in enrollment.taxonomies.all():
+                taxonomies.append({"name": taxonomy.name,
+                                   "tags": [t["name"] for t in taxonomy.tag_set.values("name").order_by("name")]})
+            response_d["taxonomies"] = taxonomies
+        return JsonResponse(response_d)
+
+
+class RegisterView(View):
+    def post(self, request, *args, **kwargs):
+        user_agent, ip = user_agent_and_ip_address_from_request(request)
+        try:
+            token = request.META['HTTP_X_MONOLITH_TOKEN'].strip()
+        except (KeyError, AttributeError, EnrolledMachine.DoesNotExist):
+            raise PermissionDenied("Could not read token header")
+        try:
+            enrolled_machine = EnrolledMachine.objects.select_related("enrollment").get(token=token)
+        except EnrolledMachine.DoesNotExist:
+            raise PermissionDenied("Invalid token")
+        try:
+            request_json = json.loads(request.body.decode("utf-8"))
+        except (KeyError, ValueError):
+            raise SuspiciousOperation("Posted json data invalid")
+        registered = True
+        trigger_munki_run = False
+        tags = {}
+        for taxonomy in enrolled_machine.enrollment.taxonomies.all():
+            try:
+                tag_name = request_json[taxonomy.name]
+            except KeyError:
+                registered = False
+                # missing tag
+                continue
+            try:
+                tag = taxonomy.tag_set.get(name=tag_name)
+            except Tag.DoesNotExists:
+                registered = False
+                # unknown answer
+                continue
+            tags[taxonomy.name] = tag.name
+            _, tag_created = MachineTag.objects.get_or_create(serial_number=enrolled_machine.serial_number, tag=tag)
+            if tag_created:
+                trigger_munki_run = True
+        if registered:
+            try:
+                registered_at = dateutil.parser.parse(request_json["registration_date"])
+            except KeyError:
+                registered_at = timezone.now()
+            enrolled_machine.registered = True
+            enrolled_machine.registered_at = registered_at
+            enrolled_machine.save()
+        post_monolith_registration_event(enrolled_machine.serial_number, user_agent, ip,
+                                         {'registered': registered, 'tags': tags})
+        return JsonResponse({"do_munki_run": trigger_munki_run,
+                             "registered": registered})
 
 
 # pkg infos
@@ -810,10 +869,12 @@ class AddManifestEnrollmentView(LoginRequiredMixin, TemplateView):
 
     def forms_valid(self, secret_form, enrollment_form):
         secret = secret_form.save()
+        secret_form.save_m2m()
         enrollment = enrollment_form.save(commit=False)
         enrollment.secret = secret
         enrollment.manifest = self.manifest
         enrollment.save()
+        enrollment_form.save_m2m()
         return HttpResponseRedirect(enrollment.get_absolute_url())
 
     def post(self, request, *args, **kwargs):
