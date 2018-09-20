@@ -139,6 +139,7 @@ class CreateSimpleMDMAppView(LoginRequiredMixin, TemplateView):
     def forms_valid(self, secret_form, enrollment_form):
         # make secret
         secret = secret_form.save()
+        secret_form.save_m2m()
         # make enrollment
         enrollment = enrollment_form.save(commit=False)
         enrollment.version = 0

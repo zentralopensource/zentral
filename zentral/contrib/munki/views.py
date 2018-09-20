@@ -64,6 +64,7 @@ class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
 
     def forms_valid(self, secret_form, enrollment_form):
         secret = secret_form.save()
+        secret_form.save_m2m()
         enrollment = enrollment_form.save(commit=False)
         enrollment.secret = secret
         enrollment.save()
