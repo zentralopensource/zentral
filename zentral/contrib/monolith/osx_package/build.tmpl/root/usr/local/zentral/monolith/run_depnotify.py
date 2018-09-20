@@ -14,7 +14,8 @@ DEPNOTIFY_CONFIG_DEST_PATH = "~/Library/Preferences/menu.nomad.DEPNotify.plist"
 def copy_depnotify_configuration():
     if os.path.exists(DEPNOTIFY_CONFIG_SOURCE_PATH):
         try:
-            shutil.copy(DEPNOTIFY_CONFIG_SOURCE_PATH, DEPNOTIFY_CONFIG_DEST_PATH)
+            shutil.copy(DEPNOTIFY_CONFIG_SOURCE_PATH,
+                        os.path.expanduser(DEPNOTIFY_CONFIG_DEST_PATH))
         except Exception:
             print "Could not copy DEPNotify configuration"
     elif os.path.exists(DEPNOTIFY_CONFIG_DEST_PATH):
