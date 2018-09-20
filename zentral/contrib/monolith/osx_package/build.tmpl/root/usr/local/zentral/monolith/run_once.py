@@ -126,13 +126,12 @@ def register():
 def cleanup_depnotify():
     # write the quit command
     if os.path.exists(DEPNOTIFY_CONTROL_FILE):
-        last_line_quit = False
         with open(DEPNOTIFY_CONTROL_FILE, "r") as f:
-            for line in f.readlines():
-                last_line_quit = line.startswith(DEPNOTIFY_QUIT_COMMAND)
-        if not last_line_quit:
-            with open(DEPNOTIFY_CONTROL_FILE, "a") as f:
-                f.write("{}\n".format(DEPNOTIFY_QUIT_COMMAND))
+            command_lines = [l.strip() for l in f.readlines()]
+        if not command_lines or not command_lines[-1].startswith(DEPNOTIFY_QUIT_COMMAND):
+            command_lines.append(DEPNOTIFY_QUIT_COMMAND)
+        with open(DEPNOTIFY_CONTROL_FILE, "w") as f:
+            f.write("\n".join(command_lines))
     # remove the launch agent
     if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST):
         subprocess.call(["/bin/launchctl", "unload", DEPNOTIFY_LAUNCH_AGENT_PLIST])
