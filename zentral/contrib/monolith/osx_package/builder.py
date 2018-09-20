@@ -48,34 +48,40 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
             setup_script_path = "/usr/local/zentral/monolith/setup_script"
             self.create_file_with_content_string(setup_script_path[1:], setup_script, executable=True)
 
-        # software_repo_url
+        # depnotify / EULA
+        eula = self.build_kwargs.get("eula")
+        if eula:
+            self.create_file_with_content_string("Users/Shared/eula.txt", eula)
+
+        tls_ca_cert = self.include_tls_ca_cert()
+
+        # postinstall script / enrollment
+        enrollment_url = "https://{}{}".format(self.get_tls_hostname(), reverse("monolith:enroll"))
+
         # TODO: hardcoded
         software_repo_url = "https://{}/monolith/munki_repo".format(self.get_tls_hostname())
 
-        # enrollment url
-        enrollment_url = "https://{}{}".format(self.get_tls_hostname(), reverse("monolith:enroll"))
-
-        # depnotify
         depnotify_release = self.build_kwargs.get("depnotify_release")
         if depnotify_release:
             include_depnotify = 1
         else:
             include_depnotify = 0
 
-        # depnotify / EULA
-        eula = self.build_kwargs.get("eula")
-        if eula:
-            self.create_file_with_content_string("Users/Shared/eula.txt", eula)
-
-        # postinstall script
         self.replace_in_file(self.get_build_path("scripts", "postinstall"),
                              (("%SETUP_SCRIPT_PATH%", setup_script_path),
                               ("%SOFTWARE_REPO_URL%", software_repo_url),
                               ("%ENROLLMENT_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
                               ("%ENROLLMENT_URL%", enrollment_url),
-                              ("%TLS_CA_CERT%", self.include_tls_ca_cert()),
+                              ("%TLS_CA_CERT%", tls_ca_cert),
                               ("%INCLUDE_DEPNOTIFY%", str(include_depnotify)),
                               ("%DEPNOTIFY_COMMANDS%", self.build_kwargs.get("depnotify_commands") or "")))
+
+        # run_once.py script / registration
+        registration_url = "https://{}{}".format(self.get_tls_hostname(), reverse("monolith:register"))
+
+        self.replace_in_file(self.get_root_path("usr/local/zentral/monolith/run_once.py"),
+                             (("%TLS_CA_CERT%", tls_ca_cert),
+                              ("%REGISTRATION_URL%", registration_url)))
 
     def extra_product_archive_build_steps(self, pa_builder):
         no_restart = self.build_kwargs.get("no_restart")

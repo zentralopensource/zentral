@@ -107,6 +107,19 @@ class CreateTagForm(forms.ModelForm):
         return self.cleaned_data
 
 
+class UpdateTagForm(forms.ModelForm):
+    class Meta:
+        model = Tag
+        fields = ("taxonomy", "name", "color")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.meta_business_unit:
+            self.fields["taxonomy"].queryset = self.fields["taxonomy"].queryset.filter(
+                meta_business_unit=self.instance.meta_business_unit
+            )
+
+
 class AddTagForm(forms.Form):
     existing_tag = forms.ModelChoiceField(label="existing tag", queryset=Tag.objects.none(), required=False)
     new_tag_name = forms.CharField(label="new tag name", max_length=50, required=False)

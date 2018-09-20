@@ -1,14 +1,18 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-from SystemConfiguration import SCDynamicStoreCopyConsoleUser
-import subprocess
+from datetime import datetime, timedelta
+import json
 import os
 import plistlib
+import ssl
+import subprocess
 import time
+import urllib2
+from Foundation import CFPreferencesCopyAppValue
+from SystemConfiguration import SCDynamicStoreCopyConsoleUser
 
 CAFFEINATE = "/usr/bin/caffeinate"
 MANAGED_SOFTWARE_UPDATE = "/usr/local/munki/managedsoftwareupdate"
-MAX_REGISTRATION_WAIT = 7200  # 2 hours
 
 # munki daemons
 MUNKI_DAEMONS_CONFIG_FILES = [
@@ -19,6 +23,13 @@ MUNKI_DAEMONS_CONFIG_FILES = [
                  "logouthelper")
 ]
 
+MUNKI_APPLICATION_ID = "ManagedInstalls"
+MONOLITH_HEADERS_PREF_KEY = "AdditionalHttpHeaders"
+MONOLITH_TOKEN_HEADER_KEY = "X-Monolith-Token"
+MAX_REGISTRATION_WAIT = 7200  # 2 hours
+REGISTRATION_URL = "%REGISTRATION_URL%"
+USER_AGENT = "Zentral/monolithrunonce 0.1"
+TLS_CA_CERT = "%TLS_CA_CERT%"
 
 DEPNOTIFY_CONTROL_FILE = "/var/tmp/depnotify.log"
 DEPNOTIFY_QUIT_COMMAND = "Command: Quit"
@@ -54,6 +65,34 @@ def do_munki_run():
     subprocess.call(args)
 
 
+def cleanup_registration_date(registration_data):
+    registration_date = registration_data.get("Registration Date")
+    try:
+        registration_date = datetime.strptime(registration_date, "%m-%d-%Y %H:%M")
+    except (TypeError, ValueError):
+        pass
+    else:
+        utc_offset = timedelta(seconds=time.altzone if time.daylight else time.timezone)
+        registration_data["registration_date"] = (registration_date + utc_offset).isoformat()
+
+
+def get_monolith_auth_header():
+    for header in CFPreferencesCopyAppValue(MONOLITH_HEADERS_PREF_KEY, MUNKI_APPLICATION_ID):
+        if header.startswith(MONOLITH_TOKEN_HEADER_KEY):
+            return MONOLITH_TOKEN_HEADER_KEY, header.split(":", 1)[-1].strip()
+    print "Could not get the monolith token"
+
+
+def post_registration_data(registration_data):
+    req = urllib2.Request(REGISTRATION_URL)
+    req.add_header(*get_monolith_auth_header())
+    req.add_header("User-Agent", USER_AGENT)
+    req.add_header("Content-Type", "application/json")
+    ctx = ssl.create_default_context(cafile=TLS_CA_CERT)
+    resp = urllib2.urlopen(req, data=json.dumps(registration_data), context=ctx)
+    return json.load(resp)
+
+
 def register():
     """Wait for the DEPNotify registration data and post them.
 
@@ -67,11 +106,18 @@ def register():
     while time.time() - start_t < MAX_REGISTRATION_WAIT:
         if os.path.exists(DEPNOTIFY_REGISTRATION_DATA_PATH):
             registration_data = plistlib.readPlist(DEPNOTIFY_REGISTRATION_DATA_PATH)
-            # get the token
-            # post the data
-            # remove the depnotify config if registered = true in the response
-            do_munki_run = True  # get the value from the HTTP json response
-            return do_munki_run
+            cleanup_registration_date(registration_data)
+            try:
+                resp_data = post_registration_data(registration_data)
+            except Exception:
+                print "Could not post the registration data"
+                return False
+            else:
+                try:
+                    os.unlink(DEPNOTIFY_REGISTRATION_DATA_PATH)
+                except Exception:
+                    print "Could not remove the depnotify registration data"
+                return resp_data.get("do_munki_run", False)
         else:
             time.sleep(5)
     return False
@@ -87,6 +133,7 @@ def cleanup_depnotify():
         if not last_line_quit:
             with open(DEPNOTIFY_CONTROL_FILE, "a") as f:
                 f.write("{}\n".format(DEPNOTIFY_QUIT_COMMAND))
+    # remove the launch agent
     if os.path.exists(DEPNOTIFY_LAUNCH_AGENT_PLIST):
         subprocess.call(["/bin/launchctl", "unload", DEPNOTIFY_LAUNCH_AGENT_PLIST])
         os.unlink(DEPNOTIFY_LAUNCH_AGENT_PLIST)

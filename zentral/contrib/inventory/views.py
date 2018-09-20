@@ -12,7 +12,7 @@ from zentral.conf import settings
 from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
-                    CreateTagForm,
+                    CreateTagForm, UpdateTagForm,
                     MacOSAppSearchForm)
 from .models import (BusinessUnit,
                      MetaBusinessUnit, MachineGroup,
@@ -643,7 +643,7 @@ class CreateTagView(LoginRequiredMixin, CreateView):
 
 class UpdateTagView(LoginRequiredMixin, UpdateView):
     model = Tag
-    fields = ('name', 'color')
+    form_class = UpdateTagForm
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
