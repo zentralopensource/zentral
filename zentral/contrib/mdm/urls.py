@@ -183,6 +183,7 @@ urlpatterns = [
 ]
 
 main_menu_cfg = {
+    'title': 'MDM',
     'weight': 20,
     'items': (
         ('mbu_list', 'Business units'),
