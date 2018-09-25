@@ -87,11 +87,9 @@ class Catalog(models.Model):
     def get_munki_name(self):
         return build_munki_name("catalog", self.id, self.name)
 
-    def serialize(self):
-        pkginfo_list = []
+    def iter_pkginfos(self):
         for pkginfo in self.pkginfo_set.select_related("name").filter(archived_at__isnull=True):
-            pkginfo_list.append(pkginfo.get_pkg_info())
-        return plistlib.dumps(pkginfo_list)
+            yield pkginfo.get_pkg_info()
 
     def get_absolute_url(self):
         return reverse("monolith:catalog", args=(self.pk,))
@@ -234,9 +232,8 @@ SUB_MANIFEST_PKG_INFO_KEY_CHOICES = (
 
 
 class SubManifest(models.Model):
-    """Group of pkginfo or attachments (pkgs, cfg profiles, scripts).
+    """Group of pkginfo or attachments (pkgs, cfg profiles, scripts)."""
 
-    No catalogs except the attachment catalog."""
     meta_business_unit = models.ForeignKey(MetaBusinessUnit,
                                            blank=True, null=True)  # to restrict some sub manifests to a MBU
     name = models.CharField(max_length=256)
@@ -287,9 +284,6 @@ class SubManifest(models.Model):
     def get_munki_name(self):
         return build_munki_name("sub_manifest", self.id, self.name)
 
-    def get_catalog_munki_name(self):
-        return build_munki_name("sub_manifest_catalog", self.id, self.name)
-
     def serialize(self):
         condition_d = {}
         featured_items = set()
@@ -319,14 +313,6 @@ class SubManifest(models.Model):
         qs = SubManifestAttachment.objects.filter(sub_manifest=self).exclude(name__in=included_sma_names)
         data.setdefault('managed_uninstalls', []).extend({sma.get_name() for sma in qs})
         return plistlib.dumps(data)
-
-    def serialize_catalog(self):
-        pkginfo_list = []
-        # have to include trashed attachments for autoremove to work
-        # therefore newest() and not active()
-        for sma in SubManifestAttachment.objects.newest().filter(sub_manifest=self):
-            pkginfo_list.append(sma.get_pkg_info())
-        return plistlib.dumps(pkginfo_list)
 
     def can_be_deleted(self):
         return self.manifestsubmanifest_set.all().count() == 0
@@ -492,19 +478,6 @@ class Manifest(models.Model):
                                .select_related("catalog")
                                .filter(Q(tags__isnull=True) | Q(tags__in=tags)))]
 
-    def catalog(self, c_id, tags=None):
-        if tags is None:
-            tags = []
-        try:
-            mc = (self.manifestcatalog_set
-                      .select_related("catalog")
-                      .filter(Q(tags__isnull=True) | Q(tags__in=tags))
-                      .get(catalog__id=c_id))
-        except ManifestCatalog.DoesNotExist:
-            pass
-        else:
-            return mc.catalog
-
     def sub_manifests(self, tags=None):
         if tags is None:
             tags = []
@@ -644,40 +617,42 @@ class Manifest(models.Model):
         """PkgInfos installed per default, with their dependencies"""
         return self._pkginfo_deps_and_updates(monolith_conf.get_default_managed_installs(), tags)
 
-    def get_enrollment_catalog_munki_name(self):
-        return build_munki_name("enrollment_catalog", self.meta_business_unit.id, self.meta_business_unit.name)
+    # the manifest catalog - for a given set of tags
 
-    def serialize_enrollment_catalog(self, tags):
-        # loop on the enrollment packages for the given set of tags.
+    def get_catalog_munki_name(self):
+        return build_munki_name("manifest_catalog", self.meta_business_unit.id, str(self.meta_business_unit))
+
+    def serialize_catalog(self, tags=None):
         pkginfo_list = []
+
+        # the repository catalogs
+        for catalog in self.catalogs(tags):
+            for pkginfo in catalog.iter_pkginfos():
+                pkginfo_list.append(pkginfo)
+
+        # the sub manifests attachments
+        for sma in SubManifestAttachment.objects.newest().filter(sub_manifest__in=self.sub_manifests(tags)):
+            pkginfo_list.append(sma.get_pkg_info())
+
+        # the enrollment packages
         for enrollment_package in self.enrollment_packages(tags).values():
             pkginfo_list.append(enrollment_package.get_pkg_info())
-        return plistlib.dumps(pkginfo_list)
 
-    def get_printer_catalog_munki_name(self):
-        return build_munki_name("printer_catalog", self.meta_business_unit.id, self.meta_business_unit.name)
-
-    def serialize_printer_catalog(self):
-        pkginfo_list = []
+        # include the catalog with all the printers for autoremove
         for printer in self.printer_set.all():
             pkginfo_list.append(printer.pkg_info)
+
         return plistlib.dumps(pkginfo_list)
 
+    # the manifest
+
     def serialize(self, tags):
-        data = {'catalogs': [c.get_munki_name() for c in self.catalogs(tags)],
+        data = {'catalogs': [self.get_catalog_munki_name()],
                 'included_manifests': []}
 
         # include the sub manifests
         for sm in self.sub_manifests(tags):
             data['included_manifests'].append(sm.get_munki_name())
-            if sm.has_attachments():
-                # add the sub manifest catalog to make the attachments available.
-                # include the catalog even if the attachments are all trashed
-                # so that autoremove works.
-                data['catalogs'].append(sm.get_catalog_munki_name())
-
-        # add the special catalog for the zentral enrollment packages
-        data['catalogs'].append(self.get_enrollment_catalog_munki_name())
 
         # add default managed installs
         data['managed_installs'] = monolith_conf.get_default_managed_installs()
@@ -695,12 +670,6 @@ class Manifest(models.Model):
                     # the package it is an update_for is not in the managed_installs, remove it.
                     data.setdefault('managed_uninstalls', []).append(update_for)
 
-        # printers
-
-        # include the catalog with all the printers for autoremove
-        all_printers = self.printer_set.all()
-        if all_printers.count():
-            data['catalogs'].append(self.get_printer_catalog_munki_name())
         # include only the matching active printers as managed installs
         for printer in self.printers(tags):
             data.setdefault("managed_installs", []).append(printer.get_pkg_info_name())

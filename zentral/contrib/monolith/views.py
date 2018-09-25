@@ -1317,36 +1317,11 @@ class MRCatalogView(MRNameView):
 
     def do_get(self, model, key, event_payload):
         catalog_data = None
-        if model == "enrollment_catalog":
+        if model == "manifest_catalog":
             # intercept calls for special enrollment catalog
             mbu_id = int(key)
             if mbu_id == self.meta_business_unit.id:
-                catalog_data = self.manifest.serialize_enrollment_catalog(self.tags)
-        elif model == "printer_catalog":
-            # intercept calls for special printer catalog
-            mbu_id = int(key)
-            if mbu_id == self.meta_business_unit.id:
-                # do not filter with tags. need all the possible installs for autoremove.
-                catalog_data = self.manifest.serialize_printer_catalog()
-        elif model == "sub_manifest_catalog":
-            # intercept calls for sub manifest catalog
-            sm_id = int(key)
-            event_payload["sub_manifest"] = {"id": sm_id}
-            # verify machine access to sub manifest and respond
-            sub_manifest = self.manifest.sub_manifest(sm_id, self.tags)
-            if sub_manifest:
-                catalog_data = sub_manifest.serialize_catalog()
-                event_payload["sub_manifest"]["name"] = sub_manifest.name
-        elif model == "catalog":
-            # intercept calls for manifest catalog
-            c_id = int(key)
-            event_payload["catalog"] = {"id": c_id}
-            # verify machine access to catalog and respond
-            catalog = self.manifest.catalog(c_id, self.tags)
-            if catalog:
-                catalog_data = catalog.serialize()
-                event_payload["catalog"].update({"name": catalog.name,
-                                                 "priority": catalog.priority})
+                catalog_data = self.manifest.serialize_catalog(self.tags)
         if catalog_data:
             return HttpResponse(catalog_data, content_type="application/xml")
 
