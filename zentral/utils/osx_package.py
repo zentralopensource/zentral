@@ -221,11 +221,15 @@ class ProductArchiveBuilder(BasePackageBuilder):
         tree.write(self.distribution, encoding='utf-8', xml_declaration=True)
 
 
+def get_tls_hostname():
+    tls_hostname_p = urlparse(settings['api']['tls_hostname'])
+    return tls_hostname_p.netloc
+
+
 class APIConfigToolsMixin(object):
     def get_tls_hostname(self):
         if not hasattr(self, "tls_hostname"):
-            tls_hostname_p = urlparse(settings['api']['tls_hostname'])
-            self.tls_hostname = tls_hostname_p.netloc
+            self.tls_hostname = get_tls_hostname()
         return self.tls_hostname
 
     def get_tls_server_certs(self):

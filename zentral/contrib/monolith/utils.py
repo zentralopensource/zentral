@@ -1,7 +1,10 @@
 import hashlib
 import logging
+import plistlib
 from django.core.files.base import ContentFile
 from django.template.loader import get_template
+from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload_openssl
+from zentral.utils.osx_package import TLS_CA_CERT_CLIENT_PATH, get_tls_hostname
 
 logger = logging.getLogger('zentral.contrib.monolith.utils')
 
@@ -82,3 +85,45 @@ def make_printer_package_info(printer):
     if required_package:
         pkg_info["requires"] = [required_package.name]
     return pkg_info
+
+
+def build_configuration(enrolled_machine):
+    # TODO: hardcoded
+    return {"ClientIdentifier": enrolled_machine.serial_number,
+            "SoftwareRepoURL": "https://{}/monolith/munki_repo".format(get_tls_hostname()),
+            "SoftwareRepoCACertificate": TLS_CA_CERT_CLIENT_PATH,
+            "FollowHTTPRedirects": "all",
+            "SuppressLoginwindowInstall": True,
+            # "ManifestURL": None,  # no special Manifest URL with monolith
+            # force redirect via monolith for Icon and Client Resource
+            # "IconURL": None,
+            # "ClientResourceURL": None,
+            "AdditionalHttpHeaders": [
+                "X-Zentral-Serial-Number: {}".format(enrolled_machine.serial_number),
+                "X-Monolith-Token: {}".format(enrolled_machine.token)
+            ],
+            }
+
+
+def build_configuration_profile(enrolled_machine):
+    payload_content = {"PayloadContent": {"ManagedInstalls": {"Forced": [
+                           {"mcx_preference_settings": build_configuration(enrolled_machine)}
+                       ]}},
+                       "PayloadEnabled": True,
+                       "PayloadIdentifier": get_payload_identifier("monolith.settings.0"),
+                       "PayloadUUID": generate_payload_uuid(),
+                       "PayloadType": "com.apple.ManagedClient.preferences",
+                       "PayloadVersion": 1}
+    configuration_profile_data = {"PayloadContent": [payload_content],
+                                  "PayloadDescription": "Munki settings for Zentral/Monolith",
+                                  "PayloadDisplayName": "Zentral - Munki settings",
+                                  "PayloadIdentifier": get_payload_identifier("monolith.settings"),
+                                  "PayloadOrganization": "Zentral",
+                                  "PayloadRemovalDisallowed": True,
+                                  "PayloadScope": "System",
+                                  "PayloadType": "Configuration",
+                                  "PayloadUUID": generate_payload_uuid(),
+                                  "PayloadVersion": 1}
+    content = sign_payload_openssl(plistlib.dumps(configuration_profile_data))
+    return (get_payload_identifier("monolith.settings.mobileconfig"),
+            content)

@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import base64
 import json
 import os
 import plistlib
@@ -67,8 +68,10 @@ if __name__ == "__main__":
 
     # save configuration profile content
     configuration_profile_path = os.path.join(ZENTRAL_SANTA_DIR, resp["configuration_profile"]["name"])
+    configuration_profile_content = resp["configuration_profile"]["content"]
+    configuration_profile_content = base64.b64decode(configuration_profile_content)
     with open(configuration_profile_path, "w") as f:
-        f.write(resp["configuration_profile"]["content"])
+        f.write(configuration_profile_content)
 
     # install configuration profile
     install_configuration_profile(configuration_profile_path)

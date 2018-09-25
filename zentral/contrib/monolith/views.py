@@ -1,3 +1,4 @@
+import base64
 from itertools import chain
 import json
 import logging
@@ -48,6 +49,7 @@ from .models import (MunkiNameError, parse_munki_name,
                      Condition,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
 from .osx_package.builder import MonolithZentralEnrollPkgBuilder
+from .utils import build_configuration_profile
 
 logger = logging.getLogger('zentral.contrib.monolith.views')
 
@@ -143,8 +145,13 @@ class EnrollView(View):
         action = "enrollment" if enrolled_machine_created else "re-enrollment"
         post_monolith_enrollment_event(serial_number, user_agent, ip, {'action': action})
 
-        response_d = {"token": enrolled_machine.token,
-                      "action": action}
+        response_d = {"action": action}
+        configuration_profile_name, configuration_profile_data = build_configuration_profile(enrolled_machine)
+        configuration_profile_data = base64.b64encode(configuration_profile_data).decode("utf-8")
+        response_d["configuration_profile"] = {
+            "name": configuration_profile_name,
+            "data": configuration_profile_data
+        }
         if enrollment.has_registration_steps() and not enrolled_machine.registered:
             taxonomies = []
             for taxonomy in enrollment.taxonomies.all():

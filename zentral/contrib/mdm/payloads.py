@@ -5,7 +5,7 @@ from django.urls import reverse
 from zentral.conf import settings
 from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
-from .cms import sign_payload_openssl
+from zentral.utils.payloads import sign_payload_openssl
 
 
 logger = logging.getLogger("zentral.contrib.mdm.payloads")

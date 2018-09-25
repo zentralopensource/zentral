@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 from django.core.exceptions import SuspiciousOperation
@@ -162,6 +163,7 @@ class EnrollView(View):
             # response
             response = {"machine_id": enrolled_machine.machine_id}
             cp_name, cp_content = build_configuration_profile(enrolled_machine)
+            cp_content = base64.b64encode(cp_content).decode("utf-8")
             response["configuration_profile"] = {"name": cp_name, "content": cp_content}
             cpl_name, cpl_content = build_config_plist(enrolled_machine)
             response["config_plist"] = {"name": cpl_name, "content": cpl_content}

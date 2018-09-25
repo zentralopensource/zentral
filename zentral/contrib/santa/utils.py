@@ -1,7 +1,7 @@
 import plistlib
 from zentral.conf import settings
 from zentral.utils.osx_package import TLS_SERVER_CERTS_CLIENT_PATH
-from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
+from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload_openssl
 
 
 def build_santa_configuration_dict(enrolled_machine):
@@ -36,8 +36,8 @@ def build_configuration_profile(enrolled_machine):
                        'PayloadVersion': 1}
 
     configuration_profile_data = {"PayloadContent": [payload_content],
-                                  "PayloadDescription": "Google santa configuration",
-                                  "PayloadDisplayName": "Google santa configuration",
+                                  "PayloadDisplayName": "Zentral - Santa settings",
+                                  "PayloadDescription": "Google Santa settings for Zentral",
                                   "PayloadIdentifier": "com.google.santa",
                                   "PayloadOrganization": "Zentral",
                                   "PayloadRemovalDisallowed": True,
@@ -46,5 +46,5 @@ def build_configuration_profile(enrolled_machine):
                                   "PayloadUUID": generate_payload_uuid(),
                                   "PayloadVersion": 1}
 
-    content = plistlib.dumps(configuration_profile_data)
-    return "com.google.santa.zentral.mobileconfig", content.decode("utf-8")
+    content = sign_payload_openssl(plistlib.dumps(configuration_profile_data))
+    return "com.google.santa.zentral.mobileconfig", content

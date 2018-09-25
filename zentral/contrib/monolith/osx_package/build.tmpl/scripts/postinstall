@@ -1,9 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-from Foundation import (CFPreferencesAppSynchronize,
-                        CFPreferencesSetMultiple,
-                        kCFPreferencesAnyHost,
-                        kCFPreferencesCurrentUser)
+import base64
 import json
 import os
 import plistlib
@@ -17,7 +14,6 @@ BUNDLE_ID = "ManagedInstalls"
 
 # set by the builder
 SETUP_SCRIPT_PATH = "%SETUP_SCRIPT_PATH%"
-SOFTWARE_REPO_URL = "%SOFTWARE_REPO_URL%"
 ENROLLMENT_SECRET = "%ENROLLMENT_SECRET%"
 ENROLLMENT_URL = "%ENROLLMENT_URL%"
 TLS_CA_CERT = "%TLS_CA_CERT%"
@@ -66,32 +62,20 @@ def enroll(serial_number, uuid):
                        "uuid": uuid})
     resp = urllib2.urlopen(req, data=data, context=ctx)
     resp_data = json.load(resp)
-    return (resp_data["token"], resp_data.get("taxonomies", []))
+    configuration_profile = resp_data.get("configuration_profile", {})
+    configuration_profile_data = configuration_profile.get("data")
+    if configuration_profile_data:
+        configuration_profile_data = base64.b64decode(configuration_profile_data)
+    return (resp_data.get("taxonomies", []),
+            configuration_profile.get("name"),
+            configuration_profile_data)
 
 
-def update_root_prefs(serial_number, token):
-    config_d = {"ClientIdentifier": serial_number,
-                "SoftwareRepoURL": SOFTWARE_REPO_URL,
-                "SoftwareRepoCACertificate": TLS_CA_CERT,
-                "FollowHTTPRedirects": "all",
-                "SuppressLoginwindowInstall": True,
-                "ManifestURL": None,  # no special Manifest URL with monolith
-                # force redirect via monolith for Icon and Client Resource
-                "IconURL": None,
-                "ClientResourceURL": None,
-                "AdditionalHttpHeaders": [
-                    "X-Zentral-Serial-Number: {}".format(serial_number),
-                    "X-Monolith-Token: {}".format(token)
-                ],
-                }
-    CFPreferencesSetMultiple(config_d, None,
-                             BUNDLE_ID,
-                             kCFPreferencesCurrentUser,  # to write in the /var/root plist
-                             kCFPreferencesAnyHost)
-
-
-def sync_prefs():
-    CFPreferencesAppSynchronize(BUNDLE_ID)
+def install_configuration_profile(name, data):
+    path = os.path.join("/usr/local/zentral/monolith/", name)
+    with open(path, "w") as f:
+        f.write(data)
+    subprocess.check_call(["/usr/bin/profiles", "-I", "-F", path])
 
 
 def launch_run_once():
@@ -140,9 +124,8 @@ def cleanup_depnotify():
 if __name__ == "__main__":
     execute_setup_script()
     serial_number, uuid = get_serial_number_and_uuid()
-    token, taxonomies = enroll(serial_number, uuid)
-    update_root_prefs(serial_number, token)
-    sync_prefs()
+    taxonomies, configuration_profile_name, configuration_profile_data = enroll(serial_number, uuid)
+    install_configuration_profile(configuration_profile_name, configuration_profile_data)
     if include_depnotify():
         configure_depnotify(taxonomies)
     else:

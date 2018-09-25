@@ -8,7 +8,6 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from OpenSSL import crypto
-from zentral.conf import settings
 
 
 APPLE_PKI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Apple_PKI")
@@ -41,19 +40,6 @@ def verify_ca_issuer_openssl(ca_fullchain, certificate_bytes, strict=True):
         if b'OK' in line:
             return True
     return False
-
-
-def sign_payload_openssl(payload):
-    api_settings = settings["api"]
-    p = subprocess.Popen(["/usr/bin/openssl", "smime", "-sign",
-                          "-signer", api_settings["tls_server_certs"],
-                          "-inkey", api_settings["tls_server_key"],
-                          "-certfile",  api_settings["tls_server_certs"],
-                          "-outform", "der", "-nodetach"],
-                         stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE)
-    stdout, stderr = p.communicate(payload)
-    return stdout
 
 
 def verify_apple_iphone_device_ca_issuer_openssl(certificate_bytes):

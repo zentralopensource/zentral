@@ -58,9 +58,6 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         # postinstall script / enrollment
         enrollment_url = "https://{}{}".format(self.get_tls_hostname(), reverse("monolith:enroll"))
 
-        # TODO: hardcoded
-        software_repo_url = "https://{}/monolith/munki_repo".format(self.get_tls_hostname())
-
         depnotify_release = self.build_kwargs.get("depnotify_release")
         if depnotify_release:
             include_depnotify = 1
@@ -69,12 +66,11 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
 
         self.replace_in_file(self.get_build_path("scripts", "postinstall"),
                              (("%SETUP_SCRIPT_PATH%", setup_script_path),
-                              ("%SOFTWARE_REPO_URL%", software_repo_url),
                               ("%ENROLLMENT_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
                               ("%ENROLLMENT_URL%", enrollment_url),
-                              ("%TLS_CA_CERT%", tls_ca_cert),
                               ("%INCLUDE_DEPNOTIFY%", str(include_depnotify)),
-                              ("%DEPNOTIFY_COMMANDS%", self.build_kwargs.get("depnotify_commands") or "")))
+                              ("%DEPNOTIFY_COMMANDS%", self.build_kwargs.get("depnotify_commands") or ""),
+                              ("%TLS_CA_CERT%", tls_ca_cert)))
 
         # run_once.py script / registration
         registration_url = "https://{}{}".format(self.get_tls_hostname(), reverse("monolith:register"))
