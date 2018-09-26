@@ -106,7 +106,7 @@ def configure_depnotify(taxonomies):
         if not any("ContinueButtonRegister" in l for l in depnotify_commands):
             depnotify_commands.append("Command: ContinueButtonRegister: Register")
     else:
-        depnotify_commands = [l for l in DEPNOTIFY_COMMANDS if "ContinueButtonRegister" not in l]
+        depnotify_commands = [l for l in depnotify_commands if "ContinueButtonRegister" not in l]
     with open(DEPNOTIFY_CONTROL_FILE, "wb") as f:
         f.write("\n".join(depnotify_commands))
 
