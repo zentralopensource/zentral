@@ -814,9 +814,6 @@ class MDMEnrollmentPackage(models.Model):
             return "{} {}".format(self.get_description_for_enrollment(),
                                   self.builder.split(".")[-1])
 
-    class Meta:
-        unique_together = (("meta_business_unit", "builder"),)
-
     def enrollment_update_callback(self):
         self.version = F("version") + 1
         self.save()
@@ -857,6 +854,18 @@ class MDMEnrollmentPackage(models.Model):
     def get_absolute_url(self):
         return "{}#enrollment_package_{}".format(reverse("mdm:mbu",
                                                          args=(self.meta_business_unit.pk,)), self.pk)
+
+    def save(self, *args, **kwargs):
+        if not self.trashed_at:
+            query_set = MDMEnrollmentPackage.objects.filter(meta_business_unit=self.meta_business_unit,
+                                                            builder=self.builder,
+                                                            trashed_at__isnull=True)
+            if self.pk:
+                query_set = query_set.exclude(pk=self.pk)
+            if query_set.count():
+                raise ValueError("An active enrollment package for this business unit "
+                                 "and this builder already exists.")
+        super(MDMEnrollmentPackage, self).save(*args, **kwargs)
 
 
 # Configuration profiles

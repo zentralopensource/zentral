@@ -417,6 +417,19 @@ class CreateEnrollmentPackageView(LoginRequiredMixin, TemplateView):
             self.builder = standalone_builders[self.builder_key]
         except KeyError:
             raise Http404
+        try:
+            # test if an active mep exists. protect ourselves if there is a bug and many exist!
+            mep = MDMEnrollmentPackage.objects.filter(meta_business_unit=self.meta_business_unit,
+                                                      builder=self.builder_key,
+                                                      trashed_at__isnull=True)[0]
+        except IndexError:
+            pass
+        else:
+            # prevent the creation of a second enrollment package with the same builder
+            # if an active enrollment package exists
+            messages.error(request,
+                           "An active enrollment package for this business unit and this service already exists.")
+            return HttpResponseRedirect(mep.get_absolute_url())
         return super().dispatch(request, *args, **kwargs)
 
     def get_forms(self):
@@ -453,6 +466,7 @@ class CreateEnrollmentPackageView(LoginRequiredMixin, TemplateView):
         enrollment.version = 0
         enrollment.secret = secret
         enrollment.save()
+        enrollment_form.save_m2m()
         # MDM enrollment package
         mep = MDMEnrollmentPackage.objects.create(
             meta_business_unit=secret.meta_business_unit,
