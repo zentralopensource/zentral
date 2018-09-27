@@ -350,6 +350,7 @@ class CreateKernelExtensionPolicyView(LoginRequiredMixin, CreateView):
         kext_policy.meta_business_unit = self.meta_business_unit
         kext_policy.trashed_at = None
         kext_policy.save()
+        form.save_m2m()
         transaction.on_commit(lambda: send_mbu_device_notifications(kext_policy.meta_business_unit))
         return HttpResponseRedirect(kext_policy.get_absolute_url())
 
@@ -381,6 +382,7 @@ class UpdateKernelExtensionPolicyView(LoginRequiredMixin, UpdateView):
         kext_policy = form.save(commit=False)
         kext_policy.meta_business_unit = self.meta_business_unit
         kext_policy.save()
+        form.save_m2m()
         transaction.on_commit(lambda: send_mbu_device_notifications(kext_policy.meta_business_unit))
         return HttpResponseRedirect(kext_policy.get_absolute_url())
 
