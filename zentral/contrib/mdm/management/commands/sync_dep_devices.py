@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from zentral.contrib.mdm.models import DEPVirtualServer
-from zentral.contrib.mdm.dep import sync_dep_virtual_server_devices
+from zentral.contrib.mdm.dep import sync_dep_virtual_server_devices, DEPClientError
 
 
 class Command(BaseCommand):
@@ -28,5 +28,13 @@ class Command(BaseCommand):
         full_sync = kwargs.get("full_sync")
         for server in depvs_qs:
             print("Sync server", server.pk, server)
-            for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
-                print("Created" if created else "Updated", dep_device)
+            try:
+                for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
+                    print("Created" if created else "Updated", dep_device)
+            except DEPClientError as e:
+                if e.error_code == "EXPIRED_CURSOR":
+                    print("Expired cursor => full sync")
+                    for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=True):
+                        print("Created" if created else "Updated", dep_device)
+                else:
+                    raise

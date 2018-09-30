@@ -10,7 +10,19 @@ from requests_oauthlib import OAuth1Session
 
 
 class DEPClientError(Exception):
-    pass
+    def __init__(self, *args, **kwargs):
+        self.message = args[0]
+        self.error_code = kwargs.pop("error_code", None)
+        self.status_code = kwargs.pop("status_code", None)
+        super().__init__(*args, **kwargs)
+
+    def __str__(self):
+        items = [self.message]
+        if self.error_code:
+            items.append("error code: {}".format(self.error_code))
+        if self.status_code:
+            items.append("status code: {}".format(self.status_code))
+        return ", ".join(items)
 
 
 class CursorIterator(object):
@@ -71,23 +83,36 @@ class DEPClient(object):
         try:
             response = self.oauth_session.get(self.API_URL + "session")
             response.raise_for_status()
-        except RequestException:
-            raise DEPClientError("Could not get auth session token")
-        self.auth_session_token = response.json()["auth_session_token"]
+        except RequestException as e:
+            error_code = status_code = None
+            if e.response is not None:
+                status_code = e.response.status_code
+                if status_code == 403:
+                    # ACCESS_DENIED or T_C_NOT_SIGNED
+                    error_code = e.response.text.strip()
+            raise DEPClientError("Could not get auth session token",
+                                 error_code=error_code, status_code=status_code)
+        else:
+            self.auth_session_token = response.json()["auth_session_token"]
 
     def send_request(self, endpoint, method="GET", json=None, **params):
         self.get_auth_session_token()
         try:
             response = self.default_session.request(method, self.API_URL + endpoint, json=json, params=params)
-        except RequestException:
-            raise DEPClientError("Could not send request")
-        if response.status_code in [401, 403]:
-            self.get_auth_session_token(renew=True)
-            return self.send_request(endpoint, method, json, **params)
+            response.raise_for_status()
+        except RequestException as e:
+            error_code = status_code = None
+            if e.response is not None:
+                status_code = e.response.status_code
+                if status_code in [401, 403]:
+                    # ask for a new session token and try again
+                    self.get_auth_session_token(renew=True)
+                    return self.send_request(endpoint, method, json, **params)
+                if status_code == 400:
+                    error_code = e.response.text.strip()
+            raise DEPClientError("Could not perform operation",
+                                 error_code=error_code, status_code=status_code)
         else:
-            if not response.status_code == 200:
-                raise DEPClientError("Could not perform operation. "
-                                     "Response status code {}".format(response.status_code))
             self.auth_session_token = response.headers.get(self.TOKEN_HEADER)
             try:
                 return response.json()
