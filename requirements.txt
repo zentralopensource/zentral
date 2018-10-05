@@ -3,7 +3,7 @@ boto3
 coverage
 cryptography
 django-bootstrap-form
-django<1.11
+django<2
 djangorestframework
 elasticsearch
 gunicorn
