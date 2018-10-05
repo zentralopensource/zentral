@@ -35,9 +35,9 @@ class PrometheusViewsTestCase(TestCase):
         labels_dict = {}
         for family in text_string_to_metric_families(response.content.decode('utf-8')):
             self.assertEqual(len(family.samples), 1)
-            name, labels, value = family.samples[0]
-            self.assertEqual(value, 1)  # only one machine in inventory
-            labels_dict[name] = labels
+            sample = family.samples[0]
+            self.assertEqual(sample.value, 1)  # only one machine in inventory
+            labels_dict[sample.name] = sample.labels
         self.assertEqual(labels_dict['zentral_inventory_osx_apps'],
                          {'name': 'Baller.app',
                           'source': 'tests.zentral.io#{}'.format(source_id),
