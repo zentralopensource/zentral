@@ -52,7 +52,7 @@ def mbu_dashboard_machine_data(mbu):
         "select osv.name as name, osv.major as major, osv.minor as minor, osv.patch as patch, "
         "count(*) as count from inventory_osversion as osv "
         "join inventory_machinesnapshot as ms on (osv.id = ms.os_version_id) "
-        "join inventory_currentmachinesnapshot as cms on (cms.id = ms.id) "
+        "join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id) "
         "join inventory_businessunit as bu on (bu.id = ms.business_unit_id) "
         "where bu.meta_business_unit_id = %s and ms.source_id = %s "
         "group by osv.name, osv.major, osv.minor, osv.patch"
