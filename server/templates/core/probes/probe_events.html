@@ -44,7 +44,7 @@
           <p>
             {% machine_type_icon  machine %}
             {% machine_platform_icon machine %}
-            <a href="{% url 'inventory:machine' machine.serial_number %}">{{ machine.serial_number }}</a>
+	    <a href="{{ machine.get_absolute_url }}">{{ machine.serial_number }}</a>
           </p>
           {% endif %}
           {% if machine.computer_name %}

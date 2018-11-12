@@ -450,7 +450,7 @@ class MachineView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super(MachineView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['machine'] = machine = MetaMachine(context['serial_number'])
+        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
         prepared_heartbeats = []
         last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(machine.serial_number)
         for event_class, source_name, ua_max_dates in last_machine_heartbeats:
@@ -480,7 +480,7 @@ class ArchiveMachineView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/archive_machine.html"
 
     def dispatch(self, request, *args, **kwargs):
-        self.machine = MetaMachine(kwargs['serial_number'])
+        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs['urlsafe_serial_number'])
         return super(ArchiveMachineView, self).dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -530,8 +530,8 @@ class MachineEventsView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super(MachineEventsView, self).get_context_data(**kwargs)
+        context["machine"] = self.machine
         context["serial_number"] = self.serial_number
-        context["machine"] = MetaMachine(self.serial_number)
         # pagination
         page = context['page_obj']
         if page.has_next():
@@ -561,7 +561,8 @@ class MachineEventsView(LoginRequiredMixin, ListView):
         return context
 
     def get_queryset(self):
-        self.serial_number = self.kwargs['serial_number']
+        self.machine = MetaMachine.from_urlsafe_serial_number(self.kwargs["urlsafe_serial_number"])
+        self.serial_number = self.machine.serial_number
         et = self.request.GET.get('event_type')
         return MachineEventSet(self.serial_number, et)
 
@@ -571,13 +572,14 @@ class MachineTagsView(LoginRequiredMixin, FormView):
     form_class = AddMachineTagForm
 
     def dispatch(self, request, *args, **kwargs):
-        self.msn = kwargs['serial_number']
+        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
+        self.msn = self.machine.serial_number
         return super(MachineTagsView, self).dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super(MachineTagsView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['machine'] = MetaMachine(self.msn)
+        context['machine'] = self.machine
         context['color_presets'] = TAG_COLOR_PRESETS
         return context
 
@@ -591,14 +593,15 @@ class MachineTagsView(LoginRequiredMixin, FormView):
         return super(MachineTagsView, self).form_valid(form)
 
     def get_success_url(self):
-        return reverse('inventory:machine_tags', args=(self.msn,))
+        return reverse('inventory:machine_tags', args=(self.machine.get_urlsafe_serial_number(),))
 
 
 class RemoveMachineTagView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
+        machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
         MachineTag.objects.filter(tag__id=kwargs['tag_id'],
-                                  serial_number=kwargs['serial_number']).delete()
-        return HttpResponseRedirect(reverse('inventory:machine_tags', args=(kwargs['serial_number'],)))
+                                  serial_number=machine.serial_number).delete()
+        return HttpResponseRedirect(reverse('inventory:machine_tags', args=(machine.get_urlsafe_serial_number(),)))
 
 
 TAG_COLOR_PRESETS = {

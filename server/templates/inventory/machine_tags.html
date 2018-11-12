@@ -5,7 +5,7 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-  <li><a href="{% url 'inventory:machine' machine.serial_number %}">{{ machine.serial_number }}</a></li>
+  <li><a href="{{ machine.get_absolute_url }}">{{ machine.serial_number }}</a></li>
   <li class="active">Tags</li>
 </ol>
 
@@ -24,7 +24,7 @@
         <td>{% inventory_tag tag %}</td>
         <td>
           {% if type == "machine" %}
-          <form action="{% url 'inventory:remove_machine_tag' machine.serial_number tag.id %}" method="POST">{% csrf_token %}
+          <form action="{% url 'inventory:remove_machine_tag' machine.get_urlsafe_serial_number tag.id %}" method="POST">{% csrf_token %}
             <button class="btn btn-default">
               <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
             </button>
@@ -38,7 +38,7 @@
 </div>
 
 <h2>Add tag</h2>
-<form method="POST" class="form" action="{% url 'inventory:machine_tags' machine.serial_number %}">{% csrf_token %}
+<form method="POST" class="form" action="{% url 'inventory:machine_tags' machine.get_urlsafe_serial_number %}">{% csrf_token %}
   {{form.existing_tag|bootstrap }}
   <div id="new-tag" style="display:none">
   <h3> or create new tag</h3>
@@ -56,7 +56,7 @@
   </div>
   </div>
   <p>
-    <a href="{% url 'inventory:machine' machine.serial_number %}" class="btn btn-default">Cancel</a>
+    <a href="{{ machine.get_absolute_url }}" class="btn btn-default">Cancel</a>
     <button type="submit" class="btn btn-primary">Add tag</button>
   </p>
 </form>

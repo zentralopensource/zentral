@@ -73,7 +73,7 @@
       <td>
         {% machine_type_icon machine %}
         {% machine_platform_icon machine %}
-        <a href="{% url 'inventory:machine' machine.serial_number %}">
+	<a href="{{ machine.get_absolute_url }}">
           {{ machine.serial_number }}
         </a>
       </td>

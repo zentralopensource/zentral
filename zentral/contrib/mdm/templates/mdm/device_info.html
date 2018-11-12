@@ -10,7 +10,7 @@
 </ol>
 
 
-<h2>Device <a href="{% url 'inventory:machine' serial_number %}">{{ serial_number }}</a></h2>
+<h2>Device <a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></h2>
 
 <h3>{{ enrolled_devices_count }} Enrolled device{{ enrolled_devices_count|pluralize }}</h3>
 

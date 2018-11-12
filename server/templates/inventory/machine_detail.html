@@ -23,9 +23,9 @@
     </p>
 
     <p>
-      <a class="btn btn-default" href="{% url 'inventory:machine_events' serial_number %}">View events</a>
-      <a class="btn btn-default" href="{% url 'inventory:machine_tags' machine.serial_number %}">Manage tags</a>
-      <a class="btn btn-danger" href="{% url 'inventory:archive_machine' machine.serial_number %}">Archive</a>
+      <a class="btn btn-default" href="{% url 'inventory:machine_events' machine.get_urlsafe_serial_number %}">View events</a>
+      <a class="btn btn-default" href="{% url 'inventory:machine_tags' machine.get_urlsafe_serial_number %}">Manage tags</a>
+      <a class="btn btn-danger" href="{% url 'inventory:archive_machine' machine.get_urlsafe_serial_number %}">Archive</a>
     </p>
 
 

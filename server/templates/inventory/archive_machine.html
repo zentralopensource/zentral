@@ -7,7 +7,7 @@
     <ol class="breadcrumb">
       <li><a href="/">Home</a></li>
       <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-      <li><a href="{% url 'inventory:machine' machine.serial_number %}">{{ machine.serial_number }}</a></li>
+      <li><a href="{{ machine.get_absolute_url }}">{{ machine.serial_number }}</a></li>
       <li class="active">archive</li>
     </ol>
 
@@ -23,7 +23,7 @@
 
     <p>Do you really want to archive this machine?</p>
     <form method="POST">{% csrf_token %}
-      <a class="btn btn-default" href="{% url 'inventory:machine' machine.serial_number %}">No</a>
+      <a class="btn btn-default" href="{{ machine.get_absolute_url }}">No</a>
       <button type="submit" class="btn btn-danger">Yes</button>
     </form>
 

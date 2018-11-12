@@ -1,3 +1,4 @@
+import base64
 from collections import Counter
 import colorsys
 from datetime import datetime, timedelta
@@ -714,6 +715,19 @@ class MetaMachine(object):
     def __init__(self, serial_number, snapshots=None):
         self.serial_number = serial_number
 
+    @classmethod
+    def from_urlsafe_serial_number(cls, urlsafe_serial_number):
+        if isinstance(urlsafe_serial_number, str):
+            urlsafe_serial_number = urlsafe_serial_number.encode("utf-8")
+        serial_number = base64.urlsafe_b64decode(urlsafe_serial_number).decode("utf-8")
+        return cls(serial_number)
+
+    def get_urlsafe_serial_number(self):
+        return base64.urlsafe_b64encode(self.serial_number.encode("utf-8")).decode("utf-8")
+
+    def get_absolute_url(self):
+        return reverse('inventory:machine', args=(self.get_urlsafe_serial_number(),))
+
     @cached_property
     def snapshots(self):
         return list(MachineSnapshot.objects.current().filter(serial_number=self.serial_number))
@@ -733,9 +747,7 @@ class MetaMachine(object):
         except KeyError:
             logger.warning("Missing api.tls_hostname configuration key")
         else:
-            return "{}{}".format(tls_hostname.rstrip('/'),
-                                 reverse('inventory:machine',
-                                         args=(self.serial_number,)))
+            return "{}{}".format(tls_hostname.rstrip('/'), self.get_absolute_url())
 
     @property
     def names_with_sources(self):
