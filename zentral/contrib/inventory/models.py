@@ -727,7 +727,9 @@ class MetaMachine(object):
         return cls(serial_number)
 
     def get_urlsafe_serial_number(self):
-        if self.serial_number.startswith(".") or urllib.parse.quote(self.serial_number) != self.serial_number:
+        if "/" in self.serial_number or \
+           self.serial_number.startswith(".") or \
+           urllib.parse.quote(self.serial_number) != self.serial_number:
             return ".{}".format(
                 base64.urlsafe_b64encode(self.serial_number.encode("utf-8")).decode("utf-8").rstrip("=")
             )
