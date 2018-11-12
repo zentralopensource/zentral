@@ -33,7 +33,7 @@
   <tbody>
     {% for device in devices %}
     <tr>
-      <td><a href="{% url 'mdm:device' device.serial_number %}">{{ device.serial_number }}</a></td>
+      <td><a href="{% url 'mdm:device' device.urlsafe_serial_number %}">{{ device.serial_number }}</a></td>
       <td>{{ device.product|default:"" }}</td>
       <td>
         {% if device.udids %}

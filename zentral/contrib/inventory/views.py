@@ -54,8 +54,8 @@ class MachineListView(LoginRequiredMixin, TemplateView):
             cleaned_data = self.search_form.cleaned_data
             serial_number = cleaned_data['serial_number']
             if serial_number:
-                extra_wheres.append("and serial_number ~* %(serial_number)s")
-                query_args['serial_number'] = serial_number
+                extra_wheres.append("and UPPER(serial_number) LIKE UPPER(%(serial_number)s)")
+                query_args['serial_number'] = "%{}%".format(connection.ops.prep_for_like_query(serial_number))
             name = cleaned_data['name']
             if name:
                 extra_wheres.append("and (si.id is not null and computer_name ~* %(name)s)")
@@ -451,6 +451,7 @@ class MachineView(LoginRequiredMixin, TemplateView):
         context = super(MachineView, self).get_context_data(**kwargs)
         context['inventory'] = True
         context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
+        context['serial_number'] = machine.serial_number
         prepared_heartbeats = []
         last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(machine.serial_number)
         for event_class, source_name, ua_max_dates in last_machine_heartbeats:

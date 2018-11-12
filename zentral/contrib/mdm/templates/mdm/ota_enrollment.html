@@ -38,7 +38,7 @@
       <dt>Enrollment tags</dt>
       <dd>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</dd>
       <dt>Serial number{{ secret.serial_numbers|length|pluralize }}</dt>
-      <dd>{% for serial_number in secret.serial_numbers %}<a href="{% url 'mdm:device' serial_number %}">{{ serial_number }}</a>{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</dd>
+      <dd>{% for serial_number, urlsafe_serial_number in secret.urlsafe_serial_numbers %}<a href="{% url 'mdm:device' urlsafe_serial_number %}">{{ serial_number }}</a>{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</dd>
       <dt>UDID{{ secret.udids|length|pluralize }}</dt>
       <dd>{% if secret.udids %}{{ secret.udids|join:", " }}{% else %}-{% endif %}</dd>
     </dl>
@@ -80,7 +80,7 @@
   <tbody>
     {% for s in ota_enrollment_sessions %}
     <tr>
-      <td><a href="{% url 'mdm:device' s.get_serial_number %}">{{ s.get_serial_number }}</a></td>
+      <td><a href="{% url 'mdm:device' s.get_urlsafe_serial_number %}">{{ s.get_serial_number }}</a></td>
       <td>{{ s.get_status_display }}</td>
       <td>{{ s.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>{{ s.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>

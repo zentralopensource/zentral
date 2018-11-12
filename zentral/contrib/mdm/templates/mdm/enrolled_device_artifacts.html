@@ -6,7 +6,7 @@
   <li><a href="/">Home</a></li>
   <li class="active">MDM</li>
   <li><a href="{% url 'mdm:devices' %}">Devices</a></li>
-  <li><a href="{% url 'mdm:device' object.serial_number %}">{{ object.serial_number }}</a></li>
+  <li><a href="{% url 'mdm:device' urlsafe_serial_number %}">{{ object.serial_number }}</a></li>
   <li class="active">Enrolled device artifacts</li>
 </ol>
 

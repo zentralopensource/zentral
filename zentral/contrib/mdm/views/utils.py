@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from zentral.conf import settings
+from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.contrib.mdm.commands import (build_install_application_command_response,
                                           build_install_profile_command_response,
@@ -20,7 +21,7 @@ logger = logging.getLogger("zentral.contrib.mdm.views.utils")
 
 
 def tree_from_payload(udid, serial_number, meta_business_unit, payload):
-    url = reverse("mdm:device", args=(serial_number,))
+    url = reverse("mdm:device", args=(MetaMachine(serial_number).get_urlsafe_serial_number(),))
     tree = {"source": {"module": "zentral.contrib.mdm",
                        "name": "MDM"},
             "reference": udid,

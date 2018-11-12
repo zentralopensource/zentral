@@ -4,6 +4,7 @@ import colorsys
 from datetime import datetime, timedelta
 import logging
 import re
+import urllib.parse
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField, JSONField
@@ -717,13 +718,21 @@ class MetaMachine(object):
 
     @classmethod
     def from_urlsafe_serial_number(cls, urlsafe_serial_number):
-        if isinstance(urlsafe_serial_number, str):
-            urlsafe_serial_number = urlsafe_serial_number.encode("utf-8")
-        serial_number = base64.urlsafe_b64decode(urlsafe_serial_number).decode("utf-8")
+        if urlsafe_serial_number.startswith("."):
+            urlsafe_serial_number = urlsafe_serial_number[1:].encode("utf-8")
+            urlsafe_serial_number += -len(urlsafe_serial_number) % 4 * b"="
+            serial_number = base64.urlsafe_b64decode(urlsafe_serial_number).decode("utf-8")
+        else:
+            serial_number = urlsafe_serial_number
         return cls(serial_number)
 
     def get_urlsafe_serial_number(self):
-        return base64.urlsafe_b64encode(self.serial_number.encode("utf-8")).decode("utf-8")
+        if self.serial_number.startswith(".") or urllib.parse.quote(self.serial_number) != self.serial_number:
+            return ".{}".format(
+                base64.urlsafe_b64encode(self.serial_number.encode("utf-8")).decode("utf-8").rstrip("=")
+            )
+        else:
+            return self.serial_number
 
     def get_absolute_url(self):
         return reverse('inventory:machine', args=(self.get_urlsafe_serial_number(),))
@@ -987,6 +996,10 @@ class EnrollmentSecret(models.Model):
             return self.meta_business_unit.api_enrollment_business_units()[0]
         except (AttributeError, IndexError):
             pass
+
+    def urlsafe_serial_numbers(self):
+        for serial_number in self.serial_numbers:
+            yield serial_number, MetaMachine(serial_number).get_urlsafe_serial_number()
 
 
 class EnrollmentSecretRequest(models.Model):

@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
-from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.events import send_device_notification, send_mbu_device_notifications
@@ -562,7 +562,7 @@ class DevicesView(LoginRequiredMixin, TemplateView):
         self.form.is_valid()
         self.devices = list(self.form.fetch_devices())
         if len(self.devices) == 1:
-            return HttpResponseRedirect(reverse("mdm:device", args=(self.devices[0]["serial_number"],)))
+            return HttpResponseRedirect(reverse("mdm:device", args=(self.devices[0]["urlsafe_serial_number"],)))
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -585,26 +585,27 @@ class DeviceView(LoginRequiredMixin, TemplateView):
     template_name = "mdm/device_info.html"
 
     def get_context_data(self, **kwargs):
-        serial_number = kwargs["serial_number"]
         ctx = super().get_context_data(**kwargs)
         ctx["mdm"] = True
-        ctx["serial_number"] = serial_number
+        ctx["machine"] = machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
+        ctx["serial_number"] = machine.serial_number
         # enrolled devices
-        ctx["enrolled_devices"] = EnrolledDevice.objects.filter(serial_number=serial_number).order_by("-updated_at")
+        ctx["enrolled_devices"] = (EnrolledDevice.objects.filter(serial_number=machine.serial_number)
+                                                         .order_by("-updated_at"))
         ctx["enrolled_devices_count"] = ctx["enrolled_devices"].count()
         # dep device?
         try:
-            ctx["dep_device"] = DEPDevice.objects.get(serial_number=serial_number)
+            ctx["dep_device"] = DEPDevice.objects.get(serial_number=machine.serial_number)
         except DEPDevice.DoesNotExist:
             pass
         # dep enrollment sessions
         ctx["dep_enrollment_sessions"] = DEPEnrollmentSession.objects.filter(
-            enrollment_secret__serial_numbers__contains=[serial_number]
+            enrollment_secret__serial_numbers__contains=[machine.serial_number]
         ).order_by("-updated_at")
         ctx["dep_enrollment_sessions_count"] = ctx["dep_enrollment_sessions"].count()
         # ota enrollment sessions
         ctx["ota_enrollment_sessions"] = OTAEnrollmentSession.objects.filter(
-            enrollment_secret__serial_numbers__contains=[serial_number]
+            enrollment_secret__serial_numbers__contains=[machine.serial_number]
         ).order_by("-updated_at")
         ctx["ota_enrollment_sessions_count"] = ctx["ota_enrollment_sessions"].count()
         return ctx
@@ -615,7 +616,10 @@ class PokeEnrolledDeviceView(LoginRequiredMixin, View):
         enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
         send_device_notification(enrolled_device)
         messages.info(request, "Device poked!")
-        return HttpResponseRedirect(reverse("mdm:device", args=(enrolled_device.serial_number,)))
+        return HttpResponseRedirect(
+            reverse("mdm:device",
+                    args=(MetaMachine(enrolled_device.serial_number).get_urlsafe_serial_number(),))
+        )
 
 
 class EnrolledDeviceArtifactsView(LoginRequiredMixin, DetailView):
@@ -625,6 +629,7 @@ class EnrolledDeviceArtifactsView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["mdm"] = True
+        context["urlsafe_serial_number"] = MetaMachine(self.object.serial_number).get_urlsafe_serial_number()
         context["installed_device_artifacts"] = sorted(self.object.installeddeviceartifact_set.all(),
                                                        key=lambda ida: ida.created_at, reverse=True)
         context["device_artifact_commands"] = sorted(self.object.deviceartifactcommand_set.all(),
@@ -664,4 +669,7 @@ class RefreshDEPDeviceView(LoginRequiredMixin, View):
             messages.error(request, str(error))
         else:
             messages.info(request, "DEP device refreshed")
-        return HttpResponseRedirect("{}#dep_device".format(reverse("mdm:device", args=(dep_device.serial_number,))))
+        return HttpResponseRedirect("{}#dep_device".format(
+            reverse("mdm:device",
+                    args=(MetaMachine(dep_device.serial_number).get_urlsafe_serial_number(),))
+        ))

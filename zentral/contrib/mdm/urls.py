@@ -149,7 +149,7 @@ urlpatterns = [
     url(r'^devices/$',
         views.DevicesView.as_view(),
         name="devices"),
-    url(r'^devices/(?P<serial_number>\S+)/$',
+    url(r'^devices/(?P<urlsafe_serial_number>\S+)/$',
         views.DeviceView.as_view(),
         name="device"),
     url(r'^enrolled_devices/(?P<pk>\d+)/poke/$',

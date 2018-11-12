@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
-from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaBusinessUnit
+from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaBusinessUnit, MetaMachine
 from zentral.utils.osx_package import get_standalone_package_builders
 from .exceptions import EnrollmentSessionStatusError
 from .utils import build_mdm_enrollment_package
@@ -144,6 +144,9 @@ class EnrollmentSession(models.Model):
 
     def get_serial_number(self):
         return self.enrollment_secret.serial_numbers[0]
+
+    def get_urlsafe_serial_number(self):
+        return MetaMachine(self.get_serial_number()).get_urlsafe_serial_number()
 
     def get_challenge(self):
         path = reverse("mdm:verify_scep_csr")
@@ -548,7 +551,10 @@ class DEPDevice(models.Model):
         return self.serial_number
 
     def get_absolute_url(self):
-        return "{}#dep_device".format(reverse("mdm:device", args=(self.serial_number,)))
+        return "{}#dep_device".format(
+            reverse("mdm:device",
+                    args=(MetaMachine(self.serial_number).get_urlsafe_serial_number(),))
+        )
 
     def is_deleted(self):
         return self.last_op_type == self.OP_TYPE_DELETED

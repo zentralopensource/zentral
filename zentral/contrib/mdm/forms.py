@@ -1,6 +1,7 @@
 import plistlib
 from django import forms
 from django.db import connection
+from zentral.contrib.inventory.models import MetaMachine
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .models import (DEPDevice, DEPOrganization, DEPProfile, DEPToken, DEPVirtualServer,
@@ -99,7 +100,7 @@ class DeviceSearchForm(forms.Form):
         # serial number ?
         serial_number = self.cleaned_data.get("serial_number")
         if serial_number:
-            query = "{} WHERE serial_number LIKE UPPER(%s) ".format(query)
+            query = "{} WHERE UPPER(serial_number) LIKE UPPER(%s) ".format(query)
             args.append("%{}%".format(connection.ops.prep_for_like_query(serial_number)))
 
         # group by and order
@@ -115,6 +116,7 @@ class DeviceSearchForm(forms.Form):
             for row in cursor.fetchall():
                 device = dict(zip(attributes, row))
                 device["udids"] = sorted(udid for udid in device["udids"] if udid)
+                device["urlsafe_serial_number"] = MetaMachine(device["serial_number"]).get_urlsafe_serial_number()
                 yield device
 
 
