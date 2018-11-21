@@ -5,6 +5,7 @@ from django.db import models, transaction
 from django.db.models import F, Func
 from django.utils.text import slugify
 from zentral.core.events import event_types
+from zentral.core.probes.sync import signal_probe_change
 from zentral.utils.dict import dict_diff
 from . import probe_classes
 
@@ -126,8 +127,7 @@ class ProbeSource(models.Model):
         # TODO: Json filtering in the query ?
         self.event_types = [etc.event_type for etc in probe.get_event_type_classes()]
         super(ProbeSource, self).save(*args, **kwargs)
-        from zentral.core.queues import queues
-        transaction.on_commit(queues.signal_probe_change)
+        transaction.on_commit(signal_probe_change)
 
     def get_probe_class(self):
         return probe_classes.get(self.model, None)
@@ -147,9 +147,7 @@ class ProbeSource(models.Model):
 
     def delete(self, *args, **kwargs):
         super(ProbeSource, self).delete(*args, **kwargs)
-        # TODO: import loop
-        from zentral.core.queues import queues
-        transaction.on_commit(queues.signal_probe_change)
+        transaction.on_commit(signal_probe_change)
 
     def get_absolute_url(self, anchor=None):
         url = reverse("probes:probe", args=(self.pk,))

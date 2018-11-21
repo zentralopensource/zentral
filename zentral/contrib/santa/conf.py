@@ -1,4 +1,7 @@
-from zentral.core.probes.conf import ProbeList
+from zentral.core.probes.conf import all_probes
+
+
+santa_probes = all_probes.model_filter("SantaProbe")
 
 
 def build_santa_conf(machine):
@@ -10,8 +13,7 @@ def build_santa_conf(machine):
     all the configured probes for that client.
     """
     rules = []
-    for probe in (ProbeList().model_filter("SantaProbe")  # ProbeList to avoid cache inconsistency
-                             .machine_filtered(machine)):
+    for probe in santa_probes.machine_filtered(machine):
         # TODO test duplicated rules
         rules.extend(r.to_configuration() for r in probe.rules)
     return {'rules': rules}

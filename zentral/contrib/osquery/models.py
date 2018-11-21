@@ -11,7 +11,7 @@ from django.utils.text import slugify
 from zentral.conf import settings
 from zentral.contrib.inventory.models import BaseEnrollment, MachineSnapshotCommit, MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.core.probes.conf import ProbeList
+from zentral.core.probes.conf import all_probes
 
 logger = logging.getLogger("zentral.contrib.osquery.models")
 
@@ -191,13 +191,12 @@ MAX_DISTRIBUTED_QUERY_AGE = timedelta(days=1)
 
 
 class DistributedQueryProbeMachineManager(models.Manager):
+    distributed_query_probes = all_probes.model_filter("OsqueryDistributedQueryProbe", "OsqueryFileCarveProbe")
+
     def new_queries_for_machine(self, machine):
         queries = {}
 
         seen_probe_id = {dqpm.probe_source_id for dqpm in self.filter(machine_serial_number=machine.serial_number)}
-
-        def probe_model_filter(probe):
-            return probe.get_model() in ['OsqueryDistributedQueryProbe', 'OsqueryFileCarveProbe']
 
         def not_seen_probe_filter(probe):
             return probe.pk not in seen_probe_id
@@ -207,10 +206,9 @@ class DistributedQueryProbeMachineManager(models.Manager):
             return probe.created_at > min_age
         # TODO: slow
         # could filter the probes that are too old in the db
-        probe_list = (ProbeList().filter(probe_model_filter)
-                                 .machine_filtered(machine)
-                                 .filter(not_seen_probe_filter)
-                                 .filter(recent_probe_filter))
+        probe_list = (self.distributed_query_probes.machine_filtered(machine)
+                                                   .filter(not_seen_probe_filter)
+                                                   .filter(recent_probe_filter))
         for probe in probe_list:
             dqpm, created = self.get_or_create(probe_source_id=probe.pk,
                                                machine_serial_number=machine.serial_number)

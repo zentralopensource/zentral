@@ -124,27 +124,37 @@ class OsqueryDistributedQueryProbeTestCase(TestCase):
 
     def test_default_machine_distributed_queries(self):
         default_machine = MockMetaMachine([], [], None, None, serial_number="MSN1")
+        # simulate all_probes sync
+        all_probes.clear()
         queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(default_machine)
         self.assertEqual(len(queries), 2)
         for key, query in ((self.query_1_key, self.query_1),
                            (self.query_2_key, self.query_2)):
             self.assertEqual(queries[key], query)
+        # simulate all_probes sync
+        all_probes.clear()
         extra_queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(default_machine)
         self.assertEqual(extra_queries, {})
 
     def test_windows_machine_distributed_queries(self):
         windows_machine = MockMetaMachine([], [], "WINDOWS", None, serial_number="MSN2")
+        # simulate all_probes sync
+        all_probes.clear()
         queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(windows_machine)
         self.assertEqual(len(queries), 3)
         for key, query in ((self.query_1_key, self.query_1),
                            (self.query_2_key, self.query_2),
                            (self.query_windows_key, self.query_windows)):
             self.assertEqual(queries[key], query)
+        # simulate all_probes sync
+        all_probes.clear()
         extra_queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(windows_machine)
         self.assertEqual(extra_queries, {})
 
     def test_default_machine_older_distributed_queries(self):
         default_machine = MockMetaMachine([], [], None, None, serial_number="MSN3")
+        # simulate all_probes sync
+        all_probes.clear()
         # consume all queries
         queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(default_machine)
         self.assertEqual(len(queries), 2)
@@ -157,6 +167,8 @@ class OsqueryDistributedQueryProbeTestCase(TestCase):
             status=ProbeSource.ACTIVE,
             body={"distributed_query": "SELECT 'QUERY TOO OLD';"},
         )
+        # simulate all_probes sync
+        all_probes.clear()
         probe_source_too_old.created_at = timezone.now() - MAX_DISTRIBUTED_QUERY_AGE - timedelta(hours=1)
         probe_source_too_old.save()
         queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(default_machine)
@@ -171,6 +183,8 @@ class OsqueryDistributedQueryProbeTestCase(TestCase):
         )
         probe_source_ok.created_at = timezone.now() - MAX_DISTRIBUTED_QUERY_AGE + timedelta(hours=1)
         probe_source_ok.save()
+        # simulate all_probes sync
+        all_probes.clear()
         # it's there
         queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(default_machine)
         self.assertEqual(len(queries), 1)

@@ -4,7 +4,6 @@ from kombu import Connection, Consumer, Exchange, Queue
 from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 from kombu.pools import producers
 from prometheus_client import Counter
-from zentral.core.probes.conf import all_probes
 from zentral.utils.prometheus import PrometheusWorkerMixin
 
 
@@ -83,7 +82,6 @@ class PreprocessorWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMi
 class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
     def __init__(self, connection, event_store):
         self.connection = connection
-        self.channel2 = None
         self.event_store = event_store
         self.name = "store worker {}".format(self.event_store.name)
         self.input_queue = Queue(('store_events_{}'.format(self.event_store.name)).replace(" ", "_"),
@@ -105,22 +103,10 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
         super().run(*args, **kwargs)
 
     def get_consumers(self, _, default_channel):
-        self.channel2 = default_channel.connection.channel()
         return [Consumer(default_channel,
                          queues=[self.input_queue],
                          accept=['json'],
-                         callbacks=[self.store_event]),
-                Consumer(self.channel2,
-                         queues=[Queue(exchange=probes_exchange,
-                                       auto_delete=True,
-                                       durable=False)],
-                         accept=['json'],
-                         callbacks=[self.clear_probes_cache])]
-
-    def on_consumer_end(self, connection, default_channel):
-        self.log_info("consumer end")
-        if self.channel2:
-            self.channel2.close()
+                         callbacks=[self.store_event])]
 
     def store_event(self, body, message):
         self.log_debug("store event")
@@ -128,16 +114,10 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
         message.ack()
         self.stored_events_counter.labels(body['_zentral']['type']).inc()
 
-    def clear_probes_cache(self, body, message):
-        self.log_info("clear probes cache")
-        all_probes.clear()
-        message.ack()
-
 
 class ProcessorWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
     def __init__(self, connection, event_processor):
         self.connection = connection
-        self.channel2 = None
         self.event_processor = event_processor
         self.name = "processor worker"
 
@@ -156,33 +136,16 @@ class ProcessorWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
         super().run(*args, **kwargs)
 
     def get_consumers(self, _, default_channel):
-        self.channel2 = default_channel.connection.channel()
         return [Consumer(default_channel,
                          queues=[process_events_queue],
                          accept=['json'],
-                         callbacks=[self.process_event]),
-                Consumer(self.channel2,
-                         queues=[Queue(exchange=probes_exchange,
-                                       auto_delete=True,
-                                       durable=False)],
-                         accept=['json'],
-                         callbacks=[self.clear_probes_cache])]
-
-    def on_consumer_end(self, connection, default_channel):
-        self.log_info("consumer end")
-        if self.channel2:
-            self.channel2.close()
+                         callbacks=[self.process_event])]
 
     def process_event(self, body, message):
         self.log_debug("process event")
         self.event_processor.process(body)
         message.ack()
         self.processed_events_counter.labels(body['_zentral']['type']).inc()
-
-    def clear_probes_cache(self, body, message):
-        self.log_info("clear probes cache")
-        all_probes.clear()
-        message.ack()
 
 
 class EventQueues(object):
@@ -198,13 +161,6 @@ class EventQueues(object):
 
     def get_processor_worker(self, event_processor):
         return ProcessorWorker(Connection(self.backend_url), event_processor)
-
-    def signal_probe_change(self):
-        with producers[self.connection].acquire(block=True) as producer:
-            producer.publish("probe_change",
-                             serializer='json',
-                             exchange=probes_exchange,
-                             declare=[probes_exchange])
 
     def post_raw_event(self, input_queue_name, raw_event):
         exchange = Exchange(input_queue_name, type="fanout", durable=True)

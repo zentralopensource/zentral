@@ -6,6 +6,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, 
 from zentral.contrib.osquery.conf import (INVENTORY_QUERY_NAME,
                                           INVENTORY_DISTRIBUTED_QUERY_PREFIX)
 from zentral.contrib.osquery.models import Configuration, Enrollment
+from zentral.core.probes.conf import all_probes
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import make_secret
 
@@ -235,6 +236,8 @@ class OsqueryAPIViewsTestCase(TestCase):
             body={"distributed_query": dq}
         )
         dq_name = "dq_{}".format(probe_source.pk)
+        # simulate an all_probes sync
+        all_probes.clear()
         # distributed read
         response = self.post_as_json("distributed_read", {"node_key": node_key})
         self.assertEqual(response.status_code, 200)

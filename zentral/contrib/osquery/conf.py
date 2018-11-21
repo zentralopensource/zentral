@@ -1,5 +1,5 @@
 import logging
-from zentral.core.probes.conf import ProbeList
+from zentral.core.probes.conf import all_probes
 from zentral.contrib.inventory.conf import MACOS
 
 logger = logging.getLogger('zentral.contrib.osquery.conf')
@@ -44,6 +44,11 @@ DECORATORS = {
 }
 
 
+osquery_query_probes = all_probes.model_filter("OsqueryProbe",
+                                               "OsqueryComplianceProbe",
+                                               "OsqueryFIMProbe")
+
+
 def get_inventory_queries_for_machine(machine):
     yield from INVENTORY_QUERIES
     if machine.platform == MACOS:
@@ -75,12 +80,8 @@ def build_osquery_conf(machine, enrollment):
     packs = {}
     file_paths = {}
     file_accesses = []
-    # ProbeList() to avoid cache inconsistency
     # TODO: check performances
-    for probe in (ProbeList().model_filter("OsqueryProbe",
-                                           "OsqueryComplianceProbe",
-                                           "OsqueryFIMProbe")
-                             .machine_filtered(machine)):
+    for probe in osquery_query_probes.machine_filtered(machine):
         # packs or schedule
         if probe.pack_key:
             pack_conf = packs.setdefault(probe.pack_key,

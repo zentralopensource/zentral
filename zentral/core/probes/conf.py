@@ -1,14 +1,18 @@
+import threading
 import weakref
 from .models import ProbeSource
+from .sync import ProbeViewSync
 
 
 class ProbeView(object):
     def __init__(self, parent=None):
         self.parent = parent
         self._probes = None
+        self._lock = threading.Lock()
 
     def clear(self):
-        self._probes = None
+        with self._lock:
+            self._probes = None
 
     def iter_parent_probes(self):
         if self.parent is None:
@@ -18,12 +22,14 @@ class ProbeView(object):
             yield from self.parent
 
     def __iter__(self):
-        self._load()
-        yield from self._probes
+        with self._lock:
+            self._load()
+            yield from self._probes
 
     def __len__(self):
-        self._load()
-        return len(self._probes)
+        with self._lock:
+            self._load()
+            return len(self._probes)
 
 
 class ProbesDict(ProbeView):
@@ -46,16 +52,19 @@ class ProbesDict(ProbeView):
                         self._probes.setdefault(key, []).append(val)
 
     def __getitem__(self, key):
-        self._load()
-        return self._probes[key]
+        with self._lock:
+            self._load()
+            return self._probes[key]
 
     def keys(self):
-        self._load()
-        return self._probes.keys()
+        with self._lock:
+            self._load()
+            return self._probes.keys()
 
     def get(self, *args, **kwargs):
-        self._load()
-        return self._probes.get(*args, **kwargs)
+        with self._lock:
+            self._load()
+            return self._probes.get(*args, **kwargs)
 
 
 class ProbeList(ProbeView):
@@ -65,9 +74,10 @@ class ProbeList(ProbeView):
         self._children = weakref.WeakSet()
 
     def clear(self):
-        super(ProbeList, self).clear()
-        for child in self._children:
-            child.clear()
+        with self._lock:
+            self._probes = None
+            for child in self._children:
+                child.clear()
 
     def _load(self):
         if self._probes is None:
@@ -108,3 +118,8 @@ class ProbeList(ProbeView):
 
 
 all_probes = ProbeList()
+
+
+# separate thread to listen to the probe change signal
+all_probes_sync = ProbeViewSync(all_probes)
+all_probes_sync.start()
