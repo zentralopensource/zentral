@@ -20,6 +20,10 @@ fi
 /bin/mkdir -p "$OSQUERY_ROCKSDB_PATH"
 /usr/sbin/chown -R root:admin "$ZENTRAL_OSQUERY_ROOT"
 
+# create log directory for osqueryd
+/bin/mkdir -p "/var/log/osquery"
+/usr/sbin/chown -R root:admin "/var/log/osquery"
+
 # create enrollment file from a secret
 echo "%ENROLL_SECRET_SECRET%" > "$OSQUERY_ENROLL_SECRET_PATH"
 
