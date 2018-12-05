@@ -4,7 +4,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
-from django.views.generic import CreateView, DetailView, ListView, TemplateView, View
+from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.mdm.dep import add_dep_token_certificate
 from zentral.contrib.mdm.forms import (EncryptedDEPTokenForm,
                                        PushCertificateForm,
@@ -138,6 +138,25 @@ class DownloadDEPTokenPublicKeyView(LoginRequiredMixin, View):
         response = HttpResponse(dep_token.certificate, content_type="application/x-pem-file")
         response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
         return response
+
+
+class RenewDEPTokenView(LoginRequiredMixin, UpdateView):
+    model = DEPToken
+    template_name = "mdm/deptoken_renew.html"
+    form_class = EncryptedDEPTokenForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["setup"] = True
+        try:
+            context["virtual_server"] = context["object"].virtual_server
+        except DEPVirtualServer.DoesNotExist:
+            context["virtual_server"] = None
+        return context
+
+    def form_valid(self, form):
+        dep_token = form.save()
+        return HttpResponseRedirect(dep_token.virtual_server.get_absolute_url())
 
 
 # DEP virtual servers

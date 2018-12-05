@@ -39,6 +39,9 @@ urlpatterns = [
     url(r'^dep/tokens/(?P<pk>\d+)/download_public_key/$',
         views.DownloadDEPTokenPublicKeyView.as_view(),
         name='download_dep_token_public_key'),
+    url(r'^dep/tokens/(?P<pk>\d+)/renew/$',
+        views.RenewDEPTokenView.as_view(),
+        name='renew_dep_token'),
 
     # DEP virtual servers / setup views
     url(r'^dep/virtual-servers/$',

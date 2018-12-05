@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  {% if virtual_server %}
+  <li><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
+  <li><a href="{{ virtual_server.get_absolute_url }}">{{ virtual_server }}</a></li>
+  {% endif %}
+  <li class="active">Renew DEP token</li>
+</ol>
+
+<h2>Renew DEP token</h2>
+
+<form class="form" method="POST" enctype="multipart/form-data">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    {% if virtual_server %}
+    <a type="submit" href="{{ virtual_server.get_absolute_url }}" class="btn btn-default">
+      Cancel
+    </a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">
+      <span class="glyphicon glyphicon-upload" aria-hidden="true"></span>
+      Upload token
+    </button>
+  </p>
+</form>
+{% endblock %}
