@@ -70,6 +70,9 @@ KNOWN_COMMANDS = {
     "tests": ["python", 'server/manage.py', 'test', 'tests/'],
     "createuser": ["python", 'server/manage.py', 'create_zentral_user'],
 }
+KNOWN_COMMANDS_EXTRA_ENV = {
+    "tests": {"ZENTRAL_PROBES_SYNC": "0"}
+}
 
 
 KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC = {'runserver', 'gunicorn'}
@@ -80,6 +83,7 @@ if __name__ == '__main__':
         warnings.warn("Not enough arguments.")
         sys.exit(2)
     cmd = sys.argv[1]
+    env = os.environ.copy()
     args = KNOWN_COMMANDS.get(cmd, None)
     if args:
         filename = args[0]
@@ -87,8 +91,9 @@ if __name__ == '__main__':
         wait_for_db_migration()
         if cmd in KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC:
             django_collectstatic()
+        env.update(KNOWN_COMMANDS_EXTRA_ENV.get(cmd, {}))
         print('Launch known command "{}"'.format(cmd))
     else:
         filename = cmd
         args = sys.argv[1:]
-    os.execvp(filename, args)
+    os.execvpe(filename, args, env)

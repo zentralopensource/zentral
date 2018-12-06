@@ -1,3 +1,4 @@
+import os
 import threading
 import weakref
 from .models import ProbeSource
@@ -5,10 +6,12 @@ from .sync import ProbeViewSync
 
 
 class ProbeView(object):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, with_sync=False):
         self.parent = parent
         self._probes = None
         self._lock = threading.Lock()
+        self.with_sync = with_sync
+        self.sync = None
 
     def clear(self):
         with self._lock:
@@ -20,6 +23,12 @@ class ProbeView(object):
                 yield p.load()
         else:
             yield from self.parent
+
+    def _start_sync(self):
+        if self.sync is None and self.with_sync:
+            # separate thread to listen to the probe change signal
+            self.sync = ProbeViewSync(self)
+            self.sync.start()
 
     def __iter__(self):
         with self._lock:
@@ -33,8 +42,8 @@ class ProbeView(object):
 
 
 class ProbesDict(ProbeView):
-    def __init__(self, parent=None, item_func=None, unique_key=True):
-        super(ProbesDict, self).__init__(parent)
+    def __init__(self, parent=None, item_func=None, unique_key=True, with_sync=False):
+        super(ProbesDict, self).__init__(parent, with_sync=with_sync)
         if item_func is None:
             self.item_func = lambda p: [(p.name, p)]
         else:
@@ -43,6 +52,7 @@ class ProbesDict(ProbeView):
 
     def _load(self):
         if self._probes is None:
+            self._start_sync()
             self._probes = {}
             for probe in self.iter_parent_probes():
                 for key, val in self.item_func(probe):
@@ -68,8 +78,8 @@ class ProbesDict(ProbeView):
 
 
 class ProbeList(ProbeView):
-    def __init__(self, parent=None, filter_func=None):
-        super(ProbeList, self).__init__(parent)
+    def __init__(self, parent=None, filter_func=None, with_sync=False):
+        super(ProbeList, self).__init__(parent, with_sync=with_sync)
         self.filter_func = filter_func
         self._children = weakref.WeakSet()
 
@@ -81,6 +91,7 @@ class ProbeList(ProbeView):
 
     def _load(self):
         if self._probes is None:
+            self._start_sync()
             self._probes = []
             for probe in self.iter_parent_probes():
                 if self.filter_func is None or self.filter_func(probe):
@@ -117,9 +128,8 @@ class ProbeList(ProbeView):
         return self.filter(_filter)
 
 
-all_probes = ProbeList()
+# used for the tests, to avoid having an extra DB connection
+zentral_probes_sync = os.environ.get("ZENTRAL_PROBES_SYNC", "1") == "1"
 
 
-# separate thread to listen to the probe change signal
-all_probes_sync = ProbeViewSync(all_probes)
-all_probes_sync.start()
+all_probes = ProbeList(with_sync=zentral_probes_sync)
