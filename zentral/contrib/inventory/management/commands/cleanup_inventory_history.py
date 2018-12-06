@@ -60,9 +60,11 @@ class Command(BaseCommand):
     help = "Cleanup inventory history"
 
     def add_arguments(self, parser):
+        parser.add_argument("-q", "--quiet", action="store_true", help="no output if no errors")
         parser.add_argument('--days', type=int, default=30, help='number of days to keep, default 30')
 
     def set_options(self, **options):
+        self.quiet = options.get("quiet", False)
         self.min_date = timezone.now() - timedelta(days=options["days"])
 
     def handle(self, *args, **kwargs):
@@ -74,7 +76,8 @@ class Command(BaseCommand):
     def cleanup_inventory_history(self, cursor):
         # delete older machine snapshot commits
         cursor.execute(DELETE_MACHINE_SNAPSHOT_COMMIT_QUERY, [self.min_date])
-        print("machine snapshot commits", cursor.rowcount)
+        if not self.quiet:
+            print("machine snapshot commits", cursor.rowcount)
 
         # orphans
         for table_name, attribute, links in ORPHANS:
@@ -84,4 +87,5 @@ class Command(BaseCommand):
                               attribute, fk_attribute, fk_table, fk_attribute))
             query = "DELETE FROM {} WHERE {}".format(table_name, " AND ".join(wheres))
             cursor.execute(query)
-            print(table_name, cursor.rowcount)
+            if not self.quiet:
+                print(table_name, cursor.rowcount)
