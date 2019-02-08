@@ -15,7 +15,7 @@ class InventoryClient(BaseInventory):
         "criteria": {
             "logic": "one",
             "expressions": [
-                {"column": "type", "operator": "is", "component": "OperatingSystem", "qualifier": "OSX"},
+                {"column": "type", "operator": "is", "component": "OperatingSystem", "qualifier": "macOS"},
                 {"column": "type", "operator": "is", "component": "OperatingSystem", "qualifier": "WIN"},
             ]
         },
