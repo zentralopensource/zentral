@@ -5,6 +5,7 @@ cryptography
 django-bootstrap-form
 django<2
 djangorestframework
+django-filter
 elasticsearch
 gunicorn
 hyper

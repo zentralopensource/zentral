@@ -25,13 +25,20 @@ for up in auth_urlpatterns:
 # zentral apps
 for app_name in zentral_settings.get('apps', []):
     app_shortname = app_name.rsplit('.', 1)[-1]
-    url_module = "{}.urls".format(app_name)
-    try:
-        urlpatterns.append(url(r'^{}/'.format(app_shortname), include(url_module, namespace=app_shortname)))
-    except ImportError as error:
-        logger.exception("Could not load app urls %s", app_shortname)
-        # TODO use ModuleNotFoundError for python >= 3.6
-        pass
+    for url_prefix, url_module_name in (("", "urls"),
+                                        ("api/", "api_urls")):
+        url_module = "{}.{}".format(app_name, url_module_name)
+        namespace = app_shortname
+        if url_prefix:
+            namespace = "{}_{}".format(namespace, url_prefix.strip("/"))
+        try:
+            urlpatterns.append(url(r'^{p}{a}/'.format(p=url_prefix, a=app_shortname),
+                                   include(url_module, namespace=namespace)))
+        except ImportError as error:
+            if error.__class__.__name__ == "ModuleNotFoundError":
+                pass
+            else:
+                logger.exception("Could not load app %s %s", app_shortname, url_module_name)
 
 # saml2
 if saml2_idp_metadata_file:

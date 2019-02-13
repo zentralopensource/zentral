@@ -1,3 +1,4 @@
+import json
 import sys
 from django.contrib.auth.tokens import default_token_generator
 from django.core.management.base import BaseCommand
@@ -6,6 +7,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from rest_framework.authtoken.models import Token
 from accounts.models import User
 from zentral.conf import settings
 
@@ -17,21 +19,31 @@ class Command(BaseCommand):
         parser.add_argument('username')
         parser.add_argument('email')
         parser.add_argument('--superuser', action='store_true',
-                            help="user has all permissions without explicitly assigning them")
+                            help="User has all permissions without explicitly assigning them")
+        parser.add_argument('--with-api-token', action='store_true',
+                            help="Generate an API token for the user")
+        parser.add_argument('--json', action='store_true',
+                            help="Set output mode to 'json'")
+
+    def exit_with_error(self, message):
+        if self.json:
+            print(json.dumps({"error": message}, indent=2))
+        else:
+            print("ERROR", message)
+        sys.exit(1)
 
     def handle(self, *args, **kwargs):
+        self.json = kwargs.get("json", False)
         username = kwargs["username"].strip()
         if not username:
-            print("ERROR: invalid username")
-            sys.exit(1)
+            self.exit_with_error("invalid username")
         email = kwargs["email"]
         superuser = kwargs.get("superuser", False)
         email_validator = EmailValidator()
         try:
             email_validator(email)
         except ValidationError:
-            print("ERROR: invalid email address")
-            sys.exit(1)
+            self.exit_with_error("invalid email address")
         user = None
         try:
             user = User.objects.get(username=username)
@@ -39,34 +51,63 @@ class Command(BaseCommand):
             pass
         else:
             if user.email != email:
-                print("ERROR: user {} exists with a different email: {}".format(username, user.email))
-                sys.exit(1)
+                self.exit_with_error("user {} exists with a different email: {}".format(username, user.email))
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             pass
         else:
             if user.username != username:
-                print("ERROR: user with email {} exists with a different username: {}".format(email, user.username))
-                sys.exit(1)
+                self.exit_with_error(
+                    "user with email {} exists with a different username: {}".format(email, user.username)
+                )
+        created = updated = False
         if not user:
             user = User.objects.create_user(username, email,
                                             password=get_random_string(1024),
                                             is_superuser=superuser)
-            print("{} {} {} created".format("Superuser" if superuser else "User",
-                                            username, email))
+            created = True
+            if not self.json:
+                print("Superuser" if superuser else "User", username, email, "created")
         else:
             if user.is_superuser != superuser:
+                updated = True
                 user.is_superuser = superuser
                 user.save()
-                if superuser:
-                    print("Existing user {} {} promoted to superuser".format(username, email))
-                else:
-                    print("Existing superuser {} {} demoted".format(username, email))
+                if superuser and not self.json:
+                    print("Existing user", username, email, "promoted to superuser")
+                elif not self.json:
+                    print("Existing superuser", username, email, "demoted")
             else:
-                print("{} {} {} already exists".format("Superuser" if user.is_superuser else "User",
-                                                       username, email))
+                print("Superuser" if user.is_superuser else "User", username, email, "already exists")
+
+        # API Token?
+        if kwargs.get("with_api_token"):
+            api_token, api_token_created = Token.objects.get_or_create(user=user)
+            if not self.json:
+                print("Created" if api_token_created else "Existing", "API token", api_token.key)
+        else:
+            api_token = None
+            api_token_created = False
+
+        # generate password reset URL
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        url = reverse('password_reset_confirm', args=(uid, token))
-        print("Password reset: {}{}".format(settings["api"]["tls_hostname"], url))
+        password_reset_url = "{}{}".format(
+            settings["api"]["tls_hostname"],
+            reverse('password_reset_confirm', args=(uid, token))
+        )
+
+        if self.json:
+            print(json.dumps({
+                "superuser": superuser,
+                "username": user.username,
+                "email": user.email,
+                "created": created,
+                "updated": updated,
+                "api_token": api_token.key if api_token else None,
+                "api_token_created": api_token_created,
+                "password_reset_url": password_reset_url,
+            }, indent=2))
+        else:
+            print("Password reset:", password_reset_url)
