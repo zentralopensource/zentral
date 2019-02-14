@@ -1,5 +1,6 @@
 from django_filters import rest_framework as filters
 from rest_framework import generics
+from rest_framework.exceptions import ValidationError
 from .models import MetaBusinessUnit
 from .serializers import MetaBusinessUnitSerializer
 
@@ -20,3 +21,9 @@ class MetaBusinessUnitDetail(generics.RetrieveUpdateDestroyAPIView):
     """
     queryset = MetaBusinessUnit.objects.all()
     serializer_class = MetaBusinessUnitSerializer
+
+    def perform_destroy(self, instance):
+        if not instance.can_be_deleted():
+            raise ValidationError('This meta business unit cannot be deleted')
+        else:
+            return super().perform_destroy(instance)
