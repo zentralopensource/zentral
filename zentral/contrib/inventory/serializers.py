@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import MetaBusinessUnit
+from .models import EnrollmentSecret, MetaBusinessUnit, Tag
 
 
 class MetaBusinessUnitSerializer(serializers.ModelSerializer):
@@ -29,3 +29,16 @@ class MetaBusinessUnitSerializer(serializers.ModelSerializer):
             mbu.create_enrollment_business_unit()
         # TODO: switch off api_enrollment_enabled
         return mbu
+
+
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = ("id", "meta_business_unit", "name", "slug", "color")
+        # TODO: Taxonomy
+
+
+class EnrollmentSecretSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EnrollmentSecret
+        fields = ("id", "secret", "meta_business_unit", "tags", "serial_numbers", "udids", "quota", "request_count")

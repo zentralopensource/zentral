@@ -1,8 +1,8 @@
 from django_filters import rest_framework as filters
 from rest_framework import generics
 from rest_framework.exceptions import ValidationError
-from .models import MetaBusinessUnit
-from .serializers import MetaBusinessUnitSerializer
+from .models import MetaBusinessUnit, Tag
+from .serializers import MetaBusinessUnitSerializer, TagSerializer
 
 
 class MetaBusinessUnitList(generics.ListCreateAPIView):
@@ -17,7 +17,7 @@ class MetaBusinessUnitList(generics.ListCreateAPIView):
 
 class MetaBusinessUnitDetail(generics.RetrieveUpdateDestroyAPIView):
     """
-    Retrieve, update or delete a MBU instance.
+    Retrieve, update or delete a MBU.
     """
     queryset = MetaBusinessUnit.objects.all()
     serializer_class = MetaBusinessUnitSerializer
@@ -27,3 +27,21 @@ class MetaBusinessUnitDetail(generics.RetrieveUpdateDestroyAPIView):
             raise ValidationError('This meta business unit cannot be deleted')
         else:
             return super().perform_destroy(instance)
+
+
+class TagList(generics.ListCreateAPIView):
+    """
+    List all tags, search tag by name, or create a new tag.
+    """
+    queryset = Tag.objects.all()
+    serializer_class = TagSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ('name',)
+
+
+class TagDetail(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update or delete a tag.
+    """
+    queryset = Tag.objects.all()
+    serializer_class = TagSerializer

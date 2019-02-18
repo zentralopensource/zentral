@@ -21,7 +21,7 @@ class Action(BaseAction):
                 if source.module == client.source['module'] and source.config == client.source['config']:
                     try:
                         client.add_machine_to_group(ms, group_name)
-                    except:
+                    except Exception:
                         logger.exception('Could not add machine to group %s with client %s',
                                          group_name, client.name)
                     break

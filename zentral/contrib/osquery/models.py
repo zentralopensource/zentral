@@ -157,6 +157,9 @@ class Configuration(models.Model):
             # and notify their distributors
             enrollment.save()
 
+    def can_be_deleted(self):
+        return self.enrollment_set.all().count() == 0
+
 
 class Enrollment(BaseEnrollment):
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)

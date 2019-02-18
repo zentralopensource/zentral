@@ -635,7 +635,7 @@ class Tag(models.Model):
     taxonomy = models.ForeignKey(Taxonomy, blank=True, null=True)
     meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True)
     name = models.CharField(max_length=50, unique=True)
-    slug = models.SlugField(unique=True)
+    slug = models.SlugField(unique=True, editable=False)
     color = models.CharField(max_length=6,
                              default="0079bf",  # blue from UpdateTagView
                              validators=[validate_color])
@@ -915,7 +915,7 @@ class EnrollmentSecretManager(models.Manager):
 
 
 class EnrollmentSecret(models.Model):
-    secret = models.CharField(max_length=256, unique=True)
+    secret = models.CharField(max_length=256, unique=True, editable=False)
     meta_business_unit = models.ForeignKey(
         MetaBusinessUnit,
         help_text="The business unit the machine will be assigned to at enrollment"
@@ -928,10 +928,10 @@ class EnrollmentSecret(models.Model):
     udids = ArrayField(models.TextField(), blank=True, null=True)
     quota = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1),
                                                                    MaxValueValidator(200000)])
-    request_count = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    request_count = models.IntegerField(default=0, validators=[MinValueValidator(0)], editable=False)
     revoked_at = models.DateTimeField(null=True, blank=True)
     expired_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     objects = EnrollmentSecretManager()
 
