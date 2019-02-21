@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from django.db import connection
 from django.db.models import Count
@@ -14,11 +15,497 @@ from .models import EnrollmentSecret, MachineSnapshot, MachineSnapshotCommit
 logger = logging.getLogger("zentral.contrib.inventory.utils")
 
 
+class BaseMSFilter:
+    title = "Untitled"
+    query_kwarg = None
+    many = False
+    non_grouping_expression = None
+    expression = None
+    grouping_set = None
+
+    def __init__(self, idx, query_dict):
+        self.idx = idx
+        self.query_dict = query_dict
+        self.value = query_dict.get(self.get_query_kwarg())
+        self.grouping_alias = "fg{}".format(idx)
+
+    def get_query_kwarg(self):
+        return self.query_kwarg
+
+    def get_expressions(self, grouping=False):
+        if grouping:
+            if self.grouping_set:
+                yield "grouping({}) as {}".format(self.grouping_set[0], self.grouping_alias)
+            if self.expression:
+                yield self.expression
+        elif self.non_grouping_expression:
+            yield self.non_grouping_expression
+
+    def joins(self):
+        return []
+
+    def join_args(self):
+        return []
+
+    def wheres(self):
+        return []
+
+    def where_args(self):
+        return []
+
+    # process grouping results
+
+    def filter_grouping_results(self, grouping_results):
+        for gr in grouping_results:
+            if gr.get(self.grouping_alias) == 0:
+                yield gr
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        if not self.grouping_set:
+            return
+        return grouping_result.get(self.grouping_set[-1].split(".")[-1])
+
+    def label_for_grouping_value(self, grouping_value):
+        return str(grouping_value) if grouping_value else "-"
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        return grouping_value
+
+    def grouping_choices_from_grouping_results(self, grouping_results):
+        choices = []
+        for grouping_result in self.filter_grouping_results(grouping_results):
+            grouping_value = self.grouping_value_from_grouping_result(grouping_result)
+            # label
+            label = self.label_for_grouping_value(grouping_value)
+            # query_dict
+            query_dict = self.query_dict.copy()
+            query_dict[self.get_query_kwarg()] = self.query_kwarg_value_from_grouping_value(grouping_value)
+            # count
+            count = grouping_result["count"]
+            choices.append((label, count, query_dict))
+        return choices
+
+
+class SourceFilter(BaseMSFilter):
+    title = "Sources"
+    query_kwarg = "src"
+    expression = "jsonb_build_object('id', src.id, 'name', src.name, 'config', src.config) as src_j"
+    grouping_set = ("src.id", "src_j")
+
+    def joins(self):
+        yield "join inventory_source as src on (ms.source_id = src.id)"
+
+    def wheres(self):
+        if self.value:
+            yield "src.id = %s"
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        gv = super().grouping_value_from_grouping_result(grouping_result)
+        if gv["id"] is None:
+            return None
+        return gv
+
+    def label_for_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return "-"
+        else:
+            return grouping_value["name"]
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return None
+        else:
+            return grouping_value["id"]
+
+
+class OSVersionFilter(BaseMSFilter):
+    title = "OS"
+    query_kwarg = "osv"
+    expression = ("jsonb_build_object("
+                  "'id', osv.id, "
+                  "'name', osv.name, "
+                  "'major', osv.major, "
+                  "'minor', osv.minor, "
+                  "'patch', osv.patch, "
+                  "'build', osv.build) as osv_j")
+    grouping_set = ("osv.id", "osv_j")
+
+    def joins(self):
+        yield "left join inventory_osversion as osv on (ms.os_version_id = osv.id)"
+
+    def wheres(self):
+        if self.value:
+            yield "osv.id = %s"
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        gv = super().grouping_value_from_grouping_result(grouping_result)
+        if gv["id"] is None:
+            return None
+        return gv
+
+    def label_for_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return "-"
+        label = [grouping_value["name"]]
+        label.append(".".join(str(num) for num in
+                              (grouping_value.get(attr) for attr in ("major", "minor", "patch"))
+                              if num is not None))
+        build = grouping_value.get("build")
+        if build:
+            label.append("({})".format(build))
+        return " ".join(e for e in label if e)
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        if grouping_value:
+            return grouping_value["id"]
+
+
+class MetaBusinessUnitFilter(BaseMSFilter):
+    title = "Meta business units"
+    query_kwarg = "mbu"
+    expression = "jsonb_build_object('id', mbu.id, 'name', mbu.name) as mbu_j"
+    grouping_set = ("mbu.id", "mbu_j")
+
+    def joins(self):
+        return ["left join inventory_businessunit as bu on (ms.business_unit_id = bu.id)",
+                "left join inventory_metabusinessunit as mbu on (bu.meta_business_unit_id = mbu.id)"]
+
+    def wheres(self):
+        if self.value:
+            yield "mbu.id = %s"
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        gv = super().grouping_value_from_grouping_result(grouping_result)
+        if gv["id"] is None:
+            return None
+        return gv
+
+    def label_for_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return "-"
+        else:
+            return grouping_value["name"] or "?"
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        if grouping_value:
+            return grouping_value["id"]
+
+
+class TagFilter(BaseMSFilter):
+    title = "Tags"
+    query_kwarg = "t"
+    expression = (
+        "jsonb_build_object("
+        "'id', t.id, "
+        "'name', t.name, "
+        "'meta_business_unit', "
+        "jsonb_build_object('id', tmbu.id, 'name', tmbu.name)"
+        ") as tag_j"
+    )
+    grouping_set = ("t.id", "tag_j")
+
+    def joins(self):
+        return [("left join inventory_tag as t on t.id = ("
+                 "select distinct tag_id from ("
+                 "select mt.tag_id "
+                 "from inventory_machinetag as mt "
+                 "where mt.serial_number = ms.serial_number "
+                 "union "
+                 "select mbut.tag_id "
+                 "from inventory_metabusinessunittag as mbut "
+                 "join inventory_businessunit as bu on (bu.meta_business_unit_id = mbut.meta_business_unit_id) "
+                 "where bu.id = ms.business_unit_id "
+                 ") as ms_tag_ids "
+                 ")"),
+                "left join inventory_metabusinessunit as tmbu on tmbu.id = t.meta_business_unit_id"]
+
+    def wheres(self):
+        if self.value:
+            yield "t.id = %s"
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        gv = super().grouping_value_from_grouping_result(grouping_result)
+        if gv["id"] is None:
+            return None
+        elif gv["meta_business_unit"]["id"] is None:
+            gv["meta_business_unit"] = None
+        return gv
+
+    def label_for_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return "-"
+        label = grouping_value["name"] or "?"
+        mbu = grouping_value.get("meta_business_unit")
+        if mbu:
+            mbu_name = mbu.get("name")
+            if mbu_name:
+                label = "{}/{}".format(mbu_name, label)
+        return label
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        if grouping_value:
+            return grouping_value["id"]
+
+
+class BundleFilter(BaseMSFilter):
+    def __init__(self, *args, **kwargs):
+        self.bundle_id = kwargs.pop("bundle_id", None)
+        self.bundle_name = kwargs.pop("bundle_name", None)
+        if not self.bundle_id and not self.bundle_name:
+            raise ValueError("no bundle id and no bundle name")
+        self.title = self.bundle_name or self.bundle_id
+        super().__init__(*args, **kwargs)
+        self.expression = (
+            "jsonb_build_object("
+            "'id', a{idx}.id, "
+            "'bundle_id', a{idx}.bundle_id, "
+            "'bundle_name', a{idx}.bundle_name, "
+            "'bundle_version_str', a{idx}.bundle_version_str"
+            ") as a{idx}_j"
+        ).format(idx=self.idx)
+        self.grouping_set = (
+            "a{idx}.id".format(idx=self.idx),
+            "a{idx}_j".format(idx=self.idx)
+        )
+
+    def get_query_kwarg(self):
+        return "a{}".format(self.idx)
+
+    def joins(self):
+        if self.bundle_id:
+            subquery_cond = "a.bundle_id = %s"
+        elif self.bundle_name:
+            subquery_cond = "a.bundle_name = %s"
+        yield (
+            "left join inventory_osxapp as a{idx} on a{idx}.id = ("
+            "select a.id "
+            "from inventory_osxapp as a "
+            "join inventory_osxappinstance as oai on (oai.app_id = a.id) "
+            "join inventory_machinesnapshot_osx_app_instances as msoai on (msoai.osxappinstance_id = oai.id) "
+            "where msoai.machinesnapshot_id = ms.id and {subquery_cond} )"
+        ).format(idx=self.idx, subquery_cond=subquery_cond)
+
+    def join_args(self):
+        if self.bundle_id:
+            yield self.bundle_id
+        elif self.bundle_name:
+            yield self.bundle_name
+
+    def wheres(self):
+        if self.value:
+            yield "a{}.id = %s".format(self.idx)
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+    def label_for_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return "-"
+        if self.bundle_id:
+            # TODO hack. Try to set a better title.
+            bundle_name = grouping_value["bundle_name"]
+            if bundle_name:
+                self.title = bundle_name
+        return " ".join(e for e in (grouping_value["bundle_name"], grouping_value["bundle_version_str"]) if e)
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        gv = super().grouping_value_from_grouping_result(grouping_result)
+        if gv["id"] is None:
+            return None
+        return gv
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        if grouping_value:
+            return grouping_value["id"]
+
+
+class TypeFilter(BaseMSFilter):
+    title = "Types"
+    query_kwarg = "tp"
+    expression = "ms.type"
+    grouping_set = ("ms.type",)
+
+    def wheres(self):
+        if self.value:
+            yield "ms.type = %s"
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+    def label_for_grouping_value(self, grouping_value):
+        if grouping_value:
+            return grouping_value.title()
+        else:
+            return "-"
+
+
+class PlaformFilter(BaseMSFilter):
+    title = "Platforms"
+    query_kwarg = "pf"
+    expression = "ms.platform"
+    grouping_set = ("ms.platform",)
+
+    def wheres(self):
+        if self.value:
+            yield "ms.platform = %s"
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+
+class SerialNumberFilter(BaseMSFilter):
+    query_kwarg = "sn"
+    non_grouping_expression = "ms.serial_number"
+
+    def wheres(self):
+        if self.value:
+            yield "UPPER(ms.serial_number) LIKE UPPER(%s)"
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+
+class HardwareModelFilter(BaseMSFilter):
+    title = "Hardware models"
+    query_kwarg = "hm"
+    expression = "si.hardware_model"
+    grouping_set = ("si.hardware_model",)
+
+    def joins(self):
+        yield "left join inventory_systeminfo as si on (ms.system_info_id = si.id)"
+
+    def wheres(self):
+        if self.value:
+            yield "si.hardware_model = %s"
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+
+class DateTimeFilter(BaseMSFilter):
+    query_kwarg = "dt"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.value:
+            self.value = datetime.strptime("%Y-%m-%d %H:%M:%S", self.value)
+
+    def joins(self):
+        if self.value:
+            yield "left join inventory_machinesnapshot as dtfms"
+        else:
+            yield "join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)"
+
+    def wheres(self):
+        if self.value:
+            return ["ms.serial_number = dtfms.serial_number",
+                    "ms.source_id = dtfms.source_id",
+                    "ms.mt_created_at > dtfms.mt_created_at",
+                    "dtfms.id is null",
+                    "ms.mt_created_at < %s"]
+        else:
+            return []
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+
+class MSQuery:
+    default_filters = [
+        DateTimeFilter,
+        SourceFilter,
+        MetaBusinessUnitFilter,
+        TagFilter,
+        TypeFilter,
+        HardwareModelFilter,
+        PlaformFilter,
+        OSVersionFilter,
+        SerialNumberFilter
+    ]
+
+    def __init__(self, query_dict=None):
+        self.query_dict = query_dict or {}
+        self.filters = []
+        for filter_class in self.default_filters:
+            self.add_filter(filter_class)
+
+    def add_filter(self, filter_class, **filter_kwargs):
+        self.filters.append(filter_class(len(self.filters), self.query_dict, **filter_kwargs))
+
+    def build_grouping_query_with_args(self):
+        query = ["select"]
+        args = []
+        # expressions
+        query.append(", ".join(e for f in self.filters for e in f.get_expressions(grouping=True)))
+        query.append(", count(*)")
+        # base table
+        query.append("from inventory_machinesnapshot as ms")
+        # joins
+        for f in self.filters:
+            query.extend(f.joins())
+            args.extend(f.join_args())
+        # wheres
+        wheres = []
+        for f in self.filters:
+            wheres.extend(f.wheres())
+            args.extend(f.where_args())
+        if wheres:
+            query.append("WHERE")
+            query.append(" AND ".join(wheres))
+        # group by sets
+        grouping_sets = ["({})".format(", ".join(gsi for gsi in f.grouping_set))
+                         for f in self.filters
+                         if f.grouping_set]
+        grouping_sets.append("()")
+        query.append("GROUP BY GROUPING SETS ({})".format(", ".join(grouping_sets)))
+        return "\n".join(query), args
+
+    def make_grouping_query(self):
+        query, args = self.build_grouping_query_with_args()
+        cursor = connection.cursor()
+        cursor.execute(query, args)
+        columns = [col[0] for col in cursor.description]
+        results = []
+        for row in cursor.fetchall():
+            results.append(dict(zip(columns, row)))
+        return results
+
+    def grouping_choices(self):
+        grouping_results = self.make_grouping_query()
+        for f in self.filters:
+            f_choices = f.grouping_choices_from_grouping_results(grouping_results)
+            if f_choices:
+                yield f, f_choices
+
+
 def mbu_dashboard_machine_data(mbu):
     # platform
     platform_qs = (MachineSnapshot.objects.filter(currentmachinesnapshot__isnull=False,
                                                   business_unit__meta_business_unit=mbu,
-                                                  source=mbu.dashboard_source)
+                                                  source=mbu.dashboard_source,
+                                                  platform__isnull=False)
                                           .values("platform").annotate(count=Count("platform")))
     platforms = sorted(((d["platform"], d["count"]) for d in platform_qs),
                        key=lambda t: (-1 * t[1], t[0]))
@@ -34,7 +521,8 @@ def mbu_dashboard_machine_data(mbu):
     # type
     type_qs = (MachineSnapshot.objects.filter(currentmachinesnapshot__isnull=False,
                                               business_unit__meta_business_unit=mbu,
-                                              source=mbu.dashboard_source)
+                                              source=mbu.dashboard_source,
+                                              type__isnull=False)
                                       .values("type").annotate(count=Count("type")))
     types = sorted(((d["type"], d["count"]) for d in type_qs),
                    key=lambda t: (-1 * t[1], t[0]))
@@ -64,7 +552,7 @@ def mbu_dashboard_machine_data(mbu):
     for row in cursor.fetchall():
         os_version = dict(zip(columns, row))
         version_str = ".".join(str(os_version[a]) for a in ("major", "minor", "patch") if os_version.get(a))
-        value = "{} {}".format(os_version["name"], version_str).strip()
+        value = " ".join(s.strip() for s in (os_version["name"], version_str) if s and s.strip())
         os_list.append((value, os_version["count"]))
     os_list.sort(key=lambda t: (-1 * t[1], t[0]))
     yield "os", "OS", {
