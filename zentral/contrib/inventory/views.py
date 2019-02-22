@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import urllib.parse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core.urlresolvers import reverse, reverse_lazy
@@ -21,7 +22,8 @@ from .models import (BusinessUnit,
                      OSXApp, OSXAppInstance)
 from .utils import (get_prometheus_inventory_metrics,
                     mbu_dashboard_bundle_data, mbu_dashboard_machine_data,
-                    prometheus_metrics_content_type)
+                    prometheus_metrics_content_type,
+                    BundleFilter, MSQuery)
 
 
 class MachineListView(LoginRequiredMixin, TemplateView):
@@ -138,6 +140,35 @@ class MachineListView(LoginRequiredMixin, TemplateView):
                                                               serial_number_page.paginator.num_pages))])
         context['breadcrumbs'] = breadcrumbs
         return context
+
+
+class DrillDownView(LoginRequiredMixin, TemplateView):
+    template_name = "inventory/drilldown.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        msquery = MSQuery(self.request.GET)
+        msquery.add_filter(BundleFilter, bundle_id="org.mozilla.firefox")
+        # msquery.add_filter(BundleFilter, bundle_id="org.mozilla.firefoxdeveloperedition")
+        grouping_links = []
+        for f, f_choices in msquery.grouping_choices():
+            f_links = []
+            for label, count, down_query_dict, up_query_dict in f_choices:
+                if up_query_dict is not None:
+                    if up_query_dict:
+                        up_link = "./?{}".format(urllib.parse.urlencode(up_query_dict))
+                    else:
+                        up_link = "./"
+                    down_link = None
+                else:
+                    up_link = None
+                    down_link = "./?{}".format(urllib.parse.urlencode(down_query_dict))
+                f_links.append((label, count, down_link, up_link))
+            f_links.sort(key=lambda t: t[1], reverse=True)
+            grouping_links.append((f, f_links[:5]))
+        ctx["grouping_links"] = grouping_links
+        ctx["machines"] = msquery.fetch()
+        return ctx
 
 
 class IndexView(MachineListView):

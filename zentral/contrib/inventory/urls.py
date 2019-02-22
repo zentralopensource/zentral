@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     url(r'^$', views.IndexView.as_view(), name='index'),
+    url(r'^dd/$', views.DrillDownView.as_view(), name='drilldown'),
     url(r'^groups/$', views.GroupsView.as_view(), name='groups'),
     url(r'^groups/(?P<group_id>\d+)/machines/$', views.GroupMachinesView.as_view(), name='group_machines'),
     url(r'^business_units/$', views.MBUView.as_view(), name='mbu'),

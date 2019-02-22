@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-12">
+    <ol class="breadcrumb">
+      <li><a href="/">Home</a></li>
+      <li class="active">Inventory drill down</li>
+    </ol>
+
+    <h2>Inventory drill down</h2>
+
+    <h3>{{ total_objects }} Machine{{ total_objects|pluralize }}</h3>
+  </div>
+</div>
+
+
+{% for f, f_links in grouping_links %}
+{% if forloop.first %}<div class="row">{% endif %}
+<div class="col-md-3">
+  <div class="panel panel-default">
+    <div class="panel-heading">{{ f.title }}</div>
+    <ul class="">
+      {% for label, count, down_link, up_link in f_links %}
+      <li>
+        {% if down_link %}
+        <a href="{{ down_link }}">{{ label }}</a>
+        <span class="badge">{{ count }}</span>
+        {% elif up_link %}
+        {{ label }} <a href="{{ up_link }}">[X]</a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% if forloop.counter|divisibleby:4 %}</div><div class="row">{% endif %}
+{% if forloop.last %}</div>{% endif %}
+{% endfor %}
+
+
+
+{% if next_url or previous_url %}
+<div class="row">
+  <div class="col-md-12">
+    <nav>
+      <ul class="pager">
+        {% if next_url %}
+        <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+        {% endif %}
+        {% if previous_url %}
+        <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+</div>
+{% endif %}
+
+<div class="table-reponsive">
+  <table class="table">
+    {% for serial_number, machine_snapshots in machines %}
+    {% for machine_snapshot in machine_snapshots %}
+    <tr>
+      {% if forloop.first %}
+      <td rowspan="{{ machine_snapshots|length }}">
+	<a href="{{ machine.get_absolute_url }}">
+          {{ serial_number }}
+        </a>
+      </td>
+      {% endif %}
+      <td>{{ machine_snapshot.computer_name }}</td>
+      <td>
+      {% for tag in machine_snapshot.tags %}
+      {{ tag.name }}
+      {% endfor %}
+      </td>
+      <td>
+        {{ machine_snapshot.source.name }}
+      </td>
+    </tr>
+    {% endfor %}
+    {% endfor %}
+  </table>
+</div>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

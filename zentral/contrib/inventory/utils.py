@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from datetime import datetime
 import logging
 from django.db import connection
@@ -38,13 +39,29 @@ class BaseMSFilter:
                 yield "grouping({}) as {}".format(self.grouping_set[0], self.grouping_alias)
             if self.expression:
                 yield self.expression
+        elif self.expression:
+            if not self.many:
+                yield self.expression
+            else:
+                if "as" in self.expression:
+                    expression, alias = self.expression.split(" as ")
+                    expression = "json_agg({})".format(expression)
+                else:
+                    expression = self.expression
+                    alias = None
+                yield " as ".join(e for e in (expression, alias) if e)
         elif self.non_grouping_expression:
             yield self.non_grouping_expression
 
-    def joins(self):
-        return []
+    def get_group_by(self):
+        if self.many:
+            return None
+        elif self.grouping_set:
+            return self.grouping_set[-1]
+        elif self.non_grouping_expression:
+            return self.non_grouping_expression
 
-    def join_args(self):
+    def joins(self):
         return []
 
     def wheres(self):
@@ -79,11 +96,26 @@ class BaseMSFilter:
             label = self.label_for_grouping_value(grouping_value)
             # query_dict
             query_dict = self.query_dict.copy()
-            query_dict[self.get_query_kwarg()] = self.query_kwarg_value_from_grouping_value(grouping_value)
+            query_kwarg_value = self.query_kwarg_value_from_grouping_value(grouping_value)
+            query_kwarg = self.get_query_kwarg()
+            if query_dict.get(query_kwarg) == str(query_kwarg_value):
+                # already filtered
+                down_query_dict = None
+                up_query_dict = query_dict
+                up_query_dict.pop(query_kwarg, None)
+            else:
+                down_query_dict = query_dict
+                down_query_dict[query_kwarg] = query_kwarg_value
+                up_query_dict = None
             # count
             count = grouping_result["count"]
-            choices.append((label, count, query_dict))
+            choices.append((label, count, down_query_dict, up_query_dict))
         return choices
+
+    # process fetching results
+
+    def process_fetched_record(self, fetching_result):
+        return
 
 
 class SourceFilter(BaseMSFilter):
@@ -120,6 +152,11 @@ class SourceFilter(BaseMSFilter):
             return None
         else:
             return grouping_value["id"]
+
+    def process_fetched_record(self, record):
+        source = record.pop("src_j", None)
+        if source and source["id"]:
+            record["source"] = source
 
 
 class OSVersionFilter(BaseMSFilter):
@@ -167,6 +204,11 @@ class OSVersionFilter(BaseMSFilter):
         if grouping_value:
             return grouping_value["id"]
 
+    def process_fetched_record(self, record):
+        os_version = record.pop("osv_j", None)
+        if os_version and os_version["id"]:
+            record["os_version"] = os_version
+
 
 class MetaBusinessUnitFilter(BaseMSFilter):
     title = "Meta business units"
@@ -202,9 +244,15 @@ class MetaBusinessUnitFilter(BaseMSFilter):
         if grouping_value:
             return grouping_value["id"]
 
+    def process_fetched_record(self, record):
+        meta_business_unit = record.pop("mbu_j", None)
+        if meta_business_unit and meta_business_unit["id"]:
+            record["meta_business_unit"] = meta_business_unit
+
 
 class TagFilter(BaseMSFilter):
     title = "Tags"
+    many = True
     query_kwarg = "t"
     expression = (
         "jsonb_build_object("
@@ -217,8 +265,10 @@ class TagFilter(BaseMSFilter):
     grouping_set = ("t.id", "tag_j")
 
     def joins(self):
-        return [("left join inventory_tag as t on t.id = ("
-                 "select distinct tag_id from ("
+        return [("left join lateral ("
+                 "select distinct * "
+                 "from inventory_tag "
+                 "where id in ("
                  "select mt.tag_id "
                  "from inventory_machinetag as mt "
                  "where mt.serial_number = ms.serial_number "
@@ -227,9 +277,9 @@ class TagFilter(BaseMSFilter):
                  "from inventory_metabusinessunittag as mbut "
                  "join inventory_businessunit as bu on (bu.meta_business_unit_id = mbut.meta_business_unit_id) "
                  "where bu.id = ms.business_unit_id "
-                 ") as ms_tag_ids "
-                 ")"),
-                "left join inventory_metabusinessunit as tmbu on tmbu.id = t.meta_business_unit_id"]
+                 ")"
+                 ") t on TRUE"),
+                "left join inventory_metabusinessunit as tmbu on (tmbu.id = t.meta_business_unit_id)"]
 
     def wheres(self):
         if self.value:
@@ -262,8 +312,20 @@ class TagFilter(BaseMSFilter):
         if grouping_value:
             return grouping_value["id"]
 
+    def process_fetched_record(self, record):
+        tags = []
+        for tag in record.pop("tag_j", []):
+            if not tag["id"]:
+                continue
+            if not tag["meta_business_unit"]["id"]:
+                tag["meta_business_unit"] = None
+            tags.append(tag)
+        record["tags"] = []
+
 
 class BundleFilter(BaseMSFilter):
+    many = True
+
     def __init__(self, *args, **kwargs):
         self.bundle_id = kwargs.pop("bundle_id", None)
         self.bundle_name = kwargs.pop("bundle_name", None)
@@ -276,6 +338,7 @@ class BundleFilter(BaseMSFilter):
             "'id', a{idx}.id, "
             "'bundle_id', a{idx}.bundle_id, "
             "'bundle_name', a{idx}.bundle_name, "
+            "'bundle_version', a{idx}.bundle_version, "
             "'bundle_version_str', a{idx}.bundle_version_str"
             ") as a{idx}_j"
         ).format(idx=self.idx)
@@ -289,23 +352,18 @@ class BundleFilter(BaseMSFilter):
 
     def joins(self):
         if self.bundle_id:
+            arg = self.bundle_id
             subquery_cond = "a.bundle_id = %s"
         elif self.bundle_name:
+            arg = self.bundle_name
             subquery_cond = "a.bundle_name = %s"
-        yield (
-            "left join inventory_osxapp as a{idx} on a{idx}.id = ("
-            "select a.id "
-            "from inventory_osxapp as a "
-            "join inventory_osxappinstance as oai on (oai.app_id = a.id) "
-            "join inventory_machinesnapshot_osx_app_instances as msoai on (msoai.osxappinstance_id = oai.id) "
-            "where msoai.machinesnapshot_id = ms.id and {subquery_cond} )"
-        ).format(idx=self.idx, subquery_cond=subquery_cond)
-
-    def join_args(self):
-        if self.bundle_id:
-            yield self.bundle_id
-        elif self.bundle_name:
-            yield self.bundle_name
+        yield (("left join lateral ("
+                "select a.* from inventory_osxapp as a "
+                "join inventory_osxappinstance as oai on (oai.app_id = a.id) "
+                "join inventory_machinesnapshot_osx_app_instances as msoai on (msoai.osxappinstance_id = oai.id) "
+                "where msoai.machinesnapshot_id = ms.id and {subquery_cond}"
+                ") a{idx} on TRUE").format(idx=self.idx, subquery_cond=subquery_cond),
+               [arg])
 
     def wheres(self):
         if self.value:
@@ -334,6 +392,15 @@ class BundleFilter(BaseMSFilter):
     def query_kwarg_value_from_grouping_value(self, grouping_value):
         if grouping_value:
             return grouping_value["id"]
+
+    def process_fetched_record(self, record):
+        osx_apps = []
+        for osx_app in record.pop(self.grouping_set[-1], []):
+            if not osx_app["id"]:
+                continue
+            osx_apps.append(osx_app)
+        # TODO: verify no conflict
+        record.setdefault("osx_apps", OrderedDict())[self.title] = osx_apps
 
 
 class TypeFilter(BaseMSFilter):
@@ -379,6 +446,22 @@ class SerialNumberFilter(BaseMSFilter):
     def wheres(self):
         if self.value:
             yield "UPPER(ms.serial_number) LIKE UPPER(%s)"
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+
+class ComputerNameFilter(BaseMSFilter):
+    query_kwarg = "cn"
+    non_grouping_expression = "si.computer_name"
+
+    def joins(self):
+        yield "left join inventory_systeminfo as si on (ms.system_info_id = si.id)"
+
+    def wheres(self):
+        if self.value:
+            yield "si.id is not null and si.computer_name ~* %s"
 
     def where_args(self):
         if self.value:
@@ -442,7 +525,8 @@ class MSQuery:
         HardwareModelFilter,
         PlaformFilter,
         OSVersionFilter,
-        SerialNumberFilter
+        SerialNumberFilter,
+        ComputerNameFilter,
     ]
 
     def __init__(self, query_dict=None):
@@ -454,18 +538,38 @@ class MSQuery:
     def add_filter(self, filter_class, **filter_kwargs):
         self.filters.append(filter_class(len(self.filters), self.query_dict, **filter_kwargs))
 
-    def build_grouping_query_with_args(self):
+    # common things for grouping and fetching
+
+    def _iter_unique_joins_with_args(self):
+        unique_joins = OrderedDict()
+        for f in self.filters:
+            for join in f.joins():
+                if isinstance(join, tuple):
+                    join, join_args = join
+                elif isinstance(join, str):
+                    join_args = []
+                else:
+                    raise ValueError("invalid join")
+                if join not in unique_joins:
+                    unique_joins[join] = join_args
+                elif unique_joins[join] != join_args:
+                    raise ValueError("same join with different args exists")
+        yield from unique_joins.items()
+
+    # grouping
+
+    def _build_grouping_query_with_args(self):
         query = ["select"]
         args = []
         # expressions
         query.append(", ".join(e for f in self.filters for e in f.get_expressions(grouping=True)))
-        query.append(", count(*)")
+        query.append(", count(distinct ms.serial_number)")
         # base table
         query.append("from inventory_machinesnapshot as ms")
         # joins
-        for f in self.filters:
-            query.extend(f.joins())
-            args.extend(f.join_args())
+        for join, join_args in self._iter_unique_joins_with_args():
+            query.append(join)
+            args.extend(join_args)
         # wheres
         wheres = []
         for f in self.filters:
@@ -482,8 +586,8 @@ class MSQuery:
         query.append("GROUP BY GROUPING SETS ({})".format(", ".join(grouping_sets)))
         return "\n".join(query), args
 
-    def make_grouping_query(self):
-        query, args = self.build_grouping_query_with_args()
+    def _make_grouping_query(self):
+        query, args = self._build_grouping_query_with_args()
         cursor = connection.cursor()
         cursor.execute(query, args)
         columns = [col[0] for col in cursor.description]
@@ -493,11 +597,67 @@ class MSQuery:
         return results
 
     def grouping_choices(self):
-        grouping_results = self.make_grouping_query()
+        grouping_results = self._make_grouping_query()
         for f in self.filters:
             f_choices = f.grouping_choices_from_grouping_results(grouping_results)
             if f_choices:
                 yield f, f_choices
+
+    # fetching
+
+    def _build_fetching_query_with_args(self, page=1, paginate_by=50):
+        query = ["select"]
+        args = []
+        # expressions
+        query.append(", ".join(e for f in self.filters for e in f.get_expressions()))
+        # base table
+        query.append("from inventory_machinesnapshot as ms")
+        # joins
+        for join, join_args in self._iter_unique_joins_with_args():
+            query.append(join)
+            args.extend(join_args)
+        # wheres
+        wheres = []
+        for f in self.filters:
+            wheres.extend(f.wheres())
+            args.extend(f.where_args())
+        if wheres:
+            query.append("WHERE")
+            query.append(" AND ".join(wheres))
+        # group bys
+        group_bys = [gb for gb in (f.get_group_by() for f in self.filters) if gb]
+        if group_bys:
+            query.append("GROUP BY {}".format(", ".join(group_bys)))
+        query = "\n".join(query)
+        limit = max(paginate_by, 1)
+        args.append(limit)
+        offset = min((page - 1) * limit, 0)
+        args.append(offset)
+        meta_query = (
+            "select ms.serial_number, json_agg(row_to_json(ms.*)) as machine_snapshots "
+            "from ({}) ms "
+            "group by ms.serial_number "
+            "order by min(ms.computer_name) asc, ms.serial_number asc "
+            "limit %s offset %s"
+        ).format(query)
+        return meta_query, args
+
+    def _make_fetching_query(self, page=1, paginate_by=50):
+        query, args = self._build_fetching_query_with_args(page=1, paginate_by=50)
+        cursor = connection.cursor()
+        cursor.execute(query, args)
+        columns = [col[0] for col in cursor.description]
+        results = []
+        for row in cursor.fetchall():
+            results.append(dict(zip(columns, row)))
+        return results
+
+    def fetch(self, page=1, paginate_by=50):
+        for record in self._make_fetching_query(page, paginate_by):
+            for machine_snapshot in record["machine_snapshots"]:
+                for f in self.filters:
+                    f.process_fetched_record(machine_snapshot)
+            yield record["serial_number"], record["machine_snapshots"]
 
 
 def mbu_dashboard_machine_data(mbu):
