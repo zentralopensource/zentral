@@ -25,8 +25,7 @@ def inventory_tag(tag):
 
 
 @register.simple_tag
-def machine_type_icon(meta_machine):
-    machine_type = meta_machine.type
+def base_machine_type_icon(machine_type):
     icon = None
     if machine_type == "VM":
         icon = "cube"
@@ -38,8 +37,13 @@ def machine_type_icon(meta_machine):
 
 
 @register.simple_tag
-def machine_platform_icon(meta_machine):
-    machine_platform = meta_machine.platform
+def machine_type_icon(meta_machine):
+    machine_type = meta_machine.type
+    return base_machine_type_icon(machine_type)
+
+
+@register.simple_tag
+def base_machine_platform_icon(machine_platform):
     icon = None
     if machine_platform in {MACOS, IOS}:
         icon = "apple"
@@ -50,6 +54,12 @@ def machine_platform_icon(meta_machine):
     if icon:
         return mark_safe('<i class="fa fa-{}" aria-hidden="true"></i>'.format(icon))
     return ""
+
+
+@register.simple_tag
+def machine_platform_icon(meta_machine):
+    machine_platform = meta_machine.platform
+    return base_machine_platform_icon(machine_platform)
 
 
 @register.simple_tag
