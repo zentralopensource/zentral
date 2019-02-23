@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from math import ceil
 import urllib.parse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
@@ -166,8 +167,34 @@ class DrillDownView(LoginRequiredMixin, TemplateView):
                 f_links.append((label, count, down_link, up_link))
             grouping_links.append((f, f_links))
         ctx["grouping_links"] = grouping_links
-        ctx["machines"] = msquery.fetch()
-        ctx["machine_count"] = msquery.count()
+        # pagination / machines
+        try:
+            page = int(self.request.GET.get("page", 1))
+        except ValueError:
+            page = 1
+        ctx["machine_count"] = count = msquery.count()
+        paginate_by = 50
+        ctx["machines"] = msquery.fetch(page=page, paginate_by=50)
+        if page > 1:
+            qd = self.request.GET.copy()
+            qd['page'] = page - 1
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        if page * paginate_by < count:
+            qd = self.request.GET.copy()
+            qd['page'] = page + 1
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        # breadcrumbs
+        if page > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            reset_link = "?{}".format(qd.urlencode())
+        else:
+            reset_link = None
+        num_pages = ceil(max(count, 1) / paginate_by)
+        ctx['breadcrumbs'] = [
+            (reset_link, "Inventory drill down"),
+            (None, "page {} of {}".format(page, num_pages))
+        ]
         return ctx
 
 

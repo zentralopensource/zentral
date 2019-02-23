@@ -649,7 +649,7 @@ class MSQuery:
         query = "\n".join(query)
         limit = max(paginate_by, 1)
         args.append(limit)
-        offset = min((page - 1) * limit, 0)
+        offset = max((page - 1) * limit, 0)
         args.append(offset)
         meta_query = (
             "select ms.serial_number, json_agg(row_to_json(ms.*)) as machine_snapshots "
@@ -661,7 +661,7 @@ class MSQuery:
         return meta_query, args
 
     def _make_fetching_query(self, page=1, paginate_by=50):
-        query, args = self._build_fetching_query_with_args(page=1, paginate_by=50)
+        query, args = self._build_fetching_query_with_args(page=page, paginate_by=paginate_by)
         cursor = connection.cursor()
         cursor.execute(query, args)
         columns = [col[0] for col in cursor.description]

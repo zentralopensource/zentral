@@ -6,7 +6,13 @@
   <div class="col-md-12">
     <ol class="breadcrumb">
       <li><a href="/">Home</a></li>
-      <li class="active">Inventory drill down</li>
+      {% for url, anchor_text in breadcrumbs %}
+      {% if url %}
+      <li><a href="{{ url }}">{{ anchor_text }}</a>
+      {% else %}
+      <li class="active">{{ anchor_text }}</li>
+      {% endif %}
+      {% endfor %}
     </ol>
 
     <h2>Inventory drill down</h2>
