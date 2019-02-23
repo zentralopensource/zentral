@@ -23,28 +23,47 @@
 
 
 {% for f, f_links in grouping_links %}
-{% if forloop.first %}<div class="row">{% endif %}
-<div class="col-md-3">
-  <div class="panel panel-default">
-    <div class="panel-heading">{{ f.title }}</div>
-    <ul style="max-height:25vh;overflow-y:auto;">
-      {% for label, count, down_link, up_link in f_links %}
-      <li>
-        {% if down_link %}
-        <a href="{{ down_link }}">{{ label }}</a>
-        <span class="badge">{{ count }}</span>
-        {% elif up_link %}
-        {{ label }} <a href="{{ up_link }}">[X]</a>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
+{% if forloop.first %}
+<div class="row">
+  <div class="col-md-12">
+    <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
+      <div class="form-group">
+        <label for="id_serial_number" class="sr-only">Serial number</label>
+        <input type="text" id="id_serial_number" value="{{ msquery.query_dict.sn }}" name="sn" class="form-control" placeholder="serial number">
+      </div>
+      <div class="form-group">
+        <label for="id_name" class="sr-only">Name</label>
+        <input type="text" id="id_name" value="{{ msquery.query_dict.cn }}" name="cn" class="form-control" placeholder="computer name">
+      </div>
+      <button type="submit" class="btn btn-default">Search</button>
+    </form>
   </div>
+{% endif %}
+  <div class="col-md-3">
+    <div class="panel panel-default">
+      <div class="panel-heading">{{ f.title }}</div>
+      <ul style="max-height:25vh;overflow-y:auto;">
+        {% for label, count, down_link, up_link in f_links %}
+        <li>
+          {% if down_link %}
+          <a href="{{ down_link }}">{{ label }}</a>
+          <span class="badge">{{ count }}</span>
+          {% elif up_link %}
+          {{ label }} <a href="{{ up_link }}">[X]</a>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+{% if forloop.counter|divisibleby:4 %}
 </div>
-{% if forloop.counter|divisibleby:4 %}</div><div class="row">{% endif %}
-{% if forloop.last %}</div>{% endif %}
+<div class="row">
+{% endif %}
+{% if forloop.last %}
+</div>
+{% endif %}
 {% endfor %}
-
 
 
 {% if next_url or previous_url %}

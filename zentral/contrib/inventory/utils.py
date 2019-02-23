@@ -449,13 +449,18 @@ class SerialNumberFilter(BaseMSFilter):
     query_kwarg = "sn"
     non_grouping_expression = "ms.serial_number"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.value:
+            self.value = self.value.strip()
+
     def wheres(self):
         if self.value:
             yield "UPPER(ms.serial_number) LIKE UPPER(%s)"
 
     def where_args(self):
         if self.value:
-            yield self.value
+            yield "%{}%".format(connection.ops.prep_for_like_query(self.value))
 
     def process_fetched_record(self, record):
         record["urlsafe_serial_number"] = MetaMachine.make_urlsafe_serial_number(record["serial_number"])
@@ -464,6 +469,11 @@ class SerialNumberFilter(BaseMSFilter):
 class ComputerNameFilter(BaseMSFilter):
     query_kwarg = "cn"
     non_grouping_expression = "si.computer_name"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.value:
+            self.value = self.value.strip()
 
     def joins(self):
         yield "left join inventory_systeminfo as si on (ms.system_info_id = si.id)"

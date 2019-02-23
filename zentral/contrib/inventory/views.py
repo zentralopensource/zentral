@@ -148,7 +148,7 @@ class DrillDownView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        msquery = MSQuery(self.request.GET)
+        ctx["msquery"] = msquery = MSQuery(self.request.GET)
         msquery.add_filter(BundleFilter, bundle_id="org.mozilla.firefox")
         # msquery.add_filter(BundleFilter, bundle_id="org.mozilla.firefoxdeveloperedition")
         grouping_links = []
