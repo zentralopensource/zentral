@@ -1,6 +1,5 @@
 import base64
 from collections import Counter
-import colorsys
 from datetime import datetime, timedelta
 import logging
 import re
@@ -657,22 +656,6 @@ class Tag(models.Model):
         self.slug = slugify(self.name)
         super(Tag, self).save(*args, **kwargs)
 
-    def text_color(self):
-        try:
-            hls = colorsys.rgb_to_hls(float(int(self.color[0:2], 16))/255.0,
-                                      float(int(self.color[2:4], 16))/255.0,
-                                      float(int(self.color[4:6], 16))/255.0,)
-        except ValueError:
-            return "000"
-        else:
-            if hls[1] > .7:
-                return "000"
-            else:
-                return "FFF"
-
-    def need_border(self):
-        return self.color.upper() in ['FFFFFF', 'FFF']
-
     def links(self):
         known_models = {
             EnrollmentSecret: ("enrollment secret", "enrollment secrets", None),
@@ -726,14 +709,18 @@ class MetaMachine(object):
             serial_number = urlsafe_serial_number
         return cls(serial_number)
 
-    def get_urlsafe_serial_number(self):
-        if self.serial_number.startswith(".") or \
-           urllib.parse.quote(self.serial_number, safe="") != self.serial_number:
+    @staticmethod
+    def make_urlsafe_serial_number(serial_number):
+        if serial_number.startswith(".") or \
+           urllib.parse.quote(serial_number, safe="") != serial_number:
             return ".{}".format(
-                base64.urlsafe_b64encode(self.serial_number.encode("utf-8")).decode("utf-8").rstrip("=")
+                base64.urlsafe_b64encode(serial_number.encode("utf-8")).decode("utf-8").rstrip("=")
             )
         else:
-            return self.serial_number
+            return serial_number
+
+    def get_urlsafe_serial_number(self):
+        return self.make_urlsafe_serial_number(self.serial_number)
 
     def get_absolute_url(self):
         return reverse('inventory:machine', args=(self.get_urlsafe_serial_number(),))

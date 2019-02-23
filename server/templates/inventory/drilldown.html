@@ -71,7 +71,7 @@
     <tr>
       {% if forloop.first %}
       <td rowspan="{{ machine_snapshots|length }}">
-	<a href="{{ machine.get_absolute_url }}">
+	<a href="{% url 'inventory:machine' machine_snapshot.urlsafe_serial_number %}">
           {{ serial_number }}
         </a>
       </td>
@@ -79,7 +79,7 @@
       <td>{{ machine_snapshot.computer_name }}</td>
       <td>
       {% for tag in machine_snapshot.tags %}
-      {{ tag.name }}
+      {% base_inventory_tag tag.display_name tag.color %}
       {% endfor %}
       </td>
       <td>

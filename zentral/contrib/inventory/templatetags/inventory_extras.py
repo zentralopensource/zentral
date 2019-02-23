@@ -4,19 +4,24 @@ from django.utils.html import escape
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from zentral.contrib.inventory.conf import IOS, LINUX, MACOS, WINDOWS
+from zentral.utils.color import text_color_for_background_color
 
 register = template.Library()
 
 
 @register.simple_tag
-def inventory_tag(tag):
-    style = {'background-color': "#%s" % tag.color,
-             'color': "#%s" % tag.text_color()}
-    if tag.need_border():
+def base_inventory_tag(display_name, color):
+    style = {'background-color': "#%s" % color,
+             'color': "#%s" % text_color_for_background_color(color)}
+    if color.upper() in ["FFFFFF", "FFF"]:
         style['border'] = '1px solid grey'
-    sty_str = ";".join(["%s:%s" % (key, val) for key, val in style.items()])
-    return mark_safe('<span class="label" style="%s">%s</span>' %
-                     (sty_str, escape(str(tag))))
+    style_str = ";".join(["%s:%s" % (key, val) for key, val in style.items()])
+    return mark_safe('<span class="label" style="%s">%s</span>' % (style_str, escape(display_name)))
+
+
+@register.simple_tag
+def inventory_tag(tag):
+    return base_inventory_tag(str(tag), tag.color)
 
 
 @register.simple_tag

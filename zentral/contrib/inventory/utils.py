@@ -11,7 +11,7 @@ from .conf import PLATFORM_CHOICES_DICT, TYPE_CHOICES_DICT
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      post_inventory_events)
 from .exceptions import EnrollmentSecretVerificationFailed
-from .models import EnrollmentSecret, MachineSnapshot, MachineSnapshotCommit
+from .models import EnrollmentSecret, MachineSnapshot, MachineSnapshotCommit, MetaMachine
 
 logger = logging.getLogger("zentral.contrib.inventory.utils")
 
@@ -96,6 +96,7 @@ class BaseMSFilter:
             label = self.label_for_grouping_value(grouping_value)
             # query_dict
             query_dict = self.query_dict.copy()
+            query_dict.pop("page", None)
             query_kwarg_value = self.query_kwarg_value_from_grouping_value(grouping_value)
             query_kwarg = self.get_query_kwarg()
             if query_dict.get(query_kwarg) == str(query_kwarg_value):
@@ -114,7 +115,7 @@ class BaseMSFilter:
 
     # process fetching results
 
-    def process_fetched_record(self, fetching_result):
+    def process_fetched_record(self, record):
         return
 
 
@@ -258,6 +259,7 @@ class TagFilter(BaseMSFilter):
         "jsonb_build_object("
         "'id', t.id, "
         "'name', t.name, "
+        "'color', t.color, "
         "'meta_business_unit', "
         "jsonb_build_object('id', tmbu.id, 'name', tmbu.name)"
         ") as tag_j"
@@ -317,10 +319,14 @@ class TagFilter(BaseMSFilter):
         for tag in record.pop("tag_j", []):
             if not tag["id"]:
                 continue
+            display_name = tag["name"]
             if not tag["meta_business_unit"]["id"]:
                 tag["meta_business_unit"] = None
+            else:
+                display_name = "/".join(s for s in (tag["meta_business_unit"]["name"], display_name) if s)
+            tag["display_name"] = display_name
             tags.append(tag)
-        record["tags"] = []
+        record["tags"] = tags
 
 
 class BundleFilter(BaseMSFilter):
@@ -450,6 +456,9 @@ class SerialNumberFilter(BaseMSFilter):
     def where_args(self):
         if self.value:
             yield self.value
+
+    def process_fetched_record(self, record):
+        record["urlsafe_serial_number"] = MetaMachine.make_urlsafe_serial_number(record["serial_number"])
 
 
 class ComputerNameFilter(BaseMSFilter):
