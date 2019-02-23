@@ -164,10 +164,10 @@ class DrillDownView(LoginRequiredMixin, TemplateView):
                     up_link = None
                     down_link = "./?{}".format(urllib.parse.urlencode(down_query_dict))
                 f_links.append((label, count, down_link, up_link))
-            f_links.sort(key=lambda t: t[1], reverse=True)
-            grouping_links.append((f, f_links[:5]))
+            grouping_links.append((f, f_links))
         ctx["grouping_links"] = grouping_links
         ctx["machines"] = msquery.fetch()
+        ctx["machine_count"] = msquery.count()
         return ctx
 
 

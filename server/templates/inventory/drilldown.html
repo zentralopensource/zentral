@@ -11,7 +11,7 @@
 
     <h2>Inventory drill down</h2>
 
-    <h3>{{ total_objects }} Machine{{ total_objects|pluralize }}</h3>
+    <h3>{{ machine_count }} Machine{{ machine_count|pluralize }}</h3>
   </div>
 </div>
 
@@ -21,7 +21,7 @@
 <div class="col-md-3">
   <div class="panel panel-default">
     <div class="panel-heading">{{ f.title }}</div>
-    <ul class="">
+    <ul style="max-height:25vh;overflow-y:auto;">
       {% for label, count, down_link, up_link in f_links %}
       <li>
         {% if down_link %}

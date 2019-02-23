@@ -534,6 +534,8 @@ class MSQuery:
         self.filters = []
         for filter_class in self.default_filters:
             self.add_filter(filter_class)
+        self._grouping_results = None
+        self._count = None
 
     def add_filter(self, filter_class, **filter_kwargs):
         self.filters.append(filter_class(len(self.filters), self.query_dict, **filter_kwargs))
@@ -596,8 +598,24 @@ class MSQuery:
             results.append(dict(zip(columns, row)))
         return results
 
+    def _get_grouping_results(self):
+        if self._grouping_results is None:
+            self._grouping_results = self._make_grouping_query()
+        return self._grouping_results
+
+    def count(self):
+        if self._count is None:
+            all_grouping_aliases = [f.grouping_alias for f in self.filters]
+            for grouping_result in self._get_grouping_results():
+                if all(grouping_result.get(a, 1) == 1 for a in all_grouping_aliases):
+                    self._count = grouping_result["count"]
+                    break
+            else:
+                self._count = 0
+        return self._count
+
     def grouping_choices(self):
-        grouping_results = self._make_grouping_query()
+        grouping_results = self._get_grouping_results()
         for f in self.filters:
             f_choices = f.grouping_choices_from_grouping_results(grouping_results)
             if f_choices:
