@@ -17,16 +17,56 @@
 
     <h2>Inventory drill down</h2>
 
-    <h3>{{ machine_count }} Machine{{ machine_count|pluralize }}</h3>
+    <h3>{{ msquery.count }} Machine{{ msquery.count|pluralize }}</h3>
   </div>
 </div>
 
 
-{% for f, f_links in grouping_links %}
-{% if forloop.first %}
+<div class="modal{% if form.errors %} modal-with-errors{% endif %}" id="add-filter" tabindex="-1" role="dialog" aria-labelledby="add-filter">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="myModalLabel">Add a drill down filter</h4>
+      </div>
+      <div class="modal-body">
+
+        <div>
+          {% for anchor_text, link in msquery.available_filters %}
+          <a href="{{ link }}" class="btn btn-primary" style="margin: 0 0 .3em 0">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+            {{ anchor_text }}
+          </a>
+          {% endfor %}
+        </div>
+
+        <form method="POST" class="form-inline" style="margin: 0">{% csrf_token %}
+          <div class="form-group">
+            <label for="id_bundle_id" class="sr-only">App</label>
+            {{ form.bundle_id }}
+            {{ form.bundle_name }}
+            <button type="submit" class="btn btn-primary">
+              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+              App
+            </button>
+            {% for error in form.non_field_errors %}
+            <p class="text-danger">{{ error }}</p>
+            {% endfor %}
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <div class="row">
   <div class="col-md-12">
-    <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
+    <form method="GET" class="form-inline" style="margin:1em 0">
+      {% for key, val in search_form_qd.items %}
+      <input type="hidden" name="{{ key }}" value="{{ val }}">
+      {% endfor %}
       <div class="form-group">
         <label for="id_serial_number" class="sr-only">Serial number</label>
         <input type="text" id="id_serial_number" value="{{ msquery.query_dict.sn }}" name="sn" class="form-control" placeholder="serial number">
@@ -35,25 +75,37 @@
         <label for="id_name" class="sr-only">Name</label>
         <input type="text" id="id_name" value="{{ msquery.query_dict.cn }}" name="cn" class="form-control" placeholder="computer name">
       </div>
-      <button type="submit" class="btn btn-default">Search</button>
+      <button class="btn btn-success" type="button" data-toggle="modal" data-target="#add-filter"
+                                      aria-expanded="false" aria-controls="add-filter">
+        <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+        Filter
+      </button>
+      <button type="submit" class="btn btn-primary">Search</button>
     </form>
   </div>
-{% endif %}
+{% for f, f_links, r_link in grouping_links %}
   <div class="col-md-3">
     <div class="panel panel-default">
-      <div class="panel-heading">{{ f.title }}</div>
-      <ul style="max-height:25vh;overflow-y:auto;">
+      <div class="panel-heading filter-title">
+        {{ f.title }}
+        {% if r_link %}
+        <a href="{{ r_link }}" class="pull-right btn btn-danger btn-xs trash-filter" style="display:none;">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+      </div>
+      <div class="panel-body" style="max-height:25vh;overflow-y:auto;">
         {% for label, count, down_link, up_link in f_links %}
-        <li>
+        <p style="margin:0">
           {% if down_link %}
           <a href="{{ down_link }}">{{ label }}</a>
-          <span class="badge">{{ count }}</span>
+          <span class="badge pull-right">{{ count }}</span>
           {% elif up_link %}
-          {{ label }} <a href="{{ up_link }}">[X]</a>
+          {{ label }} <a href="{{ up_link }}"><span class="glyphicon glyphicon-trash" aria-hidden="true"></span></a>
           {% endif %}
-        </li>
+        </p>
         {% endfor %}
-      </ul>
+      </div>
     </div>
   </div>
 {% if forloop.counter|divisibleby:4 %}
@@ -124,4 +176,22 @@
   </ul>
 </nav>
 {% endif %}
+{% endblock %}
+
+{% block extrajs %}
+<script>
+  $(document).ready(function () {
+    // remove filter links
+    $(".filter-title").hover(
+      function () {
+        $(this).find(".trash-filter").show();
+      },
+      function () {
+        $(this).find(".trash-filter").hide();
+      }
+    );
+    // show modal if form errors
+    $(".modal-with-errors").modal("show");
+  });
+</script>
 {% endblock %}

@@ -1,6 +1,10 @@
 from collections import OrderedDict
 from datetime import datetime
+from itertools import chain
 import logging
+import re
+import urllib.parse
+from django import forms
 from django.db import connection
 from django.db.models import Count
 from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
@@ -17,7 +21,10 @@ logger = logging.getLogger("zentral.contrib.inventory.utils")
 
 
 class BaseMSFilter:
+    none_value = "\u2400"
     title = "Untitled"
+    optional = False
+    free_input = False
     query_kwarg = None
     many = False
     non_grouping_expression = None
@@ -70,6 +77,9 @@ class BaseMSFilter:
     def where_args(self):
         return []
 
+    def serialize(self):
+        return self.get_query_kwarg()
+
     # process grouping results
 
     def filter_grouping_results(self, grouping_results):
@@ -83,7 +93,7 @@ class BaseMSFilter:
         return grouping_result.get(self.grouping_set[-1].split(".")[-1])
 
     def label_for_grouping_value(self, grouping_value):
-        return str(grouping_value) if grouping_value else "-"
+        return str(grouping_value) if grouping_value else self.none_value
 
     def query_kwarg_value_from_grouping_value(self, grouping_value):
         return grouping_value
@@ -98,8 +108,12 @@ class BaseMSFilter:
             query_dict = self.query_dict.copy()
             query_dict.pop("page", None)
             query_kwarg_value = self.query_kwarg_value_from_grouping_value(grouping_value)
+            if query_kwarg_value is None:
+                query_kwarg_value = self.none_value
+            else:
+                query_kwarg_value = str(query_kwarg_value)
             query_kwarg = self.get_query_kwarg()
-            if query_dict.get(query_kwarg) == str(query_kwarg_value):
+            if query_dict.get(query_kwarg) == query_kwarg_value:
                 # already filtered
                 down_query_dict = None
                 up_query_dict = query_dict
@@ -130,10 +144,13 @@ class SourceFilter(BaseMSFilter):
 
     def wheres(self):
         if self.value:
-            yield "src.id = %s"
+            if self.value != self.none_value:
+                yield "src.id = %s"
+            else:
+                yield "src.id is null"
 
     def where_args(self):
-        if self.value:
+        if self.value and self.value != self.none_value:
             yield self.value
 
     def grouping_value_from_grouping_result(self, grouping_result):
@@ -144,7 +161,7 @@ class SourceFilter(BaseMSFilter):
 
     def label_for_grouping_value(self, grouping_value):
         if not grouping_value:
-            return "-"
+            return self.none_value
         else:
             return grouping_value["name"]
 
@@ -162,6 +179,7 @@ class SourceFilter(BaseMSFilter):
 
 class OSVersionFilter(BaseMSFilter):
     title = "OS"
+    optional = True
     query_kwarg = "osv"
     expression = ("jsonb_build_object("
                   "'id', osv.id, "
@@ -177,10 +195,13 @@ class OSVersionFilter(BaseMSFilter):
 
     def wheres(self):
         if self.value:
-            yield "osv.id = %s"
+            if self.value != self.none_value:
+                yield "osv.id = %s"
+            else:
+                yield "osv.id is null"
 
     def where_args(self):
-        if self.value:
+        if self.value and self.value != self.none_value:
             yield self.value
 
     def grouping_value_from_grouping_result(self, grouping_result):
@@ -191,7 +212,7 @@ class OSVersionFilter(BaseMSFilter):
 
     def label_for_grouping_value(self, grouping_value):
         if not grouping_value:
-            return "-"
+            return self.none_value
         label = [grouping_value["name"]]
         label.append(".".join(str(num) for num in
                               (grouping_value.get(attr) for attr in ("major", "minor", "patch"))
@@ -213,6 +234,7 @@ class OSVersionFilter(BaseMSFilter):
 
 class MetaBusinessUnitFilter(BaseMSFilter):
     title = "Meta business units"
+    optional = True
     query_kwarg = "mbu"
     expression = "jsonb_build_object('id', mbu.id, 'name', mbu.name) as mbu_j"
     grouping_set = ("mbu.id", "mbu_j")
@@ -223,10 +245,13 @@ class MetaBusinessUnitFilter(BaseMSFilter):
 
     def wheres(self):
         if self.value:
-            yield "mbu.id = %s"
+            if self.value != self.none_value:
+                yield "mbu.id = %s"
+            else:
+                yield "mbu.id is null"
 
     def where_args(self):
-        if self.value:
+        if self.value and self.value != self.none_value:
             yield self.value
 
     def grouping_value_from_grouping_result(self, grouping_result):
@@ -237,7 +262,7 @@ class MetaBusinessUnitFilter(BaseMSFilter):
 
     def label_for_grouping_value(self, grouping_value):
         if not grouping_value:
-            return "-"
+            return self.none_value
         else:
             return grouping_value["name"] or "?"
 
@@ -253,6 +278,7 @@ class MetaBusinessUnitFilter(BaseMSFilter):
 
 class TagFilter(BaseMSFilter):
     title = "Tags"
+    optional = True
     many = True
     query_kwarg = "t"
     expression = (
@@ -285,10 +311,13 @@ class TagFilter(BaseMSFilter):
 
     def wheres(self):
         if self.value:
-            yield "t.id = %s"
+            if self.value != self.none_value:
+                yield "t.id = %s"
+            else:
+                yield "t.id is null"
 
     def where_args(self):
-        if self.value:
+        if self.value and self.value != self.none_value:
             yield self.value
 
     def grouping_value_from_grouping_result(self, grouping_result):
@@ -301,7 +330,7 @@ class TagFilter(BaseMSFilter):
 
     def label_for_grouping_value(self, grouping_value):
         if not grouping_value:
-            return "-"
+            return self.none_value
         label = grouping_value["name"] or "?"
         mbu = grouping_value.get("meta_business_unit")
         if mbu:
@@ -330,6 +359,7 @@ class TagFilter(BaseMSFilter):
 
 
 class BundleFilter(BaseMSFilter):
+    optional = True
     many = True
 
     def __init__(self, *args, **kwargs):
@@ -373,15 +403,24 @@ class BundleFilter(BaseMSFilter):
 
     def wheres(self):
         if self.value:
-            yield "a{}.id = %s".format(self.idx)
+            if self.value != self.none_value:
+                yield "a{}.id = %s".format(self.idx)
+            else:
+                yield "a{}.id is null".format(self.idx)
 
     def where_args(self):
-        if self.value:
+        if self.value and self.value != self.none_value:
             yield self.value
+
+    def serialize(self):
+        if self.bundle_name:
+            return "a.n.{}".format(self.bundle_name)
+        elif self.bundle_id:
+            return "a.i.{}".format(self.bundle_id)
 
     def label_for_grouping_value(self, grouping_value):
         if not grouping_value:
-            return "-"
+            return self.none_value
         if self.bundle_id:
             # TODO hack. Try to set a better title.
             bundle_name = grouping_value["bundle_name"]
@@ -411,42 +450,51 @@ class BundleFilter(BaseMSFilter):
 
 class TypeFilter(BaseMSFilter):
     title = "Types"
+    optional = True
     query_kwarg = "tp"
     expression = "ms.type"
     grouping_set = ("ms.type",)
 
     def wheres(self):
         if self.value:
-            yield "ms.type = %s"
+            if self.value != self.none_value:
+                yield "ms.type = %s"
+            else:
+                yield "ms.type is null"
 
     def where_args(self):
-        if self.value:
+        if self.value and self.value != self.none_value:
             yield self.value
 
     def label_for_grouping_value(self, grouping_value):
         if grouping_value:
             return grouping_value.title()
         else:
-            return "-"
+            return self.none_value
 
 
 class PlaformFilter(BaseMSFilter):
     title = "Platforms"
+    optional = True
     query_kwarg = "pf"
     expression = "ms.platform"
     grouping_set = ("ms.platform",)
 
     def wheres(self):
         if self.value:
-            yield "ms.platform = %s"
+            if self.value != self.none_value:
+                yield "ms.platform = %s"
+            else:
+                yield "ms.platform is null"
 
     def where_args(self):
-        if self.value:
+        if self.value and self.value != self.none_value:
             yield self.value
 
 
 class SerialNumberFilter(BaseMSFilter):
     query_kwarg = "sn"
+    free_input = True
     non_grouping_expression = "ms.serial_number"
 
     def __init__(self, *args, **kwargs):
@@ -468,6 +516,7 @@ class SerialNumberFilter(BaseMSFilter):
 
 class ComputerNameFilter(BaseMSFilter):
     query_kwarg = "cn"
+    free_input = True
     non_grouping_expression = "si.computer_name"
 
     def __init__(self, *args, **kwargs):
@@ -480,15 +529,19 @@ class ComputerNameFilter(BaseMSFilter):
 
     def wheres(self):
         if self.value:
-            yield "si.id is not null and si.computer_name ~* %s"
+            if self.value != self.none_value:
+                yield "si.id is not null and si.computer_name ~* %s"
+            else:
+                yield "si.id is null or si.computer_name is null"
 
     def where_args(self):
-        if self.value:
+        if self.value and self.value != self.none_value:
             yield self.value
 
 
 class HardwareModelFilter(BaseMSFilter):
     title = "Hardware models"
+    optional = True
     query_kwarg = "hm"
     expression = "si.hardware_model"
     grouping_set = ("si.hardware_model",)
@@ -498,10 +551,13 @@ class HardwareModelFilter(BaseMSFilter):
 
     def wheres(self):
         if self.value:
-            yield "si.hardware_model = %s"
+            if self.value != self.none_value:
+                yield "si.hardware_model = %s"
+            else:
+                yield "si.hardware_model is null"
 
     def where_args(self):
-        if self.value:
+        if self.value and self.value != self.none_value:
             yield self.value
 
 
@@ -535,6 +591,8 @@ class DateTimeFilter(BaseMSFilter):
 
 
 class MSQuery:
+    paginate_by = 50
+    itersize = 1000
     default_filters = [
         DateTimeFilter,
         SourceFilter,
@@ -550,14 +608,68 @@ class MSQuery:
 
     def __init__(self, query_dict=None):
         self.query_dict = query_dict or {}
+        try:
+            self.page = int(self.query_dict.get("page", 1))
+        except ValueError:
+            self.page = 1
         self.filters = []
-        for filter_class in self.default_filters:
-            self.add_filter(filter_class)
+        self._redirect = False
+        self._deserialize_filters(query_dict.get("sf"))
         self._grouping_results = None
         self._count = None
 
+    # filters configuration
+
     def add_filter(self, filter_class, **filter_kwargs):
         self.filters.append(filter_class(len(self.filters), self.query_dict, **filter_kwargs))
+
+    def _deserialize_filters(self, serialized_filters):
+        try:
+            serialized_filters = serialized_filters.split("-")
+            default = False
+        except Exception:
+            serialized_filters = []
+            default = True
+            self._redirect = True
+        for f in self.default_filters:
+            if default or not f.optional or f.query_kwarg in serialized_filters:
+                self.add_filter(f)
+        for serialized_filter in serialized_filters:
+            if serialized_filter.startswith("a."):
+                attr, value = re.sub(r"^a\.", "", serialized_filter).split(".", 1)
+                if attr == "n":
+                    self.add_filter(BundleFilter, bundle_name=value)
+                elif attr == "i":
+                    self.add_filter(BundleFilter, bundle_id=value)
+
+    def serialize_filters(self, filter_to_add=None, filter_to_remove=None):
+        return "-".join(f.serialize() for f in chain(self.filters, [filter_to_add])
+                        if f and f.optional and not f == filter_to_remove)
+
+    def get_url(self):
+        qd = self.query_dict.copy()
+        qd["sf"] = self.serialize_filters()
+        return "?{}".format(urllib.parse.urlencode(qd))
+
+    def redirect_url(self):
+        if self._redirect:
+            return self.get_url()
+
+    def available_filters(self):
+        links = []
+        idx = len(self.filters)
+        for filter_class in self.default_filters:
+            for f in self.filters:
+                if isinstance(f, filter_class):
+                    break
+            else:
+                available_filter = filter_class(idx, self.query_dict)
+                available_filter_qd = self.query_dict.copy()
+                available_filter_qd["sf"] = self.serialize_filters(filter_to_add=available_filter)
+                links.append((available_filter.title,
+                              "?{}".format(urllib.parse.urlencode(available_filter_qd))))
+                idx += 1
+        return links
 
     # common things for grouping and fetching
 
@@ -640,9 +752,33 @@ class MSQuery:
             if f_choices:
                 yield f, f_choices
 
+    def grouping_links(self):
+        grouping_links = []
+        for f, f_choices in self.grouping_choices():
+            f_links = []
+            for label, count, down_query_dict, up_query_dict in f_choices:
+                if up_query_dict is not None:
+                    up_link = "?{}".format(urllib.parse.urlencode(up_query_dict))
+                    down_link = None
+                else:
+                    up_link = None
+                    down_link = "?{}".format(urllib.parse.urlencode(down_query_dict))
+                f_links.append((label, count, down_link, up_link))
+            f_links.sort(key=lambda t: (t[0] == f.none_value, (t[0] or "").upper()))
+            if f.optional:
+                remove_filter_query_dict = self.query_dict.copy()
+                remove_filter_query_dict.pop("page", None)
+                remove_filter_query_dict.pop(f.get_query_kwarg(), None)
+                remove_filter_query_dict["sf"] = self.serialize_filters(filter_to_remove=f)
+                r_link = "?{}".format(urllib.parse.urlencode(remove_filter_query_dict))
+            else:
+                r_link = None
+            grouping_links.append((f, f_links, r_link))
+        return grouping_links
+
     # fetching
 
-    def _build_fetching_query_with_args(self, page=1, paginate_by=50):
+    def _build_fetching_query_with_args(self, paginate=True):
         query = ["select"]
         args = []
         # expressions
@@ -666,35 +802,56 @@ class MSQuery:
         if group_bys:
             query.append("GROUP BY {}".format(", ".join(group_bys)))
         query = "\n".join(query)
-        limit = max(paginate_by, 1)
-        args.append(limit)
-        offset = max((page - 1) * limit, 0)
-        args.append(offset)
+        # pagination
+        if paginate:
+            limit = max(self.paginate_by, 1)
+            args.append(limit)
+            offset = max((self.page - 1) * limit, 0)
+            args.append(offset)
+            limit_offset = " limit %s offset %s"
+        else:
+            limit_offset = ""
         meta_query = (
             "select ms.serial_number, json_agg(row_to_json(ms.*)) as machine_snapshots "
             "from ({}) ms "
             "group by ms.serial_number "
-            "order by min(ms.computer_name) asc, ms.serial_number asc "
-            "limit %s offset %s"
-        ).format(query)
+            "order by min(ms.computer_name) asc, ms.serial_number asc{}"
+        ).format(query, limit_offset)
         return meta_query, args
 
-    def _make_fetching_query(self, page=1, paginate_by=50):
-        query, args = self._build_fetching_query_with_args(page=page, paginate_by=paginate_by)
+    def _make_fetching_query(self, paginate=True):
+        query, args = self._build_fetching_query_with_args(paginate)
         cursor = connection.cursor()
         cursor.execute(query, args)
         columns = [col[0] for col in cursor.description]
-        results = []
-        for row in cursor.fetchall():
-            results.append(dict(zip(columns, row)))
-        return results
+        for rows in iter(lambda: cursor.fetchmany(self.itersize), connection.features.empty_fetchmany_value):
+            for row in rows:
+                yield dict(zip(columns, row))
 
-    def fetch(self, page=1, paginate_by=50):
-        for record in self._make_fetching_query(page, paginate_by):
+    def fetch(self, paginate=True):
+        for record in self._make_fetching_query(paginate):
             for machine_snapshot in record["machine_snapshots"]:
                 for f in self.filters:
                     f.process_fetched_record(machine_snapshot)
             yield record["serial_number"], record["machine_snapshots"]
+
+
+class BundleFilterForm(forms.Form):
+    bundle_id = forms.CharField(label="Bundle id", required=False,
+                                widget=forms.TextInput(attrs={"class": "form-control",
+                                                              "placeholder": "Bundle id"}))
+    bundle_name = forms.CharField(label="Bundle name", required=False,
+                                  widget=forms.TextInput(attrs={"class": "form-control",
+                                                                "placeholder": "Bundle name"}))
+
+    def clean(self):
+        cleaned_data = super().clean()
+        bundle_name = cleaned_data.get("bundle_name")
+        bundle_id = cleaned_data.get("bundle_id")
+        if bundle_name and bundle_id:
+            raise forms.ValidationError("Bundle id and bundle name cannot be both specified.")
+        elif not bundle_name and not bundle_id:
+            raise forms.ValidationError("Choose a bundle id or a bundle name.")
 
 
 def mbu_dashboard_machine_data(mbu):

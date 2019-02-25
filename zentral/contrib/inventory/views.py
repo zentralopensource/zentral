@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from math import ceil
-import urllib.parse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.core.urlresolvers import reverse, reverse_lazy
@@ -24,7 +23,7 @@ from .models import (BusinessUnit,
 from .utils import (get_prometheus_inventory_metrics,
                     mbu_dashboard_bundle_data, mbu_dashboard_machine_data,
                     prometheus_metrics_content_type,
-                    BundleFilter, MSQuery)
+                    BundleFilter, BundleFilterForm, MSQuery)
 
 
 class MachineListView(LoginRequiredMixin, TemplateView):
@@ -143,59 +142,56 @@ class MachineListView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class DrillDownView(LoginRequiredMixin, TemplateView):
+class DrillDownView(LoginRequiredMixin, FormView):
     template_name = "inventory/drilldown.html"
+    form_class = BundleFilterForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.msquery = MSQuery(request.GET)
+        if request.method == "GET":
+            redirect_url = self.msquery.redirect_url()
+            if redirect_url:
+                return HttpResponseRedirect(redirect_url)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["msquery"] = msquery = MSQuery(self.request.GET)
-        msquery.add_filter(BundleFilter, bundle_id="org.mozilla.firefox")
-        # msquery.add_filter(BundleFilter, bundle_id="org.mozilla.firefoxdeveloperedition")
-        grouping_links = []
-        for f, f_choices in msquery.grouping_choices():
-            f_links = []
-            for label, count, down_query_dict, up_query_dict in f_choices:
-                if up_query_dict is not None:
-                    if up_query_dict:
-                        up_link = "./?{}".format(urllib.parse.urlencode(up_query_dict))
-                    else:
-                        up_link = "./"
-                    down_link = None
-                else:
-                    up_link = None
-                    down_link = "./?{}".format(urllib.parse.urlencode(down_query_dict))
-                f_links.append((label, count, down_link, up_link))
-            grouping_links.append((f, f_links))
-        ctx["grouping_links"] = grouping_links
+        ctx["msquery"] = self.msquery
         # pagination / machines
-        try:
-            page = int(self.request.GET.get("page", 1))
-        except ValueError:
-            page = 1
-        ctx["machine_count"] = count = msquery.count()
-        paginate_by = 50
-        ctx["machines"] = msquery.fetch(page=page, paginate_by=50)
-        if page > 1:
+        ctx["machines"] = self.msquery.fetch()
+        ctx["grouping_links"] = self.msquery.grouping_links()
+        if self.msquery.page > 1:
             qd = self.request.GET.copy()
-            qd['page'] = page - 1
+            qd['page'] = self.msquery.page - 1
             ctx['previous_url'] = "?{}".format(qd.urlencode())
-        if page * paginate_by < count:
+        if self.msquery.page * self.msquery.paginate_by < self.msquery.count():
             qd = self.request.GET.copy()
-            qd['page'] = page + 1
+            qd['page'] = self.msquery.page + 1
             ctx['next_url'] = "?{}".format(qd.urlencode())
+        # search form
+        search_form_qd = self.request.GET.copy()
+        for key in [f.get_query_kwarg() for f in self.msquery.filters if f.free_input]:
+            search_form_qd.pop(key, None)
+        ctx["search_form_qd"] = search_form_qd
         # breadcrumbs
-        if page > 1:
-            qd = self.request.GET.copy()
-            qd.pop('page', None)
-            reset_link = "?{}".format(qd.urlencode())
-        else:
-            reset_link = None
-        num_pages = ceil(max(count, 1) / paginate_by)
+        reset_link = reverse("inventory:drilldown")
+        num_pages = ceil(max(self.msquery.count(), 1) / self.msquery.paginate_by)
         ctx['breadcrumbs'] = [
             (reset_link, "Inventory drill down"),
-            (None, "page {} of {}".format(page, num_pages))
+            (None, "page {} of {}".format(self.msquery.page, num_pages))
         ]
         return ctx
+
+    def form_valid(self, form):
+        f_kwargs = {}
+        bundle_id = form.cleaned_data.get("bundle_id")
+        bundle_name = form.cleaned_data.get("bundle_name")
+        if bundle_id:
+            f_kwargs["bundle_id"] = bundle_id
+        elif bundle_name:
+            f_kwargs["bundle_name"] = bundle_name
+        self.msquery.add_filter(BundleFilter, **f_kwargs)
+        return HttpResponseRedirect(self.msquery.get_url())
 
 
 class IndexView(MachineListView):
