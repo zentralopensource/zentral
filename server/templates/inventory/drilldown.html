@@ -99,10 +99,10 @@
         <p style="margin:0">
           {% if down_link %}
           <a href="{{ down_link }}">{{ label }}</a>
-          <span class="badge pull-right">{{ count }}</span>
           {% elif up_link %}
-          {{ label }} <a href="{{ up_link }}"><span class="glyphicon glyphicon-trash" aria-hidden="true"></span></a>
+          {{ label }} <a href="{{ up_link }}"><span class="text-danger glyphicon glyphicon-remove" aria-hidden="true"></span></a>
           {% endif %}
+          <span class="badge pull-right">{{ count }}</span>
         </p>
         {% endfor %}
       </div>
