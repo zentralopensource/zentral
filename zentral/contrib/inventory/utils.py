@@ -210,17 +210,22 @@ class OSVersionFilter(BaseMSFilter):
             return None
         return gv
 
+    @staticmethod
+    def display_name(os_version):
+        dn = [os_version["name"]]
+        dn.append(".".join(str(num) for num in
+                           (os_version.get(attr) for attr in ("major", "minor", "patch"))
+                           if num is not None))
+        build = os_version.get("build")
+        if build:
+            dn.append("({})".format(build))
+        return " ".join(e for e in dn if e)
+
     def label_for_grouping_value(self, grouping_value):
         if not grouping_value:
             return self.none_value
-        label = [grouping_value["name"]]
-        label.append(".".join(str(num) for num in
-                              (grouping_value.get(attr) for attr in ("major", "minor", "patch"))
-                              if num is not None))
-        build = grouping_value.get("build")
-        if build:
-            label.append("({})".format(build))
-        return " ".join(e for e in label if e)
+        else:
+            return self.display_name(grouping_value)
 
     def query_kwarg_value_from_grouping_value(self, grouping_value):
         if grouping_value:
@@ -229,6 +234,7 @@ class OSVersionFilter(BaseMSFilter):
     def process_fetched_record(self, record):
         os_version = record.pop("osv_j", None)
         if os_version and os_version["id"]:
+            os_version["display_name"] = self.display_name(os_version)
             record["os_version"] = os_version
 
 

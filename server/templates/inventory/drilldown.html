@@ -149,7 +149,9 @@
         </a>
       </td>
       {% endif %}
-      <td>{{ machine_snapshot.computer_name }}</td>
+      <td>{{ machine_snapshot.computer_name|default:"" }}</td>
+      <td>{{ machine_snapshot.hardware_model|default:"" }}</td>
+      <td>{{ machine_snapshot.os_version.display_name }}</td>
       <td>
       {% for tag in machine_snapshot.tags %}
       {% base_inventory_tag tag.display_name tag.color %}
