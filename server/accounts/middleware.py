@@ -15,7 +15,7 @@ def force_password_change_middleware(get_response):
 
     def middleware(request):
         user = request.user
-        if user.is_authenticated() and \
+        if user.is_authenticated and \
            not user.is_remote and \
            user.has_usable_password() and \
            user.password_updated_at is not None and \

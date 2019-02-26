@@ -27,7 +27,7 @@ class OsquerySetupViewsTestCase(TestCase):
     def log_user_out(self):
         response = self.client.get(reverse('logout'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["user"].is_authenticated(), False)
+        self.assertEqual(response.context["user"].is_authenticated, False)
 
     def test_configurations_redirect(self):
         self.login_redirect(reverse("osquery:configuration_list"))

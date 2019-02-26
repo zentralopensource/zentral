@@ -30,7 +30,7 @@ class MunkiSetupViewsTestCase(TestCase):
     def log_user_out(self):
         response = self.client.get(reverse('logout'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["user"].is_authenticated(), False)
+        self.assertEqual(response.context["user"].is_authenticated, False)
 
     def post_as_json(self, url_name, data):
         return self.client.post(reverse("munki:{}".format(url_name)),
