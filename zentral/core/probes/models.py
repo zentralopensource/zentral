@@ -1,6 +1,6 @@
 import logging
 from django.contrib.postgres.fields import ArrayField, JSONField
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.db import models, transaction
 from django.db.models import F, Func
 from django.utils.text import slugify

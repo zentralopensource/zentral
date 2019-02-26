@@ -1,5 +1,5 @@
 import logging
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 from rest_framework import serializers

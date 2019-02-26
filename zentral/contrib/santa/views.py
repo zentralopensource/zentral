@@ -2,7 +2,7 @@ import base64
 import json
 import logging
 from django.core.exceptions import SuspiciousOperation
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.http import Http404, HttpResponseRedirect, JsonResponse

@@ -1,5 +1,5 @@
 import os.path
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from rest_framework import serializers
 from .base import register_probe_class, BaseProbeSerializer, OsqueryResultProbe, OsqueryQuery
 

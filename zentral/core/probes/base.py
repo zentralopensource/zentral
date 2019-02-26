@@ -2,7 +2,7 @@ import collections
 import collections.abc
 import copy
 import logging
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from django.utils.functional import cached_property
 from rest_framework import serializers
 from zentral.contrib.inventory.conf import (PLATFORM_CHOICES, PLATFORM_CHOICES_DICT,

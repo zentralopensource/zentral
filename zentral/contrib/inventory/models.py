@@ -8,7 +8,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField, JSONField
 from django.core.exceptions import ValidationError
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import connection, IntegrityError, models, transaction
 from django.db.models import Count, F, Q

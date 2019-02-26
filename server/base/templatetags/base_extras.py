@@ -3,7 +3,7 @@ from importlib import import_module
 import logging
 import pprint
 from django import template
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import linebreaks, urlize
 from django.utils.safestring import mark_safe

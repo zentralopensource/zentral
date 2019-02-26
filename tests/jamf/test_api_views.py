@@ -1,5 +1,5 @@
 import json
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test import TestCase, override_settings
 from zentral.contrib.jamf.models import JamfInstance
 

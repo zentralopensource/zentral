@@ -1,4 +1,4 @@
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from rest_framework import serializers
 from zentral.core.probes import register_probe_class
 from zentral.core.probes.base import BaseProbe, BaseProbeSerializer, PayloadFilter

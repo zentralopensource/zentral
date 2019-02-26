@@ -5,7 +5,7 @@ import logging
 import dateutil.parser
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from django.http import (FileResponse,
                          Http404,
                          HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect,

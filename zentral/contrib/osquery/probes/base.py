@@ -1,5 +1,5 @@
 import hashlib
-from django.core.urlresolvers import reverse_lazy
+from django.urls import reverse_lazy
 from django.utils.functional import cached_property
 from rest_framework import serializers
 from zentral.core.probes import register_probe_class
