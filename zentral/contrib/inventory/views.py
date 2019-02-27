@@ -5,7 +5,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse, reverse_lazy
 from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
-from django.utils.timezone import make_naive
+from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.core.stores import frontend_store
 from zentral.conf import settings
@@ -45,6 +45,14 @@ class MachineListView(LoginRequiredMixin, FormView):
             redirect_url = self.msquery.redirect_url()
             if redirect_url:
                 return HttpResponseRedirect(redirect_url)
+            if "xlsx" in request.GET:
+                response = HttpResponse(
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                filename = "inventory_export_{:%Y-%m-%d_%H-%M-%S}.xlsx".format(timezone.now())
+                response['Content-Disposition'] = "attachment; filename={}".format(filename)
+                self.msquery.export_xlsx(response)
+                return response
         return super().dispatch(request, *args, **kwargs)
 
     def get_list_title(self):
@@ -88,6 +96,11 @@ class MachineListView(LoginRequiredMixin, FormView):
             breadcrumbs.extend([(reset_link, anchor_text),
                                 (None, "page {} of {}".format(self.msquery.page, num_pages))])
         ctx['breadcrumbs'] = breadcrumbs
+        # xlsx link
+        xlsx_qs = self.request.GET.copy()
+        xlsx_qs["xlsx"] = True
+        xlsx_link = "?{}".format(xlsx_qs.urlencode())
+        ctx["xlsx_link"] = xlsx_link
         return ctx
 
     def form_valid(self, form):
@@ -377,7 +390,7 @@ class MachineView(LoginRequiredMixin, TemplateView):
             date_class = None
             if ua_max_dates:
                 # should always be the case
-                all_ua_max_date = make_naive(ua_max_dates[0][1])
+                all_ua_max_date = timezone.make_naive(ua_max_dates[0][1])
                 if heartbeat_timeout:
                     if datetime.utcnow() - all_ua_max_date > heartbeat_timeout:
                         date_class = "danger"

@@ -8,6 +8,7 @@ from django import forms
 from django.db import connection
 from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
                                generate_latest, CONTENT_TYPE_LATEST as prometheus_metrics_content_type)
+import xlsxwriter
 from zentral.utils.json import log_data
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      post_inventory_events)
@@ -506,6 +507,10 @@ class BundleFilter(BaseMSFilter):
         elif self.bundle_id:
             return "a.i.{}".format(self.bundle_id)
 
+    @staticmethod
+    def display_name(osx_app):
+        return " ".join(e for e in (osx_app["bundle_name"], osx_app["bundle_version_str"]) if e)
+
     def label_for_grouping_value(self, grouping_value):
         if not grouping_value:
             return self.none_value
@@ -514,7 +519,7 @@ class BundleFilter(BaseMSFilter):
             bundle_name = grouping_value["bundle_name"]
             if bundle_name:
                 self.title = bundle_name
-        return " ".join(e for e in (grouping_value["bundle_name"], grouping_value["bundle_version_str"]) if e)
+            return self.display_name(grouping_value)
 
     def grouping_value_from_grouping_result(self, grouping_result):
         gv = super().grouping_value_from_grouping_result(grouping_result)
@@ -531,7 +536,10 @@ class BundleFilter(BaseMSFilter):
         for osx_app in record.pop(self.grouping_set[-1], []):
             if not osx_app["id"]:
                 continue
+            osx_app["display_name"] = self.display_name(osx_app)
             osx_apps.append(osx_app)
+        osx_apps.sort(key=lambda app: (app.get("major"), app.get("minor"), app.get("patch"), app.get("build"),
+                                       app.get("id")))
         # TODO: verify no conflict
         record.setdefault("osx_apps", OrderedDict())[self.title] = osx_apps
 
@@ -945,6 +953,90 @@ class MSQuery:
                 for f in self.filters:
                     f.process_fetched_record(machine_snapshot)
             yield record["serial_number"], record["machine_snapshots"]
+
+    # export
+    def export_xlsx(self, http_response):
+        workbook = xlsxwriter.Workbook(http_response, {'in_memory': True})
+        # machines
+        machines_ws = workbook.add_worksheet("Machines")
+        headers = [
+            "Source ID", "Source",
+            "SN", "Type", "Platform",
+            "Name",
+            "Hardware model",
+            "OS",
+            "tags"
+        ]
+        row = 0
+        col = 0
+        for header in headers:
+            machines_ws.write_string(row, col, header)
+            col += 1
+        for serial_number, machine_snapshots in self.fetch(paginate=False):
+            for machine_snapshot in machine_snapshots:
+                if row == 0:
+                    # still the headers get the apps
+                    for app_title in machine_snapshot.get("osx_apps", {}):
+                        for suffix in ("min", "max"):
+                            machines_ws.write_string(row, col, "{} {}".format(app_title, suffix))
+                            col += 1
+                    row += 1
+                col = 0
+                machines_ws.write_number(row, col, machine_snapshot["source"]["id"])
+                col += 1
+                machines_ws.write_string(row, col, machine_snapshot["source"].get("display_name") or "")
+                col += 1
+                machines_ws.write_string(row, col, serial_number)
+                col += 1
+                machines_ws.write_string(row, col, machine_snapshot.get("type") or "")
+                col += 1
+                machines_ws.write_string(row, col, machine_snapshot.get("platform") or "")
+                col += 1
+                machines_ws.write_string(row, col, machine_snapshot.get("computer_name") or "")
+                col += 1
+                machines_ws.write_string(row, col, machine_snapshot.get("hardware_model") or "")
+                col += 1
+                os_version = machine_snapshot.get("os_version")
+                if os_version:
+                    os_version_dn = os_version.get("display_name") or ""
+                else:
+                    os_version_dn = ""
+                machines_ws.write_string(row, col, os_version_dn)
+                col += 1
+                tags = "|".join(dn for dn in (t.get("display_name") for t in machine_snapshot.get("tags", [])) if dn)
+                machines_ws.write_string(row, col, tags)
+                col += 1
+                for _, app_versions in machine_snapshot.get("osx_apps", {}).items():
+                    if app_versions:
+                        min_app_version = app_versions[0]["display_name"]
+                        max_app_version = app_versions[-1]["display_name"]
+                    else:
+                        min_app_version = max_app_version = ""
+                    machines_ws.write_string(row, col, min_app_version)
+                    col += 1
+                    machines_ws.write_string(row, col, max_app_version)
+                    col += 1
+                row += 1
+        # aggregations
+        for f, f_links, _ in self.grouping_links():
+            ws = workbook.add_worksheet(f.title)
+            row = col = 0
+            headers = ["Value", "Count", "%"]
+            for header in headers:
+                ws.write_string(row, col, header)
+                col += 1
+            row += 1
+            for label, f_count, f_perc, _, _ in f_links:
+                if label == "\u2400":
+                    label = "NULL"
+                col = 0
+                ws.write_string(row, col, label)
+                col += 1
+                ws.write_number(row, col, f_count)
+                col += 1
+                ws.write_number(row, col, f_perc)
+                row += 1
+        workbook.close()
 
 
 class BundleFilterForm(forms.Form):
