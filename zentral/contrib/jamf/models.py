@@ -15,7 +15,7 @@ def make_secret():
 
 class JamfInstance(models.Model):
     version = models.PositiveIntegerField(editable=False)
-    business_unit = models.ForeignKey("inventory.BusinessUnit", models.PROTECT, blank=True, null=True)
+    business_unit = models.ForeignKey("inventory.BusinessUnit", on_delete=models.PROTECT, blank=True, null=True)
     host = models.CharField(max_length=256,
                             help_text="host name of the server")
     port = models.IntegerField(validators=[MinValueValidator(1),
