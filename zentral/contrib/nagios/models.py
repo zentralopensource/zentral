@@ -13,7 +13,7 @@ def make_secret():
 
 class NagiosInstance(models.Model):
     version = models.PositiveIntegerField(editable=False)
-    business_unit = models.ForeignKey("inventory.BusinessUnit", models.PROTECT, blank=True, null=True)
+    business_unit = models.ForeignKey("inventory.BusinessUnit", on_delete=models.PROTECT, blank=True, null=True)
     url = models.URLField(unique=True)
     secret = models.CharField(max_length=256, editable=False, unique=True,
                               default=make_secret)
