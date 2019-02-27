@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 
 from django.db import migrations, models
+import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
@@ -29,7 +30,8 @@ class Migration(migrations.Migration):
                 ('result', models.TextField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('distributed_query', models.ForeignKey(to='osquery.DistributedQuery')),
+                ('distributed_query', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE,
+                                                        to='osquery.DistributedQuery')),
             ],
         ),
         migrations.CreateModel(

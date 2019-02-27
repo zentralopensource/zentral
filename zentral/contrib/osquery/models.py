@@ -162,7 +162,7 @@ class Configuration(models.Model):
 
 
 class Enrollment(BaseEnrollment):
-    configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
+    configuration = models.ForeignKey(Configuration, on_delete=models.PROTECT)
     osquery_release = models.CharField(max_length=64, blank=True, null=False)
 
     def get_description_for_distributor(self):
@@ -181,7 +181,7 @@ class Enrollment(BaseEnrollment):
 
 
 class EnrolledMachine(models.Model):
-    enrollment = models.ForeignKey(Enrollment)
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
     serial_number = models.TextField(db_index=True)
     node_key = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -226,7 +226,7 @@ class DistributedQueryProbeMachine(models.Model):
 
     Necessary to keep track of the distributed queries received by each machine.
     """
-    probe_source = models.ForeignKey('probes.ProbeSource')
+    probe_source = models.ForeignKey('probes.ProbeSource', on_delete=models.CASCADE)
     machine_serial_number = models.CharField(max_length=255, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -245,7 +245,7 @@ def carve_session_archive_path(instance, filename):
 
 
 class CarveSession(models.Model):
-    probe_source = models.ForeignKey('probes.ProbeSource')
+    probe_source = models.ForeignKey('probes.ProbeSource', on_delete=models.CASCADE)
     machine_serial_number = models.CharField(max_length=255, db_index=True)
     session_id = models.CharField(max_length=255, db_index=True)
     carve_guid = models.CharField(max_length=255, db_index=True)
@@ -280,7 +280,7 @@ def carve_session_block_path(instance, filename):
 
 
 class CarveBlock(models.Model):
-    carve_session = models.ForeignKey(CarveSession)
+    carve_session = models.ForeignKey(CarveSession, on_delete=models.CASCADE)
     block_id = models.IntegerField()
     file = models.FileField(upload_to=carve_session_block_path)
     created_at = models.DateTimeField(auto_now_add=True)
