@@ -10,7 +10,7 @@ logger = logging.getLogger("zentral.contrib.simplemdm.models")
 
 
 class SimpleMDMInstance(models.Model):
-    business_unit = models.ForeignKey("inventory.BusinessUnit", models.PROTECT)
+    business_unit = models.ForeignKey("inventory.BusinessUnit", on_delete=models.PROTECT)
     api_key = models.TextField()
     account_name = models.TextField(editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -24,7 +24,7 @@ class SimpleMDMInstance(models.Model):
 
 
 class SimpleMDMApp(models.Model):
-    simplemdm_instance = models.ForeignKey(SimpleMDMInstance)
+    simplemdm_instance = models.ForeignKey(SimpleMDMInstance, on_delete=models.CASCADE)
     name = models.CharField(max_length=256)
     simplemdm_id = models.IntegerField('SimpleMDM ID')
     builder = models.CharField(max_length=256)
