@@ -161,11 +161,21 @@ class SourceFilter(BaseMSFilter):
             return None
         return gv
 
+    @staticmethod
+    def display_name(source):
+        dn = [source["name"]]
+        config = source.get("config")
+        if config:
+            host = config.get("host")
+            if host:
+                dn.append(host)
+        return "/".join(e for e in dn if e)
+
     def label_for_grouping_value(self, grouping_value):
         if not grouping_value:
             return self.none_value
         else:
-            return grouping_value["name"]
+            return self.display_name(grouping_value)
 
     def query_kwarg_value_from_grouping_value(self, grouping_value):
         if not grouping_value:
@@ -176,6 +186,7 @@ class SourceFilter(BaseMSFilter):
     def process_fetched_record(self, record):
         source = record.pop("src_j", None)
         if source and source["id"]:
+            source["display_name"] = self.display_name(source)
             record["source"] = source
 
 
