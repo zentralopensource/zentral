@@ -4,7 +4,6 @@ from . import views
 
 urlpatterns = [
     url(r'^$', views.IndexView.as_view(), name='index'),
-    url(r'^dd/$', views.DrillDownView.as_view(), name='drilldown'),
     url(r'^groups/$', views.GroupsView.as_view(), name='groups'),
     url(r'^groups/(?P<group_id>\d+)/machines/$', views.GroupMachinesView.as_view(), name='group_machines'),
     url(r'^business_units/$', views.MBUView.as_view(), name='mbu'),
@@ -18,10 +17,6 @@ urlpatterns = [
         views.RemoveMBUTagView.as_view(),
         name='remove_mbu_tag'),
     url(r'^business_units/(?P<pk>\d+)/machines/$', views.MBUMachinesView.as_view(), name='mbu_machines'),
-    url(r'^business_units/(?P<pk>\d+)/dashboard/bundle_data/$',
-        views.MBUDashboardBundleDataView.as_view(), name='mbu_dashboard_bundle_data'),
-    url(r'^business_units/(?P<pk>\d+)/dashboard/machine_data/$',
-        views.MBUDashboardMachineDataView.as_view(), name='mbu_dashboard_machine_data'),
     url(r'^business_units/(?P<pk>\d+)/detach_bu/(?P<bu_id>\d+)/$', views.DetachBUView.as_view(), name='detach_bu'),
     url(r'^business_units/(?P<pk>\d+)/api_enrollment/$',
         views.MBUAPIEnrollmentView.as_view(),

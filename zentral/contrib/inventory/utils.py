@@ -6,16 +6,13 @@ import re
 import urllib.parse
 from django import forms
 from django.db import connection
-from django.db.models import Count
 from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
                                generate_latest, CONTENT_TYPE_LATEST as prometheus_metrics_content_type)
-from zentral.utils.charts import make_dataset
 from zentral.utils.json import log_data
-from .conf import PLATFORM_CHOICES_DICT, TYPE_CHOICES_DICT
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      post_inventory_events)
 from .exceptions import EnrollmentSecretVerificationFailed
-from .models import EnrollmentSecret, MachineSnapshot, MachineSnapshotCommit, MetaMachine
+from .models import EnrollmentSecret, MachineSnapshotCommit, MetaMachine
 
 logger = logging.getLogger("zentral.contrib.inventory.utils")
 
@@ -31,10 +28,15 @@ class BaseMSFilter:
     expression = None
     grouping_set = None
 
-    def __init__(self, idx, query_dict):
+    def __init__(self, idx, query_dict, hidden_value=None):
         self.idx = idx
         self.query_dict = query_dict
-        self.value = query_dict.get(self.get_query_kwarg())
+        if hidden_value:
+            self.value = hidden_value
+            self.hidden = True
+        else:
+            self.value = query_dict.get(self.get_query_kwarg())
+            self.hidden = False
         self.grouping_alias = "fg{}".format(idx)
 
     def get_query_kwarg(self):
@@ -282,6 +284,54 @@ class MetaBusinessUnitFilter(BaseMSFilter):
             record["meta_business_unit"] = meta_business_unit
 
 
+class MachineGroupFilter(BaseMSFilter):
+    title = "Groups"
+    optional = True
+    many = True
+    query_kwarg = "g"
+    expression = "jsonb_build_object('id', mg.id, 'name', mg.name) as mg_j"
+    grouping_set = ("mg.id", "mg_j")
+
+    def joins(self):
+        return ["left join inventory_machinesnapshot_groups as msg on (ms.id = msg.machinesnapshot_id)",
+                "left join inventory_machinegroup as mg on (mg.id = msg.machinegroup_id)"]
+
+    def wheres(self):
+        if self.value:
+            if self.value != self.none_value:
+                yield "mg.id = %s"
+            else:
+                yield "mg.id is null"
+
+    def where_args(self):
+        if self.value and self.value != self.none_value:
+            yield self.value
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        gv = super().grouping_value_from_grouping_result(grouping_result)
+        if gv["id"] is None:
+            return None
+        return gv
+
+    def label_for_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return self.none_value
+        else:
+            return grouping_value["name"] or "?"
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        if grouping_value:
+            return grouping_value["id"]
+
+    def process_fetched_record(self, record):
+        machine_groups = []
+        for machine_group in record.pop("mg_j", []):
+            if not machine_group["id"]:
+                continue
+            machine_groups.append(machine_group)
+        record["machine_groups"] = machine_groups
+
+
 class TagFilter(BaseMSFilter):
     title = "Tags"
     optional = True
@@ -362,6 +412,27 @@ class TagFilter(BaseMSFilter):
             tag["display_name"] = display_name
             tags.append(tag)
         record["tags"] = tags
+
+
+class OSXAppInstanceFilter(BaseMSFilter):
+    title = "macOS app instances"
+    optional = True
+    many = True
+    query_kwarg = "mosai"
+
+    def joins(self):
+        yield "left join inventory_machinesnapshot_osx_app_instances as mosai on (mosai.machinesnapshot_id = ms.id)"
+
+    def wheres(self):
+        if self.value:
+            if self.value != self.none_value:
+                yield "mosai.osxappinstance_id = %s"
+            else:
+                yield "mosai.osxappinstance_id is null"
+
+    def where_args(self):
+        if self.value and self.value != self.none_value:
+            yield self.value
 
 
 class BundleFilter(BaseMSFilter):
@@ -623,11 +694,26 @@ class MSQuery:
         self._deserialize_filters(query_dict.get("sf"))
         self._grouping_results = None
         self._count = None
+        self._grouping_links = None
 
     # filters configuration
 
     def add_filter(self, filter_class, **filter_kwargs):
+        """add a filter"""
         self.filters.append(filter_class(len(self.filters), self.query_dict, **filter_kwargs))
+
+    def force_filter(self, filter_class, **filter_kwargs):
+        """replace an existing filter from the same class or add it"""
+        found_f = None
+        for idx, f in enumerate(self.filters):
+            if isinstance(f, filter_class):
+                found_f = f
+                break
+        if not found_f:
+            self.add_filter(filter_class, **filter_kwargs)
+        else:
+            new_f = filter_class(found_f.idx, self.query_dict, **filter_kwargs)
+            self.filters = [f if f.idx != found_f.idx else new_f for f in self.filters]
 
     def _deserialize_filters(self, serialized_filters):
         try:
@@ -637,9 +723,9 @@ class MSQuery:
             serialized_filters = []
             default = True
             self._redirect = True
-        for f in self.default_filters:
-            if default or not f.optional or f.query_kwarg in serialized_filters:
-                self.add_filter(f)
+        for filter_class in self.default_filters:
+            if default or not filter_class.optional or filter_class.query_kwarg in serialized_filters:
+                self.add_filter(filter_class)
         for serialized_filter in serialized_filters:
             if serialized_filter.startswith("a."):
                 attr, value = re.sub(r"^a\.", "", serialized_filter).split(".", 1)
@@ -650,7 +736,7 @@ class MSQuery:
 
     def serialize_filters(self, filter_to_add=None, filter_to_remove=None):
         return "-".join(f.serialize() for f in chain(self.filters, [filter_to_add])
-                        if f and f.optional and not f == filter_to_remove)
+                        if f and f.optional and not f == filter_to_remove and not f.hidden)
 
     def get_url(self):
         qd = self.query_dict.copy()
@@ -754,33 +840,41 @@ class MSQuery:
     def grouping_choices(self):
         grouping_results = self._get_grouping_results()
         for f in self.filters:
+            if f.hidden:
+                continue
             f_choices = f.grouping_choices_from_grouping_results(grouping_results)
             if f_choices:
                 yield f, f_choices
 
     def grouping_links(self):
-        grouping_links = []
-        for f, f_choices in self.grouping_choices():
-            f_links = []
-            for label, count, down_query_dict, up_query_dict in f_choices:
-                if up_query_dict is not None:
-                    up_link = "?{}".format(urllib.parse.urlencode(up_query_dict))
-                    down_link = None
+        if self._grouping_links is None:
+            self._grouping_links = []
+            count = self.count()
+            for f, f_choices in self.grouping_choices():
+                f_links = []
+                for label, f_count, down_query_dict, up_query_dict in f_choices:
+                    if up_query_dict is not None:
+                        up_link = "?{}".format(urllib.parse.urlencode(up_query_dict))
+                        down_link = None
+                    else:
+                        up_link = None
+                        down_link = "?{}".format(urllib.parse.urlencode(down_query_dict))
+                    if count > 0:
+                        f_perc = f_count * 100 / count
+                    else:
+                        f_perc = 0
+                    f_links.append((label, f_count, f_perc, down_link, up_link))
+                f_links.sort(key=lambda t: (t[0] == f.none_value, (t[0] or "").upper()))
+                if f.optional:
+                    remove_filter_query_dict = self.query_dict.copy()
+                    remove_filter_query_dict.pop("page", None)
+                    remove_filter_query_dict.pop(f.get_query_kwarg(), None)
+                    remove_filter_query_dict["sf"] = self.serialize_filters(filter_to_remove=f)
+                    r_link = "?{}".format(urllib.parse.urlencode(remove_filter_query_dict))
                 else:
-                    up_link = None
-                    down_link = "?{}".format(urllib.parse.urlencode(down_query_dict))
-                f_links.append((label, count, down_link, up_link))
-            f_links.sort(key=lambda t: (t[0] == f.none_value, (t[0] or "").upper()))
-            if f.optional:
-                remove_filter_query_dict = self.query_dict.copy()
-                remove_filter_query_dict.pop("page", None)
-                remove_filter_query_dict.pop(f.get_query_kwarg(), None)
-                remove_filter_query_dict["sf"] = self.serialize_filters(filter_to_remove=f)
-                r_link = "?{}".format(urllib.parse.urlencode(remove_filter_query_dict))
-            else:
-                r_link = None
-            grouping_links.append((f, f_links, r_link))
-        return grouping_links
+                    r_link = None
+                self._grouping_links.append((f, f_links, r_link))
+        return self._grouping_links
 
     # fetching
 
@@ -858,118 +952,6 @@ class BundleFilterForm(forms.Form):
             raise forms.ValidationError("Bundle id and bundle name cannot be both specified.")
         elif not bundle_name and not bundle_id:
             raise forms.ValidationError("Choose a bundle id or a bundle name.")
-
-
-def mbu_dashboard_machine_data(mbu):
-    # platform
-    platform_qs = (MachineSnapshot.objects.filter(currentmachinesnapshot__isnull=False,
-                                                  business_unit__meta_business_unit=mbu,
-                                                  source=mbu.dashboard_source,
-                                                  platform__isnull=False)
-                                          .values("platform").annotate(count=Count("platform")))
-    platforms = sorted(((d["platform"], d["count"]) for d in platform_qs),
-                       key=lambda t: (-1 * t[1], t[0]))
-    yield "platform", "Plaforms", {
-        "type": "doughnut",
-        "data": {
-            "labels": [PLATFORM_CHOICES_DICT.get(p, "Unknown") for p, _ in platforms],
-            "datasets": [
-                make_dataset([c for _, c in platforms])
-            ]
-        }
-    }
-    # type
-    type_qs = (MachineSnapshot.objects.filter(currentmachinesnapshot__isnull=False,
-                                              business_unit__meta_business_unit=mbu,
-                                              source=mbu.dashboard_source,
-                                              type__isnull=False)
-                                      .values("type").annotate(count=Count("type")))
-    types = sorted(((d["type"], d["count"]) for d in type_qs),
-                   key=lambda t: (-1 * t[1], t[0]))
-    yield "type", "Types", {
-        "type": "doughnut",
-        "data": {
-            "labels": [TYPE_CHOICES_DICT.get(t, "Unknown") for t, _ in types],
-            "datasets": [
-                make_dataset([c for _, c in types])
-            ]
-        }
-    }
-    # os
-    query = (
-        "select osv.name as name, osv.major as major, osv.minor as minor, osv.patch as patch, "
-        "count(*) as count from inventory_osversion as osv "
-        "join inventory_machinesnapshot as ms on (osv.id = ms.os_version_id) "
-        "join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id) "
-        "join inventory_businessunit as bu on (bu.id = ms.business_unit_id) "
-        "where bu.meta_business_unit_id = %s and ms.source_id = %s "
-        "group by osv.name, osv.major, osv.minor, osv.patch"
-    )
-    cursor = connection.cursor()
-    cursor.execute(query, [mbu.pk, mbu.dashboard_source.pk])
-    columns = [col[0] for col in cursor.description]
-    os_list = []
-    for row in cursor.fetchall():
-        os_version = dict(zip(columns, row))
-        version_str = ".".join(str(os_version[a]) for a in ("major", "minor", "patch") if os_version.get(a))
-        value = " ".join(s.strip() for s in (os_version["name"], version_str) if s and s.strip())
-        os_list.append((value, os_version["count"]))
-    os_list.sort(key=lambda t: (-1 * t[1], t[0]))
-    yield "os", "OS", {
-        "type": "doughnut",
-        "data": {
-            "labels": [n for n, _ in os_list],
-            "datasets": [
-                make_dataset([c for _, c in os_list])
-            ]
-        }
-    }
-
-
-def mbu_dashboard_bundle_data(mbu):
-    query = (
-        "select a.bundle_id as id, a.bundle_name as name, a.bundle_version_str as version_str, foo.count as count "
-        "from ("
-        "  select ai.app_id, count(*) as count "
-        "  from inventory_osxappinstance as ai "
-        "  join inventory_machinesnapshot_osx_app_instances as msai on (msai.osxappinstance_id = ai.id) "
-        "  join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = msai.machinesnapshot_id) "
-        "  join inventory_machinesnapshot as ms on (cms.machine_snapshot_id = ms.id) "
-        "  join inventory_businessunit as bu on (ms.business_unit_id = bu.id) "
-        "  where bu.meta_business_unit_id = %s and cms.source_id = %s "
-        "  group by ai.app_id"
-        ") as foo "
-        "join inventory_osxapp as a on (foo.app_id = a.id) "
-        "where a.bundle_id IN %s"
-    )
-    cursor = connection.cursor()
-    bundle_id_tuple = tuple(mbu.dashboard_osx_app_bundle_id_list)
-    cursor.execute(query, [mbu.pk, mbu.dashboard_source.pk, bundle_id_tuple])
-    columns = [col[0] for col in cursor.description]
-    # group versions and counts by bundle_id
-    bundles = {}
-    for row in cursor.fetchall():
-        bundle = dict(zip(columns, row))
-        if bundle["id"] not in bundles:
-            bundles[bundle["id"]] = {"name": bundle["name"],
-                                     "versions": {}}
-        bundles[bundle["id"]]["versions"][bundle["version_str"]] = bundle["count"]
-    # build charts config
-    for bundle_id in bundle_id_tuple:
-        bundle = bundles.get(bundle_id, None)
-        if bundle is None:
-            continue
-        versions = sorted(bundle["versions"].items(), key=lambda t: (-1 * t[1], t[0]), reverse=True)
-        config = {
-            "type": "doughnut",
-            "data": {
-                "labels": [v[0] for v in versions],
-                "datasets": [
-                    make_dataset([v[1] for v in versions])
-                ]
-            }
-        }
-        yield bundle_id, bundle["name"], config
 
 
 def osx_app_count():

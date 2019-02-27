@@ -4,37 +4,9 @@ from django.db import connection
 from django.utils.text import slugify
 from zentral.utils.forms import validate_sha256
 from .models import (EnrollmentSecret,
-                     MachineSnapshot, MachineTag, MetaMachine,
+                     MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
                      Source, Tag)
-
-
-class MachineSearchForm(forms.Form):
-    serial_number = forms.CharField(label="serial number", required=False)
-    name = forms.CharField(label="name", required=False)
-    platform = forms.ChoiceField(label="platform", choices=[], required=False,
-                                 widget=forms.Select(attrs={'class': 'form-control'}))
-    type = forms.ChoiceField(label="type", choices=[], required=False,
-                             widget=forms.Select(attrs={'class': 'form-control'}))
-    source = forms.ModelChoiceField(queryset=Source.objects.current_machine_snapshot_sources(),
-                                    required=False,
-                                    widget=forms.Select(attrs={'class': 'form-control'}))
-    tag = forms.ChoiceField(choices=[],
-                            required=False,
-                            widget=forms.Select(attrs={'class': 'form-control'}))
-
-    def clean_tag(self):
-        if self.cleaned_data['tag']:
-            return int(self.cleaned_data['tag'])
-        else:
-            return None
-
-    def __init__(self, *args, **kwargs):
-        super(MachineSearchForm, self).__init__(*args, **kwargs)
-        self.fields['tag'].choices = [(t.id, str(t)) for t, _ in Tag.objects.used_in_inventory()]
-        self.fields['tag'].choices.insert(0, ('', '----'))
-        self.fields['platform'].choices = [('', '----')] + MachineSnapshot.objects.current_platforms()
-        self.fields['type'].choices = [('', '----')] + MachineSnapshot.objects.current_types()
 
 
 class MachineGroupSearchForm(forms.Form):

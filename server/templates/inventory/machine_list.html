@@ -2,93 +2,176 @@
 {% load inventory_extras %}
 
 {% block content %}
-<ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  {% for url, anchor_text in breadcrumbs %}
-  {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a>
-  {% else %}
-  <li class="active">{{ anchor_text }}</li>
+<div class="row">
+  <div class="col-md-12">
+    <ol class="breadcrumb">
+      <li><a href="/">Home</a></li>
+      {% for url, anchor_text in breadcrumbs %}
+      {% if url %}
+      <li><a href="{{ url }}">{{ anchor_text }}</a>
+      {% else %}
+      <li class="active">{{ anchor_text }}</li>
+      {% endif %}
+      {% endfor %}
+    </ol>
+
+    {% if object_list_title %}
+    <h2>{{ object_list_title }}</h2>
+    {% endif %}
+
+    {% block objectextras %}
+    {% endblock %}
+
+    <h3>{{ msquery.count }} Machine{{ msquery.count|pluralize }}</h3>
+  </div>
+</div>
+
+<div class="modal{% if form.errors %} modal-with-errors{% endif %}" id="add-filter" tabindex="-1" role="dialog" aria-labelledby="add-filter">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="myModalLabel">Add a drill down filter</h4>
+      </div>
+      <div class="modal-body">
+        <div>
+          {% for anchor_text, link in msquery.available_filters %}
+          <a href="{{ link }}" class="btn btn-primary" style="margin: 0 0 .3em 0">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+            {{ anchor_text }}
+          </a>
+          {% endfor %}
+        </div>
+        <form method="POST" class="form-inline" style="margin: 0">{% csrf_token %}
+          <div class="form-group">
+            <label for="id_bundle_id" class="sr-only">App</label>
+            {{ form.bundle_id }}
+            {{ form.bundle_name }}
+            <button type="submit" class="btn btn-primary">
+              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+              App
+            </button>
+            {% for error in form.non_field_errors %}
+            <p class="text-danger">{{ error }}</p>
+            {% endfor %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="row">
+  <div class="col-md-12">
+    <form method="GET" class="form-inline" style="margin:1em 0">
+      {% for key, val in search_form_qd.items %}
+      <input type="hidden" name="{{ key }}" value="{{ val }}">
+      {% endfor %}
+      <div class="form-group">
+        <label for="id_serial_number" class="sr-only">Serial number</label>
+        <input type="text" id="id_serial_number" value="{{ msquery.query_dict.sn }}" name="sn" class="form-control" placeholder="serial number">
+      </div>
+      <div class="form-group">
+        <label for="id_name" class="sr-only">Name</label>
+        <input type="text" id="id_name" value="{{ msquery.query_dict.cn }}" name="cn" class="form-control" placeholder="computer name">
+      </div>
+      <button class="btn btn-success" type="button" data-toggle="modal" data-target="#add-filter"
+                                      aria-expanded="false" aria-controls="add-filter">
+        <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+        Filter
+      </button>
+      <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+  </div>
+</div>
+
+<div class="row">
+  {% for f, f_links, r_link in grouping_links %}
+  <div class="col-md-3">
+    <div class="panel panel-default">
+      <div class="panel-heading filter-title">
+        {{ f.title }}
+        <div class="pull-right panel-heading-btns" style="display:none">
+          <a href="#filter-{{ f.get_query_kwarg }}-links" class="btn btn-default btn-xs reorder-filter">
+            <span class="glyphicon glyphicon-sort-by-alphabet-alt" aria-hidden="true"></span>
+          </a>
+          {% if r_link %}
+          <a href="{{ r_link }}" class="btn btn-danger btn-xs">
+            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+      <div id="filter-{{ f.get_query_kwarg }}-links" data-sort="az" class="panel-body" style="max-height:25vh;overflow-y:auto;">
+        {% for label, count, percentage, down_link, up_link in f_links %}
+        <div data-label="{{ label }}" data-count="{{ count }}" style="margin:0;position:relative;height:1.8em;width:100%;margin:0 0 .2em 0">
+          <div style="z-index:0;position:absolute;top:0;bottom:0;left:0;width:{{ percentage }}%;border-bottom: 3px solid #337ab7">
+          </div>
+          <div style="z-index:10;position:absolute;top:0;bottom:0;right:0;left:0;">
+            <span class="badge pull-right">{{ count }}</span>
+          </div>
+          <a style="z-index:20;position:absolute;display:block;padding:0 2.5em 0 0;left:0;right:0;top:0;bottom:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}">
+            {{ label }}
+            {% if up_link %}<span class="text-danger glyphicon glyphicon-remove" aria-hidden="true"></span>{% endif %}
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% if forloop.counter|divisibleby:4 and not forloop.last %}
+</div>
+<div class="row">
   {% endif %}
   {% endfor %}
-</ol>
+</div>
 
-{% if object_list_title %}
-<h2>{{ object_list_title }}</h2>
-{% endif %}
-
-{% block objectextras %}
-{% endblock %}
-
-<h3>{{ total_objects }} Machine{{ total_objects|pluralize }}</h3>
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-  <div>
-    <div class="form-group">
-      <label for="id_serial_number" class="sr-only">{{ search_form.serial_number.label|title }}</label>
-      <input type="text" id="id_serial_number"{% if search_form.serial_number.value %} value="{{ search_form.serial_number.value }}"{% endif %} name="serial_number" class="form-control" placeholder="{{ search_form.serial_number.label }}">
-    </div>
-    <div class="form-group">
-      <label for="id_name" class="sr-only">{{ search_form.name.label|title }}</label>
-      <input type="text" id="id_name"{% if search_form.name.value %} value="{{ search_form.name.value }}"{% endif %} name="name" class="form-control" placeholder="{{ search_form.name.label }}">
-    </div>
-  </div>
-  <div style="margin:.2em 0 0 0">
-    <div class="form-group">
-      <label for="id_source">{{ search_form.source.label|title }}</label>
-      {{ search_form.source }}
-    </div>
-    <div class="form-group">
-      <label for="id_source">{{ search_form.tag.label|title }}</label>
-      {{ search_form.tag }}
-    </div>
-    <div class="form-group">
-      <label for="id_platform">{{ search_form.platform.label|title }}</label>
-      {{ search_form.platform }}
-    </div>
-    <div class="form-group">
-      <label for="id_type">{{ search_form.type.label|title }}</label>
-      {{ search_form.type }}
-    </div>
-    <button type="submit" class="btn btn-default">Search</button>
-  </div>
-</form>
 
 {% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
+<div class="row">
+  <div class="col-md-12">
+    <nav>
+      <ul class="pager">
+        {% if next_url %}
+        <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+        {% endif %}
+        {% if previous_url %}
+        <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+</div>
 {% endif %}
 
 <div class="table-reponsive">
   <table class="table">
-    {% for machine in object_list %}
+    {% for serial_number, machine_snapshots in machines %}
+    {% for machine_snapshot in machine_snapshots %}
     <tr>
-      <td>
-        {% machine_type_icon machine %}
-        {% machine_platform_icon machine %}
-	<a href="{{ machine.get_absolute_url }}">
-          {{ machine.serial_number }}
+      {% if forloop.first %}
+      <td rowspan="{{ machine_snapshots|length }}">
+        {% base_machine_type_icon machine_snapshot.type %}
+        {% base_machine_platform_icon machine_snapshot.platform %}
+	<a href="{% url 'inventory:machine' machine_snapshot.urlsafe_serial_number %}">
+          {{ serial_number }}
         </a>
       </td>
-      <td>{{ machine.computer_name }}</td>
+      {% endif %}
+      <td>{{ machine_snapshot.computer_name|default:"" }}</td>
+      <td>{{ machine_snapshot.hardware_model|default:"" }}</td>
+      <td>{{ machine_snapshot.os_version.display_name }}</td>
       <td>
-      {% for tag in machine.tags %}
-      {% inventory_tag tag %}
+      {% for tag in machine_snapshot.tags %}
+      {% base_inventory_tag tag.display_name tag.color %}
       {% endfor %}
       </td>
       <td>
-        {% for source in machine.get_snapshots_sources_for_display %}
-        {{ source.name }}
-        {% endfor %}
+        {{ machine_snapshot.source.name }}
       </td>
     </tr>
+    {% endfor %}
     {% endfor %}
   </table>
 </div>
@@ -105,4 +188,134 @@
   </ul>
 </nav>
 {% endif %}
+{% endblock %}
+
+{% block extrajs %}
+<script>
+  var filter_list_sorts = ["az", "za", "09", "90"];
+  var filter_list_sort_logos = ["alphabet", "alphabet-alt", "order", "order-alt"];
+
+  function getNextSort (sort) {
+    return filter_list_sorts[(filter_list_sorts.indexOf(sort) + 1) % filter_list_sorts.length];
+  }
+
+  function getNextButtonIcon (sort) {
+    return "glyphicon-sort-by-" + filter_list_sort_logos[(filter_list_sorts.indexOf(sort) + 1) % filter_list_sort_logos.length];
+  }
+
+  function azSort(a, b) {
+    if (a.linn === b.linn) {
+      var cmp = a.l.toUpperCase().localeCompare(b.l.toUpperCase());
+      if (cmp != 0) {
+        return cmp;
+      } else if (a.c < b.c) {
+        return -1;
+      } else if (a.c == b.c) {
+        return 0;
+      } else {
+        return 1;
+      }
+    } else if (a.linn < b.linn) {
+      return -1;
+    } else {
+      return 1;
+    }
+  }
+
+  function zaSort(a, b) {
+    return azSort(b, a);
+  }
+
+  function cSort(a, b) {
+    if (a.c === b.c) {
+      if (a.linn < b.linn) {
+        return -1;
+      } else if (a.linn > b.linn) {
+        return 1;
+      } else {
+        return a.l.toUpperCase().localeCompare(b.l.toUpperCase());
+      }
+    } else if (a.c < b.c) {
+      return -1;
+    } else {
+      return 1;
+    }
+  }
+
+  function crSort(a, b) {
+    return cSort(b, a);
+  }
+
+  function sortFilterList($btn) {
+      var $filter_list = $($btn.attr("href"));
+      var current_sort = $filter_list.data("sort");
+      var next_sort = getNextSort(current_sort);
+      // get the divs
+      var divs = [];
+      $.each($filter_list.children("div"), function () {
+        var $div = $(this);
+        var sortDiv = {l: $div.data("label"), "c": $div.data("count"), "div": $div.detach().get(0)};
+        sortDiv["linn"] = sortDiv["l"] != '\u2400';
+        divs.push(sortDiv);
+      });
+      // sort the divs
+      if (next_sort === "az") {
+        divs.sort(azSort);
+      } else if (next_sort === "za") {
+        divs.sort(zaSort);
+      } else if (next_sort === "09") {
+        divs.sort(cSort);
+      } else if (next_sort === "90") {
+        divs.sort(crSort);
+      }
+      // reinsert the divs
+      $.each(divs, function () {
+        $filter_list.append(this.div);
+      });
+      // update state
+      $filter_list.data("sort", next_sort);
+      $btn.find("span").removeClass(getNextButtonIcon(current_sort)).addClass(getNextButtonIcon(next_sort));
+  }
+
+  function make_chart($canvas) {
+    var chart_id = $canvas.data("chart-id");
+    var chart_conf = JSON.parse(document.getElementById(chart_id).textContent);
+    chart_conf["options"]["animations"] = {duration: 0};
+    var chart = new Chart($canvas, chart_conf);
+    $canvas.click(function (event) {
+      var dataPoint = chart.getElementAtEvent(event)[0];
+      if (dataPoint) {
+        var label = chart.data.labels[dataPoint._index];
+        var search = chart.data.datasets[dataPoint._datasetIndex].down_links[dataPoint._index];
+        window.location.search = search;
+      }
+    });
+  }
+
+  $(document).ready(function () {
+    // remove filter links
+    $(".filter-title").hover(
+      function () {
+        $(this).find(".panel-heading-btns").show();
+      },
+      function () {
+        $(this).find(".panel-heading-btns").hide();
+      }
+    );
+
+    // show modal if form errors
+    $(".modal-with-errors").modal("show");
+
+    // make charts
+    $("canvas").each(function () {
+      make_chart($(this));
+    });
+
+    // reorder filters
+    $(".reorder-filter").click(function (event) {
+      event.preventDefault();
+      sortFilterList($(this));
+    });
+  });
+</script>
 {% endblock %}

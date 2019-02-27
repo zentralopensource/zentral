@@ -1,161 +1,65 @@
 from datetime import datetime, timedelta
 from math import ceil
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse, reverse_lazy
-from django.db import connection
-from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.timezone import make_naive
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.core.stores import frontend_store
 from zentral.conf import settings
 from .forms import (MetaBusinessUnitForm,
-                    MetaBusinessUnitSearchForm, MachineGroupSearchForm, MachineSearchForm,
+                    MetaBusinessUnitSearchForm, MachineGroupSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
                     CreateTagForm, UpdateTagForm,
                     MacOSAppSearchForm)
 from .models import (BusinessUnit,
                      MetaBusinessUnit, MachineGroup,
-                     MachineSnapshot, MetaMachine,
+                     MetaMachine,
                      MetaBusinessUnitTag, MachineTag, Tag, Taxonomy,
                      OSXApp, OSXAppInstance)
-from .utils import (get_prometheus_inventory_metrics,
-                    mbu_dashboard_bundle_data, mbu_dashboard_machine_data,
-                    prometheus_metrics_content_type,
-                    BundleFilter, BundleFilterForm, MSQuery)
+from .utils import (get_prometheus_inventory_metrics, prometheus_metrics_content_type,
+                    BundleFilter, BundleFilterForm,
+                    MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
+                    MSQuery)
 
 
-class MachineListView(LoginRequiredMixin, TemplateView):
+class MachineListView(LoginRequiredMixin, FormView):
     template_name = "inventory/machine_list.html"
+    form_class = BundleFilterForm
 
     def get_object(self, **kwargs):
         return None
 
-    def get_list_title(self, **kwargs):
-        return ""
-
-    def get_breadcrumbs(self, **kwargs):
-        return []
-
-    def get(self, request, *args, **kwargs):
-        self.search_form = MachineSearchForm(request.GET)
-        return super(MachineListView, self).get(request, *args, **kwargs)
-
-    def get_extra_joins(self):
-        return []
-
-    def get_extra_wheres(self):
-        return []
-
-    def _get_filtered_serial_numbers(self):
-        extra_joins = self.get_extra_joins()
-        extra_wheres = self.get_extra_wheres()
-        query_args = {}
-        if self.search_form.is_valid():
-            cleaned_data = self.search_form.cleaned_data
-            serial_number = cleaned_data['serial_number']
-            if serial_number:
-                extra_wheres.append("and UPPER(serial_number) LIKE UPPER(%(serial_number)s)")
-                query_args['serial_number'] = "%{}%".format(connection.ops.prep_for_like_query(serial_number))
-            name = cleaned_data['name']
-            if name:
-                extra_wheres.append("and (si.id is not null and computer_name ~* %(name)s)")
-                query_args['name'] = name
-            source = cleaned_data['source']
-            if source:
-                extra_wheres.append("and ms.source_id = %(source_id)s")
-                query_args['source_id'] = source.id
-            platform = cleaned_data['platform']
-            if platform:
-                extra_wheres.append("and ms.platform = %(platform)s")
-                query_args['platform'] = platform
-            ms_type = cleaned_data['type']
-            if ms_type:
-                extra_wheres.append("and ms.type = %(type)s")
-                query_args['type'] = ms_type
-            tag = cleaned_data['tag']
-            if tag is not None:
-                extra_wheres.append("and (serial_number in "
-                                    " (select serial_number from inventory_machinetag where tag_id=%(tag_id)s) "
-                                    "or ms.business_unit_id in "
-                                    " (select bu.id from inventory_businessunit as bu "
-                                    "  join inventory_metabusinessunittag as mbut "
-                                    "  on (mbut.meta_business_unit_id = bu.meta_business_unit_id) "
-                                    "  where mbut.tag_id=%(tag_id)s))")
-                query_args['tag_id'] = tag
-        query = ("select ms.serial_number as serial_number, max(si.computer_name) as computer_name "
-                 "from inventory_machinesnapshot as ms "
-                 "left join inventory_systeminfo as si on (si.id = ms.system_info_id) "
-                 "{} "
-                 "where ms.id in (select machine_snapshot_id from inventory_currentmachinesnapshot) {} "
-                 "group by serial_number "
-                 "order by computer_name;")
-        query = query.format(" ".join(extra_joins), " ".join(extra_wheres))
-        cursor = connection.cursor()
-        cursor.execute(query, query_args)
-        return [t[0] for t in cursor.fetchall()]
-
-    def _get_serial_number_page(self):
-        paginator = Paginator(self._get_filtered_serial_numbers(), 50)
-        page_num = self.request.GET.get('page')
-        try:
-            return paginator.page(page_num)
-        except PageNotAnInteger:
-            return paginator.page(1)
-        except EmptyPage:
-            return paginator.page(paginator.num_pages)
-
-    def get_context_data(self, **kwargs):
-        context = super(MachineListView, self).get_context_data(**kwargs)
-        self.object = self.get_object(**kwargs)
-        context['object'] = self.object
-        context['inventory'] = True
-        serial_number_page = self._get_serial_number_page()
-        ms_dict = {}
-        for ms in (MachineSnapshot.objects.current()
-                   .filter(serial_number__in=[msn for msn in serial_number_page])):
-            ms_dict.setdefault(ms.serial_number, []).append(ms)
-        context['object_list'] = [MetaMachine(msn, ms_dict[msn]) for msn in serial_number_page]
-        # pagination
-        context['total_objects'] = serial_number_page.paginator.count
-        if serial_number_page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = serial_number_page.next_page_number()
-            context['next_url'] = "?{}".format(qd.urlencode())
-        if serial_number_page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = serial_number_page.previous_page_number()
-            context['previous_url'] = "?{}".format(qd.urlencode())
-        context['object_list_title'] = self.get_list_title(**kwargs)
-        context['search_form'] = self.search_form
-        breadcrumbs = self.get_breadcrumbs(**kwargs)
-        if breadcrumbs:
-            _, anchor_text = breadcrumbs.pop()
-            qd = self.request.GET.copy()
-            qd.pop('page', None)
-            reset_link = "?{}".format(qd.urlencode())
-            breadcrumbs.extend([(reset_link, anchor_text),
-                                (None, "page {} of {}".format(serial_number_page.number,
-                                                              serial_number_page.paginator.num_pages))])
-        context['breadcrumbs'] = breadcrumbs
-        return context
-
-
-class DrillDownView(LoginRequiredMixin, FormView):
-    template_name = "inventory/drilldown.html"
-    form_class = BundleFilterForm
+    def get_msquery(self, request):
+        return MSQuery(request.GET)
 
     def dispatch(self, request, *args, **kwargs):
-        self.msquery = MSQuery(request.GET)
+        try:
+            self.object = self.get_object(**kwargs)
+        except ObjectDoesNotExist:
+            raise Http404
+        self.msquery = self.get_msquery(request)
         if request.method == "GET":
             redirect_url = self.msquery.redirect_url()
             if redirect_url:
                 return HttpResponseRedirect(redirect_url)
         return super().dispatch(request, *args, **kwargs)
 
+    def get_list_title(self):
+        return ""
+
+    def get_breadcrumbs(self, **kwargs):
+        return []
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx['inventory'] = True
+        # object
+        ctx["object"] = self.object
+        ctx['object_list_title'] = self.get_list_title()
+        # msquery
         ctx["msquery"] = self.msquery
         # pagination / machines
         ctx["machines"] = self.msquery.fetch()
@@ -174,12 +78,16 @@ class DrillDownView(LoginRequiredMixin, FormView):
             search_form_qd.pop(key, None)
         ctx["search_form_qd"] = search_form_qd
         # breadcrumbs
-        reset_link = reverse("inventory:drilldown")
-        num_pages = ceil(max(self.msquery.count(), 1) / self.msquery.paginate_by)
-        ctx['breadcrumbs'] = [
-            (reset_link, "Inventory drill down"),
-            (None, "page {} of {}".format(self.msquery.page, num_pages))
-        ]
+        breadcrumbs = self.get_breadcrumbs(**kwargs)
+        if breadcrumbs:
+            num_pages = ceil(max(self.msquery.count(), 1) / self.msquery.paginate_by)
+            _, anchor_text = breadcrumbs.pop()
+            reset_qd = self.request.GET.copy()
+            reset_qd.pop('page', None)
+            reset_link = "?{}".format(reset_qd.urlencode())
+            breadcrumbs.extend([(reset_link, anchor_text),
+                                (None, "page {} of {}".format(self.msquery.page, num_pages))])
+        ctx['breadcrumbs'] = breadcrumbs
         return ctx
 
     def form_valid(self, form):
@@ -196,13 +104,7 @@ class DrillDownView(LoginRequiredMixin, FormView):
 
 class IndexView(MachineListView):
     def get_breadcrumbs(self, **kwargs):
-        l = []
-        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
-            l.append((reverse('inventory:index'), "Inventory machines"))
-            l.append((None, "Machine search"))
-        else:
-            l.append((None, "Inventory machines"))
-        return l
+        return [(None, "Inventory machines")]
 
 
 class GroupsView(LoginRequiredMixin, TemplateView):
@@ -225,13 +127,13 @@ class GroupsView(LoginRequiredMixin, TemplateView):
                 qs = qs.filter(source=source)
         context['object_list'] = qs
         context['search_form'] = self.search_form
-        l = []
+        breadcrumbs = []
         if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
-            l.append((reverse('inventory:groups'), 'Inventory groups'))
-            l.append((None, "Search"))
+            breadcrumbs.append((reverse('inventory:groups'), 'Inventory groups'))
+            breadcrumbs.append((None, "Search"))
         else:
-            l.append((None, "Inventory groups"))
-        context['breadcrumbs'] = l
+            breadcrumbs.append((None, "Inventory groups"))
+        context['breadcrumbs'] = breadcrumbs
         return context
 
 
@@ -239,52 +141,38 @@ class GroupMachinesView(MachineListView):
     def get_object(self, **kwargs):
         return MachineGroup.objects.select_related('source').get(pk=kwargs['group_id'])
 
-    def get_extra_joins(self):
-        return ["join inventory_machinesnapshot_groups as msg "
-                "on (msg.machinesnapshot_id = ms.id) "
-                "join inventory_machinegroup as mg "
-                "on (mg.id = msg.machinegroup_id)"]
+    def get_msquery(self, request):
+        ms_query = super().get_msquery(request)
+        ms_query.force_filter(MachineGroupFilter, hidden_value=self.object.pk)
+        return ms_query
 
-    def get_extra_wheres(self):
-        return ["and mg.id = %d" % self.object.id]
-
-    def get_list_title(self, **kwargs):
+    def get_list_title(self):
         return "Group: {} - {}".format(self.object.source.name, self.object.name)
 
     def get_breadcrumbs(self, **kwargs):
-        l = [(reverse('inventory:groups'), 'Inventory groups')]
-        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
-            l.append((reverse('inventory:group_machines', args=(self.object.id,)), self.object.name))
-            l.append((None, "Machine search"))
-        else:
-            l.append((None, self.object.name))
-        return l
+        return [(reverse('inventory:groups'), 'Inventory groups'),
+                (None, self.object.name)]
 
 
 class OSXAppInstanceMachinesView(MachineListView):
     template_name = "inventory/macos_app_instance_machines.html"
 
     def get_object(self, **kwargs):
-        return OSXAppInstance.objects.select_related('app').get(app__pk=kwargs['pk'], pk=kwargs['osx_app_instance_id'])
+        return OSXAppInstance.objects.select_related('app').get(app__pk=kwargs['pk'],
+                                                                pk=kwargs['osx_app_instance_id'])
 
-    def get_extra_joins(self):
-        return ["join inventory_machinesnapshot_osx_app_instances as msoai "
-                "on (msoai.machinesnapshot_id = ms.id) "]
+    def get_msquery(self, request):
+        ms_query = super().get_msquery(request)
+        ms_query.force_filter(OSXAppInstanceFilter, hidden_value=self.object.pk)
+        return ms_query
 
-    def get_extra_wheres(self):
-        return ["and msoai.osxappinstance_id = %d" % self.object.id]
-
-    def get_list_title(self, **kwargs):
+    def get_list_title(self):
         return "macOS app instance: {}".format(self.object.app)
 
     def get_breadcrumbs(self, **kwargs):
-        l = [(reverse('inventory:macos_apps'), 'macOS applications'),
-             ((reverse('inventory:macos_app', args=(self.object.app.id,)), str(self.object.app)))]
-        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
-            l.append((None, "Machine search"))
-        else:
-            l.append((None, "Machines"))
-        return l
+        return [(reverse('inventory:macos_apps'), 'macOS applications'),
+                ((reverse('inventory:macos_app', args=(self.object.app.id,)), str(self.object.app))),
+                (None, "Machines")]
 
 
 class MBUView(LoginRequiredMixin, ListView):
@@ -324,17 +212,17 @@ class MBUView(LoginRequiredMixin, ListView):
             qd['page'] = page.previous_page_number()
             context['previous_url'] = "?{}".format(qd.urlencode())
         # breadcrumbs
-        l = []
+        breadcrumbs = []
         qd = self.request.GET.copy()
         qd.pop('page', None)
         reset_link = "?{}".format(qd.urlencode())
         if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
-            l.append((reverse('inventory:mbu'), 'Inventory business units'))
-            l.append((reset_link, "Search"))
+            breadcrumbs.append((reverse('inventory:mbu'), 'Inventory business units'))
+            breadcrumbs.append((reset_link, "Search"))
         else:
-            l.append((reset_link, "Inventory business units"))
-        l.append((None, "page {} of {}".format(page.number, page.paginator.num_pages)))
-        context['breadcrumbs'] = l
+            breadcrumbs.append((reset_link, "Inventory business units"))
+        breadcrumbs.append((None, "page {} of {}".format(page.number, page.paginator.num_pages)))
+        context['breadcrumbs'] = breadcrumbs
         return context
 
 
@@ -458,44 +346,17 @@ class MBUMachinesView(MachineListView):
     def get_object(self, **kwargs):
         return MetaBusinessUnit.objects.get(pk=kwargs['pk'])
 
-    def get_extra_joins(self):
-        return ["join inventory_businessunit as bu "
-                "on (bu.id = ms.business_unit_id) "
-                "join inventory_metabusinessunit as mbu "
-                "on (mbu.id = bu.meta_business_unit_id)"]
+    def get_msquery(self, request):
+        ms_query = super().get_msquery(request)
+        ms_query.force_filter(MetaBusinessUnitFilter, hidden_value=self.object.pk)
+        return ms_query
 
-    def get_extra_wheres(self):
-        return ["and mbu.id = %d" % self.object.id]
-
-    def get_list_title(self, **kwargs):
+    def get_list_title(self):
         return "BU: {}".format(self.object.name)
 
     def get_breadcrumbs(self, **kwargs):
-        l = [(reverse('inventory:mbu'), 'Inventory business units')]
-        if self.search_form.is_valid() and len([i for i in self.search_form.cleaned_data.values() if i]):
-            l.append((reverse('inventory:mbu_machines', args=(self.object.id,)), self.object.name))
-            l.append((None, "Machine search"))
-        else:
-            l.append((None, self.object.name))
-        return l
-
-
-class MBUDashboardBundleDataView(LoginRequiredMixin, View):
-    def get(self, request, *args, **kwargs):
-        mbu = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
-        return JsonResponse({bundle_id: {"name": bundle_name,
-                                         "config": chart_config}
-                             for bundle_id, bundle_name, chart_config
-                             in mbu_dashboard_bundle_data(mbu)})
-
-
-class MBUDashboardMachineDataView(LoginRequiredMixin, View):
-    def get(self, request, *args, **kwargs):
-        mbu = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
-        return JsonResponse({doughnut_id: {"name": doughnut_name,
-                                           "config": chart_config}
-                             for doughnut_id, doughnut_name, chart_config
-                             in mbu_dashboard_machine_data(mbu)})
+        return [(reverse('inventory:mbu'), 'Inventory business units'),
+                (None, self.object.name)]
 
 
 class MachineView(LoginRequiredMixin, TemplateView):
