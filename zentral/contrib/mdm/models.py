@@ -95,7 +95,7 @@ class EnrolledDevice(models.Model):
 
 
 class EnrolledUser(models.Model):
-    enrolled_device = models.ForeignKey(EnrolledDevice)
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
     user_id = models.CharField(max_length=36, unique=True)
     long_name = models.TextField()
     short_name = models.TextField()
@@ -114,7 +114,7 @@ class EnrollmentSession(models.Model):
     meid = models.CharField(max_length=18, null=True)
     language = models.CharField(max_length=64, null=True)
 
-    enrolled_device = models.ForeignKey(EnrolledDevice, null=True)
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -192,7 +192,8 @@ class EnrollmentSession(models.Model):
 
 class OTAEnrollment(models.Model):
     name = models.CharField(max_length=256, unique=True)
-    enrollment_secret = models.OneToOneField(EnrollmentSecret, related_name="ota_enrollment")
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+                                             related_name="ota_enrollment")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -260,9 +261,12 @@ class OTAEnrollmentSession(EnrollmentSession):
     )
     status = models.CharField(max_length=64, choices=STATUS_CHOICES)
     ota_enrollment = models.ForeignKey(OTAEnrollment, on_delete=models.CASCADE)
-    enrollment_secret = models.OneToOneField(EnrollmentSecret, related_name="ota_enrollment_session")
-    phase2_scep_request = models.ForeignKey(EnrollmentSecretRequest, null=True, related_name="+")
-    phase3_scep_request = models.ForeignKey(EnrollmentSecretRequest, null=True, related_name="+")
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+                                             related_name="ota_enrollment_session")
+    phase2_scep_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT,
+                                            null=True, related_name="+")
+    phase3_scep_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT,
+                                            null=True, related_name="+")
 
     objects = OTAEnrollmentSessionManager()
 
@@ -393,8 +397,9 @@ class DEPVirtualServer(models.Model):
     name = models.TextField(editable=False)
     uuid = models.UUIDField(unique=True, editable=False)
 
-    organization = models.ForeignKey(DEPOrganization, editable=False)
-    token = models.OneToOneField(DEPToken, editable=False, null=True, related_name="virtual_server")
+    organization = models.ForeignKey(DEPOrganization, on_delete=models.PROTECT, editable=False)
+    token = models.OneToOneField(DEPToken, on_delete=models.SET_NULL,
+                                 editable=False, null=True, related_name="virtual_server")
 
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True, editable=False)
@@ -468,7 +473,8 @@ class DEPProfile(models.Model):
     # TODO: language, region
 
     # to protect the dep enrollment endpoint. Link to the meta business unit too
-    enrollment_secret = models.OneToOneField(EnrollmentSecret, related_name="dep_profile", editable=False)
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+                                             related_name="dep_profile", editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -605,8 +611,9 @@ class DEPEnrollmentSession(EnrollmentSession):
     )
     status = models.CharField(max_length=64, choices=STATUS_CHOICES)
     dep_profile = models.ForeignKey(DEPProfile, on_delete=models.CASCADE)
-    enrollment_secret = models.OneToOneField(EnrollmentSecret, related_name="dep_enrollment_session")
-    scep_request = models.ForeignKey(EnrollmentSecretRequest, null=True, related_name="+")
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+                                             related_name="dep_enrollment_session")
+    scep_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT, null=True, related_name="+")
 
     objects = DEPEnrollmentSessionManager()
 
@@ -650,7 +657,7 @@ class DEPEnrollmentSession(EnrollmentSession):
 
 
 class InstalledDeviceArtifact(models.Model):
-    enrolled_device = models.ForeignKey(EnrolledDevice)
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
     artifact_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     artifact_id = models.PositiveIntegerField()
     artifact = GenericForeignKey("artifact_content_type", "artifact_id")
@@ -681,7 +688,7 @@ class DeviceArtifactCommand(models.Model):
         (STATUS_CODE_NOT_NOW, "Not now"),
     )
 
-    enrolled_device = models.ForeignKey(EnrolledDevice)
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
     artifact_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     artifact_id = models.PositiveIntegerField()
     artifact = GenericForeignKey("artifact_content_type", "artifact_id")
@@ -713,7 +720,7 @@ class KernelExtensionTeam(models.Model):
 
 
 class KernelExtension(models.Model):
-    team = models.ForeignKey(KernelExtensionTeam)
+    team = models.ForeignKey(KernelExtensionTeam, on_delete=models.PROTECT)
     name = models.TextField(unique=True)
     identifier = models.TextField(unique=True)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
@@ -736,6 +743,7 @@ class KernelExtensionPolicy(models.Model):
     # devices
     # TODO: add tags
     meta_business_unit = models.OneToOneField(MetaBusinessUnit,
+                                              on_delete=models.PROTECT,
                                               related_name="kernel_extension_policy",
                                               editable=False)
 
@@ -796,7 +804,7 @@ class MDMEnrollmentPackage(models.Model):
 
     # devices
     # TODO: add tags
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit)
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.PROTECT)
 
     # content
     builder = models.CharField(max_length=256)
@@ -883,7 +891,7 @@ class ConfigurationProfile(models.Model):
 
     # devices
     # TODO: add tags
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit)
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.PROTECT)
 
     # content
     source = JSONField()
