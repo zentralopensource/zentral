@@ -194,7 +194,7 @@ class Enrollment(BaseEnrollment):
 
 
 class EnrolledMachine(models.Model):
-    enrollment = models.ForeignKey(Enrollment)
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
     serial_number = models.TextField(db_index=True)
     machine_id = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -245,8 +245,8 @@ class CollectedApplication(AbstractMTObject):
     name = models.TextField()
     path = models.TextField()
     sha_256 = models.CharField(max_length=64, db_index=True)
-    bundle = models.ForeignKey(OSXApp, blank=True, null=True, on_delete=models.PROTECT)
+    bundle = models.ForeignKey(OSXApp, on_delete=models.PROTECT, blank=True, null=True)
     bundle_path = models.TextField(blank=True, null=True)
-    signed_by = models.ForeignKey(Certificate, blank=True, null=True, on_delete=models.PROTECT)
+    signed_by = models.ForeignKey(Certificate, on_delete=models.PROTECT, blank=True, null=True)
 
     objects = CollectedApplicationManager()
