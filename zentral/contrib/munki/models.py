@@ -13,8 +13,9 @@ class Enrollment(BaseEnrollment):
     def get_description_for_distributor(self):
         return "Munki enrollment"
 
+
 class EnrolledMachine(models.Model):
-    enrollment = models.ForeignKey(Enrollment)
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
     serial_number = models.TextField(db_index=True)
     token = models.CharField(max_length=64, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
