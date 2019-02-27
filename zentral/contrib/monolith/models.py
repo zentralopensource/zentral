@@ -182,10 +182,10 @@ class PkgInfoManager(models.Manager):
 
 
 class PkgInfo(models.Model):
-    name = models.ForeignKey(PkgInfoName)
+    name = models.ForeignKey(PkgInfoName, on_delete=models.PROTECT)
     version = models.CharField(max_length=256)
     catalogs = models.ManyToManyField(Catalog)
-    category = models.ForeignKey(PkgInfoCategory, null=True, blank=True)
+    category = models.ForeignKey(PkgInfoCategory, on_delete=models.SET_NULL, null=True, blank=True)
     requires = models.ManyToManyField(PkgInfoName, related_name="required_by")
     update_for = models.ManyToManyField(PkgInfoName, related_name="updated_by")
     data = JSONField()
@@ -234,8 +234,9 @@ SUB_MANIFEST_PKG_INFO_KEY_CHOICES = (
 class SubManifest(models.Model):
     """Group of pkginfo or attachments (pkgs, cfg profiles, scripts)."""
 
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit,
-                                           blank=True, null=True)  # to restrict some sub manifests to a MBU
+    # to restrict some sub manifests to a MBU
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.SET_NULL, blank=True, null=True)
+
     name = models.CharField(max_length=256)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -343,11 +344,11 @@ class Condition(models.Model):
 
 
 class SubManifestPkgInfo(models.Model):
-    sub_manifest = models.ForeignKey(SubManifest)
+    sub_manifest = models.ForeignKey(SubManifest, on_delete=models.CASCADE)
     key = models.CharField(max_length=32, choices=SUB_MANIFEST_PKG_INFO_KEY_CHOICES)
-    pkg_info_name = models.ForeignKey(PkgInfoName)
+    pkg_info_name = models.ForeignKey(PkgInfoName, on_delete=models.PROTECT)
     featured_item = models.BooleanField(default=False)
-    condition = models.ForeignKey(Condition, null=True, blank=True, on_delete=models.PROTECT)
+    condition = models.ForeignKey(Condition, on_delete=models.PROTECT, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -398,12 +399,12 @@ class SubManifestAttachmentManager(models.Manager):
 
 
 class SubManifestAttachment(models.Model):
-    sub_manifest = models.ForeignKey(SubManifest)
+    sub_manifest = models.ForeignKey(SubManifest, on_delete=models.CASCADE)
     key = models.CharField(max_length=32, choices=SUB_MANIFEST_PKG_INFO_KEY_CHOICES)
     type = models.CharField(max_length=32, choices=SUB_MANIFEST_ATTACHMENT_TYPE_CHOICES)
     name = models.CharField(max_length=256)
     featured_item = models.BooleanField(default=False)
-    condition = models.ForeignKey(Condition, null=True, blank=True, on_delete=models.PROTECT)
+    condition = models.ForeignKey(Condition, on_delete=models.PROTECT, null=True, blank=True)
     identifier = models.TextField(blank=True, null=True)
     version = models.PositiveSmallIntegerField(default=0)
     file = models.FileField(upload_to=attachment_path, blank=True)
@@ -459,7 +460,7 @@ class SubManifestAttachment(models.Model):
 
 
 class Manifest(models.Model):
-    meta_business_unit = models.OneToOneField(MetaBusinessUnit)
+    meta_business_unit = models.OneToOneField(MetaBusinessUnit, on_delete=models.PROTECT)
 
     class Meta:
         ordering = ('meta_business_unit__name',)
@@ -678,8 +679,8 @@ class Manifest(models.Model):
 
 
 class ManifestCatalog(models.Model):
-    manifest = models.ForeignKey(Manifest)
-    catalog = models.ForeignKey(Catalog)
+    manifest = models.ForeignKey(Manifest, on_delete=models.CASCADE)
+    catalog = models.ForeignKey(Catalog, on_delete=models.PROTECT)
     tags = models.ManyToManyField(Tag)
 
     class Meta:
@@ -687,8 +688,8 @@ class ManifestCatalog(models.Model):
 
 
 class ManifestSubManifest(models.Model):
-    manifest = models.ForeignKey(Manifest)
-    sub_manifest = models.ForeignKey(SubManifest)
+    manifest = models.ForeignKey(Manifest, on_delete=models.CASCADE)
+    sub_manifest = models.ForeignKey(SubManifest, on_delete=models.PROTECT)
     tags = models.ManyToManyField(Tag)
 
 
@@ -701,7 +702,7 @@ def enrollment_package_path(instance, filename):
 
 
 class ManifestEnrollmentPackage(models.Model):
-    manifest = models.ForeignKey(Manifest)
+    manifest = models.ForeignKey(Manifest, on_delete=models.CASCADE)
     tags = models.ManyToManyField(Tag)
 
     builder = models.CharField(max_length=256)
@@ -790,7 +791,7 @@ class CacheServerManager(models.Manager):
 
 class CacheServer(models.Model):
     name = models.CharField(max_length=256)
-    manifest = models.ForeignKey(Manifest)
+    manifest = models.ForeignKey(Manifest, on_delete=models.CASCADE)
     public_ip_address = models.GenericIPAddressField()
     base_url = models.URLField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -898,7 +899,7 @@ class Printer(models.Model):
                                        SCHEME_HTTP, SCHEME_HTTPS,
                                        SCHEME_LPD, SCHEME_SOCKET)]
 
-    manifest = models.ForeignKey(Manifest)
+    manifest = models.ForeignKey(Manifest, on_delete=models.CASCADE)
     tags = models.ManyToManyField(Tag, blank=True)
     name = models.CharField(max_length=128, help_text="display name of the printer")
     location = models.CharField(max_length=256, blank=True, help_text="location of the printer")
@@ -908,7 +909,7 @@ class Printer(models.Model):
     error_policy = models.CharField(max_length=32, choices=ERROR_POLICY_CHOICES, default=ERROR_POLICY_ABORT_JOB)
     ppd = models.ForeignKey(PrinterPPD, on_delete=models.PROTECT)
     version = models.PositiveSmallIntegerField(default=1)
-    required_package = models.ForeignKey(PkgInfoName, blank=True, null=True, on_delete=models.PROTECT)
+    required_package = models.ForeignKey(PkgInfoName, on_delete=models.PROTECT, blank=True, null=True)
     pkg_info = JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -988,7 +989,7 @@ class Configuration(models.Model):
 
 class Enrollment(BaseEnrollment):
     manifest = models.ForeignKey(Manifest, on_delete=models.CASCADE)
-    configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
+    configuration = models.ForeignKey(Configuration, on_delete=models.PROTECT)
     munki_release = models.CharField(max_length=64, blank=True, null=False)
     # taxonomies here, to be able to prompt for extra tags during the enrollment
     taxonomies = models.ManyToManyField(
@@ -1017,7 +1018,7 @@ class Enrollment(BaseEnrollment):
 
 
 class EnrolledMachine(models.Model):
-    enrollment = models.ForeignKey(Enrollment)
+    enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
     serial_number = models.TextField(db_index=True)
     token = models.CharField(max_length=64, unique=True)
     registered = models.BooleanField(default=False)
