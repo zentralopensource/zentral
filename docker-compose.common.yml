@@ -11,4 +11,3 @@ services:
       - ./conf/start/docker/postgres.env
     volumes:
       - .:/zentral
-    restart: on-failure:10
