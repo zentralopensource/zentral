@@ -31,7 +31,7 @@ class Feed(models.Model):
 
 
 class FeedProbe(models.Model):
-    feed = models.ForeignKey(Feed)
+    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     model = models.CharField(max_length=255)
     name = models.TextField()
     description = models.TextField(blank=True)
