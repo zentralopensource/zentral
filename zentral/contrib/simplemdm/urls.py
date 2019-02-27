@@ -1,6 +1,7 @@
 from django.conf.urls import url
 from . import views
 
+app_name = "simplemdm"
 urlpatterns = [
     url(r'instances/$',
         views.SimpleMDMInstancesView.as_view(),

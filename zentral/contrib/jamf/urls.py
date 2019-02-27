@@ -2,6 +2,7 @@ from django.conf.urls import url
 from django.views.decorators.csrf import csrf_exempt
 from . import views
 
+app_name = "jamf"
 urlpatterns = [
     # setup > jamf instances
     url(r'instances/$', views.JamfInstancesView.as_view(), name="jamf_instances"),

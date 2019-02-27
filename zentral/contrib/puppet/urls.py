@@ -2,6 +2,7 @@ from django.conf.urls import url
 from django.views.decorators.csrf import csrf_exempt
 from . import views
 
+app_name = "puppet"
 urlpatterns = [
     # setup > puppet instances
     url(r'instances/$', views.InstancesView.as_view(), name="instances"),

@@ -4,6 +4,7 @@ from .api_views import (ConfigurationDetail, ConfigurationList,
                         EnrollmentDetail, EnrollmentList)
 
 
+app_name = "osquery_api"
 urlpatterns = [
     url('^configurations/$', ConfigurationList.as_view(), name="configurations"),
     url('^configurations/(?P<pk>\d+)/$', ConfigurationDetail.as_view(), name="configuration"),

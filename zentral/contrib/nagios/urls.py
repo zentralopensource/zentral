@@ -2,6 +2,7 @@ from django.conf.urls import url
 from django.views.decorators.csrf import csrf_exempt
 from . import views
 
+app_name = "nagios"
 urlpatterns = [
     # setup > nagios instances
     url(r'instances/$', views.NagiosInstancesView.as_view(), name="nagios_instances"),

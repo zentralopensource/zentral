@@ -2,6 +2,7 @@ from django.conf.urls import url
 from django.views.decorators.csrf import csrf_exempt
 from . import views
 
+app_name = "monotith"
 urlpatterns = [
     # repository sync configuration
     url(r'^webhook/$', views.WebHookView.as_view(), name='webhook'),

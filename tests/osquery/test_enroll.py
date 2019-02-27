@@ -13,7 +13,7 @@ class OsqueryEnrollmentTestCase(TestCase):
         cls.tags = [Tag.objects.create(name="Tag {}".format(get_random_string(7)))
                     for i in range(3)]
         cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit)
-        cls.enrollment_secret.tags = cls.tags
+        cls.enrollment_secret.tags.set(cls.tags)
         cls.enrollment = Enrollment.objects.create(configuration=cls.configuration,
                                                    secret=cls.enrollment_secret)
 

@@ -4,6 +4,7 @@ from .api_views import (MetaBusinessUnitDetail, MetaBusinessUnitList,
                         TagDetail, TagList)
 
 
+app_name = "inventory_api"
 urlpatterns = [
     url('^meta_business_units/$', MetaBusinessUnitList.as_view(), name="meta_business_units"),
     url('^meta_business_units/(?P<pk>\d+)/$', MetaBusinessUnitDetail.as_view(), name="meta_business_unit"),

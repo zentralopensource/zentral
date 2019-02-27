@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 
 # base
 urlpatterns = [
-    url(r'^', include('base.urls', namespace='base')),
-    url(r'^admin/users/', include('accounts.urls', namespace='users')),
+    url(r'^', include('base.urls')),
+    url(r'^admin/users/', include('accounts.urls')),
     # special login view with verification device redirect
     url(r'^accounts/login/$', login, name='login'),
     url(r'^accounts/verify_totp/$', VerifyTOTPView.as_view(), name='verify_totp'),
@@ -28,12 +28,8 @@ for app_name in zentral_settings.get('apps', []):
     for url_prefix, url_module_name in (("", "urls"),
                                         ("api/", "api_urls")):
         url_module = "{}.{}".format(app_name, url_module_name)
-        namespace = app_shortname
-        if url_prefix:
-            namespace = "{}_{}".format(namespace, url_prefix.strip("/"))
         try:
-            urlpatterns.append(url(r'^{p}{a}/'.format(p=url_prefix, a=app_shortname),
-                                   include(url_module, namespace=namespace)))
+            urlpatterns.append(url(r'^{p}{a}/'.format(p=url_prefix, a=app_shortname), include(url_module)))
         except ImportError as error:
             if error.__class__.__name__ == "ModuleNotFoundError":
                 pass
@@ -42,7 +38,7 @@ for app_name in zentral_settings.get('apps', []):
 
 # saml2
 if saml2_idp_metadata_file:
-    urlpatterns.append(url(r'^saml2/', include('accounts.saml2_urls', namespace='saml2')))
+    urlpatterns.append(url(r'^saml2/', include('accounts.saml2_urls')))
 
 # static files
 urlpatterns += staticfiles_urlpatterns()

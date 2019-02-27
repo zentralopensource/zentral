@@ -2,6 +2,7 @@ from django.conf.urls import url
 
 from . import views
 
+app_name = "probes"
 urlpatterns = [
     url(r'^$', views.IndexView.as_view(), name='index'),
     url(r'^create/$', views.CreateProbeView.as_view(), name='create'),

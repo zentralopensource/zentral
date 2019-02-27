@@ -68,7 +68,7 @@ class AssertionConsumerServiceView(BaseSPView):
         saml2_client = self.get_saml2_client(request)
         authn_response = saml2_client.parse_authn_request_response(request.POST['SAMLResponse'], BINDING_HTTP_POST)
         session_info = authn_response.session_info()
-        user = authenticate(session_info=session_info)
+        user = authenticate(request=request, session_info=session_info)
         if not user:
             raise ValueError("NO SAML2 USER")
         else:
@@ -90,7 +90,9 @@ class SSORedirectView(BaseSPView):
         saml2_client = self.get_saml2_client(request)
         relay_state = ""
         next_url = request.GET.get("next")
-        if next_url and is_safe_url(next_url, self.request.get_host()):
+        if next_url and is_safe_url(url=next_url,
+                                    allowed_hosts={self.request.get_host()},
+                                    require_https=self.request.is_secure()):
             relay_state = self.signer.sign(next_url)
         request_id, request_info = saml2_client.prepare_for_authenticate(relay_state=relay_state)
         redirect_url = dict(request_info["headers"])["Location"]

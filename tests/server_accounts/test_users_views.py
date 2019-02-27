@@ -25,6 +25,11 @@ class AccountUsersViewsTestCase(TestCase):
         response = self.client.get(url)
         self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
 
+    def permission_denied(self, url_name, *args):
+        url = reverse("users:{}".format(url_name), args=args)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
     def log_user_in(self, superuser=False):
         if superuser:
             user, pwd = self.superuser, self.su_pwd
@@ -41,22 +46,22 @@ class AccountUsersViewsTestCase(TestCase):
     def test_user_list_redirect(self):
         self.login_redirect("list")
         self.log_user_in()
-        self.login_redirect("list")
+        self.permission_denied("list")
 
     def test_user_add_redirect(self):
         self.login_redirect("add")
         self.log_user_in()
-        self.login_redirect("add")
+        self.permission_denied("add")
 
     def test_user_update_redirect(self):
         self.login_redirect("update", self.user.id)
         self.log_user_in()
-        self.login_redirect("update", self.superuser.id)
+        self.permission_denied("update", self.superuser.id)
 
     def test_user_delete_redirect(self):
         self.login_redirect("delete", self.user.id)
         self.log_user_in()
-        self.login_redirect("delete", self.user.id)
+        self.permission_denied("delete", self.user.id)
 
     # user list
 

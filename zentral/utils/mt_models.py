@@ -135,7 +135,7 @@ class MTObjectManager(models.Manager):
                 with transaction.atomic():
                     obj.save(**extra_obj_save_kwargs)
                     for k, l in m2m_fields:
-                        setattr(obj, k, l)
+                        getattr(obj, k).set(l)
                     obj.full_clean()
             except IntegrityError as integrity_error:
                 # the object has been concurrently created ?
