@@ -46,10 +46,8 @@ class MetaBusinessUnit(models.Model):
     """The object to link the different BusinessUnits."""
     name = models.TextField()
 
-    dashboard_source = models.ForeignKey("inventory.Source",
-                                         on_delete=models.SET_NULL,
-                                         related_name="+",
-                                         null=True, blank=True)
+    dashboard_source = models.ForeignKey("inventory.Source", on_delete=models.SET_NULL,
+                                         related_name="+", null=True, blank=True)
     dashboard_osx_app_bundle_id_list = ArrayField(models.TextField(), default=list, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -159,7 +157,7 @@ class AbstractMachineGroupManager(MTObjectManager):
 
 
 class AbstractMachineGroup(AbstractMTObject):
-    source = models.ForeignKey(Source)
+    source = models.ForeignKey(Source, on_delete=models.PROTECT)
     reference = models.TextField()
     key = models.CharField(max_length=40, db_index=True)
     name = models.TextField()
@@ -188,7 +186,7 @@ class AbstractMachineGroup(AbstractMTObject):
 
 
 class BusinessUnit(AbstractMachineGroup):
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.CASCADE)
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.PROTECT)
     mt_excluded_fields = ('key', 'meta_business_unit')
 
     def __str__(self):
@@ -331,17 +329,17 @@ class Certificate(AbstractMTObject):
     sha_256 = models.CharField(max_length=64, db_index=True)
     valid_from = models.DateTimeField()
     valid_until = models.DateTimeField()
-    signed_by = models.ForeignKey('self', blank=True, null=True)
+    signed_by = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
 
 
 class OSXAppInstance(AbstractMTObject):
-    app = models.ForeignKey(OSXApp)
+    app = models.ForeignKey(OSXApp, on_delete=models.PROTECT)
     bundle_path = models.TextField(blank=True, null=True)
     path = models.TextField(blank=True, null=True)
     sha_1 = models.CharField(max_length=40, blank=True, null=True)
     sha_256 = models.CharField(max_length=64, db_index=True, blank=True, null=True)
     type = models.TextField(blank=True, null=True)
-    signed_by = models.ForeignKey(Certificate, blank=True, null=True)
+    signed_by = models.ForeignKey(Certificate, on_delete=models.PROTECT, blank=True, null=True)
 
     def certificate_chain(self):
         chain = []
@@ -388,8 +386,8 @@ class PuppetCoreFacts(AbstractMTObject):
 
 class PuppetNode(AbstractMTObject):
     environment = models.TextField()
-    trusted_facts = models.ForeignKey(PuppetTrustedFacts, blank=True, null=True)
-    core_facts = models.ForeignKey(PuppetCoreFacts, blank=True, null=True)
+    trusted_facts = models.ForeignKey(PuppetTrustedFacts, on_delete=models.PROTECT, blank=True, null=True)
+    core_facts = models.ForeignKey(PuppetCoreFacts, on_delete=models.PROTECT, blank=True, null=True)
     extra_facts = JSONField(blank=True, null=True)
 
 
@@ -414,23 +412,23 @@ class MachineSnapshotManager(MTObjectManager):
 
 
 class MachineSnapshot(AbstractMTObject):
-    source = models.ForeignKey(Source)
+    source = models.ForeignKey(Source, on_delete=models.PROTECT)
     reference = models.TextField(blank=True, null=True, db_index=True)
     serial_number = models.TextField(db_index=True)
     imei = models.CharField(max_length=18, blank=True, null=True)
     meid = models.CharField(max_length=18, blank=True, null=True)
     links = models.ManyToManyField(Link)
-    business_unit = models.ForeignKey(BusinessUnit, blank=True, null=True)
+    business_unit = models.ForeignKey(BusinessUnit, on_delete=models.PROTECT, blank=True, null=True)
     groups = models.ManyToManyField(MachineGroup)
-    os_version = models.ForeignKey(OSVersion, blank=True, null=True)
+    os_version = models.ForeignKey(OSVersion, on_delete=models.PROTECT, blank=True, null=True)
     platform = models.CharField(max_length=32, blank=True, null=True, choices=PLATFORM_CHOICES)
-    system_info = models.ForeignKey(SystemInfo, blank=True, null=True)
+    system_info = models.ForeignKey(SystemInfo, on_delete=models.PROTECT, blank=True, null=True)
     type = models.CharField(max_length=32, blank=True, null=True, choices=TYPE_CHOICES)
     network_interfaces = models.ManyToManyField(NetworkInterface)
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
     deb_packages = models.ManyToManyField(DebPackage)
-    teamviewer = models.ForeignKey(TeamViewer, blank=True, null=True)
-    puppet_node = models.ForeignKey(PuppetNode, blank=True, null=True)
+    teamviewer = models.ForeignKey(TeamViewer, on_delete=models.PROTECT, blank=True, null=True)
+    puppet_node = models.ForeignKey(PuppetNode, on_delete=models.PROTECT, blank=True, null=True)
     public_ip_address = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
 
     objects = MachineSnapshotManager()
@@ -520,10 +518,10 @@ class MachineSnapshotCommitManager(models.Manager):
 
 class MachineSnapshotCommit(models.Model):
     serial_number = models.TextField(db_index=True)
-    source = models.ForeignKey(Source)
+    source = models.ForeignKey(Source, on_delete=models.CASCADE)
     version = models.PositiveIntegerField(default=1)
-    machine_snapshot = models.ForeignKey(MachineSnapshot)
-    parent = models.ForeignKey('self', blank=True, null=True, on_delete=models.SET_NULL)
+    machine_snapshot = models.ForeignKey(MachineSnapshot, on_delete=models.CASCADE)
+    parent = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
     last_seen = models.DateTimeField(blank=True, null=True)
     system_uptime = models.PositiveIntegerField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -551,7 +549,7 @@ class MachineSnapshotCommit(models.Model):
 
 class CurrentMachineSnapshot(models.Model):
     serial_number = models.TextField(db_index=True)
-    source = models.ForeignKey(Source)
+    source = models.ForeignKey(Source, on_delete=models.CASCADE)
     machine_snapshot = models.ForeignKey(MachineSnapshot, on_delete=models.CASCADE)
 
     class Meta:
@@ -560,7 +558,7 @@ class CurrentMachineSnapshot(models.Model):
 
 class Taxonomy(models.Model):
     """A bag of tags, can be restricted to a MBU"""
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True)
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.CASCADE, blank=True, null=True)
     name = models.CharField(max_length=256, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -631,8 +629,8 @@ def validate_color(value):
 
 
 class Tag(models.Model):
-    taxonomy = models.ForeignKey(Taxonomy, blank=True, null=True)
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit, blank=True, null=True)
+    taxonomy = models.ForeignKey(Taxonomy, on_delete=models.CASCADE, blank=True, null=True)
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.CASCADE, blank=True, null=True)
     name = models.CharField(max_length=50, unique=True)
     slug = models.SlugField(unique=True, editable=False)
     color = models.CharField(max_length=6,
@@ -690,7 +688,7 @@ class MachineTag(models.Model):
 
 
 class MetaBusinessUnitTag(models.Model):
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit)
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.CASCADE)
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
 
 
@@ -862,7 +860,7 @@ class MACAddressBlockAssignment(models.Model):
                                          ('MA-M', 'MA-M'),
                                          ('MA-S', 'MA-S')))
     assignment = models.CharField(max_length=9, unique=True)
-    organization = models.ForeignKey(MACAddressBlockAssignmentOrganization)
+    organization = models.ForeignKey(MACAddressBlockAssignmentOrganization, on_delete=models.CASCADE)
 
     objects = MACAddressBlockAssignmentManager()
 
@@ -903,9 +901,8 @@ class EnrollmentSecretManager(models.Manager):
 
 class EnrollmentSecret(models.Model):
     secret = models.CharField(max_length=256, unique=True, editable=False)
-    meta_business_unit = models.ForeignKey(
-        MetaBusinessUnit,
-        help_text="The business unit the machine will be assigned to at enrollment"
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.PROTECT,
+        help_text="The business unit the machine will be assigned to at enrollment",
     )
     tags = models.ManyToManyField(
         Tag, blank=True,
@@ -1004,7 +1001,8 @@ class BaseEnrollment(models.Model):
                                   on_delete=models.CASCADE,
                                   related_name="%(app_label)s_%(class)s", editable=False)
     version = models.PositiveSmallIntegerField(default=1, editable=False)
-    distributor_content_type = models.ForeignKey(ContentType, related_name="+", on_delete=models.CASCADE,
+    distributor_content_type = models.ForeignKey(ContentType, on_delete=models.PROTECT,
+                                                 related_name="+",
                                                  null=True, editable=False)
     distributor_pk = models.PositiveIntegerField(null=True, editable=False)
     distributor = GenericForeignKey("distributor_content_type", "distributor_pk")
