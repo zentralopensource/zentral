@@ -31,7 +31,7 @@ for app_name in zentral_settings.get('apps', []):
         try:
             urlpatterns.append(url(r'^{p}{a}/'.format(p=url_prefix, a=app_shortname), include(url_module)))
         except ImportError as error:
-            if error.__class__.__name__ == "ModuleNotFoundError":
+            if error.__class__.__name__ == "ModuleNotFoundError" or "NO MODULE" in str(error).upper():
                 pass
             else:
                 logger.exception("Could not load app %s %s", app_shortname, url_module_name)
