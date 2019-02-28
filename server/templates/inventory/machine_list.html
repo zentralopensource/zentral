@@ -91,18 +91,24 @@
 </div>
 
 <div class="row">
-  {% for f, f_links, r_link in grouping_links %}
+  {% for f, f_links, f_r_link, f_up_link in grouping_links %}
   <div class="col-md-3">
-    <div class="panel panel-default">
+    <div class="panel panel-default{% if f_up_link %} panel-info{% endif %}">
       <div class="panel-heading filter-title">
         {{ f.title }}
-        <div class="pull-right panel-heading-btns" style="display:none">
+        <div class="pull-right{% if not f_up_link %} panel-heading-btns{% endif %}"{% if not f_up_link %} style="display:none"{% endif %}>
+          {% if not f_up_link %}
           <a href="#filter-{{ f.get_query_kwarg }}-links" class="btn btn-default btn-xs reorder-filter">
             <span class="glyphicon glyphicon-sort-by-alphabet-alt" aria-hidden="true"></span>
           </a>
-          {% if r_link %}
-          <a href="{{ r_link }}" class="btn btn-danger btn-xs">
+          {% if f_r_link %}
+          <a href="{{ f_r_link }}" class="btn btn-danger btn-xs">
             <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+          </a>
+          {% endif %}
+          {% else %}
+          <a href="{{ f_up_link }}" class="btn btn-link btn-xs">
+            <span class="glyphicon glyphicon-remove" aria-hidden="true"></span>
           </a>
           {% endif %}
         </div>
@@ -117,7 +123,6 @@
           </div>
           <a style="z-index:20;position:absolute;display:block;padding:0 2.5em 0 0;left:0;right:0;top:0;bottom:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}">
             {{ label }}
-            {% if up_link %}<span class="text-danger glyphicon glyphicon-remove" aria-hidden="true"></span>{% endif %}
           </a>
         </div>
         {% endfor %}

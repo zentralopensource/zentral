@@ -870,9 +870,11 @@ class MSQuery:
             count = self.count()
             for f, f_choices in self.grouping_choices():
                 f_links = []
+                f_up_links = []
                 for label, f_count, down_query_dict, up_query_dict in f_choices:
                     if up_query_dict is not None:
                         up_link = "?{}".format(urllib.parse.urlencode(up_query_dict))
+                        f_up_links.append(up_link)
                         down_link = None
                     else:
                         up_link = None
@@ -888,10 +890,16 @@ class MSQuery:
                     remove_filter_query_dict.pop("page", None)
                     remove_filter_query_dict.pop(f.get_query_kwarg(), None)
                     remove_filter_query_dict["sf"] = self.serialize_filters(filter_to_remove=f)
-                    r_link = "?{}".format(urllib.parse.urlencode(remove_filter_query_dict))
+                    f_r_link = "?{}".format(urllib.parse.urlencode(remove_filter_query_dict))
                 else:
-                    r_link = None
-                self._grouping_links.append((f, f_links, r_link))
+                    f_r_link = None
+                f_up_link = None
+                if len(f_up_links) == 1:
+                    f_up_link = f_up_links[0]
+                elif len(f_up_links) > 1:
+                    # should not happen
+                    logger.warning("More than one uplink for filter %s - %s", f.get_query_kwarg(), self.query_dict)
+                self._grouping_links.append((f, f_links, f_r_link, f_up_link))
         return self._grouping_links
 
     # fetching
@@ -1017,7 +1025,7 @@ class MSQuery:
                     col += 1
                 row += 1
         # aggregations
-        for f, f_links, _ in self.grouping_links():
+        for f, f_links, _, _ in self.grouping_links():
             ws = workbook.add_worksheet(f.title)
             row = col = 0
             headers = ["Value", "Count", "%"]
