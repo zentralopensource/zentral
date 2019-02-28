@@ -519,7 +519,7 @@ class BundleFilter(BaseMSFilter):
             bundle_name = grouping_value["bundle_name"]
             if bundle_name:
                 self.title = bundle_name
-            return self.display_name(grouping_value)
+        return self.display_name(grouping_value)
 
     def grouping_value_from_grouping_result(self, grouping_result):
         gv = super().grouping_value_from_grouping_result(grouping_result)
@@ -538,8 +538,7 @@ class BundleFilter(BaseMSFilter):
                 continue
             osx_app["display_name"] = self.display_name(osx_app)
             osx_apps.append(osx_app)
-        osx_apps.sort(key=lambda app: (app.get("major"), app.get("minor"), app.get("patch"), app.get("build"),
-                                       app.get("id")))
+        osx_apps.sort(key=lambda app: (app.get("bundle_version"), app.get("bundle_version_str"), app.get("id")))
         # TODO: verify no conflict
         record.setdefault("osx_apps", OrderedDict())[self.title] = osx_apps
 
