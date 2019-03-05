@@ -13,6 +13,7 @@ from saml2 import BINDING_HTTP_POST, md, saml, samlp, xmlenc, xmldsig
 from saml2.client import Saml2Client
 from saml2.config import Config as Saml2Config
 from saml2.metadata import entity_descriptor
+from saml2.saml import NAMEID_FORMAT_EMAILADDRESS
 from zentral.conf import saml2_idp_metadata_file
 
 
@@ -40,6 +41,7 @@ class BaseSPView(View):
             "entityid": entity_id,
             "service": {
                 "sp": {
+                    "name_id_format": NAMEID_FORMAT_EMAILADDRESS,
                     "endpoints": {
                         "assertion_consumer_service": [
                             (acs_url, BINDING_HTTP_POST),
@@ -48,13 +50,13 @@ class BaseSPView(View):
                     "allow_unsolicited": True,
                     "authn_requests_signed": False,
                     "logout_requests_signed": True,
-                    "want_assertions_signed": False,
-                    "want_response_signed": True,
-                    "allow_unknown_attributes": True,
+                    "want_assertions_signed": True,
+                    "want_response_signed": False,
                 },
             },
         }
         sp_config = Saml2Config()
+        sp_config.allow_unknown_attributes = True
         sp_config.load(settings)
         return sp_config
 
