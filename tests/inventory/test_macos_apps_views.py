@@ -136,7 +136,8 @@ class MacOSAppsViewsTestCase(TestCase):
     def test_macos_app_instance_machines(self):
         self.log_user_in()
         response = self.client.get(reverse("inventory:macos_app_instance_machines",
-                                           args=(self.osx_app.id, self.osx_app_instance.id)))
+                                           args=(self.osx_app.id, self.osx_app_instance.id)),
+                                   follow=True)
         self.assertContains(response, "Baller.app 1.2.3")
         self.assertContains(response, "1 Machine")
         self.assertContains(response, self.osx_app_instance.signed_by.sha_256)

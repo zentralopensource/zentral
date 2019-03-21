@@ -1,3 +1,4 @@
+import urllib.parse
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import BusinessUnit, MachineSnapshotCommit, MachineTag, Tag
@@ -49,19 +50,22 @@ class InventoryLoginRedirectTestCase(TestCase):
         MachineTag.objects.create(tag=cls.tag1, serial_number=cls.ms.serial_number)
         cls.tag2 = Tag.objects.create(name="tag2", meta_business_unit=cls.bu2.meta_business_unit)
 
-    def login_redirect(self, url_name, *args):
+    def login_redirect(self, url_name, *args, query=None):
         url = reverse("inventory:{}".format(url_name), args=args)
+        if query:
+            url = "{u}?{q}".format(u=url, q=query)
         response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+        self.assertRedirects(response, "{u}?{q}".format(u=reverse("login"),
+                                                        q=urllib.parse.urlencode({"next": url}, safe="/")))
 
     def test_index(self):
-        self.login_redirect("index")
+        self.login_redirect("index", query="sf=mbu-t-tp-hm-pf-osv")
 
     def test_groups(self):
         self.login_redirect("groups")
 
     def test_group_machines(self):
-        self.login_redirect("group_machines", self.group_id)
+        self.login_redirect("group_machines", self.group_id, query="sf=mbu-t-tp-hm-pf-osv")
 
     def test_business_units(self):
         self.login_redirect("mbu")
@@ -85,7 +89,7 @@ class InventoryLoginRedirectTestCase(TestCase):
         self.login_redirect("remove_mbu_tag", self.mbu2_id, self.tag2.id)
 
     def test_business_units_machines(self):
-        self.login_redirect("mbu_machines", self.mbu_id)
+        self.login_redirect("mbu_machines", self.mbu_id, query="sf=mbu-t-tp-hm-pf-osv")
 
     def test_business_units_detach_bu(self):
         self.login_redirect("detach_bu", self.mbu_id, self.bu_id)
@@ -126,4 +130,5 @@ class InventoryLoginRedirectTestCase(TestCase):
     def test_macos_app_instance_machines(self):
         self.login_redirect("macos_app_instance_machines",
                             self.osx_app_instance.app.id,
-                            self.osx_app_instance.id)
+                            self.osx_app_instance.id,
+                            query="sf=mbu-t-tp-hm-pf-osv")
