@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import logging
 from math import ceil
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
@@ -23,6 +24,9 @@ from .utils import (get_prometheus_inventory_metrics, prometheus_metrics_content
                     BundleFilter, BundleFilterForm,
                     MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
                     MSQuery)
+
+
+logger = logging.getLogger("zentral.contrib.inventory.views")
 
 
 class MachineListView(LoginRequiredMixin, FormView):
@@ -278,8 +282,10 @@ class DeleteMBUView(LoginRequiredMixin, DeleteView):
 
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
-        if self.object.can_be_deleted():
+        try:
             self.object.delete()
+        except ValueError:
+            logger.exception("Could not delete MBU %s", self.object.pk)
         return HttpResponseRedirect(reverse('inventory:mbu'))
 
 

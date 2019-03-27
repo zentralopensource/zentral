@@ -104,6 +104,13 @@ class MetaBusinessUnit(models.Model):
                     return False
         return True
 
+    def delete(self, *args, **kwargs):
+        if not self.can_be_deleted():
+            raise ValueError("MBU {} cannot be deleted".format(self.pk))
+        for b in self.businessunit_set.all():
+            b.delete()
+        super().delete(*args, **kwargs)
+
 
 class SourceManager(MTObjectManager):
     def current_machine_group_sources(self):
