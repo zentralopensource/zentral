@@ -901,7 +901,8 @@ class EnrollmentSecretManager(models.Manager):
 
 class EnrollmentSecret(models.Model):
     secret = models.CharField(max_length=256, unique=True, editable=False)
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.PROTECT,
+    meta_business_unit = models.ForeignKey(
+        MetaBusinessUnit, on_delete=models.PROTECT,
         help_text="The business unit the machine will be assigned to at enrollment",
     )
     tags = models.ManyToManyField(
@@ -1016,16 +1017,26 @@ class BaseEnrollment(models.Model):
         abstract = True
         unique_together = (("distributor_content_type", "distributor_pk"),)
 
+    def can_be_deleted(self):
+        return not self.distributor
+
+    def can_be_revoked(self):
+        return not self.secret.is_revoked
+
     def save(self, *args, **kwargs):
         if self.pk:
             self.version = F("version") + 1
         super().save(*args, **kwargs)
         if self.distributor:
             self.distributor.enrollment_update_callback()
+        self.refresh_from_db()
 
     def delete(self, *args, **kwargs):
-        self.secret.delete()
-        super().delete(*args, **kwargs)
+        if self.can_be_deleted():
+            self.secret.delete()
+            super().delete(*args, **kwargs)
+        else:
+            raise ValueError("Enrollment {} cannot be deleted".format(self.pk))
 
     def serialize_for_event(self):
         enrollment_dict = {"pk": self.pk,

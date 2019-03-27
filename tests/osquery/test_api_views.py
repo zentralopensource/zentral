@@ -53,7 +53,6 @@ class OsqueryAPIViewsTestCase(TestCase):
     def setUpTestData(cls):
         cls.configuration = Configuration.objects.create(name=get_random_string(256))
         cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(64))
-        cls.business_unit = cls.meta_business_unit.create_enrollment_business_unit()
         cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit)
         cls.enrollment = Enrollment.objects.create(configuration=cls.configuration,
                                                    secret=cls.enrollment_secret)

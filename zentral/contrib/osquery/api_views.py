@@ -43,3 +43,9 @@ class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
     """
     queryset = Enrollment.objects.all()
     serializer_class = EnrollmentSerializer
+
+    def perform_destroy(self, instance):
+        if not instance.can_be_deleted():
+            raise ValidationError('This enrollment cannot be deleted')
+        else:
+            return super().perform_destroy(instance)
