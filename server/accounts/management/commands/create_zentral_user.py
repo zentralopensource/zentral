@@ -92,6 +92,8 @@ class Command(BaseCommand):
 
         # generate password reset URL
         uid = urlsafe_base64_encode(force_bytes(user.pk))
+        if isinstance(uid, bytes):
+            uid = uid.decode("ascii")
         token = default_token_generator.make_token(user)
         password_reset_url = "{}{}".format(
             settings["api"]["tls_hostname"],
