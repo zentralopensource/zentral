@@ -46,10 +46,6 @@ class MetaBusinessUnit(models.Model):
     """The object to link the different BusinessUnits."""
     name = models.TextField()
 
-    dashboard_source = models.ForeignKey("inventory.Source", on_delete=models.SET_NULL,
-                                         related_name="+", null=True, blank=True)
-    dashboard_osx_app_bundle_id_list = ArrayField(models.TextField(), default=list, blank=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

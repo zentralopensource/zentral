@@ -29,7 +29,7 @@ class MetaBusinessUnitSearchForm(forms.Form):
 class MetaBusinessUnitForm(forms.ModelForm):
     class Meta:
         model = MetaBusinessUnit
-        fields = ("name", "dashboard_source", "dashboard_osx_app_bundle_id_list")
+        fields = ("name",)
         widgets = {"name": forms.TextInput}
 
 
