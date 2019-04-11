@@ -164,8 +164,12 @@ class BaseNodeView(JSONPostAPIView):
 
         def clean_dict(d):
             for k, v in list(d.items()):
+                if isinstance(v, str):
+                    v = v.strip()
                 if v is None or v == "":
                     del d[k]
+                elif v != d[k]:
+                    d[k] = v
             return d
 
         deb_packages = []

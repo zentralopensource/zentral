@@ -24,7 +24,7 @@ INVENTORY_QUERY_SNAPSHOT = [
      'cpu_physical_cores': '2',
      'cpu_subtype': 'Intel 80486',
      'cpu_type': 'i486',
-     'hardware_model': 'MacBookPro5,1',
+     'hardware_model': 'MacBookPro5,1 ',  # extra space must be removed by osquery module
      'hardware_serial': '0123456789',
      'hostname': 'godzilla.box',
      'physical_memory': '8589934592',
@@ -223,6 +223,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.post_default_inventory_query_snapshot(node_key)
         ms = MachineSnapshot.objects.current().get(serial_number=machine_serial_number)
         self.assertEqual(ms.os_version.build, INVENTORY_QUERY_SNAPSHOT[0]["build"])
+        self.assertEqual(ms.system_info.hardware_model, INVENTORY_QUERY_SNAPSHOT[1]["hardware_model"].strip())
 
     def test_distributed_read_one_query_plus_default_inventory_query(self):
         _, node_key = self.enroll_machine()
