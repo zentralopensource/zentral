@@ -1027,7 +1027,7 @@ class AddManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView):
             enrollment_pk=enrollment.pk,
             version=0  # will be updated by the callback call in enrollment.save()
         )
-        mep.tags = mep_form.cleaned_data["tags"]
+        mep.tags.set(mep_form.cleaned_data["tags"])
         # link from enrollment to manifest enrollment package, for config update propagation
         enrollment.distributor = mep
         enrollment.save()  # bump mep version and build package via callback call
@@ -1036,7 +1036,7 @@ class AddManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView):
 
 class UpdateManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView):
     def forms_valid(self, builder_form, mep_form):
-        self.manifest_enrollment_package.tags = mep_form.cleaned_data["tags"]
+        self.manifest_enrollment_package.tags.set(mep_form.cleaned_data["tags"])
         self.manifest_enrollment_package.save()
         builder_form.save()  # bump mep version and build package via callback call
         return HttpResponseRedirect(self.manifest.get_absolute_url())
