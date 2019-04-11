@@ -266,7 +266,7 @@ class AddManifestCatalogForm(forms.Form):
         mc = ManifestCatalog(manifest=self.manifest,
                              catalog=self.cleaned_data['catalog'])
         mc.save()
-        mc.tags = self.cleaned_data['tags']
+        mc.tags.set(self.cleaned_data['tags'])
         self.manifest.save()  # updated_at
         return mc
 
@@ -333,7 +333,7 @@ class AddManifestSubManifestForm(forms.Form):
         msn = ManifestSubManifest(manifest=self.manifest,
                                   sub_manifest=self.cleaned_data['sub_manifest'])
         msn.save()
-        msn.tags = self.cleaned_data['tags']
+        msn.tags.set(self.cleaned_data['tags'])
         self.manifest.save()  # updated_at
         return msn
 
