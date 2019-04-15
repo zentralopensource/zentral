@@ -36,6 +36,12 @@
         <td><code>{{ object.file_changes_regex }}</code></td>
       </tr>
       {% endif %}
+      {% if object.file_changes_prefix_filters %}
+      <tr>
+        <td>File changes prefix filters</td>
+        <td><code>{{ object.file_changes_prefix_filters }}</code></td>
+      </tr>
+      {% endif %}
       {% if object.whitelist_regex %}
       <tr>
         <td>Whitelist regex</td>

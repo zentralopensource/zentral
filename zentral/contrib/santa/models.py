@@ -25,6 +25,7 @@ class Configuration(models.Model):
     LOCAL_CONFIGURATION_ATTRIBUTES = {
         'client_mode',
         'file_changes_regex',
+        'file_changes_prefix_filters',
         'whitelist_regex',
         'blacklist_regex',
         'enable_page_zero_protection',
@@ -52,6 +53,11 @@ class Configuration(models.Model):
     file_changes_regex = models.TextField(
         blank=True,
         help_text="The regex of paths to log file changes. Regexes are specified in ICU format."
+    )
+    file_changes_prefix_filters = models.TextField(
+        blank=True,
+        help_text=("A list of ignore prefixes which are checked in-kernel. "
+                   "This is more performant than FileChangesRegex when ignoring whole directory trees.")
     )
     whitelist_regex = models.TextField(
         blank=True,

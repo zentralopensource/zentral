@@ -6,10 +6,14 @@ from zentral.contrib.santa.models import Configuration
 class SantaAPIViewsTestCase(TestCase):
     def test_local_configuration_url_keys(self):
         more_info_url = "https://{}.de".format(get_random_string(34))
+        file_changes_prefix_filters = "/private/tmp/"
+
         config = Configuration.objects.create(name=get_random_string(256),
-                                              more_info_url=more_info_url)
+                                              more_info_url=more_info_url,
+                                              file_changes_prefix_filters=file_changes_prefix_filters)
         local_config = config.get_local_config()
         self.assertEqual(local_config["MoreInfoURL"], more_info_url)
+        self.assertEqual(local_config["FileChangesPrefixFilters"], file_changes_prefix_filters)
 
     def test_blacklist_regex_default_whitelist_regex(self):
         blacklist_regex = get_random_string(34)
