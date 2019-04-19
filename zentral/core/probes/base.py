@@ -9,6 +9,7 @@ from zentral.contrib.inventory.conf import (PLATFORM_CHOICES, PLATFORM_CHOICES_D
                                             TYPE_CHOICES, TYPE_CHOICES_DICT)
 from zentral.core.actions import actions as available_actions
 from zentral.core.events import event_types
+from zentral.core.incidents.models import SEVERITY_CHOICES
 from zentral.core.stores import stores
 from . import register_probe_class
 
@@ -96,16 +97,16 @@ class MetadataFilter(object):
         return True
 
     def get_event_type_classes(self):
-        l = []
+        etl = []
         for et in self.event_types:
             try:
                 et = event_types[et]
             except KeyError:
                 logger.warning("Unknown event type %s in metadata filter", et)
             else:
-                l.append(et)
-        l.sort(key=lambda et: et.get_event_type_display())
-        return l
+                etl.append(et)
+        etl.sort(key=lambda et: et.get_event_type_display())
+        return etl
 
     def get_event_types_display(self):
         return ", ".join(et.get_event_type_display()
@@ -196,6 +197,7 @@ class ActionsSerializer(serializers.DictField):
 class BaseProbeSerializer(serializers.Serializer):
     filters = FiltersSerializer(required=False)
     actions = ActionsSerializer(required=False)
+    incident_severity = serializers.ChoiceField(SEVERITY_CHOICES, allow_null=True, required=False)
 
 
 class BaseProbe(object):
@@ -274,6 +276,7 @@ class BaseProbe(object):
     def load_validated_data(self, validated_data):
         self.load_filters(validated_data)
         self.load_actions(validated_data)
+        self.incident_severity = validated_data.get("incident_severity")
 
     # methods used in the ProbeSource
 
@@ -347,6 +350,9 @@ class BaseProbe(object):
             return False
         return True
 
+    def get_matching_event_incident_severity(self, matching_event):
+        return self.incident_severity
+
     def get_extra_links(self):
         return []
 
@@ -368,11 +374,11 @@ class BaseProbe(object):
     def not_configured_actions(self):
         """return a list of available actions not configured in the probe."""
         configured_actions = {action.name for action, _ in self.actions}
-        l = [action
-             for action_name, action in available_actions.items()
-             if action_name not in configured_actions]
-        l.sort(key=lambda action: action.name)
-        return l
+        al = [action
+              for action_name, action in available_actions.items()
+              if action_name not in configured_actions]
+        al.sort(key=lambda action: action.name)
+        return al
 
     # export method for probe sharing
 

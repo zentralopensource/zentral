@@ -38,7 +38,8 @@ user_templates_dir = os.path.join(conf_dir, 'templates')
 settings = load_config_file(find_conf_file(conf_dir, "base"))
 
 # add default apps
-settings.setdefault('apps', {})['zentral.core.probes'] = {}
+for app in ["zentral.core.incidents", "zentral.core.probes"]:
+    settings.setdefault('apps', {})[app] = {}
 
 
 def load_contact_groups(conf_dir):
@@ -52,5 +53,6 @@ def load_contact_groups(conf_dir):
         for group in groups:
             contact_groups.setdefault(group, []).append(contact_d)
     return contact_groups
+
 
 contact_groups = load_contact_groups(conf_dir)
