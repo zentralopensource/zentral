@@ -3,7 +3,7 @@ boto3
 coverage
 cryptography
 django-bootstrap-form
-django<2.2
+django>=2.2,<2.3
 djangorestframework
 django-filter
 elasticsearch
