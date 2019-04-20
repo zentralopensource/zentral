@@ -119,12 +119,12 @@ def post_events(msn, user_agent, ip, data):
     for event_d in events:
         try:
             app_d = build_collected_app_tree_from_santa_event(event_d)
-        except:
+        except Exception:
             logger.exception("Could not build app tree from santa event")
         else:
             try:
                 CollectedApplication.objects.commit(app_d)
-            except:
+            except Exception:
                 logger.exception("Could not commit collected appi %s", app_d)
     SantaEventEvent.post_machine_request_payloads(msn, user_agent, ip,
                                                   data.get('events', []),
