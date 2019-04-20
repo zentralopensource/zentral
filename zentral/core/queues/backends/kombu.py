@@ -15,8 +15,6 @@ process_events_queue = Queue('process_events',
                              exchange=events_exchange,
                              durable=True)
 
-probes_exchange = Exchange('probes', type='fanout', durable=True)
-
 
 class LoggingMixin(object):
     def log(self, msg, level):
