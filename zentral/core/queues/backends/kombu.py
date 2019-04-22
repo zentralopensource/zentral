@@ -63,7 +63,7 @@ class PreprocessWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixi
                          accept=['json'],
                          callbacks=[self.do_preprocess_raw_event])]
 
-    def do_process_raw_event(self, body, message):
+    def do_preprocess_raw_event(self, body, message):
         self.log_debug("process raw event")
         try:
             for event in self.event_preprocessor.process_raw_event(body):
@@ -90,12 +90,13 @@ class EnrichWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
     def setup_prometheus_metrics(self):
         self.enriched_events_counter = Counter(
             "enriched_events",
-            "Enriched events"
+            "Enriched events",
+            ["event_type"]
         )
-        self.incident_events_counter = Counter(
-            "incident_events",
-            "Incident events",
-            ["severity"]
+        self.produced_events_counter = Counter(
+            "produced_events",
+            "Produced events",
+            ["event_type"]
         )
 
     def run(self, *args, **kwargs):
@@ -115,18 +116,18 @@ class EnrichWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
         self.log_debug("enrich event")
         try:
             for event in self.enrich_event(body):
-                self.produced_events_counter.labels(event.event_type).inc()
                 self.producer.publish(event.serialize(machine_metadata=False),
                                       serializer='json',
                                       exchange=enriched_events_exchange,
                                       declare=[enriched_events_exchange])
+                self.produced_events_counter.labels(event.event_type).inc()
         except Exception as exception:
             logger.exception("Requeuing message with 1s delay: %s", exception)
             time.sleep(1)
             message.requeue()
         else:
             message.ack()
-            self.enriched_events_counter.inc()
+            self.enriched_events_counter.labels(event.event_type).inc()
 
 
 class ProcessWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
@@ -202,6 +203,12 @@ class EventQueues(object):
     def __init__(self, config_d):
         self.backend_url = config_d['backend_url']
         self.connection = Connection(self.backend_url)
+        # migration TODO: remove ?
+        # disconnect process_events_queue from events_exchange
+        channel = self.connection.channel()
+        bound_process_events_queue = process_events_queue.bind(channel)
+        bound_process_events_queue.unbind_from(events_exchange)
+        channel.close()
 
     def get_preprocess_worker(self, event_preprocessor):
         return PreprocessWorker(Connection(self.backend_url), event_preprocessor)
@@ -213,7 +220,14 @@ class EventQueues(object):
         return ProcessWorker(Connection(self.backend_url), process_event)
 
     def get_store_worker(self, event_store):
-        return StoreWorker(Connection(self.backend_url), event_store)
+        store_worker = StoreWorker(Connection(self.backend_url), event_store)
+        # migration TODO: remove ?
+        # disconnect StoreWorker input_queue from events_exchange
+        channel = self.connection.channel()
+        bound_store_worker_input_queue = store_worker.input_queue.bind(channel)
+        bound_store_worker_input_queue.unbind_from(events_exchange)
+        channel.close()
+        return store_worker
 
     def post_raw_event(self, input_queue_name, raw_event):
         exchange = Exchange(input_queue_name, type="fanout", durable=True)
