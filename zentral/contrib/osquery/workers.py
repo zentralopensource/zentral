@@ -50,4 +50,4 @@ class FinishedFileCarveSessionPreprocessor(object):
 
 
 def get_workers():
-    yield queues.get_preprocessor_worker(FinishedFileCarveSessionPreprocessor())
+    yield queues.get_preprocess_worker(FinishedFileCarveSessionPreprocessor())

@@ -83,19 +83,19 @@ class EventRequest(object):
         return d
 
     def __str__(self):
-        l = []
+        s_l = []
         if self.user and self.user.username:
-            l.append(self.user.username)
+            s_l.append(self.user.username)
         if self.ip:
-            l.append(self.ip)
+            s_l.append(self.ip)
         if self.user_agent:
             user_agent = self.user_agent
             if len(user_agent) > self.user_agent_str_length:
                 user_agent = "{}…".format(
                    user_agent[:self.user_agent_str_length - 1].strip()
                 )
-            l.append(user_agent)
-        return " - ".join(l)
+            s_l.append(user_agent)
+        return " - ".join(s_l)
 
 
 class EventMetadata(object):
@@ -117,6 +117,7 @@ class EventMetadata(object):
             self.machine = None
         self.request = kwargs.pop('request', None)
         self.tags = kwargs.pop('tags', [])
+        self.incidents = kwargs.pop('incidents', [])
 
     @classmethod
     def deserialize(cls, event_d_metadata):
@@ -138,6 +139,8 @@ class EventMetadata(object):
             d['request'] = self.request.serialize()
         if self.tags:
             d['tags'] = self.tags
+        if self.incidents:
+            d['incidents'] = self.incidents
         if self.machine_serial_number:
             d['machine_serial_number'] = self.machine_serial_number
         if not machine_metadata or not self.machine:
@@ -178,6 +181,9 @@ class EventMetadata(object):
             d['machine'] = machine_d
         return d
 
+    def add_incident(self, incident):
+        self.incidents.append(incident.serialize_for_event())
+
 
 class BaseEvent(object):
     event_type = "base"
@@ -200,7 +206,7 @@ class BaseEvent(object):
             if get_created_at:
                 try:
                     metadata.created_at = get_created_at(payload)
-                except:
+                except Exception:
                     logger.exception("Could not extract created_at from payload")
             yield cls(metadata, payload)
 

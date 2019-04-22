@@ -16,7 +16,7 @@ class AuditRecordPreprocessor(object):
     def build_audit_event(self, raw_event_d):
         try:
             payload = parse_record(raw_event_d["message"])
-        except:
+        except Exception:
             logger.exception("Could not parse audit message")
             return
         else:
@@ -35,4 +35,4 @@ class AuditRecordPreprocessor(object):
 
 
 def get_workers():
-    return [queues.get_preprocessor_worker(AuditRecordPreprocessor())]
+    return [queues.get_preprocess_worker(AuditRecordPreprocessor())]

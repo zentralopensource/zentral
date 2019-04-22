@@ -39,13 +39,13 @@ class WebhookEventPreprocessor(object):
         logger.info("Update machine %s %s %s", client.get_source_d(), device_type, jamf_id)
         try:
             machine_d = client.get_machine_d(device_type, jamf_id)
-        except:
+        except Exception:
             logger.exception("Could not get machine_d. %s %s %s",
                              client.get_source_d(), device_type, jamf_id)
         else:
             try:
                 msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
-            except:
+            except Exception:
                 logger.exception("Could not commit machine snapshot")
             else:
                 if msc:
@@ -73,7 +73,7 @@ class WebhookEventPreprocessor(object):
     def update_group_machines(self, client, device_type, jamf_group_id, is_smart):
         try:
             current_machine_references = set(client.get_group_machine_references(device_type, jamf_group_id))
-        except:
+        except Exception:
             logger.exception("Could not get group machines. %s %s %s",
                              client.get_source_d(), device_type, jamf_group_id)
         else:
@@ -272,5 +272,5 @@ class BeatPreprocessor(object):
 
 
 def get_workers():
-    yield queues.get_preprocessor_worker(WebhookEventPreprocessor())
-    yield queues.get_preprocessor_worker(BeatPreprocessor())
+    yield queues.get_preprocess_worker(WebhookEventPreprocessor())
+    yield queues.get_preprocess_worker(BeatPreprocessor())

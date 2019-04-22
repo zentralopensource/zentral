@@ -33,24 +33,6 @@ OPEN_STATUSES = {STATUS_OPEN, STATUS_IN_PROGRESS, STATUS_REOPENED}
 CLOSED_STATUSES = {STATUS_CLOSED, STATUS_RESOLVED}
 
 
-class IncidentManager(models.Manager):
-    def get_or_create_open_incident(self, probe_source, severity, event_id):
-        incident, created = self.get_or_create(
-            probe_source=probe_source,
-            status__in=OPEN_STATUSES,
-            defaults={
-                "name": probe_source.name,
-                "description": probe_source.description,
-                "severity": severity,
-                "status": STATUS_OPEN,
-                "event_id": event_id,
-            }
-        )
-        if not created and severity > incident.severity:
-            self.filter(pk=incident.pk, severity__lt=severity).update(severity=severity)
-        return incident, created
-
-
 class Incident(models.Model):
     probe_source = models.ForeignKey("probes.ProbeSource", on_delete=models.SET_NULL, blank=True, null=True)
     name = models.TextField()
@@ -71,19 +53,13 @@ class Incident(models.Model):
             )
         ]
 
-
-class MachineIncidentManager(models.Manager):
-    def get_or_create_machine_incident(self, probe_source, severity, serial_number, event_id):
-        incident, __ = Incident.objects.get_or_create_open_incident(probe_source, severity, event_id)
-        machine_incident, created = self.get_or_create(
-            incident=incident,
-            serial_number=serial_number,
-            defaults={
-                "status": Incident.STATUS_OPEN,
-                "event_id": event_id,
-            }
-        )
-        return machine_incident, created
+    def serialize_for_event(self):
+        return {
+            "pk": self.pk,
+            "name": self.name,
+            "severity": self.severity,
+            "status": self.status
+        }
 
 
 class MachineIncident(models.Model):
@@ -94,8 +70,6 @@ class MachineIncident(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    objects = MachineIncidentManager()
-
     class Meta:
         ordering = ("-created_at",)
         constraints = [
@@ -105,3 +79,11 @@ class MachineIncident(models.Model):
                 condition=Q(status__in=OPEN_STATUSES)
             )
         ]
+
+    def serialize_for_event(self):
+        d = self.incident.serialize_for_event()
+        d["machine_incident"] = {
+            "pk": self.pk,
+            "status": self.status
+        }
+        return d

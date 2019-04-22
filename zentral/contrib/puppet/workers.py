@@ -39,7 +39,7 @@ class ReportEventPreprocessor(object):
         logger.info("Update machine %s %s", machine_d["source"], machine_d["reference"])
         try:
             msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
-        except:
+        except Exception:
             logger.exception("Could not commit machine snapshot")
         else:
             if msc:
@@ -62,14 +62,14 @@ class ReportEventPreprocessor(object):
 
         try:
             puppet_report = yaml.load(raw_event["puppet_report"])
-        except:
+        except Exception:
             logger.exception("Could not read puppet report")
             return
 
         certname = puppet_report["host"]
         try:
             machine_d = client.get_machine_d(certname)
-        except:
+        except Exception:
             logger.exception("Could not get machine_d. %s %s",
                              client.get_source_d(), certname)
             return
@@ -94,4 +94,4 @@ class ReportEventPreprocessor(object):
 
 
 def get_workers():
-    yield queues.get_preprocessor_worker(ReportEventPreprocessor())
+    yield queues.get_preprocess_worker(ReportEventPreprocessor())

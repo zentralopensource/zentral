@@ -52,4 +52,4 @@ class DeviceNotificationSender(object):
 
 
 def get_workers():
-    yield queues.get_preprocessor_worker(DeviceNotificationSender())
+    yield queues.get_preprocess_worker(DeviceNotificationSender())
