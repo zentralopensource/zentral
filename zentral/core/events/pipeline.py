@@ -16,19 +16,19 @@ def enrich_event(event):
         incident_severity = probe.get_matching_event_incident_severity(event)
         if incident_severity is None:
             continue
-        if event.machine is not None:
+        if event.metadata.machine_serial_number is not None:
             machine_incident, incident_event_payloads = update_or_create_open_machine_incident(
                 probe.source,
                 incident_severity,
-                event.machine.serial_number,
-                event.uuid
+                event.metadata.machine_serial_number,
+                event.metadata.uuid
             )
             event.metadata.add_incident(machine_incident)
         else:
             incident, incident_event_payloads = update_or_create_open_incident(
                 probe.source,
                 incident_severity,
-                event.uuid
+                event.metadata.uuid
             )
             event.metadata.add_incident(incident)
         incident_events_uuid = uuid.uuid4()

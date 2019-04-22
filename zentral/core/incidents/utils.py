@@ -11,7 +11,7 @@ def _update_or_create_open_incident(probe_source, severity, event_id):
     extra_event_payload = {}
     lookup = {"probe_source": probe_source, "status__in": OPEN_STATUSES}
     try:
-        incident = Incident.select_for_update().get(**lookup)
+        incident = Incident.objects.select_for_update().get(**lookup)
     except Incident.DoesNotExist:
         try:
             with transaction.atomic():
@@ -24,7 +24,7 @@ def _update_or_create_open_incident(probe_source, severity, event_id):
                     event_id=event_id)
         except IntegrityError as e:
             try:
-                incident = Incident.select_for_update().get(**lookup)
+                incident = Incident.objects.select_for_update().get(**lookup)
             except Incident.DoesNotExist:
                 pass
             raise e
@@ -74,7 +74,7 @@ def update_or_create_open_machine_incident(probe_source, severity, serial_number
                 machine_incident.save()
                 machine_incident_event_payload = machine_incident.serialize_for_event()
                 machine_incident_event_payload["action"] = "closed"
-                machine_incident_event_payload["diff"] = machine_incident_diff
+                machine_incident_event_payload["machine_incident"]["diff"] = machine_incident_diff
                 event_payloads.append(machine_incident_event_payload)
                 # close the incident if status == "OPEN"
                 # do not automatically close it if open but not status == "OPEN" (manual intervention)

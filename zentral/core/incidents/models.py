@@ -58,7 +58,8 @@ class Incident(models.Model):
             "pk": self.pk,
             "name": self.name,
             "severity": self.severity,
-            "status": self.status
+            "status": self.status,
+            "event_id": str(self.event_id),
         }
 
 
@@ -84,6 +85,7 @@ class MachineIncident(models.Model):
         d = self.incident.serialize_for_event()
         d["machine_incident"] = {
             "pk": self.pk,
-            "status": self.status
+            "status": self.status,
+            "event_id": str(self.event_id),
         }
         return d
