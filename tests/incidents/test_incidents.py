@@ -7,6 +7,7 @@ from zentral.core.incidents.models import (Incident, MachineIncident,
                                            SEVERITY_CRITICAL,
                                            STATUS_CLOSED, STATUS_IN_PROGRESS, STATUS_OPEN)
 from zentral.core.incidents.utils import update_or_create_open_incident, update_or_create_open_machine_incident
+from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.probes.models import ProbeSource
 from tests.inventory.utils import MockMetaMachine
 
@@ -131,6 +132,8 @@ class IncidentTestCase(TestCase):
                          {"pk": machine_incident.pk,
                           "status": machine_incident.status,
                           "event_id": str(event.metadata.uuid)})
+        # meta machine
+        self.assertEqual(MetaMachine("YOLOFOMO").max_incident_severity(), SEVERITY_CRITICAL)
 
     def test_same_open_machine_incident(self):
         event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
@@ -184,6 +187,8 @@ class IncidentTestCase(TestCase):
                           "added": {"severity": SEVERITY_CRITICAL + 100}})
         self.assertEqual(event_payload["severity"], SEVERITY_CRITICAL + 100)
         self.assertEqual(event_payload.get("machine_incident"), None)
+        # meta machine
+        self.assertEqual(MetaMachine("YOLOFOMO").max_incident_severity(), SEVERITY_CRITICAL + 100)
 
     def test_close_open_machine_incident(self):
         event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
@@ -233,6 +238,8 @@ class IncidentTestCase(TestCase):
         self.assertEqual(event_payload2["diff"],
                          {"removed": {"status": STATUS_OPEN},
                           "added": {"status": STATUS_CLOSED}})
+        # meta machine
+        self.assertEqual(MetaMachine("YOLOFOMO").max_incident_severity(), None)
 
     def test_close_manually_changed_incident_open_machine_incident(self):
         event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
