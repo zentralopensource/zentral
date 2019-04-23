@@ -276,6 +276,10 @@ class BaseEvent(object):
         ctx = self.get_notification_context(probe)
         return render_notification_part(ctx, self.event_type, 'body')
 
+    def get_notification_serial(self, probe):
+        ctx = self.get_notification_context(probe)
+        return render_notification_part(ctx, self.event_type, 'serial')
+
     # aggregations
 
     @classmethod
