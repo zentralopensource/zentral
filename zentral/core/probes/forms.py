@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.conf import PLATFORM_CHOICES, TYPE_CHOICES
+from zentral.core.incidents.models import SEVERITY_CHOICES
 from zentral.utils.forms import CommaSeparatedQuotedStringField
 from .base import BaseProbe
 from .feeds import FeedError, get_feed_serializer, sync_feed, update_or_create_feed
@@ -194,6 +195,43 @@ class CreateProbeForm(BaseCreateProbeForm, MetadataFilterForm):
 
     def get_body(self):
         return {"filters": {"metadata": [self.get_filter_d()]}}
+
+
+PROBE_SEVERITY_CHOICES = [('', 'Do not create incidents')] + sorted(SEVERITY_CHOICES)
+
+
+class UpdateProbeForm(forms.ModelForm):
+    incident_severity = forms.ChoiceField(
+            choices=PROBE_SEVERITY_CHOICES,
+            required=False,
+            help_text="Create incidents with this severity level, if events are a match for this probe"
+    )
+
+    def __init__(self, *args, **kwargs):
+        instance = kwargs.get("instance")
+        if instance:
+            try:
+                kwargs.setdefault("initial", {})["incident_severity"] = instance.load().incident_severity
+            except Exception:
+                pass
+        super().__init__(*args, **kwargs)
+
+    class Meta:
+        model = ProbeSource
+        fields = ["name", "description", "status"]
+
+    def clean_incident_severity(self):
+        incident_severity = self.cleaned_data.get("incident_severity")
+        if not incident_severity:
+            return None
+        else:
+            return incident_severity
+
+    def save(self):
+        probe_source = super().save(commit=False)
+        probe_source.body["incident_severity"] = self.cleaned_data.get("incident_severity")
+        probe_source.save()
+        return probe_source
 
 
 class AddFeedForm(forms.Form):

@@ -380,6 +380,13 @@ class BaseProbe(object):
         al.sort(key=lambda action: action.name)
         return al
 
+    def get_incident_severity_display(self):
+        if self.incident_severity is None:
+            return "Do not create incidents"
+        else:
+            return dict(SEVERITY_CHOICES).get(self.incident_severity,
+                                              "Unknown severity {}".format(self.incident_severity))
+
     # export method for probe sharing
 
     def export(self):

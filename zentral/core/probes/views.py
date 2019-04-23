@@ -5,8 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.views.generic import View, DetailView, ListView, TemplateView
-from django.views.generic.edit import DeleteView, FormView, UpdateView
+from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 import requests
 from zentral.core.stores import frontend_store
 from zentral.utils.charts import make_dataset
@@ -14,7 +13,7 @@ from .feeds import FeedError, export_feed, sync_feed
 from .forms import (CreateProbeForm, ProbeSearchForm,
                     InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet,
                     AddFeedForm, ImportFeedProbeForm,
-                    CloneProbeForm)
+                    CloneProbeForm, UpdateProbeForm)
 from .models import Feed, FeedProbe, ProbeSource
 
 logger = logging.getLogger("zentral.core.probes.views")
@@ -253,7 +252,7 @@ class ProbeEventsView(LoginRequiredMixin, ListView):
 
 class UpdateProbeView(LoginRequiredMixin, UpdateView):
     model = ProbeSource
-    fields = ['name', 'status', 'description']
+    form_class = UpdateProbeForm
     template_name = "core/probes/form.html"
 
     def get_context_data(self, **kwargs):
