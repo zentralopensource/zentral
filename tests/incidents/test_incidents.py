@@ -49,6 +49,7 @@ class IncidentTestCase(TestCase):
         event_payload = event_payloads[0]
         self.assertEqual(event_payload["action"], "created")
         self.assertEqual(event_payload["pk"], incident.pk)
+        self.assertEqual(event_payload["probe_pk"], self.probe_source.pk)
         self.assertEqual(event_payload["name"], "base probe")
         self.assertEqual(event_payload["status"], STATUS_OPEN)
         self.assertEqual(event_payload["severity"], SEVERITY_CRITICAL)

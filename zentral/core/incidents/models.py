@@ -56,6 +56,7 @@ class Incident(models.Model):
     def serialize_for_event(self):
         return {
             "pk": self.pk,
+            "probe_pk": self.probe_source.pk,
             "name": self.name,
             "severity": self.severity,
             "status": self.status,
