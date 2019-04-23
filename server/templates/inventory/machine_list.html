@@ -166,6 +166,9 @@
 	<a href="{% url 'inventory:machine' machine_snapshot.urlsafe_serial_number %}">
           {{ serial_number }}
         </a>
+        {% if machine_snapshot.max_incident_severity_display %}
+        - {{ machine_snapshot.max_incident_severity_display }}
+        {% endif %}
       </td>
       {% endif %}
       <td>{{ machine_snapshot.computer_name|default:"" }}</td>

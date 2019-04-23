@@ -9,6 +9,7 @@ from django.db import connection
 from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
                                generate_latest, CONTENT_TYPE_LATEST as prometheus_metrics_content_type)
 import xlsxwriter
+from zentral.core.incidents.models import OPEN_STATUSES, SEVERITY_CHOICES
 from zentral.utils.json import log_data
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      post_inventory_events)
@@ -685,6 +686,49 @@ class DateTimeFilter(BaseMSFilter):
             yield self.value
 
 
+class IncidentSeverityFilter(BaseMSFilter):
+    title = "Incidents severities"
+    optional = True
+    query_kwarg = "mis"
+    expression = "mis.max_incident_severity as max_incident_severity"
+    grouping_set = ("mis.max_incident_severity",)
+    severities_dict = dict(SEVERITY_CHOICES)
+
+    def joins(self):
+        yield (
+            "left join ("
+            "select mi.serial_number as serial_number, max(i.severity) as max_incident_severity "
+            "from incidents_machineincident as mi "
+            "join incidents_incident as i on (i.id = mi.incident_id) "
+            "where i.status in ({}) "
+            "group by mi.serial_number"
+            ") as mis on (mis.serial_number = ms.serial_number)"
+        ).format(",".join("'{}'".format(s) for s in OPEN_STATUSES))
+
+    def wheres(self):
+        if self.value:
+            if self.value != self.none_value:
+                yield "mis.max_incident_severity = %s"
+            else:
+                yield "mis.max_incident_severity is null"
+
+    def where_args(self):
+        if self.value and self.value != self.none_value:
+            yield self.value
+
+    def label_for_grouping_value(self, grouping_value):
+        if grouping_value is None:
+            return self.none_value
+        else:
+            return self.severities_dict.get(grouping_value, str(grouping_value))
+
+    def process_fetched_record(self, record):
+        max_incident_severity = record.get("max_incident_severity")
+        if max_incident_severity is not None:
+            record["max_incident_severity_display"] = self.severities_dict.get(max_incident_severity,
+                                                                               str(max_incident_severity))
+
+
 class MSQuery:
     paginate_by = 50
     itersize = 1000
@@ -699,6 +743,7 @@ class MSQuery:
         OSVersionFilter,
         SerialNumberFilter,
         ComputerNameFilter,
+        IncidentSeverityFilter,
     ]
 
     def __init__(self, query_dict=None):
