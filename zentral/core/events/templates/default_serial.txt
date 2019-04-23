@@ -1,0 +1,3 @@
+{% if machine %}
+{{ machine.serial_number }}
+{% endif %}
