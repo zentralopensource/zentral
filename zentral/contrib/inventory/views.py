@@ -8,6 +8,7 @@ from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpRespon
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
+from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores import frontend_store
 from zentral.conf import settings
 from .forms import (MetaBusinessUnitForm,
@@ -500,6 +501,30 @@ class MachineEventsView(LoginRequiredMixin, ListView):
         self.serial_number = self.machine.serial_number
         et = self.request.GET.get('event_type')
         return MachineEventSet(self.serial_number, et)
+
+
+class MachineMacOSAppInstancesView(LoginRequiredMixin, TemplateView):
+    template_name = "inventory/machine_macos_app_instances.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['inventory'] = True
+        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
+        context['serial_number'] = machine.serial_number
+        return context
+
+
+class MachineIncidentsView(LoginRequiredMixin, TemplateView):
+    template_name = "inventory/machine_incidents.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['inventory'] = True
+        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
+        context['serial_number'] = machine.serial_number
+        context['incidents'] = (MachineIncident.objects.select_related("incident__probe_source")
+                                                       .filter(serial_number=machine.serial_number))
+        return context
 
 
 class MachineTagsView(LoginRequiredMixin, FormView):

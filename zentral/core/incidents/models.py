@@ -1,6 +1,7 @@
 import logging
 from django.db import models
 from django.db.models import Q
+from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
 
 
@@ -53,6 +54,9 @@ class Incident(models.Model):
             )
         ]
 
+    def get_absolute_url(self):
+        return reverse("incidents:incident", args=(self.pk,))
+
     def serialize_for_event(self):
         return {
             "pk": self.pk,
@@ -81,6 +85,9 @@ class MachineIncident(models.Model):
                 condition=Q(status__in=OPEN_STATUSES)
             )
         ]
+
+    def get_absolute_url(self):
+        return "{}#{}".format(reverse("incidents:incident", args=(self.incident.pk,)), self.pk)
 
     def serialize_for_event(self):
         d = self.incident.serialize_for_event()

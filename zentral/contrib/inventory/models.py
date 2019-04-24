@@ -843,6 +843,10 @@ class MetaMachine(object):
                                        .aggregate(max_incident_severity=Max("incident__severity"))
                 )["max_incident_severity"]
 
+    def open_incidents(self):
+        return list(MachineIncident.objects.select_related("incident__probe_source")
+                                           .filter(serial_number=self.serial_number, status__in=OPEN_STATUSES))
+
     def archive(self):
         CurrentMachineSnapshot.objects.filter(serial_number=self.serial_number).delete()
 

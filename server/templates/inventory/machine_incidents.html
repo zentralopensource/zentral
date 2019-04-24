@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load base_extras inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+  <li><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
+  <li class="active">incidents</li>
+</ol>
+
+<h2>
+  {% machine_type_icon machine %}
+  {% machine_platform_icon machine %}
+  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / incidents
+</h2>
+
+<table class="table table-condensed">
+  <thead>
+    <th>Name</th>
+    <th>Status</th>
+    <th>Severity</th>
+    <th>Created at</th>
+  </thead>
+  <tbody>
+    {% for machine_incident in incidents %}
+    {% with machine_incident.incident as incident %}
+    <tr>
+      <td><a href="{{ incident.get_absolute_url }}">{{ incident.name }}</a></td>
+      <td>{{ machine_incident.get_status_display }}</td>
+      <td>{{ incident.get_severity_display }}</td>
+      <td>{{ machine_incident.created_at }}</td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

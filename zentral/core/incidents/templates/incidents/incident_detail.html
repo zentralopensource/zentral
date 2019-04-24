@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'incidents:index' %}">Incidents</a>
+  <li class="active">{{ object.name }}</li>
+</ol>
+
+<h2>Incident <em>{{ incident.name }}</em></h2>
+
+{% if machine_incidents_count %}
+<h3>{{ machine_incidents_count }} machine incident{{ machine_incidents_count|pluralize }}</h3>
+<table class="table table-condensed">
+  <thead>
+    <th>Serial number</th>
+    <th>Status</th>
+    <th>Created at</th>
+  </thead>
+  <tbody>
+    {% for machine_incident in machine_incidents %}
+    <tr>
+      <td>
+        <a name="{{ machine_incident.pk }}"></a>
+        <a href="{% machine_url machine_incident.serial_number %}">{{ machine_incident.serial_number }}</a>
+      </td>
+      <td>{{ machine_incident.get_status_display }}</td>
+      <td>{{ machine_incident.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

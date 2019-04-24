@@ -12,7 +12,9 @@
     </ol>
 
     <h2>
-      {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}{{ serial_number }}
+      {% machine_type_icon machine %}
+      {% machine_platform_icon machine %}
+      {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}{{ machine.serial_number }}
     </h2>
 
     <p>

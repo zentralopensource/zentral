@@ -4,6 +4,7 @@ from django.utils.html import escape
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from zentral.contrib.inventory.conf import IOS, LINUX, MACOS, WINDOWS
+from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.color import text_color_for_background_color
 
 register = template.Library()
@@ -70,3 +71,8 @@ def sha_256_link(sha_256):
         return mark_safe('<a href="{}">{}</a>'.format(url, sha_256))
     else:
         return "-"
+
+
+@register.simple_tag
+def machine_url(serial_number):
+    return reverse("inventory:machine", args=(MetaMachine(serial_number).get_urlsafe_serial_number(),))

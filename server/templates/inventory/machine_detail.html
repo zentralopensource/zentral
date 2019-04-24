@@ -22,13 +22,37 @@
       {% endfor %}
     </p>
 
-    <p>
-      <a class="btn btn-default" href="{% url 'inventory:machine_events' machine.get_urlsafe_serial_number %}">View events</a>
-      <a class="btn btn-default" href="{% url 'inventory:machine_tags' machine.get_urlsafe_serial_number %}">Manage tags</a>
-      <a class="btn btn-danger" href="{% url 'inventory:archive_machine' machine.get_urlsafe_serial_number %}">Archive</a>
-    </p>
+    <div class="btn-group" role="group" style="margin:0 0 10px 0">
+      <a class="btn btn-default" href="{% url 'inventory:machine_events' machine.get_urlsafe_serial_number %}">
+        <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
+      </a>
+      <a class="btn btn-default" href="{% url 'inventory:machine_incidents' machine.get_urlsafe_serial_number %}">
+        <span class="glyphicon glyphicon-warning-sign" aria-hidden="true"></span> Incidents
+      </a>
+      {% if machine.snapshots_with_osx_app_instances %}
+      <a class="btn btn-default" href="{% url 'inventory:machine_macos_app_instances' machine.get_urlsafe_serial_number %}">
+        <i class="fa fa-apple" aria-hidden="true"></i> apps
+      </a>
+      {% endif %}
+      <div class="btn-group">
+        <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          Action <span class="caret"></span>
+        </button>
+        <ul class="dropdown-menu">
+          <li>
+            <a href="{% url 'inventory:machine_tags' machine.get_urlsafe_serial_number %}">Manage tags</a>
+          </li>
+          <li>
+            <a href="{% url 'inventory:archive_machine' machine.get_urlsafe_serial_number %}"><span class="text-danger">Archive</span></a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
 
-
+<div class="row">
+  <div class="col-md-6">
     <ul class="nav nav-tabs">
       {% for ms in machine.snapshots %}
       <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
@@ -38,308 +62,286 @@
       </li>
       {% endfor %}
     </ul>
-  </div>
-</div>
-
-{% for ms in machine.snapshots %}
-<div class="row detailstab" id="details-{{ ms.id }}"{% if not forloop.first %}style="display:none;"{% endif %}>
-<div class="col-md-6">
-{% if ms.business_unit %}
-<h3>Business unit</h3>
-<dl class="dl-horizontal">
-  <dt>Name</dt>
-  <dd><a href="{% url 'inventory:mbu_machines' ms.business_unit.meta_business_unit_id %}">{{ ms.business_unit.get_name_display }}</a></dd>
-  <dt>Key</dt>
-  <dd>{{ ms.business_unit.get_short_key }}</dd>
-</dl>
-<p>
-{% for link in ms.business_unit.links.all %}
-  <a href="{{ link.url }}" class="btn btn-default">
-    {{ ms.source.name }} - {{ link.anchor_text }}
-  </a>
-{% endfor %}
-</p>
-{% endif %}
-
-{% with ms.system_info as system_info %}
-{% if system_info.hardware_model or system_info.cpu_type or system_info.cpu_physical_cores or system_info.physical_memory %}
-<h3>System info</h3>
-<dl class="dl-horizontal">
-  {% if system_info.hardware_model %}
-  <dt>Hardware model</dt>
-  <dd>{{ system_info.hardware_model }}</dd>
-  {% endif %}
-  {% if system_info.hardware_serial %}
-  <dt>Hardware serial</dt>
-  <dd>{{ system_info.hardware_serial }}</dd>
-  {% endif %}
-  {% if system_info.cpu_brand %}
-  <dt>CPU brand</dt>
-  <dd>{{ system_info.cpu_brand }}</dd>
-  {% endif %}
-  {% if system_info.cpu_type %}
-  <dt>CPU type</dt>
-  <dd>{{ system_info.cpu_type }}</dd>
-  {% endif %}
-  {% if system_info.cpu_physical_cores %}
-  <dt>CPU physical cores</dt>
-  <dd>{{ system_info.cpu_physical_cores }}</dd>
-  {% endif %}
-  {% if system_info.cpu_logical_cores %}
-  <dt>CPU logical cores</dt>
-  <dd>{{ system_info.cpu_logical_cores }}</dd>
-  {% endif %}
-  {% if ms.system_info.physical_memory %}
-  <dt>Physical memory</dt>
-  <dd>{{ ms.system_info.physical_memory|filesizeformat }}</dd>
-  {% endif %}
-</dl>
-{% endif %}
-{% endwith %}
-
-{% if ms.os_version %}
-<h3>OS</h3>
-<dl class="dl-horizontal">
-  <dt>Name</dt>
-  <dd>{{ ms.os_version.name }}</dd>
-  <dt>OS Version</dt>
-  <dd>{{ ms.os_version.get_number_display }}</dd>
-  <dt>OS Build</dt>
-  <dd>{{ ms.os_version.build|default:"-" }}</dd>
-</dl>
-{% endif %}
-
-{% with ms.network_interfaces.count as nic %}
-{% if nic %}
-<h3>{{ nic }} Interface{{ nic|pluralize }}</h3>
-<table class="table table-condensed">
-  <thead>
-    <th>Name</th>
-    <th>MAC</th>
-    <th>IP</th>
-    <th>Mask</th>
-    <th>Broadcast</th>
-  <thead>
-  <tbody>
-    {% for ni in ms.network_interfaces.all %}
-    {% with ni.get_mac_organization as org %}
-    <tr>
-      <td>{{ ni.interface }}</td>
-      <td>
-        {{ ni.mac|default:"-" }}
-        {% if org %}<br><small>{{ org.name }}</small>{% endif %}
-      </td>
-      <td>{{ ni.address }}</td>
-      <td>{{ ni.mask|default:"-" }}</td>
-      <td>{{ ni.broadcast|default:"-" }}</td>
-    </tr>
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-{% endwith %}
-</div>
-
-<div class="col-md-6">
-<h3>Links</h3>
-<p>
-  {% for link in ms.links.all %}
-  <a href="{{ link.url }}" class="btn btn-default">{{ ms.source.name }} - {{ link.anchor_text }}</a>
-  {% endfor %}
-</p>
-{% if ms.teamviewer %}
-<h3>TeamViewer</h3>
-<dl class="dl-horizontal">
-  <dt>ID</dt>
-  <dd><a href="https://start.teamviewer.com/{{ ms.teamviewer.teamviewer_id }}">{{ ms.teamviewer.teamviewer_id }}</a></dd>
-  <dt>Release</dt>
-  <dd>{{ ms.teamviewer.release }}</dd>
-  <dt>Unattended</dt>
-  <dd>{{ ms.teamviewer|yesno }}</dd>
-</dl>
-{% endif %}
-
-{% with ms.puppet_node as puppet_node %}
-{% if puppet_node %}
-<h3>Puppet</h3>
-
-{% with puppet_node.trusted_facts as trusted_facts %}
-{% if trusted_facts %}
-<h4>Trusted facts</h4>
-
-<dl class="dl-horizontal">
-  <dt>Certificate Name</dt>
-  <dd>{{ trusted_facts.certname }}</dd>
-  <dt>Authenticated</dt>
-  <dd>{{ trusted_facts.authenticated }}</dd>
-  {% if trusted_facts.extensions %}
-  <dt>Extensions</dt>
-  <dd>
-    {% for key, val in trusted_facts.extensions.items %}
-    <p><em>{{ key }}</em> - {{ val }}</p>
-    {% endfor %}
-  </dd>
-  {% endif %}
-</dl>
-{% endif %}
-{% endwith %}
-
-{% with puppet_node.core_facts as core_facts %}
-{% if core_facts %}
-<h4>Core facts</h4>
-
-<dl class="dl-horizontal">
-  <dt>aio agent version</dt>
-  <dd>{{ core_facts.aio_agent_version }}</dd>
-  <dt>augeas version</dt>
-  <dd>{{ core_facts.augeas_version }}</dd>
-  <dt>client version</dt>
-  <dd>{{ core_facts.client_version }}</dd>
-  <dt>facter version</dt>
-  <dd>{{ core_facts.facter_version }}</dd>
-  <dt>ruby</dt>
-  <dd>
-    {{ core_facts.ruby_platform }}<br>
-    {{ core_facts.ruby_sitedir }}<br>
-    {{ core_facts.ruby_version }}
-  </dd>
-</dl>
-{% endif %}
-{% endwith %}
-
-{% with puppet_node.extra_facts as extra_facts %}
-{% if extra_facts %}
-<h4>Extra facts</h4>
-
-<dl class="dl-horizontal">
-  {% for key, val in extra_facts.items %}
-  <dt>{{ key }}</dt>
-  <dd>{{ val }}</dd>
-  {% endfor %}
-</dl>
-{% endif %}
-{% endwith %}
-
-
-{% endif %}
-{% endwith %}
-
-{% if ms.groups.count %}
-<h3>Groups</h3>
-<table class="table table-condensed">
-  <thead>
-    <th>Name</th>
-    <th>Links</th>
-  </thead>
-  <tbody>
-    {% for group, links in ms.groups_with_links %}
-    <tr>
-      <td><a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a></td>
-      <td>
-        {% for link_url, anchor_text in links %}
-        <a href="{{ link_url }}" class="btn btn-default">
-          {{ ms.source.name }} - {{ anchor_text }}
+    {% for ms in machine.snapshots %}
+    <div class="detailstab" id="details-{{ ms.id }}"{% if not forloop.first %}style="display:none;"{% endif %}>
+      {% if ms.business_unit %}
+      <h3>Business unit</h3>
+        <dl class="dl-horizontal">
+          <dt>Name</dt>
+          <dd><a href="{% url 'inventory:mbu_machines' ms.business_unit.meta_business_unit_id %}">{{ ms.business_unit.get_name_display }}</a></dd>
+          <dt>Key</dt>
+          <dd>{{ ms.business_unit.get_short_key }}</dd>
+       </dl>
+       <p>
+       {% for link in ms.business_unit.links.all %}
+         <a href="{{ link.url }}" class="btn btn-default">
+           {{ ms.source.name }} - {{ link.anchor_text }}
         </a>
-        {% endfor %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-</div>
-
-<div class="col-md-12">
-<dl class="dl-horizontal">
-  <dt class="small" style="opacity:0.5">last change</dt>
-  <dd class="small" style="opacity:0.5">
-    {% if ms.public_ip_address %}{{ ms.public_ip_address }} - {% endif %}
-    {{ ms.mt_created_at|date:'r'|default:'-' }}
-  </dd>
-  {% if ms.last_commit.last_seen %}
-  <dt class="small" style="opacity:0.5">last seen</dt>
-  <dd class="small" style="opacity:0.5">
-    {{ ms.last_commit.last_seen|date:'r' }}
-  </dd>
-  {% endif %}
-  {% if ms.last_commit.system_uptime %}
-  <dt class="small" style="opacity:0.5">system uptime</dt>
-  <dd class="small" style="opacity:0.5">
-    {{ ms.last_commit.get_system_update_for_display }}
-  </dd>
-  {% endif %}
-</dl>
-</div>
-
-</div>
-{% endfor %}
-
-
-{% if machine.snapshots_with_osx_app_instances %}
-<h2>macOS Apps</h2>
-
-<ul class="nav nav-tabs">
-  {% for ms in machine.snapshots_with_osx_app_instances %}
-  <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
-    <a href="#" data-tabclass="appstab" data-tabid="apps-{{ ms.id }}">
-      {{ ms.source.name }}
-    </a>
-  </li>
-  {% endfor %}
-</ul>
-
-{% for ms in machine.snapshots_with_osx_app_instances %}
-<div class="table-reponsive">
-<table class="table table-condensed appstab" id="apps-{{ ms.id }}"
-  {% if not forloop.first %}style="display:none;"{% endif %}>
-  <thead>
-    <th>Bundle ID</th>
-    <th>Bundle Name</th>
-    <th>Bundle Version Str</th>
-    <th>Bundle Path</th>
-  </thead>
-  <tbody>
-    {% for osx_app_instance in ms.ordered_osx_app_instances %}
-    {% with osx_app_instance.app as app %}
-    <tr>
-      <td>{{ app.bundle_id|default:"" }}</td>
-      <td><a href="{% url 'inventory:macos_app' app.id %}">{{ app.bundle_name }}</a></td>
-      <td>{{ app.bundle_version_str|default:"" }}</td>
-      <td>{{ osx_app_instance.bundle_path|default:"" }}</td>
-    </tr>
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
-</div>
-{% endfor %}
-{% endif %}
-
-<h2>{{ heartbeats|length }} Heartbeat{{ heartbeats|length|pluralize }}</h2>
-<table class="table table-condensed">
-  <thead>
-    <th>Event</th>
-    <th>User agent</th>
-    <th>Last seen</th>
-  </thead>
-  <tbody>
-    {% for event_class_display, inventory_source_name, ua_max_dates, cell_class in heartbeats %}
-    {% for ua, ua_max_date in ua_max_dates %}
-    <tr>
-      {% if forloop.counter == 1 %}
-      <td rowspan="{{ ua_max_dates|length }}">
-        {{ event_class_display }}{% if inventory_source_name %} - {{ inventory_source_name }}{% endif %}
-      </td>
+       {% endfor %}
+       </p>
       {% endif %}
-      <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua|default:"-" }}</td>
-      <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua_max_date }}</td>
-    </tr>
-    {% endfor %}
-    {% endfor %}
-  </tbody>
-</table>
 
+      {% with ms.system_info as system_info %}
+      {% if system_info.hardware_model or system_info.cpu_type or system_info.cpu_physical_cores or system_info.physical_memory %}
+      <h3>System info</h3>
+      <dl class="dl-horizontal">
+        {% if system_info.hardware_model %}
+        <dt>Hardware model</dt>
+        <dd>{{ system_info.hardware_model }}</dd>
+        {% endif %}
+        {% if system_info.hardware_serial %}
+        <dt>Hardware serial</dt>
+        <dd>{{ system_info.hardware_serial }}</dd>
+        {% endif %}
+        {% if system_info.cpu_brand %}
+        <dt>CPU brand</dt>
+        <dd>{{ system_info.cpu_brand }}</dd>
+        {% endif %}
+        {% if system_info.cpu_type %}
+        <dt>CPU type</dt>
+        <dd>{{ system_info.cpu_type }}</dd>
+        {% endif %}
+        {% if system_info.cpu_physical_cores %}
+        <dt>CPU physical cores</dt>
+        <dd>{{ system_info.cpu_physical_cores }}</dd>
+        {% endif %}
+        {% if system_info.cpu_logical_cores %}
+        <dt>CPU logical cores</dt>
+        <dd>{{ system_info.cpu_logical_cores }}</dd>
+        {% endif %}
+        {% if ms.system_info.physical_memory %}
+        <dt>Physical memory</dt>
+        <dd>{{ ms.system_info.physical_memory|filesizeformat }}</dd>
+        {% endif %}
+      </dl>
+      {% endif %}
+      {% endwith %}
+
+      {% if ms.os_version %}
+      <h3>OS</h3>
+      <dl class="dl-horizontal">
+        <dt>Name</dt>
+        <dd>{{ ms.os_version.name }}</dd>
+        <dt>OS Version</dt>
+        <dd>{{ ms.os_version.get_number_display }}</dd>
+        <dt>OS Build</dt>
+        <dd>{{ ms.os_version.build|default:"-" }}</dd>
+      </dl>
+      {% endif %}
+
+      {% with ms.network_interfaces.count as nic %}
+      {% if nic %}
+      <h3>{{ nic }} Interface{{ nic|pluralize }}</h3>
+      <table class="table table-condensed">
+        <thead>
+          <th>Name</th>
+          <th>MAC</th>
+          <th>IP</th>
+          <th>Mask</th>
+          <th>Broadcast</th>
+        <thead>
+        <tbody>
+          {% for ni in ms.network_interfaces.all %}
+          {% with ni.get_mac_organization as org %}
+          <tr>
+            <td>{{ ni.interface }}</td>
+            <td>
+              {{ ni.mac|default:"-" }}
+              {% if org %}<br><small>{{ org.name }}</small>{% endif %}
+            </td>
+            <td>{{ ni.address }}</td>
+            <td>{{ ni.mask|default:"-" }}</td>
+            <td>{{ ni.broadcast|default:"-" }}</td>
+          </tr>
+          {% endwith %}
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      {% endwith %}
+
+      {% if ms.links.count %}
+      <h3>Links</h3>
+      <p>
+        {% for link in ms.links.all %}
+        <a href="{{ link.url }}" class="btn btn-default">{{ ms.source.name }} - {{ link.anchor_text }}</a>
+        {% endfor %}
+      </p>
+      {% endif %}
+
+      {% if ms.teamviewer %}
+      <h3>TeamViewer</h3>
+      <dl class="dl-horizontal">
+        <dt>ID</dt>
+        <dd><a href="https://start.teamviewer.com/{{ ms.teamviewer.teamviewer_id }}">{{ ms.teamviewer.teamviewer_id }}</a></dd>
+        <dt>Release</dt>
+        <dd>{{ ms.teamviewer.release }}</dd>
+        <dt>Unattended</dt>
+        <dd>{{ ms.teamviewer|yesno }}</dd>
+      </dl>
+      {% endif %}
+
+      {% with ms.puppet_node as puppet_node %}
+      {% if puppet_node %}
+      <h3>Puppet</h3>
+
+      {% with puppet_node.trusted_facts as trusted_facts %}
+      {% if trusted_facts %}
+      <h4>Trusted facts</h4>
+      <dl class="dl-horizontal">
+        <dt>Certificate Name</dt>
+        <dd>{{ trusted_facts.certname }}</dd>
+        <dt>Authenticated</dt>
+        <dd>{{ trusted_facts.authenticated }}</dd>
+        {% if trusted_facts.extensions %}
+        <dt>Extensions</dt>
+        <dd>
+          {% for key, val in trusted_facts.extensions.items %}
+          <p><em>{{ key }}</em> - {{ val }}</p>
+          {% endfor %}
+        </dd>
+        {% endif %}
+      </dl>
+      {% endif %}
+      {% endwith %}
+
+      {% with puppet_node.core_facts as core_facts %}
+      {% if core_facts %}
+      <h4>Core facts</h4>
+      <dl class="dl-horizontal">
+        <dt>aio agent version</dt>
+        <dd>{{ core_facts.aio_agent_version }}</dd>
+        <dt>augeas version</dt>
+        <dd>{{ core_facts.augeas_version }}</dd>
+        <dt>client version</dt>
+        <dd>{{ core_facts.client_version }}</dd>
+        <dt>facter version</dt>
+        <dd>{{ core_facts.facter_version }}</dd>
+        <dt>ruby</dt>
+        <dd>
+          {{ core_facts.ruby_platform }}<br>
+          {{ core_facts.ruby_sitedir }}<br>
+          {{ core_facts.ruby_version }}
+        </dd>
+      </dl>
+      {% endif %}
+      {% endwith %}
+
+      {% with puppet_node.extra_facts as extra_facts %}
+      {% if extra_facts %}
+      <h4>Extra facts</h4>
+      <dl class="dl-horizontal">
+        {% for key, val in extra_facts.items %}
+        <dt>{{ key }}</dt>
+        <dd>{{ val }}</dd>
+        {% endfor %}
+      </dl>
+      {% endif %}
+      {% endwith %}
+
+      {% endif %}
+      {% endwith %}{% comment %}End if puppet_node {% endcomment %}
+
+      {% if ms.groups.count %}
+      <h3>Groups</h3>
+      <table class="table table-condensed">
+        <thead>
+          <th>Name</th>
+          <th>Links</th>
+        </thead>
+        <tbody>
+          {% for group, links in ms.groups_with_links %}
+          <tr>
+            <td><a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a></td>
+            <td>
+              {% for link_url, anchor_text in links %}
+              <a href="{{ link_url }}" class="btn btn-default">
+                {{ ms.source.name }} - {{ anchor_text }}
+              </a>
+              {% endfor %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      <dl class="dl-horizontal">
+        <dt class="small" style="opacity:0.5">last change</dt>
+        <dd class="small" style="opacity:0.5">
+          {% if ms.public_ip_address %}{{ ms.public_ip_address }} - {% endif %}
+          {{ ms.mt_created_at|date:'r'|default:'-' }}
+        </dd>
+        {% if ms.last_commit.last_seen %}
+        <dt class="small" style="opacity:0.5">last seen</dt>
+        <dd class="small" style="opacity:0.5">
+          {{ ms.last_commit.last_seen|date:'r' }}
+        </dd>
+        {% endif %}
+        {% if ms.last_commit.system_uptime %}
+        <dt class="small" style="opacity:0.5">system uptime</dt>
+        <dd class="small" style="opacity:0.5">
+          {{ ms.last_commit.get_system_update_for_display }}
+        </dd>
+        {% endif %}
+      </dl>
+    </div><!-- end details tab -->
+    {% endfor %}{% comment %}end for loop on machine snapshots{% endcomment %}
+  </div><!-- end col-md-6 -->
+  <div class="col-md-6">
+
+    {% with machine.open_incidents as open_incidents %}
+    {% if open_incidents %}
+    <h3>{{ open_incidents|length }} open incident{{ open_incidents|length|pluralize }}</h3>
+    <table class="table table-condensed">
+      <thead>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Severity</th>
+        <th>Created at</th>
+      </thead>
+      <tbody>
+        {% for machine_incident in open_incidents %}
+        {% with machine_incident.incident as incident %}
+        <tr>
+          <td><a href="{{ machine_incident.get_absolute_url }}">{{ incident.name }}</a></td>
+          <td>{{ machine_incident.get_status_display }}</td>
+          <td>{{ incident.get_severity_display }}</td>
+          <td>{{ machine_incident.created_at }}</td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% endwith %}
+
+    <h3>{{ heartbeats|length }} Heartbeat{{ heartbeats|length|pluralize }}</h2>
+    <table class="table table-condensed">
+      <thead>
+        <th>Event</th>
+        <th>User agent</th>
+        <th>Last seen</th>
+      </thead>
+      <tbody>
+        {% for event_class_display, inventory_source_name, ua_max_dates, cell_class in heartbeats %}
+        {% for ua, ua_max_date in ua_max_dates %}
+        <tr>
+          {% if forloop.counter == 1 %}
+          <td rowspan="{{ ua_max_dates|length }}">
+            {{ event_class_display }}{% if inventory_source_name %} - {{ inventory_source_name }}{% endif %}
+          </td>
+          {% endif %}
+          <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua|default:"-" }}</td>
+          <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua_max_date }}</td>
+        </tr>
+        {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+
+  </div>
+</div><!-- end row -->
 {% endblock %}
 
 {% block extrajs %}

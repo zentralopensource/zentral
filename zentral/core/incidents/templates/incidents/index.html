@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  {% for url, anchor_text in breadcrumbs %}
+  {% if url %}
+  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  {% else %}
+  <li class="active">{{ anchor_text }}</li>
+  {% endif %}
+  {% endfor %}
+</ol>
+
+<h2>{{ paginator.count }} Incident{{ paginator.count|pluralize }}</h2>
+
+<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
+    <div class="form-group">
+      {{ form.q|bootstrap_inline }}
+    </div>
+    <div class="form-group">
+      {{ form.severity.label_tag }}
+      {{ form.severity|bootstrap_inline }}
+    </div>
+    <div class="form-group">
+      {{ form.status.label_tag }}
+      {{ form.status|bootstrap_inline }}
+    </div>
+    <button type="submit" class="btn btn-default">Search</button>
+</form>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+<div class="table-reponsive">
+  <table class="table">
+    <thead>
+      <th>Name</th>
+      <th>Status</th>
+      <th>Severity</th>
+      <th>Created at</th>
+    </thead>
+    <tbody>
+    {% for incident in object_list %}
+    <tr>
+      <td><a href="{{ incident.get_absolute_url }}">{{ incident.name }}</a></td>
+      <td>{{ incident.get_status_display }}</td>
+      <td>{{ incident.get_severity_display }}</td>
+      <td>{{ incident.created_at }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% endblock %}
