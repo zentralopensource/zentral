@@ -737,13 +737,13 @@ class MSQuery:
         SourceFilter,
         MetaBusinessUnitFilter,
         TagFilter,
+        IncidentSeverityFilter,
         TypeFilter,
-        HardwareModelFilter,
         PlaformFilter,
+        HardwareModelFilter,
         OSVersionFilter,
         SerialNumberFilter,
         ComputerNameFilter,
-        IncidentSeverityFilter,
     ]
 
     def __init__(self, query_dict=None):
