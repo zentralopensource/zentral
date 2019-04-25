@@ -341,7 +341,8 @@ class MachineGroupFilter(BaseMSFilter):
         for machine_group in record.pop("mg_j", []):
             if not machine_group["id"]:
                 continue
-            machine_groups.append(machine_group)
+            if machine_group not in machine_groups:
+                machine_groups.append(machine_group)
         record["machine_groups"] = machine_groups
 
 
@@ -423,7 +424,8 @@ class TagFilter(BaseMSFilter):
             else:
                 display_name = "/".join(s for s in (tag["meta_business_unit"]["name"], display_name) if s)
             tag["display_name"] = display_name
-            tags.append(tag)
+            if tag not in tags:
+                tags.append(tag)
         record["tags"] = tags
 
 
@@ -538,7 +540,8 @@ class BundleFilter(BaseMSFilter):
             if not osx_app["id"]:
                 continue
             osx_app["display_name"] = self.display_name(osx_app)
-            osx_apps.append(osx_app)
+            if osx_app not in osx_apps:
+                osx_apps.append(osx_app)
         osx_apps.sort(key=lambda app: (app.get("bundle_version"), app.get("bundle_version_str"), app.get("id")))
         # TODO: verify no conflict
         record.setdefault("osx_apps", OrderedDict())[self.title] = osx_apps
