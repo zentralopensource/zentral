@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load bootstrap incidents_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -9,6 +9,7 @@
 </ol>
 
 <h2>Incident <em>{{ incident.name }}</em></h2>
+<p>{% incident_severity incident.severity %}</p>
 
 {% if machine_incidents_count %}
 <h3>{{ machine_incidents_count }} machine incident{{ machine_incidents_count|pluralize }}</h3>

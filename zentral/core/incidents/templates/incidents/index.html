@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load bootstrap incidents_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -56,7 +56,7 @@
     <tr>
       <td><a href="{{ incident.get_absolute_url }}">{{ incident.name }}</a></td>
       <td>{{ incident.get_status_display }}</td>
-      <td>{{ incident.get_severity_display }}</td>
+      <td>{% incident_severity incident.severity %}</td>
       <td>{{ incident.created_at }}</td>
     </tr>
     {% endfor %}

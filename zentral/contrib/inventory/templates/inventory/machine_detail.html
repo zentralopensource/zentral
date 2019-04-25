@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load incidents_extras inventory_extras %}
 
 {% block content %}
 <div class="row">
@@ -17,6 +17,7 @@
     </h2>
 
     <p>
+      {% incident_severity machine.max_incident_severity %}
       {% for tag in machine.tags %}
       {% inventory_tag tag %}
       {% endfor %}
@@ -31,7 +32,7 @@
       </a>
       {% if machine.snapshots_with_osx_app_instances %}
       <a class="btn btn-default" href="{% url 'inventory:machine_macos_app_instances' machine.get_urlsafe_serial_number %}">
-        <i class="fa fa-apple" aria-hidden="true"></i> apps
+        <i class="fab fa-apple" aria-hidden="true"></i> apps
       </a>
       {% endif %}
       <div class="btn-group">
@@ -306,7 +307,7 @@
         <tr>
           <td><a href="{{ machine_incident.get_absolute_url }}">{{ incident.name }}</a></td>
           <td>{{ machine_incident.get_status_display }}</td>
-          <td>{{ incident.get_severity_display }}</td>
+          <td>{% incident_severity incident.severity %}</td>
           <td>{{ machine_incident.created_at }}</td>
         </tr>
         {% endwith %}

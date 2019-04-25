@@ -33,7 +33,7 @@ def base_machine_type_icon(machine_type):
     elif machine_type:
         icon = machine_type.lower()
     if icon:
-        return mark_safe('<i class="fa fa-{}" aria-hidden="true"></i>'.format(icon))
+        return mark_safe('<i class="fas fa-{}"></i>'.format(icon))
     return ""
 
 
@@ -53,7 +53,7 @@ def base_machine_platform_icon(machine_platform):
     elif machine_platform == WINDOWS:
         icon = "windows"
     if icon:
-        return mark_safe('<i class="fa fa-{}" aria-hidden="true"></i>'.format(icon))
+        return mark_safe('<i class="fab fa-{}" aria-hidden="true"></i>'.format(icon))
     return ""
 
 
