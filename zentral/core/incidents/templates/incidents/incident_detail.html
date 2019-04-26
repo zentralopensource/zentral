@@ -10,6 +10,14 @@
 
 <h2>Incident <em>{{ incident.name }}</em></h2>
 <p>{% incident_severity incident.severity %}</p>
+<div class="btn-group" role="group" style="margin:0 0 10px 0">
+  <a class="btn btn-default" href="{% url 'incidents:incident_events' object.pk %}">
+    <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
+  </a>
+  <a class="btn btn-default" href="{{ object.probe_source.get_absolute_url }}">
+    Probe
+  </a>
+</div>
 
 {% if machine_incidents_count %}
 <h3>{{ machine_incidents_count }} machine incident{{ machine_incidents_count|pluralize }}</h3>

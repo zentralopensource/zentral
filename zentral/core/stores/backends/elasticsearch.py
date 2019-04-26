@@ -581,6 +581,32 @@ class EventStore(BaseEventStore):
         for hit in r['hits']['hits']:
             yield self._deserialize_event(hit['_type'], hit['_source'])
 
+    # incident events
+
+    def _get_incident_events_body(self, incident):
+        self.wait_and_configure_if_necessary()
+        # TODO: doc, better args, ...
+        return {'query': {'term': {'incidents.pk': incident.pk}}}
+
+    def incident_events_count(self, incident):
+        # TODO: count could work from first fetch with elasticsearch.
+        body = self._get_incident_events_body(incident)
+        body['size'] = 0
+        r = self._es.search(index=self.read_index, body=body)
+        return r['hits']['total']
+
+    def incident_events_fetch(self, probe, offset=0, limit=0, **search_dict):
+        # TODO: count could work from first fetch with elasticsearch.
+        body = self._get_incident_events_body(probe, **search_dict)
+        if offset:
+            body['from'] = offset
+        if limit:
+            body['size'] = limit
+        body['sort'] = [{'created_at': 'desc'}]
+        r = self._es.search(index=self.read_index, body=body)
+        for hit in r['hits']['hits']:
+            yield self._deserialize_event(hit['_type'], hit['_source'])
+
     def get_vis_url(self, probe, **search_dict):
         if not self.kibana_base_url:
             return

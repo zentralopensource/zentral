@@ -33,6 +33,14 @@ class BaseEventStore(object):
     def probe_events_aggregations(self, probe, **search_dict):
         return {}
 
+    # incident events
+
+    def incident_events_fetch(self, incident, offset=0, limit=0):
+        return []
+
+    def incident_events_count(self, incident):
+        return 0
+
     def get_vis_url(self, probe, **search_dict):
         return None
 

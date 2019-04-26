@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load base_extras inventory_extras probe_extras %}
+{% load base_extras incidents_extras inventory_extras probe_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -51,7 +51,7 @@
     {% endif %}
     <tr>
       <td>Incident severity</td>
-      <td>{{ probe.get_incident_severity_display }}</td>
+      <td>{% incident_severity probe.incident_severity %}</td>
     </tr>
     </tr>
   </table>
