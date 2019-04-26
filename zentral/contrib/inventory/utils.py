@@ -1084,6 +1084,8 @@ class MSQuery:
             for label, f_count, f_perc, _, _ in f_links:
                 if label == "\u2400":
                     label = "NULL"
+                elif not isinstance(label, str):
+                    label = str(label)
                 col = 0
                 ws.write_string(row, col, label)
                 col += 1
