@@ -243,6 +243,30 @@
       {% endif %}
       {% endwith %}{% comment %}End if puppet_node {% endcomment %}
 
+      {% with ms.azure_ad_info as azure_ad_info %}
+      {% if azure_ad_info %}
+      <h3>Azure AD</h3>
+      <dl class="dl-horizontal">
+        {% if azure_ad_info.device_unique_id %}
+        <dt>Device unique ID</dt>
+        <dd>{{ azure_ad_info.device_unique_id }}</dd>
+        {% endif %}
+        {% if azure_ad_info.local_user_name %}
+        <dt>Local user name</dt>
+        <dd>{{ azure_ad_info.local_user_name }}</dd>
+        {% endif %}
+        {% if azure_ad_info.user_unique_id %}
+        <dt>User unique ID</dt>
+        <dd>{{ azure_ad_info.user_unique_id }}</dd>
+        {% endif %}
+        {% if azure_ad_info.user_id %}
+        <dt>User ID</dt>
+        <dd>{{ azure_ad_info.user_id }}</dd>
+        {% endif %}
+      </dl>
+      {% endif %}
+      {% endwith %}
+
       {% if ms.groups.count %}
       <h3>Groups</h3>
       <table class="table table-condensed">

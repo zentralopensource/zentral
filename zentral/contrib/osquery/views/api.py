@@ -175,6 +175,7 @@ class BaseNodeView(JSONPostAPIView):
         deb_packages = []
         network_interfaces = []
         osx_app_instances = []
+        azure_ad_info = {}
         for t in snapshot:
             table_name = t.pop('table_name')
             if table_name == 'os_version':
@@ -217,12 +218,27 @@ class BaseNodeView(JSONPostAPIView):
                         osx_app_instances.append(osx_app_instance)
                     else:
                         logger.warning("Duplicated osx app instance")
+            elif table_name == 'azure_ad_certificate':
+                common_name = t.get("common_name")
+                if common_name:
+                    azure_ad_info["device_unique_id"] = common_name
+            elif table_name == 'azure_ad_user_info':
+                # TODO: verify users count = 1!
+                azure_ad_info["local_user_name"] = t.get('username')
+                key = t.get("key")
+                value = t.get("value")
+                if key == "aadUniqueId":
+                    azure_ad_info["user_unique_id"] = value
+                elif key == "aadUserId":
+                    azure_ad_info["user_id"] = value
         if deb_packages:
             tree["deb_packages"] = deb_packages
         if network_interfaces:
             tree["network_interfaces"] = network_interfaces
         if osx_app_instances:
             tree["osx_app_instances"] = osx_app_instances
+        if azure_ad_info:
+            tree["azure_ad_info"] = azure_ad_info
         commit_machine_snapshot_and_trigger_events(tree)
 
 

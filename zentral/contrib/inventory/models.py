@@ -395,6 +395,13 @@ class PuppetNode(AbstractMTObject):
     extra_facts = JSONField(blank=True, null=True)
 
 
+class AzureADInfo(AbstractMTObject):
+    device_unique_id = models.TextField(blank=True, null=True)
+    local_user_name = models.TextField(blank=True, null=True)
+    user_unique_id = models.TextField(blank=True, null=True)
+    user_id = models.TextField(blank=True, null=True)
+
+
 class MachineSnapshotManager(MTObjectManager):
     def current(self):
         return (self.select_related('business_unit__meta_business_unit',
@@ -433,6 +440,7 @@ class MachineSnapshot(AbstractMTObject):
     deb_packages = models.ManyToManyField(DebPackage)
     teamviewer = models.ForeignKey(TeamViewer, on_delete=models.PROTECT, blank=True, null=True)
     puppet_node = models.ForeignKey(PuppetNode, on_delete=models.PROTECT, blank=True, null=True)
+    azure_ad_info = models.ForeignKey(AzureADInfo, on_delete=models.PROTECT, blank=True, null=True)
     public_ip_address = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
 
     objects = MachineSnapshotManager()

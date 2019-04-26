@@ -46,6 +46,28 @@ OSX_APP_INSTANCE = {
     "table_name": "apps"
 }
 
+AZURE_AD_INFO_TUPLES = [
+    {"common_name": "d14a06da-2547-4c80-9c5a-4851d1e4c7b2",
+     "not_valid_before": "1556232938",
+     "table_name": "azure_ad_certificate"},
+    {"username": "jean",
+     "key": "aadUniqueId",
+     "value": "fc0e524e-9b87-4f63-a318-02727dc7983e",
+     "table_name": "azure_ad_user_info"},
+    {"username": "jean",
+     "key": "aadUserId",
+     "value": "jean@example.com",
+     "table_name": "azure_ad_user_info"},
+    {"username": "jean",
+     "key": "version",
+     "value": "1.1",
+     "table_name": "azure_ad_user_info"},
+    {"username": "jean",
+     "key": "aadAuthorityUrl",
+     "value": "https://login.microsoftonline.com/common",
+     "table_name": "azure_ad_user_info"},
+]
+
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class OsqueryAPIViewsTestCase(TestCase):
@@ -208,10 +230,12 @@ class OsqueryAPIViewsTestCase(TestCase):
                        for t in ("os_version", "system_info", "uptime", "network_interface")]
         self.assertCountEqual(json_response["queries"], query_names)
 
-    def post_default_inventory_query_snapshot(self, node_key, with_app=False):
+    def post_default_inventory_query_snapshot(self, node_key, with_app=False, with_azure_ad=False):
         snapshot = list(INVENTORY_QUERY_SNAPSHOT)
         if with_app:
             snapshot.append(OSX_APP_INSTANCE)
+        if with_azure_ad:
+            snapshot.extend(AZURE_AD_INFO_TUPLES)
         self.post_as_json("distributed_write",
                           {"node_key": node_key,
                            "queries": {"{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, i["table_name"]): [i]
@@ -251,16 +275,18 @@ class OsqueryAPIViewsTestCase(TestCase):
         # post default inventory snapshot.
         self.post_default_inventory_query_snapshot(node_key)
         # 2nd distributed read still has the inventory query
-        # but with the apps now that we know what kind of machine it is
+        # but with the apps and azure ad info queries, now that we know
+        # what kind of machine it is
         response = self.post_as_json("distributed_read", {"node_key": node_key})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
         json_response = response.json()
         query_names = ["{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, t)
-                       for t in ("os_version", "system_info", "uptime", "network_interface", "apps")]
+                       for t in ("os_version", "system_info", "uptime", "network_interface",
+                                 "apps", "azure_ad_user_info", "azure_ad_certificate")]
         self.assertCountEqual(json_response["queries"], query_names)
-        # post default inventory snapshot with one app
-        self.post_default_inventory_query_snapshot(node_key, with_app=True)
+        # post default inventory snapshot with one app, and the azure ad info
+        self.post_default_inventory_query_snapshot(node_key, with_app=True, with_azure_ad=True)
         # 3rd distributed read empty (2 snapshots done and no other distributed queries available)
         response = self.post_as_json("distributed_read", {"node_key": node_key})
         self.assertEqual(response.status_code, 200)
