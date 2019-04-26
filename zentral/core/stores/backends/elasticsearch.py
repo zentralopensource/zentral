@@ -586,7 +586,21 @@ class EventStore(BaseEventStore):
     def _get_incident_events_body(self, incident):
         self.wait_and_configure_if_necessary()
         # TODO: doc, better args, ...
-        return {'query': {'term': {'incidents.pk': incident.pk}}}
+        return {
+            'query': {
+                'bool': {
+                    'filter': [
+                        {'bool': {
+                            'should': [
+                                {'term': {'incidents.pk': incident.pk}},
+                                {'term': {'incident.pk': incident.pk}},
+                                {'term': {'machine_incident.pk': incident.pk}}
+                            ]
+                        }}
+                    ]
+                }
+            }
+        }
 
     def incident_events_count(self, incident):
         # TODO: count could work from first fetch with elasticsearch.
