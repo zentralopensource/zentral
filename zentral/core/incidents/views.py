@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, UpdateView
 from zentral.core.stores import frontend_store
-from .forms import IncidentSearchForm, UpdateMachineIncidentForm
+from .forms import IncidentSearchForm, UpdateIncidentForm, UpdateMachineIncidentForm
 from .models import Incident, MachineIncident
 
 logger = logging.getLogger("zentral.core.incidents.views")
@@ -61,6 +61,16 @@ class IncidentView(LoginRequiredMixin, DetailView):
         ctx["incidents"] = True
         ctx["machine_incidents"] = ctx["object"].machineincident_set.all()
         ctx["machine_incidents_count"] = ctx["machine_incidents"].count()
+        return ctx
+
+
+class UpdateIncidentView(LoginRequiredMixin, UpdateView):
+    form_class = UpdateIncidentForm
+    model = Incident
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["incidents"] = True
         return ctx
 
 

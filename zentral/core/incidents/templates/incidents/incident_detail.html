@@ -10,6 +10,14 @@
 
 <h2>Incident <em>{{ incident.name }}</em></h2>
 <p>{% incident_severity incident.severity %}</p>
+<dl>
+  <dt>Status</dt>
+  <dd>{{ incident.get_status_display }}</dd>
+  <dt>Created at</dt>
+  <dd>{{ incident.created_at }}</dd>
+  <dt>Updated at</dz>
+  <dd>{{ incident.updated_at }}</dt>
+</dl>
 <div class="btn-group" role="group" style="margin:0 0 10px 0">
   <a class="btn btn-default" href="{% url 'incidents:incident_events' object.pk %}">
     <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
@@ -17,6 +25,16 @@
   <a class="btn btn-default" href="{{ object.probe_source.get_absolute_url }}">
     Probe
   </a>
+  <div class="btn-group">
+    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+      Action <span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu">
+      <li{% if not object.get_next_statuses %} class="disabled"{% endif %}>
+        <a href="{% url 'incidents:update_incident' object.pk %}">Update</a>
+      </li>
+    </ul>
+  </div>
 </div>
 
 {% if machine_incidents_count %}

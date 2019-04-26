@@ -5,17 +5,13 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'incidents:index' %}">Incidents</a>
-  <li><a href="{{ object.get_absolute_url }}">{{ incident.name }}</a></li>
-  <li class="active">{{ object.serial_number }}</li>
+  <li><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
   <li class="active">update</li>
 </ol>
 
 <h2>Incident <em>{{ incident.name }}</em></h2>
 <p>{% incident_severity incident.severity %}</p>
-<h3>Update machine incident status</h3>
 <dl>
-  <dt>Machine</dt>
-  <dd><a href="{% machine_url object.serial_number %}">{{ object.serial_number }}</a></dd>
   <dt>Current status</dt>
   <dd>{{ object.get_status_display }}</dd>
   <dt>Created at</dt>

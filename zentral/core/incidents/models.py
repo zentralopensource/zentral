@@ -34,7 +34,7 @@ OPEN_STATUSES = {STATUS_OPEN, STATUS_IN_PROGRESS, STATUS_REOPENED}
 CLOSED_STATUSES = {STATUS_CLOSED, STATUS_RESOLVED}
 
 
-def next_statuses(current_status):
+def get_next_statuses(current_status):
     if current_status in [STATUS_OPEN, STATUS_REOPENED]:
         return [STATUS_IN_PROGRESS, STATUS_CLOSED, STATUS_RESOLVED]
     elif current_status == STATUS_IN_PROGRESS:
@@ -77,7 +77,17 @@ class Incident(models.Model):
         }
 
     def get_next_statuses(self):
-        return next_statuses(self.status)
+        next_statuses = get_next_statuses(self.status)
+        if self.machineincident_set.filter(status__in=OPEN_STATUSES).count():
+            for status in (STATUS_CLOSED, STATUS_RESOLVED):
+                try:
+                    next_statuses.remove(status)
+                except ValueError:
+                    pass
+        return next_statuses
+
+    def get_next_status_choices(self):
+        return [(s, l) for s, l in STATUS_CHOICES if s in self.get_next_statuses()]
 
 
 class MachineIncident(models.Model):
@@ -111,7 +121,7 @@ class MachineIncident(models.Model):
         return d
 
     def get_next_statuses(self):
-        return next_statuses(self.status)
+        return get_next_statuses(self.status)
 
     def get_next_status_choices(self):
         return [(s, l) for s, l in STATUS_CHOICES if s in self.get_next_statuses()]
