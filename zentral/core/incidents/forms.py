@@ -1,6 +1,8 @@
 from django import forms
 from django.db.models import Q
-from .models import Incident, SEVERITY_CHOICES, STATUS_CHOICES
+from .events import build_incident_events
+from .models import Incident, MachineIncident, SEVERITY_CHOICES, STATUS_CHOICES
+from .utils import update_machine_incident_status
 
 
 class IncidentSearchForm(forms.Form):
@@ -51,3 +53,20 @@ class IncidentSearchForm(forms.Form):
 
     def is_initial(self):
         return {k: v for k, v in self.cleaned_data.items() if v} == {}
+
+
+class UpdateMachineIncidentForm(forms.ModelForm):
+    class Meta:
+        model = MachineIncident
+        fields = ("status",)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["status"].choices = self.instance.get_next_status_choices()
+
+    def save(self, *args, **kwargs):
+        machine_incident, incident_event_payloads = update_machine_incident_status(self.instance,
+                                                                                   self.cleaned_data.get("status"))
+        for event in build_incident_events(incident_event_payloads, machine_incident.serial_number):
+            event.post()
+        return machine_incident

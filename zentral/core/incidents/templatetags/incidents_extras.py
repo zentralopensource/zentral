@@ -8,9 +8,9 @@ register = template.Library()
 
 
 @register.simple_tag
-def incident_severity(severity):
+def incident_severity(severity, default=""):
     if severity is None:
-        return "-"
+        return default
     color_dict = {
         300: "ff0000",
         200: "ff9900",

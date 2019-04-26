@@ -34,6 +34,15 @@ OPEN_STATUSES = {STATUS_OPEN, STATUS_IN_PROGRESS, STATUS_REOPENED}
 CLOSED_STATUSES = {STATUS_CLOSED, STATUS_RESOLVED}
 
 
+def next_statuses(current_status):
+    if current_status in [STATUS_OPEN, STATUS_REOPENED]:
+        return [STATUS_IN_PROGRESS, STATUS_CLOSED, STATUS_RESOLVED]
+    elif current_status == STATUS_IN_PROGRESS:
+        return [STATUS_CLOSED, STATUS_RESOLVED]
+    elif current_status in [STATUS_CLOSED, STATUS_RESOLVED]:
+        return [STATUS_REOPENED]
+
+
 class Incident(models.Model):
     probe_source = models.ForeignKey("probes.ProbeSource", on_delete=models.SET_NULL, blank=True, null=True)
     name = models.TextField()
@@ -67,6 +76,9 @@ class Incident(models.Model):
             "event_id": str(self.event_id),
         }
 
+    def get_next_statuses(self):
+        return next_statuses(self.status)
+
 
 class MachineIncident(models.Model):
     incident = models.ForeignKey(Incident, on_delete=models.CASCADE)
@@ -97,3 +109,9 @@ class MachineIncident(models.Model):
             "event_id": str(self.event_id),
         }
         return d
+
+    def get_next_statuses(self):
+        return next_statuses(self.status)
+
+    def get_next_status_choices(self):
+        return [(s, l) for s, l in STATUS_CHOICES if s in self.get_next_statuses()]

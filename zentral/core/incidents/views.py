@@ -2,10 +2,10 @@ import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.views.generic import DetailView, ListView
+from django.views.generic import DetailView, ListView, UpdateView
 from zentral.core.stores import frontend_store
-from .forms import IncidentSearchForm
-from .models import Incident
+from .forms import IncidentSearchForm, UpdateMachineIncidentForm
+from .models import Incident, MachineIncident
 
 logger = logging.getLogger("zentral.core.incidents.views")
 
@@ -131,3 +131,14 @@ class IncidentEventsView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         return IncidentEventSet(self.incident)
+
+
+class UpdateMachineIncidentView(LoginRequiredMixin, UpdateView):
+    form_class = UpdateMachineIncidentForm
+    model = MachineIncident
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["incidents"] = True
+        ctx["incident"] = ctx["object"].incident
+        return ctx

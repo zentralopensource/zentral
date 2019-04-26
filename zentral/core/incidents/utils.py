@@ -111,3 +111,24 @@ def update_or_create_open_machine_incident(probe_source, severity, serial_number
                 machine_incident_event_payload["action"] = "created"
                 event_payloads.append(machine_incident_event_payload)
     return machine_incident, event_payloads
+
+
+def update_machine_incident_status(machine_incident, new_status):
+    event_payloads = []
+    with transaction.atomic():
+        try:
+            machine_incident = (MachineIncident.objects.select_for_update().select_related("incident")
+                                                       .get(pk=machine_incident.pk))
+        except MachineIncident.DoesNotExist:
+            return machine_incident, event_payloads
+        if new_status not in machine_incident.get_next_statuses():
+            return machine_incident, event_payloads
+        diff = {"removed": {"status": machine_incident.status},
+                "added": {"status": new_status}}
+        machine_incident.status = new_status
+        machine_incident.save()
+        machine_incident_event_payload = machine_incident.serialize_for_event()
+        machine_incident_event_payload["action"] = "updated"
+        machine_incident_event_payload["machine_incident"]["diff"] = diff
+        event_payloads.append(machine_incident_event_payload)
+    return machine_incident, event_payloads
