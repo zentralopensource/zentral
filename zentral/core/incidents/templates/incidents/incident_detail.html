@@ -26,6 +26,7 @@
     <th>Serial number</th>
     <th>Status</th>
     <th>Created at</th>
+    <th>Updated at</th>
     <th></th>
   </thead>
   <tbody>
@@ -37,6 +38,7 @@
       </td>
       <td>{{ machine_incident.get_status_display }}</td>
       <td>{{ machine_incident.created_at }}</td>
+      <td>{{ machine_incident.updated_at }}</td>
       <td>
         <a href="{% url 'incidents:update_machine_incident' object.pk machine_incident.pk %}" class="btn btn-default">
           Update
