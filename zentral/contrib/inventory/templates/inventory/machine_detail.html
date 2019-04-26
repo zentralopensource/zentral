@@ -170,6 +170,30 @@
       </p>
       {% endif %}
 
+      {% if ms.groups.count %}
+      <h3>Groups</h3>
+      <table class="table table-condensed">
+        <thead>
+          <th>Name</th>
+          <th>Links</th>
+        </thead>
+        <tbody>
+          {% for group, links in ms.groups_with_links %}
+          <tr>
+            <td><a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a></td>
+            <td>
+              {% for link_url, anchor_text in links %}
+              <a href="{{ link_url }}" class="btn btn-default">
+                {{ ms.source.name }} - {{ anchor_text }}
+              </a>
+              {% endfor %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
       {% if ms.teamviewer %}
       <h3>TeamViewer</h3>
       <dl class="dl-horizontal">
@@ -266,30 +290,6 @@
       </dl>
       {% endif %}
       {% endwith %}
-
-      {% if ms.groups.count %}
-      <h3>Groups</h3>
-      <table class="table table-condensed">
-        <thead>
-          <th>Name</th>
-          <th>Links</th>
-        </thead>
-        <tbody>
-          {% for group, links in ms.groups_with_links %}
-          <tr>
-            <td><a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a></td>
-            <td>
-              {% for link_url, anchor_text in links %}
-              <a href="{{ link_url }}" class="btn btn-default">
-                {{ ms.source.name }} - {{ anchor_text }}
-              </a>
-              {% endfor %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% endif %}
 
       <dl class="dl-horizontal">
         <dt class="small" style="opacity:0.5">last change</dt>
