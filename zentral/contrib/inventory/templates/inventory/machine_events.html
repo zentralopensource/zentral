@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load base_extras inventory_extras %}
+{% load base_extras incidents_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -58,6 +58,9 @@
           {% if request %}
           <br><small>{{ request }}</small>
           {% endif %}
+          {% for incident in event.metadata.incidents %}
+          <br>{% incident_severity incident.severity %}&nbsp;<a href="{% url 'incidents:incident' incident.pk %}{% if incident.machine_incident.pk %}#{{ incident.machine_incident.pk }}{% endif %}">{{ incident.name }}</a>
+          {% endfor %}
         </td>
         <td>{{ event.payload|pythonprettyprint }}</td>
       </tr>
