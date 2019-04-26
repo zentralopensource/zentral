@@ -30,9 +30,13 @@
       Action <span class="caret"></span>
     </button>
     <ul class="dropdown-menu">
-      <li{% if not object.get_next_statuses %} class="disabled"{% endif %}>
+      {% if object.get_next_statuses %}
+      <li>
         <a href="{% url 'incidents:update_incident' object.pk %}">Update</a>
       </li>
+      {% else %}
+      <li class="disabled"><a href="#">Update</a></li>
+      {% endif %}
     </ul>
   </div>
 </div>
