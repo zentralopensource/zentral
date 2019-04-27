@@ -15,13 +15,13 @@ class IncidentSearchForm(forms.Form):
         super().__init__(*args, **kwargs)
         severity_choices_dict = dict(SEVERITY_CHOICES)
         self.fields["severity"].choices = [("", "----")]
-        for severity in sorted(Incident.objects.values_list("severity", flat=True)):
+        for severity in sorted(Incident.objects.values_list("severity", flat=True).distinct().order_by("severity")):
             self.fields["severity"].choices.append(
                 (str(severity), severity_choices_dict.get(severity, str(severity)))
             )
         status_choices_dict = dict(STATUS_CHOICES)
         self.fields["status"].choices = [("", "----")]
-        for status in Incident.objects.values_list("status", flat=True):
+        for status in Incident.objects.values_list("status", flat=True).distinct().order_by("status"):
             self.fields["status"].choices.append(
                 (status, status_choices_dict.get(status, status))
             )
