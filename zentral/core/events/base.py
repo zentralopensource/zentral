@@ -6,6 +6,7 @@ import uuid
 from dateutil import parser
 from django.utils.functional import cached_property
 from django.utils.text import slugify
+from geoip2.models import City
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.queues import queues
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -52,12 +53,55 @@ class EventRequestUser(object):
         return d
 
 
+class EventRequestGeo(object):
+    geo_attr_list = ["city_name", "continent_name",
+                     "country_iso_code", "country_name",
+                     "location",
+                     "region_iso_code", "region_name"]
+
+    def __init__(self, **kwargs):
+        for attr in self.geo_attr_list:
+            setattr(self, attr, kwargs.get(attr))
+
+    @classmethod
+    def build_from_city(cls, c):
+        if not isinstance(c, City):
+            raise TypeError("not a geoip2.records.City object")
+        kwargs = {}
+        if c.city.name:
+            kwargs["city_name"] = c.city.name
+        if c.continent.name:
+            kwargs["continent_name"] = c.continent.name
+        if c.country.iso_code:
+            kwargs["country_iso_code"] = c.country.iso_code
+        if c.country.name:
+            kwargs["country_name"] = c.country.name
+        if c.location.longitude is not None and c.location.latitude is not None:
+            kwargs["location"] = {"lat": c.location.latitude,
+                                  "lon": c.location.longitude}
+        if c.subdivisions.most_specific.iso_code:
+            kwargs["region_iso_code"] = c.subdivisions.most_specific.iso_code
+        if c.subdivisions.most_specific.name:
+            kwargs["region_name"] = c.subdivisions.most_specific.name
+        if kwargs:
+            return cls(**kwargs)
+
+    def serialize(self):
+        d = {}
+        for attr in self.geo_attr_list:
+            val = getattr(self, attr)
+            if val is not None:
+                d[attr] = val
+        return d
+
+
 class EventRequest(object):
     user_agent_str_length = 50
 
-    def __init__(self, user_agent, ip, user=None):
+    def __init__(self, user_agent, ip, user=None, geo=None):
         self.user_agent = user_agent
         self.ip = ip
+        self.geo = geo
         self.user = user
 
     @classmethod
@@ -65,11 +109,14 @@ class EventRequest(object):
         user_agent, ip = user_agent_and_ip_address_from_request(request)
         user = EventRequestUser.build_from_user(request.user)
         if user_agent or ip or user:
-            return EventRequest(user_agent, ip, user)
+            return EventRequest(user_agent, ip, user=user)
 
     @classmethod
     def deserialize(cls, request_d):
         kwargs = {k: request_d.get(k) for k in ("user_agent", "ip")}
+        geo_d = request_d.get("geo")
+        if geo_d:
+            kwargs["geo"] = EventRequestGeo(**geo_d)
         user_d = request_d.get("user")
         if user_d:
             kwargs["user"] = EventRequestUser(**user_d)
@@ -78,6 +125,8 @@ class EventRequest(object):
     def serialize(self):
         d = {k: v for k, v in (("user_agent", self.user_agent),
                                ("ip", self.ip)) if v}
+        if self.geo:
+            d["geo"] = self.geo.serialize()
         if self.user:
             d["user"] = self.user.serialize()
         return d
@@ -96,6 +145,9 @@ class EventRequest(object):
                 )
             s_l.append(user_agent)
         return " - ".join(s_l)
+
+    def set_geo_from_city(self, city):
+        self.geo = EventRequestGeo.build_from_city(city)
 
 
 class EventMetadata(object):

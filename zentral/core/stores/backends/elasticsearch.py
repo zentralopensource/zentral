@@ -50,7 +50,12 @@ class EventStore(BaseEventStore):
                     },
                     "request": {
                         "properties": {
-                            "ip": {"type": "ip"}
+                            "ip": {"type": "ip"},
+                            "geo": {
+                                "properties": {
+                                    "location": {"type": "geo_point"}
+                                }
+                            }
                         }
                     },
                     "osquery_distributed_query_result": {
