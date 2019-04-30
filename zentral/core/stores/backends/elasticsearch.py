@@ -20,49 +20,42 @@ except NotImplementedError:
 
 
 class EventStore(BaseEventStore):
-    DOC_TYPE = "doc"
+    LEGACY_DOC_TYPE = "doc"  # _type used with 5.6 < ES < 7
     MAX_CONNECTION_ATTEMPTS = 20
-    INDEX_CONF = {
-        "settings": {
-            "number_of_shards": 1
-        },
-        "mappings": {
-            DOC_TYPE: {
-                "dynamic_templates": [
-                    {"zentral_ip_address": {
-                        "mapping": {"type": "ip"},
-                        "match": "*ip_address"
-                    }},
-                    {"zentral_string_default": {
-                        "mapping": {"type": "keyword",
-                                    "ignore_above": 512},
-                        "match": "*",
-                        "unmatch": "*ip_address",
-                        "match_mapping_type": "string"
-                    }}
-                ],
+    MAPPINGS = {
+        "dynamic_templates": [
+            {"zentral_ip_address": {
+                "mapping": {"type": "ip"},
+                "match": "*ip_address"
+             }},
+            {"zentral_string_default": {
+                "mapping": {"type": "keyword",
+                            "ignore_above": 512},
+                "match": "*",
+                "unmatch": "*ip_address",
+                "match_mapping_type": "string"
+            }}
+        ],
+        "properties": {
+            "type": {
+                "type": "keyword"
+            },
+            "created_at": {
+                "type": "date"
+            },
+            "request": {
                 "properties": {
-                    "type": {
-                        "type": "keyword"
-                    },
-                    "created_at": {
-                        "type": "date"
-                    },
-                    "request": {
+                    "ip": {"type": "ip"},
+                    "geo": {
                         "properties": {
-                            "ip": {"type": "ip"},
-                            "geo": {
-                                "properties": {
-                                    "location": {"type": "geo_point"}
-                                }
-                            }
-                        }
-                    },
-                    "osquery_distributed_query_result": {
-                        "properties": {
-                            "result": {"enabled": False}
+                            "location": {"type": "geo_point"}
                         }
                     }
+                }
+            },
+            "osquery_distributed_query_result": {
+                "properties": {
+                    "result": {"enabled": False}
                 }
             }
         }
@@ -116,15 +109,30 @@ class EventStore(BaseEventStore):
         self.index = config_d['index']
         self.read_index = config_d.get('read_index', self.index)
         self.kibana_base_url = config_d.get('kibana_base_url', None)
-        self.INDEX_CONF["settings"]["number_of_shards"] = config_d.get("number_of_shards", 1)
+        self.index_settings = {
+            "number_of_shards": config_d.get("number_of_shards", 1),
+            "number_of_replicas": config_d.get("number_of_replicas", 0)
+        }
         self.test = test
+        self.version = None
+
+    def get_index_conf(self):
+        if self.version:
+            if self.version >= [7]:
+                return {"settings": self.index_settings,
+                        "mappings": self.MAPPINGS}
+            else:
+                return {"settings": self.index_settings,
+                        "mappings": {self.LEGACY_DOC_TYPE: self.MAPPINGS}}
 
     def wait_and_configure(self):
         for i in range(self.MAX_CONNECTION_ATTEMPTS):
             # get or create index
             try:
+                info = self._es.info()
+                self.version = [int(i) for i in info["version"]["number"].split(".")]
                 if not self._es.indices.exists(self.index):
-                    self._es.indices.create(self.index, body=self.INDEX_CONF)
+                    self._es.indices.create(self.index, body=self.get_index_conf())
                     self.use_mapping_types = False
                     logger.info("Index %s created", self.index)
             except ConnectionError:
@@ -161,8 +169,11 @@ class EventStore(BaseEventStore):
 
         # use_mapping_types
         if self.use_mapping_types is None:
-            doc_types = set(list(self._es.indices.get_mapping(self.index).values())[0]['mappings'])
-            self.use_mapping_types = self.DOC_TYPE not in doc_types
+            if self.version >= [7]:
+                self.use_mapping_types = False
+            else:
+                mappings = set(list(self._es.indices.get_mapping(self.index).values())[0]['mappings'])
+                self.use_mapping_types = self.LEGACY_DOC_TYPE not in mappings
 
     def _get_type_field(self):
         if not self.use_mapping_types:
@@ -180,7 +191,7 @@ class EventStore(BaseEventStore):
         event_d = event.serialize()
         es_event_d = event_d.pop('_zentral')
         if not self.use_mapping_types:
-            es_doc_type = self.DOC_TYPE
+            es_doc_type = self.LEGACY_DOC_TYPE
         else:
             es_event_d.pop('type')  # document type in ES
             es_doc_type = event.event_type
@@ -188,8 +199,7 @@ class EventStore(BaseEventStore):
         return es_doc_type, es_event_d
 
     def _deserialize_event(self, es_doc_type, es_event_d):
-        if es_doc_type == self.DOC_TYPE:
-            # TODO VERIFY self.use_mapping_types == False
+        if es_doc_type == "_doc" or es_doc_type == self.LEGACY_DOC_TYPE:
             event_type = es_event_d["type"]
         else:
             event_type = es_doc_type
@@ -203,8 +213,11 @@ class EventStore(BaseEventStore):
         if isinstance(event, dict):
             event = event_from_event_d(event)
         doc_type, body = self._serialize_event(event)
+        kwargs = {"body": body}
+        if self.version < [7]:
+            kwargs["doc_type"] = doc_type
         try:
-            self._es.index(index=self.index, doc_type=doc_type, body=body)
+            self._es.index(index=self.index, **kwargs)
             if self.test:
                 self._es.indices.refresh(self.index)
         except Exception:
@@ -233,8 +246,13 @@ class EventStore(BaseEventStore):
         # TODO: count could work from first fetch with elasticsearch.
         body = self._get_machine_events_body(machine_serial_number, event_type)
         body['size'] = 0
+        body['track_total_hits'] = True
         r = self._es.search(index=self.read_index, body=body)
-        return r['hits']['total']
+        total = r['hits']['total']
+        if isinstance(total, dict):  # ES >= 7
+            return total["value"]
+        else:
+            return total
 
     def machine_events_fetch(self, machine_serial_number, offset=0, limit=0, event_type=None):
         # TODO: count could work from first fetch with elasticsearch.
@@ -470,8 +488,13 @@ class EventStore(BaseEventStore):
         # TODO: count could work from first fetch with elasticsearch.
         body = self._get_probe_events_body(probe, **search_dict)
         body['size'] = 0
+        body['track_total_hits'] = True
         r = self._es.search(index=self.read_index, body=body)
-        return r['hits']['total']
+        total = r['hits']['total']
+        if isinstance(total, dict):  # ES >= 7
+            return total["value"]
+        else:
+            return total
 
     def probe_events_aggregations(self, probe, **search_dict):
         body = self._get_probe_events_body(probe, **search_dict)
@@ -611,8 +634,13 @@ class EventStore(BaseEventStore):
         # TODO: count could work from first fetch with elasticsearch.
         body = self._get_incident_events_body(incident)
         body['size'] = 0
+        body['track_total_hits'] = True
         r = self._es.search(index=self.read_index, body=body)
-        return r['hits']['total']
+        total = r['hits']['total']
+        if isinstance(total, dict):  # ES >= 7
+            return total["value"]
+        else:
+            return total
 
     def incident_events_fetch(self, probe, offset=0, limit=0, **search_dict):
         # TODO: count could work from first fetch with elasticsearch.
