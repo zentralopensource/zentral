@@ -16,7 +16,7 @@ BUNDLE_ID = "ManagedInstalls"
 SETUP_SCRIPT_PATH = "%SETUP_SCRIPT_PATH%"
 ENROLLMENT_SECRET = "%ENROLLMENT_SECRET%"
 ENROLLMENT_URL = "%ENROLLMENT_URL%"
-TLS_CA_CERT = "%TLS_CA_CERT%"
+TLS_SERVER_CERTS = "%TLS_SERVER_CERTS%"
 DEPNOTIFY_COMMANDS = """%DEPNOTIFY_COMMANDS%"""
 
 # the two plists
@@ -56,7 +56,7 @@ def enroll(serial_number, uuid):
     req = urllib2.Request(ENROLLMENT_URL)
     req.add_header("User-Agent", USER_AGENT)
     req.add_header("Content-Type", "application/json")
-    ctx = ssl.create_default_context(cafile=TLS_CA_CERT)
+    ctx = ssl.create_default_context(cafile=TLS_SERVER_CERTS or None)
     data = json.dumps({"secret": ENROLLMENT_SECRET,
                        "serial_number": serial_number,
                        "uuid": uuid})

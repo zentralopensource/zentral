@@ -4,7 +4,7 @@ import plistlib
 from django.core.files.base import ContentFile
 from django.template.loader import get_template
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload_openssl
-from zentral.utils.osx_package import TLS_CA_CERT_CLIENT_PATH, get_tls_hostname
+from zentral.utils.osx_package import distribute_tls_server_certs, get_tls_hostname, TLS_SERVER_CERTS_CLIENT_PATH
 
 logger = logging.getLogger('zentral.contrib.monolith.utils')
 
@@ -89,20 +89,23 @@ def make_printer_package_info(printer):
 
 def build_configuration(enrolled_machine):
     # TODO: hardcoded
-    return {"ClientIdentifier": enrolled_machine.serial_number,
-            "SoftwareRepoURL": "https://{}/monolith/munki_repo".format(get_tls_hostname()),
-            "SoftwareRepoCACertificate": TLS_CA_CERT_CLIENT_PATH,
-            "FollowHTTPRedirects": "all",
-            "SuppressLoginwindowInstall": True,
-            # "ManifestURL": None,  # no special Manifest URL with monolith
-            # force redirect via monolith for Icon and Client Resource
-            # "IconURL": None,
-            # "ClientResourceURL": None,
-            "AdditionalHttpHeaders": [
-                "X-Zentral-Serial-Number: {}".format(enrolled_machine.serial_number),
-                "X-Monolith-Token: {}".format(enrolled_machine.token)
-            ],
-            }
+    config = {
+        "ClientIdentifier": enrolled_machine.serial_number,
+        "SoftwareRepoURL": "https://{}/monolith/munki_repo".format(get_tls_hostname()),
+        "FollowHTTPRedirects": "all",
+        "SuppressLoginwindowInstall": True,
+        # "ManifestURL": None,  # no special Manifest URL with monolith
+        # force redirect via monolith for Icon and Client Resource
+        # "IconURL": None,
+        # "ClientResourceURL": None,
+        "AdditionalHttpHeaders": [
+            "X-Zentral-Serial-Number: {}".format(enrolled_machine.serial_number),
+            "X-Monolith-Token: {}".format(enrolled_machine.token)
+        ],
+    }
+    if distribute_tls_server_certs():
+        config["SoftwareRepoCACertificate"] = TLS_SERVER_CERTS_CLIENT_PATH
+    return config
 
 
 def build_configuration_profile(enrolled_machine):

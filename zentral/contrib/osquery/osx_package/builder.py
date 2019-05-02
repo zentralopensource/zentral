@@ -33,16 +33,16 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
     def extra_build_steps(self):
         launchd_plist = self.get_root_path("Library/LaunchDaemons/com.facebook.osqueryd.plist")
         # tls_hostname
-        self.replace_in_file(launchd_plist,
-                             (("%TLS_HOSTNAME%", self.get_tls_hostname()),))
-        self.replace_in_file(self.get_build_path("scripts", "postinstall"),
-                             (("%TLS_HOSTNAME%", self.get_tls_hostname()),))
+        hostname_replacement = (("%TLS_HOSTNAME%", self.get_tls_hostname()),)
+        self.replace_in_file(launchd_plist, hostname_replacement)
+        self.replace_in_file(self.get_build_path("scripts", "postinstall"), hostname_replacement)
 
         extra_prog_args = self.build_kwargs["serialized_flags"]
 
         # tls_server_certs
         tls_server_certs_install_path = self.include_tls_server_certs()
-        extra_prog_args.append("--tls_server_certs={}".format(tls_server_certs_install_path))
+        if tls_server_certs_install_path:
+            extra_prog_args.append("--tls_server_certs={}".format(tls_server_certs_install_path))
 
         self.append_to_plist_key(launchd_plist, "ProgramArguments", extra_prog_args)
 

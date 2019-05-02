@@ -29,7 +29,7 @@ MONOLITH_TOKEN_HEADER_KEY = "X-Monolith-Token"
 MAX_REGISTRATION_WAIT = 7200  # 2 hours
 REGISTRATION_URL = "%REGISTRATION_URL%"
 USER_AGENT = "Zentral/monolithrunonce 0.1"
-TLS_CA_CERT = "%TLS_CA_CERT%"
+TLS_SERVER_CERTS = "%TLS_SERVER_CERTS%"
 
 DEPNOTIFY_CONTROL_FILE = "/var/tmp/depnotify.log"
 DEPNOTIFY_QUIT_COMMAND = "Command: Quit"
@@ -88,7 +88,7 @@ def post_registration_data(registration_data):
     req.add_header(*get_monolith_auth_header())
     req.add_header("User-Agent", USER_AGENT)
     req.add_header("Content-Type", "application/json")
-    ctx = ssl.create_default_context(cafile=TLS_CA_CERT)
+    ctx = ssl.create_default_context(cafile=TLS_SERVER_CERTS or None)
     resp = urllib2.urlopen(req, data=json.dumps(registration_data), context=ctx)
     return json.load(resp)
 

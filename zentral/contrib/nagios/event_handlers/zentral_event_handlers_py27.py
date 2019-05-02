@@ -48,7 +48,7 @@ def post_event(args):
     req.add_header('Content-Type', 'application/json')
     req.add_header('User-Agent', USER_AGENT)
     req.add_header(HEADER, SECRET)
-    ctx = ssl.create_default_context(cadata=ZENTRAL_FULLCHAIN)
+    ctx = ssl.create_default_context(cadata=ZENTRAL_FULLCHAIN.strip() or None)
     data = build_payload(args)
     response = urllib2.urlopen(req, data=data, context=ctx)
     return json.load(response)

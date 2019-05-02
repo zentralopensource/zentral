@@ -12,8 +12,8 @@ MIN_CONFIGURATION_PROFILE_SANTA_VERSION = (0, 9, 21)
 USER_AGENT = "Zentral/santaenrollment 0.1"
 
 ENROLLMENT_URL = """%ENROLLMENT_URL%"""
-
 ENROLLMENT_SECRET = """%ENROLLMENT_SECRET%"""
+TLS_SERVER_CERTS = "%TLS_SERVER_CERTS%"
 
 ZENTRAL_DIR = "/usr/local/zentral/"
 
@@ -53,8 +53,7 @@ def post_enrollment_secret():
     req = urllib2.Request(ENROLLMENT_URL)
     req.add_header("User-Agent", USER_AGENT)
     req.add_header("Content-Type", "application/json")
-    # TODO hardcoded
-    ctx = ssl.create_default_context(cafile=os.path.join(ZENTRAL_DIR, "tls_server_certs.crt"))
+    ctx = ssl.create_default_context(cafile=TLS_SERVER_CERTS or None)
     serial_number, uuid = get_serial_number_and_uuid()
     data = json.dumps({"secret": ENROLLMENT_SECRET,
                        "serial_number": serial_number,

@@ -1,6 +1,6 @@
 import plistlib
 from zentral.conf import settings
-from zentral.utils.osx_package import TLS_SERVER_CERTS_CLIENT_PATH
+from zentral.utils.osx_package import distribute_tls_server_certs, TLS_SERVER_CERTS_CLIENT_PATH
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload_openssl
 
 
@@ -9,8 +9,9 @@ def build_santa_configuration_dict(enrolled_machine):
 
     # default attributes
     config_dict = {"MachineID": enrolled_machine.machine_id,
-                   "ServerAuthRootsFile": TLS_SERVER_CERTS_CLIENT_PATH,
                    "SyncBaseURL": "{}/santa/".format(settings["api"]["tls_hostname"])}
+    if distribute_tls_server_certs():
+        config_dict["ServerAuthRootsFile"] = TLS_SERVER_CERTS_CLIENT_PATH
 
     # configuration attributes
     config_dict.update(configuration.get_local_config())

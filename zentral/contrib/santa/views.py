@@ -405,7 +405,7 @@ class PreflightView(BaseView):
     def check_data_secret(self, data):
         reported_serial_number = data['serial_num']
         if reported_serial_number != self.machine_serial_number:
-            # the SN reported by osquery is not the one configured in the enrollment secret
+            # the SN reported by santa is not the one configured in the enrollment secret
             auth_err = "santa reported SN {} different from enrollment SN {}".format(reported_serial_number,
                                                                                      self.machine_serial_number)
             machine_info = {k: v for k, v in data.items()

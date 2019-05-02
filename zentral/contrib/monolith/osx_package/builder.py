@@ -53,7 +53,7 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         if eula:
             self.create_file_with_content_string("Users/Shared/eula.txt", eula)
 
-        tls_ca_cert = self.include_tls_ca_cert()
+        tls_server_certs_install_path = self.include_tls_server_certs()
 
         # postinstall script / enrollment
         enrollment_url = "https://{}{}".format(self.get_tls_hostname(), reverse("monolith:enroll"))
@@ -70,13 +70,13 @@ class MonolithZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
                               ("%ENROLLMENT_URL%", enrollment_url),
                               ("%INCLUDE_DEPNOTIFY%", str(include_depnotify)),
                               ("%DEPNOTIFY_COMMANDS%", self.build_kwargs.get("depnotify_commands") or ""),
-                              ("%TLS_CA_CERT%", tls_ca_cert)))
+                              ("%TLS_SERVER_CERTS%", tls_server_certs_install_path or "")))
 
         # run_once.py script / registration
         registration_url = "https://{}{}".format(self.get_tls_hostname(), reverse("monolith:register"))
 
         self.replace_in_file(self.get_root_path("usr/local/zentral/monolith/run_once.py"),
-                             (("%TLS_CA_CERT%", tls_ca_cert),
+                             (("%TLS_SERVER_CERTS%", tls_server_certs_install_path or ""),
                               ("%REGISTRATION_URL%", registration_url)))
 
     def extra_product_archive_build_steps(self, pa_builder):

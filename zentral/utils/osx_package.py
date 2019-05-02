@@ -16,7 +16,6 @@ logger = logging.getLogger("zentral.utils.osx_package")
 
 
 TLS_SERVER_CERTS_CLIENT_PATH = "/usr/local/zentral/tls_server_certs.crt"
-TLS_CA_CERT_CLIENT_PATH = "/usr/local/zentral/tls_ca_cert.crt"
 
 
 class BasePackageBuilder(object):
@@ -226,6 +225,10 @@ def get_tls_hostname():
     return tls_hostname_p.netloc
 
 
+def distribute_tls_server_certs():
+    return settings["api"].get("distribute_tls_server_certs", True)
+
+
 class APIConfigToolsMixin(object):
     def get_tls_hostname(self):
         if not hasattr(self, "tls_hostname"):
@@ -233,7 +236,8 @@ class APIConfigToolsMixin(object):
         return self.tls_hostname
 
     def get_tls_server_certs(self):
-        return settings["api"]["tls_server_certs"]
+        if distribute_tls_server_certs():
+            return settings["api"]["tls_server_certs"]
 
 
 class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
@@ -390,25 +394,11 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             plistlib.dump(pl, f)
 
     def include_tls_server_certs(self):
-        tls_server_certs_rel_path = os.path.relpath(TLS_SERVER_CERTS_CLIENT_PATH, "/")
-        shutil.copy(self.get_tls_server_certs(),
-                    self.get_root_path(tls_server_certs_rel_path))
-        return TLS_SERVER_CERTS_CLIENT_PATH
-
-    def include_tls_ca_cert(self):
-        # extract root CA cert
-        with open(self.get_tls_server_certs()) as f:
-            fullchain = f.read()
-        begin_certificate_line = "-----BEGIN CERTIFICATE-----"
-        tls_ca_cert_content = "{}{}".format(
-            begin_certificate_line,
-            fullchain.split(begin_certificate_line)[-1]
-        )
-        # add it to package
-        tls_ca_cert_rel_path = os.path.relpath(TLS_CA_CERT_CLIENT_PATH, "/")
-        with open(self.get_root_path(tls_ca_cert_rel_path), "w") as f:
-            f.write(tls_ca_cert_content)
-        return TLS_CA_CERT_CLIENT_PATH
+        tls_server_certs = self.get_tls_server_certs()
+        if tls_server_certs:
+            tls_server_certs_rel_path = os.path.relpath(TLS_SERVER_CERTS_CLIENT_PATH, "/")
+            shutil.copy(tls_server_certs, self.get_root_path(tls_server_certs_rel_path))
+            return TLS_SERVER_CERTS_CLIENT_PATH
 
     def is_product_archive(self):
         return self.get_product_archive() is not None or len(self.get_extra_packages()) > 0

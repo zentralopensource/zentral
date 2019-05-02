@@ -11,14 +11,6 @@ filebeat:
         machine_serial_number: "%MACHINE_SERIAL_NUMBER%"
 
 output:
-  logstash:
-    hosts:
-      - "%TLS_HOSTNAME%:5044"
-    ssl:
-      certificate_authorities:
-        - "%TLS_SERVER_CERTS%"
-      certificate: "%TLS_CLIENT_CERT%"
-      key: "%TLS_CLIENT_CERT_KEY%"
 
 logging:
   level: info

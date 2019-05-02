@@ -14,17 +14,19 @@ class MunkiZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
     build_tmpl_dir = os.path.join(BASE_DIR, "build.tmpl")
 
     def extra_build_steps(self):
+        tls_hostname = self.get_tls_hostname()
         # munki zentral postflight script
         postflight_script = self.get_root_path("usr/local/zentral/munki/zentral_postflight")
-        self.replace_in_file(postflight_script,
-                             (("%TLS_HOSTNAME%", self.get_tls_hostname()),
-                              ("%TLS_SERVER_CERTS%", self.include_tls_server_certs())))
+        replacements = [
+            ("%TLS_HOSTNAME%", tls_hostname),
+            ("%TLS_SERVER_CERTS%", self.include_tls_server_certs() or ""),
+        ]
+        self.replace_in_file(postflight_script, replacements)
 
         # postinstall script
-        enrollment_url = "https://{}{}".format(self.get_tls_hostname(), reverse("munki:enroll"))
         postinstall_script = self.get_build_path("scripts", "postinstall")
-        self.replace_in_file(postinstall_script,
-                             (("%TLS_HOSTNAME%", self.get_tls_hostname()),
-                              ("%TLS_CA_CERT%", self.include_tls_ca_cert()),
-                              ("%ENROLLMENT_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
-                              ("%ENROLLMENT_URL%", enrollment_url)))
+        replacements.extend([
+            ("%ENROLLMENT_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
+            ("%ENROLLMENT_URL%", "https://{}{}".format(tls_hostname, reverse("munki:enroll")))
+        ])
+        self.replace_in_file(postinstall_script, replacements)

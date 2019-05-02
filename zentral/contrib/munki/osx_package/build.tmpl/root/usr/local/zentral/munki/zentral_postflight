@@ -308,10 +308,7 @@ def make_api_request(url, data=None):
         req.add_header('Content-Type', 'application/json')
         data = zlib.compress(data, 9)
         req.add_header('Content-Encoding', 'deflate')
-    if ZENTRAL_API_SERVER_CERTIFICATE:
-        ctx = ssl.create_default_context(cafile=ZENTRAL_API_SERVER_CERTIFICATE)
-    else:
-        ctx = ssl.create_default_context()
+    ctx = ssl.create_default_context(cafile=ZENTRAL_API_SERVER_CERTIFICATE or None)
     response = urllib2.urlopen(req, data=data, context=ctx)
     return json.load(response)
 

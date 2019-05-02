@@ -146,9 +146,11 @@ fi
 sudo mkdir -p /etc/zentral/osquery
 
 # server certs
+if %INCLUDE_TLS_SERVER_CERTS%; then
 cat << TLS_SERVER_CERT | sudo tee /etc/zentral/tls_server_certs.crt
 %TLS_SERVER_CERTS%
 TLS_SERVER_CERT
+fi
 
 # enroll secret
 cat << ENROLL_SECRET | sudo tee /etc/zentral/osquery/enroll_secret.txt
@@ -171,7 +173,6 @@ sudo mkdir -p /var/osquery/zentral
 get_host_identifier
 cat << OSQUERY_FLAGS | sudo tee /etc/osquery/osquery.flags
 --tls_hostname=%TLS_HOSTNAME%
---tls_server_certs=/etc/zentral/tls_server_certs.crt
 --database_path=/var/osquery/zentral
 --enroll_tls_endpoint=/osquery/enroll
 --enroll_secret_path=/etc/zentral/osquery/enroll_secret.txt
