@@ -35,7 +35,8 @@ RUN apt-get install -y \
 
 # zentral user and group
 RUN groupadd -r zentral --gid=999 && \
-    useradd -r -s /bin/false -g zentral --uid=999 zentral
+    useradd -r -s /bin/false -g zentral --uid=999 zentral && \
+    mkdir /home/zentral && chown zentral.zentral /home/zentral
 
 # app
 RUN mkdir /zentral
