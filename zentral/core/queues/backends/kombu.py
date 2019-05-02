@@ -203,12 +203,6 @@ class EventQueues(object):
     def __init__(self, config_d):
         self.backend_url = config_d['backend_url']
         self.connection = Connection(self.backend_url)
-        # migration TODO: remove ?
-        # disconnect process_events_queue from events_exchange
-        channel = self.connection.channel()
-        bound_process_events_queue = process_events_queue.bind(channel)
-        bound_process_events_queue.unbind_from(events_exchange)
-        channel.close()
 
     def get_preprocess_worker(self, event_preprocessor):
         return PreprocessWorker(Connection(self.backend_url), event_preprocessor)
@@ -217,7 +211,14 @@ class EventQueues(object):
         return EnrichWorker(Connection(self.backend_url), enrich_event)
 
     def get_process_worker(self, process_event):
-        return ProcessWorker(Connection(self.backend_url), process_event)
+        process_worker = ProcessWorker(Connection(self.backend_url), process_event)
+        # migration TODO: remove ?
+        # disconnect process_events_queue from events_exchange
+        channel = self.connection.channel()
+        bound_process_events_queue = process_events_queue.bind(channel)
+        bound_process_events_queue.unbind_from(events_exchange)
+        channel.close()
+        return process_worker
 
     def get_store_worker(self, event_store):
         store_worker = StoreWorker(Connection(self.backend_url), event_store)
