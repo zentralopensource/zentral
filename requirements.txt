@@ -31,3 +31,9 @@ setuptools
 sqlparse
 tqdm
 XlsxWriter
+
+# dependencies
+
+# urllib3 for boto3, elasticsearch, requests
+# 20190502 - use the narrowest requirement to avoid conflicts
+urllib3<1.25,>=1.21.1
