@@ -5,10 +5,11 @@ from django.http import HttpResponse
 from django.views.generic import View
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.contrib.mdm.events import MDMRequestEvent, send_device_notification
+from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.models import (EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
                                         PushCertificate)
+from zentral.contrib.mdm.tasks import send_enrolled_device_notification
 from .base import PostEventMixin
 from .utils import (build_application_download_response, build_application_manifest_response,
                     get_next_device_command_response,
@@ -152,10 +153,14 @@ class CheckinView(MDMView):
         )
 
         if not user_id and enrolled_device.can_be_poked():
-            transaction.on_commit(lambda: send_device_notification(enrolled_device,
-                                                                   delay=self.first_device_notification_delay))
-            transaction.on_commit(lambda: send_device_notification(enrolled_device,
-                                                                   delay=2 * self.first_device_notification_delay))
+            transaction.on_commit(lambda: send_enrolled_device_notification(
+                enrolled_device,
+                delay=self.first_device_notification_delay
+            ))
+            transaction.on_commit(lambda: send_enrolled_device_notification(
+                enrolled_device,
+                delay=2 * self.first_device_notification_delay
+            ))
 
         # Update enrollment session
         if enrolled_device.token and not self.enrollment_session.is_completed():

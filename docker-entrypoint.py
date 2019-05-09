@@ -65,15 +65,20 @@ KNOWN_COMMANDS = {
                              "--error-logfile", "-",
                              "server.wsgi"],
     "runworkers": ["python", 'server/manage.py', 'runworkers'],
+    "celery": ["/usr/local/bin/celery", "-A", "server", "worker"],
     # extras
     "shell": ["python", 'server/manage.py', 'shell'],
     "tests": ["python", 'server/manage.py', 'test', 'tests/'],
     "createuser": ["python", 'server/manage.py', 'create_zentral_user'],
 }
+
 KNOWN_COMMANDS_EXTRA_ENV = {
     "tests": {"ZENTRAL_PROBES_SYNC": "0"}
 }
 
+KNOWN_COMMANDS_CHDIR = {
+    "celery": "/zentral/server"
+}
 
 KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC = {'runserver', 'gunicorn'}
 
@@ -92,6 +97,9 @@ if __name__ == '__main__':
         if cmd in KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC:
             django_collectstatic()
         env.update(KNOWN_COMMANDS_EXTRA_ENV.get(cmd, {}))
+        wd = KNOWN_COMMANDS_CHDIR.get(cmd)
+        if wd:
+            os.chdir(wd)
         print('Launch known command "{}"'.format(cmd))
     else:
         filename = cmd

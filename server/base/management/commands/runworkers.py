@@ -1,9 +1,7 @@
-from importlib import import_module
 from multiprocessing import Process
 import yaml
 from django.core.management.base import BaseCommand
-from zentral.conf import settings
-from zentral.core.queues.workers import get_workers as get_queues_workers
+from zentral.core.queues.workers import get_workers
 
 
 class Command(BaseCommand):
@@ -17,16 +15,6 @@ class Command(BaseCommand):
         parser.add_argument("--external-hostname", default="localhost")
         parser.add_argument("worker", nargs="*")
 
-    def get_workers(self):
-        for app in settings['apps']:
-            try:
-                workers_module = import_module("{}.workers".format(app))
-            except ImportError as e:
-                pass
-            else:
-                yield from getattr(workers_module, "get_workers")()
-        yield from get_queues_workers()
-
     def handle(self, *args, **kwargs):
         processes = []
         prometheus_targets = []
@@ -35,7 +23,7 @@ class Command(BaseCommand):
         prometheus_sd_file = kwargs.get('prometheus_sd_file')
         external_hostname = kwargs['external_hostname']
         workers = kwargs['worker']
-        for idx, worker in enumerate(sorted(self.get_workers(), key=lambda w: w.name)):
+        for idx, worker in enumerate(sorted(get_workers(), key=lambda w: w.name)):
             if list_workers:
                 print("Worker '{}'".format(worker.name))
                 continue

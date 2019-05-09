@@ -4,11 +4,10 @@ from zentral.contrib.inventory.models import MachineSnapshotCommit
 from zentral.contrib.inventory.utils import inventory_events_from_machine_snapshot_commit
 from zentral.core.events import event_cls_from_type
 from zentral.core.events.base import EventMetadata
-from zentral.core.queues import queues
 from .puppetdb_client import PuppetDBClient
 
 
-logger = logging.getLogger("zentral.contrib.jamf.preprocessor")
+logger = logging.getLogger("zentral.contrib.puppet.preprocessors")
 
 
 def default_constructor(loader, tag_suffix, node):
@@ -20,8 +19,7 @@ def get_report_created_at(report):
 
 
 class ReportEventPreprocessor(object):
-    name = "puppet report events preprocessor"
-    input_queue_name = "puppet_reports"
+    routing_key = "puppet_reports"
 
     def __init__(self):
         self.clients = {}
@@ -93,5 +91,5 @@ class ReportEventPreprocessor(object):
         )
 
 
-def get_workers():
-    yield queues.get_preprocess_worker(ReportEventPreprocessor())
+def get_preprocessors():
+    yield ReportEventPreprocessor()

@@ -57,6 +57,16 @@ services:
     volumes:
       - web_media_root:/var/zentral
       - prometheus_sd:/prometheus_sd
+  celery:
+    extends:
+      file: docker-compose.common.yml
+      service: app
+    command: celery
+    depends_on:
+      - db
+      - rabbitmq
+    volumes:
+      - web_media_root:/var/zentral
 
 networks:
   default:

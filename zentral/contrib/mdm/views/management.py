@@ -12,7 +12,6 @@ from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
-from zentral.contrib.mdm.events import send_device_notification, send_mbu_device_notifications
 from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DeviceSearchForm,
                                        CreateDEPProfileForm, UpdateDEPProfileForm, OTAEnrollmentForm,
                                        UploadConfigurationProfileForm)
@@ -23,6 +22,7 @@ from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate,
                                         KernelExtensionPolicy, MDMEnrollmentPackage, ConfigurationProfile)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_profile_service_configuration_profile)
+from zentral.contrib.mdm.tasks import send_enrolled_device_notification, send_mbu_enrolled_devices_notifications
 from zentral.utils.osx_package import get_standalone_package_builders
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
@@ -351,7 +351,7 @@ class CreateKernelExtensionPolicyView(LoginRequiredMixin, CreateView):
         kext_policy.trashed_at = None
         kext_policy.save()
         form.save_m2m()
-        transaction.on_commit(lambda: send_mbu_device_notifications(kext_policy.meta_business_unit))
+        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(kext_policy.meta_business_unit))
         return HttpResponseRedirect(kext_policy.get_absolute_url())
 
 
@@ -383,7 +383,7 @@ class UpdateKernelExtensionPolicyView(LoginRequiredMixin, UpdateView):
         kext_policy.meta_business_unit = self.meta_business_unit
         kext_policy.save()
         form.save_m2m()
-        transaction.on_commit(lambda: send_mbu_device_notifications(kext_policy.meta_business_unit))
+        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(kext_policy.meta_business_unit))
         return HttpResponseRedirect(kext_policy.get_absolute_url())
 
 
@@ -399,7 +399,7 @@ class TrashKernelExtensionPolicyView(LoginRequiredMixin, DeleteView):
         self.object = self.get_object()
         self.object.trashed_at = timezone.now()
         self.object.save()
-        transaction.on_commit(lambda: send_mbu_device_notifications(self.object.meta_business_unit))
+        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(self.object.meta_business_unit))
         return HttpResponseRedirect(reverse("mdm:mbu", args=(self.object.meta_business_unit.pk,)))
 
 
@@ -476,7 +476,7 @@ class CreateEnrollmentPackageView(LoginRequiredMixin, TemplateView):
         # link from enrollment to mdm enrollment package, for config update propagation
         enrollment.distributor = mep
         enrollment.save()  # build package and package manifest via callback call
-        transaction.on_commit(lambda: send_mbu_device_notifications(mep.meta_business_unit))
+        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(mep.meta_business_unit))
         return HttpResponseRedirect(mep.get_absolute_url())
 
     def post(self, request, *args, **kwargs):
@@ -528,7 +528,7 @@ class UploadConfigurationProfileView(LoginRequiredMixin, FormView):
 
     def form_valid(self, form):
         self.configuration_profile = form.save()
-        transaction.on_commit(lambda: send_mbu_device_notifications(self.meta_business_unit))
+        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(self.meta_business_unit))
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -547,7 +547,7 @@ class TrashConfigurationProfileView(LoginRequiredMixin, DeleteView):
         self.object = self.get_object()
         self.object.trashed_at = timezone.now()
         self.object.save()
-        transaction.on_commit(lambda: send_mbu_device_notifications(self.object.meta_business_unit))
+        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(self.object.meta_business_unit))
         return HttpResponseRedirect(reverse("mdm:mbu", args=(self.object.meta_business_unit.pk,)))
 
 
@@ -614,7 +614,7 @@ class DeviceView(LoginRequiredMixin, TemplateView):
 class PokeEnrolledDeviceView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
-        send_device_notification(enrolled_device)
+        send_enrolled_device_notification(enrolled_device)
         messages.info(request, "Device poked!")
         return HttpResponseRedirect(
             reverse("mdm:device",

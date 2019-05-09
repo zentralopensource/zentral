@@ -1,5 +1,7 @@
+from importlib import import_module
 import logging
 import time
+from zentral.conf import settings
 from kombu import Connection, Consumer, Exchange, Queue
 from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 from kombu.pools import producers
@@ -9,6 +11,8 @@ from zentral.utils.prometheus import PrometheusWorkerMixin
 
 logger = logging.getLogger('zentral.core.queues.backends.kombu')
 
+
+raw_events_exchange = Exchange('raw_events', type='direct', durable=True)
 
 events_exchange = Exchange('events', type="fanout", durable=True)
 enrich_events_queue = Queue('enrich_events',
@@ -32,17 +36,28 @@ class LoggingMixin(object):
 
 
 class PreprocessWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
-    def __init__(self, connection, event_preprocessor):
+    def __init__(self, connection):
         self.connection = connection
-        self.event_preprocessor = event_preprocessor
-        input_exchange = Exchange(event_preprocessor.input_queue_name, type="fanout", durable=True)
-        self.input_queue = Queue(event_preprocessor.input_queue_name, exchange=input_exchange, durable=True)
-        self.name = self.event_preprocessor.name
+        self.name = "preprocess worker"
+        self.preprocessors = {
+            preprocessor.routing_key: preprocessor
+            for preprocessor in self.get_preprocessors()
+        }
+
+    def get_preprocessors(self):
+        for app in settings['apps']:
+            try:
+                preprocessors_module = import_module("{}.preprocessors".format(app))
+            except ImportError as e:
+                pass
+            else:
+                yield from getattr(preprocessors_module, "get_preprocessors")()
 
     def setup_prometheus_metrics(self):
         self.preprocessed_events_counter = Counter(
             "preprocessed_events",
-            "Preprocessed events"
+            "Preprocessed events",
+            ["routing_key"]
         )
         self.produced_events_counter = Counter(
             "produced_events",
@@ -58,27 +73,33 @@ class PreprocessWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixi
         super().run(*args, **kwargs)
 
     def get_consumers(self, _, default_channel):
+        queues = [
+            Queue(preprocessor.routing_key, exchange=raw_events_exchange,
+                  routing_key=preprocessor.routing_key, durable=True)
+            for routing_key, preprocessor in self.preprocessors.items()
+        ]
         return [Consumer(default_channel,
-                         queues=[self.input_queue],
+                         queues=queues,
                          accept=['json'],
                          callbacks=[self.do_preprocess_raw_event])]
 
     def do_preprocess_raw_event(self, body, message):
-        self.log_debug("process raw event")
-        try:
-            for event in self.event_preprocessor.process_raw_event(body):
-                self.produced_events_counter.labels(event.event_type).inc()
-                self.producer.publish(event.serialize(machine_metadata=False),
-                                      serializer='json',
-                                      exchange=events_exchange,
-                                      declare=[events_exchange])
-        except Exception as exception:
-            logger.exception("Requeuing message with 1s delay: %s", exception)
-            time.sleep(1)
-            message.requeue()
+        routing_key = message.delivery_info.get("routing_key")
+        if not routing_key:
+            logger.error("Message w/o routing key")
         else:
-            message.ack()
-            self.preprocessed_events_counter.inc()
+            preprocessor = self.preprocessors.get(routing_key)
+            if not preprocessor:
+                logger.error("No preprocessor for routing key %s", routing_key)
+            else:
+                for event in preprocessor.process_raw_event(body):
+                    self.produced_events_counter.labels(event.event_type).inc()
+                    self.producer.publish(event.serialize(machine_metadata=False),
+                                          serializer='json',
+                                          exchange=events_exchange,
+                                          declare=[events_exchange])
+        message.ack()
+        self.preprocessed_events_counter.labels(routing_key or "UNKNOWN").inc()
 
 
 class EnrichWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
@@ -204,8 +225,15 @@ class EventQueues(object):
         self.backend_url = config_d['backend_url']
         self.connection = Connection(self.backend_url)
 
-    def get_preprocess_worker(self, event_preprocessor):
-        return PreprocessWorker(Connection(self.backend_url), event_preprocessor)
+    def get_preprocess_worker(self):
+        preprocess_worker = PreprocessWorker(Connection(self.backend_url))
+        # migration TODO: remove ?
+        channel = self.connection.channel()
+        for routing_key in preprocess_worker.preprocessors.keys():
+            legacy_exchange = Exchange(routing_key, type='fanout', channel=channel, durable=True)
+            legacy_exchange.delete()
+        channel.close()
+        return preprocess_worker
 
     def get_enrich_worker(self, enrich_event):
         return EnrichWorker(Connection(self.backend_url), enrich_event)
@@ -230,13 +258,13 @@ class EventQueues(object):
         channel.close()
         return store_worker
 
-    def post_raw_event(self, input_queue_name, raw_event):
-        exchange = Exchange(input_queue_name, type="fanout", durable=True)
+    def post_raw_event(self, routing_key, raw_event):
         with producers[self.connection].acquire(block=True) as producer:
             producer.publish(raw_event,
                              serializer='json',
-                             exchange=exchange,
-                             declare=[exchange])
+                             exchange=raw_events_exchange,
+                             routing_key=routing_key,
+                             declare=[raw_events_exchange])
 
     def post_event(self, event):
         with producers[self.connection].acquire(block=True) as producer:

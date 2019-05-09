@@ -18,12 +18,13 @@ from zentral.contrib.osquery.conf import (build_osquery_conf,
                                           INVENTORY_QUERY_NAME,
                                           INVENTORY_DISTRIBUTED_QUERY_PREFIX)
 from zentral.contrib.osquery.events import (post_distributed_query_result, post_enrollment_event,
-                                            post_file_carve_events, post_finished_file_carve_session,
+                                            post_file_carve_events,
                                             post_events_from_osquery_log, post_request_event)
 from zentral.contrib.osquery.models import (CarveBlock, CarveSession,
                                             DistributedQueryProbeMachine,
                                             enroll, EnrolledMachine,
                                             SOURCE_MODULE)
+from zentral.contrib.osquery.tasks import build_carve_session_archive
 
 logger = logging.getLogger('zentral.contrib.osquery.views.api')
 
@@ -310,7 +311,7 @@ class CarverContinueView(BaseNodeView):
                                  "session_finished": session_finished,
                                  "session_id": self.session_id}])
         if session_finished:
-            post_finished_file_carve_session(self.session_id)
+            build_carve_session_archive.apply_async((self.session_id,))
         return {}
 
 

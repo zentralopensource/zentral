@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/1.8/ref/settings/
 import os
 # Import the zentral settings (base.json)
 from zentral.conf import saml2_idp_metadata_file, settings as zentral_settings
+from .celery import app as celery_app
+
+__all__ = ('celery_app',)
 
 django_zentral_settings = zentral_settings['django']
 
@@ -61,6 +64,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'django_filters',
+    'django_celery_results',
     'accounts',
     'base',
 ]
@@ -158,6 +162,9 @@ for key in ('HOST', 'PASSWORD', 'PORT'):
     val = os.environ.get('POSTGRES_{}'.format(key))
     if val:
         DATABASES['default'][key] = val
+
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_BROKER_URL = django_zentral_settings.get("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
 
 # Internationalization
 # https://docs.djangoproject.com/en/1.8/topics/i18n/

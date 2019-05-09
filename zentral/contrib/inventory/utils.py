@@ -800,9 +800,9 @@ class MSQuery:
                 elif attr == "i":
                     self.add_filter(BundleFilter, bundle_id=value)
 
-    def serialize_filters(self, filter_to_add=None, filter_to_remove=None):
+    def serialize_filters(self, filter_to_add=None, filter_to_remove=None, include_hidden=False):
         return "-".join(f.serialize() for f in chain(self.filters, [filter_to_add])
-                        if f and f.optional and not f == filter_to_remove and not f.hidden)
+                        if f and f.optional and not f == filter_to_remove and (include_hidden or not f.hidden))
 
     def get_url(self):
         qd = self.query_dict.copy()
@@ -812,6 +812,18 @@ class MSQuery:
     def redirect_url(self):
         if self._redirect:
             return self.get_url()
+
+    def get_urlencoded_canonical_query_dict(self):
+        # used to serialize the state of the msquery object
+        # even with forced hidden filter values
+        # see inventory export
+        qd = {
+            "sf": self.serialize_filters(include_hidden=True)
+        }
+        for f in self.filters:
+            if f.value is not None:
+                qd[f.serialize()] = f.value
+        return urllib.parse.urlencode(qd)
 
     def available_filters(self):
         links = []

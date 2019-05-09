@@ -6,17 +6,15 @@ from zentral.contrib.inventory.models import MachineGroup, MachineSnapshot, Mach
 from zentral.contrib.inventory.utils import inventory_events_from_machine_snapshot_commit
 from zentral.core.events import event_cls_from_type
 from zentral.core.events.base import EventMetadata
-from zentral.core.queues import queues
 from zentral.contrib.jamf.events import JAMFAccessEvent, JAMFChangeManagementEvent, JAMFSoftwareServerEvent
 from .api_client import APIClient
 
 
-logger = logging.getLogger("zentral.contrib.jamf.preprocessor")
+logger = logging.getLogger("zentral.contrib.jamf.preprocessors")
 
 
 class WebhookEventPreprocessor(object):
-    name = "jamf webhook events preprocessor"
-    input_queue_name = "jamf_events"
+    routing_key = "jamf_events"
 
     def __init__(self):
         self.clients = {}
@@ -133,8 +131,7 @@ class WebhookEventPreprocessor(object):
 
 
 class BeatPreprocessor(object):
-    name = "jamf beats preprocessor"
-    input_queue_name = "jamf_beats"
+    routing_key = "jamf_beats"
     USER_RE = re.compile(r'^(?P<name>.*) \(ID: (?P<id>\d+)\)$')
     OBJECT_INFO_SEP_RE = re.compile("[ \.]{2,}")
 
@@ -271,6 +268,6 @@ class BeatPreprocessor(object):
             yield event
 
 
-def get_workers():
-    yield queues.get_preprocess_worker(WebhookEventPreprocessor())
-    yield queues.get_preprocess_worker(BeatPreprocessor())
+def get_preprocessors():
+    yield WebhookEventPreprocessor()
+    yield BeatPreprocessor()

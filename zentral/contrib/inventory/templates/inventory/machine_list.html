@@ -82,7 +82,7 @@
         Filter
       </button>
       <button type="submit" class="btn btn-primary">Search</button>
-      <a href="{{ xlsx_link }}" class="btn btn-primary">
+      <a href="{{ xlsx_link }}" class="task btn btn-primary">
         <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
         XLSX
       </a>
@@ -302,6 +302,34 @@
     });
   }
 
+  var WAIT_FOR_TASK_TIMEOUT_ID;
+
+  function waitForTask(url) {
+    $.ajax({
+      dataType: "json",
+      url: url,
+      success: function (data) {
+        console.log(data);
+        if (data.unready) {
+          WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 1000, url);
+        } else if (data.status === "SUCCESS") {
+          window.location = data.download_url;
+        }
+      }
+    });
+  }
+
+  function launchTask($link) {
+      var url = $link.attr("href");
+      $.ajax({
+        dataType: "json",
+        url: url,
+        success: function (data) {
+          WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 500, data.task_result_url);
+        }
+      });
+  }
+
   $(document).ready(function () {
     // remove filter links
     $(".filter-title").hover(
@@ -325,6 +353,11 @@
     $(".reorder-filter").click(function (event) {
       event.preventDefault();
       sortFilterList($(this));
+    });
+
+    $(".task").click(function (event) {
+      event.preventDefault();
+      launchTask($(this));
     });
   });
 </script>

@@ -1,17 +1,15 @@
 import json
 import logging
 from zentral.core.events.base import EventMetadata
-from zentral.core.queues import queues
 from .events import AuditEvent
 from .record import parse_record
 
 
-logger = logging.getLogger("zentral.contrib.audit.workers")
+logger = logging.getLogger("zentral.contrib.audit.preprocessors")
 
 
 class AuditRecordPreprocessor(object):
-    name = "audit record preprocessor"
-    input_queue_name = "audit_records"
+    routing_key = "audit_records"
 
     def build_audit_event(self, raw_event_d):
         try:
@@ -34,5 +32,5 @@ class AuditRecordPreprocessor(object):
             yield event
 
 
-def get_workers():
-    return [queues.get_preprocess_worker(AuditRecordPreprocessor())]
+def get_preprocessors():
+    yield AuditRecordPreprocessor()

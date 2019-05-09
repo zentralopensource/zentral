@@ -1,5 +1,7 @@
 asn1crypto
 boto3
+celery
+django-celery-results
 coverage
 cryptography
 django-bootstrap-form
