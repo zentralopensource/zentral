@@ -34,10 +34,8 @@ class SantaZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         tls_hostname = self.get_tls_hostname()
         postinstall_script = self.get_build_path("scripts", "postinstall")
         self.replace_in_file(postinstall_script,
-                             (("%TLS_HOSTNAME%", tls_hostname),))
-        enroll_script = self.get_root_path("usr", "local", "zentral", "santa", "enroll.py")
-        self.replace_in_file(enroll_script,
-                             (("%ENROLLMENT_URL%", "https://{}{}".format(tls_hostname,
+                             (("%TLS_HOSTNAME%", tls_hostname),
+                              ("%ENROLLMENT_URL%", "https://{}{}".format(tls_hostname,
                                                                          reverse("santa:enroll"))),
                               ("%ENROLLMENT_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
                               ("%TLS_SERVER_CERTS%", self.include_tls_server_certs() or "")))

@@ -8,7 +8,8 @@ def build_santa_configuration_dict(enrolled_machine):
     configuration = enrolled_machine.enrollment.configuration
 
     # default attributes
-    config_dict = {"MachineID": enrolled_machine.machine_id,
+    config_dict = {"MachineIDKey": "MachineID",
+                   "MachineIDPlist": "/usr/local/zentral/santa/machine_id.plist",
                    "SyncBaseURL": "{}/santa/".format(settings["api"]["tls_hostname"])}
     if distribute_tls_server_certs():
         config_dict["ServerAuthRootsFile"] = TLS_SERVER_CERTS_CLIENT_PATH
