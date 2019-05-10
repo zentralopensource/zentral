@@ -324,8 +324,9 @@
       $.ajax({
         dataType: "json",
         url: url,
+        method: "post",
         success: function (data) {
-          WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 500, data.task_result_url);
+          WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 300, data.task_result_url);
         }
       });
   }

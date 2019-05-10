@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 # base
 urlpatterns = [
     url(r'^', include('base.urls')),
+    url(r'^api/', include('base.api_urls')),
     url(r'^admin/users/', include('accounts.urls')),
     # special login view with verification device redirect
     url(r'^accounts/login/$', login, name='login'),

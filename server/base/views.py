@@ -1,13 +1,8 @@
-import json
 import logging
-import celery.states
 from django.apps import apps
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import FileResponse, Http404, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404
-from django.urls import reverse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.views.generic import TemplateView, View
-from django_celery_results.models import TaskResult
 from zentral.core.stores import frontend_store
 
 
@@ -74,37 +69,3 @@ class AppHistogramDataView(LoginRequiredMixin, View):
         return JsonResponse({"app": app,
                              "labels": labels,
                              "datasets": datasets})
-
-
-class TaskResultView(LoginRequiredMixin, View):
-    def get(self, request, *args, **kwargs):
-        task_id = str(kwargs["task_id"])
-        try:
-            task_result = TaskResult.objects.get(task_id=task_id)
-        except TaskResult.DoesNotExist:
-            response = {"status": "UNKNOWN",
-                        "unready": True}
-        else:
-            response = {"status": task_result.status,
-                        "unready": task_result.status in celery.states.UNREADY_STATES}
-            if task_result.status == "SUCCESS":
-                try:
-                    result = json.loads(task_result.result)
-                except (TypeError, ValueError):
-                    logger.exception("Could not load task result")
-                else:
-                    filepath = result.get("filepath")
-                    if filepath:
-                        response["download_url"] = reverse("base:task_result_file_download", args=(task_id,))
-        return JsonResponse(response)
-
-
-class TaskResultFileDownloadView(LoginRequiredMixin, View):
-    def get(self, request, *args, **kwargs):
-        task_result = get_object_or_404(TaskResult, task_id=str(kwargs["task_id"]), status="SUCCESS")
-        result = json.loads(task_result.result)
-        filepath = result["filepath"]
-        response = FileResponse(open(filepath, "rb"))
-        for k, v in result.get("headers").items():
-            response[k] = v
-        return response

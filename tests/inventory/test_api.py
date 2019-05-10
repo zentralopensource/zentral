@@ -16,6 +16,13 @@ class InventoryAPITests(APITestCase):
         super().setUp()
         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.token.key)
 
+    def test_export_machines(self):
+        url = reverse('inventory_api:machines_export')
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("task_id", response.data)
+        self.assertIn("task_result_url", response.data)
+
     def test_create_meta_business_unit(self):
         url = reverse('inventory_api:meta_business_units')
         data = {'name': 'TestMBU0'}

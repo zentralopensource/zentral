@@ -1,8 +1,24 @@
+from django.urls import reverse
+from django.utils import timezone
 from django_filters import rest_framework as filters
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from .models import MetaBusinessUnit, Tag
 from .serializers import MetaBusinessUnitSerializer, TagSerializer
+from .tasks import export_inventory
+from .utils import MSQuery
+
+
+class MachinesExport(APIView):
+    def post(self, request, format=None):
+        msquery = MSQuery(request.GET)
+        filename = "inventory_export_{:%Y-%m-%d_%H-%M-%S}.xlsx".format(timezone.now())
+        result = export_inventory.apply_async((msquery.get_urlencoded_canonical_query_dict(), filename))
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)
 
 
 class MetaBusinessUnitList(generics.ListCreateAPIView):

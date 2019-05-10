@@ -4,7 +4,7 @@ from math import ceil
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse, reverse_lazy
-from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
@@ -21,7 +21,6 @@ from .models import (BusinessUnit,
                      MetaMachine,
                      MetaBusinessUnitTag, MachineTag, Tag, Taxonomy,
                      OSXApp, OSXAppInstance)
-from .tasks import export_inventory
 from .utils import (get_prometheus_inventory_metrics, prometheus_metrics_content_type,
                     BundleFilter, BundleFilterForm,
                     MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
@@ -51,11 +50,6 @@ class MachineListView(LoginRequiredMixin, FormView):
             redirect_url = self.msquery.redirect_url()
             if redirect_url:
                 return HttpResponseRedirect(redirect_url)
-            if "xlsx" in request.GET:
-                filename = "inventory_export_{:%Y-%m-%d_%H-%M-%S}.xlsx".format(timezone.now())
-                result = export_inventory.apply_async((self.msquery.get_urlencoded_canonical_query_dict(), filename))
-                return JsonResponse({"task_id": result.id,
-                                     "task_result_url": reverse("base:task_result", args=(result.id,))})
         return super().dispatch(request, *args, **kwargs)
 
     def get_list_title(self):
@@ -99,11 +93,8 @@ class MachineListView(LoginRequiredMixin, FormView):
             breadcrumbs.extend([(reset_link, anchor_text),
                                 (None, "page {} of {}".format(self.msquery.page, num_pages))])
         ctx['breadcrumbs'] = breadcrumbs
-        # xlsx link
-        xlsx_qs = self.request.GET.copy()
-        xlsx_qs["xlsx"] = True
-        xlsx_link = "?{}".format(xlsx_qs.urlencode())
-        ctx["xlsx_link"] = xlsx_link
+        ctx["xlsx_link"] = "{}?{}".format(reverse("inventory_api:machines_export"),
+                                          self.msquery.get_urlencoded_canonical_query_dict())
         return ctx
 
     def form_valid(self, form):
