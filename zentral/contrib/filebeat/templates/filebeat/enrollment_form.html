@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'filebeat:configuration_list' %}">Filebeat configurations</a></li>
+  <li><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="active">Create enrollment</li>
+</ol>
+
+<h2>Create enrollment for Filebeat configuration <i>{{ configuration }}</i></h2>
+
+<form method="post" class="form">{% csrf_token %}
+  {% if secret_form %}
+  {{ secret_form|bootstrap }}
+  {% endif %}
+  {% if enrollment_form %}
+  {{ enrollment_form|bootstrap }}
+  {% endif %}
+  <p>
+    <a class="btn btn-default" href="{{ configuration.get_absolute_url }}">
+      Cancel
+    </a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
+</form>
+{% endblock %}

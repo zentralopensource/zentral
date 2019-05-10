@@ -30,13 +30,16 @@ class Releases(object):
 
     def get_versions(self):
         resp = requests.get(self.GITHUB_API_URL)
+        versions = []
         for release in resp.json():
             version = release["tag_name"].strip("v")
             filename = self.FILENAME_TMPL.format(version=version)
             download_url = self.DOWNLOAD_URL_TMPL.format(filename=filename)
             created_at = parser.parse(release["created_at"])
             is_local = os.path.exists(self._get_local_path(filename))
-            yield filename, version, created_at, download_url, is_local
+            versions.append((filename, version, created_at, download_url, is_local))
+        versions.sort(key=lambda t: [int(i) for i in t[1].split("-")[0].split(".")], reverse=True)
+        return versions
 
     def get_requested_package(self, requested_filename):
         local_path = self._get_local_path(requested_filename)
