@@ -1,11 +1,17 @@
 from collections import OrderedDict
+import csv
 from datetime import datetime
 from itertools import chain
 import logging
+import os
 import re
+import tempfile
 import urllib.parse
+import zipfile
 from django import forms
 from django.db import connection
+from django.http import QueryDict
+from django.utils.text import slugify
 from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
                                generate_latest, CONTENT_TYPE_LATEST as prometheus_metrics_content_type)
 import xlsxwriter
@@ -813,17 +819,19 @@ class MSQuery:
         if self._redirect:
             return self.get_url()
 
-    def get_urlencoded_canonical_query_dict(self):
+    def get_canonical_query_dict(self):
         # used to serialize the state of the msquery object
         # even with forced hidden filter values
         # see inventory export
-        qd = {
-            "sf": self.serialize_filters(include_hidden=True)
-        }
+        qd = QueryDict(mutable=True)
+        qd["sf"] = self.serialize_filters(include_hidden=True)
         for f in self.filters:
             if f.value is not None:
                 qd[f.serialize()] = f.value
-        return urllib.parse.urlencode(qd)
+        return qd
+
+    def get_urlencoded_canonical_query_dict(self):
+        return self.get_canonical_query_dict().urlencode()
 
     def available_filters(self):
         links = []
@@ -1022,10 +1030,8 @@ class MSQuery:
             yield record["serial_number"], record["machine_snapshots"]
 
     # export
-    def export_xlsx(self, http_response):
-        workbook = xlsxwriter.Workbook(http_response, {'in_memory': True})
-        # machines
-        machines_ws = workbook.add_worksheet("Machines")
+    def export_sheets_data(self):
+        title = "Machines"
         headers = [
             "Source ID", "Source",
             "SN", "Type", "Platform",
@@ -1034,78 +1040,85 @@ class MSQuery:
             "OS",
             "tags"
         ]
-        row = 0
-        col = 0
-        for header in headers:
-            machines_ws.write_string(row, col, header)
-            col += 1
+        row_idx = 0
+        rows = []
         for serial_number, machine_snapshots in self.fetch(paginate=False):
             for machine_snapshot in machine_snapshots:
-                if row == 0:
-                    # still the headers get the apps
+                if row_idx == 0:
                     for app_title in machine_snapshot.get("osx_apps", {}):
                         for suffix in ("min", "max"):
-                            machines_ws.write_string(row, col, "{} {}".format(app_title, suffix))
-                            col += 1
-                    row += 1
-                col = 0
-                machines_ws.write_number(row, col, machine_snapshot["source"]["id"])
-                col += 1
-                machines_ws.write_string(row, col, machine_snapshot["source"].get("display_name") or "")
-                col += 1
-                machines_ws.write_string(row, col, serial_number)
-                col += 1
-                machines_ws.write_string(row, col, machine_snapshot.get("type") or "")
-                col += 1
-                machines_ws.write_string(row, col, machine_snapshot.get("platform") or "")
-                col += 1
-                machines_ws.write_string(row, col, machine_snapshot.get("computer_name") or "")
-                col += 1
-                machines_ws.write_string(row, col, machine_snapshot.get("hardware_model") or "")
-                col += 1
+                            headers.append("{} {}".format(app_title, suffix))
+                row_idx += 1
+                row = [
+                    machine_snapshot["source"]["id"],
+                    machine_snapshot["source"].get("display_name") or "",
+                    serial_number,
+                    machine_snapshot.get("type") or "",
+                    machine_snapshot.get("platform") or "",
+                    machine_snapshot.get("computer_name") or "",
+                    machine_snapshot.get("hardware_model") or ""
+                ]
                 os_version = machine_snapshot.get("os_version")
                 if os_version:
                     os_version_dn = os_version.get("display_name") or ""
                 else:
                     os_version_dn = ""
-                machines_ws.write_string(row, col, os_version_dn)
-                col += 1
-                tags = "|".join(dn for dn in (t.get("display_name") for t in machine_snapshot.get("tags", [])) if dn)
-                machines_ws.write_string(row, col, tags)
-                col += 1
+                row.append(os_version_dn)
+                row.append(
+                    "|".join(dn for dn in (t.get("display_name") for t in machine_snapshot.get("tags", [])) if dn)
+                )
                 for _, app_versions in machine_snapshot.get("osx_apps", {}).items():
                     if app_versions:
                         min_app_version = app_versions[0]["display_name"]
                         max_app_version = app_versions[-1]["display_name"]
                     else:
                         min_app_version = max_app_version = ""
-                    machines_ws.write_string(row, col, min_app_version)
-                    col += 1
-                    machines_ws.write_string(row, col, max_app_version)
-                    col += 1
-                row += 1
+                    row.extend([min_app_version, max_app_version])
+                rows.append(row)
+        yield title, headers, rows
+
         # aggregations
         for f, f_links, _, _ in self.grouping_links():
-            ws = workbook.add_worksheet(f.title)
-            row = col = 0
-            headers = ["Value", "Count", "%"]
-            for header in headers:
-                ws.write_string(row, col, header)
-                col += 1
-            row += 1
+            rows = []
             for label, f_count, f_perc, _, _ in f_links:
                 if label == "\u2400":
                     label = "NULL"
                 elif not isinstance(label, str):
                     label = str(label)
-                col = 0
-                ws.write_string(row, col, label)
-                col += 1
-                ws.write_number(row, col, f_count)
-                col += 1
-                ws.write_number(row, col, f_perc)
-                row += 1
+                rows.append([label, f_count, f_perc])
+            yield f.title, ["Value", "Count", "%"], rows
+
+    def export_xlsx(self, f_obj):
+        workbook = xlsxwriter.Workbook(f_obj)
+        # machines
+        for title, headers, rows in self.export_sheets_data():
+            ws = workbook.add_worksheet(title)
+            row_idx = col_idx = 0
+            for header in headers:
+                ws.write_string(row_idx, col_idx, header)
+                col_idx += 1
+            for row in rows:
+                row_idx += 1
+                col_idx = 0
+                for value in row:
+                    if isinstance(value, (int, float)):
+                        ws.write_number(row_idx, col_idx, value)
+                    else:
+                        ws.write_string(row_idx, col_idx, value)
+                    col_idx += 1
         workbook.close()
+
+    def export_zip(self, f_obj):
+        with zipfile.ZipFile(f_obj, mode='w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zip_f:
+            for title, headers, rows in self.export_sheets_data():
+                tmp_file_fh, tmp_file = tempfile.mkstemp()
+                with os.fdopen(tmp_file_fh, mode='w', newline='') as csv_f:
+                    w = csv.writer(csv_f)
+                    w.writerow(headers)
+                    for row in rows:
+                        w.writerow(row)
+                zip_f.write(tmp_file, "{}.csv".format(slugify(title)))
+                os.unlink(tmp_file)
 
 
 class BundleFilterForm(forms.Form):

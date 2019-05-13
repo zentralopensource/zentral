@@ -93,8 +93,14 @@ class MachineListView(LoginRequiredMixin, FormView):
             breadcrumbs.extend([(reset_link, anchor_text),
                                 (None, "page {} of {}".format(self.msquery.page, num_pages))])
         ctx['breadcrumbs'] = breadcrumbs
-        ctx["xlsx_link"] = "{}?{}".format(reverse("inventory_api:machines_export"),
-                                          self.msquery.get_urlencoded_canonical_query_dict())
+        msquery_cqd = self.msquery.get_canonical_query_dict()
+        ctx['export_links'] = []
+        for fmt in ("xlsx", "zip"):
+            export_qd = msquery_cqd.copy()
+            export_qd["export_format"] = fmt
+            ctx['export_links'].append((fmt,
+                                        "{}?{}".format(reverse("inventory_api:machines_export"),
+                                                       export_qd.urlencode())))
         return ctx
 
     def form_valid(self, form):

@@ -12,9 +12,12 @@ from .utils import MSQuery
 
 
 class MachinesExport(APIView):
-    def post(self, request, format=None):
+    def post(self, request, *args, **kwargs):
+        export_format = request.GET.get("export_format", "xlsx")
+        if export_format not in ("xlsx", "zip"):
+            raise ValidationError("Unknown export format")
         msquery = MSQuery(request.GET)
-        filename = "inventory_export_{:%Y-%m-%d_%H-%M-%S}.xlsx".format(timezone.now())
+        filename = "inventory_export_{:%Y-%m-%d_%H-%M-%S}.{}".format(timezone.now(), export_format)
         result = export_inventory.apply_async((msquery.get_urlencoded_canonical_query_dict(), filename))
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
