@@ -1042,9 +1042,13 @@ class MSQuery:
         ]
         row_idx = 0
         rows = []
+        include_max_incident_severity = False
         for serial_number, machine_snapshots in self.fetch(paginate=False):
             for machine_snapshot in machine_snapshots:
                 if row_idx == 0:
+                    if "max_incident_severity" in machine_snapshot:
+                        include_max_incident_severity = True
+                        headers.extend(["Max incident severity", "Max incident severity display"])
                     for app_title in machine_snapshot.get("osx_apps", {}):
                         for suffix in ("min", "max"):
                             headers.append("{} {}".format(app_title, suffix))
@@ -1067,6 +1071,9 @@ class MSQuery:
                 row.append(
                     "|".join(dn for dn in (t.get("display_name") for t in machine_snapshot.get("tags", [])) if dn)
                 )
+                if include_max_incident_severity:
+                    row.extend([machine_snapshot.get("max_incident_severity") or "",
+                                machine_snapshot.get("max_incident_severity_display") or ""])
                 for _, app_versions in machine_snapshot.get("osx_apps", {}).items():
                     if app_versions:
                         min_app_version = app_versions[0]["display_name"]
@@ -1104,12 +1111,14 @@ class MSQuery:
                     if isinstance(value, (int, float)):
                         ws.write_number(row_idx, col_idx, value)
                     else:
+                        if not isinstance(value, str):
+                            value = str(value)
                         ws.write_string(row_idx, col_idx, value)
                     col_idx += 1
         workbook.close()
 
     def export_zip(self, f_obj):
-        with zipfile.ZipFile(f_obj, mode='w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zip_f:
+        with zipfile.ZipFile(f_obj, mode='w', compression=zipfile.ZIP_DEFLATED) as zip_f:
             for title, headers, rows in self.export_sheets_data():
                 tmp_file_fh, tmp_file = tempfile.mkstemp()
                 with os.fdopen(tmp_file_fh, mode='w', newline='') as csv_f:
