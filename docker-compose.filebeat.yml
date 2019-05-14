@@ -18,16 +18,17 @@ services:
       - scepserver
       - web
     volumes:
-      - ./conf/mdm/docker/nginx/conf.d/:/etc/nginx/conf.d/
+      - ./conf/filebeat/docker/nginx/conf.d/:/etc/nginx/conf.d/
       - scep_ca:/scep_CA
-  web:
-    environment:
-      ZENTRAL_CONF_DIR: /zentral/conf/mdm/zentral/
+  logstash:
+    build: ./conf/filebeat/docker/logstash/
+    ports:
+      - "5044:5044"
+    depends_on:
+      - scepserver
     volumes:
       - scep_ca:/scep_CA
-  workers:
-    environment:
-      ZENTRAL_CONF_DIR: /zentral/conf/mdm/zentral/
+      - ./conf/start/docker/tls/:/zentral_tls
 
 volumes:
   scep_ca:

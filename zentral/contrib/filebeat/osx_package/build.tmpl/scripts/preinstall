@@ -1,0 +1,10 @@
+#!/usr/bin/python
+import os.path
+import subprocess
+
+if __name__ == "__main__":
+    launch_daemon_plist = "/Library/LaunchDaemons/io.zentral.filebeat.plist"
+    if os.path.exists(launch_daemon_plist):
+        subprocess.check_call([
+          "/bin/launchctl", "unload", "-w", launch_daemon_plist
+        ])

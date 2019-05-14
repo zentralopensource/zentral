@@ -1,0 +1,114 @@
+#!/usr/bin/python
+import json
+import os
+import plistlib
+import shutil
+import ssl
+import subprocess
+import tempfile
+import urllib2
+
+
+START_ENROLLMENT_URL = "https://%TLS_HOSTNAME%/filebeat/enrollment/start/"
+COMPLETE_ENROLLMENT_URL = "https://%TLS_HOSTNAME%/filebeat/enrollment/complete/"
+ENROLLMENT_SECRET = "%ENROLLMENT_SECRET%"
+TLS_SERVER_CERTS = "%TLS_SERVER_CERTS%"
+DEFAULT_HEADERS = {
+    "User-Agent": "Zentral/filebeatenrollment 0.1",
+    "Content-Type": "application/json"
+}
+
+ZENTRAL_DIR = "/usr/local/zentral/"
+FILEBEAT_DIR = os.path.join(ZENTRAL_DIR, "filebeat")
+FILEBEAT_YML = os.path.join(FILEBEAT_DIR, "filebeat.yml")
+SCEPCLIENT = os.path.join(ZENTRAL_DIR, "bin", "scepclient")
+
+
+def get_serial_number_and_uuid():
+    output = subprocess.check_output(["ioreg", "-a", "-c", "IOPlatformExpertDevice", "-d", "2"])
+    ioreg_result = plistlib.readPlistFromString(output)["IORegistryEntryChildren"][0]
+    return ioreg_result["IOPlatformSerialNumber"], ioreg_result["IOPlatformUUID"]
+
+
+def get_ssl_context(client_cert=None, client_key=None):
+    ctx = ssl.create_default_context(cafile=TLS_SERVER_CERTS or None)
+    if client_cert:
+        ctx.load_cert_chain(client_cert, client_key)
+    return ctx
+
+
+def get_post_data(secret):
+    serial_number, uuid = get_serial_number_and_uuid()
+    data = json.dumps({"secret": secret,
+                       "serial_number": serial_number,
+                       "uuid": uuid})
+    return data
+
+
+def start_enrollment():
+    print("START ENROLLMENT", ENROLLMENT_SECRET)
+    req = urllib2.Request(START_ENROLLMENT_URL,
+                          get_post_data(ENROLLMENT_SECRET),
+                          DEFAULT_HEADERS)
+    resp = urllib2.urlopen(req, context=get_ssl_context())
+    return json.load(resp)
+
+
+def get_certificate(cn, org, challenge, url):
+    print("GET CERTIFICATE", cn, org, challenge, url)
+    if not os.path.isdir(FILEBEAT_DIR):
+        os.makedirs(FILEBEAT_DIR)
+    client_cert, private_key = os.path.join(FILEBEAT_DIR, "client.crt"), os.path.join(FILEBEAT_DIR, "client.key")
+    old_umask = os.umask(0o077)
+    old_dir = os.getcwd()
+    tmpdir = tempfile.mkdtemp()
+    os.chdir(tmpdir)
+    subprocess.check_call([
+        SCEPCLIENT,
+        "-server-url", url,
+        "-challenge", challenge,
+        "-private-key", "client.key",
+        "-certificate", "client.crt",
+        "-organization", org,
+        "-cn", cn
+    ])
+    shutil.move("client.crt", client_cert)
+    shutil.move("client.key", private_key)
+    os.chdir(old_dir)
+    shutil.rmtree(tmpdir)
+    os.umask(old_umask)
+    return client_cert, private_key
+
+
+def complete_enrollment(client_cert, client_key, enrollment_session_secret):
+    print("COMPLETE ENROLLMENT", client_cert, client_key, enrollment_session_secret)
+    req = urllib2.Request(COMPLETE_ENROLLMENT_URL,
+                          get_post_data(enrollment_session_secret),
+                          DEFAULT_HEADERS)
+    resp = urllib2.urlopen(req, context=get_ssl_context(client_cert, client_key))
+    resp_json = json.load(resp)
+    with open(FILEBEAT_YML, "w") as f:
+        f.write(resp_json["filebeat.yml"])
+
+
+def load_launch_daemon():
+    subprocess.check_call([
+        "/bin/launchctl", "load", "-w",
+        "/Library/LaunchDaemons/io.zentral.filebeat.plist"
+    ])
+
+
+def update_default_zentral_plist():
+    subprocess.check_call([
+        "/usr/bin/defaults", "write",
+        "/Library/Preferences/io.zentral.plist",
+        "base_url", "https://%TLS_HOSTNAME%"
+    ])
+
+
+if __name__ == "__main__":
+    enrollment_session_data = start_enrollment()
+    client_cert, client_key = get_certificate(**enrollment_session_data["scep"])
+    complete_enrollment(client_cert, client_key, enrollment_session_data["secret"])
+    load_launch_daemon()
+    update_default_zentral_plist()

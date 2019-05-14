@@ -10,10 +10,11 @@ from zentral.contrib.mdm.models import (EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
                                         PushCertificate)
 from zentral.contrib.mdm.tasks import send_enrolled_device_notification
+from zentral.utils.certificates import parse_dn
 from .base import PostEventMixin
 from .utils import (build_application_download_response, build_application_manifest_response,
                     get_next_device_command_response,
-                    parse_dn, process_result_payload, tree_from_payload)
+                    process_result_payload, tree_from_payload)
 
 logger = logging.getLogger('zentral.contrib.mdm.views.mdm')
 

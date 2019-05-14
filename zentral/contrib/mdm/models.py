@@ -236,7 +236,7 @@ class OTAEnrollmentSessionManager(models.Manager):
             expired_at=enrollment_secret.expired_at
         )
         new_es.save(secret_length=56)  # CN max 64 - $ separator - prefix, ota or mdm$ota
-        new_es.tags = tags
+        new_es.tags.set(tags)
         enrollment_session = self.model(status=self.model.PHASE_2,
                                         ota_enrollment=ota_enrollment,
                                         enrollment_secret=new_es)
@@ -590,7 +590,7 @@ class DEPEnrollmentSessionManager(models.Manager):
             expired_at=expired_at,
         )
         new_es.save(secret_length=56)  # CN max 64 - $ separator - prefix MDM$DEP
-        new_es.tags = tags
+        new_es.tags.set(tags)
         enrollment_session = self.model(status=self.model.STARTED,
                                         dep_profile=dep_profile,
                                         enrollment_secret=new_es)

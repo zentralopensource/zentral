@@ -1,14 +1,19 @@
+import base64
 from gzip import GzipFile
 import json
 import logging
 import warnings
 import zlib
+from asn1crypto import csr
 from django.core import signing
 from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
+from django.shortcuts import get_object_or_404
 from django.views.generic import View
 from zentral.conf import settings
-from zentral.contrib.inventory.models import BusinessUnit
+from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
+from zentral.contrib.inventory.models import BusinessUnit, MetaBusinessUnit
+from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.core.exceptions import ImproperlyConfigured
 from .http import user_agent_and_ip_address_from_request
 
@@ -177,3 +182,62 @@ class SignedRequestHeaderJSONPostAPIView(SignedRequestJSONPostAPIView):
         if auth_err:
             raise APIAuthError(auth_err)
         return req_sec
+
+
+class BaseVerifySCEPCSRView(SignedRequestHeaderJSONPostAPIView):
+    verify_module = "zentral"
+    serial_number = None
+
+    def post_event(self, scep_status, **event_payload):
+        event_payload["scep_status"] = scep_status
+        self.event_class.post_machine_request_payloads(self.serial_number, self.user_agent, self.ip,
+                                                       [event_payload])
+
+    def abort(self, reason, **event_payload):
+        if reason:
+            event_payload["reason"] = reason
+        self.post_event("failure", **event_payload)
+        raise SuspiciousOperation(reason)
+
+    def do_post(self, data):
+        csr_data = base64.b64decode(data["csr"].encode("ascii"))
+        csr_info = csr.CertificationRequest.load(csr_data)["certification_request_info"]
+
+        csr_d = {}
+
+        # subject
+        for rdn_idx, rdn in enumerate(csr_info["subject"].chosen):
+            for type_val_idx, type_val in enumerate(rdn):
+                csr_d[type_val["type"].native] = type_val['value'].native
+
+        kwargs = {"user_agent": self.user_agent,
+                  "public_ip_address": self.ip}
+
+        # meta business
+        organization_name = csr_d.get("organization_name")
+        if not organization_name or not organization_name.startswith("MBU$"):
+            self.abort("Unknown organization name format")
+        meta_business_unit_id = int(organization_name.split("$", 1)[-1])
+        kwargs["meta_business_unit"] = get_object_or_404(MetaBusinessUnit, pk=meta_business_unit_id)
+
+        # type and session secret
+        try:
+            cn_prefix, kwargs["secret"] = csr_d["common_name"].rsplit("$", 1)
+        except (KeyError, ValueError, AttributeError):
+            self.abort("Unknown common name format")
+
+        model, status, update_status_method = self.get_enrollment_session_info(cn_prefix)
+        kwargs["model"] = model
+        kwargs["{}__status".format(model)] = status
+        try:
+            es_request = verify_enrollment_secret(**kwargs)
+        except EnrollmentSecretVerificationFailed as e:
+            self.abort("secret verification failed: '{}'".format(e.err_msg))
+        else:
+            # update the enrollment session status
+            enrollment_session = getattr(es_request.enrollment_secret, model)
+            getattr(enrollment_session, update_status_method)(es_request)
+            self.post_event("success", **enrollment_session.serialize_for_event())
+
+        # OK
+        return {"status": 0}

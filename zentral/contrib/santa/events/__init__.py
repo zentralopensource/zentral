@@ -53,6 +53,14 @@ class SantaEventEvent(BaseEvent):
 register_event_type(SantaEventEvent)
 
 
+class SantaLogEvent(BaseEvent):
+    event_type = "santa_log"
+    tags = ["santa"]
+
+
+register_event_type(SantaLogEvent)
+
+
 def build_certificate_tree_from_santa_event_cert(in_d):
     out_d = {}
     for from_a, to_a, is_dt in (("cn", "common_name", False),

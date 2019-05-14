@@ -90,7 +90,7 @@
       <td>
         {% if not distributor and not secret.is_used_up %}
         <a class="btn btn-default download-tool"
-           href="{% comment %}{% url 'filebeat:enrollment_package' enrollment.configuration.id enrollment.id %}{% endcomment %}">
+           href="{% url 'filebeat:enrollment_package' enrollment.configuration.id enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
         </a>
         {% elif secret.is_used_up %}

@@ -80,7 +80,7 @@ def build_scep_payload(enrollment_session):
     return build_payload("com.apple.security.scep",
                          enrollment_session.get_payload_name(),
                          "scep",
-                         {"URL": "{}/scep".format(settings["api"]["tls_hostname"]),
+                         {"URL": "{}/scep".format(settings["api"]["tls_hostname"]),  # TODO: hardcoded scep url
                           "Subject": [[["CN", enrollment_session.get_common_name()]],
                                       [["2.5.4.5", enrollment_session.get_serial_number()]],
                                       [["O", enrollment_session.get_organization()]]],

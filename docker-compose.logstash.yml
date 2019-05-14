@@ -1,7 +1,0 @@
-version: '2'
-
-services:
-  logstash:
-    build: ./conf/logstash/docker/logstash/
-    ports:
-      - "5044:5044"

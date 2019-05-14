@@ -20,12 +20,20 @@ urlpatterns = [
     path('configurations/<int:pk>/enrollments/create/',
          views.CreateEnrollmentView.as_view(),
          name='create_enrollment'),
-    # path('configurations/<int:configuration_pk>/enrollments/<int:pk>/',
-    #      views.EnrollmentPackageView.as_view(),
-    #      name='enrollment_package'),
-    # enrollment endpoint called by enrollment script
-    path('enroll/', csrf_exempt(views.EnrollView.as_view()),
-         name='enroll'),
+    path('configurations/<int:configuration_pk>/enrollments/<int:pk>/package/',
+         views.EnrollmentPackageView.as_view(),
+         name='enrollment_package'),
+
+    # enrollment endpoints called by enrollment script
+    path('enrollment/start/', csrf_exempt(views.StartEnrollmentView.as_view()),
+         name='start_enrollment'),
+    path('enrollment/complete/', csrf_exempt(views.CompleteEnrollmentView.as_view()),
+         name='complete_enrollment'),
+    # SCEP verification / scep view
+    path('verify_scep_csr/',
+         csrf_exempt(views.VerifySCEPCSRView.as_view()),
+         name='verify_scep_csr'),
+
 ]
 
 

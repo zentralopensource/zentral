@@ -6,14 +6,19 @@ from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, UpdateView
+from zentral.conf import settings
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MachineTag
 from zentral.contrib.inventory.utils import verify_enrollment_secret
+from zentral.utils.api_views import BaseVerifySCEPCSRView
+from zentral.utils.certificates import parse_dn
 from zentral.utils.http import user_agent_and_ip_address_from_request
-from .events import post_enrollment_event
+from .events import FilebeatEnrollmentEvent, post_enrollment_event
 from .forms import ConfigurationForm, EnrollmentForm
-from .models import Configuration, EnrolledMachine
+from .models import Configuration, EnrolledMachine, Enrollment, EnrollmentSession
+from .osx_package.builder import ZentralFilebeatPkgBuilder
+from .utils import build_filebeat_yml
 
 logger = logging.getLogger('zentral.contrib.filebeat.views')
 
@@ -110,39 +115,108 @@ class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
             return self.forms_invalid(secret_form, enrollment_form)
 
 
-# enrollment endpoint called by enrollment script
+class EnrollmentPackageView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
+        builder = ZentralFilebeatPkgBuilder(enrollment)
+        return builder.build_and_make_response()
 
 
-class EnrollView(View):
+# enrollment endpoints called by enrollment script
+
+
+class StartEnrollmentView(View):
     def post(self, request, *args, **kwargs):
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
         try:
             request_json = json.loads(request.body.decode("utf-8"))
             secret = request_json["secret"]
             serial_number = request_json["serial_number"]
-            uuid = request_json["uuid"]
             es_request = verify_enrollment_secret(
                 "filebeat_enrollment", secret,
                 self.user_agent, self.ip,
-                serial_number, uuid
+                serial_number
             )
         except (ValueError, KeyError, EnrollmentSecretVerificationFailed):
             raise SuspiciousOperation
         else:
-            # get or create enrolled machine
-            enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.get_or_create(
+            enrollment_session = EnrollmentSession.objects.create_from_enrollment(
                 enrollment=es_request.enrollment_secret.filebeat_enrollment,
                 serial_number=serial_number
             )
+            # response
+            response = {
+                "scep": {
+                    "cn": enrollment_session.get_common_name(),
+                    "org": enrollment_session.get_organization(),
+                    "challenge": enrollment_session.get_challenge(),
+                    "url": "{}/scep".format(settings["api"]["tls_hostname"]),  # TODO: hardcoded scep url
+                },
+                "secret": enrollment_session.enrollment_secret.secret,
+            }
 
+            # post event
+            post_enrollment_event(serial_number, self.user_agent, self.ip, enrollment_session.serialize_for_event())
+        return JsonResponse(response)
+
+
+class CompleteEnrollmentView(View):
+    def post(self, request, *args, **kwargs):
+        # DN => serial_number + meta_business_unit
+        dn = request.META.get("HTTP_X_SSL_CLIENT_S_DN")
+        if not dn:
+            raise SuspiciousOperation("missing DN in request headers")
+
+        dn_d = parse_dn(dn)
+
+        cn = dn_d.get("CN")
+        try:
+            cn_prefix, enrollment_secret_secret = cn.split("$")
+        except (AttributeError, ValueError):
+            raise SuspiciousOperation("missing or bad CN in client certificate DN")
+
+        # verify prefix
+        if cn_prefix != "FLBT":
+            raise SuspiciousOperation("bad CN prefix in client certificate")
+
+        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
+        try:
+            request_json = json.loads(request.body.decode("utf-8"))
+            secret = request_json["secret"]
+            serial_number = request_json["serial_number"]
+            es_request = verify_enrollment_secret(
+                "filebeat_enrollment_session", secret,
+                self.user_agent, self.ip,
+                serial_number,
+                filebeat_enrollment_session__status__in=(EnrollmentSession.STARTED, EnrollmentSession.SCEP_VERIFIED)
+            )
+        except (ValueError, KeyError, EnrollmentSecretVerificationFailed):
+            raise SuspiciousOperation("Could not verify enrollment session secret")
+        else:
+            # update enrollment session
+            enrollment_session = es_request.enrollment_secret.filebeat_enrollment_session
+            enrolled_machine, _ = EnrolledMachine.objects.get_or_create(serial_number=serial_number)
+            enrollment_session.set_completed(enrolled_machine)
             # apply enrollment secret tags
             for tag in es_request.enrollment_secret.tags.all():
                 MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
-
-            # response
-            response = {}
-
             # post event
-            post_enrollment_event(serial_number, self.user_agent, self.ip,
-                                  {'action': "enrollment" if enrolled_machine_created else "re-enrollment"})
-        return JsonResponse(response)
+            post_enrollment_event(serial_number, self.user_agent, self.ip, enrollment_session.serialize_for_event())
+            # response
+            response = {
+                "filebeat.yml": build_filebeat_yml(enrollment_session.enrollment.configuration)
+            }
+            return JsonResponse(response)
+
+
+# SCEP verification
+
+
+class VerifySCEPCSRView(BaseVerifySCEPCSRView):
+    event_class = FilebeatEnrollmentEvent
+
+    def get_enrollment_session_info(self, cn_prefix):
+        if cn_prefix == "FLBT":
+            return "filebeat_enrollment_session", EnrollmentSession.STARTED, "set_scep_verified_status"
+        else:
+            self.abort("Unknown CN prefix {}".format(cn_prefix))
