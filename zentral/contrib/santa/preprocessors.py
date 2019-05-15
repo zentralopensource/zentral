@@ -68,11 +68,12 @@ class SantaLogPreprocessor(object):
             serial_number = enrollment_session.enrollment_secret.serial_numbers[0]
             event_data = parse_santa_log_message(raw_event_d["message"])
             user_agent = "/".join(raw_event_d.get("agent", {}).get(attr) for attr in ("type", "version"))
+            ip_address = raw_event_d.get("filebeat_ip_address")
         except Exception:
             logger.exception("Could not process santa_log raw event")
         else:
             yield from SantaLogEvent.build_from_machine_request_payloads(
-                serial_number, user_agent, None, [event_data],
+                serial_number, user_agent, ip_address, [event_data],
                 get_created_at=lambda d: d.pop("timestamp", None)
             )
 
