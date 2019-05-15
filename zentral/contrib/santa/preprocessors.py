@@ -72,7 +72,8 @@ class SantaLogPreprocessor(object):
             logger.exception("Could not process santa_log raw event")
         else:
             yield from SantaLogEvent.build_from_machine_request_payloads(
-                serial_number, user_agent, None, [event_data]
+                serial_number, user_agent, None, [event_data],
+                get_created_at=lambda d: d.pop("timestamp", None)
             )
 
 
