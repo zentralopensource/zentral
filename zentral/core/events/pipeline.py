@@ -1,3 +1,4 @@
+from functools import lru_cache
 import logging
 import geoip2.database
 from . import event_from_event_d
@@ -21,15 +22,21 @@ else:
         logger.info("Could not open Geolite2 city database")
 
 
+@lru_cache(maxsize=256)
+def get_city(ip):
+    try:
+        return city_db_reader.city(ip)
+    except Exception:
+        pass
+
+
 def enrich_event(event):
     if isinstance(event, dict):
         event = event_from_event_d(event)
     if event.metadata.request and event.metadata.request.ip and not event.metadata.request.geo and city_db_reader:
-        try:
-            city = city_db_reader.city(event.metadata.request.ip)
+        city = get_city(event.metadata.request.ip)
+        if city:
             event.metadata.request.set_geo_from_city(city)
-        except Exception:
-            pass
     for probe in all_probes.event_filtered(event):
         incident_severity = probe.get_matching_event_incident_severity(event)
         if incident_severity is None:
