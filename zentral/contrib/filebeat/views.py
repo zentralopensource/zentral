@@ -3,9 +3,11 @@ import logging
 from django.core.exceptions import SuspiciousOperation
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, UpdateView
+from pygments import lexers, highlight
+from pygments.formatters import HtmlFormatter
 from zentral.conf import settings
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
@@ -14,11 +16,11 @@ from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.utils.api_views import BaseVerifySCEPCSRView
 from zentral.utils.certificates import parse_dn
 from zentral.utils.http import user_agent_and_ip_address_from_request
+from .conf import available_inputs, build_filebeat_yml
 from .events import FilebeatEnrollmentEvent, post_enrollment_event
 from .forms import ConfigurationForm, EnrollmentForm
 from .models import Configuration, EnrolledMachine, Enrollment, EnrollmentSession
 from .osx_package.builder import ZentralFilebeatPkgBuilder
-from .utils import build_filebeat_yml
 
 logger = logging.getLogger('zentral.contrib.filebeat.views')
 
@@ -43,7 +45,15 @@ class CreateConfigurationView(LoginRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
+        ctx["input_forms"] = available_inputs.forms_for_context()
         return ctx
+
+    def form_valid(self, form):
+        configuration = form.save(commit=False)
+        _, serialized_inputs = available_inputs.serialized_inputs(self.request.POST)
+        configuration.inputs = serialized_inputs
+        configuration.save()
+        return redirect(configuration)
 
 
 class ConfigurationView(LoginRequiredMixin, DetailView):
@@ -52,6 +62,9 @@ class ConfigurationView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
+        lexer = lexers.get_lexer_by_name("yaml")
+        formatter = HtmlFormatter()
+        ctx["filebeat_yml"] = highlight(build_filebeat_yml(self.object), lexer, formatter)
         enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
         ctx["enrollments"] = enrollments
         ctx["enrollments_count"] = len(enrollments)
@@ -65,7 +78,15 @@ class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
+        ctx["input_forms"] = available_inputs.forms_for_context(self.object.inputs)
         return ctx
+
+    def form_valid(self, form):
+        configuration = form.save(commit=False)
+        _, serialized_inputs = available_inputs.serialized_inputs(self.request.POST)
+        configuration.inputs = serialized_inputs
+        configuration.save()
+        return redirect(configuration)
 
 
 class CreateEnrollmentView(LoginRequiredMixin, TemplateView):

@@ -25,6 +25,8 @@
       </tbody>
     </table>
 
+    {{ filebeat_yml|safe }}
+
     <dl class="dl-horizontal">
       <dt class="small" style="opacity:0.5">Created at</dt>
       <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
