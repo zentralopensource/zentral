@@ -4,6 +4,7 @@ import os.path
 import re
 import uuid
 from dateutil import parser
+from django.core.cache import cache
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from geoip2.models import City
@@ -181,6 +182,45 @@ class EventMetadata(object):
             kwargs['request'] = EventRequest.deserialize(request_d)
         return cls(**kwargs)
 
+    def serialize_machine(self):
+        machine_d_cache_key = "machine_d_{}".format(self.machine.serial_number)
+        machine_d = cache.get(machine_d_cache_key)
+        if not machine_d:
+            machine_d = {}
+            for ms in self.machine.snapshots:
+                source = ms.source
+                ms_d = {'name': ms.get_machine_str()}
+                if ms.business_unit:
+                    if not ms.business_unit.is_api_enrollment_business_unit():
+                        ms_d['business_unit'] = {'reference': ms.business_unit.reference,
+                                                 'key': ms.business_unit.get_short_key(),
+                                                 'name': ms.business_unit.name}
+                if ms.os_version:
+                    ms_d['os_version'] = str(ms.os_version)
+                for group in ms.groups.all():
+                    ms_d.setdefault('groups', []).append({'reference': group.reference,
+                                                          'key': group.get_short_key(),
+                                                          'name': group.name})
+                key = slugify(source.name)
+                if key in ms_d:
+                    # TODO: earlier warning in conf check ?
+                    logger.warning('Inventory source slug %s exists already', key)
+                machine_d[key] = ms_d
+            for tag in self.machine.tags:
+                machine_d.setdefault('tags', []).append({'id': tag.id,
+                                                         'name': tag.name})
+            for meta_business_unit in self.machine.meta_business_units:
+                machine_d.setdefault('meta_business_units', []).append({
+                    'name': meta_business_unit.name,
+                    'id': meta_business_unit.id
+                })
+            if self.machine.platform:
+                machine_d['platform'] = self.machine.platform
+            if self.machine.type:
+                machine_d['type'] = self.machine.type
+            cache.set(machine_d_cache_key, machine_d, 60)  # TODO: Hard coded timeout value
+        return machine_d
+
     def serialize(self, machine_metadata=True):
         d = {'created_at': self.created_at.isoformat(),
              'id': str(self.uuid),
@@ -197,38 +237,7 @@ class EventMetadata(object):
             d['machine_serial_number'] = self.machine_serial_number
         if not machine_metadata or not self.machine:
             return d
-        machine_d = {}
-        for ms in self.machine.snapshots:
-            source = ms.source
-            ms_d = {'name': ms.get_machine_str()}
-            if ms.business_unit:
-                if not ms.business_unit.is_api_enrollment_business_unit():
-                    ms_d['business_unit'] = {'reference': ms.business_unit.reference,
-                                             'key': ms.business_unit.get_short_key(),
-                                             'name': ms.business_unit.name}
-            if ms.os_version:
-                ms_d['os_version'] = str(ms.os_version)
-            for group in ms.groups.all():
-                ms_d.setdefault('groups', []).append({'reference': group.reference,
-                                                      'key': group.get_short_key(),
-                                                      'name': group.name})
-            key = slugify(source.name)
-            if key in ms_d:
-                # TODO: earlier warning in conf check ?
-                logger.warning('Inventory source slug %s exists already', key)
-            machine_d[key] = ms_d
-        for tag in self.machine.tags:
-            machine_d.setdefault('tags', []).append({'id': tag.id,
-                                                     'name': tag.name})
-        for meta_business_unit in self.machine.meta_business_units:
-            machine_d.setdefault('meta_business_units', []).append({
-                'name': meta_business_unit.name,
-                'id': meta_business_unit.id
-            })
-        if self.machine.platform:
-            machine_d['platform'] = self.machine.platform
-        if self.machine.type:
-            machine_d['type'] = self.machine.type
+        machine_d = self.serialize_machine()
         if machine_d:
             d['machine'] = machine_d
         return d

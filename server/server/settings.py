@@ -37,6 +37,9 @@ ALLOWED_HOSTS = django_zentral_settings['ALLOWED_HOSTS']
 
 MEDIA_ROOT = django_zentral_settings.get("MEDIA_ROOT", "")
 
+if "CACHES" in django_zentral_settings:
+    CACHES = django_zentral_settings["CACHES"]
+
 # django default is 2.5MB. increased to 10MB.
 DATA_UPLOAD_MAX_MEMORY_SIZE = django_zentral_settings.get('DATA_UPLOAD_MAX_MEMORY_SIZE', 10485760)
 
