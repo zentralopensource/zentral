@@ -6,3 +6,6 @@ class MockMetaMachine(object):
         self.type = type
         self.serial_number = serial_number
         self.has_deb_packages = platform == "LINUX"
+
+    def get_probe_filtering_values(self):
+        return self.platform, self.type, self.meta_business_unit_id_set, self.tag_id_set

@@ -4,10 +4,12 @@ from dateutil import parser
 from django.test import TestCase
 from django.utils.timezone import is_aware, make_naive
 from zentral.contrib.inventory.conf import DESKTOP, MACOS, SERVER, update_ms_tree_type, VM
-from zentral.contrib.inventory.models import (Certificate,
+from zentral.contrib.inventory.models import (BusinessUnit,
+                                              Certificate,
                                               CurrentMachineSnapshot,
                                               MachineSnapshot, MachineSnapshotCommit,
                                               MachineTag,
+                                              MetaBusinessUnitTag,
                                               MetaMachine,
                                               Source,
                                               Tag)
@@ -15,52 +17,64 @@ from zentral.utils.mt_models import MTOError
 
 
 class MachineSnapshotTestCase(TestCase):
-    serial_number = "GODZILLAKOMMT"
-    os_version = {'name': 'OS X',
-                  'major': 10,
-                  'minor': 11,
-                  'patch': 1}
-    os_version2 = dict(os_version, patch=2)
-    osx_app = {'bundle_id': 'io.zentral.baller',
-               'bundle_name': 'Baller.app',
-               'bundle_version': '123',
-               'bundle_version_str': '1.2.3'}
-    osx_app2 = {'bundle_id': 'io.zentral.hoho',
-                'bundle_name': 'HoHo.app',
-                'bundle_version': '978',
-                'bundle_version_str': '9.7.8'}
-    certificate = {'common_name': 'Apple Root CA',
-                   'organization': 'Apple Inc.',
-                   'organizational_unit': 'Apple Certification Authority',
-                   'sha_1': '611e5b662c593a08ff58d14ae22452d198df6c60',
-                   'sha_256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
-                   'valid_from': parser.parse('2006/04/25 23:40:36 +0200'),
-                   'valid_until': parser.parse('2035/02/09 22:40:36 +0100')}
-    osx_app_instance = {'app': osx_app,
-                        'bundle_path': "/Applications/Baller.app",
-                        'signed_by': certificate
-                        }
-    osx_app_instance2 = {'app': osx_app2,
-                         'bundle_path': "/Applications/HoHo.app",
-                         'signed_by': certificate
-                         }
-    source = {'module': 'io.zentral.tests',
-              'name': 'zentral'}
-    machine_snapshot = {'source': source,
-                        'serial_number': serial_number,
-                        'osx_app_instances': []}
-    machine_snapshot_source_error = {'source': "raise_error",
-                                     'serial_number': serial_number,
-                                     'os_version': os_version,
-                                     'osx_app_instances': [osx_app_instance]}
-    machine_snapshot2 = {'source': source,
-                         'serial_number': serial_number,
-                         'os_version': os_version,
-                         'osx_app_instances': [osx_app_instance]}
-    machine_snapshot3 = {'source': source,
-                         'serial_number': serial_number,
-                         'os_version': os_version,
-                         'osx_app_instances': [osx_app_instance, osx_app_instance2]}
+    @classmethod
+    def setUpTestData(cls):
+        cls.serial_number = "GODZILLAKOMMT"
+        cls.os_version = {'name': 'OS X',
+                          'major': 10,
+                          'minor': 11,
+                          'patch': 1}
+        cls.os_version2 = dict(cls.os_version, patch=2)
+        cls.osx_app = {'bundle_id': 'io.zentral.baller',
+                       'bundle_name': 'Baller.app',
+                       'bundle_version': '123',
+                       'bundle_version_str': '1.2.3'}
+        cls.osx_app2 = {'bundle_id': 'io.zentral.hoho',
+                        'bundle_name': 'HoHo.app',
+                        'bundle_version': '978',
+                        'bundle_version_str': '9.7.8'}
+        cls.certificate = {'common_name': 'Apple Root CA',
+                           'organization': 'Apple Inc.',
+                           'organizational_unit': 'Apple Certification Authority',
+                           'sha_1': '611e5b662c593a08ff58d14ae22452d198df6c60',
+                           'sha_256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
+                           'valid_from': parser.parse('2006/04/25 23:40:36 +0200'),
+                           'valid_until': parser.parse('2035/02/09 22:40:36 +0100')}
+        cls.osx_app_instance = {'app': cls.osx_app,
+                                'bundle_path': "/Applications/Baller.app",
+                                'signed_by': cls.certificate
+                                }
+        cls.osx_app_instance2 = {'app': cls.osx_app2,
+                                 'bundle_path': "/Applications/HoHo.app",
+                                 'signed_by': cls.certificate
+                                 }
+        cls.source = {'module': 'io.zentral.tests',
+                      'name': 'zentral'}
+        cls.business_unit_tree = {
+            "name": "bulle",
+            "reference": "bulle 1",
+            "source": cls.source
+        }
+        cls.business_unit, _ = BusinessUnit.objects.commit(cls.business_unit_tree)
+        cls.meta_business_unit = cls.business_unit.meta_business_unit
+        cls.machine_snapshot = {'source': cls.source,
+                                'business_unit': cls.business_unit_tree,
+                                'serial_number': cls.serial_number,
+                                'osx_app_instances': []}
+        cls.machine_snapshot_source_error = {'source': "raise_error",
+                                             'serial_number': cls.serial_number,
+                                             'os_version': cls.os_version,
+                                             'osx_app_instances': [cls.osx_app_instance]}
+        cls.machine_snapshot2 = {'source': cls.source,
+                                 'business_unit': cls.business_unit_tree,
+                                 'serial_number': cls.serial_number,
+                                 'os_version': cls.os_version,
+                                 'osx_app_instances': [cls.osx_app_instance]}
+        cls.machine_snapshot3 = {'source': cls.source,
+                                 'business_unit': cls.business_unit_tree,
+                                 'serial_number': cls.serial_number,
+                                 'os_version': cls.os_version,
+                                 'osx_app_instances': [cls.osx_app_instance, cls.osx_app_instance2]}
 
     def test_machine_snapshot_commit_create(self):
         tree = copy.deepcopy(self.machine_snapshot)
@@ -168,7 +182,7 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(msc2.source, msc.source)
         self.assertEqual(ms2.source, ms.source)
         self.assertEqual([], list(Source.objects.current_machine_group_sources()))
-        self.assertEqual([], list(Source.objects.current_business_unit_sources()))
+        self.assertEqual([ms.source], list(Source.objects.current_business_unit_sources()))
         self.assertEqual([ms.source], list(Source.objects.current_machine_snapshot_sources()))
         self.assertEqual([ms.source], list(Source.objects.current_macos_apps_sources()))
         for sn in (self.serial_number, ms2.serial_number):
@@ -221,6 +235,14 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(mm.serial_number, self.serial_number)
         self.assertEqual(mm.snapshots, [ms3])
         self.assertEqual(mm.platform, MACOS)
+        tag1, _ = Tag.objects.get_or_create(name="tag111")
+        tag2, _ = Tag.objects.get_or_create(name="tag222")
+        MachineTag.objects.create(tag=tag1, serial_number=self.serial_number)
+        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id}),
+                         mm.get_probe_filtering_values())
+        MetaBusinessUnitTag.objects.create(tag=tag2, meta_business_unit=self.meta_business_unit)
+        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id, tag2.id}),
+                         mm.get_probe_filtering_values())
         mm.archive()
         mm = MetaMachine(self.serial_number)
         self.assertEqual(mm.snapshots, [])

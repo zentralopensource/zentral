@@ -858,6 +858,51 @@ class MetaMachine(object):
     def archive(self):
         CurrentMachineSnapshot.objects.filter(serial_number=self.serial_number).delete()
 
+    def get_probe_filtering_values(self):
+        query = (
+            "select * from ("
+            "select '{NULL}', '{NULL}', NULL,"
+            "array_agg(tag_id) from inventory_machinetag "
+            "where serial_number = %s "
+            "group by serial_number "
+            "union "
+            "select st.platforms, st.types, st.meta_business_unit_id, array_agg(mbut.tag_id) "
+            "from ("
+            "select array_agg(ms.platform) as platforms,"
+            "array_agg(ms.type) as types,"
+            "bu.meta_business_unit_id "
+            "from inventory_businessunit as bu "
+            "join inventory_machinesnapshot as ms on (ms.business_unit_id = bu.id) "
+            "join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id) "
+            "where cms.serial_number = %s "
+            "group by bu.meta_business_unit_id"
+            ") st "
+            "left join inventory_metabusinessunittag as mbut "
+            "on (mbut.meta_business_unit_id = st.meta_business_unit_id) "
+            "group by st.platforms, st.types, st.meta_business_unit_id"
+            ") t;"
+        )
+        args = [self.serial_number, self.serial_number]
+        with connection.cursor() as cursor:
+            platforms = Counter()
+            types = Counter()
+            mbu_ids = set([])
+            tag_ids = set([])
+            cursor.execute(query, args)
+            for t_platforms, t_types, t_mbu_id, t_tag_ids in cursor.fetchall():
+                if t_platforms:
+                    platforms.update(p for p in t_platforms if p)
+                if t_types:
+                    types.update(t for t in t_types if t)
+                if t_mbu_id is not None:
+                    mbu_ids.add(t_mbu_id)
+                if t_tag_ids:
+                    tag_ids.update(t for t in t_tag_ids if t)
+            return (platforms.most_common(1)[0][0] if platforms else None,
+                    types.most_common(1)[0][0] if types else None,
+                    mbu_ids,
+                    tag_ids)
+
 
 class MACAddressBlockAssignmentOrganization(models.Model):
     name = models.TextField()
