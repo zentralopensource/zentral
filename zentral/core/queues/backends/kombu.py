@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from importlib import import_module
 import logging
 import time
@@ -43,6 +44,15 @@ class PreprocessWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixi
             preprocessor.routing_key: preprocessor
             for preprocessor in self.get_preprocessors()
         }
+
+    @contextmanager
+    def extra_context(self, connection, channel):
+        # TODO: migration! remove ?
+        logger.info("PreprocessWorker migration")
+        for routing_key in self.preprocessors.keys():
+            legacy_exchange = Exchange(routing_key, type='fanout', channel=channel, durable=True)
+            legacy_exchange.delete()
+        yield
 
     def get_preprocessors(self):
         for app in settings['apps']:
@@ -157,6 +167,14 @@ class ProcessWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
         self.process_event = process_event
         self.name = "process worker"
 
+    @contextmanager
+    def extra_context(self, connection, channel):
+        # TODO: migration! remove ?
+        logger.info("ProcessWorker migration")
+        bound_process_events_queue = process_events_queue.bind(channel)
+        bound_process_events_queue.unbind_from(events_exchange)
+        yield
+
     def setup_prometheus_metrics(self):
         self.processed_events_counter = Counter(
             "processed_events",
@@ -193,6 +211,14 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
                                  exchange=enriched_events_exchange,
                                  durable=True)
 
+    @contextmanager
+    def extra_context(self, connection, channel):
+        # TODO: migration! remove ?
+        logger.info("StoreWorker migration")
+        bound_store_worker_input_queue = self.input_queue.bind(channel)
+        bound_store_worker_input_queue.unbind_from(events_exchange)
+        yield
+
     def setup_prometheus_metrics(self):
         self.stored_events_counter = Counter(
             "stored_events",
@@ -226,37 +252,16 @@ class EventQueues(object):
         self.connection = Connection(self.backend_url)
 
     def get_preprocess_worker(self):
-        preprocess_worker = PreprocessWorker(Connection(self.backend_url))
-        # migration TODO: remove ?
-        channel = self.connection.channel()
-        for routing_key in preprocess_worker.preprocessors.keys():
-            legacy_exchange = Exchange(routing_key, type='fanout', channel=channel, durable=True)
-            legacy_exchange.delete()
-        channel.close()
-        return preprocess_worker
+        return PreprocessWorker(Connection(self.backend_url))
 
     def get_enrich_worker(self, enrich_event):
         return EnrichWorker(Connection(self.backend_url), enrich_event)
 
     def get_process_worker(self, process_event):
-        process_worker = ProcessWorker(Connection(self.backend_url), process_event)
-        # migration TODO: remove ?
-        # disconnect process_events_queue from events_exchange
-        channel = self.connection.channel()
-        bound_process_events_queue = process_events_queue.bind(channel)
-        bound_process_events_queue.unbind_from(events_exchange)
-        channel.close()
-        return process_worker
+        return ProcessWorker(Connection(self.backend_url), process_event)
 
     def get_store_worker(self, event_store):
-        store_worker = StoreWorker(Connection(self.backend_url), event_store)
-        # migration TODO: remove ?
-        # disconnect StoreWorker input_queue from events_exchange
-        channel = self.connection.channel()
-        bound_store_worker_input_queue = store_worker.input_queue.bind(channel)
-        bound_store_worker_input_queue.unbind_from(events_exchange)
-        channel.close()
-        return store_worker
+        return StoreWorker(Connection(self.backend_url), event_store)
 
     def post_raw_event(self, routing_key, raw_event):
         with producers[self.connection].acquire(block=True) as producer:
