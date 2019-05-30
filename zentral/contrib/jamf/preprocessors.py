@@ -107,7 +107,7 @@ class WebhookEventPreprocessor(object):
             yield from self.update_group_machines(client, device_type, jamf_group_id, is_smart)
         elif event_type == "jamf_computer_policy_finished":
             try:
-                jamf_event["_fetched_policy"] = client.get_policy_general_info(jamf_event.pop("jssID"))
+                jamf_event["policy"] = client.get_policy_general_info(jamf_event["policyId"])
             except Exception:
                 logger.exception("Could not enrich policy finished event")
         else:
