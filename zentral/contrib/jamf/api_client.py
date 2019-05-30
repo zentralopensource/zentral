@@ -357,6 +357,13 @@ class APIClient(object):
 
         return mdt
 
+    # policies
+
+    def get_policy_general_info(self, jamf_id):
+        return self._make_get_query('/policies/id/{}'.format(jamf_id))['policy']['general']
+
+    # add to or remove from group
+
     def get_computer_group_with_name(self, group_name):
         try:
             return self._make_get_query('/computergroups/name/{}'.format(group_name))
@@ -426,6 +433,8 @@ class APIClient(object):
                     break
             else:
                 logger.debug("Machine {} already not in group {}".format(jamf_id, group_name))
+
+    # webhooks setup
 
     def iter_instance_webhooks(self):
         for webhook in self._make_get_query('/webhooks')['webhooks']:

@@ -105,7 +105,12 @@ class WebhookEventPreprocessor(object):
             # find missing machines and machines still in the group
             # update them
             yield from self.update_group_machines(client, device_type, jamf_group_id, is_smart)
-        elif event_type == "jamf_computer_push_capability_changed":
+        elif event_type == "jamf_computer_policy_finished":
+            try:
+                jamf_event["_fetched_policy"] = client.get_policy_general_info(jamf_event.pop("jssID"))
+            except Exception:
+                logger.exception("Could not enrich policy finished event")
+        else:
             # enrich jamf event ?
             pass
 
