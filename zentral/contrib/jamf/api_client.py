@@ -360,7 +360,9 @@ class APIClient(object):
     # policies
 
     def get_policy_general_info(self, jamf_id):
-        return self._make_get_query('/policies/id/{}'.format(jamf_id))['policy']['general']
+        general_d = self._make_get_query('/policies/id/{}'.format(jamf_id))['policy']['general']
+        general_d.pop("network_limitations", None)  # TODO: any_ip_address is not an IP and triggers an elastic err
+        return general_d
 
     # add to or remove from group
 
