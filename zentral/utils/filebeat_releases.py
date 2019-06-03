@@ -25,7 +25,11 @@ class Releases(object):
 
     def _download_and_extract_package(self, download_url, local_path):
         resp = requests.get(download_url, stream=True)
-        tf = tarfile.open(fileobj=resp.raw, mode="r:*")
+        _, ext = os.path.splitext(download_url)
+        ext = ext.lstrip(".")
+        if ext not in ("gz", "bz2", "xz"):
+            ext = "*"
+        tf = tarfile.open(fileobj=resp.raw, mode="r:{}".format(ext))
         tf.extractall(path=self.release_dir)
 
     def get_versions(self):
