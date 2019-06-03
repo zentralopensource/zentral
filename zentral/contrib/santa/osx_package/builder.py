@@ -27,7 +27,7 @@ class SantaZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         release = self.build_kwargs.get("release")
         if release:
             r = Releases()
-            extra_packages.append(r.get_requested_package(release))
+            extra_packages.append(r.get_requested_version(release))
         return extra_packages
 
     def extra_build_steps(self):

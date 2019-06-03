@@ -28,11 +28,10 @@ class Releases(object):
                 return asset_name, asset["browser_download_url"]
         raise ValueError("Could not find dmg")
 
-    def _get_local_path(self, filename):
+    def _get_local_path(self, version):
         if not self.release_dir:
             self.release_dir = get_and_create_local_dir("santa", "releases")
-        basename, _ = os.path.splitext(filename)
-        local_filename = "{}.pkg".format(basename)
+        local_filename = "santa-{}.pkg".format(version)
         return os.path.join(self.release_dir, local_filename)
 
     def _download_and_extract_package(self, download_url, local_path):
@@ -47,7 +46,7 @@ class Releases(object):
                 f.write(chunk)
         # extract dmg
         check_call(["/usr/bin/7z", "-o{}".format(tempdir), "x", downloaded_file])
-        # find hfs
+        # find hfs (for older versions of 7z)
         for filename in os.listdir(tempdir):
             if filename.endswith(".hfs"):
                 check_call(["/usr/bin/7z", "-o{}".format(tempdir), "x", os.path.join(tempdir, filename)])
@@ -55,9 +54,10 @@ class Releases(object):
         # find pkg
         for root, dirs, files in os.walk(tempdir):
             for filename in files:
-                if local_path.endswith(filename):
+                if filename.endswith(".pkg"):
                     shutil.move(os.path.join(root, filename),
                                 local_path)
+                    break
         shutil.rmtree(tempdir)
 
     def get_versions(self):
@@ -74,22 +74,13 @@ class Releases(object):
                 continue
             version = self._get_release_version(release)
             created_at = parser.parse(release["created_at"])
-            is_local = os.path.exists(self._get_local_path(filename))
+            is_local = os.path.exists(self._get_local_path(version))
             yield filename, version, created_at, download_url, is_local
 
-    def get_requested_package(self, requested_filename):
-        local_path = self._get_local_path(requested_filename)
-        if not os.path.exists(local_path):
-            for filename, version, created_at, download_url, _ in self.get_versions():
-                if filename == requested_filename:
-                    self._download_and_extract_package(download_url, local_path)
-                    break
-        return local_path
-
-    def get_requested_version(self, version):
+    def get_requested_version(self, requested_version):
         for filename, version, created_at, download_url, is_local in self.get_versions():
-            if version == version:
-                local_path = self._get_local_path(filename)
+            if version == requested_version:
+                local_path = self._get_local_path(version)
                 if not is_local:
                     self._download_and_extract_package(download_url, local_path)
                 return local_path

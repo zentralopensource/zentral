@@ -51,7 +51,7 @@ class EnrollmentForm(forms.ModelForm):
             release_field.widget = forms.HiddenInput()
         else:
             r = Releases()
-            release_choices = [(filename, filename) for filename, _, _, _, _ in r.get_versions()]
+            release_choices = [(version, version) for _, version, _, _, _ in r.get_versions()]
             if not self.standalone:
                 release_choices.insert(0, ("", "Do not include santa"))
             release_field.choices = release_choices
