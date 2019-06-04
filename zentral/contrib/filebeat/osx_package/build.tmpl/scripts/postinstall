@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from __future__ import print_function
 import json
 import os
 import plistlib
@@ -21,6 +22,7 @@ DEFAULT_HEADERS = {
 ZENTRAL_DIR = "/usr/local/zentral/"
 FILEBEAT_DIR = os.path.join(ZENTRAL_DIR, "filebeat")
 FILEBEAT_YML = os.path.join(FILEBEAT_DIR, "filebeat.yml")
+OPENSSL = "/usr/bin/openssl"
 SCEPCLIENT = os.path.join(ZENTRAL_DIR, "bin", "scepclient")
 
 
@@ -37,41 +39,81 @@ def get_ssl_context(client_cert=None, client_key=None):
     return ctx
 
 
-def get_post_data(secret):
-    serial_number, uuid = get_serial_number_and_uuid()
+def get_post_data(secret, serial_number, uuid):
     data = json.dumps({"secret": secret,
                        "serial_number": serial_number,
                        "uuid": uuid})
     return data
 
 
-def start_enrollment():
+def start_enrollment(serial_number, uuid):
     print("START ENROLLMENT", ENROLLMENT_SECRET)
     req = urllib2.Request(START_ENROLLMENT_URL,
-                          get_post_data(ENROLLMENT_SECRET),
+                          get_post_data(ENROLLMENT_SECRET, serial_number, uuid),
                           DEFAULT_HEADERS)
     resp = urllib2.urlopen(req, context=get_ssl_context())
     return json.load(resp)
 
 
-def get_certificate(cn, org, challenge, url):
+def build_csr(tmpdir, serial_number, cn, org, challenge):
+    pkcs8_key = os.path.join(tmpdir, "client.key.pkcs8")
+    cfg = {
+        "req": {
+            "default_bits": "2048",
+            "default_md": "sha256",
+            "default_keyfile": pkcs8_key,
+            "encrypt_key": "no",
+            "prompt": "no",
+            "distinguished_name": "req_distinguished_name",
+            "attributes": "req_attributes"
+        },
+        "req_distinguished_name": {
+            "CN": cn.replace("$", "\$"),
+            "O": org.replace("$", "\$"),
+            "serialNumber": serial_number
+        },
+        "req_attributes": {
+            "challengePassword": challenge,
+        }
+    }
+    openssl_req_config = os.path.join(tmpdir, "openssl_req.cfg")
+    with open(openssl_req_config, "w") as of:
+        for section, section_body in cfg.items():
+            of.write("[ {} ]\n".format(section))
+            for key, val in section_body.items():
+                of.write("{} = {}\n".format(key, val))
+    csr = os.path.join(tmpdir, "csr.pem")  # expected csr file for scepclient
+    subprocess.check_call([
+        OPENSSL,
+        "req", "-new",
+        "-config", openssl_req_config,
+        "-out", csr
+    ])
+    # convert key to pkcs1 for scepclient
+    subprocess.check_call([
+        OPENSSL,
+        "rsa",
+        "-in", pkcs8_key,
+        "-out", os.path.join(tmpdir, "client.key")
+    ])
+
+
+def get_certificate(serial_number, cn, org, challenge, url):
     print("GET CERTIFICATE", cn, org, challenge, url)
     if not os.path.isdir(FILEBEAT_DIR):
         os.makedirs(FILEBEAT_DIR)
-    client_cert, private_key = os.path.join(FILEBEAT_DIR, "client.crt"), os.path.join(FILEBEAT_DIR, "client.key")
     old_umask = os.umask(0o077)
     old_dir = os.getcwd()
     tmpdir = tempfile.mkdtemp()
     os.chdir(tmpdir)
+    build_csr(tmpdir, serial_number, cn, org, challenge)
     subprocess.check_call([
         SCEPCLIENT,
         "-server-url", url,
-        "-challenge", challenge,
         "-private-key", "client.key",
-        "-certificate", "client.crt",
-        "-organization", org,
-        "-cn", cn
+        "-certificate", "client.crt"
     ])
+    client_cert, private_key = os.path.join(FILEBEAT_DIR, "client.crt"), os.path.join(FILEBEAT_DIR, "client.key")
     shutil.move("client.crt", client_cert)
     shutil.move("client.key", private_key)
     os.chdir(old_dir)
@@ -80,10 +122,10 @@ def get_certificate(cn, org, challenge, url):
     return client_cert, private_key
 
 
-def complete_enrollment(client_cert, client_key, enrollment_session_secret):
+def complete_enrollment(client_cert, client_key, enrollment_session_secret, serial_number, uuid):
     print("COMPLETE ENROLLMENT", client_cert, client_key, enrollment_session_secret)
     req = urllib2.Request(COMPLETE_ENROLLMENT_URL,
-                          get_post_data(enrollment_session_secret),
+                          get_post_data(enrollment_session_secret, serial_number, uuid),
                           DEFAULT_HEADERS)
     resp = urllib2.urlopen(req, context=get_ssl_context(client_cert, client_key))
     resp_json = json.load(resp)
@@ -107,8 +149,9 @@ def update_default_zentral_plist():
 
 
 if __name__ == "__main__":
-    enrollment_session_data = start_enrollment()
-    client_cert, client_key = get_certificate(**enrollment_session_data["scep"])
-    complete_enrollment(client_cert, client_key, enrollment_session_data["secret"])
+    serial_number, uuid = get_serial_number_and_uuid()
+    enrollment_session_data = start_enrollment(serial_number, uuid)
+    client_cert, client_key = get_certificate(serial_number, **enrollment_session_data["scep"])
+    complete_enrollment(client_cert, client_key, enrollment_session_data["secret"], serial_number, uuid)
     load_launch_daemon()
     update_default_zentral_plist()

@@ -1,3 +1,7 @@
+import re
+from asn1crypto.core import load as load_asn1
+
+
 def split_certificate_chain(filename):
     pem_certificates = []
     current_certificate = ""
@@ -11,6 +15,11 @@ def split_certificate_chain(filename):
     if current_certificate:
         pem_certificates.append(current_certificate)
     return pem_certificates
+
+
+# the way for example that the logstash filebeat input serializes the serialNumber of a client cert
+SERIAL_NUMBER_OID = '2.5.4.5'
+ASN1_ENCODED_STRING_RE = re.compile("^#(?P<bytes>(?:[0-9a-f][0-9a-f]){3,})$")
 
 
 def parse_dn(dn):
@@ -44,4 +53,16 @@ def parse_dn(dn):
     if current_attr:
         d[current_attr] = current_val
         current_attr = current_val = ""
+
+    # try to extract the serial number
+    encoded_serial_number = d.get(SERIAL_NUMBER_OID)
+    if encoded_serial_number:
+        m = ASN1_ENCODED_STRING_RE.match(encoded_serial_number.lower())
+        if m:
+            try:
+                d["serialNumber"] = str(load_asn1(bytes.fromhex(m.group("bytes"))))
+            except Exception:
+                pass
+            else:
+                d.pop(SERIAL_NUMBER_OID)
     return d

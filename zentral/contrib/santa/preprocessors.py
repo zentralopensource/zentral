@@ -1,8 +1,7 @@
 from dateutil import parser
 import json
 import logging
-from zentral.utils.certificates import parse_dn
-from zentral.contrib.filebeat.models import EnrollmentSession
+from zentral.contrib.filebeat.utils import get_serial_number_from_raw_event
 from .events import SantaLogEvent
 
 
@@ -60,12 +59,9 @@ class SantaLogPreprocessor(object):
     def process_raw_event(self, raw_event):
         try:
             raw_event_d = json.loads(raw_event)
-            tls_peer = json.loads(raw_event_d.pop("tls_peer"))
-            subject = parse_dn(tls_peer["subject"])
-            subject_prefix, secret = subject["CN"].split("$")
-            enrollment_session = (EnrollmentSession.objects.select_related("enrollment_secret")
-                                                           .get(enrollment_secret__secret=secret))
-            serial_number = enrollment_session.enrollment_secret.serial_numbers[0]
+            serial_number = get_serial_number_from_raw_event(raw_event_d)
+            if not serial_number:
+                return
             event_data = parse_santa_log_message(raw_event_d["message"])
             user_agent = "/".join(raw_event_d.get("agent", {}).get(attr) for attr in ("type", "version"))
             ip_address = raw_event_d.get("filebeat_ip_address")

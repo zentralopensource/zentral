@@ -20,13 +20,15 @@ class ZentralFilebeatPkgBuilder(EnrollmentPackageBuilder):
 
     def extra_build_steps(self):
         # filebeat binary
-        r = FilebeatReleases()
-        local_path = r.get_requested_package(self.build_kwargs["release"])
-        filebeat_path = self.get_root_path("usr/local/zentral/bin/filebeat")
-        filebeat_dir = os.path.dirname(filebeat_path)
-        if not os.path.exists(filebeat_dir):
-            os.makedirs(filebeat_dir)
-        shutil.copy(local_path, filebeat_path)
+        release = self.build_kwargs["release"]
+        if release:
+            r = FilebeatReleases()
+            local_path = r.get_requested_package(self.build_kwargs["release"])
+            filebeat_path = self.get_root_path("usr/local/zentral/bin/filebeat")
+            filebeat_dir = os.path.dirname(filebeat_path)
+            if not os.path.exists(filebeat_dir):
+                os.makedirs(filebeat_dir)
+            shutil.copy(local_path, filebeat_path)
 
         # scepclient binary
         local_path = ScepClientReleases("darwin").get_a_version()

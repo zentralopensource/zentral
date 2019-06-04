@@ -1,23 +1,11 @@
-from functools import lru_cache
 import json
 import logging
 from dateutil import parser
-from zentral.utils.certificates import parse_dn
-from zentral.contrib.filebeat.models import EnrollmentSession
+from zentral.contrib.filebeat.utils import get_serial_number_from_raw_event
 from .events import XnumonLogEvent
 
 
 logger = logging.getLogger("zentral.contrib.xnumon.preprocessors")
-
-
-@lru_cache(maxsize=32)
-def get_serial_number(secret):
-    try:
-        return (EnrollmentSession.objects.select_related("enrollment_secret")
-                                         .get(enrollment_secret__secret=secret)
-                                         .enrollment_secret.serial_numbers[0])
-    except (EnrollmentSession.DoesNotExist, IndexError):
-        pass
 
 
 class XnumonLogPreprocessor(object):
@@ -26,10 +14,7 @@ class XnumonLogPreprocessor(object):
     def process_raw_event(self, raw_event):
         try:
             raw_event_d = json.loads(raw_event)
-            tls_peer = json.loads(raw_event_d.pop("tls_peer"))
-            subject = parse_dn(tls_peer["subject"])
-            _, secret = subject["CN"].split("$")
-            serial_number = get_serial_number(secret)
+            serial_number = get_serial_number_from_raw_event(raw_event_d)
             if not serial_number:
                 return
             event_data = raw_event_d["json"]
