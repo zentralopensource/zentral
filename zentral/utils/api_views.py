@@ -211,7 +211,8 @@ class BaseVerifySCEPCSRView(SignedRequestHeaderJSONPostAPIView):
                 csr_d[type_val["type"].native] = type_val['value'].native
 
         kwargs = {"user_agent": self.user_agent,
-                  "public_ip_address": self.ip}
+                  "public_ip_address": self.ip,
+                  "serial_number": csr_d.pop("serial_number")}  # TODO: better system to find this attr in csr_d
 
         # meta business
         organization_name = csr_d.get("organization_name")
