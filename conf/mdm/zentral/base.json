@@ -1,10 +1,8 @@
 {
   "api": {
     "tls_hostname": "https://zentral",
-    "tls_hostname_client_certificate_authenticated": "https://zentral-clicertauth",
     "tls_server_certs": "/zentral/conf/start/docker/tls/zentral_fullchain.crt",
     "tls_server_key": "/zentral/conf/start/docker/tls/zentral.key",
-    "tls_server_certs_client_certificate_authenticated": "/zentral/conf/start/docker/tls/zentral-clicertauth_fullchain.crt",
     "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
   },
   "extra_links": [

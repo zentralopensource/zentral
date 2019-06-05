@@ -49,25 +49,13 @@ def build_payload(payload_type, payload_display_name, suffix, content, payload_v
 
 
 def build_root_ca_payloads():
-    root_certificates = []
-    payloads = []
-    for api_settings_attr, name, suffix in (("tls_server_certs",
-                                             "Zentral - root CA",
-                                             "tls-root-ca-cert"),
-                                            ("tls_server_certs_client_certificate_authenticated",
-                                             "Zentral client certificate authenticated - root CA",
-                                             "tls-clicertauth-root-ca")):
-        if api_settings_attr not in settings["api"]:
-            logger.warning("Missing %s key in api settings", api_settings_attr)
-            continue
-        certificate_chain_filename = settings["api"][api_settings_attr]
-        root_certificate = split_certificate_chain(certificate_chain_filename)[-1]
-        if root_certificate not in root_certificates:
-            payloads.append(build_payload("com.apple.security.pem",
-                                          name, suffix,
-                                          root_certificate.encode("utf-8"),
-                                          encapsulate_content=True))
-    return payloads
+    root_certificate = split_certificate_chain(settings["api"]["tls_server_certs"])[-1]
+    return [
+        build_payload("com.apple.security.pem",
+                      "Zentral - root CA", "tls-root-ca-cert",
+                      root_certificate.encode("utf-8"),
+                      encapsulate_content=True)
+    ]
 
 
 def build_root_ca_configuration_profile():
@@ -124,11 +112,11 @@ def build_mdm_configuration_profile(enrollment_session, push_certificate):
                       {"IdentityCertificateUUID": scep_payload["PayloadUUID"],
                        "Topic": push_certificate.topic,
                        "ServerURL": "{}{}".format(
-                           settings["api"]["tls_hostname_client_certificate_authenticated"],
+                           settings["api"]["tls_hostname"],
                            reverse("mdm:connect")),
                        "ServerCapabilities": ["com.apple.mdm.per-user-connections"],
                        "CheckInURL": "{}{}".format(
-                           settings["api"]["tls_hostname_client_certificate_authenticated"],
+                           settings["api"]["tls_hostname"],
                            reverse("mdm:checkin")),
                        "CheckOutWhenRemoved": True,
                        "AccessRights": 8191,  # TODO: config
