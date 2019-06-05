@@ -1,7 +1,8 @@
+import io
 import logging
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
@@ -130,14 +131,18 @@ class OTAEnrollmentListView(LoginRequiredMixin, ListView):
 class DownloadDEPTokenPublicKeyView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         dep_token = get_object_or_404(DEPToken, pk=kwargs["pk"], consumer_key__isnull=True)
+        certificate = dep_token.certificate
+        if isinstance(certificate, memoryview):
+            certificate = certificate.tobytes()
         filename = "{}_public_key_{}_{}.pem".format(
             request.get_host(),
             dep_token.pk,
             dep_token.created_at.strftime("%Y%m%d%H%M%S")
         )
-        response = HttpResponse(dep_token.certificate, content_type="application/x-pem-file")
-        response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
-        return response
+        return FileResponse(io.BytesIO(certificate),
+                            content_type="application/x-pem-file",
+                            as_attachment=True,
+                            filename=filename)
 
 
 class RenewDEPTokenView(LoginRequiredMixin, UpdateView):
