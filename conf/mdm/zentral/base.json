@@ -60,7 +60,9 @@
       ]
     },
     "zentral.contrib.audit": {},
-    "zentral.contrib.mdm": {},
+    "zentral.contrib.mdm": {
+      "scep_ca_fullchain": "/scep_CA/ca.pem"
+    },
     "zentral.contrib.simplemdm": {},
     "zentral.contrib.munki": {},
     "zentral.contrib.osquery": {},

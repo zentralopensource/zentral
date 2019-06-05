@@ -1,7 +1,7 @@
 import logging
 from zentral.contrib.mdm.events import MDMSCEPVerificationEvent
 from zentral.contrib.mdm.models import DEPEnrollmentSession, OTAEnrollmentSession
-from zentral.utils.api_views import SignedRequestHeaderJSONPostAPIView
+from zentral.utils.api_views import BaseVerifySCEPCSRView
 
 
 logger = logging.getLogger('zentral.contrib.mdm.views.scep')
@@ -10,7 +10,7 @@ logger = logging.getLogger('zentral.contrib.mdm.views.scep')
 # SCEP verification
 
 
-class VerifySCEPCSRView(SignedRequestHeaderJSONPostAPIView):
+class VerifySCEPCSRView(BaseVerifySCEPCSRView):
     event_class = MDMSCEPVerificationEvent
 
     def get_enrollment_session_info(self, cn_prefix):

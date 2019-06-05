@@ -8,12 +8,12 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from OpenSSL import crypto
+from .conf import SCEP_CA_FULLCHAIN
 
 
 APPLE_PKI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Apple_PKI")
 IPHONE_CA_CN = "Apple iPhone Device CA"
 IPHONE_CA_FULLCHAIN = os.path.join(APPLE_PKI_DIR, "Apple_iPhone_Device_CA_Fullchain.pem")
-SCEP_CA_FULLCHAIN = "/scep_CA/ca.pem"
 
 
 def decrypt_cms_payload(payload, private_key_bytes):
