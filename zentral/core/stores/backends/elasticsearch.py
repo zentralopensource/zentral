@@ -109,6 +109,7 @@ class EventStore(BaseEventStore):
         self.index = config_d['index']
         self.read_index = config_d.get('read_index', self.index)
         self.kibana_base_url = config_d.get('kibana_base_url', None)
+        self.kibana_index_pattern_uuid = config_d.get('kibana_index_pattern_uuid')
         self.index_settings = {
             "number_of_shards": config_d.get("number_of_shards", 1),
             "number_of_replicas": config_d.get("number_of_replicas", 0)
@@ -660,11 +661,12 @@ class EventStore(BaseEventStore):
         body = self._get_probe_events_body(probe, **search_dict)
         kibana_params = {
             "columns": ["_source"],
-            "index": self.read_index,
             "interval": "auto",
             "query": body["query"],
             "sort": ["created_at", "desc"]
         }
+        if self.kibana_index_pattern_uuid:
+            kibana_params["index"] = self.kibana_index_pattern_uuid
         query = {"_g": "()",  # rison for []
                  "_a": rison_dumps(kibana_params)}
         return "{kibana_base_url}#/discover?{query}".format(
