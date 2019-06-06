@@ -29,3 +29,9 @@ def get_serial_number_from_raw_event(raw_event_d):
         return serial_number
     except Exception:
         logger.exception("Could not extract the S/N from the raw event")
+
+
+def get_user_agent_and_ip_address_from_raw_event(raw_event_d):
+    user_agent = "/".join(raw_event_d.get("agent", {}).get(attr) for attr in ("type", "version"))
+    ip_address = raw_event_d.get("filebeat_ip_address")
+    return user_agent, ip_address

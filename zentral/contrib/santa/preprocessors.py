@@ -1,7 +1,8 @@
 from dateutil import parser
 import json
 import logging
-from zentral.contrib.filebeat.utils import get_serial_number_from_raw_event
+from zentral.contrib.filebeat.utils import (get_serial_number_from_raw_event,
+                                            get_user_agent_and_ip_address_from_raw_event)
 from .events import SantaLogEvent
 
 
@@ -62,9 +63,8 @@ class SantaLogPreprocessor(object):
             serial_number = get_serial_number_from_raw_event(raw_event_d)
             if not serial_number:
                 return
+            user_agent, ip_address = get_user_agent_and_ip_address_from_raw_event(raw_event_d)
             event_data = parse_santa_log_message(raw_event_d["message"])
-            user_agent = "/".join(raw_event_d.get("agent", {}).get(attr) for attr in ("type", "version"))
-            ip_address = raw_event_d.get("filebeat_ip_address")
         except Exception:
             logger.exception("Could not process santa_log raw event")
         else:

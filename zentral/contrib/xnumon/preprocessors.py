@@ -1,7 +1,8 @@
 import json
 import logging
 from dateutil import parser
-from zentral.contrib.filebeat.utils import get_serial_number_from_raw_event
+from zentral.contrib.filebeat.utils import (get_serial_number_from_raw_event,
+                                            get_user_agent_and_ip_address_from_raw_event)
 from .events import XnumonImageExecEvent, XnumonLaunchdAddEvent, XnumonOpsEvent, XnumonProcessAccessEvent
 
 
@@ -22,9 +23,8 @@ class XnumonLogPreprocessor(object):
             serial_number = get_serial_number_from_raw_event(raw_event_d)
             if not serial_number:
                 return
+            user_agent, ip_address = get_user_agent_and_ip_address_from_raw_event(raw_event_d)
             event_data = raw_event_d["json"]
-            user_agent = "/".join(raw_event_d.get("agent", {}).get(attr) for attr in ("type", "version"))
-            ip_address = raw_event_d.get("filebeat_ip_address")
             event_class = self.eventcode_mapping[int(event_data.pop("eventcode"))]
         except Exception:
             logger.exception("Could not process xnumon_log raw event")

@@ -5,8 +5,9 @@ from dateutil import parser
 from zentral.contrib.inventory.models import MachineGroup, MachineSnapshot, MachineSnapshotCommit
 from zentral.contrib.inventory.utils import inventory_events_from_machine_snapshot_commit
 from zentral.core.events import event_cls_from_type
-from zentral.core.events.base import EventMetadata
+from zentral.core.events.base import EventMetadata, EventRequest
 from zentral.contrib.jamf.events import JAMFAccessEvent, JAMFChangeManagementEvent, JAMFSoftwareServerEvent
+from zentral.contrib.filebeat.utils import get_user_agent_and_ip_address_from_raw_event
 from .api_client import APIClient
 
 
@@ -140,16 +141,10 @@ class BeatPreprocessor(object):
     USER_RE = re.compile(r'^(?P<name>.*) \(ID: (?P<id>\d+)\)$')
     OBJECT_INFO_SEP_RE = re.compile("[ \.]{2,}")
 
-    def add_payload_jamf_instance(self, payload, raw_event_d):
-        jamf_instance = raw_event_d["fields"]["jamf_instance"]
-        jamf_instance.setdefault("path", "/JSSResource")
-        jamf_instance.setdefault("port", 8443)
-        payload["jamf_instance"] = jamf_instance
-
     def get_created_at(self, raw_event_d):
         return parser.parse(raw_event_d["@timestamp"])
 
-    def build_change_management_event(self, raw_event_d):
+    def build_change_management_event(self, raw_event_d, user_agent, ip_address):
         object_type = raw_event_d.get("object", None)
         action = raw_event_d.get("action", None)
         if object_type is None or action is None:
@@ -186,8 +181,6 @@ class BeatPreprocessor(object):
                 elif v == "true":
                     v = True
                 payload["object"][k] = v
-        # jamf instance
-        self.add_payload_jamf_instance(payload, raw_event_d)
         # user
         user_m = self.USER_RE.match(raw_event_d["user"])
         if user_m:
@@ -214,11 +207,12 @@ class BeatPreprocessor(object):
         # event
         metadata = EventMetadata(JAMFChangeManagementEvent.event_type,
                                  machine_serial_number=machine_serial_number,
+                                 request=EventRequest(user_agent, ip_address),
                                  created_at=self.get_created_at(raw_event_d),
                                  tags=JAMFChangeManagementEvent.tags)
         return JAMFChangeManagementEvent(metadata, payload)
 
-    def build_software_server_event(self, raw_event_d):
+    def build_software_server_event(self, raw_event_d, user_agent, ip_address):
         payload = {}
         for p_attr, re_attr in (("log_level", "log_level"),
                                 ("info_1", "info_1"),
@@ -233,41 +227,40 @@ class BeatPreprocessor(object):
             logger.error("Could not build software server event %s", raw_event_d)
             return None
         else:
-            # jamf instance
-            self.add_payload_jamf_instance(payload, raw_event_d)
             # event
             metadata = EventMetadata(JAMFSoftwareServerEvent.event_type,
                                      created_at=self.get_created_at(raw_event_d),
+                                     request=EventRequest(user_agent, ip_address),
                                      tags=JAMFSoftwareServerEvent.tags)
             return JAMFSoftwareServerEvent(metadata, payload)
 
-    def build_access_event(self, raw_event_d):
+    def build_access_event(self, raw_event_d, user_agent, ip_address):
         # payload
         try:
             payload = {attr: raw_event_d[attr] for attr in ("entry_point", "username", "status", "ip_address")}
         except KeyError:
             logger.error("Could not build access event %s", raw_event_d)
             return
-        # jamf instance
-        self.add_payload_jamf_instance(payload, raw_event_d)
         # event
         metadata = EventMetadata(JAMFAccessEvent.event_type,
                                  created_at=self.get_created_at(raw_event_d),
+                                 request=EventRequest(user_agent, ip_address),
                                  tags=JAMFAccessEvent.tags)
         return JAMFAccessEvent(metadata, payload)
 
     def process_raw_event(self, raw_event):
         raw_event_d = json.loads(raw_event)
-        raw_event_type = raw_event_d["type"]
+        user_agent, ip_address = get_user_agent_and_ip_address_from_raw_event(raw_event_d)
+        zentral_log_type = raw_event_d["zentral_log_type"]
         event = None
-        if raw_event_type == "jamf_change_management":
-            event = self.build_change_management_event(raw_event_d)
-        elif raw_event_type == "jamf_software_server":
-            event = self.build_software_server_event(raw_event_d)
-        elif raw_event_type == "jss_access":
-            event = self.build_access_event(raw_event_d)
+        if zentral_log_type == "zentral.contrib.jamf.jamf_change_management":
+            event = self.build_change_management_event(raw_event_d, user_agent, ip_address)
+        elif zentral_log_type == "zentral.contrib.jamf.jamf_software_server":
+            event = self.build_software_server_event(raw_event_d, user_agent, ip_address)
+        elif zentral_log_type == "zentral.contrib.jamf.jss_access":
+            event = self.build_access_event(raw_event_d, user_agent, ip_address)
         else:
-            logger.warning("Unknown event type %s", raw_event_type)
+            logger.warning("Unknown zentral_log_type %s", zentral_log_type)
             return
         if event:
             yield event
