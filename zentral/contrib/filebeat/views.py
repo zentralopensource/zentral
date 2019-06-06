@@ -211,6 +211,8 @@ class CompleteEnrollmentView(View):
                 serial_number,
                 filebeat_enrollment_session__status__in=(EnrollmentSession.STARTED, EnrollmentSession.SCEP_VERIFIED)
             )
+            certificate = request_json["certificate"]
+            key = request_json["key"]
         except (ValueError, KeyError, EnrollmentSecretVerificationFailed):
             raise SuspiciousOperation("Could not verify enrollment session secret")
         else:
@@ -225,7 +227,8 @@ class CompleteEnrollmentView(View):
             post_enrollment_event(serial_number, self.user_agent, self.ip, enrollment_session.serialize_for_event())
             # response
             response = {
-                "filebeat.yml": build_filebeat_yml(enrollment_session.enrollment.configuration)
+                "filebeat.yml": build_filebeat_yml(enrollment_session.enrollment.configuration,
+                                                   certificate=certificate, key=key)
             }
             return JsonResponse(response)
 

@@ -86,17 +86,17 @@ class AvailableInputs(object):
 available_inputs = AvailableInputs()
 
 
-def build_filebeat_yml(configuration):
+def build_filebeat_yml(configuration, certificate=None, key=None):
+    ssl = {"enable": True}
+    if certificate:
+        ssl["certificate"] = certificate
+    if key:
+        ssl["key"] = key
     fb_cfg = {
-        "path": {"home": "/usr/local/zentral/filebeat"},
         "output": {
             "logstash": {
                 "hosts": ["{}:5044".format(urlparse(settings["api"]["tls_hostname"]).netloc)],
-                "ssl": {
-                    "enable": True,
-                    "certificate": "/usr/local/zentral/filebeat/client.crt",
-                    "key": "/usr/local/zentral/filebeat/client.key",
-                },
+                "ssl": ssl,
             }
         },
         "processors": [

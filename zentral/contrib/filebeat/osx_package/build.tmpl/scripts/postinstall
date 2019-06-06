@@ -20,8 +20,8 @@ DEFAULT_HEADERS = {
 }
 
 ZENTRAL_DIR = "/usr/local/zentral/"
-FILEBEAT_DIR = os.path.join(ZENTRAL_DIR, "filebeat")
-FILEBEAT_YML = os.path.join(FILEBEAT_DIR, "filebeat.yml")
+FILEBEAT_HOME = os.path.join(ZENTRAL_DIR, "filebeat")
+FILEBEAT_YML = os.path.join(FILEBEAT_HOME, "filebeat.yml")
 OPENSSL = "/usr/bin/openssl"
 SCEPCLIENT = os.path.join(ZENTRAL_DIR, "bin", "scepclient")
 
@@ -39,11 +39,17 @@ def get_ssl_context(client_cert=None, client_key=None):
     return ctx
 
 
+def get_certificate_and_key_paths():
+    return os.path.join(FILEBEAT_HOME, "client.crt"), os.path.join(FILEBEAT_HOME, "client.key")
+
+
 def get_post_data(secret, serial_number, uuid):
-    data = json.dumps({"secret": secret,
+    client_cert, client_key = get_certificate_and_key_paths()
+    return json.dumps({"secret": secret,
                        "serial_number": serial_number,
-                       "uuid": uuid})
-    return data
+                       "uuid": uuid,
+                       "certificate": client_cert,
+                       "key": client_key})
 
 
 def start_enrollment(serial_number, uuid):
@@ -100,8 +106,8 @@ def build_csr(tmpdir, serial_number, cn, org, challenge):
 
 def get_certificate(serial_number, cn, org, challenge, url):
     print("GET CERTIFICATE", cn, org, challenge, url)
-    if not os.path.isdir(FILEBEAT_DIR):
-        os.makedirs(FILEBEAT_DIR)
+    if not os.path.isdir(FILEBEAT_HOME):
+        os.makedirs(FILEBEAT_HOME)
     old_umask = os.umask(0o077)
     old_dir = os.getcwd()
     tmpdir = tempfile.mkdtemp()
@@ -113,7 +119,7 @@ def get_certificate(serial_number, cn, org, challenge, url):
         "-private-key", "client.key",
         "-certificate", "client.crt"
     ])
-    client_cert, private_key = os.path.join(FILEBEAT_DIR, "client.crt"), os.path.join(FILEBEAT_DIR, "client.key")
+    client_cert, private_key = get_certificate_and_key_paths()
     shutil.move("client.crt", client_cert)
     shutil.move("client.key", private_key)
     os.chdir(old_dir)
