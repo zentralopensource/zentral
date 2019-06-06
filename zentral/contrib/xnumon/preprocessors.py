@@ -29,6 +29,10 @@ class XnumonLogPreprocessor(object):
         except Exception:
             logger.exception("Could not process xnumon_log raw event")
         else:
+            if event_class == XnumonImageExecEvent and "image" in event_data:
+                # default value for xnumon signature
+                # see https://github.com/droe/xnumon/blob/ca644bdc9de04dcb821a4d9012b38f7c7c64a589/codesign.c#L395
+                event_data["image"].setdefault("signature", "undefined")
             yield from event_class.build_from_machine_request_payloads(
                 serial_number, user_agent, ip_address, [event_data],
                 get_created_at=lambda d: parser.parse(d.pop("time"))
