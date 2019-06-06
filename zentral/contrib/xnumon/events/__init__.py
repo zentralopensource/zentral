@@ -20,6 +20,13 @@ class XnumonImageExecEvent(BaseEvent):
     event_type = "xnumon_image_exec"
     tags = ["xnumon"]
     xnumon_eventcode = 2
+    payload_aggregations = [
+        ("image.signature", {"type": "terms", "bucket_number": 2, "label": "Signatures"}),
+        ("paths", {"type": "table", "bucket_number": 50, "label": "Top 50. paths", "top": True,
+                   "columns": [("image.path", "path")]}),
+        ("certs", {"type": "table", "bucket_number": 50, "label": "Top 50. certs", "top": True,
+                   "columns": [("image.certcn", "CN")]}),
+    ]
 
 
 register_event_type(XnumonImageExecEvent)

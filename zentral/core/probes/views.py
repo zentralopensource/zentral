@@ -138,7 +138,9 @@ class ProbeDashboardDataView(LoginRequiredMixin, View):
                         if v is None:
                             row[k] = "-"
                     data.append(row)
-                data.sort(key=lambda d: [d[fn].lower() for fn, _ in columns])
+                top_results = aggregation.get("top", False)
+                if not top_results:
+                    data.sort(key=lambda d: [d[fn].lower() for fn, _ in columns])
                 labels = [l for _, l in columns]
                 labels.append("Event count")
                 chart_config = {
