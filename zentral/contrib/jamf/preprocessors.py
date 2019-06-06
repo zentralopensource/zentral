@@ -136,7 +136,7 @@ class WebhookEventPreprocessor(object):
 
 
 class BeatPreprocessor(object):
-    routing_key = "jamf_beats"
+    routing_key = "jamf_logs"
     USER_RE = re.compile(r'^(?P<name>.*) \(ID: (?P<id>\d+)\)$')
     OBJECT_INFO_SEP_RE = re.compile("[ \.]{2,}")
 

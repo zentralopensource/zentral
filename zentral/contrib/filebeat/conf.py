@@ -73,7 +73,14 @@ class AvailableInputs(object):
             if prefix in inputs:
                 form = form_class(inputs[prefix])
                 form.is_valid()
-                yield form.get_filebeat_input()
+                filebeat_input = form.get_filebeat_input()
+                filebeat_input.update({
+                    "fields": {
+                        "zentral_log_type": prefix
+                    },
+                    "fields_under_root": True,
+                })
+                yield filebeat_input
 
 
 available_inputs = AvailableInputs()
