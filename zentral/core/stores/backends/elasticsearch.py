@@ -111,6 +111,7 @@ class EventStore(BaseEventStore):
         self.kibana_base_url = config_d.get('kibana_base_url', None)
         self.kibana_index_pattern_uuid = config_d.get('kibana_index_pattern_uuid')
         self.index_settings = {
+            "index.mapping.total_fields.limit": config_d.get("index.mapping.total_fields.limit", 2000),
             "number_of_shards": config_d.get("number_of_shards", 1),
             "number_of_replicas": config_d.get("number_of_replicas", 0)
         }
