@@ -1,7 +1,11 @@
+import logging
 import subprocess
 from urllib.parse import urlparse
 import uuid
 from zentral.conf import settings
+
+
+logger = logging.getLogger("zentral.utils.payloads")
 
 
 def generate_payload_uuid():
@@ -23,7 +27,12 @@ def sign_payload_openssl(payload):
                           "-inkey", api_settings["tls_server_key"],
                           "-certfile",  api_settings["tls_server_certs"],
                           "-outform", "der", "-nodetach"],
+                         stderr=subprocess.PIPE,
                          stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE)
     stdout, stderr = p.communicate(payload)
-    return stdout
+    if not stdout:
+        logger.error("Could not sign payload: %s", stderr.decode("utf-8", errors="replace"))
+        return payload
+    else:
+        return stdout
