@@ -19,6 +19,7 @@ from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import available_inputs, build_filebeat_yml
 from .events import FilebeatEnrollmentEvent, post_enrollment_event
 from .forms import ConfigurationForm, EnrollmentForm
+from .linux_script.builder import ZentralFilebeatEnrollmentScriptBuilder
 from .models import Configuration, EnrolledMachine, Enrollment, EnrollmentSession
 from .osx_package.builder import ZentralFilebeatPkgBuilder
 
@@ -143,6 +144,13 @@ class EnrollmentPackageView(LoginRequiredMixin, View):
         return builder.build_and_make_response()
 
 
+class EnrollmentScriptView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
+        builder = ZentralFilebeatEnrollmentScriptBuilder(enrollment)
+        return builder.build_and_make_response()
+
+
 # enrollment endpoints called by enrollment script
 
 
@@ -213,6 +221,7 @@ class CompleteEnrollmentView(View):
             )
             certificate = request_json["certificate"]
             key = request_json["key"]
+            certificate_authority = request_json["certificate_authority"]
         except (ValueError, KeyError, EnrollmentSecretVerificationFailed):
             raise SuspiciousOperation("Could not verify enrollment session secret")
         else:
@@ -228,7 +237,8 @@ class CompleteEnrollmentView(View):
             # response
             response = {
                 "filebeat.yml": build_filebeat_yml(enrollment_session.enrollment.configuration,
-                                                   certificate=certificate, key=key)
+                                                   certificate=certificate, key=key,
+                                                   certificate_authority=certificate_authority)
             }
             return JsonResponse(response)
 

@@ -1,5 +1,5 @@
 from django import forms
-from zentral.utils.filebeat_releases import Releases
+from .filebeat_releases import get_filebeat_versions
 from .models import Configuration, Enrollment
 
 
@@ -38,8 +38,7 @@ class EnrollmentForm(forms.ModelForm):
         if self.update_for:
             release_field.widget = forms.HiddenInput()
         else:
-            r = Releases()
-            release_choices = [(filename, filename) for filename, _, _, _, _ in r.get_versions()]
+            release_choices = [(version, version) for version in get_filebeat_versions()]
             if not self.standalone:
                 release_choices.insert(0, ("", "Do not include filebeat"))
             release_field.choices = release_choices

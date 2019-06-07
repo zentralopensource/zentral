@@ -86,7 +86,7 @@ class AvailableInputs(object):
 available_inputs = AvailableInputs()
 
 
-def build_filebeat_yml(configuration, certificate=None, key=None):
+def build_filebeat_yml(configuration, certificate=None, key=None, certificate_authority=None):
     ssl = {"enable": True}
     if certificate:
         ssl["certificate"] = certificate
@@ -110,9 +110,9 @@ def build_filebeat_yml(configuration, certificate=None, key=None):
     }
 
     # include tls certs?
-    if settings["api"].get("distribute_tls_server_certs", True):
+    if settings["api"].get("distribute_tls_server_certs", True) and certificate_authority:
         fb_cfg["output"]["logstash"]["ssl"]["certificate_authorities"] = [
-            "/usr/local/zentral/tls_server_certs.crt",
+            certificate_authority,
         ]
 
     # add configured filebeat input

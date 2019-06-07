@@ -23,6 +23,9 @@ urlpatterns = [
     path('configurations/<int:configuration_pk>/enrollments/<int:pk>/package/',
          views.EnrollmentPackageView.as_view(),
          name='enrollment_package'),
+    path('configurations/<int:configuration_pk>/enrollments/<int:pk>/script/',
+         views.EnrollmentScriptView.as_view(),
+         name='enrollment_script'),
 
     # enrollment endpoints called by enrollment script
     path('enrollment/start/', csrf_exempt(views.StartEnrollmentView.as_view()),

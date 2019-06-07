@@ -1,8 +1,8 @@
 import os
 import shutil
 from zentral.utils.osx_package import EnrollmentPackageBuilder
-from zentral.utils.filebeat_releases import Releases as FilebeatReleases
-from zentral.contrib.filebeat.scepclient_releases import Releases as ScepClientReleases
+from zentral.contrib.filebeat.filebeat_releases import get_filebeat_binary
+from zentral.contrib.filebeat.scepclient_releases import get_scepclient_binary
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -22,8 +22,7 @@ class ZentralFilebeatPkgBuilder(EnrollmentPackageBuilder):
         # filebeat binary
         release = self.build_kwargs["release"]
         if release:
-            r = FilebeatReleases()
-            local_path = r.get_requested_package(self.build_kwargs["release"])
+            local_path = get_filebeat_binary(self.build_kwargs["release"])
             filebeat_path = self.get_root_path("usr/local/zentral/bin/filebeat")
             filebeat_dir = os.path.dirname(filebeat_path)
             if not os.path.exists(filebeat_dir):
@@ -31,7 +30,7 @@ class ZentralFilebeatPkgBuilder(EnrollmentPackageBuilder):
             shutil.copy(local_path, filebeat_path)
 
         # scepclient binary
-        local_path = ScepClientReleases("darwin").get_a_version()
+        local_path = get_scepclient_binary()
         if local_path:
             scepclient_path = self.get_root_path("usr/local/zentral/bin/scepclient")
             scepclient_dir = os.path.dirname(scepclient_path)

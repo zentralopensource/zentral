@@ -94,6 +94,12 @@
         <a class="btn btn-default download-tool"
            href="{% url 'filebeat:enrollment_package' enrollment.configuration.id enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+          macOS
+        </a>
+        <a class="btn btn-default download-tool"
+           href="{% url 'filebeat:enrollment_script' enrollment.configuration.id enrollment.id %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+          Linux
         </a>
         {% elif secret.is_used_up %}
         <span class="text-danger">Enrollment used up.</span>
