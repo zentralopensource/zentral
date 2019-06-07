@@ -1,4 +1,3 @@
-from functools import lru_cache
 import logging
 import geoip2.database
 from . import event_from_event_d
@@ -22,7 +21,6 @@ else:
         logger.info("Could not open Geolite2 city database")
 
 
-@lru_cache(maxsize=256)
 def get_city(ip):
     try:
         return city_db_reader.city(ip)
