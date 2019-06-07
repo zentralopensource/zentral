@@ -1,4 +1,3 @@
-from functools import lru_cache
 import json
 import logging
 from zentral.utils.certificates import parse_dn
@@ -8,8 +7,8 @@ from .models import EnrollmentSession
 logger = logging.getLogger("zentral.contrib.filebeat.utils")
 
 
-@lru_cache(maxsize=32)
 def get_serial_number_from_enrollment_secret(secret):
+    # TODO optimization. Could be cached. With encrypted communications to the cache server (like with the DB) !
     try:
         return (EnrollmentSession.objects.select_related("enrollment_secret")
                                          .get(enrollment_secret__secret=secret)
