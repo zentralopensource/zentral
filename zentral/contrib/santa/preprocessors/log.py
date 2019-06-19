@@ -1,12 +1,12 @@
-from dateutil import parser
 import json
 import logging
+from dateutil import parser
 from zentral.contrib.filebeat.utils import (get_serial_number_from_raw_event,
                                             get_user_agent_and_ip_address_from_raw_event)
-from .events import SantaLogEvent
+from zentral.contrib.santa.events import SantaLogEvent
 
 
-logger = logging.getLogger("zentral.contrib.santa.preprocessors")
+logger = logging.getLogger("zentral.contrib.santa.preprocessors.log")
 
 
 def parse_santa_log_message(message):
@@ -72,7 +72,3 @@ class SantaLogPreprocessor(object):
                 serial_number, user_agent, ip_address, [event_data],
                 get_created_at=lambda d: d.pop("timestamp", None)
             )
-
-
-def get_preprocessors():
-    yield SantaLogPreprocessor()
