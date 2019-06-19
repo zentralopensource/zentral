@@ -16,6 +16,15 @@ class XnumonOpsEvent(BaseEvent):
 register_event_type(XnumonOpsEvent)
 
 
+class XnumonStatsEvent(BaseEvent):
+    event_type = "xnumon_stats"
+    tags = ["xnumon"]
+    xnumon_eventcode = 1
+
+
+register_event_type(XnumonStatsEvent)
+
+
 class XnumonImageExecEvent(BaseEvent):
     event_type = "xnumon_image_exec"
     tags = ["xnumon"]

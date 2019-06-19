@@ -3,7 +3,8 @@ import logging
 from dateutil import parser
 from zentral.contrib.filebeat.utils import (get_serial_number_from_raw_event,
                                             get_user_agent_and_ip_address_from_raw_event)
-from .events import XnumonImageExecEvent, XnumonLaunchdAddEvent, XnumonOpsEvent, XnumonProcessAccessEvent
+from .events import (XnumonImageExecEvent, XnumonLaunchdAddEvent, XnumonOpsEvent,
+                     XnumonProcessAccessEvent, XnumonStatsEvent)
 
 
 logger = logging.getLogger("zentral.contrib.xnumon.preprocessors")
@@ -13,6 +14,7 @@ class XnumonLogPreprocessor(object):
     routing_key = "xnumon_logs"
     eventcode_mapping = dict((event_class.xnumon_eventcode, event_class)
                              for event_class in (XnumonOpsEvent,
+                                                 XnumonStatsEvent,
                                                  XnumonImageExecEvent,
                                                  XnumonProcessAccessEvent,
                                                  XnumonLaunchdAddEvent))
