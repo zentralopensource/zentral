@@ -1,22 +1,42 @@
 # TLS material
 
-The files in this directory are provided as examples.  DO NOT USE THEM IN PRODUCTION.
+The files in this directory are provided as examples. DO NOT USE THEM IN PRODUCTION!!!
 
 ## How?
 
-Self signed certificate for the CA
+Create a self signed certificate for the CA:
+
 ```
-openssl genrsa -out zentral_ca.key 2048
-openssl req -x509 -new -nodes -key zentral_ca.key -sha256 -days 3650 -out zentral_ca.crt
+openssl req -x509 -out zentral_ca.crt \
+            -newkey rsa:2048 -nodes -keyout zentral_ca.key \
+            -sha256 -days 3650 \
+            -extensions ext \
+            -config <(printf "[req]\nprompt=no\ndistinguished_name=dn\nreq_extensions=ext\n[dn]\nC=DE\nST=Hamburg\nL=Hamburg\nO=Zentral\nOU=IT\nCN=Zentral CA\nemailAddress=info@zentral.io\n[ext]\nbasicConstraints=CA:TRUE\nsubjectKeyIdentifier=hash\nkeyUsage=keyCertSign,cRLSign\n")
 ```
 
-Then, for each service:
+Create a certificate request for zentral:
+
 ```
-openssl genrsa -out zentral.key 2048
-openssl req -new -key zentral.key -out zentral.csr
-openssl x509 -req -in zentral.csr -CA zentral_ca.crt -CAkey zentral_ca.key -CAcreateserial -out zentral.crt -days 3650 -sha256
+openssl req \
+        -newkey rsa:2048 -nodes -keyout zentral.key \
+        -subj '/CN=zentral' \
+        -out zentral.csr
 ```
 
-We add the root cert to the generated certs for nginx.
+Add the extensions and sign the request with the CA, to build the certificate:
 
-For the fullchains, we add the cert again.
+```
+openssl x509 \
+        -req -in zentral.csr \
+        -CA zentral_ca.crt -CAkey zentral_ca.key \
+        -CAcreateserial \
+        -days 3650 -sha256 \
+        -extensions ext \
+        -extfile <(printf "[ext]\nsubjectAltName=DNS:zentral,DNS:zentral-clicertauth\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth,emailProtection") \
+        -out zentral.crt
+```
+
+Create the fullchain:
+```
+cat zentral.crt zentral_ca.crt > zentral_fullchain.crt
+```

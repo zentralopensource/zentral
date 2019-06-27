@@ -49,7 +49,8 @@ def build_payload(payload_type, payload_display_name, suffix, content, payload_v
 
 
 def build_root_ca_payloads():
-    root_certificate = split_certificate_chain(settings["api"]["tls_server_certs"])[-1]
+    certificate_chain_filename = settings["api"]["tls_server_certs"]
+    root_certificate = split_certificate_chain(certificate_chain_filename)[-1]
     return [
         build_payload("com.apple.security.pem",
                       "Zentral - root CA", "tls-root-ca-cert",
@@ -112,11 +113,11 @@ def build_mdm_configuration_profile(enrollment_session, push_certificate):
                       {"IdentityCertificateUUID": scep_payload["PayloadUUID"],
                        "Topic": push_certificate.topic,
                        "ServerURL": "{}{}".format(
-                           settings["api"]["tls_hostname"],
+                           settings["api"]["tls_hostname_for_client_cert_auth"],
                            reverse("mdm:connect")),
                        "ServerCapabilities": ["com.apple.mdm.per-user-connections"],
                        "CheckInURL": "{}{}".format(
-                           settings["api"]["tls_hostname"],
+                           settings["api"]["tls_hostname_for_client_cert_auth"],
                            reverse("mdm:checkin")),
                        "CheckOutWhenRemoved": True,
                        "AccessRights": 8191,  # TODO: config

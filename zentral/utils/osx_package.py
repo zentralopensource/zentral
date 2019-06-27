@@ -220,8 +220,12 @@ class ProductArchiveBuilder(BasePackageBuilder):
         tree.write(self.distribution, encoding='utf-8', xml_declaration=True)
 
 
-def get_tls_hostname():
-    tls_hostname_p = urlparse(settings['api']['tls_hostname'])
+def get_tls_hostname(for_client_cert_auth=False):
+    if for_client_cert_auth:
+        key = "tls_hostname_for_client_cert_auth"
+    else:
+        key = "tls_hostname"
+    tls_hostname_p = urlparse(settings['api'][key])
     return tls_hostname_p.netloc
 
 
@@ -230,10 +234,8 @@ def distribute_tls_server_certs():
 
 
 class APIConfigToolsMixin(object):
-    def get_tls_hostname(self):
-        if not hasattr(self, "tls_hostname"):
-            self.tls_hostname = get_tls_hostname()
-        return self.tls_hostname
+    def get_tls_hostname(self, for_client_cert_auth=False):
+        return get_tls_hostname(for_client_cert_auth)
 
     def get_tls_server_certs(self):
         if distribute_tls_server_certs():
@@ -394,10 +396,10 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             plistlib.dump(pl, f)
 
     def include_tls_server_certs(self):
-        tls_server_certs = self.get_tls_server_certs()
-        if tls_server_certs:
+        local_certs_path = self.get_tls_server_certs()
+        if local_certs_path:
             tls_server_certs_rel_path = os.path.relpath(TLS_SERVER_CERTS_CLIENT_PATH, "/")
-            shutil.copy(tls_server_certs, self.get_root_path(tls_server_certs_rel_path))
+            shutil.copy(local_certs_path, self.get_root_path(tls_server_certs_rel_path))
             return TLS_SERVER_CERTS_CLIENT_PATH
 
     def is_product_archive(self):

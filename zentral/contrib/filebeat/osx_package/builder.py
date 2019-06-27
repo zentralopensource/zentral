@@ -40,7 +40,10 @@ class ZentralFilebeatPkgBuilder(EnrollmentPackageBuilder):
 
         # postinstall
         postinstall_script = self.get_build_path("scripts", "postinstall")
-        self.replace_in_file(postinstall_script,
-                             (("%ENROLLMENT_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
-                              ("%TLS_HOSTNAME%", self.get_tls_hostname()),
-                              ("%TLS_SERVER_CERTS%", self.include_tls_server_certs() or "")))
+        self.replace_in_file(
+            postinstall_script,
+            (("%ENROLLMENT_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
+             ("%TLS_HOSTNAME%", self.get_tls_hostname()),
+             ("%TLS_HOSTNAME_FOR_CLIENT_CERT_AUTH%", self.get_tls_hostname(for_client_cert_auth=True)),
+             ("%TLS_SERVER_CERTS%", self.include_tls_server_certs() or ""))
+        )
