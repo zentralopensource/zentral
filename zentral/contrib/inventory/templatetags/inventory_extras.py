@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.utils.html import escape
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
-from zentral.contrib.inventory.conf import IOS, LINUX, MACOS, WINDOWS
+from zentral.contrib.inventory.conf import IOS, IPADOS, LINUX, MACOS, TVOS, WINDOWS
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.color import text_color_for_background_color
 
@@ -46,7 +46,7 @@ def machine_type_icon(meta_machine):
 @register.simple_tag
 def base_machine_platform_icon(machine_platform):
     icon = None
-    if machine_platform in {MACOS, IOS}:
+    if machine_platform in {IOS, IPADOS, MACOS, TVOS}:
         icon = "apple"
     elif machine_platform == LINUX:
         icon = "linux"

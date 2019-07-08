@@ -5,12 +5,16 @@ MACOS = "MACOS"
 WINDOWS = "WINDOWS"
 ANDROID = "ANDROID"
 IOS = "IOS"
+IPADOS = "IPADOS"
+TVOS = "TVOS"
 PLATFORM_CHOICES = (
     (LINUX, 'Linux'),
     (MACOS, 'macOS'),
     (WINDOWS, 'Windows'),
     (ANDROID, 'Android'),
     (IOS, 'iOS'),
+    (IPADOS, 'iPadOS'),
+    (TVOS, 'tvOS'),
 )
 
 PLATFORM_CHOICES_DICT = dict(PLATFORM_CHOICES)
@@ -21,6 +25,7 @@ LAPTOP = "LAPTOP"
 MOBILE = "MOBILE"
 SERVER = "SERVER"
 TABLET = "TABLET"
+TV = "TV"
 VM = "VM"
 TYPE_CHOICES = (
     (DESKTOP, 'Desktop'),
@@ -28,6 +33,7 @@ TYPE_CHOICES = (
     (MOBILE, 'Mobile'),
     (SERVER, 'Server'),
     (TABLET, 'Tablet'),
+    (TV, 'TV'),
     (VM, 'Virtual machine'),
 )
 
@@ -36,6 +42,7 @@ TYPE_CHOICES_DICT = dict(TYPE_CHOICES)
 # utils
 
 HARDWARE_MODEL_SERIAL_MACHINE_TYPE_DICT = {
+    'appletv': TV,
     'imac': DESKTOP,
     'ipad': TABLET,
     'iphone': MOBILE,
@@ -67,6 +74,10 @@ def platform_with_os_name(os_name):
         return MACOS
     elif "ios" in os_name:
         return IOS
+    elif "ipados" in os_name:
+        return IPADOS
+    elif "tvos" in os_name:
+        return TVOS
     elif "windows" in os_name:
         return WINDOWS
     else:
