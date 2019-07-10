@@ -12,8 +12,7 @@ from django import forms
 from django.db import connection
 from django.http import QueryDict
 from django.utils.text import slugify
-from prometheus_client import (CollectorRegistry, Gauge,  # NOQA
-                               generate_latest, CONTENT_TYPE_LATEST as prometheus_metrics_content_type)
+from prometheus_client import CollectorRegistry, Gauge
 import xlsxwriter
 from zentral.core.incidents.models import OPEN_STATUSES, SEVERITY_CHOICES
 from zentral.utils.json import log_data
@@ -1210,7 +1209,7 @@ def get_prometheus_inventory_metrics():
     for r in os_version_count():
         count = r.pop('count')
         g.labels(**r).set(count)
-    return generate_latest(registry)
+    return registry
 
 
 def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):

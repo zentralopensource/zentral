@@ -1,6 +1,9 @@
 import logging
-from django.db import IntegrityError, transaction
-from .models import Incident, MachineIncident, OPEN_STATUSES, STATUS_CLOSED, STATUS_OPEN
+from django.db import connection, IntegrityError, transaction
+from prometheus_client import CollectorRegistry, Gauge
+from .models import (Incident, MachineIncident,
+                     OPEN_STATUSES, SEVERITY_CHOICES_DICT,
+                     STATUS_CLOSED, STATUS_CHOICES_DICT, STATUS_OPEN)
 
 
 logger = logging.getLogger("zentral.core.incidents.utils")
@@ -152,3 +155,30 @@ def update_machine_incident_status(machine_incident, new_status):
         machine_incident_event_payload["machine_incident"]["diff"] = diff
         event_payloads.append(machine_incident_event_payload)
     return machine_incident, event_payloads
+
+
+def get_prometheus_incidents_metrics():
+    registry = CollectorRegistry()
+    g = Gauge('zentral_incidents_count', 'Zentral incidents',
+              ['name', 'id', 'severity', 'status', 'opened'],
+              registry=registry)
+    query = (
+        "select count(*), "
+        "i.id, i.name, i.severity, "
+        "mi.status, (CASE WHEN mi.status in ('CLOSED', 'RESOLVED') THEN FALSE ELSE TRUE END) as opened "
+        "from incidents_incident as i "
+        "join incidents_machineincident as mi on (mi.incident_id = i.id) "
+        "group by i.name, i.id, i.severity, mi.status, opened "
+        "order by i.id, mi.status;"
+    )
+    cursor = connection.cursor()
+    cursor.execute(query)
+    columns = [col[0] for col in cursor.description]
+    for row in cursor.fetchall():
+        d = dict(zip(columns, row))
+        d["severity"] = str(SEVERITY_CHOICES_DICT.get(d.pop("severity"), "Unknown"))
+        d["status"] = str(STATUS_CHOICES_DICT.get(d.pop("status"), "Unknown"))
+        d["opened"] = 'Y' if d["opened"] else 'N'
+        count = d.pop('count')
+        g.labels(**d).set(count)
+    return registry

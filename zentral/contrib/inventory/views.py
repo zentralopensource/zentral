@@ -4,13 +4,13 @@ from math import ceil
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse, reverse_lazy
-from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores import frontend_store
-from zentral.conf import settings
+from zentral.utils.prometheus import BasePrometheusMetricsView
 from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
@@ -21,7 +21,7 @@ from .models import (BusinessUnit,
                      MetaMachine,
                      MetaBusinessUnitTag, MachineTag, Tag, Taxonomy,
                      OSXApp, OSXAppInstance)
-from .utils import (get_prometheus_inventory_metrics, prometheus_metrics_content_type,
+from .utils import (get_prometheus_inventory_metrics,
                     BundleFilter, BundleFilterForm,
                     MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
                     MSQuery)
@@ -714,12 +714,6 @@ class MacOSAppView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class PrometheusMetricsView(View):
-    def get(self, request, *args, **kwargs):
-        bearer_token = settings['apps']['zentral.contrib.inventory'].get('prometheus_bearer_token')
-        if bearer_token and \
-           request.META.get('HTTP_AUTHORIZATION') == "Bearer {}".format(bearer_token):
-            return HttpResponse(get_prometheus_inventory_metrics(),
-                                content_type=prometheus_metrics_content_type)
-        else:
-            return HttpResponseForbidden()
+class PrometheusMetricsView(BasePrometheusMetricsView):
+    def get_registry(self):
+        return get_prometheus_inventory_metrics()

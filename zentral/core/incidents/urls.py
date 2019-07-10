@@ -10,6 +10,9 @@ urlpatterns = [
     url(r'^(?P<pk>\d+)/events/$', views.IncidentEventsView.as_view(), name='incident_events'),
     url(r'^(?P<incident_pk>\d+)/machine_incident/(?P<pk>\d+)/update/$',
         views.UpdateMachineIncidentView.as_view(), name='update_machine_incident'),
+    url(r'^prometheus_metrics/$',
+        views.PrometheusMetricsView.as_view(),
+        name='prometheus_metrics'),
 ]
 
 main_menu_cfg = {
