@@ -733,8 +733,12 @@ class IncidentSeverityFilter(BaseMSFilter):
     def process_fetched_record(self, record):
         max_incident_severity = record.get("max_incident_severity")
         if max_incident_severity is not None:
-            record["max_incident_severity_display"] = self.severities_dict.get(max_incident_severity,
-                                                                               str(max_incident_severity))
+            record["max_incident_severity"] = {"value": max_incident_severity,
+                                               "keyword": str(self.severities_dict.get(max_incident_severity,
+                                                                                       max_incident_severity))}
+        elif for_filtering:
+            record["max_incident_severity"] = {"value": 0,
+                                               "keyword": "No incidents"}
 
 
 class MSQuery:
