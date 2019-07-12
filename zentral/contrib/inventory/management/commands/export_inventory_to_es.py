@@ -2,7 +2,7 @@ import logging
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from elasticsearch import Elasticsearch, NotFoundError, RequestError
-from zentral.contrib.inventory.utils import MSQuery
+from zentral.contrib.inventory.utils import MSQuery, BundleFilter
 
 logger = logging.getLogger("zentral.contrib.inventory.management.commands.export_inventory_to_es")
 
@@ -30,15 +30,25 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("-q", "--quiet", action="store_true", help="no output if no errors")
         parser.add_argument("es_hosts", nargs="+", help="elasticsearch hosts")
+        parser.add_argument("--bundle-ids", nargs="*", help="macOS app bundle ids")
+        parser.add_argument("--bundle-names", nargs="*", help="macOS app bundle names")
 
     def set_options(self, **options):
         self.quiet = options.get("quiet", False)
         self.es_hosts = options["es_hosts"]
+        self.bundle_ids = options["bundle_ids"] or []
+        self.bundle_names = options["bundle_names"] or []
         if not self.quiet:
             print("ES host" + (len(self.es_hosts) > 1) * "s", ", ".join(self.es_hosts))
+            print("Bundle id" + (len(self.bundle_ids) > 1) * "s", ", ".join(self.bundle_ids))
+            print("Bundle name" + (len(self.bundle_names) > 1) * "s", ", ".join(self.bundle_names))
 
     def iter_machine_snapshots(self, timestamp):
         ms_query = MSQuery()
+        for bundle_id in self.bundle_ids:
+            ms_query.add_filter(BundleFilter, bundle_id=bundle_id)
+        for bundle_name in self.bundle_names:
+            ms_query.add_filter(BundleFilter, bundle_name=bundle_name)
         for serial_number, machine_snapshots in ms_query.fetch(paginate=False, for_filtering=True):
             for machine_snapshot in machine_snapshots:
                 yield machine_snapshot

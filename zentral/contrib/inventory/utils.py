@@ -568,8 +568,24 @@ class BundleFilter(BaseMSFilter):
             if osx_app not in osx_apps:
                 osx_apps.append(osx_app)
         osx_apps.sort(key=lambda app: (app.get("bundle_version"), app.get("bundle_version_str"), app.get("id")))
-        # TODO: verify no conflict
-        record.setdefault("osx_apps", OrderedDict())[self.title] = osx_apps
+        if not for_filtering:
+            # TODO: verify no conflict
+            record.setdefault("osx_apps", OrderedDict())[self.title] = osx_apps
+        else:
+            bundles_dict = record.setdefault("bundles", {})
+            bundle_idx = len(bundles_dict)  # we do not use self.idx because we want to start from 0
+            bundle_dict = bundles_dict.setdefault(str(bundle_idx), {})
+            if self.bundle_name:
+                bundle_dict["name"] = self.bundle_name
+            elif self.bundle_id:
+                bundle_dict["id"] = self.bundle_id
+            if not osx_apps:
+                bundle_dict["version"] = {"min": self.unknown_value, "max": self.unknown_value}
+            else:
+                bundle_dict["version"] = {"min": (osx_apps[0].get("bundle_version_str")
+                                                  or osx_apps[0].get("bundle_version")),
+                                          "max": (osx_apps[-1].get("bundle_version_str")
+                                                  or osx_apps[-1].get("bundle_version"))}
 
 
 class TypeFilter(BaseMSFilter):
