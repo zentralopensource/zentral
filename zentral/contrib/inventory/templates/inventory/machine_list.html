@@ -173,16 +173,16 @@
 	<a href="{% url 'inventory:machine' machine_snapshot.urlsafe_serial_number %}">
           {{ serial_number }}
         </a>
-        {% if machine_snapshot.max_incident_severity_display %}
-        {% incident_severity machine_snapshot.max_incident_severity %}
+        {% if machine_snapshot.max_incident_severity.value %}
+        {% incident_severity machine_snapshot.max_incident_severity.value %}
         {% endif %}
         {% for tag in machine_snapshot.tags %}
         {% base_inventory_tag tag.display_name tag.color %}
         {% endfor %}
       </td>
       {% endif %}
-      <td>{{ machine_snapshot.computer_name|default:"" }}</td>
-      <td>{{ machine_snapshot.hardware_model|default:"" }}</td>
+      <td>{{ machine_snapshot.system_info.computer_name|default:"" }}</td>
+      <td>{{ machine_snapshot.system_info.hardware_model|default:"" }}</td>
       <td>{{ machine_snapshot.os_version.display_name }}</td>
       <td>
         {{ machine_snapshot.source.display_name }}

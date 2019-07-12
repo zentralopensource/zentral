@@ -26,6 +26,7 @@ logger = logging.getLogger("zentral.contrib.inventory.utils")
 
 class BaseMSFilter:
     none_value = "\u2400"
+    unknown_value = "UNKNOWN"
     title = "Untitled"
     optional = False
     free_input = False
@@ -138,7 +139,7 @@ class BaseMSFilter:
 
     # process fetching results
 
-    def process_fetched_record(self, record):
+    def process_fetched_record(self, record, for_filtering):
         return
 
 
@@ -190,11 +191,16 @@ class SourceFilter(BaseMSFilter):
         else:
             return grouping_value["id"]
 
-    def process_fetched_record(self, record):
+    def process_fetched_record(self, record, for_filtering):
         source = record.pop("src_j", None)
         if source and source["id"]:
             source["display_name"] = self.display_name(source)
             record["source"] = source
+            if for_filtering:
+                source.pop("config", None)
+        elif for_filtering:
+            record["source"] = {"display_name": self.unknown_value.title(),
+                                "name": self.unknown_value}
 
 
 class OSVersionFilter(BaseMSFilter):
@@ -231,15 +237,20 @@ class OSVersionFilter(BaseMSFilter):
         return gv
 
     @staticmethod
-    def display_name(os_version):
-        dn = [os_version["name"]]
-        dn.append(".".join(str(num) for num in
-                           (os_version.get(attr) for attr in ("major", "minor", "patch"))
-                           if num is not None))
+    def version(os_version):
+        return ".".join(str(num) for num in
+                        (os_version.get(attr) for attr in ("major", "minor", "patch"))
+                        if num is not None)
+
+    def version_with_build(self, os_version):
+        version = self.version(os_version)
         build = os_version.get("build")
         if build:
-            dn.append("({})".format(build))
-        return " ".join(e for e in dn if e)
+            version = "{} ({})".format(version, build)
+        return version.strip()
+
+    def display_name(self, os_version):
+        return " ".join(e for e in (os_version["name"], self.version_with_build(os_version)) if e)
 
     def label_for_grouping_value(self, grouping_value):
         if not grouping_value:
@@ -251,11 +262,15 @@ class OSVersionFilter(BaseMSFilter):
         if grouping_value:
             return grouping_value["id"]
 
-    def process_fetched_record(self, record):
+    def process_fetched_record(self, record, for_filtering):
         os_version = record.pop("osv_j", None)
         if os_version and os_version["id"]:
+            os_version["version"] = self.version(os_version)
             os_version["display_name"] = self.display_name(os_version)
             record["os_version"] = os_version
+        elif for_filtering:
+            record["os_version"] = {"version": self.unknown_value,
+                                    "display_name": self.unknown_value.title()}
 
 
 class MetaBusinessUnitFilter(BaseMSFilter):
@@ -296,10 +311,12 @@ class MetaBusinessUnitFilter(BaseMSFilter):
         if grouping_value:
             return grouping_value["id"]
 
-    def process_fetched_record(self, record):
+    def process_fetched_record(self, record, for_filtering):
         meta_business_unit = record.pop("mbu_j", None)
         if meta_business_unit and meta_business_unit["id"]:
             record["meta_business_unit"] = meta_business_unit
+        elif for_filtering:
+            record["meta_business_unit"] = {"name": self.unknown_value}
 
 
 class MachineGroupFilter(BaseMSFilter):
@@ -341,7 +358,7 @@ class MachineGroupFilter(BaseMSFilter):
         if grouping_value:
             return grouping_value["id"]
 
-    def process_fetched_record(self, record):
+    def process_fetched_record(self, record, for_filtering):
         machine_groups = []
         for machine_group in record.pop("mg_j", []):
             if not machine_group["id"]:
@@ -418,7 +435,7 @@ class TagFilter(BaseMSFilter):
         if grouping_value:
             return grouping_value["id"]
 
-    def process_fetched_record(self, record):
+    def process_fetched_record(self, record, for_filtering):
         tags = []
         for tag in record.pop("tag_j", []):
             if not tag["id"]:
@@ -428,7 +445,10 @@ class TagFilter(BaseMSFilter):
                 tag["meta_business_unit"] = None
             else:
                 display_name = "/".join(s for s in (tag["meta_business_unit"]["name"], display_name) if s)
-            tag["display_name"] = display_name
+            if for_filtering:
+                tag = display_name
+            else:
+                tag["display_name"] = display_name
             if tag not in tags:
                 tags.append(tag)
         record["tags"] = tags
@@ -539,7 +559,7 @@ class BundleFilter(BaseMSFilter):
         if grouping_value:
             return grouping_value["id"]
 
-    def process_fetched_record(self, record):
+    def process_fetched_record(self, record, for_filtering):
         osx_apps = []
         for osx_app in record.pop(self.grouping_set[-1], []):
             if not osx_app["id"]:
@@ -576,6 +596,10 @@ class TypeFilter(BaseMSFilter):
         else:
             return self.none_value
 
+    def process_fetched_record(self, record, for_filtering):
+        if for_filtering and record.get("type") is None:
+            record["type"] = self.unknown_value
+
 
 class PlaformFilter(BaseMSFilter):
     title = "Platforms"
@@ -594,6 +618,10 @@ class PlaformFilter(BaseMSFilter):
     def where_args(self):
         if self.value and self.value != self.none_value:
             yield self.value
+
+    def process_fetched_record(self, record, for_filtering):
+        if for_filtering and record.get("platform") is None:
+            record["platform"] = self.unknown_value
 
 
 class SerialNumberFilter(BaseMSFilter):
@@ -614,8 +642,9 @@ class SerialNumberFilter(BaseMSFilter):
         if self.value:
             yield "%{}%".format(connection.ops.prep_for_like_query(self.value))
 
-    def process_fetched_record(self, record):
-        record["urlsafe_serial_number"] = MetaMachine.make_urlsafe_serial_number(record["serial_number"])
+    def process_fetched_record(self, record, for_filtering):
+        if not for_filtering:
+            record["urlsafe_serial_number"] = MetaMachine.make_urlsafe_serial_number(record["serial_number"])
 
 
 class ComputerNameFilter(BaseMSFilter):
@@ -642,6 +671,13 @@ class ComputerNameFilter(BaseMSFilter):
         if self.value and self.value != self.none_value:
             yield self.value
 
+    def process_fetched_record(self, record, for_filtering):
+        computer_name = record.pop("computer_name", None)
+        if computer_name:
+            record.setdefault("system_info", {})["computer_name"] = computer_name
+        elif for_filtering:
+            record.setdefault("system_info", {})["computer_name"] = self.unknown_value
+
 
 class HardwareModelFilter(BaseMSFilter):
     title = "Hardware models"
@@ -663,6 +699,13 @@ class HardwareModelFilter(BaseMSFilter):
     def where_args(self):
         if self.value and self.value != self.none_value:
             yield self.value
+
+    def process_fetched_record(self, record, for_filtering):
+        hardware_model = record.pop("hardware_model", None)
+        if hardware_model:
+            record.setdefault("system_info", {})["hardware_model"] = hardware_model
+        elif for_filtering:
+            record.setdefault("system_info", {})["hardware_model"] = self.unknown_value
 
 
 class DateTimeFilter(BaseMSFilter):
@@ -730,8 +773,8 @@ class IncidentSeverityFilter(BaseMSFilter):
         else:
             return self.severities_dict.get(grouping_value, str(grouping_value))
 
-    def process_fetched_record(self, record):
-        max_incident_severity = record.get("max_incident_severity")
+    def process_fetched_record(self, record, for_filtering):
+        max_incident_severity = record.pop("max_incident_severity", None)
         if max_incident_severity is not None:
             record["max_incident_severity"] = {"value": max_incident_severity,
                                                "keyword": str(self.severities_dict.get(max_incident_severity,
@@ -766,7 +809,7 @@ class MSQuery:
             self.page = 1
         self.filters = []
         self._redirect = False
-        self._deserialize_filters(query_dict.get("sf"))
+        self._deserialize_filters(self.query_dict.get("sf"))
         self._grouping_results = None
         self._count = None
         self._grouping_links = None
@@ -1025,11 +1068,11 @@ class MSQuery:
             for row in rows:
                 yield dict(zip(columns, row))
 
-    def fetch(self, paginate=True):
+    def fetch(self, paginate=True, for_filtering=False):
         for record in self._make_fetching_query(paginate):
             for machine_snapshot in record["machine_snapshots"]:
                 for f in self.filters:
-                    f.process_fetched_record(machine_snapshot)
+                    f.process_fetched_record(machine_snapshot, for_filtering)
             yield record["serial_number"], record["machine_snapshots"]
 
     # export
@@ -1037,7 +1080,10 @@ class MSQuery:
         title = "Machines"
         headers = [
             "Source ID", "Source",
-            "SN", "Type", "Platform",
+            "SN",
+            "Meta Business Unit ID",
+            "Meta Business Unit Name",
+            "Type", "Platform",
             "Name",
             "Hardware model",
             "OS",
@@ -1056,14 +1102,18 @@ class MSQuery:
                         for suffix in ("min", "max"):
                             headers.append("{} {}".format(app_title, suffix))
                 row_idx += 1
+                system_info = machine_snapshot.get("system_info", {})
+                meta_business_unit = machine_snapshot.get("meta_business_unit", {})
                 row = [
                     machine_snapshot["source"]["id"],
                     machine_snapshot["source"].get("display_name") or "",
                     serial_number,
+                    meta_business_unit.get("id") or "",
+                    meta_business_unit.get("name") or "",
                     machine_snapshot.get("type") or "",
                     machine_snapshot.get("platform") or "",
-                    machine_snapshot.get("computer_name") or "",
-                    machine_snapshot.get("hardware_model") or ""
+                    system_info.get("computer_name") or "",
+                    system_info.get("hardware_model") or ""
                 ]
                 os_version = machine_snapshot.get("os_version")
                 if os_version:
@@ -1075,8 +1125,9 @@ class MSQuery:
                     "|".join(dn for dn in (t.get("display_name") for t in machine_snapshot.get("tags", [])) if dn)
                 )
                 if include_max_incident_severity:
-                    row.extend([machine_snapshot.get("max_incident_severity") or "",
-                                machine_snapshot.get("max_incident_severity_display") or ""])
+                    mis = machine_snapshot.get("max_incident_severity", {})
+                    row.extend([mis.get("value") or "",
+                                mis.get("keyword") or ""])
                 for _, app_versions in machine_snapshot.get("osx_apps", {}).items():
                     if app_versions:
                         min_app_version = app_versions[0]["display_name"]
