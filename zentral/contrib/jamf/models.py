@@ -66,3 +66,10 @@ class JamfInstance(models.Model):
         if self.business_unit:
             d["business_unit"] = self.business_unit.serialize()
         return d
+
+    def observer_dict(self):
+        return {"hostname": self.host,
+                "vendor": "Jamf",
+                "type": "Jamf Pro",
+                "content_type": "jamf.jamfinstance",
+                "pk": self.pk}

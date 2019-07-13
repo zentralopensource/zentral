@@ -127,5 +127,6 @@ class WebhookEventPreprocessor(object):
             serial_number,
             raw_event["request"]["user_agent"],
             raw_event["request"]["ip"],
-            [jamf_event]
+            [jamf_event],
+            observer=raw_event.pop("observer", None)
         )

@@ -87,13 +87,6 @@ def post_jamf_event(jamf_instance, user_agent, ip, data):
     event_type = 'jamf_{}'.format(JAMF_EVENTS[jamf_event][0])
     payload = data["event"]
 
-    # add origin to jamf event
-    payload["jamf_instance"] = {
-        "host": jamf_instance.host,
-        "path": jamf_instance.path,
-        "port": jamf_instance.port
-    }
-
     # device event ?
     device_type = None
     if jamf_event.startswith("Computer"):
@@ -101,12 +94,15 @@ def post_jamf_event(jamf_instance, user_agent, ip, data):
     elif jamf_event.startswith("MobileDevice"):
         device_type = "mobile_device"
 
+    observer_dict = jamf_instance.observer_dict()
+
     if device_type is not None \
        or event_type == "jamf_smart_group_computer_membership_change" \
        or event_type == "jamf_smart_group_mobile_device_membership_change":
         # event needs preprocessing
         raw_event = {"request": {"user_agent": user_agent,
                                  "ip": ip},
+                     "observer": observer_dict,
                      "event_type": event_type,
                      "jamf_instance": jamf_instance.serialize(),
                      "jamf_event": payload}
@@ -127,4 +123,4 @@ def post_jamf_event(jamf_instance, user_agent, ip, data):
         # event doesn't need preprocessing
         event_cls = event_cls_from_type(event_type)
         msn = payload.get("serialNumber", None)
-        event_cls.post_machine_request_payloads(msn, user_agent, ip, [payload])
+        event_cls.post_machine_request_payloads(msn, user_agent, ip, [payload], observer=observer_dict)

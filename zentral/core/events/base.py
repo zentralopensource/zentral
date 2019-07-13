@@ -30,6 +30,31 @@ def render_notification_part(ctx, event_type, part):
         return msg
 
 
+class EventObserver(object):
+    def __init__(self, hostname, vendor, type, content_type, pk):
+        self.hostname = hostname
+        self.vendor = vendor
+        self.type = type
+        self.content_type = content_type
+        self.pk = pk
+
+    @classmethod
+    def deserialize(cls, observer_d):
+        kwargs = {k: observer_d.get(k) for k in ("hostname", "vendor", "type", "content_type", "pk")}
+        return cls(**kwargs)
+
+    def serialize(self):
+        d = {k: v for k, v in (("hostname", self.hostname),
+                               ("vendor", self.vendor),
+                               ("type", self.type),
+                               ("content_type", self.content_type),
+                               ("pk", self.pk)) if v}
+        return d
+
+    def __str__(self):
+        return self.hostname or ""
+
+
 class EventRequestUser(object):
     user_attr_list = ["id", "username", "email",
                       "has_verification_device",
@@ -168,6 +193,7 @@ class EventMetadata(object):
             self.machine = MetaMachine(self.machine_serial_number)
         else:
             self.machine = None
+        self.observer = kwargs.pop('observer', None)
         self.request = kwargs.pop('request', None)
         self.tags = kwargs.pop('tags', [])
         self.incidents = kwargs.pop('incidents', [])
@@ -177,6 +203,9 @@ class EventMetadata(object):
         kwargs = event_d_metadata.copy()
         kwargs['event_type'] = kwargs.pop('type')
         kwargs['uuid'] = kwargs.pop('id')
+        observer_d = kwargs.pop('observer', None)
+        if observer_d:
+            kwargs['observer'] = EventObserver.deserialize(observer_d)
         request_d = kwargs.pop('request', None)
         if request_d:
             kwargs['request'] = EventRequest.deserialize(request_d)
@@ -227,6 +256,8 @@ class EventMetadata(object):
              'index': self.index,
              'type': self.event_type,
              }
+        if self.observer:
+            d['observer'] = self.observer.serialize()
         if self.request:
             d['request'] = self.request.serialize()
         if self.tags:
@@ -253,13 +284,16 @@ class BaseEvent(object):
     payload_aggregations = []
 
     @classmethod
-    def build_from_machine_request_payloads(cls, msn, ua, ip, payloads, get_created_at=None):
+    def build_from_machine_request_payloads(cls, msn, ua, ip, payloads, get_created_at=None, observer=None):
         if ua or ip:
             request = EventRequest(ua, ip)
         else:
             request = None
+        if observer:
+            observer = EventObserver.deserialize(observer)
         metadata = EventMetadata(cls.event_type,
                                  machine_serial_number=msn,
+                                 observer=observer,
                                  request=request,
                                  tags=cls.tags)
         for index, payload in enumerate(payloads):
@@ -272,8 +306,8 @@ class BaseEvent(object):
             yield cls(metadata, payload)
 
     @classmethod
-    def post_machine_request_payloads(cls, msn, user_agent, ip, payloads, get_created_at=None):
-        for event in cls.build_from_machine_request_payloads(msn, user_agent, ip, payloads, get_created_at):
+    def post_machine_request_payloads(cls, msn, user_agent, ip, payloads, get_created_at=None, observer=None):
+        for event in cls.build_from_machine_request_payloads(msn, user_agent, ip, payloads, get_created_at, observer):
             event.post()
 
     def __init__(self, metadata, payload):
