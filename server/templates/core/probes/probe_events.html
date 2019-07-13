@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load base_extras inventory_extras %}
+{% load base_extras incidents_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -37,6 +37,7 @@
     <tbody>
       {% for event in object_list %}
       {% with event.metadata.machine as machine %}
+      {% with event.metadata.observer.get_object as observer_obj %}
       {% with event.metadata.request as request %}
       <tr>
         <td>
@@ -55,13 +56,23 @@
           <p style="white-space:nowrap">
             {{ event.get_event_type_display }}<br>
             {{ event.metadata.created_at }}
+            {% if observer_obj %}
+            <br><small>{{ observer_obj }}</small>
+            {% endif %}
             {% if request %}
             <br><small>{{ request }}</small>
+            {% if request.geo %}
+            <br><small>{{ request.geo.short_repr }}</small>
             {% endif %}
+            {% endif %}
+            {% for incident in event.metadata.incidents %}
+            <br>{% incident_severity incident.severity %}&nbsp;<a href="{% url 'incidents:incident' incident.pk %}{% if incident.machine_incident.pk %}#{{ incident.machine_incident.pk }}{% endif %}">{{ incident.name }}</a>
+            {% endfor %}
           </p>
         </td>
         <td>{{ event.payload|pythonprettyprint }}</td>
       </tr>
+      {% endwith %}
       {% endwith %}
       {% endwith %}
       {% endfor %}

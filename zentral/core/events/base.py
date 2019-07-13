@@ -5,6 +5,8 @@ import re
 import uuid
 from dateutil import parser
 from django.core.cache import cache
+from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.contenttypes.models import ContentType
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from geoip2.models import City
@@ -53,6 +55,15 @@ class EventObserver(object):
 
     def __str__(self):
         return self.hostname or ""
+
+    def get_object(self):
+        if self.content_type and self.pk:
+            try:
+                app_label, model = self.content_type.split(".")
+                ct = ContentType.objects.get(app_label=app_label, model=model)
+                return ct.get_object_for_this_type(pk=self.pk)
+            except ObjectDoesNotExist:
+                pass
 
 
 class EventRequestUser(object):
@@ -119,6 +130,9 @@ class EventRequestGeo(object):
             if val is not None:
                 d[attr] = val
         return d
+
+    def short_repr(self):
+        return ", ".join(s for s in (self.city_name, self.country_name) if s)
 
 
 class EventRequest(object):

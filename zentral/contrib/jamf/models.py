@@ -36,6 +36,9 @@ class JamfInstance(models.Model):
     class Meta:
         unique_together = ('host', 'port', 'path')
 
+    def __str__(self):
+        return self.host
+
     def save(self, *args, **kwargs):
         if not self.id:
             self.version = 0
