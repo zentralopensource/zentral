@@ -4,9 +4,13 @@ ENV PYTHONUNBUFFERED 1
 MAINTAINER Éric Falconnier <eric.falconnier@112hz.com>
 
 # bomutils & xar build apt dependencies
-RUN apt-get update && \
+RUN echo 'deb http://deb.debian.org/debian stretch main' >> /etc/apt/sources.list && \
+    apt-get update && \
     apt-get autoremove -y && \
-    apt-get install -y libbz2-dev libssl1.0-dev
+    apt-get install -y libbz2-dev libssl1.0-dev && \
+    head -n -1 /etc/apt/sources.list > /etc/apt/sources.list.new && \
+    mv /etc/apt/sources.list.new /etc/apt/sources.list && \
+    apt-get update
 
 # bomutils & xar build (to generate the pkg files with zentral)
 # as seen in https://github.com/boot2docker/osx-installer/blob/master/Dockerfile
