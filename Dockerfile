@@ -1,31 +1,14 @@
-FROM python:3.7
+FROM python:3.7-buster
 ENV PYTHONUNBUFFERED 1
 
 MAINTAINER Éric Falconnier <eric.falconnier@112hz.com>
 
-# bomutils & xar build apt dependencies
-RUN echo 'deb http://deb.debian.org/debian stretch main' >> /etc/apt/sources.list && \
-    apt-get update && \
-    apt-get autoremove -y && \
-    apt-get install -y libbz2-dev libssl1.0-dev && \
-    head -n -1 /etc/apt/sources.list > /etc/apt/sources.list.new && \
-    mv /etc/apt/sources.list.new /etc/apt/sources.list && \
-    apt-get update
-
-# bomutils & xar build (to generate the pkg files with zentral)
-# as seen in https://github.com/boot2docker/osx-installer/blob/master/Dockerfile
-RUN curl -fsSL https://github.com/zentralopensource/bomutils/archive/master.tar.gz | tar xvz && \
-    cd bomutils-* && \
-    make && make install && \
-    cd .. && rm -rf bomutils-*
-RUN curl -fsSL https://github.com/mackyle/xar/archive/xar-1.6.1.tar.gz | tar xvz && \
-    cd xar-*/xar && \
-    ./autogen.sh && ./configure --with-bzip2 && \
-    make && make install && \
-    cd ../.. && rm -rf xar-*
-
 # zentral apt dependencies
-RUN apt-get install -y \
+RUN apt-get update && \
+    apt-get autoremove -y && \
+    apt-get install -y --no-install-recommends \
+# xar to build the packages
+            libbz2-dev \
 # bsdcpio to generate the pkg files
             bsdcpio \
 # xmlsec1 for PySAML2
@@ -35,7 +18,22 @@ RUN apt-get install -y \
 # extra dependencies for python crypto / u2f
             libssl-dev \
             libffi-dev \
-            python-dev
+            python3-dev && \
+# clean cache
+    rm -rf /var/lib/apt/lists/*
+
+# bomutils & xar build (to generate the pkg files with zentral)
+# as seen in https://github.com/boot2docker/osx-installer/blob/master/Dockerfile
+RUN curl -fsSL https://github.com/zentralopensource/bomutils/archive/master.tar.gz | tar xvz && \
+    cd bomutils-* && \
+    make && make install && \
+    cd .. && rm -rf bomutils-*
+RUN curl -fsSL https://github.com/mackyle/xar/archive/xar-1.6.1.tar.gz | tar xvz && \
+    cd xar-*/xar && \
+    sed -i 's/OpenSSL_add_all_ciphers/CRYPTO_new_ex_data/' configure.ac && \
+    ./autogen.sh && ./configure --with-bzip2 && \
+    make && make install && \
+    cd ../.. && rm -rf xar-*
 
 # zentral user and group
 RUN groupadd -r zentral --gid=999 && \
