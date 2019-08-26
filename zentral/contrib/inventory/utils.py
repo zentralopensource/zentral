@@ -146,7 +146,9 @@ class BaseMSFilter:
 class SourceFilter(BaseMSFilter):
     title = "Sources"
     query_kwarg = "src"
-    expression = "jsonb_build_object('id', src.id, 'name', src.name, 'config', src.config) as src_j"
+    expression = ("jsonb_build_object("
+                  "'id', src.id, 'module', src.module, "
+                  "'name', src.name, 'config', src.config) as src_j")
     grouping_set = ("src.id", "src_j")
 
     def joins(self):
@@ -171,6 +173,7 @@ class SourceFilter(BaseMSFilter):
 
     @staticmethod
     def display_name(source):
+        # TODO: better. see also zentral.inventory.models
         dn = [source["name"]]
         config = source.get("config")
         if config:

@@ -147,6 +147,15 @@ class Source(AbstractMTObject):
     def __str__(self):
         return self.name
 
+    def get_display_name(self):
+        # TODO: better. see also zentral.inventory.utils
+        dn = [self.name]
+        try:
+            dn.append(self.config["host"])
+        except (TypeError, KeyError):
+            pass
+        return "/".join(e for e in dn if e)
+
 
 class Link(AbstractMTObject):
     anchor_text = models.TextField()

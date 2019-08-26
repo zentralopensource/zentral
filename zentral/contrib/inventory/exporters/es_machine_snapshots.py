@@ -1,17 +1,18 @@
 import logging
-from django.core.management.base import BaseCommand
 from django.utils import timezone
 from elasticsearch import Elasticsearch, NotFoundError, RequestError
-from zentral.contrib.inventory.utils import MSQuery, BundleFilter
+from zentral.core.exceptions import ImproperlyConfigured
+from .base import BaseExporter
 
-logger = logging.getLogger("zentral.contrib.inventory.management.commands.export_inventory_to_es")
+logger = logging.getLogger("zentral.contrib.inventory.exporters.es_machine_snapshots")
 
 
 MAX_EXPORTS_COUNT = 3
-ES_ALIAS = "zentral-inventory-export-latest"
-ES_TEMPLATE_NAME = "zentral-inventory-exports"
+ES_ALIAS = "zentral-inventory-export-machine-snapshots"
+ES_TEMPLATE_NAME = ES_ALIAS
+ES_INDEX_PATTERN = '{}-*'.format(ES_ALIAS)
 ES_TEMPLATE = {
-    'index_patterns': ['zentral-inventory-export-*'],
+    'index_patterns': [ES_INDEX_PATTERN],
     'settings': {'number_of_shards': 1,
                  'number_of_replicas': 0},
     'mappings': {'date_detection': False,
@@ -24,32 +25,22 @@ ES_TEMPLATE = {
 }
 
 
-class Command(BaseCommand):
-    help = "Export inventory to elasticsearch"
+class InventoryExporter(BaseExporter):
+    name = "elasticsearch machine snapshots exporter"
 
-    def add_arguments(self, parser):
-        parser.add_argument("-q", "--quiet", action="store_true", help="no output if no errors")
-        parser.add_argument("es_hosts", nargs="+", help="elasticsearch hosts")
-        parser.add_argument("--bundle-ids", nargs="*", help="macOS app bundle ids")
-        parser.add_argument("--bundle-names", nargs="*", help="macOS app bundle names")
+    def __init__(self, config_g):
+        super().__init__(config_g)
+        error_msgs = []
+        self.es_hosts = config_g["es_hosts"]
+        if not self.es_hosts:
+            error_msgs.append("Missing es_hosts")
+        if not isinstance(self.es_hosts, list):
+            error_msgs.append("es_hosts must be a list")
+        if error_msgs:
+            raise ImproperlyConfigured("{} in {}".format(", ".join(error_msgs), self.name))
 
-    def set_options(self, **options):
-        self.quiet = options.get("quiet", False)
-        self.es_hosts = options["es_hosts"]
-        self.bundle_ids = options["bundle_ids"] or []
-        self.bundle_names = options["bundle_names"] or []
-        if not self.quiet:
-            print("ES host" + (len(self.es_hosts) > 1) * "s", ", ".join(self.es_hosts))
-            print("Bundle id" + (len(self.bundle_ids) > 1) * "s", ", ".join(self.bundle_ids))
-            print("Bundle name" + (len(self.bundle_names) > 1) * "s", ", ".join(self.bundle_names))
-
-    def iter_machine_snapshots(self, timestamp):
-        ms_query = MSQuery()
-        for bundle_id in self.bundle_ids:
-            ms_query.add_filter(BundleFilter, bundle_id=bundle_id)
-        for bundle_name in self.bundle_names:
-            ms_query.add_filter(BundleFilter, bundle_name=bundle_name)
-        for serial_number, machine_snapshots in ms_query.fetch(paginate=False, for_filtering=True):
+    def iter_machine_snapshots(self):
+        for serial_number, machine_snapshots in self.get_ms_query().fetch(paginate=False, for_filtering=True):
             for machine_snapshot in machine_snapshots:
                 yield machine_snapshot
 
@@ -63,12 +54,12 @@ class Command(BaseCommand):
         self._es.indices.put_template(ES_TEMPLATE_NAME, template_body)
         # create index
         for i in range(10):
-            existing_indices = self._es.indices.get("zentral-inventory-export-*").keys()
+            existing_indices = self._es.indices.get(ES_INDEX_PATTERN).keys()
             if not len(existing_indices):
                 next_id = 0
             else:
                 next_id = max(int(index.rsplit("-", 1)[-1]) for index in existing_indices) + 1
-            index_name = "zentral-inventory-export-{:08d}".format(next_id)
+            index_name = ES_INDEX_PATTERN.replace("*", "{:08d}".format(next_id))
             try:
                 self._es.indices.create(index_name)
             except RequestError:
@@ -98,23 +89,19 @@ class Command(BaseCommand):
         self._es.create(index_name, doc_id, machine_snapshot)
 
     def prune_exports(self):
-        existing_indices = sorted(self._es.indices.get("zentral-inventory-export-*").keys(), reverse=True)
+        existing_indices = sorted(self._es.indices.get(ES_INDEX_PATTERN).keys(), reverse=True)
         for index_name in existing_indices[MAX_EXPORTS_COUNT:]:
             self._es.indices.delete(index_name)
-            if not self.quiet:
-                print("Removed index", index_name)
+            logger.info("Removed '%s' index", index_name)
 
-    def handle(self, *args, **kwargs):
-        self.set_options(**kwargs)
+    def run(self):
         timestamp = timezone.now().isoformat()
         index_name = self.get_es_client()
-        if not self.quiet:
-            print("Created index", index_name)
+        logger.info("Created '%s' index", index_name)
         i = 0
-        for machine_snapshot in self.iter_machine_snapshots(timestamp):
+        for machine_snapshot in self.iter_machine_snapshots():
             machine_snapshot["@timestamp"] = timestamp
             self.index_snapshot(index_name, machine_snapshot)
             i += 1
-        if not self.quiet:
-            print("Added", i, "machine snapshots")
+        logger.info("Added %s machine snapshot(s)", i)
         self.prune_exports()

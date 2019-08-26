@@ -57,6 +57,26 @@
         {
           "backend": "zentral.contrib.inventory.clients.dummy"
         }
+      ],
+      "exporters": [
+        {
+          "backend": "zentral.contrib.inventory.exporters.es_machine_snapshots",
+          "es_hosts": [
+            "http://elastic:9200"
+          ],
+          "bundle_ids": [
+            "org.mozilla.firefox"
+          ]
+        },
+        {
+          "backend": "zentral.contrib.inventory.exporters.es_aggregations",
+          "es_hosts": [
+            "http://elastic:9200"
+          ],
+          "bundle_ids": [
+            "org.mozilla.firefox"
+          ]
+        }
       ]
     },
     "zentral.contrib.jamf": {},
