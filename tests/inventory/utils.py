@@ -9,3 +9,6 @@ class MockMetaMachine(object):
 
     def get_probe_filtering_values(self):
         return self.platform, self.type, self.meta_business_unit_id_set, self.tag_id_set
+
+    def get_cached_probe_filtering_values(self):
+        return self.get_probe_filtering_values()

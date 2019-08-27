@@ -7,6 +7,7 @@ import urllib.parse
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField, JSONField
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -902,6 +903,14 @@ class MetaMachine(object):
                     types.most_common(1)[0][0] if types else None,
                     mbu_ids,
                     tag_ids)
+
+    def get_cached_probe_filtering_values(self):
+        filtering_values_cache_key = "probe_filtering_values_{}".format(self.serial_number)
+        filtering_values = cache.get(filtering_values_cache_key)
+        if filtering_values is None:
+            filtering_values = self.get_probe_filtering_values()
+            cache.set(filtering_values_cache_key, filtering_values, 60)  # TODO: Hard coded timeout value
+        return filtering_values
 
 
 class MACAddressBlockAssignmentOrganization(models.Model):

@@ -22,7 +22,7 @@ class InventoryFilter(object):
             setattr(self, attr, set(kwargs.get(attr, [])))
 
     def test_machine(self, meta_machine):
-        m_platform, m_type, m_mbu_id_set, m_tag_id_set = meta_machine.get_probe_filtering_values()
+        m_platform, m_type, m_mbu_id_set, m_tag_id_set = meta_machine.get_cached_probe_filtering_values()
         if self.meta_business_unit_ids and not self.meta_business_unit_ids & m_mbu_id_set:
             return False
         if self.tag_ids and not self.tag_ids & m_tag_id_set:
