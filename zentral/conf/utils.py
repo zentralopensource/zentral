@@ -25,14 +25,16 @@ def load_config_file(filepath):
     if ext == '.json':
         fileopener = json.load
         filetype = "JSON"
+        fileopener_kwargs = {}
     elif ext == '.yml':
         fileopener = yaml.load
         filetype = "YAML"
+        fileopener_kwargs = {"Loader": yaml.SafeLoader}
     else:
         raise ImproperlyConfigured("Unknown extension {} of file {}".format(ext, filepath))
     try:
         with open(filepath) as f:
-            return fileopener(f)
+            return fileopener(f, **fileopener_kwargs)
     except (ValueError, yaml.YAMLError):
         raise ImproperlyConfigured("{} error in file {}".format(filetype, filepath)) from None
     except Exception as e:
