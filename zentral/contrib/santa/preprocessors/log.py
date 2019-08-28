@@ -68,7 +68,11 @@ class SantaLogPreprocessor(object):
         except Exception:
             logger.exception("Could not process santa_log raw event")
         else:
-            yield from SantaLogEvent.build_from_machine_request_payloads(
-                serial_number, user_agent, ip_address, [event_data],
-                get_created_at=lambda d: d.pop("timestamp", None)
-            )
+            if event_data:
+                yield from SantaLogEvent.build_from_machine_request_payloads(
+                    serial_number, user_agent, ip_address, [event_data],
+                    get_created_at=lambda d: d.pop("timestamp", None)
+                )
+            else:
+                # probably a log rotation line
+                logger.info("Empty santa log event data.")
