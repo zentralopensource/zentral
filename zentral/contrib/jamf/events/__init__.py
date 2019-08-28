@@ -82,6 +82,14 @@ class JAMFAccessEvent(BaseEvent):
 register_event_type(JAMFAccessEvent)
 
 
+class JAMFClientEvent(BaseEvent):
+    event_type = "jamf_client"
+    tags = ["jamf", "jamf_beat"]
+
+
+register_event_type(JAMFClientEvent)
+
+
 def post_jamf_event(jamf_instance, user_agent, ip, data):
     jamf_event = data["webhook"]["webhookEvent"]
     event_type = 'jamf_{}'.format(JAMF_EVENTS[jamf_event][0])

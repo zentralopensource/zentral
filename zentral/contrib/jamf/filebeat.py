@@ -41,6 +41,22 @@ class JSSAccessLogForm(forms.Form):
         }
 
 
+class ClientLogForm(forms.Form):
+    path = forms.CharField(initial="/var/log/jamf.log")
+
+    def get_filebeat_input(self):
+        return {
+            "type": "log",
+            "paths": [self.cleaned_data["path"]],
+            "multiline": {
+                "pattern": ("^[A-Z][a-z]{2}\s[A-Z][a-z]{2}\s[\s0-9]{2}\s[\s012]?[0-9]:[0-5][0-9]:[0-5][0-9]\s"
+                            ".*\s\S+\[[0-9]{1,6}\]:\s.*$"),
+                "negate": True,
+                "match": "after"
+            }
+        }
+
+
 inputs = {
     "jamf_change_management": {
         "name": "JAMFChangeManagement.log",
@@ -54,4 +70,8 @@ inputs = {
         "name": "JSSAccess.log",
         "form_class": JSSAccessLogForm
     },
+    "client": {
+        "name": "jamf.log",
+        "form_class": ClientLogForm
+    }
 }

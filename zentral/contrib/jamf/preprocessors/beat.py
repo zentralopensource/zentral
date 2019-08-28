@@ -3,8 +3,10 @@ import logging
 import re
 from dateutil import parser
 from zentral.contrib.inventory.models import MachineSnapshot
-from zentral.contrib.filebeat.utils import get_user_agent_and_ip_address_from_raw_event
-from zentral.contrib.jamf.events import JAMFAccessEvent, JAMFChangeManagementEvent, JAMFSoftwareServerEvent
+from zentral.contrib.filebeat.utils import (get_serial_number_from_raw_event,
+                                            get_user_agent_and_ip_address_from_raw_event)
+from zentral.contrib.jamf.events import (JAMFAccessEvent, JAMFChangeManagementEvent, JAMFClientEvent,
+                                         JAMFSoftwareServerEvent)
 from zentral.core.events.base import EventMetadata, EventRequest
 
 
@@ -15,6 +17,13 @@ class BeatPreprocessor(object):
     routing_key = "jamf_logs"
     USER_RE = re.compile(r'^(?P<name>.*) \(ID: (?P<id>\d+)\)$')
     OBJECT_INFO_SEP_RE = re.compile("[ \.]{2,}")
+    CLIENT_LOG_RE = re.compile(
+        "(?P<datetime>[A-Z][a-z]{2}\s[A-Z][a-z]{2}\s[\s0-9]{2}\s[\s012][0-9]:[0-5][0-9]:[0-5][0-9])\s"
+        "(?P<hostname>.*)\s"
+        "(?P<proc_name>\S+)\[(?P<proc_pid>[0-9]{1,6})\]:\s"
+        "(?P<message>.*)",
+        re.DOTALL
+    )
 
     def get_created_at(self, raw_event_d):
         return parser.parse(raw_event_d["@timestamp"])
@@ -123,6 +132,27 @@ class BeatPreprocessor(object):
                                  tags=JAMFAccessEvent.tags)
         return JAMFAccessEvent(metadata, payload)
 
+    def build_client_event(self, raw_event_d, user_agent, ip_address):
+        # payload
+        try:
+            payload = self.CLIENT_LOG_RE.match(raw_event_d["message"]).groupdict()
+            payload["proc"] = {"pid": int(payload.pop("proc_pid")),
+                               "name": payload.pop("proc_name") or "UNKNOWN"}
+            payload["message"] = "\n".join(l.strip() for l in (payload.pop("message") or "").splitlines())
+            # TODO: TIMEZONE
+            created_at = parser.parse(payload.pop("datetime"))
+            serial_number = get_serial_number_from_raw_event(raw_event_d)
+        except Exception:
+            logger.exception("Could not process jamf client log raw event")
+        else:
+            # event
+            metadata = EventMetadata(JAMFClientEvent.event_type,
+                                     machine_serial_number=serial_number,
+                                     created_at=created_at,
+                                     request=EventRequest(user_agent, ip_address),
+                                     tags=JAMFClientEvent.tags)
+            return JAMFClientEvent(metadata, payload)
+
     def process_raw_event(self, raw_event):
         raw_event_d = json.loads(raw_event)
         user_agent, ip_address = get_user_agent_and_ip_address_from_raw_event(raw_event_d)
@@ -134,6 +164,8 @@ class BeatPreprocessor(object):
             event = self.build_software_server_event(raw_event_d, user_agent, ip_address)
         elif zentral_log_type == "zentral.contrib.jamf.jss_access":
             event = self.build_access_event(raw_event_d, user_agent, ip_address)
+        elif zentral_log_type == "zentral.contrib.jamf.client":
+            event = self.build_client_event(raw_event_d, user_agent, ip_address)
         else:
             logger.warning("Unknown zentral_log_type %s", zentral_log_type)
             return
