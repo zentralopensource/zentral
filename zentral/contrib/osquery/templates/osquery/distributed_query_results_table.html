@@ -63,6 +63,9 @@
           <p style="white-space:nowrap">
             {{ event.metadata.created_at }}
             <br><small>{{ request }}</small>
+            {% if request.geo %}
+            <br><small>{{ request.geo.short_repr }}</small>
+            {% endif %}
           </p>
         </td>
         {% endif %}
