@@ -13,7 +13,7 @@ import zipfile
 
 
 START_ENROLLMENT_URL = "https://%TLS_HOSTNAME%/filebeat/enrollment/start/"
-COMPLETE_ENROLLMENT_URL = "https://%TLS_HOSTNAME%/filebeat/enrollment/complete/"
+COMPLETE_ENROLLMENT_URL = "https://%TLS_HOSTNAME_FOR_CLIENT_CERT_AUTH%/filebeat/enrollment/complete/"
 ENROLLMENT_SECRET = "%ENROLLMENT_SECRET%"
 TLS_SERVER_CERTS = """%TLS_SERVER_CERTS%"""
 DEFAULT_HEADERS = {

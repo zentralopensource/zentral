@@ -23,6 +23,8 @@ class ZentralFilebeatEnrollmentScriptBuilder(APIConfigToolsMixin):
         # tls hostname
         tls_hostname = self.get_tls_hostname()
         content = content.replace("%TLS_HOSTNAME%", tls_hostname)
+        content = content.replace("%TLS_HOSTNAME_FOR_CLIENT_CERT_AUTH%",
+                                  self.get_tls_hostname(for_client_cert_auth=True))
 
         # tls server certs
         tls_server_certs_path = self.get_tls_server_certs()
