@@ -19,10 +19,10 @@ class Releases(object):
         self.release_dir = None
 
     def _get_release_version(self, release):
-        return release["name"]
+        return release["tag_name"]
 
     def _get_release_filename(self, release):
-        return "osquery-{}.pkg".format(release["name"])
+        return "osquery-{}.pkg".format(self._get_release_version(release))
 
     def _get_local_path(self, filename):
         if not self.release_dir:
