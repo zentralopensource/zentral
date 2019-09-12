@@ -47,6 +47,8 @@ class Releases(object):
             logger.exception("Could not get versions from Github.")
             return
         for release in resp.json():
+            if release.get("prerelease", False) or release.get("draft", False) or not release.get("assets", []):
+                continue
             try:
                 filename = self._get_release_filename(release)
             except ValueError:
