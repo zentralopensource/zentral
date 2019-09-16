@@ -7,6 +7,7 @@ from kombu import Connection, Consumer, Exchange, Queue
 from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 from kombu.pools import producers
 from prometheus_client import Counter
+from zentral.utils.json import save_dead_letter
 from zentral.utils.prometheus import PrometheusWorkerMixin
 
 
@@ -245,9 +246,8 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
             self.event_store.store(body)
         except Exception:
             logger.exception("Could add event to store %s", self.event_store.name)
-            message.requeue()
-            logger.error("Stopped consumer on store %s error !!!", self.event_store.name)
-            self.should_stop = True
+            save_dead_letter(body, "event store {} error".format(self.event_store.name))
+            message.reject()
         else:
             message.ack()
             self.stored_events_counter.labels(body['_zentral']['type']).inc()

@@ -15,7 +15,7 @@ from django.utils.text import slugify
 from prometheus_client import CollectorRegistry, Gauge
 import xlsxwriter
 from zentral.core.incidents.models import OPEN_STATUSES, SEVERITY_CHOICES
-from zentral.utils.json import log_data
+from zentral.utils.json import save_dead_letter
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      post_inventory_events)
 from .exceptions import EnrollmentSecretVerificationFailed
@@ -1343,7 +1343,7 @@ def commit_machine_snapshot_and_trigger_events(tree):
         machine_snapshot_commit, machine_snapshot = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
     except Exception:
         logger.exception("Could not commit machine snapshot")
-        log_data(tree, "/tmp", "snapshot_errors")
+        save_dead_letter(tree, "machine snapshot commit error")
     else:
         if machine_snapshot_commit:
             post_inventory_events(machine_snapshot_commit.serial_number,
