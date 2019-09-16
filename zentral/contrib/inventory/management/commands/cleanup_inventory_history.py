@@ -23,33 +23,48 @@ WHERE
 
 
 ORPHANS = (
+    # MachineSnapshot of archived machines
     ("inventory_machinesnapshot", "id",
      (("machine_snapshot_id", "inventory_machinesnapshotcommit"),)),
+    # AzureADInfo
+    ("inventory_azureadinfo", "id",
+     (("azure_ad_info_id", "inventory_machinesnapshot"),)),
+    # PuppetNode
     ("inventory_puppetnode", "id",
      (("puppet_node_id", "inventory_machinesnapshot"),)),
+    # SystemInfo
     ("inventory_systeminfo", "id",
      (("system_info_id", "inventory_machinesnapshot"),)),
+    # TeamViewer
     ("inventory_teamviewer", "id",
      (("teamviewer_id", "inventory_machinesnapshot"),)),
+    # OSVersion
     ("inventory_osversion", "id",
      (("os_version_id", "inventory_machinesnapshot"),)),
+    # DebPackage
     ("inventory_debpackage", "id",
      (("debpackage_id", "inventory_machinesnapshot_deb_packages"),)),
+    # MachineGroup
     ("inventory_machinegroup", "id",
      (("machinegroup_id", "inventory_machinesnapshot_groups"),)),
+    # Link
     ("inventory_link", "id",
      (("link_id", "inventory_machinesnapshot_links"),
       ("link_id", "inventory_machinegroup_links"),
       ("link_id", "inventory_machinegroup_machine_links"),
       ("link_id", "inventory_businessunit_links"))),
+    # NetworkInterface
     ("inventory_networkinterface", "id",
      (("networkinterface_id", "inventory_machinesnapshot_network_interfaces"),)),
+    # OSXAppInstance
     ("inventory_osxappinstance", "id",
      (("osxappinstance_id", "inventory_machinesnapshot_osx_app_instances"),)),
+    # Certificate
     ("inventory_certificate", "id",
      (("signed_by_id", "inventory_osxappinstance"),
       ("signed_by_id", "inventory_certificate"),
       ("signed_by_id", "santa_collectedapplication"))),
+     # OSXApp
     ("inventory_osxapp", "id",
      (("app_id", "inventory_osxappinstance"),
       ("bundle_id", "santa_collectedapplication"))),
