@@ -29,7 +29,7 @@ def parse_santa_log_message(message):
             elif current_attr or c != " ":
                 current_attr += c
         elif state == "VAL":
-            if c == "|" or c == "]":
+            if c == "|" or (current_attr == "timestamp" and c == "]"):
                 if c == "|":
                     state = "ATTR"
                 elif c == "]":
