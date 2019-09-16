@@ -218,12 +218,9 @@ class EventStore(BaseEventStore):
         kwargs = {"body": body}
         if self.version < [7]:
             kwargs["doc_type"] = doc_type
-        try:
-            self._es.index(index=self.index, **kwargs)
-            if self.test:
-                self._es.indices.refresh(self.index)
-        except Exception:
-            logger.exception('Could not add event to elasticsearch index')
+        self._es.index(index=self.index, **kwargs)
+        if self.test:
+            self._es.indices.refresh(self.index)
 
     # machine events
 

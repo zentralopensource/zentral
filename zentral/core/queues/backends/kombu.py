@@ -58,7 +58,7 @@ class PreprocessWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixi
         for app in settings['apps']:
             try:
                 preprocessors_module = import_module("{}.preprocessors".format(app))
-            except ImportError as e:
+            except ImportError:
                 pass
             else:
                 yield from getattr(preprocessors_module, "get_preprocessors")()
@@ -241,9 +241,16 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
 
     def do_store_event(self, body, message):
         self.log_debug("store event")
-        self.event_store.store(body)
-        message.ack()
-        self.stored_events_counter.labels(body['_zentral']['type']).inc()
+        try:
+            self.event_store.store(body)
+        except Exception:
+            logger.exception("Could add event to store %s", self.event_store.name)
+            message.requeue()
+            logger.error("Stopped consumer on store %s error !!!", self.event_store.name)
+            self.should_stop = True
+        else:
+            message.ack()
+            self.stored_events_counter.labels(body['_zentral']['type']).inc()
 
 
 class EventQueues(object):
