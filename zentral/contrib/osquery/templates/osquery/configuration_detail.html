@@ -105,6 +105,11 @@
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
           Linux
         </a>
+        <a class="btn btn-default download-tool"
+           href="{% url 'osquery:enrollment_powershell_script' enrollment.configuration.id enrollment.id %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+          Windows
+        </a>
         {% elif secret.is_used_up %}
         <span class="text-danger">Enrollment used up.</span>
         {% endif %}

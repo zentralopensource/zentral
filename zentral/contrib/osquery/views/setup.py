@@ -8,6 +8,7 @@ from zentral.contrib.osquery.forms import ConfigurationForm, EnrollmentForm
 from zentral.contrib.osquery.linux_script.builder import OsqueryZentralEnrollScriptBuilder
 from zentral.contrib.osquery.models import Configuration, Enrollment
 from zentral.contrib.osquery.osx_package.builder import OsqueryZentralEnrollPkgBuilder
+from zentral.contrib.osquery.powershell_script.builder import OsqueryZentralEnrollPowershellScriptBuilder
 
 logger = logging.getLogger('zentral.contrib.osquery.views.setup')
 
@@ -112,4 +113,11 @@ class EnrollmentScriptView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
         builder = OsqueryZentralEnrollScriptBuilder(enrollment)
+        return builder.build_and_make_response()
+
+
+class EnrollmentPowershellScriptView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
+        builder = OsqueryZentralEnrollPowershellScriptBuilder(enrollment)
         return builder.build_and_make_response()

@@ -26,6 +26,9 @@ urlpatterns = [
     url(r'^configurations/(?P<configuration_pk>\d+)/enrollments/(?P<pk>\d+)/script/$',
         views.EnrollmentScriptView.as_view(),
         name='enrollment_script'),
+    url(r'^configurations/(?P<configuration_pk>\d+)/enrollments/(?P<pk>\d+)/powershell_script/$',
+        views.EnrollmentPowershellScriptView.as_view(),
+        name='enrollment_powershell_script'),
 
     # osquery probes
     url(r'^probes/create/$', views.CreateProbeView.as_view(), name='create_probe'),
