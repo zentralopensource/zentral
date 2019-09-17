@@ -226,7 +226,7 @@ class EventMetadata(object):
         return cls(**kwargs)
 
     def serialize_machine(self):
-        machine_d_cache_key = "machine_d_{}".format(self.machine.serial_number)
+        machine_d_cache_key = "machine_d_{}".format(self.machine.get_urlsafe_serial_number())
         machine_d = cache.get(machine_d_cache_key)
         if not machine_d:
             machine_d = {}

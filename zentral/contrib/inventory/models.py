@@ -914,7 +914,7 @@ class MetaMachine(object):
                     tag_ids)
 
     def get_cached_probe_filtering_values(self):
-        filtering_values_cache_key = "probe_filtering_values_{}".format(self.serial_number)
+        filtering_values_cache_key = "probe_filtering_values_{}".format(self.get_urlsafe_serial_number())
         filtering_values = cache.get(filtering_values_cache_key)
         if filtering_values is None:
             filtering_values = self.get_probe_filtering_values()
