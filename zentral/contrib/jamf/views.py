@@ -8,7 +8,7 @@ from django.views.generic import View, ListView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from .api_client import APIClient, APIClientError
-from .events import post_jamf_event
+from .events import post_jamf_webhook_event
 from .forms import JamfInstanceForm
 from .models import JamfInstance
 
@@ -116,5 +116,5 @@ class PostEventView(JSONPostAPIView):
             raise APIAuthError
 
     def do_post(self, data):
-        post_jamf_event(self.jamf_instance, self.user_agent, self.ip, data)
+        post_jamf_webhook_event(self.jamf_instance, self.user_agent, self.ip, data)
         return {}

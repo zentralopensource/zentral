@@ -90,7 +90,7 @@ class JAMFClientEvent(BaseEvent):
 register_event_type(JAMFClientEvent)
 
 
-def post_jamf_event(jamf_instance, user_agent, ip, data):
+def post_jamf_webhook_event(jamf_instance, user_agent, ip, data):
     jamf_event = data["webhook"]["webhookEvent"]
     event_type = 'jamf_{}'.format(JAMF_EVENTS[jamf_event][0])
     payload = data["event"]
