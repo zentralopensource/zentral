@@ -1,58 +1,13 @@
 import json
 import logging
-from dateutil import parser
 from zentral.contrib.filebeat.utils import (get_serial_number_from_raw_event,
                                             get_user_agent_and_ip_address_from_raw_event)
 from zentral.contrib.santa.events import SantaLogEvent
+from zentral.contrib.santa.utils import parse_santa_log_message
 from zentral.utils.json import save_dead_letter
 
 
 logger = logging.getLogger("zentral.contrib.santa.preprocessors.log")
-
-
-def parse_santa_log_message(message):
-    d = {}
-    current_attr = ""
-    current_val = ""
-    state = None
-    for c in message:
-        if state is None:
-            if c == "[":
-                current_attr = "timestamp"
-                state = "VAL"
-            elif c == ":":
-                state = "ATTR"
-                current_attr = ""
-        elif state == "ATTR":
-            if c == "=":
-                state = "VAL"
-            elif current_attr or c != " ":
-                current_attr += c
-        elif state == "VAL":
-            if c == "|" or (current_attr == "timestamp" and c == "]"):
-                if c == "|":
-                    state = "ATTR"
-                elif c == "]":
-                    state = None
-                if current_attr == "timestamp":
-                    current_val = parser.parse(current_val)
-                d[current_attr] = current_val
-                current_attr = ""
-                current_val = ""
-            else:
-                current_val += c
-    if current_attr and current_val:
-        d[current_attr] = current_val
-    for attr, val in d.items():
-        if attr.endswith("id"):
-            try:
-                d[attr] = int(val)
-            except ValueError:
-                pass
-    args = d.get("args")
-    if args:
-        d["args"] = args.split()
-    return d
 
 
 class SantaLogPreprocessor(object):

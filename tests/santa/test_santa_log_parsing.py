@@ -1,7 +1,7 @@
 import datetime
 from dateutil.tz.tz import tzlocal
 from django.test import TestCase
-from zentral.contrib.santa.preprocessors.log import parse_santa_log_message
+from zentral.contrib.santa.utils import parse_santa_log_message
 
 
 LOG1 = ("[2019-09-16T13:53:17.187Z] I santad: action=EXEC|decision=ALLOW|reason=CERT|"
