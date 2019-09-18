@@ -51,7 +51,7 @@ class Enrollment(BaseEnrollment):
 
 
 class EnrolledMachine(models.Model):
-    serial_number = models.TextField(db_index=True)
+    serial_number = models.TextField(unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
