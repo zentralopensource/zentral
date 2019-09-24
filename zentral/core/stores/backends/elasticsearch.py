@@ -700,8 +700,12 @@ class EventStore(BaseEventStore):
         min_bound = "now-{q}{u}/{u}".format(q=bucket_number - 1,
                                             u=interval_unit)
         max_bound = "now/{u}".format(u=interval_unit)
+        if self.version >= [7, 2]:
+            interval_attr = "calendar_interval"
+        else:
+            interval_attr = "interval"
         return {"field": field,
-                "interval": interval,
+                interval_attr: interval,
                 "min_doc_count": 0,
                 "extended_bounds": {
                   "min": min_bound,
@@ -709,6 +713,7 @@ class EventStore(BaseEventStore):
                 }}
 
     def get_app_hist_data(self, interval, bucket_number, tag=None, event_type=None):
+        self.wait_and_configure_if_necessary()
         body = {"query": self._get_hist_query_dict(interval, bucket_number, tag, event_type),
                 "size": 0,
                 "aggs": {
@@ -724,7 +729,6 @@ class EventStore(BaseEventStore):
                     }
                   }
                 }}
-        self.wait_and_configure_if_necessary()
         r = self._es.search(index=self.read_index, body=body)
         return [(parser.parse(b["key_as_string"]), b["doc_count"], b["unique_msn"]["value"])
                 for b in r['aggregations']['buckets']['buckets']]
