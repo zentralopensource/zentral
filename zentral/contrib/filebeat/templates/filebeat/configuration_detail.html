@@ -92,14 +92,18 @@
       <td>
         {% if not distributor and not secret.is_used_up %}
         <a class="btn btn-default download-tool"
+           aria-label="Download macOS enrollment package"
+           title="macOS enrollment package"
            href="{% url 'filebeat:enrollment_package' enrollment.configuration.id enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-          macOS
+          <i class="fab fa-apple" aria-hidden="true"></i>
         </a>
         <a class="btn btn-default download-tool"
+           aria-label="Download Linux enrollment script"
+           title="Linux enrollment script"
            href="{% url 'filebeat:enrollment_script' enrollment.configuration.id enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-          Linux
+          <i class="fab fa-linux" aria-hidden="true"></i>
         </a>
         {% elif secret.is_used_up %}
         <span class="text-danger">Enrollment used up.</span>

@@ -35,8 +35,12 @@
       </td>
       <td>{{ nagios_instance.url }}</td>
       <td>
-        <a href="{% url 'nagios:download_nagios_instance_event_handler' nagios_instance.pk %}" class="btn btn-default" data-toggle="tooltip" data-placement="bottom" title="Download event handler script">
+        <a href="{% url 'nagios:download_nagios_instance_event_handler' nagios_instance.pk %}"
+          class="btn btn-default"
+          aria-label="Download python2.7 event handler script"
+          title="Python2.7 event handler script">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+          <i class="fab fa-python" aria-hidden="true"></i>
         </a>
         <a href="{% url 'nagios:update_nagios_instance' nagios_instance.pk %}" class="btn btn-default">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
