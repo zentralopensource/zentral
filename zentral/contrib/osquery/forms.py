@@ -5,7 +5,7 @@ from .models import Configuration, Enrollment
 from .probes import (OsqueryProbe, OsqueryComplianceProbe,
                      OsqueryDistributedQueryProbe, OsqueryFileCarveProbe,
                      OsqueryFIMProbe)
-from .releases import Releases
+from .releases import get_osquery_versions
 
 
 # Configuration / Enrollment
@@ -45,8 +45,15 @@ class EnrollmentForm(forms.ModelForm):
         if self.update_for:
             release_field.widget = forms.HiddenInput()
         else:
-            r = Releases()
-            release_choices = [(filename, filename) for filename, _, _, _ in r.get_versions()]
+            release_choices = [
+                (version,
+                 "{}{} ({})".format(
+                     version,
+                     " - prerelease -" if prerelease else "",
+                     ", ".join(sorted(available_assets.keys()))
+                 ))
+                for version, prerelease, available_assets in get_osquery_versions()
+            ]
             if not self.standalone:
                 release_choices.insert(0, ("", "Do not include osquery"))
             release_field.choices = release_choices

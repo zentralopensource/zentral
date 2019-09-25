@@ -1,7 +1,7 @@
 import os
 from zentral.utils.osx_package import EnrollmentPackageBuilder
 from zentral.contrib.osquery.forms import EnrollmentForm
-from zentral.contrib.osquery.releases import Releases
+from zentral.contrib.osquery.releases import get_osquery_local_asset
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -26,8 +26,7 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         extra_packages = []
         release = self.build_kwargs.get("release")
         if release:
-            r = Releases()
-            extra_packages.append(r.get_requested_package(release))
+            extra_packages.append(get_osquery_local_asset(release, ".pkg"))
         return extra_packages
 
     def extra_build_steps(self):
