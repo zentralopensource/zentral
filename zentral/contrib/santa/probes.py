@@ -36,26 +36,33 @@ class Rule(object):
         self.sha256 = sha256
         self.custom_msg = custom_msg
 
-    def get_payload_filter_kwargs(self):
-        f = {}
+    def _get_search_dict(self):
+        search_dict = {}
         if self.rule_type == self.CERTIFICATE:
-            f['signing_chain.sha256'] = [self.sha256]
+            search_dict["signing_chain.sha256"] = [self.sha256]
             if self.policy == self.BLACKLIST:
-                f['decision'] = ['BLOCK_CERTIFICATE']
+                search_dict["decision"] = ['BLOCK_CERTIFICATE']
             elif self.policy == self.WHITELIST:
-                f['decision'] = ['ALLOW_CERTIFICATE']
+                search_dict["decision"] = ['ALLOW_CERTIFICATE']
         else:
-            f['file_sha256'] = [self.sha256]
+            search_dict["file_sha256"] = [self.sha256]
             if self.policy == self.BLACKLIST:
-                f['decision'] = ['BLOCK_BINARY']
+                search_dict["decision"] = ['BLOCK_BINARY']
             elif self.policy == self.WHITELIST:
-                f['decision'] = ['ALLOW_BINARY']
-        return f
+                search_dict["decision"] = ['ALLOW_BINARY']
+        return search_dict
+
+    def get_payload_filter_data(self):
+        return [
+            {"attribute": attribute,
+             "operator": PayloadFilter.IN,
+             "values": values}
+            for attribute, values in self._get_search_dict().items()
+        ]
 
     def get_store_links(self):
-        search_dict = {'event_type': [self.probe.forced_event_type]}
-        search_dict.update(self.get_payload_filter_kwargs())
-        return self.probe.get_store_links(**search_dict)
+        return self.probe.get_store_links(event_type=self.probe.forced_event_type,
+                                          **self._get_search_dict())
 
     def get_policy_display(self):
         return dict(self.POLICY_CHOICES)[self.policy]
@@ -89,7 +96,7 @@ class Rule(object):
 class RuleSerializer(serializers.Serializer):
     policy = serializers.ChoiceField(choices=Rule.POLICY_CHOICES)
     rule_type = serializers.ChoiceField(choices=Rule.RULE_TYPE_CHOICES)
-    sha256 = serializers.RegexField('^[a-f0-9]{64}\Z')
+    sha256 = serializers.RegexField(r'^[a-f0-9]{64}\Z')
     custom_msg = serializers.CharField(required=False)
 
 
@@ -113,8 +120,9 @@ class SantaProbe(BaseProbe):
                       for rule_data in validated_data["rules"]]
         self.can_delete_rules = len(self.rules) > 1
         for r in self.rules:
-            f = r.get_payload_filter_kwargs()
-            self.payload_filters.append(PayloadFilter(**f))
+            self.payload_filters.append(
+                PayloadFilter(r.get_payload_filter_data())
+            )
 
 
 register_probe_class(SantaProbe)

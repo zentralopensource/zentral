@@ -28,12 +28,24 @@ class MunkiInstallProbe(BaseProbe):
         self.unattended_installs = data.get("unattended_installs")
         # probe with can_edit_payload_filters = False
         # override the payload filters
-        kwargs = {'type': self.install_types}
+        payload_filter_data = [
+            {"attribute": "type",
+             "operator": PayloadFilter.IN,
+             "values": self.install_types},
+        ]
         if self.installed_item_names:
-            kwargs['name'] = self.installed_item_names
+            payload_filter_data.append(
+                {"attribute": "name",
+                 "operator": PayloadFilter.IN,
+                 "values": self.installed_item_names}
+            )
         if self.unattended_installs is not None:
-            kwargs['unattended'] = [self.unattended_installs]
-        self.payload_filters = [PayloadFilter(**kwargs)]
+            payload_filter_data.append(
+                {"attribute": "unattended",
+                 "operator": PayloadFilter.IN,
+                 "values": [self.unattended_installs]}
+            )
+        self.payload_filters = [PayloadFilter(payload_filter_data)]
 
     def get_installed_item_names_display(self):
         return ", ".join(sorted(self.installed_item_names))

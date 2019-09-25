@@ -208,21 +208,21 @@ class MetadataFilterBaseProbeTestCase(TestCase):
 class PayloadFilterBaseProbeTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.payload_filter_data = {
-            "yo": {"operator": "IN", "values": ["yoval2", "yoval1"]},
-            "yo2": {"operator": "IN", "values": ["yo2val"]},
-        }
-        cls.payload_filter_data2 = {
-            "zo": {"operator": "IN", "values": ["zoval2", "zoval1"]},
-            "zo2": {"operator": "IN", "values": ["zo2val"]},
-        }
-        cls.payload_filter_data3 = {
-            "a.b.c": {"operator": "IN", "values": ["abc"]}
-        }
-        cls.payload_filter_data4 = {
-            "yo": {"operator": "NOT_IN", "values": ["notin23"]},
-            "ewuew": {"operator": "IN", "values": ["z99", "a00"]},
-        }
+        cls.payload_filter_data = [
+            {"attribute": "yo", "operator": "IN", "values": ["yoval2", "yoval1"]},
+            {"attribute": "yo2", "operator": "IN", "values": ["yo2val"]},
+        ]
+        cls.payload_filter_data2 = [
+            {"attribute": "zo", "operator": "IN", "values": ["zoval2", "zoval1"]},
+            {"attribute": "zo2", "operator": "IN", "values": ["zo2val"]},
+        ]
+        cls.payload_filter_data3 = [
+            {"attribute": "a.b.c", "operator": "IN", "values": ["abc"]}
+        ]
+        cls.payload_filter_data4 = [
+            {"attribute": "yo", "operator": "NOT_IN", "values": ["notin23"]},
+            {"attribute": "ewuew", "operator": "IN", "values": ["z99", "a00"]},
+        ]
         cls.probe_source = ProbeSource.objects.create(
             model="BaseProbe",
             name="base probe",
@@ -239,8 +239,8 @@ class PayloadFilterBaseProbeTestCase(TestCase):
     def test_payload_filter_items(self):
         payload_filter = self.probe.payload_filters[3]
         self.assertEqual(payload_filter.items,
-                         sorted([(k, v["operator"], set(v["values"]))
-                                 for k, v in self.payload_filter_data4.items()]))
+                         sorted([(d["attribute"], d["operator"], set(d["values"]))
+                                 for d in self.payload_filter_data4]))
         self.assertEqual(payload_filter.items_display(),
                          [("ewuew", "=", ["a00", "z99"]),
                           ("yo", "!=", ["notin23"])])
@@ -255,6 +255,19 @@ class PayloadFilterBaseProbeTestCase(TestCase):
                                 ({"yo": "notin23", "zo2": ["yo2val"]}, False),
                                 ({"yo": ["yoval1", "yoval2", "yoval3"], "yo2": "yo2val"}, True),
                                 ({"yo": ["yoval1", "yoval2", "yoval3"], "yo2": "yo2val"}, True),
+                                ):
+            self.assertEqual(payload_filter.test_event_payload(payload),
+                             result)
+
+    def test_payload_filter_test_event_not_in_payload(self):
+        payload_filter = self.probe.payload_filters[3]
+        for payload, result in (({}, False),
+                                ({"yoloooooo": 1}, False),
+                                ({"ewuew": 1}, False),
+                                ({"ewuew": "z99"}, True),
+                                ({"yo": "notin23"}, False),
+                                ({"yo": "notin23", "ewuew": ["z99"]}, False),
+                                ({"yo": "yoval1", "ewuew": ["z99"]}, True),
                                 ):
             self.assertEqual(payload_filter.test_event_payload(payload),
                              result)

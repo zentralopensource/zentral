@@ -455,7 +455,7 @@ class AddFilterView(LoginRequiredMixin, FormView):
 
     def form_valid(self, form):
         self.probe_source.append_filter(self.section,
-                                        form.get_filter_d())
+                                        form.get_serialized_filter())
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -500,7 +500,7 @@ class UpdateFilterView(LoginRequiredMixin, FormView):
 
     def form_valid(self, form):
         self.probe_source.update_filter(self.section, self.filter_id,
-                                        form.get_filter_d())
+                                        form.get_serialized_filter())
         return super().form_valid(form)
 
     def get_success_url(self):

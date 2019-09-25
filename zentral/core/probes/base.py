@@ -16,9 +16,9 @@ logger = logging.getLogger('zentral.core.probes.base')
 
 
 class InventoryFilter(object):
-    def __init__(self, **kwargs):
+    def __init__(self, data):
         for attr in ("meta_business_unit_ids", "tag_ids", "platforms", "types"):
-            setattr(self, attr, set(kwargs.get(attr, [])))
+            setattr(self, attr, set(data.get(attr, [])))
 
     def test_machine(self, meta_machine):
         m_platform, m_type, m_mbu_id_set, m_tag_id_set = meta_machine.get_cached_probe_filtering_values()
@@ -81,10 +81,12 @@ class InventoryFilterSerializer(serializers.Serializer):
 
 
 class MetadataFilter(object):
-    def __init__(self, event_types=None, event_tags=None):
+    def __init__(self, data):
+        event_types = data.get("event_types")
         if event_types is None:
             event_types = []
         self.event_types = set(event_types)
+        event_tags = data.get("event_tags")
         if event_tags is None:
             event_tags = []
         self.event_tags = set(event_tags)
@@ -162,17 +164,18 @@ class PayloadFilter(object):
         (NOT_IN, "!="),
     )
 
-    def __init__(self, **kwargs):
+    def __init__(self, data):
         self.items = []
-        for a, pfa in kwargs.items():
-            operator = pfa["operator"]
+        for payload_filter_item_d in data:
+            attribute = payload_filter_item_d["attribute"]
+            operator = payload_filter_item_d["operator"]
             if operator not in (self.IN, self.NOT_IN):
                 raise ValueError("Unknown operator '{}'".format(operator))
-            values = set(pfa["values"])
+            values = set(payload_filter_item_d["values"])
             if not values:
                 logger.warning("Payload filter item without values")
                 continue
-            self.items.append((a, operator, values))
+            self.items.append((attribute, operator, values))
         self.items.sort()
 
     def test_event_payload(self, payload):
@@ -189,7 +192,8 @@ class PayloadFilter(object):
                 for attribute, operator, values in self.items]
 
 
-class PayloadFilterAttributeSerializer(serializers.Serializer):
+class PayloadFilterItemSerializer(serializers.Serializer):
+    attribute = serializers.CharField()
     operator = serializers.ChoiceField(
         choices=PayloadFilter.operator_choices
     )
@@ -198,8 +202,8 @@ class PayloadFilterAttributeSerializer(serializers.Serializer):
     )
 
 
-class PayloadFilterSerializer(serializers.DictField):
-    child = PayloadFilterAttributeSerializer()
+class PayloadFilterSerializer(serializers.ListField):
+    child = PayloadFilterItemSerializer()
 
 
 class FiltersSerializer(serializers.Serializer):
@@ -273,7 +277,7 @@ class BaseProbe(object):
 
     def load_filter_section(self, section, filter_class, filter_data_list):
         setattr(self, "{}_filters".format(section),
-                [filter_class(**filter_data)
+                [filter_class(filter_data)
                  for filter_data in filter_data_list])
 
     def load_filters(self, validated_data):
@@ -291,12 +295,11 @@ class BaseProbe(object):
             self.payload_filters = []
         # metadata
         metadata_filter_data_list = filters.get("metadata", [])
-        if not self.forced_event_type:
-            self.load_filter_section("metadata", MetadataFilter, metadata_filter_data_list)
-        else:
+        if self.forced_event_type:
             if metadata_filter_data_list:
-                logger.warning("Metadata filters in probe %s with force_event_type", self.pk)
-            self.metadata_filters = [MetadataFilter(event_types=[self.forced_event_type])]
+                logger.warning("Metadata filters in probe %s with forced_event_type", self.pk)
+            metadata_filter_data_list = [{"event_types": [self.forced_event_type]}]
+        self.load_filter_section("metadata", MetadataFilter, metadata_filter_data_list)
 
     # load_validated_data must be extended in the sub-classes
     # to load the rest of the probe source

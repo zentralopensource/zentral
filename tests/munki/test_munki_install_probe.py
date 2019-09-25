@@ -1,6 +1,7 @@
 from django.test import TestCase
 from zentral.core.events import event_types
 from zentral.core.events.base import EventMetadata
+from zentral.core.probes.base import PayloadFilter
 from zentral.core.probes.models import ProbeSource
 from tests.inventory.utils import MockMetaMachine
 
@@ -70,7 +71,7 @@ class MunkiInstallProbeTestCase(TestCase):
         self.assertEqual(len(p.payload_filters), 1)
         pf = p.payload_filters[0]
         self.assertEqual(len(pf.items), 1)
-        self.assertEqual(pf.items.get("type"), set(["removal", "install"]))
+        self.assertEqual(pf.items[0], ("type", PayloadFilter.IN, set(["removal", "install"])))
 
     def test_events_batch_1(self):
         ps, p = self.create_probe(install_types=["install"])

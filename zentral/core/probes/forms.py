@@ -68,7 +68,7 @@ class InventoryFilterForm(forms.Form):
             raise forms.ValidationError("You must specify at least one of the sub filters")
         return self.cleaned_data
 
-    def get_filter_d(self):
+    def get_serialized_filter(self):
         filter_d = self.cleaned_data.copy()
         for field_name, filter_attr in (("meta_business_units", "meta_business_unit_ids"),
                                         ("tags", "tag_ids")):
@@ -115,7 +115,7 @@ class MetadataFilterForm(forms.Form):
             raise forms.ValidationError("Choose at least one event type or one tag.")
         return cleaned_data
 
-    def get_filter_d(self):
+    def get_serialized_filter(self):
         filter_d = {}
         for attr in ("event_tags", "event_types"):
             value = self.cleaned_data.get(attr)
@@ -149,15 +149,12 @@ class PayloadFilterItemForm(forms.Form):
 
 
 class BasePayloadFilterFormSet(forms.BaseFormSet):
-    def get_filter_d(self):
-        filter_d = {}
+    def get_serialized_filter(self):
+        filter_l = []
         for item_cleaned_data in self.cleaned_data:
             if not item_cleaned_data.get("DELETE"):
-                filter_d[item_cleaned_data["attribute"]] = {
-                    "operator": item_cleaned_data["operator"],
-                    "values": item_cleaned_data["values"]
-                }
-        return filter_d
+                filter_l.append(item_cleaned_data)
+        return filter_l
 
     @staticmethod
     def get_initial(payload_filter):
@@ -204,7 +201,7 @@ class CreateProbeForm(BaseCreateProbeForm, MetadataFilterForm):
     field_order = ("name", "event_type")
 
     def get_body(self):
-        return {"filters": {"metadata": [self.get_filter_d()]}}
+        return {"filters": {"metadata": [self.get_serialized_filter()]}}
 
 
 PROBE_SEVERITY_CHOICES = [('', 'Do not create incidents')] + sorted(SEVERITY_CHOICES)
