@@ -256,9 +256,10 @@
 {% for payload_filter in probe.payload_filters %}
 <div class="panel panel-default">
   <table class="table table-condensed probe-panel">
-    {% for attribute, values in payload_filter.items_display %}
+    {% for attribute, operator, values in payload_filter.items_display %}
     <tr>
       <td>{{ attribute }}</td>
+      <td>{{ operator }}</td>
       <td>
           {{ values|join:", " }}
       </td>

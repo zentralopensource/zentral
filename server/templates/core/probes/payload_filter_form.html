@@ -14,6 +14,7 @@
   <div class="form-group">
     {{ form.empty_form.attribute.label_tag }}
     {{ form.empty_form.attribute|bootstrap_inline }}
+    {{ form.empty_form.operator|bootstrap_inline }}
   </div>
   <div class="form-group">
     {{ form.empty_form.values.label_tag }}
@@ -32,6 +33,7 @@
       <div class="form-group">
         {{ itemform.attribute.label_tag }}
         {{ itemform.attribute|bootstrap_inline }}
+        {{ itemform.operator|bootstrap_inline }}
       </div>
       <div class="form-group">
         {{ itemform.values.label_tag }}
@@ -78,6 +80,9 @@
     itemform.find('label')
             .attr('for', set_prefix);
     itemform.find('input')
+            .attr('id', set_prefix)
+            .attr('name', set_prefix);
+    itemform.find('select')
             .attr('id', set_prefix)
             .attr('name', set_prefix);
     $("#item-forms").append(itemform);

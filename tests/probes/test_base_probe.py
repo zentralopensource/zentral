@@ -209,36 +209,41 @@ class PayloadFilterBaseProbeTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.payload_filter_data = {
-            "yo": ["yoval2", "yoval1"],
-            "yo2": ["yo2val"]
+            "yo": {"operator": "IN", "values": ["yoval2", "yoval1"]},
+            "yo2": {"operator": "IN", "values": ["yo2val"]},
         }
         cls.payload_filter_data2 = {
-            "zo": ["zoval2", "zoval1"],
-            "zo2": ["zo2val"]
+            "zo": {"operator": "IN", "values": ["zoval2", "zoval1"]},
+            "zo2": {"operator": "IN", "values": ["zo2val"]},
         }
         cls.payload_filter_data3 = {
-            "a.b.c": ["abc"]
+            "a.b.c": {"operator": "IN", "values": ["abc"]}
+        }
+        cls.payload_filter_data4 = {
+            "yo": {"operator": "NOT_IN", "values": ["notin23"]},
+            "ewuew": {"operator": "IN", "values": ["z99", "a00"]},
         }
         cls.probe_source = ProbeSource.objects.create(
             model="BaseProbe",
             name="base probe",
             body={"filters": {"payload": [cls.payload_filter_data,
                                           cls.payload_filter_data2,
-                                          cls.payload_filter_data3]}}
+                                          cls.payload_filter_data3,
+                                          cls.payload_filter_data4]}}
         )
         cls.probe = cls.probe_source.load()
 
     def test_payload_filters(self):
-        self.assertEqual(len(self.probe.payload_filters), 3)
+        self.assertEqual(len(self.probe.payload_filters), 4)
 
     def test_payload_filter_items(self):
-        payload_filter = self.probe.payload_filters[0]
-        for key, values in self.payload_filter_data.items():
-            self.assertEqual(payload_filter.items.get(key),
-                             set(values))
+        payload_filter = self.probe.payload_filters[3]
+        self.assertEqual(payload_filter.items,
+                         sorted([(k, v["operator"], set(v["values"]))
+                                 for k, v in self.payload_filter_data4.items()]))
         self.assertEqual(payload_filter.items_display(),
-                         [("yo", ["yoval1", "yoval2"]),
-                          ("yo2", ["yo2val"])])
+                         [("ewuew", "=", ["a00", "z99"]),
+                          ("yo", "!=", ["notin23"])])
 
     def test_payload_filter_test_event_payload(self):
         payload_filter = self.probe.payload_filters[0]
@@ -247,6 +252,8 @@ class PayloadFilterBaseProbeTestCase(TestCase):
                                 ({"yo": "yoval1"}, False),
                                 ({"yo": "yoval1", "yo3": [1, 2]}, False),
                                 ({"yo": "yoval1", "yo2": ["yo2val"]}, True),
+                                ({"yo": "notin23", "zo2": ["yo2val"]}, False),
+                                ({"yo": ["yoval1", "yoval2", "yoval3"], "yo2": "yo2val"}, True),
                                 ({"yo": ["yoval1", "yoval2", "yoval3"], "yo2": "yo2val"}, True),
                                 ):
             self.assertEqual(payload_filter.test_event_payload(payload),
@@ -276,6 +283,7 @@ class PayloadFilterBaseProbeTestCase(TestCase):
                                 ({"yo": "yoval1", "yo2": ["yo2val"]}, True),
                                 ({"zo": "zoval1", "zo2": ["zo2val"]}, True),
                                 ({"yo": "yoval1", "zo2": ["zo2val"]}, False),
+                                ({"yo": "notin23", "zo2": ["yo2val"]}, False),
                                 ({"a": 1}, False),
                                 ({"a": {"b": {"c": "abc", "d": "d"}}}, True),
                                 ({"a": [{"b": {"c": "abc", "d": "d"}}]}, True),

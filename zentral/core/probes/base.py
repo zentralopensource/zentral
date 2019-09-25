@@ -10,7 +10,6 @@ from zentral.contrib.inventory.conf import (PLATFORM_CHOICES, PLATFORM_CHOICES_D
 from zentral.core.actions import actions as available_actions
 from zentral.core.events import event_types
 from zentral.core.incidents.models import SEVERITY_CHOICES
-from zentral.core.stores import stores
 from . import register_probe_class
 
 logger = logging.getLogger('zentral.core.probes.base')
@@ -156,24 +155,51 @@ def get_flattened_payload_values(payload, attrs):
 
 
 class PayloadFilter(object):
+    IN = "IN"
+    NOT_IN = "NOT_IN"
+    operator_choices = (
+        (IN, "="),
+        (NOT_IN, "!="),
+    )
+
     def __init__(self, **kwargs):
-        self.items = {k: set(v) for k, v in kwargs.items()}
+        self.items = []
+        for a, pfa in kwargs.items():
+            operator = pfa["operator"]
+            if operator not in (self.IN, self.NOT_IN):
+                raise ValueError("Unknown operator '{}'".format(operator))
+            values = set(pfa["values"])
+            if not values:
+                logger.warning("Payload filter item without values")
+                continue
+            self.items.append((a, operator, values))
+        self.items.sort()
 
     def test_event_payload(self, payload):
-        for payload_attribute, filter_value_set in self.items.items():
+        for payload_attribute, operator, filter_value_set in self.items:
             payload_value_set = set(get_flattened_payload_values(payload, payload_attribute.split(".")))
-            if not payload_value_set & filter_value_set:
+            common_values = filter_value_set & payload_value_set
+            if (operator == self.IN and not common_values) or (operator == self.NOT_IN and common_values):
+                # AND: all items of a payload filter must match
                 return False
         return True
 
     def items_display(self):
-        return sorted((k, sorted(v)) for k, v in self.items.items())
+        return [(attribute, "=" if operator == "IN" else "!=", sorted(values))
+                for attribute, operator, values in self.items]
+
+
+class PayloadFilterAttributeSerializer(serializers.Serializer):
+    operator = serializers.ChoiceField(
+        choices=PayloadFilter.operator_choices
+    )
+    values = serializers.ListField(
+        child=serializers.CharField()
+    )
 
 
 class PayloadFilterSerializer(serializers.DictField):
-    child = serializers.ListField(
-        child=serializers.CharField()
-    )
+    child = PayloadFilterAttributeSerializer()
 
 
 class FiltersSerializer(serializers.Serializer):
@@ -365,6 +391,9 @@ class BaseProbe(object):
         if not search_dict:
             search_dict = self.get_extra_event_search_dict()
         links = []
+        # TODO: circular dependency because the elasticsearch store needs the PayloadFilter class
+        # to build the probe events queries.
+        from zentral.core.stores import stores
         for store in stores:
             url = store.get_vis_url(self, **search_dict)
             if url:

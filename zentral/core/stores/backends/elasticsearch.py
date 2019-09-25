@@ -1,3 +1,4 @@
+from itertools import product
 import logging
 import random
 import time
@@ -8,6 +9,7 @@ from elasticsearch.exceptions import ConnectionError, RequestError
 from requests_aws4auth import AWS4Auth
 from zentral.core.events import event_from_event_d, event_tags, event_types
 from zentral.core.exceptions import ImproperlyConfigured
+from zentral.core.probes.base import PayloadFilter
 from zentral.core.stores.backends.base import BaseEventStore
 from zentral.utils.rison import dumps as rison_dumps
 
@@ -421,21 +423,23 @@ class EventStore(BaseEventStore):
         payload_should = []
         for payload_filter in probe.payload_filters:
             payload_filter_must = []
-            for attribute, values in payload_filter.items.items():
-                if values:
-
-                    def make_query_string(v):
-                        return {'query_string': {'fields': ['{}.{}'.format(event_type, attribute)
-                                                            for event_type in payload_event_types_for_filters],
-                                                 'query': '"{}"'.format(v)}}
-
-                    if len(values) > 1:
-                        # TODO: escape value in query string
-                        payload_filter_must.append({'bool': {'should': [make_query_string(v) for v in values]}})
-                    else:
-                        v = list(values)[0]
-                        payload_filter_must.append(make_query_string(v))
+            for attribute, operator, values in payload_filter.items:
+                attribute_queries = [{"term": {"{}.{}".format(event_type, attribute): value}}
+                                     for event_type, value in product(payload_event_types_for_filters, values)]
+                if len(attribute_queries) > 1:
+                    # OR for the different values
+                    if operator == PayloadFilter.IN:
+                        bool_attr = "should"
+                    elif operator == PayloadFilter.NOT_IN:
+                        bool_attr = "must_not"
+                    payload_filter_must.append({'bool': {bool_attr: attribute_queries}})
+                else:
+                    attribute_query = attribute_queries[0]
+                    if operator == PayloadFilter.NOT_IN:
+                        attribute_query = {'bool': {'must_not': attribute_query}}
+                    payload_filter_must.append(attribute_query)
             if payload_filter_must:
+                # AND for the attributes of the same payload filter
                 if len(payload_filter_must) > 1:
                     payload_should.append({'bool': {'must': payload_filter_must}})
                 else:

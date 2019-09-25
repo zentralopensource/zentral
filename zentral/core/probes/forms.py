@@ -5,6 +5,7 @@ from django.utils.text import slugify
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.conf import PLATFORM_CHOICES, TYPE_CHOICES
 from zentral.core.incidents.models import SEVERITY_CHOICES
+from zentral.core.probes.base import PayloadFilter
 from zentral.utils.forms import CommaSeparatedQuotedStringField
 from .base import BaseProbe
 from .feeds import FeedError, get_feed_serializer, sync_feed, update_or_create_feed
@@ -138,6 +139,10 @@ class PayloadFilterItemForm(forms.Form):
     attribute = forms.CharField(
         widget=forms.TextInput(attrs={'placeholder': 'Name of the payload attribute',
                                       'size': '33%'}))
+    operator = forms.ChoiceField(
+        choices=PayloadFilter.operator_choices,
+        initial=PayloadFilter.IN
+    )
     values = CommaSeparatedQuotedStringField(
         widget=forms.TextInput(attrs={'placeholder': 'Comma separated value list',
                                       'size': '33%'}))
@@ -148,14 +153,19 @@ class BasePayloadFilterFormSet(forms.BaseFormSet):
         filter_d = {}
         for item_cleaned_data in self.cleaned_data:
             if not item_cleaned_data.get("DELETE"):
-                filter_d[item_cleaned_data["attribute"]] = item_cleaned_data["values"]
+                filter_d[item_cleaned_data["attribute"]] = {
+                    "operator": item_cleaned_data["operator"],
+                    "values": item_cleaned_data["values"]
+                }
         return filter_d
 
     @staticmethod
     def get_initial(payload_filter):
         initial = []
-        for key, val in payload_filter.items.items():
-            initial.append({"attribute": key, "values": val})
+        for attribute, operator, values in payload_filter.items:
+            initial.append({"attribute": attribute,
+                            "operator": operator,
+                            "values": values})
         return initial
 
 
