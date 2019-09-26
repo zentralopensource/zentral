@@ -33,6 +33,9 @@ class BaseEventStore(object):
     def probe_events_aggregations(self, probe, **search_dict):
         return {}
 
+    def get_vis_url(self, probe, **search_dict):
+        return None
+
     # incident events
 
     def incident_events_fetch(self, incident, offset=0, limit=0):
@@ -41,8 +44,10 @@ class BaseEventStore(object):
     def incident_events_count(self, incident):
         return 0
 
-    def get_vis_url(self, probe, **search_dict):
+    def get_incident_vis_url(self, incident):
         return None
+
+    # zentral apps data
 
     def get_app_hist_data(self, interval, bucket_number, tag=None, event_type=None):
         return []

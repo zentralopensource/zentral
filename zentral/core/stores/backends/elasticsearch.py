@@ -224,6 +224,24 @@ class EventStore(BaseEventStore):
         if self.test:
             self._es.indices.refresh(self.index)
 
+    def _build_kibana_url(self, body):
+        if not self.kibana_base_url:
+            return
+        kibana_params = {
+            "columns": ["_source"],
+            "interval": "auto",
+            "query": body["query"],
+            "sort": ["created_at", "desc"]
+        }
+        if self.kibana_index_pattern_uuid:
+            kibana_params["index"] = self.kibana_index_pattern_uuid
+        query = {"_g": "()",  # rison for []
+                 "_a": rison_dumps(kibana_params)}
+        return "{kibana_base_url}#/discover?{query}".format(
+                   kibana_base_url=self.kibana_base_url,
+                   query=urllib.parse.urlencode(query, safe='/:,')
+               )
+
     # machine events
 
     def _get_machine_events_body(self, machine_serial_number, event_type=None, tag=None):
@@ -491,6 +509,18 @@ class EventStore(BaseEventStore):
 
         return {'query': {'bool': {'filter': query_filter}}}
 
+    def probe_events_fetch(self, probe, offset=0, limit=0, **search_dict):
+        # TODO: count could work from first fetch with elasticsearch.
+        body = self._get_probe_events_body(probe, **search_dict)
+        if offset:
+            body['from'] = offset
+        if limit:
+            body['size'] = limit
+        body['sort'] = [{'created_at': 'desc'}]
+        r = self._es.search(index=self.read_index, body=body)
+        for hit in r['hits']['hits']:
+            yield self._deserialize_event(hit['_type'], hit['_source'])
+
     def probe_events_count(self, probe, **search_dict):
         # TODO: count could work from first fetch with elasticsearch.
         body = self._get_probe_events_body(probe, **search_dict)
@@ -604,17 +634,8 @@ class EventStore(BaseEventStore):
                 results[field]["interval"] = interval
         return results
 
-    def probe_events_fetch(self, probe, offset=0, limit=0, **search_dict):
-        # TODO: count could work from first fetch with elasticsearch.
-        body = self._get_probe_events_body(probe, **search_dict)
-        if offset:
-            body['from'] = offset
-        if limit:
-            body['size'] = limit
-        body['sort'] = [{'created_at': 'desc'}]
-        r = self._es.search(index=self.read_index, body=body)
-        for hit in r['hits']['hits']:
-            yield self._deserialize_event(hit['_type'], hit['_source'])
+    def get_vis_url(self, probe, **search_dict):
+        return self._build_kibana_url(self._get_probe_events_body(probe, **search_dict))
 
     # incident events
 
@@ -661,26 +682,10 @@ class EventStore(BaseEventStore):
         for hit in r['hits']['hits']:
             yield self._deserialize_event(hit['_type'], hit['_source'])
 
-    def get_vis_url(self, probe, **search_dict):
-        if not self.kibana_base_url:
-            return
-        body = self._get_probe_events_body(probe, **search_dict)
-        kibana_params = {
-            "columns": ["_source"],
-            "interval": "auto",
-            "query": body["query"],
-            "sort": ["created_at", "desc"]
-        }
-        if self.kibana_index_pattern_uuid:
-            kibana_params["index"] = self.kibana_index_pattern_uuid
-        query = {"_g": "()",  # rison for []
-                 "_a": rison_dumps(kibana_params)}
-        return "{kibana_base_url}#/discover?{query}".format(
-                   kibana_base_url=self.kibana_base_url,
-                   query=urllib.parse.urlencode(query, safe='/:,')
-               )
+    def get_incident_vis_url(self, incident):
+        return self._build_kibana_url(self._get_incident_events_body(incident))
 
-    # apps hist data
+    # zentral apps data
 
     def _get_hist_query_dict(self, interval, bucket_number, tag, event_type):
         filter_list = []

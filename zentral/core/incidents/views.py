@@ -3,7 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, UpdateView
-from zentral.core.stores import frontend_store
+from zentral.core.stores import frontend_store, stores
 from zentral.utils.prometheus import BasePrometheusMetricsView
 from .forms import IncidentSearchForm, UpdateIncidentForm, UpdateMachineIncidentForm
 from .models import Incident, MachineIncident
@@ -63,6 +63,12 @@ class IncidentView(LoginRequiredMixin, DetailView):
         ctx["incidents"] = True
         ctx["machine_incidents"] = ctx["object"].machineincident_set.all()
         ctx["machine_incidents_count"] = ctx["machine_incidents"].count()
+        ctx["store_links"] = []
+        for store in stores:
+            url = store.get_incident_vis_url(ctx["object"])
+            if url:
+                ctx["store_links"].append((store.name, url))
+        ctx["store_links"].sort()
         return ctx
 
 
