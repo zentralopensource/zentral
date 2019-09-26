@@ -223,18 +223,26 @@ class PayloadFilterBaseProbeTestCase(TestCase):
             {"attribute": "yo", "operator": "NOT_IN", "values": ["notin23"]},
             {"attribute": "ewuew", "operator": "IN", "values": ["z99", "a00"]},
         ]
+        cls.payload_filter_data5 = [
+            {"attribute": "yo_bool", "operator": "IN", "values": ["True"]},
+        ]
+        cls.payload_filter_data6 = [
+            {"attribute": "yo_int", "operator": "IN", "values": ["42"]},
+        ]
         cls.probe_source = ProbeSource.objects.create(
             model="BaseProbe",
             name="base probe",
             body={"filters": {"payload": [cls.payload_filter_data,
                                           cls.payload_filter_data2,
                                           cls.payload_filter_data3,
-                                          cls.payload_filter_data4]}}
+                                          cls.payload_filter_data4,
+                                          cls.payload_filter_data5,
+                                          cls.payload_filter_data6]}}
         )
         cls.probe = cls.probe_source.load()
 
     def test_payload_filters(self):
-        self.assertEqual(len(self.probe.payload_filters), 4)
+        self.assertEqual(len(self.probe.payload_filters), 6)
 
     def test_payload_filter_items(self):
         payload_filter = self.probe.payload_filters[3]
@@ -272,9 +280,33 @@ class PayloadFilterBaseProbeTestCase(TestCase):
             self.assertEqual(payload_filter.test_event_payload(payload),
                              result)
 
+    def test_payload_filter_test_event_boolean_in_payload(self):
+        payload_filter = self.probe.payload_filters[4]
+        for payload, result in (({}, False),
+                                ({"yo_bool": 1}, False),
+                                ({"yo_bool": "False"}, False),
+                                ({"yo_bool": "dlekjde delkjd qeldkj"}, False),
+                                ({"yo_bool": False}, False),
+                                ({"yo_bool": "True"}, True),
+                                ({"yo_bool": True}, True),
+                                ):
+            self.assertEqual(payload_filter.test_event_payload(payload),
+                             result)
+
+    def test_payload_filter_test_event_integer_in_payload(self):
+        payload_filter = self.probe.payload_filters[5]
+        for payload, result in (({}, False),
+                                ({"yo_int": "yolo"}, False),
+                                ({"yo_int": True}, False),
+                                ({"yo_int": 33}, False),
+                                ({"yo_int": 42}, True),
+                                ):
+            self.assertEqual(payload_filter.test_event_payload(payload),
+                             result)
+
     def test_get_flattened_payload_values(self):
-        for payload, attrs, result in (({"a": 1}, ["a"], {1}),
-                                       ({"a": [{"b": [2, 3, 3]}]}, ["a", "b"], {2, 3})):
+        for payload, attrs, result in (({"a": 1}, ["a"], {"1"}),
+                                       ({"a": [{"b": [2, 3, 3]}]}, ["a", "b"], {"2", "3"})):
             self.assertEqual(set(get_flattened_payload_values(payload, attrs)), result)
 
     def test_dotted_payload_attribute(self):

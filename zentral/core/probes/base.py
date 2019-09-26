@@ -147,9 +147,9 @@ def get_flattened_payload_values(payload, attrs):
             return
         if not attrs:
             if isinstance(val, (set, list)):
-                yield from val
+                yield from (str(v) for v in val)
             else:
-                yield val
+                yield str(val)
         else:
             yield from get_flattened_payload_values(val, attrs)
     else:
