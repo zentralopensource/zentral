@@ -17,6 +17,9 @@
   Probe <i>{{ probe.name }}</i> events
 </h2>
 
+{% if error %}
+<p class="text-danger">{{ error }}</p>
+{% else %}
 <nav>
   <ul class="pager">
     {% if next_url %}
@@ -90,4 +93,5 @@
     {% endif %}
   </ul>
 </nav>
+{% endif %}
 {% endblock %}

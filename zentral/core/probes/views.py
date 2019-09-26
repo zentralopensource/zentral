@@ -214,38 +214,54 @@ class ProbeEventsView(LoginRequiredMixin, ListView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['probes'] = True
-        ctx['probe_source'] = self.probe_source
-        ctx['probe'] = self.probe
-        ctx['aggregations'] = self.probe.get_aggregations()
+        ctx = {
+            "probes": True,
+            "probe_source": self.probe_source,
+            "probe": self.probe
+        }
+        try:
+            ctx.update(super().get_context_data(**kwargs))
+        except Exception:
+            # probably a store error
+            logger.exception("Could not fetch probe %s events", self.probe_source.pk)
+            ctx["error"] = "Could not fetch the probe events"
+
         # pagination
-        page = ctx['page_obj']
-        if page.has_next():
+        # previous / next links
+        page = ctx.get('page_obj')
+        if page is not None and page.has_next():
             qd = self.request.GET.copy()
             qd['page'] = page.next_page_number()
             ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
+        if page is not None and page.has_previous():
             qd = self.request.GET.copy()
             qd['page'] = page.previous_page_number()
             ctx['previous_url'] = "?{}".format(qd.urlencode())
+
+        # breadcrumbs
         bc = [(reverse('probes:index'), 'Probes'),
               (reverse('probes:probe', args=(self.probe.pk,)), self.probe.name)]
-        if page.number > 1:
+        if page is not None and page.number > 1:
             qd = self.request.GET.copy()
             qd.pop("page", None)
             reset_link = "?{}".format(qd.urlencode())
         else:
             reset_link = None
-        paginator = page.paginator
-        if paginator.count:
-            count = paginator.count
+        if page is not None and page.paginator.count:
+            count = page.paginator.count
             pluralize = min(1, count - 1) * 's'
             bc.extend([(reset_link, '{} event{}'.format(count, pluralize)),
-                       (None, "page {} of {}".format(page.number, paginator.num_pages))])
+                       (None, "page {} of {}".format(page.number, page.paginator.num_pages))])
         else:
-            bc.append((None, "no events"))
+            # no events
+            if "error" not in ctx:
+                label = "no events found"
+                ctx["error"] = label
+            else:
+                label = "error"
+            bc.append((None, label))
         ctx['breadcrumbs'] = bc
+
         return ctx
 
     def get_queryset(self):
