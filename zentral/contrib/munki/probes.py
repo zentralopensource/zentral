@@ -43,7 +43,7 @@ class MunkiInstallProbe(BaseProbe):
             payload_filter_data.append(
                 {"attribute": "unattended",
                  "operator": PayloadFilter.IN,
-                 "values": [self.unattended_installs]}
+                 "values": [str(self.unattended_installs)]}  # str comparison
             )
         self.payload_filters = [PayloadFilter(payload_filter_data)]
 
