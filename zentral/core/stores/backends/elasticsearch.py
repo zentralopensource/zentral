@@ -424,8 +424,12 @@ class EventStore(BaseEventStore):
         for payload_filter in probe.payload_filters:
             payload_filter_must = []
             for attribute, operator, values in payload_filter.items:
+                # the values may be casted to booleans if the field is stored as a boolean field in elasticsearch
+                # only json like boolean strings will be automatically interpreted as booleans
+                processed_values = [v.lower() if v in ("False", "True") else v for v in values]
                 attribute_queries = [{"term": {"{}.{}".format(event_type, attribute): value}}
-                                     for event_type, value in product(payload_event_types_for_filters, values)]
+                                     for event_type, value in product(payload_event_types_for_filters,
+                                                                      processed_values)]
                 if len(attribute_queries) > 1:
                     # OR for the different values
                     if operator == PayloadFilter.IN:
