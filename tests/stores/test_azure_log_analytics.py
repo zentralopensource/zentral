@@ -1,3 +1,4 @@
+from datetime import datetime
 from dateutil import parser
 from django.test import SimpleTestCase
 from zentral.core.stores.backends.azure_log_analytics import datetime_to_iso8601z_truncated_to_milliseconds
@@ -25,3 +26,9 @@ class TestDateTimeConverstion(SimpleTestCase):
             ("2019-01-12T11:11:11.000999+00:00", "2019-01-12T11:11:11.001Z"),
             ("2019-01-12T11:11:11.000234+00:00", "2019-01-12T11:11:11Z"),
         ))
+
+    def test_naive_datetime(self):
+        self.assertEqual(
+            datetime_to_iso8601z_truncated_to_milliseconds(datetime(2019, 1, 1, 0, 0, 0).replace(tzinfo=None)),
+            "2019-01-01T00:00:00Z"
+        )

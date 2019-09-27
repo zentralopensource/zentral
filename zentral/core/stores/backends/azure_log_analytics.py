@@ -25,8 +25,12 @@ def datetime_to_iso8601z_truncated_to_milliseconds(dt):
         else:
             dt = dt.replace(microsecond=1000 * dt_millisecond)
 
-    # convert created at to UTC, remove the TZ info (naive datetime), convert to isoformat
-    dt_iso = dt.astimezone(pytz.utc).replace(tzinfo=None).isoformat()
+    # convert to UTC only if not naive (python<3.6)
+    if dt.utcoffset() is not None:
+        dt = dt.astimezone(pytz.utc)
+
+    # ensure naive, convert to isoformat
+    dt_iso = dt.replace(tzinfo=None).isoformat()
 
     # truncate the microseconds in isoformat if necessary
     if "." in dt_iso:
