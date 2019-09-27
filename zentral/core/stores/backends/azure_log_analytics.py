@@ -1,16 +1,39 @@
 import base64
 import collections.abc
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import hmac
 import json
 import logging
+import pytz
 import requests
 from zentral.core.events import event_from_event_d
 from zentral.core.stores.backends.base import BaseEventStore
 
 
 logger = logging.getLogger('zentral.core.stroes.backends.azure_log_analytics')
+
+
+def datetime_to_iso8601z_truncated_to_milliseconds(dt):
+    # round created at to milliseconds
+    dt_microsecond = dt.microsecond
+    if dt_microsecond:
+        dt_millisecond = round(dt_microsecond / 1000)
+        if dt_millisecond == 1000:
+            dt = dt.replace(microsecond=0)
+            dt += timedelta(seconds=1)
+        else:
+            dt = dt.replace(microsecond=1000 * dt_millisecond)
+
+    # convert created at to UTC, remove the TZ info (naive datetime), convert to isoformat
+    dt_iso = dt.astimezone(pytz.utc).replace(tzinfo=None).isoformat()
+
+    # truncate the microseconds in isoformat if necessary
+    if "." in dt_iso:
+        dt_iso = dt_iso[:-3]
+
+    # add the pseudo time zone
+    return "{}Z".format(dt_iso)
 
 
 class EventStore(BaseEventStore):
@@ -53,23 +76,8 @@ class EventStore(BaseEventStore):
 
         metadata = event_d.pop("_zentral")
 
-        # created at
-        created_at = metadata.pop("created_at")
-        if "." in created_at:
-            created_at, created_at_ms = created_at.split(".")
-            if len(created_at_ms) == 6:
-                created_at_ms = round(int(created_at_ms) / 1000)
-            elif len(created_at_ms) == 3:
-                created_at_ms = int(created_at_ms)
-            else:
-                # TODO
-                created_at_ms = 0
-            if created_at_ms:
-                if created_at_ms == 1000:
-                    # TODO
-                    created_at_ms = 999
-                created_at = "{}.{:03d}".format(created_at, created_at_ms)
-        metadata["created_at"] = "{}Z".format(created_at)
+        # fix created_at format for use as TimeGenerated field via the time-generated-field header
+        metadata["created_at"] = datetime_to_iso8601z_truncated_to_milliseconds(event.metadata.created_at)
 
         # flatten the metadata
         azure_event = self._flatten_metadata(metadata)
