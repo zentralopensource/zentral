@@ -288,7 +288,7 @@ class EventMetadata(object):
         return d
 
     def add_incident(self, incident):
-        self.incidents.append(incident.serialize_for_event())
+        self.incidents.append(incident.serialize_for_event_metadata())
 
 
 class BaseEvent(object):
@@ -409,8 +409,8 @@ register_event_type(BaseEvent)
 
 class CommandEvent(BaseEvent):
     COMMAND_RE = re.compile(r"^zentral\$(?P<command>[a-zA-Z\-_ ]+)"
-                            "(?P<serial_numbers>(?:\$[a-zA-Z0-9\-_]+)+)"
-                            "(?P<args>(?:#[a-zA-Z0-9\-_ ]+)+)?$")
+                            r"(?P<serial_numbers>(?:\$[a-zA-Z0-9\-_]+)+)"
+                            r"(?P<args>(?:#[a-zA-Z0-9\-_ ]+)+)?$")
     event_type = "zentral_command"
     tags = ["zentral"]
 

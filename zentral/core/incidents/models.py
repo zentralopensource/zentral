@@ -68,15 +68,22 @@ class Incident(models.Model):
     def get_absolute_url(self):
         return reverse("incidents:incident", args=(self.pk,))
 
-    def serialize_for_event(self):
+    def serialize_for_event_metadata(self):
+        # to be included in the triggering events metadata
+        # do not include the original event_id
         return {
             "pk": self.pk,
             "probe_pk": self.probe_source.pk,
             "name": self.name,
             "severity": self.severity,
             "status": self.status,
-            "event_id": str(self.event_id),
         }
+
+    def serialize_for_event(self):
+        # payload of the incident events
+        d = self.serialize_for_event_metadata()
+        d["event_id"] = str(self.event_id)
+        return d
 
     def get_next_statuses(self):
         next_statuses = get_next_statuses(self.status)
@@ -113,13 +120,28 @@ class MachineIncident(models.Model):
     def get_absolute_url(self):
         return "{}#{}".format(reverse("incidents:incident", args=(self.incident.pk,)), self.pk)
 
-    def serialize_for_event(self):
-        d = self.incident.serialize_for_event()
-        d["machine_incident"] = {
+    def _serialize(self, include_event_id=True):
+        d = {
             "pk": self.pk,
             "status": self.status,
-            "event_id": str(self.event_id),
         }
+        if include_event_id:
+            d["event_id"] = str(self.event_id)
+        return d
+
+    def serialize_for_event_metadata(self):
+        # to be included in the triggering events metadata
+        # serialize as an incident with an embedded machine event
+        # this way we always have an incident as the outermost object in the event metadata
+        # do not include the original event_id
+        d = self.incident.serialize_for_event_metadata()
+        d["machine_incident"] = self._serialize(include_event_id=False)
+        return d
+
+    def serialize_for_event(self):
+        # serialize as a machine incident with an embedded incident
+        d = self._serialize()
+        d["incident"] = self.incident.serialize_for_event()
         return d
 
     def get_next_statuses(self):

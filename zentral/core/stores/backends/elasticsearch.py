@@ -640,17 +640,20 @@ class EventStore(BaseEventStore):
     # incident events
 
     def _get_incident_events_body(self, incident):
+        # see incident and machine incident serialization in zentral.core.incidents.models
         self.wait_and_configure_if_necessary()
-        # TODO: doc, better args, ...
         return {
             'query': {
                 'bool': {
                     'filter': [
                         {'bool': {
                             'should': [
+                                # incidents present in triggering event metadata
                                 {'term': {'incidents.pk': incident.pk}},
+                                # incident events, pk attribute
                                 {'term': {'incident.pk': incident.pk}},
-                                {'term': {'machine_incident.pk': incident.pk}}
+                                # machine incident events, incident.pk attribute
+                                {'term': {'machine_incident.incident.pk': incident.pk}}
                             ]
                         }}
                     ]

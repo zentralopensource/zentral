@@ -55,7 +55,7 @@ class IncidentTestCase(TestCase):
         self.assertEqual(event_payload["status"], STATUS_OPEN)
         self.assertEqual(event_payload["severity"], SEVERITY_CRITICAL)
         self.assertEqual(event_payload["event_id"], str(event.metadata.uuid))
-        self.assertEqual(event_payload.get("machine_incident"), None)
+        self.assertEqual(event_payload.get("incident"), None)  # not a machine incident payload
 
     def test_same_open_incident(self):
         event1_metadata = EventMetadata(event_type="test")
@@ -125,13 +125,13 @@ class IncidentTestCase(TestCase):
         # incident event payload
         self.assertEqual(event_payload1["action"], "created")
         self.assertEqual(event_payload1["pk"], incident.pk)
-        self.assertEqual(event_payload1.get("machine_incident"), None)
+        self.assertEqual(event_payload1.get("incident"), None)
         # machine incident event payload
         self.assertEqual(event_payload2["action"], "created")
-        self.assertEqual(event_payload2["machine_incident"],
-                         {"pk": machine_incident.pk,
-                          "status": machine_incident.status,
-                          "event_id": str(event.metadata.uuid)})
+        self.assertEqual(event_payload2["pk"], machine_incident.pk)
+        self.assertEqual(event_payload2["status"], machine_incident.status)
+        self.assertEqual(event_payload2["event_id"], str(event.metadata.uuid))
+        self.assertEqual(event_payload2["incident"]["pk"], incident.pk)
         # meta machine
         self.assertEqual(MetaMachine("YOLOFOMO").max_incident_severity(), SEVERITY_CRITICAL)
 
@@ -186,7 +186,7 @@ class IncidentTestCase(TestCase):
                          {"removed": {"severity": SEVERITY_CRITICAL},
                           "added": {"severity": SEVERITY_CRITICAL + 100}})
         self.assertEqual(event_payload["severity"], SEVERITY_CRITICAL + 100)
-        self.assertEqual(event_payload.get("machine_incident"), None)
+        self.assertEqual(event_payload.get("incident"), None)
         # meta machine
         self.assertEqual(MetaMachine("YOLOFOMO").max_incident_severity(), SEVERITY_CRITICAL + 100)
 
@@ -221,20 +221,18 @@ class IncidentTestCase(TestCase):
         event_payload1, event_payload2 = event_payloads
         # machine incident event payload
         self.assertEqual(event_payload1["action"], "closed")
-        self.assertEqual(event_payload2["pk"], incident.pk)
-        self.assertEqual(event_payload1["status"], STATUS_OPEN)  # Incident still open
-        self.assertEqual(event_payload1["machine_incident"],
-                         {"pk": machine_incident2.pk,
-                          "status": machine_incident2.status,
-                          "event_id": str(event.metadata.uuid),
-                          "diff": {"removed": {"status": STATUS_OPEN},
-                                   "added": {"status": STATUS_CLOSED}}
-                          })
+        self.assertEqual(event_payload1["incident"]["pk"], incident.pk)
+        self.assertEqual(event_payload1["incident"]["status"], STATUS_OPEN)  # Incident still open
+        self.assertEqual(event_payload1["pk"], machine_incident2.pk)
+        self.assertEqual(event_payload1["status"], machine_incident2.status)
+        self.assertEqual(event_payload1["event_id"], str(event.metadata.uuid))
+        self.assertEqual(event_payload1["diff"], {"removed": {"status": STATUS_OPEN},
+                                                  "added": {"status": STATUS_CLOSED}})
         # incident event payload
         self.assertEqual(event_payload2["action"], "closed")
         self.assertEqual(event_payload2["pk"], incident.pk)
         self.assertEqual(event_payload2["status"], STATUS_CLOSED)  # Incident closed now
-        self.assertEqual(event_payload2.get("machine_incident"), None)
+        self.assertEqual(event_payload2.get("incident"), None)
         self.assertEqual(event_payload2["diff"],
                          {"removed": {"status": STATUS_OPEN},
                           "added": {"status": STATUS_CLOSED}})
@@ -272,9 +270,9 @@ class IncidentTestCase(TestCase):
         event_payload = event_payloads[0]
         self.assertEqual(event_payload["action"], "closed")
         self.assertEqual(event_payload["pk"], machine_incident2.pk)
-        self.assertEqual(event_payload["status"], STATUS_IN_PROGRESS)  # incident still in progress
-        self.assertEqual(event_payload["machine_incident"]["pk"], machine_incident2.pk)
-        self.assertEqual(event_payload["machine_incident"]["status"], STATUS_CLOSED)  # machine incident closed
+        self.assertEqual(event_payload["status"], STATUS_CLOSED)  # machine incident closed
+        self.assertEqual(event_payload["incident"]["pk"], incident.pk)
+        self.assertEqual(event_payload["incident"]["status"], STATUS_IN_PROGRESS)  # incident still in progress
 
     def test_close_manually_changed_open_machine_incident(self):
         event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
@@ -349,8 +347,8 @@ class IncidentTestCase(TestCase):
         self.assertEqual(len(event_payloads), 1)
         event_payload = event_payloads[0]
         self.assertEqual(event_payload["action"], "closed")
-        self.assertEqual(event_payload["machine_incident"]["pk"], machine_incident3.pk)
-        self.assertEqual(event_payload["machine_incident"]["status"], STATUS_CLOSED)
+        self.assertEqual(event_payload["pk"], machine_incident3.pk)
+        self.assertEqual(event_payload["status"], STATUS_CLOSED)
 
     def test_enrich_event_no_match(self):
         event_metadata = EventMetadata(event_type="test2")
@@ -418,10 +416,10 @@ class IncidentTestCase(TestCase):
         # second event is the machine incident event
         self.assertIsInstance(eevent2, MachineIncidentEvent)
         self.assertEqual(eevent2.payload["action"], "created")
-        self.assertEqual(eevent2.payload["pk"], incident.pk)
+        self.assertEqual(eevent2.payload["incident"]["pk"], incident.pk)
         self.assertEqual(eevent2.metadata.machine_serial_number, "YOLOFOMO")
         machine_incident = incident.machineincident_set.all()[0]
-        self.assertEqual(eevent2.payload["machine_incident"]["pk"], machine_incident.pk)
+        self.assertEqual(eevent2.payload["pk"], machine_incident.pk)
         # third event is the original event
         self.assertEqual(eevent3, event)
         # machine incident in the original event metadata incidents

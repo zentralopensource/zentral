@@ -28,11 +28,8 @@ register_event_type(MachineIncidentEvent)
 def build_incident_events(incident_event_payloads, machine_serial_number=None, request=None):
     incident_events_uuid = uuid.uuid4()
     for incident_event_index, incident_event_payload in enumerate(incident_event_payloads):
-        if "machine_incident" in incident_event_payload:
+        if "incident" in incident_event_payload:
             incident_event_cls = MachineIncidentEvent
-            # the serial number of the machine incident trumps the one given has argument
-            machine_serial_number = incident_event_payload["machine_incident"].get("serial_number",
-                                                                                   machine_serial_number)
         else:
             incident_event_cls = IncidentEvent
         incident_event_metadata = EventMetadata(

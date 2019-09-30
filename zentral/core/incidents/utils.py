@@ -77,7 +77,7 @@ def update_or_create_open_machine_incident(probe_source, severity, serial_number
                 machine_incident.save()
                 machine_incident_event_payload = machine_incident.serialize_for_event()
                 machine_incident_event_payload["action"] = "closed"
-                machine_incident_event_payload["machine_incident"]["diff"] = machine_incident_diff
+                machine_incident_event_payload["diff"] = machine_incident_diff
                 event_payloads.append(machine_incident_event_payload)
                 # close the incident if status == "OPEN"
                 # do not automatically close it if open but not status == "OPEN" (manual intervention)
@@ -152,7 +152,7 @@ def update_machine_incident_status(machine_incident, new_status):
         machine_incident.save()
         machine_incident_event_payload = machine_incident.serialize_for_event()
         machine_incident_event_payload["action"] = "updated"
-        machine_incident_event_payload["machine_incident"]["diff"] = diff
+        machine_incident_event_payload["diff"] = diff
         event_payloads.append(machine_incident_event_payload)
     return machine_incident, event_payloads
 
