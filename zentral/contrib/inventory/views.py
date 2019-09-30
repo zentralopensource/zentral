@@ -381,6 +381,11 @@ class MachineView(LoginRequiredMixin, TemplateView):
         context = super(MachineView, self).get_context_data(**kwargs)
         context['inventory'] = True
         context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
+        context['machine_snapshots'] = sorted(
+            [(ms.source.get_display_name(), ms) for ms in machine.snapshots],
+            key=lambda t: t[0].lower()
+        )
+        context['max_source_tab_with'] = 100 // len(context['machine_snapshots'])
         context['serial_number'] = machine.serial_number
         prepared_heartbeats = []
         last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(machine.serial_number)
