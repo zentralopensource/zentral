@@ -339,10 +339,11 @@ class Certificate(AbstractMTObject):
     common_name = models.TextField(blank=True, null=True)
     organization = models.TextField(blank=True, null=True)
     organizational_unit = models.TextField(blank=True, null=True)
+    domain = models.TextField(blank=True, null=True)
     sha_1 = models.CharField(max_length=40, blank=True, null=True)
-    sha_256 = models.CharField(max_length=64, db_index=True)
-    valid_from = models.DateTimeField()
-    valid_until = models.DateTimeField()
+    sha_256 = models.CharField(max_length=64, blank=True, null=True, db_index=True)
+    valid_from = models.DateTimeField(blank=True, null=True)
+    valid_until = models.DateTimeField(blank=True, null=True)
     signed_by = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
 
 
@@ -405,11 +406,20 @@ class PuppetNode(AbstractMTObject):
     extra_facts = JSONField(blank=True, null=True)
 
 
-class AzureADInfo(AbstractMTObject):
-    device_unique_id = models.TextField(blank=True, null=True)
-    local_user_name = models.TextField(blank=True, null=True)
-    user_unique_id = models.TextField(blank=True, null=True)
-    user_id = models.TextField(blank=True, null=True)
+class PrincipalUserSource(AbstractMTObject):
+    COMPANY_PORTAL = "COMPANY_PORTAL"
+    TYPE_CHOICES = (
+        (COMPANY_PORTAL, "Company portal"),
+    )
+    type = models.CharField(choices=TYPE_CHOICES, max_length=64)
+    properties = JSONField(blank=True, null=True)
+
+
+class PrincipalUser(AbstractMTObject):
+    source = models.ForeignKey(PrincipalUserSource, on_delete=models.PROTECT)
+    unique_id = models.TextField(db_index=True)
+    principal_name = models.TextField(db_index=True)
+    display_name = models.TextField(blank=True, null=True)
 
 
 class MachineSnapshotManager(MTObjectManager):
@@ -450,7 +460,8 @@ class MachineSnapshot(AbstractMTObject):
     deb_packages = models.ManyToManyField(DebPackage)
     teamviewer = models.ForeignKey(TeamViewer, on_delete=models.PROTECT, blank=True, null=True)
     puppet_node = models.ForeignKey(PuppetNode, on_delete=models.PROTECT, blank=True, null=True)
-    azure_ad_info = models.ForeignKey(AzureADInfo, on_delete=models.PROTECT, blank=True, null=True)
+    principal_user = models.ForeignKey(PrincipalUser, on_delete=models.PROTECT, blank=True, null=True)
+    certificates = models.ManyToManyField(Certificate)
     public_ip_address = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
 
     objects = MachineSnapshotManager()

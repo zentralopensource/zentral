@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 import hashlib
@@ -14,144 +15,33 @@ import zlib
 
 MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
+APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-SAL_BUNDLE_ID = "com.salsoftware.sal"
-
-USER_AGENT = "Zentral/munkipostflight 0.4"
+USER_AGENT = "Zentral/munkipostflight 0.5"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
 
-SANTACTL = "/usr/local/bin/santactl"
 SYSTEM_PROFILER = "/usr/sbin/system_profiler"
 
-
-# SAL infos
-
-
-def get_sal_infos():
-    """Returns dict of preferences set for Sal, minimum should be key (for business unit)
-    and ServerURL (unless inherited from DNS/Sal default of 'http://sal/"""
-    # ../sal-scripts/blob/3e11bb5ffe654869a6d6aeebb65418b0d13e9eeb/utils.py#L39
-    try:
-        from Foundation import (CFPreferencesCopyKeyList,
-                                kCFPreferencesAnyUser,
-                                kCFPreferencesCurrentHost,
-                                CFPreferencesCopyAppValue)
-        infos = {}
-        for key in CFPreferencesCopyKeyList(SAL_BUNDLE_ID,
-                                            kCFPreferencesAnyUser,
-                                            kCFPreferencesCurrentHost) or []:
-            val = CFPreferencesCopyAppValue(key, SAL_BUNDLE_ID)
-            if val is not None:
-                infos[key] = val
-        return infos
-    except ImportError:
-        print "Could not import CFPreferencesCopyAppValue. Not on OSX ?"
 
 # OSX apps
 
 
-def get_santa_versions():
-    """Returns component versions of santa, including kext, daemon, job control script,
-    and GUI (santa-driver, santad, santactl, and SantaGUI, respectively)"""
-    versions = {}
+def get_osx_app_instances():
+    apps = []
     try:
-        stdout = subprocess.check_output([SANTACTL, "version"])
-    except (OSError, subprocess.CalledProcessError):
-        pass
+        data = plistlib.readPlist(APPLICATION_INVENTORY)
+    except IOError:
+        print "Could not read application inventory plist"
     else:
-        # if previous check_output command in the try was successful,
-        for line in stdout.splitlines():
-            component, version = (s.strip() for s in line.split('|'))
-            versions[component] = version
-    return versions
+        for app_d in data:
+            apps.append({'app': {'bundle_id': app_d['bundleid'],
+                                 'bundle_name': app_d['CFBundleName'],
+                                 'bundle_version_str': app_d['version']},
+                         'bundle_path': app_d['path']})
+    return apps
 
-
-def cleanup_santa_fileinfo_dict(d):
-    for k in d:
-        v = d.pop(k)
-        k = k.lower().replace(' ', '_').replace('-', '_')
-        if v == "Yes":
-            v = True
-        elif v == "No":
-            v = False
-        elif v == "None":
-            v = None
-        elif isinstance(v, list):
-            v = [cleanup_santa_fileinfo_dict(vd) for vd in v]
-        d[k] = v
-    return d
-
-
-def get_santa_fileinfo(bundle_path):
-    """ Get's app bundle paths from munki's AppInventory, returns dict of parsed
-    output from santactl, including Path, SHA-256/1, Bundle Name/Version/
-    BundleVersionString values, type (executable), if code-signed, santas rules
-    for handling, cert/signing chain info"""
-    try:
-        stdout = subprocess.check_output([SANTACTL, "fileinfo", "--json", bundle_path])
-    except subprocess.CalledProcessError:
-        return {}
-    stdout = stdout.strip()
-    try:
-        fileinfo = json.loads(stdout)[0]
-    except Exception:
-        # workaround for older santa versions
-        try:
-            stdout = stdout[stdout.index('{'):]
-        except ValueError:
-            return {}
-        fileinfo = json.loads(stdout)
-    fileinfo = cleanup_santa_fileinfo_dict(fileinfo)
-    return fileinfo
-
-
-class ApplicationInventory(object):
-    APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
-
-    def __init__(self):
-        try:
-            self.data = plistlib.readPlist(self.APPLICATION_INVENTORY)
-        except IOError:
-            print "Could not read application inventory plist"
-            self.data = []
-
-    def get_osx_app_instances(self, include_santa_fileinfo=False):
-        apps = []
-        if include_santa_fileinfo and not get_santa_versions():
-            # asked a full report but santa is not installed
-            include_santa_fileinfo = False
-        for app_d in self.data:
-            osx_app_instance = {'app': {'bundle_id': app_d['bundleid'],
-                                        'bundle_name': app_d['CFBundleName'],
-                                        'bundle_version_str': app_d['version']},
-                                'bundle_path': app_d['path'],
-                                }
-            if include_santa_fileinfo:
-                fileinfo = get_santa_fileinfo(osx_app_instance['bundle_path'])
-                if not fileinfo:
-                    warnings.warn('Bundle {} without santa fileinfo'.format(osx_app_instance['app']['bundle_id']))
-                else:
-                    signing_chain = fileinfo.get('signing_chain', None)
-                    if not signing_chain:
-                        signed_by = None
-                    else:
-                        signed_by = signing_chain.pop(0)
-                        current_signed_by = signed_by
-                        while signing_chain:
-                            current_signed_by_signed_by = signing_chain.pop(0)
-                            current_signed_by['signed_by'] = current_signed_by_signed_by
-                            current_signed_by = current_signed_by_signed_by
-                    if 'bundle_version' in fileinfo:
-                        osx_app_instance['app'].update({'bundle_version': fileinfo['bundle_version']})
-                    osx_app_instance.update({'path': fileinfo.get('path', None),
-                                             'sha_1': fileinfo['sha_1'],
-                                             'sha_256': fileinfo['sha_256'],
-                                             'type': fileinfo['type'],
-                                             'signed_by': signed_by})
-            apps.append(osx_app_instance)
-        return include_santa_fileinfo, apps
 
 # Munki run reports
 
@@ -222,6 +112,7 @@ def build_reports_payload(last_seen=None):
             break
         payload.append(mir.serialize())
     return payload
+
 
 # Machine infos
 
@@ -296,6 +187,179 @@ class SystemProfilerReport(object):
                 'os_version': os_version,
                 'system_uptime': uptime}
 
+
+# Microsoft certificates and UUIDs
+
+
+def parse_dn(dn):
+    # TODO: poor man's DN parser
+    d = defaultdict(list)
+    current_attr = ""
+    current_val = ""
+
+    state = "ATTR"
+    string_state = "NOT_ESCAPED"
+    for c in dn:
+        if c == "\\" and string_state == "NOT_ESCAPED":
+            string_state = "ESCAPED"
+        else:
+            if string_state == "NOT_ESCAPED" and c in "=/":
+                if c == "=":
+                    state = "VAL"
+                elif c == "/":
+                    state = "ATTR"
+                    if current_attr:
+                        d[current_attr].append(current_val)
+                    current_attr = current_val = ""
+            else:
+                if state == "ATTR":
+                    current_attr += c
+                elif state == "VAL":
+                    current_val += c
+                if string_state == "ESCAPED":
+                    string_state = "NOT_ESCAPED"
+
+    if current_attr:
+        d[current_attr].append(current_val)
+        current_attr = current_val = ""
+    return d
+
+
+def read_cert_info(cert):
+    p = subprocess.Popen(["/usr/bin/openssl", "x509", "-noout", "-issuer", "-subject"],
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    stdout, _ = p.communicate(cert)
+    info = {}
+    for line in stdout.splitlines():
+        line = line.strip()
+        attr, dn = line.split("= ", 1)
+        info[attr] = parse_dn(dn.strip())
+    return info
+
+
+def iter_certs():
+    # first run, for SHA1 and Keychain
+    found_certs = {}
+    p = subprocess.Popen(["/usr/bin/security", "find-certificate", "-a", "-Z"], stdout=subprocess.PIPE)
+    stdout, _ = p.communicate()
+    current_sha1 = None
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("SHA-1 hash:"):
+            current_sha1 = line.replace("SHA-1 hash:", "").strip()
+        elif line.startswith("keychain:"):
+            found_certs[current_sha1] = line.replace("keychain:", "").strip('" ')
+    # second run, for the PEM values
+    p = subprocess.Popen(["/usr/bin/security", "find-certificate", "-a", "-Z", "-p"], stdout=subprocess.PIPE)
+    stdout, _ = p.communicate()
+    current_cert = current_keychain = None
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("SHA-1 hash:"):
+            sha1 = line.replace("SHA-1 hash:", "").strip()
+            try:
+                current_keychain = found_certs[sha1]
+            except KeyError:
+                # TODO: probably a new certificate between the 2 runs...
+                current_keychain = None
+        elif "--BEGIN CERTIFICATE--" in line:
+            if current_cert:
+                yield current_keychain, current_cert.strip()
+            current_cert = ""
+        if current_cert is not None:
+            current_cert += "{}\n".format(line)
+    if current_cert:
+        yield current_keychain, current_cert.strip()
+
+
+def iter_filtered_certs():
+    for keychain, cert in iter_certs():
+        if keychain != "/Library/Keychains/System.keychain":
+            # only system keychain certificates
+            # TODO: verify
+            continue
+        cert_info = read_cert_info(cert)
+        issuer_dict = cert_info.get("issuer", {})
+        issuer_dc = issuer_dict.get("DC")
+        issuer_cn = issuer_dict.get("CN", [])
+        if issuer_dc == ["net", "windows"] and issuer_cn == ["MS-Organization-Access"] or \
+           issuer_cn == ["Microsoft Intune MDM Device CA"] or \
+           any("JSS" in cn for cn in issuer_cn):
+            yield cert
+
+
+# Company portal user info
+
+
+def iter_users():
+    p = subprocess.Popen(["/usr/bin/dscl", "-plist", ".", "-readall", "/Users",
+                          "NFSHomeDirectory", "RealName", "UniqueID"],
+                         stdout=subprocess.PIPE)
+    stdout, _ = p.communicate()
+    for dscl_d in plistlib.readPlistFromString(stdout):
+        user_d = {}
+        for dscl_attr, user_attr in (("NFSHomeDirectory", "directory"),
+                                     ("RecordName", "username"),
+                                     ("RealName", "description"),
+                                     ("UniqueID", "uid")):
+            dscl_values = dscl_d.get("dsAttrTypeStandard:{}".format(dscl_attr))
+            if dscl_values:
+                value = dscl_values[0]
+                if user_attr == "uid":
+                    try:
+                        value = int(value)
+                    except (TypeError, ValueError):
+                        continue
+                user_d[user_attr] = value
+        if user_d["directory"].startswith("/Users"):
+            yield user_d
+
+
+def get_principal_user():
+    # ATM, only the company portal info
+    selected_plist_ctime = principal_user = None
+    for user_d in iter_users():
+        plist_path = os.path.join(
+            user_d["directory"],
+            "Library/Application Support/com.microsoft.CompanyPortal.usercontext.info"
+        )
+        try:
+            plist_ctime = os.stat(plist_path).st_ctime
+        except OSError:
+            # plist doesn't exist
+            continue
+        if plist_ctime < selected_plist_ctime:
+            # we have already found a more recent plist
+            # TODO: better way to select the principal user?
+            # TODO: do it on the client or on the server?
+            continue
+        try:
+            p = subprocess.Popen(["/usr/bin/plutil", "-convert", "json", "-o", "-", plist_path],
+                                 stdout=subprocess.PIPE)
+            stdout, _ = p.communicate()
+            company_portal_info = json.loads(stdout)
+        except Exception:
+            pass
+        else:
+            selected_plist_ctime = plist_ctime
+            principal_user = {
+                "source": {
+                    "type": "COMPANY_PORTAL",
+                    "properties": {
+                        "azure_ad_authority_url": company_portal_info["aadAuthorityUrl"],
+                        "version": company_portal_info["version"],
+                    },
+                },
+                "unique_id": company_portal_info["aadUniqueId"],
+                "principal_name": company_portal_info["aadUserId"],
+            }
+    return principal_user
+
+
 # Zentral Munki API calls
 
 
@@ -323,33 +387,40 @@ def post_job(data):
     return make_api_request(url, data)
 
 
+def get_machine_snapshot():
+    spr = SystemProfilerReport()
+    machine_snapshot = spr.get_machine_snapshot()
+    machine_snapshot['pem_certificates'] = list(iter_filtered_certs())
+    machine_snapshot['osx_app_instances'] = get_osx_app_instances()
+    machine_snapshot["principal_user"] = get_principal_user()
+    return machine_snapshot
+
+
 # Main
 
 
 if __name__ == '__main__':
+    # machine snapshot
+    data = {'machine_snapshot': get_machine_snapshot()}
+
+    # run type
     run_type = None
     try:
         run_type = sys.argv[1]
     except IndexError:
         pass
-    spr = SystemProfilerReport()
-    # initialize data dict
-    data = {'machine_snapshot': spr.get_machine_snapshot()}
-    sal_infos = get_sal_infos()
-    if sal_infos is not None:
-        data['sal_infos'] = sal_infos
+
+    # get job info
     msn = data['machine_snapshot']['serial_number']
     job_details = get_job_details(msn)
-    ai = ApplicationInventory()
-    # if it's both an auto run (vs. debug/testing) and we have santa fileinfo collected
-    data['include_santa_fileinfo'] = run_type == 'auto' and job_details['include_santa_fileinfo']
-    # retain the boolean about whether we've included santa fileinfo, populate w/ info or []
-    (data['santa_fileinfo_included'],
-     data['machine_snapshot']['osx_app_instances']) = ai.get_osx_app_instances(data['include_santa_fileinfo'])
     last_seen_sha1sum = job_details.get('last_seen_sha1sum', None)
+
+    # add the new reports
     data['reports'] = build_reports_payload(last_seen_sha1sum)
+
+    # post the payload to zentral
     post_job(data)
+
     print ('Zentral postflight job OK - '
-           'run type %s, fileinfo %s, last sha1sum %s') % (run_type or "-",
-                                                           data['include_santa_fileinfo'],
-                                                           (last_seen_sha1sum or "-")[:7])
+           'run type %s, last sha1sum %s') % (run_type or "-",
+                                              (last_seen_sha1sum or "-")[:7])

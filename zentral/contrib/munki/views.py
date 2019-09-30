@@ -1,13 +1,11 @@
 import json
 import logging
-from datetime import timedelta
 from dateutil import parser
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.views.generic import FormView, ListView, TemplateView, View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
@@ -22,6 +20,7 @@ from .events import post_munki_enrollment_event, post_munki_events, post_munki_r
 from .forms import CreateInstallProbeForm, EnrollmentForm, UpdateInstallProbeForm
 from .models import EnrolledMachine, Enrollment, MunkiState
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
+from .utils import prepare_ms_tree_certificates
 
 logger = logging.getLogger('zentral.contrib.munki.views')
 
@@ -223,8 +222,6 @@ class BaseView(JSONPostAPIView):
 
 
 class JobDetailsView(BaseView):
-    max_fileinfo_age = timedelta(hours=1)
-
     def check_data_secret(self, data):
         if not self.machine_serial_number:
             logger.error("No machine serial number. Request secret %s", self.request_secret)
@@ -246,33 +243,20 @@ class JobDetailsView(BaseView):
         if self.enrollment:
             event_data["enrollment"] = {"pk": self.enrollment.pk}
         post_munki_request_event(self.machine_serial_number, self.user_agent, self.ip, **event_data)
-        response_d = {'include_santa_fileinfo': True}
+        response_d = {}
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
         except MunkiState.DoesNotExist:
             pass
         else:
             response_d['last_seen_sha1sum'] = munki_state.sha1sum
-            if munki_state.binaryinfo_last_seen:
-                last_fileinfo_age = timezone.now() - munki_state.binaryinfo_last_seen
-                response_d['include_santa_fileinfo'] = last_fileinfo_age >= self.max_fileinfo_age
         return response_d
-
-
-def clean_certs_datetime(tree):
-    for k, v in tree.items():
-        if k == 'valid_from' or k == 'valid_until':
-            tree[k] = parser.parse(v)
-        elif isinstance(v, list):
-            for d in v:
-                clean_certs_datetime(d)
-        elif isinstance(v, dict):
-            clean_certs_datetime(v)
 
 
 class PostJobView(BaseView):
     @transaction.non_atomic_requests
     def do_post(self, data):
+        # commit machine snapshot
         ms_tree = data['machine_snapshot']
         ms_tree['source'] = {'module': 'zentral.contrib.munki',
                              'name': 'Munki'}
@@ -282,22 +266,21 @@ class PostJobView(BaseView):
             ms_tree['serial_number'] = machine['serial_number']
         ms_tree['reference'] = ms_tree['serial_number']
         ms_tree['public_ip_address'] = self.ip
-        if data.get('include_santa_fileinfo', False):
-            clean_certs_datetime(ms_tree)
-            if self.business_unit:
-                ms_tree['business_unit'] = self.business_unit.serialize()
-            ms = commit_machine_snapshot_and_trigger_events(ms_tree)
-            if not ms:
-                raise RuntimeError("Could not commit machine snapshot")
-            msn = ms.serial_number
-        else:
-            msn = ms_tree['reference']
+        if self.business_unit:
+            ms_tree['business_unit'] = self.business_unit.serialize()
+        prepare_ms_tree_certificates(ms_tree)
+        ms = commit_machine_snapshot_and_trigger_events(ms_tree)
+        if not ms:
+            raise RuntimeError("Could not commit machine snapshot")
+
+        msn = ms.serial_number
+
+        # reports
         reports = [(parser.parse(r.pop('start_time')),
                     parser.parse(r.pop('end_time')),
                     r) for r in data.pop('reports')]
-        # Events
-        event_data = {"request_type": "postflight",
-                      "include_santa_fileinfo": data.get('include_santa_fileinfo', False)}
+        # events
+        event_data = {"request_type": "postflight"}
         if self.enrollment:
             event_data["enrollment"] = {"pk": self.enrollment.pk}
         post_munki_request_event(msn, self.user_agent, self.ip, **event_data)
@@ -305,11 +288,10 @@ class PostJobView(BaseView):
                           self.user_agent,
                           self.ip,
                           (r for _, _, r in reports))
+
         # MunkiState
         update_dict = {'user_agent': self.user_agent,
                        'ip': self.ip}
-        if data.get('santa_fileinfo_included', False):
-            update_dict['binaryinfo_last_seen'] = timezone.now()
         if reports:
             reports.sort()
             start_time, end_time, report = reports[-1]

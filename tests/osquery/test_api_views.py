@@ -283,7 +283,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         json_response = response.json()
         query_names = ["{}{}".format(INVENTORY_DISTRIBUTED_QUERY_PREFIX, t)
                        for t in ("os_version", "system_info", "uptime", "network_interface",
-                                 "apps", "azure_ad_user_info", "azure_ad_certificate")]
+                                 "apps", "company_portal", "certificates")]
         self.assertCountEqual(json_response["queries"], query_names)
         # post default inventory snapshot with one app, and the azure ad info
         self.post_default_inventory_query_snapshot(node_key, with_app=True, with_azure_ad=True)

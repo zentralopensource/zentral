@@ -32,21 +32,25 @@ OSX_APP_INSTANCE_QUERY = (
     "path as bundle_path "
     "from apps;"
 )
-MACOS_AZURE_AD_USER_INFO_QUERY = (
-    "SELECT 'azure_ad_user_info' AS table_name,"
-    "username, key, value "
+MACOS_PRINCIPAL_USER_QUERY = (
+    "SELECT 'company_portal' AS table_name,"
+    "directory, key, value "
     "FROM ("
-    "  SELECT username, directory"
+    "  SELECT directory"
     "  FROM users"
     "  WHERE directory LIKE '/Users/%'"
     ") u, plist p "
     "WHERE (p.path = u.directory || '/Library/Application Support/com.microsoft.CompanyPortal.usercontext.info');"
 )
-AZURE_AD_CERTIFICATE_QUERY = (
-    "SELECT 'azure_ad_certificate' AS table_name,"
-    "common_name, not_valid_before "
+CERTIFICATES_QUERY = (
+    "SELECT 'certificates' AS table_name, * "
     "FROM certificates "
-    "WHERE issuer LIKE '/DC=net/DC=windows/CN=MS-Organization-Access/OU=%'"
+    "WHERE path = '/Library/Keychains/System.keychain' "
+    "AND ca = '0' AND ("
+    "issuer LIKE '/DC=net/DC=windows/CN=MS-Organization-Access/OU=%' OR "
+    "issuer = '/CN=Microsoft Intune MDM Device CA' OR "
+    "issuer LIKE '%JSS%'"
+    ")"
 )
 DECORATORS = {
     "load": [
@@ -69,9 +73,9 @@ def get_inventory_queries_for_machine(machine):
     yield from INVENTORY_QUERIES
     if machine.platform == MACOS:
         yield "apps", OSX_APP_INSTANCE_QUERY
-        yield "azure_ad_user_info", MACOS_AZURE_AD_USER_INFO_QUERY
+        yield "company_portal", MACOS_PRINCIPAL_USER_QUERY
     if machine.platform in (MACOS, WINDOWS):
-        yield "azure_ad_certificate", AZURE_AD_CERTIFICATE_QUERY
+        yield "certificates", CERTIFICATES_QUERY
     if machine.has_deb_packages:
         yield "deb_packages", DEB_PACKAGE_QUERY
 

@@ -42,7 +42,9 @@ for attr in ('reference',
              'osx_app_instance',
              'deb_package',
              'teamviewer',
-             'puppet_node'):
+             'puppet_node',
+             'principal_user',
+             'certificate'):
     event_type = 'inventory_{}_update'.format(attr)
     event_class_name = "".join(s.title() for s in event_type.split('_'))
     event_class = type(event_class_name, (BaseEvent,), {'event_type': event_type, 'tags': ['inventory_update']})

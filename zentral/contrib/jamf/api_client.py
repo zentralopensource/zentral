@@ -278,19 +278,6 @@ class APIClient(object):
                                       'app': {'bundle_name': app_d['name'],
                                               'bundle_version_str': app_d['version']}})
         ct['osx_app_instances'] = osx_app_instances
-
-        # Azure AD
-        device_aad_info = computer["general"].get("device_aad_infos", {}).get("device_aad_info")
-        if device_aad_info:
-            azure_ad_info = {}
-            for ztl_attr, jamf_attr in (("device_unique_id", "device_aad_id"),
-                                        ("local_user_name", "local_user_name"),
-                                        ("user_unique_id", "user_aad_id")):
-                ztl_val = device_aad_info.get(jamf_attr)
-                if ztl_val:
-                    azure_ad_info[ztl_attr] = ztl_val
-            if azure_ad_info:
-                ct['azure_ad_info'] = azure_ad_info
         return ct
 
     def get_mobile_device_machine_d(self, jamf_id):

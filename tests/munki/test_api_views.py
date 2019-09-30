@@ -44,7 +44,7 @@ class MunkiAPIViewsTestCase(TestCase):
                                      {"machine_serial_number": machine_serial_number},
                                      HTTP_ZENTRAL_API_SECRET=api_secret)
         self.assertEqual(response.status_code, 200)
-        self.assertCountEqual(["include_santa_fileinfo"], response.json().keys())
+        self.assertCountEqual([], response.json().keys())
 
     def test_job_details_old_way_conflict(self):
         _, api_secret = self.make_api_secret()
@@ -59,7 +59,7 @@ class MunkiAPIViewsTestCase(TestCase):
                                      {"machine_serial_number": enrolled_machine.serial_number},
                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
-        self.assertCountEqual(["include_santa_fileinfo"], response.json().keys())
+        self.assertCountEqual([], response.json().keys())
 
     def test_job_details_conflict(self):
         enrolled_machine = self.make_enrolled_machine()
@@ -75,7 +75,6 @@ class MunkiAPIViewsTestCase(TestCase):
         response = self.post_as_json(reverse("munki:post_job"),
                                      {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
                                                            "system_info": {"computer_name": computer_name}},
-                                      "include_santa_fileinfo": True,
                                       "reports": [{"start_time": "2018-01-01 00:00:00 +0000",
                                                    "end_time": "2018-01-01 00:01:00 +0000",
                                                    "basename": "report2018",
@@ -89,7 +88,7 @@ class MunkiAPIViewsTestCase(TestCase):
                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
-        self.assertCountEqual(["include_santa_fileinfo", "last_seen_sha1sum"], response_json.keys())
+        self.assertCountEqual(["last_seen_sha1sum"], response_json.keys())
         self.assertEqual(response_json["last_seen_sha1sum"], report_sha1sum)
         ms = MachineSnapshot.objects.current().get(serial_number=enrolled_machine.serial_number)
         ms2 = MachineSnapshot.objects.current().get(reference=enrolled_machine.serial_number)

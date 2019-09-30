@@ -33,5 +33,4 @@ class MunkiState(models.Model):
     run_type = models.CharField(max_length=64, blank=True, null=True)
     start_time = models.DateTimeField(blank=True, null=True)
     end_time = models.DateTimeField(blank=True, null=True)
-    binaryinfo_last_seen = models.DateTimeField(blank=True, null=True)
     last_seen = models.DateTimeField(auto_now=True)

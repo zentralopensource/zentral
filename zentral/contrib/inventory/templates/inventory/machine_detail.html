@@ -267,27 +267,37 @@
       {% endif %}
       {% endwith %}{% comment %}End if puppet_node {% endcomment %}
 
-      {% with ms.azure_ad_info as azure_ad_info %}
-      {% if azure_ad_info %}
-      <h3>Azure AD</h3>
+      {% with ms.principal_user as principal_user %}
+      {% if principal_user %}
+      <h3>Principal user</h3>
       <dl class="dl-horizontal">
-        {% if azure_ad_info.device_unique_id %}
-        <dt>Device unique ID</dt>
-        <dd>{{ azure_ad_info.device_unique_id }}</dd>
-        {% endif %}
-        {% if azure_ad_info.local_user_name %}
-        <dt>Local user name</dt>
-        <dd>{{ azure_ad_info.local_user_name }}</dd>
-        {% endif %}
-        {% if azure_ad_info.user_unique_id %}
-        <dt>User unique ID</dt>
-        <dd>{{ azure_ad_info.user_unique_id }}</dd>
-        {% endif %}
-        {% if azure_ad_info.user_id %}
-        <dt>User ID</dt>
-        <dd>{{ azure_ad_info.user_id }}</dd>
+        <dt>Source</dt>
+        <dd>{{ principal_user.source.get_type_display }}</dd>
+        <dt>Unique ID</dt>
+        <dd>{{ principal_user.unique_id }}</dd>
+        <dt>Principal name</dt>
+        <dd>{{ principal_user.principal_name }}</dd>
+        {% if principal_user.display_name %}
+        <dt>Display name</dt>
+        <dd>{{ principal_user.display_name }}</dd>
         {% endif %}
       </dl>
+      {% endif %}
+      {% endwith %}
+
+      {% with ms.certificates.all as certificates %}
+      {% if certificates.count %}
+      <h3>Certificate{{ certificates.count|pluralize }}</h3>
+      {% for certificate in certificates %}
+      <dl class="dl-horizontal">
+        <dt>Common Name</dt>
+        <dd>{{ certificate.common_name }}</dd>
+        <dt>Dates</dt>
+        <dd>{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
+        <dt>Issuer</dt>
+        <dd>{{ certificate.signed_by.common_name }}</dd>
+      </dl>
+      {% endfor %}
       {% endif %}
       {% endwith %}
 

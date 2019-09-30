@@ -25,6 +25,7 @@ from zentral.contrib.osquery.models import (CarveBlock, CarveSession,
                                             enroll, EnrolledMachine,
                                             SOURCE_MODULE)
 from zentral.contrib.osquery.tasks import build_carve_session_archive
+from .utils import update_tree_with_inventory_query_snapshot
 
 logger = logging.getLogger('zentral.contrib.osquery.views.api')
 
@@ -163,83 +164,8 @@ class BaseNodeView(JSONPostAPIView):
         if self.business_unit:
             tree['business_unit'] = self.business_unit.serialize()
 
-        def clean_dict(d):
-            for k, v in list(d.items()):
-                if isinstance(v, str):
-                    v = v.strip()
-                if v is None or v == "":
-                    del d[k]
-                elif v != d[k]:
-                    d[k] = v
-            return d
+        update_tree_with_inventory_query_snapshot(tree, snapshot)
 
-        deb_packages = []
-        network_interfaces = []
-        osx_app_instances = []
-        azure_ad_info = {}
-        for t in snapshot:
-            table_name = t.pop('table_name')
-            if table_name == 'os_version':
-                os_version = clean_dict(t)
-                if os_version:
-                    tree['os_version'] = os_version
-            elif table_name == 'system_info':
-                system_info = clean_dict(t)
-                if system_info:
-                    tree['system_info'] = system_info
-            elif table_name == 'uptime':
-                try:
-                    system_uptime = int(t['total_seconds'])
-                except (KeyError, TypeError, ValueError):
-                    pass
-                else:
-                    if system_uptime > 0:
-                        tree['system_uptime'] = system_uptime
-            elif table_name == 'network_interface':
-                network_interface = clean_dict(t)
-                if network_interface:
-                    if network_interface not in network_interfaces:
-                        network_interfaces.append(network_interface)
-                    else:
-                        logger.warning("Duplicated network interface")
-            elif table_name == 'deb_packages':
-                deb_package = clean_dict(t)
-                if deb_package:
-                    if deb_package not in deb_packages:
-                        deb_packages.append(deb_package)
-                    else:
-                        logger.warning("Duplicated deb package")
-            elif table_name == 'apps':
-                bundle_path = t.pop('bundle_path')
-                osx_app = clean_dict(t)
-                if osx_app and bundle_path:
-                    osx_app_instance = {'app': osx_app,
-                                        'bundle_path': bundle_path}
-                    if osx_app_instance not in osx_app_instances:
-                        osx_app_instances.append(osx_app_instance)
-                    else:
-                        logger.warning("Duplicated osx app instance")
-            elif table_name == 'azure_ad_certificate':
-                common_name = t.get("common_name")
-                if common_name:
-                    azure_ad_info["device_unique_id"] = common_name
-            elif table_name == 'azure_ad_user_info':
-                # TODO: verify users count = 1!
-                azure_ad_info["local_user_name"] = t.get('username')
-                key = t.get("key")
-                value = t.get("value")
-                if key == "aadUniqueId":
-                    azure_ad_info["user_unique_id"] = value
-                elif key == "aadUserId":
-                    azure_ad_info["user_id"] = value
-        if deb_packages:
-            tree["deb_packages"] = deb_packages
-        if network_interfaces:
-            tree["network_interfaces"] = network_interfaces
-        if osx_app_instances:
-            tree["osx_app_instances"] = osx_app_instances
-        if azure_ad_info:
-            tree["azure_ad_info"] = azure_ad_info
         commit_machine_snapshot_and_trigger_events(tree)
 
 

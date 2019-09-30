@@ -26,12 +26,12 @@ ORPHANS = (
     # MachineSnapshot of archived machines
     ("inventory_machinesnapshot", "id",
      (("machine_snapshot_id", "inventory_machinesnapshotcommit"),)),
-    # AzureADInfo
-    ("inventory_azureadinfo", "id",
-     (("azure_ad_info_id", "inventory_machinesnapshot"),)),
     # PuppetNode
     ("inventory_puppetnode", "id",
      (("puppet_node_id", "inventory_machinesnapshot"),)),
+    # PrincipalUser
+    ("inventory_principaluser", "id",
+     (("principal_user_id", "inventory_machinesnapshot"),)),
     # SystemInfo
     ("inventory_systeminfo", "id",
      (("system_info_id", "inventory_machinesnapshot"),)),
@@ -63,8 +63,9 @@ ORPHANS = (
     ("inventory_certificate", "id",
      (("signed_by_id", "inventory_osxappinstance"),
       ("signed_by_id", "inventory_certificate"),
-      ("signed_by_id", "santa_collectedapplication"))),
-     # OSXApp
+      ("signed_by_id", "santa_collectedapplication"),
+      ("certificate_id", "inventory_machinesnapshot_certificates"))),
+    # OSXApp
     ("inventory_osxapp", "id",
      (("app_id", "inventory_osxappinstance"),
       ("bundle_id", "santa_collectedapplication"))),

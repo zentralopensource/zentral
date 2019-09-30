@@ -1302,6 +1302,7 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                                  ('network_interfaces', 'inventory_network_interface_update'),
                                  ('osx_app_instances', 'inventory_osx_app_instance_update'),
                                  ('deb_packages', 'inventory_deb_package_update'),
+                                 ('certificates', 'inventory_certificate_update'),
                                  ('groups', 'inventory_group_update')):
         m2m_diff = diff.get(m2m_attr, {})
         for action in ['added', 'removed']:
@@ -1316,7 +1317,8 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                     'os_version',
                     'system_info',
                     'teamviewer',
-                    'puppet_node'):
+                    'puppet_node',
+                    'principal_user'):
         event_type = 'inventory_{}_update'.format(fk_attr)
         fk_diff = diff.get(fk_attr, {})
         for action in ['added', 'removed']:
