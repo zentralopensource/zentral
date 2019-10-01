@@ -85,30 +85,6 @@
         <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}
       </a>
       {% endfor %}
-      <a class="btn btn-default" href="{% url 'probes:export' probe.pk %}" id="export-probe">
-        <span class="glyphicon glyphicon-export" aria-hidden="true"></span> Export gist
-      </a>
-    </div>
-  </div>
-</div>
-
-<div class="modal" id="export-probe-modal" tabindex="-1" role="dialog" aria-labelledby="export-probe-modal">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h4 class="modal-title" id="myModalLabel">Probe gist</h4>
-      </div>
-      <div class="modal-body">
-        <dl>
-          <dt>raw url</dt>
-          <dd><a href="" target="_blank" id="gist-raw-url"></a></dd>
-          <dt>html url</dt>
-          <dt><a href="" target="_blank" id="gist-html-url"></a></dt>
-        </dl>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-      </div>
     </div>
   </div>
 </div>
@@ -329,27 +305,4 @@
   </tbody>
 </table>
 {% endif %}
-{% endblock %}
-
-{% block extrajs %}
-<script>
-  function export_probe(url) {
-    console.log(url);
-    $.ajax({type: "POST",
-            url: url,
-            success: function(data){
-              $('#gist-raw-url').attr("href", data.raw_url).text(data.raw_url);
-              $('#gist-html-url').attr("href", data.html_url).text(data.html_url);
-              $('#export-probe-modal').modal('show');
-            }
-          });
-  }
-
-  $(document).ready(function(){
-    $("#export-probe").click(function(event){
-      event.preventDefault();
-      export_probe($(this).attr("href"))
-    });
-  });
-</script>
 {% endblock %}
