@@ -83,12 +83,28 @@ class WebhookEventPreprocessor(object):
                 _, jamf_machine_id = reference.split(",")
                 yield from self.update_machine(client, device_type, jamf_machine_id)
 
+    def cleanup_jamf_event(self, raw_event):
+        # to avoid indexing errors due to "" used for empty dates for example
+        for k, v in list(raw_event.items()):
+            if isinstance(v, str):
+                raw_event[k] = v = v.strip()
+            if v is None or v == "" or v == {}:
+                del raw_event[k]
+            elif isinstance(v, dict):
+                self.cleanup_jamf_event(v)
+            elif isinstance(v, list):
+                for vc in v:
+                    if isinstance(vc, dict):
+                        self.cleanup_jamf_event(vc)
+
     def process_raw_event(self, raw_event):
         jamf_instance_d = raw_event["jamf_instance"]
         client = self.get_client(jamf_instance_d)
 
         event_type = raw_event["event_type"]
         jamf_event = raw_event["jamf_event"]
+
+        self.cleanup_jamf_event(jamf_event)
 
         if event_type == "jamf_smart_group_computer_membership_change" \
            or event_type == "jamf_smart_group_mobile_device_membership_change":
