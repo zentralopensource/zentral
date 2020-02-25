@@ -3,7 +3,7 @@ from django.conf.urls import include, url
 from django.contrib.auth.urls import urlpatterns as auth_urlpatterns
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from accounts.views import login, VerifyTOTPView, VerifyU2FView
-from zentral.conf import saml2_idp_metadata_file, settings as zentral_settings
+from zentral.conf import settings as zentral_settings
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +12,7 @@ urlpatterns = [
     url(r'^', include('base.urls')),
     url(r'^api/', include('base.api_urls')),
     url(r'^admin/users/', include('accounts.urls')),
+    url(r'^realms/', include('realms.urls')),
     # special login view with verification device redirect
     url(r'^accounts/login/$', login, name='login'),
     url(r'^accounts/verify_totp/$', VerifyTOTPView.as_view(), name='verify_totp'),
@@ -36,10 +37,6 @@ for app_name in zentral_settings.get('apps', []):
                 pass
             else:
                 logger.exception("Could not load app %s %s", app_shortname, url_module_name)
-
-# saml2
-if saml2_idp_metadata_file:
-    urlpatterns.append(url(r'^saml2/', include('accounts.saml2_urls')))
 
 # static files
 urlpatterns += staticfiles_urlpatterns()

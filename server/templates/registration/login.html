@@ -4,12 +4,12 @@
 {% block content %}
 <div class="row">
   <div class="col-md-4 col-md-offset-4">
-    {% if saml2_idp_name %}
-    <div class="btn-group btn-group-justified" role="group" aria-label="SSO">
-      <a href="{{ saml2_login_url }}" class="btn btn-large btn-primary">Sign in with {{ saml2_idp_name }}</a>
-    </div>
+    {% for realm, login_link in login_realms %}
+    <form action="{{ login_link }}" method="post">{% csrf_token %}
+      <button href="{{ login_link }}" class="btn btn-large btn-primary">Sign in with {{ realm }}</button>
+    </form>
     <h3 class="text-center">or</h3>
-    {% endif %}
+    {% endfor %}
     <form class="panel panel-default" method="POST">{% csrf_token %}
       <div class="panel-heading">
         <h3 class="panel-title">

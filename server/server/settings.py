@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/1.8/ref/settings/
 
 import os
 # Import the zentral settings (base.json)
-from zentral.conf import saml2_idp_metadata_file, settings as zentral_settings
+from zentral.conf import settings as zentral_settings
 from .celery import app as celery_app
 
 __all__ = ('celery_app',)
@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     'django_celery_results',
     'accounts',
     'base',
+    'realms',
 ]
 
 REST_FRAMEWORK = {
@@ -91,9 +92,8 @@ AUTH_PASSWORD_VALIDATORS = django_zentral_settings.get("AUTH_PASSWORD_VALIDATORS
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
+    'realms.auth_backends.RealmBackend',
 ]
-if saml2_idp_metadata_file:
-    AUTHENTICATION_BACKENDS.append('accounts.auth_backends.Saml2Backend')
 
 if "SESSION_COOKIE_AGE" in django_zentral_settings:
     SESSION_COOKIE_AGE = django_zentral_settings["SESSION_COOKIE_AGE"]
@@ -142,9 +142,6 @@ TEMPLATES = [
         },
     },
 ]
-if saml2_idp_metadata_file:
-    for template_conf in TEMPLATES:
-        template_conf['OPTIONS']['context_processors'].append('zentral.conf.context_processors.saml2')
 
 WSGI_APPLICATION = 'server.wsgi.application'
 

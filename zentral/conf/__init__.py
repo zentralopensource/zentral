@@ -24,10 +24,6 @@ def get_conf_dir():
 conf_dir = get_conf_dir()
 
 
-saml2_idp_name = os.environ.get(ZENTRAL_SAML2_IDP_NAME_ENV_VAR)
-saml2_idp_metadata_file = os.environ.get(ZENTRAL_SAML2_IDP_METADATA_FILE_ENV_VAR)
-
-
 # the user can override the default templates
 # by putting correctly named templates in the
 # following dir

@@ -16,6 +16,7 @@ from django.views.generic import DetailView, FormView, ListView, TemplateView, V
 from u2flib_server.u2f import begin_registration, complete_registration
 from zentral.conf import settings as zentral_settings
 from zentral.utils.http import user_agent_and_ip_address_from_request
+from realms.models import Realm
 from .events import post_failed_verification_event, post_verification_device_event
 from .forms import (ZentralAuthenticationForm,
                     AddTOTPForm, AddUserForm, CheckPasswordForm, RegisterU2FDeviceForm, UpdateUserForm,
@@ -69,6 +70,8 @@ def login(request):
 
     context = {
         'form': form,
+        'login_realms': [(r, reverse("realms:zentral_login", args=(r.pk,)))
+                         for r in Realm.objects.filter(enabled_for_login=True)],
         REDIRECT_FIELD_NAME: redirect_to,
     }
 

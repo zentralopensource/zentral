@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>Realm <i>{{ object }}</i></h2>
+
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th>Attribute</th>
+        <th>Value</th>
+      </thead>
+      <tbody>
+      <tr>
+        <td>Name</td>
+        <td>{{ object }}</td>
+      </tr>
+      <tr>
+        <td>Backend</td>
+        <td>{{ object.backend }}</td>
+      </tr>
+      {% for name, value in object.backend_instance.extra_attributes_for_display %}
+      <tr>
+        <td>{{ name }}</td>
+        <td>{{ value }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+    </dl>
+
+  </div>
+</div>
+
+<p>
+  <a class="btn btn-default" href="{% url 'realms:update' object.uuid %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Update
+  </a>
+</p>
+{% endblock %}

@@ -9,7 +9,7 @@ from django.utils.html import linebreaks, urlize
 from django.utils.safestring import mark_safe
 from pygments import lexers, highlight
 from pygments.formatters import HtmlFormatter
-from zentral.conf import settings
+from django.conf import settings
 
 register = template.Library()
 
@@ -21,7 +21,7 @@ DROPDOWN_LIST = []
 @register.inclusion_tag('_main_menu_app_dropdowns.html', takes_context=True)
 def main_menu_app_dropdowns(context):
     if not DROPDOWN_LIST:
-        for app_name in settings['apps']:
+        for app_name in settings.INSTALLED_APPS:
             app_shortname = app_name.rsplit('.', 1)[-1]
             try:
                 url_module = import_module('{}.urls'.format(app_name))
@@ -61,7 +61,7 @@ SETUP_DROPDOWN = []
 @register.inclusion_tag('_setup_dropdown.html', takes_context=True)
 def setup_dropdown(context):
     if not SETUP_DROPDOWN:
-        for app_name in settings['apps']:
+        for app_name in settings.INSTALLED_APPS:
             app_shortname = app_name.rsplit('.', 1)[-1]
             try:
                 url_module = import_module('{}.urls'.format(app_name))

@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">{{ configurations_count }} Realm{{ realms_count|pluralize }}</li>
+</ol>
+
+<h2>{{ realms_count }} Realm{{ realms_count|pluralize }}</h2>
+
+<div class="dropdown">
+  <button class="btn btn-default dropdown-toggle" type="button" id="createRealm"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Create realm
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="createRealm">
+    {% for link in create_links %}
+    <li><a href="{{ link.url }}">{{ link.anchor_text }} realm</a></li>
+    {% endfor %}
+  </ul>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Backend</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for realm in object_list %}
+    <tr>
+      <td>
+        <a href="{{ realm.get_absolute_url }}">{{ realm }}</a>
+      </td>
+      <td>
+        {{ realm.backend }}
+      </td>
+      <td>
+        <a class="btn btn-default" href="{% url 'realms:update' realm.uuid %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+          Update
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
