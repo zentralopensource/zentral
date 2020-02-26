@@ -6,28 +6,11 @@ from realms.forms import RealmForm
 
 
 class SAMLRealmForm(RealmForm):
-    CLAIM_FIELD_NAMES = [
-        "{}_claim".format(prefix)
-        for prefix in ("username", "email", "first_name", "last_name")
-    ]
-
     metadata_file = forms.FileField()
-    username_claim = forms.CharField()
-    email_claim = forms.CharField()
-    first_name_claim = forms.CharField(required=False)
-    last_name_claim = forms.CharField(required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance:
-            self.fields["metadata_file"].required = False
-            config = self.instance.config
-            for field_name in self.CLAIM_FIELD_NAMES:
-                value = config.get(field_name)
-                if value:
-                    self.fields[field_name].initial = value
-        else:
-            self.fields["metadata_file"].required = True
+        self.fields["metadata_file"].required = self.instance is None
 
     def clean(self):
         super().clean()
@@ -79,8 +62,4 @@ class SAMLRealmForm(RealmForm):
             idp_metadata = self.instance.config.get("idp_metadata")
         if idp_metadata:
             config["idp_metadata"] = idp_metadata
-        for field_name in self.CLAIM_FIELD_NAMES:
-            value = self.cleaned_data.get(field_name)
-            if value:
-                config[field_name] = value
         return config

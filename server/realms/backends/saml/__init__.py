@@ -62,15 +62,10 @@ class SAMLRealmBackend(BaseBackend):
         return Saml2Client(config=self.get_saml2_config())
 
     def extra_attributes_for_display(self):
-        yield from [
+        return [
             ("Entity ID", self.entity_id()),
             ("Assertion Consumer Service URL", self.acs_url()),
         ]
-        config = self.instance.config
-        for field_name in self.get_form_class().CLAIM_FIELD_NAMES:
-            value = config.get(field_name)
-            if value:
-                yield (field_name.replace("_", " ").title(), value)
 
     def initialize_session(self, callback, **callback_kwargs):
         from realms.models import RealmAuthenticationSession
@@ -92,20 +87,23 @@ class SAMLRealmBackend(BaseBackend):
             name_id = session_info.pop('name_id').text
             session_info['name_id'] = name_id
 
+        # default realm user attributes for update or create
+        realm_user_defaults = {"claims": session_info}
+
         # try to get the configured claims
-        config = self.instance.config
-        extracted_claims = {}
         ava = session_info.get('ava')
         if ava:
-            for field_name in self.get_form_class().CLAIM_FIELD_NAMES:
-                attr = config.get(field_name)
-                val = ava.get(attr)
-                if val:
+            for user_claim, user_claim_source in self.instance.iter_user_claim_mappings():
+                value = ava.get(user_claim_source)
+                if value:
                     # TODO: only the first value at the moment
-                    extracted_claims[field_name.replace("_claim", "")] = val[0]
+                    value = value[0]
+                if not value:
+                    value = ""
+                realm_user_defaults[user_claim] = value
 
-        # the username from the extracted claims
-        username = extracted_claims.get("username")
+        # the username from the claim mappings
+        username = realm_user_defaults.pop("username", None)
 
         # alternatively, use name_id if possible
         if not username and name_id:
@@ -115,15 +113,11 @@ class SAMLRealmBackend(BaseBackend):
             logger.error("No username found in SAML session info")
             return None
         else:
-            claims = session_info
-            claims["_zentral"] = extracted_claims
             from realms.models import RealmUser
             realm_user, _ = RealmUser.objects.update_or_create(
                 realm=self.instance,
                 username=username,
-                defaults={
-                    "claims": claims,
-                }
+                defaults=realm_user_defaults
             )
             return realm_user
 

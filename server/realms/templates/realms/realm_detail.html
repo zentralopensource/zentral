@@ -26,6 +26,26 @@
         <td>Backend</td>
         <td>{{ object.backend }}</td>
       </tr>
+      <tr>
+        <td>Username claim</td>
+        <td>{{ object.username_claim|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Email claim</td>
+        <td>{{ object.email_claim|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>First name claim</td>
+        <td>{{ object.first_name_claim|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Last name claim</td>
+        <td>{{ object.last_name_claim|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Full name claim</td>
+        <td>{{ object.full_name_claim|default:"-" }}</td>
+      </tr>
       {% for name, value in object.backend_instance.extra_attributes_for_display %}
       <tr>
         <td>{{ name }}</td>

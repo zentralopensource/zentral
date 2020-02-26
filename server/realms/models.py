@@ -12,10 +12,19 @@ logger = logging.getLogger('zentral.realms.models')
 
 class Realm(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    backend = models.CharField(max_length=255, editable=False)
     name = models.CharField(max_length=255)
-    config = JSONField(default=dict, editable=False)
     enabled_for_login = models.BooleanField(default=False)
+
+    # backend + backend config
+    backend = models.CharField(max_length=255, editable=False)
+    config = JSONField(default=dict, editable=False)
+
+    # user claims mapping
+    username_claim = models.CharField(max_length=255)
+    email_claim = models.CharField(max_length=255, blank=True)
+    first_name_claim = models.CharField(max_length=255, blank=True)
+    last_name_claim = models.CharField(max_length=255, blank=True)
+    full_name_claim = models.CharField(max_length=255, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -32,11 +41,22 @@ class Realm(models.Model):
     def get_absolute_url(self):
         return reverse("realms:view", args=(self.uuid,))
 
+    def iter_user_claim_mappings(self):
+        for user_claim in ("username", "email", "first_name", "last_name", "full_name"):
+            yield user_claim, getattr(self, "{}_claim".format(user_claim))
+
 
 class RealmUser(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
-    username = models.CharField(max_length=255)
     claims = JSONField(default=dict)
+
+    # mapped claims
+    username = models.CharField(max_length=255)
+    email = models.EmailField(blank=True)
+    first_name = models.CharField(max_length=255, blank=True)
+    last_name = models.CharField(max_length=255, blank=True)
+    full_name = models.CharField(max_length=255, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -63,7 +83,10 @@ class RealmAuthenticationSession(models.Model):
         except Exception:
             logger.exception("Could not import module %s", module_name)
             return
-        return getattr(module, function_name, None)
+        callback = getattr(module, function_name, None)
+        if callback is None:
+            logger.exception("Could not find function %s in callback module %s", module_name, function_name)
+        return callback
 
     def finalize(self, request, realm_user):
         if self.user:
