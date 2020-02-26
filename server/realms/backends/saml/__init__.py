@@ -75,7 +75,6 @@ class SAMLRealmBackend(BaseBackend):
             callback_kwargs=callback_kwargs
         )
         ras.save()
-        ras.refresh_from_db()
         saml2_client = self.get_saml2_client()
         _, request_info = saml2_client.prepare_for_authenticate(relay_state=str(ras.pk))
         return dict(request_info["headers"])["Location"]

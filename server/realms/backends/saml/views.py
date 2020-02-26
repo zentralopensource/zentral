@@ -32,7 +32,7 @@ class AssertionConsumerServiceView(BaseSPView):
         if not relay_state:
             raise SuspiciousOperation("Missing relay state")
         try:
-            ras = RealmAuthenticationSession.objects.select_for_update().get(pk=relay_state)
+            ras = RealmAuthenticationSession.objects.select_for_update().get(realm=self.realm, pk=relay_state)
         except RealmAuthenticationSession.DoesNotExist:
             raise SuspiciousOperation("Unknown relay state")
 
