@@ -30,7 +30,10 @@ class AuthorizationCodeFlowRedirectView(View):
             raise SuspiciousOperation("Missing code")
 
         # exchange code for tokens, and build realm user with them
-        realm_user = backend_instance.update_or_create_realm_user(code)
+        code_verifier = None
+        if ras.backend_state:
+            code_verifier = ras.backend_state.get("code_verifier")
+        realm_user = backend_instance.update_or_create_realm_user(code, code_verifier)
 
         # finalize the authentication session
         redirect_url = None

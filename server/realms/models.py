@@ -70,6 +70,8 @@ class RealmAuthenticationSession(models.Model):
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
     user = models.ForeignKey(RealmUser, on_delete=models.PROTECT, null=True)
 
+    backend_state = JSONField(null=True)
+
     callback = models.CharField(max_length=255)
     callback_kwargs = JSONField(default=dict)
 

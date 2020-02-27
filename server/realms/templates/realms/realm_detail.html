@@ -27,6 +27,10 @@
         <td>{{ object.backend }}</td>
       </tr>
       <tr>
+        <td>Enabled for login</td>
+        <td>{{ object.enabled_for_login|yesno }}</td>
+      </tr>
+      <tr>
         <td>Username claim</td>
         <td>{{ object.username_claim|default:"-" }}</td>
       </tr>

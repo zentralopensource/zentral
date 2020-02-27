@@ -33,6 +33,7 @@ setuptools
 sqlparse
 tqdm
 XlsxWriter
+PyJWT
 
 # dependencies
 
