@@ -18,7 +18,10 @@ RUN apt-get update && \
 # extra dependencies for python crypto / u2f
             libssl-dev \
             libffi-dev \
-            python3-dev && \
+            python3-dev \
+# dep for python-ldap
+            libldap2-dev \
+            libsasl2-dev && \
 # clean cache
     rm -rf /var/lib/apt/lists/*
 

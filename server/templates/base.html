@@ -72,6 +72,7 @@
             </li>
           </ul>
           {% else %}
+          {% if not hide_default_sign_in %}
           <ul class="nav navbar-nav navbar-right">
             {% if request.path == '/accounts/login/' %}
             <li class="active"><a href="#">Sign in</a></li>
@@ -79,6 +80,7 @@
             <li><a href="{% url 'login' %}">Sign in</a></li>
             {% endif %}
           </ul>
+          {% endif %}
           {% endif %}
         </div><!-- /.navbar-collapse -->
       </div><!-- /.container -->

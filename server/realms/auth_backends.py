@@ -14,8 +14,7 @@ class RealmBackend(ModelBackend):
         username = realm_user.username
         defaults = {"is_remote": True}
         for attr in ("email", "first_name", "last_name"):
-            defaults[attr] = realm_user.claims.get("_zentral", {}).get(attr) or ""
-
+            defaults[attr] = getattr(realm_user, attr, None) or ""
         try:
             user, created = User.objects.update_or_create(username=username, defaults=defaults)
         except Exception:
