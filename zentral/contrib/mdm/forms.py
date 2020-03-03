@@ -13,7 +13,7 @@ from .pkcs12 import load_push_certificate
 class OTAEnrollmentForm(forms.ModelForm):
     class Meta:
         model = OTAEnrollment
-        fields = ("name",)
+        fields = ("name", "realm")
 
 
 class PushCertificateForm(forms.ModelForm):

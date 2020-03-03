@@ -52,22 +52,47 @@ class OTAEnrollView(PostEventMixin, View):
             challenge = payload.get("CHALLENGE")
             if not challenge:
                 self.abort("missing challenge", phase=phase)
-            try:
-                es_request = verify_enrollment_secret(
-                    "ota_enrollment",
-                    challenge,
-                    self.user_agent, self.ip,
-                    self.serial_number, self.udid
-                )
-            except EnrollmentSecretVerificationFailed as e:
-                self.abort("secret verification failed: '{}'".format(e.err_msg), phase=phase)
 
-            # Start an OTA enrollment session
-            ota_enrollment_session = OTAEnrollmentSession.objects.create_from_ota_enrollment(
-                es_request.enrollment_secret.ota_enrollment,
-                self.serial_number, self.udid,
-                payload
-            )
+            # Pre-authenticated session ?
+            session_enrollment = kwargs.pop("session")
+            if session_enrollment:
+                # running off a realm user authenticated existing ota enrollment session
+                try:
+                    es_request = verify_enrollment_secret(
+                        "ota_enrollment_session",
+                        challenge,
+                        self.user_agent, self.ip,
+                        self.serial_number, self.udid
+                    )
+                except EnrollmentSecretVerificationFailed as e:
+                    self.abort("secret verification failed: '{}'".format(e.err_msg), phase=phase)
+
+                # update the OTA enrollment session
+                ota_enrollment_session = es_request.enrollment_secret.ota_enrollment_session
+                ota_enrollment_session.set_phase2_status(es_request, self.serial_number, self.udid, payload)
+
+            else:
+                # running off a simple ota enrollment
+                try:
+                    es_request = verify_enrollment_secret(
+                        "ota_enrollment",
+                        challenge,
+                        self.user_agent, self.ip,
+                        self.serial_number, self.udid
+                    )
+                except EnrollmentSecretVerificationFailed as e:
+                    self.abort("secret verification failed: '{}'".format(e.err_msg), phase=phase)
+
+                ota_enrollment = es_request.enrollment_secret.ota_enrollment
+                if ota_enrollment.realm:
+                    self.abort("cannot use ota enrollment secret on ota enrollment with realm", phase=phase)
+
+                # Start an OTA enrollment session directly in phase 2
+                ota_enrollment_session = OTAEnrollmentSession.objects.create_from_machine_info(
+                    ota_enrollment,
+                    self.serial_number, self.udid,
+                    payload
+                )
 
             configuration_profile = build_ota_scep_configuration_profile(ota_enrollment_session)
             configuration_profile_filename = "zentral_ota_scep"

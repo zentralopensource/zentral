@@ -6,6 +6,7 @@ from zentral.conf import settings
 from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
 from zentral.utils.payloads import sign_payload_openssl
+from .models import OTAEnrollment, OTAEnrollmentSession
 
 
 logger = logging.getLogger("zentral.contrib.mdm.payloads")
@@ -76,23 +77,28 @@ def build_scep_payload(enrollment_session):
                           "Challenge": enrollment_session.get_challenge(),
                           "Keysize": 2048,
                           "KeyType": "RSA",
-                          "KeyUsage": 5,  # 1 is signing, 4 is encryption, 5 is both signing and encryption
+                          "Key Usage": 5,  # 1 is signing, 4 is encryption, 5 is both signing and encryption
                           },
                          encapsulate_content=True)
 
 
-def build_profile_service_configuration_profile(ota_enrollment):
+def build_profile_service_configuration_profile(ota_obj):
+    if isinstance(ota_obj, OTAEnrollmentSession):
+        url_path = reverse("mdm:ota_session_enroll")
+    elif isinstance(ota_obj, OTAEnrollment):
+        url_path = reverse("mdm:ota_enroll")
+    else:
+        raise ValueError("ota_obj not an OTAEnrollment nor an OTAEnrollmentSession")
     return build_profile("Zentral - OTA MDM Enrollment",
                          "profile-service",
-                         {"URL": "{}{}".format(settings["api"]["tls_hostname"],
-                                               reverse("mdm:ota_enroll")),
+                         {"URL": "{}{}".format(settings["api"]["tls_hostname"], url_path),
                           "DeviceAttributes": ["UDID",
                                                "VERSION",
                                                "PRODUCT",
                                                "SERIAL",
                                                "MEID",
                                                "IMEI"],
-                          "Challenge": ota_enrollment.enrollment_secret.secret},
+                          "Challenge": ota_obj.enrollment_secret.secret},
                          payload_type="Profile Service",
                          payload_description="Install this profile to enroll your device with Zentral")
 

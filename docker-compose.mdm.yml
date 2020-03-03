@@ -28,6 +28,13 @@ services:
   workers:
     environment:
       ZENTRAL_CONF_DIR: /zentral/conf/mdm/zentral/
+    volumes:
+      - scep_ca:/scep_CA
+  celery:
+    environment:
+      ZENTRAL_CONF_DIR: /zentral/conf/mdm/zentral/
+    volumes:
+      - scep_ca:/scep_CA
 
 volumes:
   scep_ca:

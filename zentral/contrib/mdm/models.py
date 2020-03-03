@@ -12,6 +12,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
+from realms.models import Realm, RealmUser
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaBusinessUnit, MetaMachine
 from zentral.utils.osx_package import get_standalone_package_builders
 from .exceptions import EnrollmentSessionStatusError
@@ -194,6 +196,9 @@ class OTAEnrollment(models.Model):
     name = models.CharField(max_length=256, unique=True)
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="ota_enrollment")
+    # linked to an auth realm
+    # if linked, a user has to authenticate to get the mdm payload.
+    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -215,6 +220,11 @@ class OTAEnrollment(models.Model):
     def get_absolute_url(self):
         return reverse("mdm:ota_enrollment", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
 
+    def get_enroll_full_url(self):
+        if self.realm:
+            path = reverse("mdm:ota_enrollment_enroll", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
+            return "{}{}".format(settings["api"]["tls_hostname"], path)
+
     def revoke(self):
         if not self.enrollment_secret.revoked_at:
             # TODO events
@@ -224,7 +234,24 @@ class OTAEnrollment(models.Model):
 
 
 class OTAEnrollmentSessionManager(models.Manager):
-    def create_from_ota_enrollment(self, ota_enrollment, serial_number, udid, payload):
+    def create_from_realm_user(self, ota_enrollment, realm_user):
+        enrollment_secret = ota_enrollment.enrollment_secret
+        tags = list(enrollment_secret.tags.all())
+        new_es = EnrollmentSecret(
+            meta_business_unit=enrollment_secret.meta_business_unit,
+            quota=3,  # Verified three times: config profile download + 2 different SCEP payloads
+            expired_at=enrollment_secret.expired_at
+        )
+        new_es.save(secret_length=56)  # CN max 64 - $ separator - prefix, ota or mdm$ota
+        new_es.tags.set(tags)
+        enrollment_session = self.model(status=self.model.PHASE_1,
+                                        ota_enrollment=ota_enrollment,
+                                        realm_user=realm_user,
+                                        enrollment_secret=new_es)
+        enrollment_session.save()
+        return enrollment_session
+
+    def create_from_machine_info(self, ota_enrollment, serial_number, udid, payload):
         # Build a new secret that can be used only by one specific machine
         enrollment_secret = ota_enrollment.enrollment_secret
         tags = list(enrollment_secret.tags.all())
@@ -245,6 +272,7 @@ class OTAEnrollmentSessionManager(models.Manager):
 
 
 class OTAEnrollmentSession(EnrollmentSession):
+    PHASE_1 = "PHASE_1"
     PHASE_2 = "PHASE_2"
     PHASE_2_SCEP_VERIFIED = "PHASE_2_SCEP_VERIFIED"
     PHASE_3 = "PHASE_3"
@@ -252,6 +280,7 @@ class OTAEnrollmentSession(EnrollmentSession):
     AUTHENTICATED = "AUTHENTICATED"
     COMPLETED = "COMPLETED"
     STATUS_CHOICES = (
+        (PHASE_1, _("Phase 1")),
         (PHASE_2, _("Phase 2")),
         (PHASE_2_SCEP_VERIFIED, _("Phase 2 SCEP verified")),
         (PHASE_3, _("Phase 3")),
@@ -261,8 +290,11 @@ class OTAEnrollmentSession(EnrollmentSession):
     )
     status = models.CharField(max_length=64, choices=STATUS_CHOICES)
     ota_enrollment = models.ForeignKey(OTAEnrollment, on_delete=models.CASCADE)
+    realm_user = models.ForeignKey(RealmUser, on_delete=models.PROTECT, blank=True, null=True)
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="ota_enrollment_session")
+    phase2_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT,
+                                       null=True, related_name="+")
     phase2_scep_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT,
                                             null=True, related_name="+")
     phase3_scep_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT,
@@ -282,6 +314,24 @@ class OTAEnrollmentSession(EnrollmentSession):
         return super().serialize_for_event("ota", self.ota_enrollment.serialize_for_event())
 
     # status update methods
+
+    def set_phase2_status(self, es_request, serial_number, udid, payload):
+        test = (serial_number
+                and udid
+                and payload
+                and self.realm_user
+                and self.status == self.PHASE_1
+                and not self.phase2_request
+                and not self.phase2_scep_request
+                and not self.phase3_scep_request
+                and not self.enrolled_device)
+        self._set_next_status(self.PHASE_2, test, phase2_request=es_request)
+        # restrict enrollment secret to the current machine
+        self.enrollment_secret.serial_numbers = [serial_number]
+        self.enrollment_secret.udids = [udid]
+        self.enrollment_secret.save()
+        # save the current machine info
+        self.update_with_payload(payload)
 
     def set_phase2_scep_verified_status(self, es_request):
         test = (es_request

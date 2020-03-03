@@ -14,11 +14,13 @@
 
 {% with object.enrollment_secret as secret %}
 <p>
+  {% if not object.realm %}
   <a class="btn btn-default"
      href="{% url 'mdm:download_profile_service_payload' meta_business_unit.id object.id %}">
     <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
     Profile service payload
   </a>
+  {% endif %}
   {% if secret.is_valid|first %}
   <a class="btn btn-danger"
      href="{% url 'mdm:revoke_ota_enrollment' meta_business_unit.id object.id %}">
@@ -33,6 +35,16 @@
     <dl class="dl-horizontal">
       <dt>Name</dt>
       <dd>{{ object.name }}</dd>
+      <dt>Realm</dt>
+      <dd>{% if object.realm %}<a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a>{% else %}-{% endif %}</dd>
+      <dt>Enrollment URL</dt>
+      <dd>
+        {% if enroll_url %}
+        <a href="{{ enroll_url }}">{{ enroll_url }}</a>
+        {% else %}
+        -
+        {% endif %}
+      </dd>
       <dt>Business unit</dt>
       <dd><a href="{% url 'mdm:mbu' secret.meta_business_unit.id %}">{{ secret.meta_business_unit }}</a></dd>
       <dt>Enrollment tags</dt>
@@ -73,6 +85,9 @@
 <table class="table">
   <thead>
     <th>Serial number</th>
+    {% if object.realm %}
+    <th>Realm user</th>
+    {% endif %}
     <th>Status</th>
     <th>Created at</th>
     <th>Updated at</th>
@@ -81,6 +96,9 @@
     {% for s in ota_enrollment_sessions %}
     <tr>
       <td><a href="{% url 'mdm:device' s.get_urlsafe_serial_number %}">{{ s.get_serial_number }}</a></td>
+      {% if object.realm %}
+      <td>{% if s.realm_user %}{{ s.realm_user }}{% else %}-{% endif %}</td>
+      {% endif %}
       <td>{{ s.get_status_display }}</td>
       <td>{{ s.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>{{ s.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>

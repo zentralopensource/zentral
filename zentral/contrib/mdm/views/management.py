@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, TemplateView, UpdateView, View
+from realms.models import RealmUser
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
@@ -271,7 +272,9 @@ class OTAEnrollmentView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["mdm"] = True
-        ctx["meta_business_unit"] = ctx["object"].enrollment_secret.meta_business_unit
+        ota_enrollment = ctx["object"]
+        ctx["meta_business_unit"] = ota_enrollment.enrollment_secret.meta_business_unit
+        ctx["enroll_url"] = ota_enrollment.get_enroll_full_url()
         # TODO: pagination
         ctx["ota_enrollment_sessions"] = (ctx["object"].otaenrollmentsession_set.all()
                                                        .select_related("enrollment_secret")
@@ -285,7 +288,8 @@ class DownloadProfileServicePayloadView(LoginRequiredMixin, View):
         ota_enrollment = get_object_or_404(
             OTAEnrollment,
             enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
-            pk=kwargs["pk"]
+            pk=kwargs["pk"],
+            realm__isnull=True
         )
         if not ota_enrollment.enrollment_secret.is_valid():
             # should not happen
@@ -317,6 +321,49 @@ class RevokeOTAEnrollmentView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         self.ota_enrollment.revoke()
         return HttpResponseRedirect(self.ota_enrollment.get_absolute_url())
+
+
+def ota_enroll_callback(request, realm_user, ota_enrollment_pk):
+    """
+    Realm authorization session callback used to start authenticated OTAEnrollmentSession
+    """
+    ota_enrollment = OTAEnrollment.objects.get(pk=ota_enrollment_pk, realm__isnull=False)
+    request.session["_ota_{}_realm_user_pk".format(ota_enrollment.pk)] = str(realm_user.pk)
+    return reverse("mdm:ota_enrollment_enroll",
+                   args=(ota_enrollment.enrollment_secret.meta_business_unit.pk,
+                         ota_enrollment.pk))
+
+
+class OTAEnrollmentEnrollView(View):
+    def get(self, request, *args, **kwargs):
+        ota_enrollment = get_object_or_404(
+            OTAEnrollment,
+            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
+            pk=kwargs["pk"],
+            realm__isnull=False
+        )
+        if not ota_enrollment.enrollment_secret.is_valid():
+            # should not happen
+            raise SuspiciousOperation
+        # check the auth
+        try:
+            realm_user_pk = self.request.session.pop("_ota_{}_realm_user_pk".format(ota_enrollment.pk))
+            realm_user = RealmUser.objects.get(realm=ota_enrollment.realm,
+                                               pk=realm_user_pk)
+        except (KeyError, RealmUser.DoesNotExist):
+            # start realm auth session, do redirect
+            callback = "zentral.contrib.mdm.views.management.ota_enroll_callback"
+            callback_kwargs = {"ota_enrollment_pk": ota_enrollment.pk}
+            return HttpResponseRedirect(
+                ota_enrollment.realm.backend_instance.initialize_session(callback, **callback_kwargs)
+            )
+        else:
+            ota_enrollment_session = OTAEnrollmentSession.objects.create_from_realm_user(ota_enrollment, realm_user)
+            # start OTAEnrollmentSession, build config profile, return config profile
+            return build_configuration_profile_response(
+                build_profile_service_configuration_profile(ota_enrollment_session),
+                "zentral_profile_service"
+            )
 
 
 # kernel extension policies

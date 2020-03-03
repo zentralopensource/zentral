@@ -118,6 +118,9 @@ urlpatterns = [
     url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/revoke/$',
         views.RevokeOTAEnrollmentView.as_view(),
         name='revoke_ota_enrollment'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/ota_enrollments/(?P<pk>\d+)/enroll/$',
+        views.OTAEnrollmentEnrollView.as_view(),
+        name='ota_enrollment_enroll'),
 
     # business_units / management views / kernel extension policies
     url(r'^business_units/(?P<pk>\d+)/kernel_extensions_policies/create/$',
@@ -169,7 +172,10 @@ urlpatterns = [
         name='verify_scep_csr'),
 
     # OTA protocol / ota view
-    url(r'^ota_enroll/$', csrf_exempt(views.OTAEnrollView.as_view()), name='ota_enroll'),
+    url(r'^ota_enroll/$', csrf_exempt(views.OTAEnrollView.as_view()),
+        kwargs={"session": False}, name='ota_enroll'),
+    url(r'^ota_session_enroll/$', csrf_exempt(views.OTAEnrollView.as_view()),
+        kwargs={"session": True}, name='ota_session_enroll'),
 
     # DEP protocol / dep view
     url(r'^dep_enroll/(?P<dep_profile_secret>\S+)/$', csrf_exempt(views.DEPEnrollView.as_view()), name='dep_enroll'),

@@ -64,6 +64,9 @@ class RealmUser(models.Model):
     class Meta:
         unique_together = (("realm", "username"),)
 
+    def __str__(self):
+        return self.username
+
 
 class RealmAuthenticationSession(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
