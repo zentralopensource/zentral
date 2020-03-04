@@ -165,7 +165,7 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
                 dep_device = DEPDevice.objects.get(serial_number=serial_number)
             except DEPDevice.DoesNotExist:
                 dep_device = None
-            if dep_device and dep_device.last_op_date and dep_device.last_op_date >= op_date:
+            if dep_device and dep_device.last_op_date and dep_device.last_op_date > op_date:
                 # already applied a newer operation. skip stalled one.
                 continue
             else:
