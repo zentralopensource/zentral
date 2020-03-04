@@ -76,10 +76,19 @@ def decrypt_dep_token(dep_token, payload):
 
 def serialize_dep_profile(dep_profile):
     payload = {"profile_name": dep_profile.name,
-               "url": "{}{}".format(settings["api"]["tls_hostname"],
-                                    reverse("mdm:dep_enroll", args=(dep_profile.enrollment_secret.secret,))),
+               "url": "{}{}".format(
+                   settings["api"]["tls_hostname"],
+                   reverse("mdm:dep_enroll", args=(dep_profile.enrollment_secret.secret,))
+               ),
                "devices": [dep_device.serial_number
                            for dep_device in dep_profile.depdevice_set.all()]}
+
+    # do authentication in webview if a realm is present
+    if dep_profile.realm:
+        payload["configuration_web_url"] = "{}{}".format(
+            settings["api"]["tls_hostname"],
+            reverse("mdm:dep_web_enroll", args=(dep_profile.enrollment_secret.secret,))
+        )
 
     # standard attibutes
     for attr in ("allow_pairing",

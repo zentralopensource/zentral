@@ -67,8 +67,12 @@ class OTAEnrollView(PostEventMixin, View):
                 except EnrollmentSecretVerificationFailed as e:
                     self.abort("secret verification failed: '{}'".format(e.err_msg), phase=phase)
 
-                # update the OTA enrollment session
                 ota_enrollment_session = es_request.enrollment_secret.ota_enrollment_session
+
+                # for PostEventMixin
+                self.realm_user = ota_enrollment_session.realm_user
+
+                # update the OTA enrollment session
                 ota_enrollment_session.set_phase2_status(es_request, self.serial_number, self.udid, payload)
 
             else:
@@ -115,6 +119,9 @@ class OTAEnrollView(PostEventMixin, View):
                 )
             except OTAEnrollmentSession.DoesNotExist:
                 self.abort("could not find ota enrollment session from payload signing certificate", phase=phase)
+
+            # for PostEventMixin
+            self.realm_user = ota_enrollment_session.realm_user
 
             # verify and update ota enrollment session status
             try:

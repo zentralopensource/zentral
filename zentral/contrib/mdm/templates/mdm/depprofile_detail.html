@@ -21,6 +21,12 @@
   </a>
 </p>
 
+{% if object.realm %}
+<h3>Realm</h3>
+
+<p><a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a></p>
+{% endif %}
+
 <h3>DEP virtual server</h3>
 
 {% with object.virtual_server as virtual_server %}

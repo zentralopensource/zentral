@@ -90,6 +90,7 @@
 <table class="table">
   <thead>
     <th class="col-md-6">profile</th>
+    <th class="col-md-6">realm user</th>
     <th class="col-md-2">status</th>
     <th class="col-md-2">created at</th>
     <th class="col-md-2">updated at</th>
@@ -98,6 +99,7 @@
     {% for dep_enrollment_session in dep_enrollment_sessions %}
     <tr>
       <td><a href="{{ dep_enrollment_session.dep_profile.get_absolute_url }}">{{ dep_enrollment_session.dep_profile }}</a></td>
+      <td>{% if dep_enrollment_session.realm_user %}{{ dep_enrollment_session.realm_user }}{% else %}-{% endif %}</td>
       <td class="{% if dep_enrollment_session.is_completed %}bg-success{% else %}bg-warning{% endif %}">
         {{ dep_enrollment_session.get_status_display }}
       </td>

@@ -116,6 +116,8 @@ class EnrollmentSession(models.Model):
     meid = models.CharField(max_length=18, null=True)
     language = models.CharField(max_length=64, null=True)
 
+    realm_user = models.ForeignKey(RealmUser, on_delete=models.PROTECT, blank=True, null=True)
+
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -290,7 +292,6 @@ class OTAEnrollmentSession(EnrollmentSession):
     )
     status = models.CharField(max_length=64, choices=STATUS_CHOICES)
     ota_enrollment = models.ForeignKey(OTAEnrollment, on_delete=models.CASCADE)
-    realm_user = models.ForeignKey(RealmUser, on_delete=models.PROTECT, blank=True, null=True)
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="ota_enrollment_session")
     phase2_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT,
@@ -499,6 +500,10 @@ class DEPProfile(models.Model):
     virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE)
     uuid = models.UUIDField(unique=True, editable=False)
 
+    # linked to an auth realm
+    # if linked, a user has to authenticate to get the mdm payload.
+    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
+
     # standard DEP profile configuration
     name = models.CharField(max_length=125, unique=True)  # see CONFIG_NAME_INVALID error
     allow_pairing = models.BooleanField(default=False)
@@ -617,7 +622,7 @@ class DEPDevice(models.Model):
 
 
 class DEPEnrollmentSessionManager(models.Manager):
-    def create_from_dep_profile(self, dep_profile, serial_number, udid, payload):
+    def create_from_dep_profile(self, dep_profile, serial_number, udid, payload, commit=False):
         # Build a new secret, only for one enrollment, only for this machine
         # scep server.
 
@@ -644,7 +649,7 @@ class DEPEnrollmentSessionManager(models.Manager):
         enrollment_session = self.model(status=self.model.STARTED,
                                         dep_profile=dep_profile,
                                         enrollment_secret=new_es)
-        enrollment_session.update_with_payload(payload)
+        enrollment_session.update_with_payload(payload, commit=commit)
         return enrollment_session
 
 

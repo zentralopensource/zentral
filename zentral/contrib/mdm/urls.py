@@ -178,7 +178,12 @@ urlpatterns = [
         kwargs={"session": True}, name='ota_session_enroll'),
 
     # DEP protocol / dep view
-    url(r'^dep_enroll/(?P<dep_profile_secret>\S+)/$', csrf_exempt(views.DEPEnrollView.as_view()), name='dep_enroll'),
+    url(r'^dep_enroll/(?P<dep_profile_secret>\S+)/$',
+        csrf_exempt(views.DEPEnrollView.as_view()), name='dep_enroll'),
+    url(r'^dep_web_enroll/(?P<dep_profile_secret>\S+)/$',
+        views.DEPWebEnrollView.as_view(), name='dep_web_enroll'),
+    url(r'^dep_enrollment_session/(?P<dep_enrollment_session_secret>\S+)/$',
+        views.DEPEnrollmentSessionView.as_view(), name='dep_enrollment_session'),
 
     # MDM protocol / mdm views
     url(r'^checkin/$', csrf_exempt(views.CheckinView.as_view()), name='checkin'),

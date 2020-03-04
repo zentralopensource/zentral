@@ -28,10 +28,27 @@ def decrypt_cms_payload(payload, private_key_bytes):
     return stdout
 
 
+def get_openssl_version():
+    cp = subprocess.run(["/usr/bin/openssl", "version"], capture_output=True)
+    major, minor, patch = cp.stdout.decode("utf-8").split()[1].split(".")
+    major = int(major)
+    minor = int(minor)
+    try:
+        patch = int(patch)
+    except ValueError:
+        patch_number, patch_letter = patch[:-1], patch[-1]
+        return (major, minor, int(patch_number), patch_letter)
+    else:
+        return (major, minor, patch)
+
+
 def verify_ca_issuer_openssl(ca_fullchain, certificate_bytes, strict=True):
-    p = subprocess.Popen(["/usr/bin/openssl", "verify", "-CAfile", ca_fullchain],
-                         stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE)
+    args = ["/usr/bin/openssl", "verify"]
+    openssl_version = get_openssl_version()
+    if not strict and openssl_version >= (1, 1):
+        args.append("-no_check_time")
+    args.extend(["-CAfile", ca_fullchain])
+    p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     certificate = crypto.load_certificate(crypto.FILETYPE_ASN1, certificate_bytes)
     stdout, stderr = p.communicate(crypto.dump_certificate(crypto.FILETYPE_PEM, certificate))
     for line in stdout.splitlines():
