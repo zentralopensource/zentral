@@ -385,7 +385,9 @@ class MachineView(LoginRequiredMixin, TemplateView):
             [(ms.source.get_display_name(), ms) for ms in machine.snapshots],
             key=lambda t: t[0].lower()
         )
-        context['max_source_tab_with'] = 100 // len(context['machine_snapshots'])
+        machine_snapshots_count = len(context['machine_snapshots'])
+        if machine_snapshots_count:
+            context['max_source_tab_with'] = 100 // machine_snapshots_count
         context['serial_number'] = machine.serial_number
         prepared_heartbeats = []
         last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(machine.serial_number)
