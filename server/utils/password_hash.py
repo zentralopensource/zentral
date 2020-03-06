@@ -19,7 +19,11 @@ def build_password_hash_dict(password):
     password = password.encode("utf-8")
     salt = bytearray(random.getrandbits(8) for i in range(32))
     iterations = 39999
-    dk = hashlib.pbkdf2_hmac("sha512", password, salt, iterations)
+    # see https://github.com/micromdm/micromdm/blob/master/pkg/crypto/password/password.go macKeyLen !!!
+    # Danke github.com/groob !!!
+    dklen = 128
+
+    dk = hashlib.pbkdf2_hmac("sha512", password, salt, iterations, dklen=dklen)
     return {
         "SALTED-SHA512-PBKDF2": {
             "entropy": base64.b64encode(dk).decode("ascii").strip(),
