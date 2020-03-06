@@ -3,6 +3,7 @@ import logging
 from django.urls import reverse
 import ldap
 from realms.backends.base import BaseBackend
+from utils.password_hash import build_password_hash_dict
 
 
 logger = logging.getLogger("zentral.realms.backends.ldap")
@@ -32,6 +33,7 @@ def cleanup_user_attributes(d):
 
 class LDAPRealmBackend(BaseBackend):
     name = "LDAP"
+    can_get_password = True
 
     def __init__(self, instance):
         super().__init__(instance)
@@ -71,16 +73,13 @@ class LDAPRealmBackend(BaseBackend):
         conn.simple_bind_s(self.instance.config.get("bind_dn"), self.instance.config.get("bind_password"))
         user_dn = self._get_user_dn(username)
         results = conn.search_s(user_dn, ldap.SCOPE_BASE, attrlist=["*"])
-        import pprint
-        pprint.pprint(results[0][1])
-        d2 = cleanup_value(results[0][1])
-        pprint.pprint(d2)
-        return d2
+        return cleanup_value(results[0][1])
 
-    def initialize_session(self, callback, **callback_kwargs):
+    def initialize_session(self, callback, save_password_hash=False, **callback_kwargs):
         from realms.models import RealmAuthenticationSession
         ras = RealmAuthenticationSession(
             realm=self.instance,
+            save_password_hash=save_password_hash,
             callback=callback,
             callback_kwargs=callback_kwargs
         )
@@ -88,11 +87,17 @@ class LDAPRealmBackend(BaseBackend):
 
         return reverse("realms:ldap_login", args=(ras.realm.pk, ras.pk))
 
-    def update_or_create_realm_user(self, username):
+    def update_or_create_realm_user(self, username, password):
         user_info = self.get_user_info(username)
 
         # default realm user attributes for update or create
         realm_user_defaults = {"claims": user_info}
+
+        # password
+        if password:
+            realm_user_defaults["password_hash"] = build_password_hash_dict(password)
+        else:
+            realm_user_defaults["password_hash"] = {}
 
         for user_claim, user_claim_source in self.instance.iter_user_claim_mappings():
             value = user_info.get(user_claim_source)

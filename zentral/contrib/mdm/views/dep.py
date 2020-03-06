@@ -123,13 +123,17 @@ class DEPWebEnrollView(DEPEnrollMixin, View):
 
         # start realm auth session, do redirect
         callback = "zentral.contrib.mdm.views.dep.dep_web_enroll_callback"
-        callback_kwargs = {"dep_profile_pk": dep_profile.pk,
-                           "serial_number": self.serial_number,
-                           "udid": self.udid,
-                           "payload": payload}
+        kwargs = {"dep_profile_pk": dep_profile.pk,
+                  "serial_number": self.serial_number,
+                  "udid": self.udid,
+                  "payload": payload}
+        if dep_profile.use_realm_user and \
+           dep_profile.realm_user_is_admin and \
+           dep_profile.realm.backend_instance.can_get_password:
+            kwargs["save_password_hash"] = True
 
         return HttpResponseRedirect(
-            dep_profile.realm.backend_instance.initialize_session(callback, **callback_kwargs)
+            dep_profile.realm.backend_instance.initialize_session(callback, **kwargs)
         )
 
 

@@ -1,3 +1,4 @@
+from datetime import timedelta
 import copy
 import logging
 import plistlib
@@ -10,10 +11,13 @@ from django.utils import timezone
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.contrib.mdm.commands import (build_install_application_command_response,
-                                          build_install_profile_command_response,
-                                          build_remove_profile_command_response)
-from zentral.contrib.mdm.models import (DeviceArtifactCommand, InstalledDeviceArtifact,
+from zentral.contrib.mdm.commands import (build_device_command_response,
+                                          build_device_configured_command,
+                                          build_device_information_command,
+                                          build_install_application_command,
+                                          build_install_profile_command,
+                                          build_remove_profile_command)
+from zentral.contrib.mdm.models import (DeviceCommand, DeviceArtifactCommand, InstalledDeviceArtifact,
                                         KernelExtensionPolicy, MDMEnrollmentPackage, ConfigurationProfile)
 
 
@@ -88,30 +92,18 @@ def tree_from_payload(udid, serial_number, meta_business_unit, payload):
 # next command
 
 
-def get_configured_device_artifact_dict(meta_business_unit, serial_number):
+def get_configured_device_artifact_dict(meta_business_unit, enrolled_device):
     artifact_version_dict = {}
 
-    # MBU KernelExtensionPolicy
-    try:
-        artifact = KernelExtensionPolicy.objects.get(meta_business_unit=meta_business_unit,
-                                                     trashed_at__isnull=True)
-    except KernelExtensionPolicy.DoesNotExist:
-        pass
-    else:
-        kext_policy_ct = ContentType.objects.get_for_model(artifact)
-        artifact_version_dict.setdefault(kext_policy_ct, {})[artifact.pk] = artifact.version
+    artifact_search_dict = {"meta_business_unit": meta_business_unit,
+                            "trashed_at__isnull": True}
+    if enrolled_device.awaiting_configuration:
+        artifact_search_dict["install_before_setup_assistant"] = True
 
-    # MBU MDMEnrollmentPackage
-    mdm_enrollment_package_ct = ContentType.objects.get_for_model(MDMEnrollmentPackage)
-    for artifact in MDMEnrollmentPackage.objects.filter(meta_business_unit=meta_business_unit,
-                                                        trashed_at__isnull=True):
-        artifact_version_dict.setdefault(mdm_enrollment_package_ct, {})[artifact.pk] = artifact.version
-
-    # MBU ConfigurationProfile
-    configuration_profile_ct = ContentType.objects.get_for_model(ConfigurationProfile)
-    for artifact in ConfigurationProfile.objects.filter(meta_business_unit=meta_business_unit,
-                                                        trashed_at__isnull=True):
-        artifact_version_dict.setdefault(configuration_profile_ct, {})[artifact.pk] = artifact.version
+    for artifact_model in (KernelExtensionPolicy, MDMEnrollmentPackage, ConfigurationProfile):
+        artifact_ct = ContentType.objects.get_for_model(artifact_model)
+        for artifact in artifact_model.objects.filter(**artifact_search_dict):
+            artifact_version_dict.setdefault(artifact_ct, {})[artifact.pk] = artifact.version
 
     return artifact_version_dict
 
@@ -129,8 +121,7 @@ def get_installed_device_artifact_dict(enrolled_device):
 
 def iter_next_device_artifact_actions(meta_business_unit, enrolled_device):
     """Compute the actions necessary to achieve the configured device state"""
-    configured_device_artifact_dict = get_configured_device_artifact_dict(meta_business_unit,
-                                                                          enrolled_device.serial_number)
+    configured_device_artifact_dict = get_configured_device_artifact_dict(meta_business_unit, enrolled_device)
     installed_device_artifact_dict = get_installed_device_artifact_dict(enrolled_device)
 
     # find all not installed or stalled artifacts
@@ -172,34 +163,66 @@ def get_next_device_artifact_command_response(meta_business_unit, enrolled_devic
                                                 status_code__in=("Error", "CommandFormatError")).count():
             # skip this one
             continue
-        # create the command
-        device_artifact_command_d["command_time"] = timezone.now()
-        device_artifact_command = DeviceArtifactCommand.objects.create(**device_artifact_command_d)
-        command_uuid = device_artifact_command.command_uuid
-        # return the adequate response
+        # build the device command
+        device_command = None
         if artifact.artifact_type == "ConfigurationProfile":
             if action == DeviceArtifactCommand.ACTION_INSTALL:
-                return build_install_profile_command_response(artifact, command_uuid)
+                device_command = build_install_profile_command(enrolled_device, artifact)
             elif action == DeviceArtifactCommand.ACTION_REMOVE:
-                return build_remove_profile_command_response(artifact, command_uuid)
+                device_command = build_remove_profile_command(enrolled_device, artifact)
         elif artifact.artifact_type == "Application":
             if action == DeviceArtifactCommand.ACTION_INSTALL:
-                return build_install_application_command_response(command_uuid)
-        raise NotImplementedError("Missing command {} {}".format(artifact.artifact_type, action))
+                device_command = build_install_application_command(enrolled_device)
+        if device_command is None:
+            raise NotImplementedError("Missing command {} {}".format(artifact.artifact_type, action))
+        else:
+            # build the device artifact command linked to the command
+            device_artifact_command_d["command"] = device_command
+            DeviceArtifactCommand.objects.create(**device_artifact_command_d)
+            # return the command response
+            return build_device_command_response(device_command)
+
+
+def get_next_queued_device_command_response(enrolled_device):
+    for device_command in (DeviceCommand.objects.filter(enrolled_device=enrolled_device,
+                                                        time__isnull=True)  # queued
+                                                .order_by("created_at")):
+        # dequeue device command
+        # TODO: BETTER
+        device_command.time = timezone.now()
+        device_command.save()
+        return build_device_command_response(device_command)
 
 
 def get_next_device_command_response(meta_business_unit, enrolled_device):
+    # queued commands
+    response = get_next_queued_device_command_response(enrolled_device)
+    if response:
+        return response
+    # artifacts to install or remove
     response = get_next_device_artifact_command_response(meta_business_unit, enrolled_device)
-    if not response:
-        response = HttpResponse()
-    return response
+    if response:
+        return response
+    elif enrolled_device.awaiting_configuration:
+        # no queued commands + no artifacts to install or remove + AwaitingConfiguration
+        # let's proceed to the next step in the DEP enrollement
+        # → DeviceConfigured
+        return build_device_command_response(build_device_configured_command(enrolled_device))
+    elif not DeviceCommand.objects.filter(enrolled_device=enrolled_device,
+                                          request_type="DeviceInformation",
+                                          time__gt=(timezone.now() - timedelta(days=1))).count():
+        # no recent information, get some
+        return build_device_command_response(build_device_information_command(enrolled_device))
+    else:
+        # nothing else to do
+        return HttpResponse()
 
 
 # InstallApplication
 
 
 def build_application_manifest_response(command_uuid):
-    device_artifact_command = get_object_or_404(DeviceArtifactCommand, command_uuid=command_uuid)
+    device_artifact_command = get_object_or_404(DeviceArtifactCommand, command__uuid=command_uuid)
     artifact = device_artifact_command.artifact
     manifest = copy.deepcopy(artifact.manifest)
     download_url = "{}{}".format(settings["api"]["tls_hostname"],
@@ -212,7 +235,7 @@ def build_application_manifest_response(command_uuid):
 
 
 def build_application_download_response(command_uuid):
-    device_artifact_command = get_object_or_404(DeviceArtifactCommand, command_uuid=command_uuid)
+    device_artifact_command = get_object_or_404(DeviceArtifactCommand, command__uuid=command_uuid)
     package_file = device_artifact_command.artifact.file
     response = FileResponse(package_file, content_type="application/octet-stream")
     response["Content-Length"] = package_file.size
@@ -227,19 +250,20 @@ def update_device_artifact_command(enrolled_device, command_uuid, payload_status
     # find command
     try:
         device_artifact_command = DeviceArtifactCommand.objects.get(
-            enrolled_device=enrolled_device,
-            command_uuid=command_uuid
+            command__enrolled_device=enrolled_device,
+            command__uuid=command_uuid
         )
     except DeviceArtifactCommand.DoesNotExist:
         return
 
-    # update command
-    device_artifact_command.status_code = payload_status
-    device_artifact_command.result_time = timezone.now()
-    device_artifact_command.save()
+    # update device command
+    device_command = device_artifact_command.command
+    device_command.status_code = payload_status
+    device_command.result_time = timezone.now()
+    device_command.save()
 
     # if acknowledged, update installed device artifacts
-    if payload_status == DeviceArtifactCommand.STATUS_CODE_ACKNOWLEDGED:
+    if payload_status == DeviceCommand.STATUS_CODE_ACKNOWLEDGED:
         if device_artifact_command.action == DeviceArtifactCommand.ACTION_INSTALL:
             # a new version of the artifact has been installed on the device
             InstalledDeviceArtifact.objects.update_or_create(
@@ -261,18 +285,52 @@ def update_device_artifact_command(enrolled_device, command_uuid, payload_status
     return device_artifact_command
 
 
-def commit_device_information_command_response(meta_business_unit, enrolled_device, payload):
-    query_responses = payload.get("QueryResponses")
-    if query_responses:
-        return commit_machine_snapshot_and_trigger_events(tree_from_payload(enrolled_device.udid,
-                                                                            enrolled_device.serial_number,
-                                                                            meta_business_unit,
-                                                                            query_responses))
+def update_device_command(meta_business_unit, enrolled_device, command_uuid, payload_status, payload):
+    # less specific than update_device_artifact_command. MUST RUN AFTERWARD.
+
+    # find command
+    try:
+        device_command = DeviceCommand.objects.get(
+            enrolled_device=enrolled_device,
+            uuid=command_uuid
+        )
+    except DeviceCommand.DoesNotExist:
+        logger.exception("Could not find device command %s", command_uuid)
+        return
+
+    # update device command
+    device_command.status_code = payload_status
+    device_command.result_time = timezone.now()
+    device_command.save()
+
+    request_type = device_command.request_type
+    if request_type == "DeviceConfigured":
+        if payload_status == DeviceCommand.STATUS_CODE_ACKNOWLEDGED:
+            if enrolled_device.awaiting_configuration:
+                enrolled_device.awaiting_configuration = False
+                enrolled_device.save()
+            else:
+                logger.error("Enrolled device %s is not awaiting configuration!",
+                             enrolled_device.udid)
+        else:
+            logger.error("DeviceConfigured command unexpected status %s for device %s",
+                         payload_status, enrolled_device.udid)
+    elif request_type == "DeviceInformation":
+        query_responses = payload.get("QueryResponses")
+        if query_responses:
+            return commit_machine_snapshot_and_trigger_events(tree_from_payload(enrolled_device.udid,
+                                                                                enrolled_device.serial_number,
+                                                                                meta_business_unit,
+                                                                                query_responses))
+        else:
+            logger.error("Empty or absent QueryResponses in a DeviceInformation response.")
+
+    return device_command
 
 
 def process_result_payload(meta_business_unit, enrolled_device, command_uuid, payload_status, payload):
     # TODO: much better !
     if update_device_artifact_command(enrolled_device, command_uuid, payload_status):
         return
-    if commit_device_information_command_response(meta_business_unit, enrolled_device, payload):
+    if update_device_command(meta_business_unit, enrolled_device, command_uuid, payload_status, payload):
         return

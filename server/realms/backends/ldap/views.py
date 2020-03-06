@@ -36,8 +36,11 @@ class LoginView(FormView):
 
     def form_valid(self, form):
         username = form.cleaned_data["username"]
+        password = None
+        if self.session.save_password_hash:
+            password = form.cleaned_data["password"]
 
-        realm_user = self.backend_instance.update_or_create_realm_user(username)
+        realm_user = self.backend_instance.update_or_create_realm_user(username, password)
 
         # finalize the authentication session
         redirect_url = None

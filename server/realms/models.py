@@ -50,6 +50,7 @@ class RealmUser(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
     claims = JSONField(default=dict)
+    password_hash = JSONField(null=True)
 
     # mapped claims
     username = models.CharField(max_length=255)
@@ -67,12 +68,27 @@ class RealmUser(models.Model):
     def __str__(self):
         return self.username
 
+    def get_full_name(self):
+        if self.full_name:
+            return self.full_name
+        else:
+            full_name = " ".join(s for s in (self.first_name, self.last_name) if s)
+            if full_name:
+                return full_name
+            else:
+                return self.username
+
+    def get_device_username(self):
+        # TODO: better
+        return self.username.split("@")[0].replace(".", "")
+
 
 class RealmAuthenticationSession(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
     user = models.ForeignKey(RealmUser, on_delete=models.PROTECT, null=True)
 
+    save_password_hash = models.BooleanField(default=False)
     backend_state = JSONField(null=True)
 
     callback = models.CharField(max_length=255)

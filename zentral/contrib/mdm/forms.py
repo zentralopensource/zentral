@@ -1,6 +1,7 @@
 import plistlib
 from django import forms
 from django.db import connection
+from utils.password_hash import build_password_hash_dict
 from zentral.contrib.inventory.models import MetaMachine
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
@@ -190,12 +191,25 @@ class EncryptedDEPTokenForm(forms.ModelForm):
 
 
 class CreateDEPProfileForm(forms.ModelForm):
+    admin_password = forms.CharField(required=False, widget=forms.PasswordInput)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        field_order = [
+            "virtual_server", "name",
+            "allow_pairing", "is_supervised", "is_mandatory", "is_mdm_removable",
+            "await_device_configured", "auto_advance_setup",
+            "support_phone_number", "support_email_address",
+            "org_magic", "department", "include_tls_certificates"
+        ]
         for pane, initial in self.Meta.model.SKIPPABLE_SETUP_PANES:
             if self.instance.pk:
                 initial = pane in self.instance.skip_setup_items
             self.fields[pane] = forms.BooleanField(label="Skip {} pane".format(pane), initial=initial, required=False)
+            field_order.append(pane)
+        field_order.extend(["realm", "use_realm_user", "realm_user_is_admin",
+                            "admin_full_name", "admin_short_name", "admin_password"])
+        self.order_fields(field_order)
 
     class Meta:
         model = DEPProfile
@@ -208,12 +222,39 @@ class CreateDEPProfileForm(forms.ModelForm):
             raise forms.ValidationError("Can only be set to False if 'Is supervised' is set to True")
         return is_mdm_removable
 
+    def clean_use_realm_user(self):
+        realm = self.cleaned_data.get("realm")
+        use_realm_user = self.cleaned_data.get("use_realm_user")
+        if use_realm_user and not realm:
+            raise forms.ValidationError("This option is only valid if a 'realm' is selected")
+        return use_realm_user
+
+    def clean_realm_user_is_admin(self):
+        use_realm_user = self.cleaned_data.get("use_realm_user")
+        realm_user_is_admin = self.cleaned_data.get("realm_user_is_admin")
+        if realm_user_is_admin and not use_realm_user:
+            raise forms.ValidationError("This option is only valid if the 'use realm user' option is ticked too")
+        return realm_user_is_admin
+
+    def clean_admin_password(self):
+        password = self.cleaned_data.get("admin_password")
+        if password:
+            self.cleaned_data["admin_password_hash"] = build_password_hash_dict(password)
+
+    def admin_info_incomplete(self):
+        return len([attr for attr in (
+                        self.cleaned_data.get(i)
+                        for i in ("admin_full_name", "admin_short_name", "admin_password_hash")
+                    ) if attr]) in (1, 2)
+
     def clean(self):
         super().clean()
         skip_setup_items = []
         for pane, initial in self.Meta.model.SKIPPABLE_SETUP_PANES:
             if self.cleaned_data.get(pane, False):
                 skip_setup_items.append(pane)
+        if self.admin_info_incomplete():
+            raise forms.ValidationError("Admin information incomplete")
         self.cleaned_data['skip_setup_items'] = skip_setup_items
 
     def save(self, *args, **kwargs):
@@ -221,6 +262,7 @@ class CreateDEPProfileForm(forms.ModelForm):
         kwargs["commit"] = False
         dep_profile = super().save(**kwargs)
         dep_profile.skip_setup_items = self.cleaned_data["skip_setup_items"]
+        dep_profile.admin_password_hash = self.cleaned_data.get("admin_password_hash")
         if commit:
             dep_profile.save()
         return dep_profile
@@ -230,6 +272,13 @@ class UpdateDEPProfileForm(CreateDEPProfileForm):
     class Meta:
         model = DEPProfile
         exclude = ("virtual_server",)
+
+    def clean_admin_password(self):
+        password = self.cleaned_data.get("admin_password")
+        if password:
+            self.cleaned_data["admin_password_hash"] = build_password_hash_dict(password)
+        else:
+            self.cleaned_data["admin_password_hash"] = self.instance.admin_password_hash
 
 
 class AssignDEPDeviceProfileForm(forms.ModelForm):

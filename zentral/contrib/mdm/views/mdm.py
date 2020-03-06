@@ -5,6 +5,7 @@ from django.http import HttpResponse
 from django.views.generic import View
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
+from zentral.contrib.mdm.commands import queue_account_configuration_command_if_needed
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.models import (EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
@@ -111,17 +112,19 @@ class CheckinView(MDMView):
         self.commit_tree()
 
         # save the enrolled device (NOT YET ENROLLED!)
-        enrolled_device_defaults = {"push_certificate": self.push_certificate,
+        enrolled_device_defaults = {"enrollment_id": self.payload.get("EnrollmentID"),
+                                    "awaiting_configuration": None,
                                     "serial_number": self.serial_number,
+                                    "push_certificate": self.push_certificate,
                                     "token": None,
                                     "push_magic": None,
                                     "unlock_token": None,
                                     "checkout_at": None}
         enrolled_device, created = EnrolledDevice.objects.update_or_create(udid=self.udid,
                                                                            defaults=enrolled_device_defaults)
-        # delete installed device artifacts, to retrigger the installs
-        enrolled_device.installeddeviceartifact_set.all().delete()
-        enrolled_device.deviceartifactcommand_set.all().delete()
+
+        # purge the installed artifacts and sent commands, to start from scratch
+        enrolled_device.purge_state()
 
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)
@@ -134,8 +137,11 @@ class CheckinView(MDMView):
 
     def do_token_update(self):
         # TODO: do something with AwaitingConfiguration. Part of the DEP setup.
-        enrolled_device_defaults = {"push_certificate": self.push_certificate,
+        awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
+        enrolled_device_defaults = {"enrollment_id": self.payload.get("EnrollmentID"),
+                                    "awaiting_configuration": awaiting_configuration,
                                     "serial_number": self.serial_number,
+                                    "push_certificate": self.push_certificate,
                                     "push_magic": self.payload.get("PushMagic"),
                                     "unlock_token": self.payload.get("UnlockToken"),
                                     "checkout_at": None}
@@ -153,6 +159,20 @@ class CheckinView(MDMView):
             defaults=enrolled_device_defaults
         )
 
+        # accounts creation
+        if awaiting_configuration:
+            dep_profile = getattr(self.enrollment_session, "dep_profile", None)
+            if dep_profile:
+                queue_account_configuration_command_if_needed(
+                    enrolled_device,
+                    dep_profile,
+                    self.enrollment_session.realm_user
+                )
+            else:
+                # should never happen. AwaitingConfiguration is only used during DEP enrollments
+                logger.error("AwaitingConfiguration but not a DEP enrollment session ???")
+
+        # send first push notifications
         if not user_id and enrolled_device.can_be_poked():
             transaction.on_commit(lambda: send_enrolled_device_notification(
                 enrolled_device,
@@ -169,11 +189,14 @@ class CheckinView(MDMView):
 
         # enrolled user
         user_created = False
-        if user_id:
-            enrolled_user_defaults = {"long_name": self.payload.get("UserLongName"),
+        if user_id and user_id.upper() != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF":
+            # user channel and no shared ipad
+            # see https://developer.apple.com/documentation/devicemanagement/tokenupdaterequest
+            enrolled_user_defaults = {"enrolled_device": enrolled_device,
+                                      "enrollment_id": self.payload.get("EnrollmentUserID"),
+                                      "long_name": self.payload.get("UserLongName"),
                                       "short_name": self.payload.get("UserShortName"),
-                                      "token": payload_token,
-                                      "enrolled_device": enrolled_device}
+                                      "token": payload_token}
             enrolled_user, user_created = EnrolledUser.objects.update_or_create(
                 user_id=user_id,
                 defaults=enrolled_user_defaults
@@ -240,7 +263,6 @@ class ConnectView(MDMView):
             return "success"
 
     def do_put(self):
-        enrolled_device = self.enrollment_session.enrolled_device
         command_uuid = self.payload.get("CommandUUID", None)
         payload_status = self.payload["Status"]
         user_id = self.payload.get("UserID")
@@ -248,6 +270,8 @@ class ConnectView(MDMView):
                         command_uuid=command_uuid,
                         payload_status=payload_status,
                         user_id=user_id)
+
+        enrolled_device = self.enrollment_session.enrolled_device
 
         # result
         if payload_status != "Idle":

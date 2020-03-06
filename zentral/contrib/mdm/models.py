@@ -73,23 +73,36 @@ class EnrolledDeviceManager(models.Manager):
 
 
 class EnrolledDevice(models.Model):
-    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.CASCADE)
+    enrollment_id = models.TextField(null=True)
+    awaiting_configuration = models.BooleanField(null=True)
+
+    # device info
     serial_number = models.TextField(db_index=True)
     udid = models.CharField(max_length=36, unique=True)
+
+    # push
+    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.CASCADE)
     token = models.BinaryField(blank=True, null=True)
     push_magic = models.TextField(blank=True, null=True)
+
+    # unlock token
     unlock_token = models.BinaryField(blank=True, null=True)
+
+    # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     objects = EnrolledDeviceManager()
 
+    def purge_state(self):
+        self.installeddeviceartifact_set.all().delete()
+        self.devicecommand_set.all().delete()
+
     def do_checkout(self):
         self.token = self.push_magic = self.unlock_token = None
         self.checkout_at = timezone.now()
-        self.installeddeviceartifact_set.all().delete()
-        self.deviceartifactcommand_set.all().delete()
+        self.purge_state()
         self.save()
 
     def can_be_poked(self):
@@ -98,10 +111,17 @@ class EnrolledDevice(models.Model):
 
 class EnrolledUser(models.Model):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
+    enrollment_id = models.TextField(null=True)
+
+    # user info
     user_id = models.CharField(max_length=36, unique=True)
     long_name = models.TextField()
     short_name = models.TextField()
+
+    # push
     token = models.BinaryField()
+
+    # timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -504,6 +524,19 @@ class DEPProfile(models.Model):
     # if linked, a user has to authenticate to get the mdm payload.
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
 
+    # if realm, use the realm user either to auto populate the user form
+    # or auto create the admin
+    use_realm_user = models.BooleanField(default=False)
+
+    # if the realm user is not an admin, we will only use the info
+    # to autopopulate the user form, and we will need a default admin
+    realm_user_is_admin = models.BooleanField(default=True)
+
+    # optional admin account info
+    admin_full_name = models.CharField(max_length=80, blank=True, null=True)
+    admin_short_name = models.CharField(max_length=32, blank=True, null=True)
+    admin_password_hash = JSONField(null=True, editable=False)
+
     # standard DEP profile configuration
     name = models.CharField(max_length=125, unique=True)  # see CONFIG_NAME_INVALID error
     allow_pairing = models.BooleanField(default=False)
@@ -705,7 +738,68 @@ class DEPEnrollmentSession(EnrollmentSession):
         self._set_next_status(self.COMPLETED, test)
 
 
+# MDM commands
+
+
+class DeviceCommand(models.Model):
+    STATUS_CODE_ACKNOWLEDGED = "Acknowledged"
+    STATUS_CODE_ERROR = "Error"
+    STATUS_CODE_COMMAND_FORMAT_ERROR = "CommandFormatError"
+    STATUS_CODE_NOT_NOW = "NotNow"
+    STATUS_CODE_CHOICES = (
+        (STATUS_CODE_ACKNOWLEDGED, "Acknowledged"),
+        (STATUS_CODE_ERROR, "Error"),
+        (STATUS_CODE_COMMAND_FORMAT_ERROR, "Command format error"),
+        (STATUS_CODE_NOT_NOW, "Not now"),
+    )
+
+    # enrolled_device
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
+
+    # command
+    uuid = models.UUIDField(unique=True, default=uuid.uuid4)
+    request_type = models.CharField(max_length=128)
+    body = models.TextField()
+
+    time = models.DateTimeField(null=True)  # no time => queued
+    result_time = models.DateTimeField(null=True)
+    status_code = models.CharField(max_length=64, choices=STATUS_CODE_CHOICES, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return " - ".join(s for s in (self.request_type, str(self.uuid), self.status_code) if s)
+
+
 # MDM artifacts
+
+
+class BaseArtifact(models.Model):
+    # to be set in the concrete models:
+    # artifact_type - str - The reference name of the artifact
+    # artifact_can_be_removed - boolean - If we should/can send the command to remove it or not.
+
+    # install it during the AwaitingConfiguration phase ?
+    install_before_setup_assistant = models.BooleanField(default=False)
+
+    # devices
+    # TODO: add tags
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit,
+                                           related_name="%(app_label)s_%(class)s",
+                                           editable=False,
+                                           on_delete=models.CASCADE)
+
+    # version
+    version = models.PositiveIntegerField(default=0, editable=False)
+
+    # timestamps
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+    trashed_at = models.DateTimeField(null=True, editable=False)
+
+    class Meta:
+        abstract = True
 
 
 # Pushed artifacts
@@ -713,10 +807,13 @@ class DEPEnrollmentSession(EnrollmentSession):
 
 class InstalledDeviceArtifact(models.Model):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
+
+    # artifact
     artifact_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     artifact_id = models.PositiveIntegerField()
     artifact = GenericForeignKey("artifact_content_type", "artifact_id")
     artifact_version = models.PositiveIntegerField()
+
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True, editable=False)
 
@@ -732,27 +829,17 @@ class DeviceArtifactCommand(models.Model):
         (ACTION_REMOVE, "Remove"),
     )
 
-    STATUS_CODE_ACKNOWLEDGED = "Acknowledged"
-    STATUS_CODE_ERROR = "Error"
-    STATUS_CODE_COMMAND_FORMAT_ERROR = "CommandFormatError"
-    STATUS_CODE_NOT_NOW = "NotNow"
-    STATUS_CODE_CHOICES = (
-        (STATUS_CODE_ACKNOWLEDGED, "Acknowledged"),
-        (STATUS_CODE_ERROR, "Error"),
-        (STATUS_CODE_COMMAND_FORMAT_ERROR, "Command format error"),
-        (STATUS_CODE_NOT_NOW, "Not now"),
-    )
-
-    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
+    # artifact
     artifact_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     artifact_id = models.PositiveIntegerField()
     artifact = GenericForeignKey("artifact_content_type", "artifact_id")
     artifact_version = models.PositiveIntegerField()
+
+    # action
     action = models.CharField(max_length=64, choices=ACTION_CHOICES)
-    command_uuid = models.UUIDField(unique=True, default=uuid.uuid4)
-    command_time = models.DateTimeField()
-    result_time = models.DateTimeField(null=True)
-    status_code = models.CharField(max_length=64, choices=STATUS_CODE_CHOICES, null=True)
+
+    # command
+    command = models.OneToOneField(DeviceCommand, on_delete=models.CASCADE)
 
 
 # Kernel extension policy
@@ -791,16 +878,9 @@ class KernelExtension(models.Model):
         return "{}#kext_{}".format(reverse("mdm:kernel_extensions_index"), self.identifier)
 
 
-class KernelExtensionPolicy(models.Model):
+class KernelExtensionPolicy(BaseArtifact):
     artifact_type = "ConfigurationProfile"
     artifact_can_be_removed = True
-
-    # devices
-    # TODO: add tags
-    meta_business_unit = models.OneToOneField(MetaBusinessUnit,
-                                              on_delete=models.PROTECT,
-                                              related_name="kernel_extension_policy",
-                                              editable=False)
 
     # content
     allow_user_overrides = models.BooleanField(help_text=("If set to true, users can approve additional kernel "
@@ -809,14 +889,6 @@ class KernelExtensionPolicy(models.Model):
                                                default=True)
     allowed_teams = models.ManyToManyField(KernelExtensionTeam, blank=True)
     allowed_kernel_extensions = models.ManyToManyField(KernelExtension, blank=True)
-
-    # version
-    version = models.PositiveIntegerField(default=1, editable=False)
-
-    # timestamps
-    created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    updated_at = models.DateTimeField(auto_now=True, editable=False)
-    trashed_at = models.DateTimeField(null=True, editable=False)
 
     def get_absolute_url(self):
         return reverse("mdm:kernel_extension_policy", args=(self.meta_business_unit.pk, self.pk))
@@ -853,27 +925,15 @@ def enrollment_package_path(instance, filename):
     )
 
 
-class MDMEnrollmentPackage(models.Model):
+class MDMEnrollmentPackage(BaseArtifact):
     artifact_type = "Application"
     artifact_can_be_removed = False  # TODO: not implemented. Verify if possible.
-
-    # devices
-    # TODO: add tags
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.PROTECT)
 
     # content
     builder = models.CharField(max_length=256)
     enrollment_pk = models.PositiveIntegerField()
     file = models.FileField(upload_to=enrollment_package_path, blank=True)
     manifest = JSONField(blank=True, null=True)
-
-    # version
-    version = models.PositiveIntegerField(default=0)
-
-    # timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    trashed_at = models.DateTimeField(null=True, editable=False)
 
     def __str__(self):
         enrollment = self.get_enrollment()
@@ -940,27 +1000,15 @@ class MDMEnrollmentPackage(models.Model):
 # Configuration profiles
 
 
-class ConfigurationProfile(models.Model):
+class ConfigurationProfile(BaseArtifact):
     artifact_type = "ConfigurationProfile"
     artifact_can_be_removed = True
-
-    # devices
-    # TODO: add tags
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.PROTECT)
 
     # content
     source = JSONField()
     source_payload_identifier = models.TextField(editable=False)
     payload_display_name = models.TextField(blank=True, null=True, editable=False)
     payload_description = models.TextField(blank=True, null=True, editable=False)
-
-    # version
-    version = models.PositiveIntegerField(default=0)
-
-    # timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    trashed_at = models.DateTimeField(null=True, editable=False)
 
     def __str__(self):
         if self.payload_display_name:
