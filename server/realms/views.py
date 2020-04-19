@@ -1,5 +1,9 @@
 import logging
+from django.conf import settings
+from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -10,6 +14,17 @@ from .models import Realm
 
 
 logger = logging.getLogger("zentral.realms.views")
+
+
+class LocalUserRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect_to_login(self.request.get_full_path(),
+                                     settings.LOGIN_URL,
+                                     REDIRECT_FIELD_NAME)
+        if request.user.is_remote:
+            raise PermissionDenied("Remote users cannot access realms settings")
+        return super().dispatch(request, *args, **kwargs)
 
 
 class RealmListView(LoginRequiredMixin, ListView):
@@ -27,7 +42,7 @@ class RealmListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class CreateRealmView(LoginRequiredMixin, CreateView):
+class CreateRealmView(LocalUserRequiredMixin, CreateView):
     template_name = "realms/realm_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -46,11 +61,11 @@ class CreateRealmView(LoginRequiredMixin, CreateView):
         return redirect(self.object)
 
 
-class RealmView(LoginRequiredMixin, DetailView):
+class RealmView(LocalUserRequiredMixin, DetailView):
     model = Realm
 
 
-class UpdateRealmView(LoginRequiredMixin, UpdateView):
+class UpdateRealmView(LocalUserRequiredMixin, UpdateView):
     model = Realm
     fields = ("name",)
 

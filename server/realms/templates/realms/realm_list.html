@@ -9,6 +9,7 @@
 
 <h2>{{ realms_count }} Realm{{ realms_count|pluralize }}</h2>
 
+{% if not request.user.is_remote %}
 <div class="dropdown">
   <button class="btn btn-default dropdown-toggle" type="button" id="createRealm"
           data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
@@ -21,6 +22,7 @@
     {% endfor %}
   </ul>
 </div>
+{% endif %}
 
 <table class="table">
   <thead>
@@ -34,16 +36,22 @@
     {% for realm in object_list %}
     <tr>
       <td>
+        {% if not request.user.is_remote %}
         <a href="{{ realm.get_absolute_url }}">{{ realm }}</a>
+        {% else %}
+        {{ realm }}
+        {% endif %}
       </td>
       <td>
         {{ realm.backend }}
       </td>
       <td>
+        {% if not request.user.is_remote %}
         <a class="btn btn-default" href="{% url 'realms:update' realm.uuid %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
           Update
         </a>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}
