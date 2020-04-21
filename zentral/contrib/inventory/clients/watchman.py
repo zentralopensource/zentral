@@ -264,9 +264,9 @@ class InventoryClient(BaseInventory):
             elif m and platform == "windows":
                 os_version = m.groupdict()
                 ct["os_version"] = os_version
-            elif "Server" in c["os_version"]:
+            elif platform == "windows" and "Server" in c["os_version"]:
                 ct["os_version"] = WINDOWS_LEGACY_SERVER_DICT[c["os_version_number"]]
-            else:
+            elif platform == "windows":
                 ct["os_version"] = WINDOWS_LEGACY_CLIENT_DICT[c["os_version_number"]]
 
             # system info
