@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import struct
 from subprocess import check_call
 import tempfile
 from dateutil import parser
@@ -44,8 +45,29 @@ class Releases(object):
         with open(downloaded_file, "wb") as f:
             for chunk in resp.iter_content(64 * 2**10):
                 f.write(chunk)
+
+        # remove stapled notarization ticket
+        # extra data after the dmg data + plist, and the dmg trailer
+        with open(downloaded_file, "rb") as f:
+            f.seek(-512, os.SEEK_END)
+            trailer = f.read()
+        dfl_h, dfl_l = struct.unpack(">II", trailer[32:40])
+        data_fork_length = (dfl_h << 32) + dfl_l
+        pl_h, pl_l = struct.unpack(">II", trailer[224:232])
+        plist_length = (pl_h << 32) + pl_l
+        prepared_downloaded_file = "{}-denotarized".format(downloaded_file)
+        with open(prepared_downloaded_file, "wb") as ouf:
+            with open(downloaded_file, "rb") as inf:
+                to_read = data_fork_length + plist_length
+                while to_read:
+                    chunk_size = min(64 * 2**10, to_read)
+                    chunk = inf.read(chunk_size)
+                    ouf.write(chunk)
+                    to_read -= chunk_size
+            ouf.write(trailer)
+
         # extract dmg
-        check_call(["/usr/bin/7z", "-o{}".format(tempdir), "x", downloaded_file])
+        check_call(["/usr/bin/7z", "-o{}".format(tempdir), "x", prepared_downloaded_file])
         # find hfs (for older versions of 7z)
         for filename in os.listdir(tempdir):
             if filename.endswith(".hfs"):
