@@ -29,6 +29,7 @@ class Configuration(models.Model):
         'whitelist_regex',
         'blacklist_regex',
         'enable_page_zero_protection',
+        'enable_bad_signature_protection',
         'more_info_url',
         'event_detail_url',
         'event_detail_text',
@@ -72,6 +73,11 @@ class Configuration(models.Model):
         default=True,
         help_text="If this flag is set to YES, 32-bit binaries that are missing the __PAGEZERO segment will be blocked"
                   " even in MONITOR mode, unless the binary is whitelisted by an explicit rule."
+    )
+    enable_bad_signature_protection = models.BooleanField(
+        default=False,
+        help_text="When enabled, a binary that is signed but has a bad signature (cert revoked, binary tampered with, "
+                  "etc.) will be blocked regardless of client-mode unless a binary whitelist."
     )
     more_info_url = models.URLField(
         blank=True,

@@ -60,6 +60,12 @@
         <td>{{ object.enable_page_zero_protection|yesno }}</td>
       </tr>
       {% endif %}
+      {% if object.enable_bad_signature_protection %}
+      <tr>
+        <td>Enable bad signature protection</td>
+        <td>{{ object.enable_bad_signature_protection|yesno }}</td>
+      </tr>
+      {% endif %}
       {% if object.more_info_url %}
       <tr>
         <td>More info URL</td>

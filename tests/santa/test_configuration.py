@@ -10,10 +10,12 @@ class SantaAPIViewsTestCase(TestCase):
 
         config = Configuration.objects.create(name=get_random_string(256),
                                               more_info_url=more_info_url,
-                                              file_changes_prefix_filters=file_changes_prefix_filters)
+                                              file_changes_prefix_filters=file_changes_prefix_filters,
+                                              enable_bad_signature_protection=True)
         local_config = config.get_local_config()
         self.assertEqual(local_config["MoreInfoURL"], more_info_url)
         self.assertEqual(local_config["FileChangesPrefixFilters"], file_changes_prefix_filters)
+        self.assertEqual(local_config["EnableBadSignatureProtection"], True)
 
     def test_blacklist_regex_default_whitelist_regex(self):
         blacklist_regex = get_random_string(34)
