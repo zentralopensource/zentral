@@ -2,7 +2,7 @@ import logging
 import uuid
 from django.utils import timezone
 from elasticsearch import Elasticsearch, RequestError
-from elasticsearch.client.xpack import IlmClient
+from elasticsearch.client import IlmClient
 from zentral.core.exceptions import ImproperlyConfigured
 from zentral.contrib.inventory.models import Source
 from zentral.contrib.inventory.utils import SourceFilter
