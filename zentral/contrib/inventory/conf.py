@@ -1,3 +1,5 @@
+import re
+
 # machine snapshot platforms
 
 LINUX = "LINUX"
@@ -127,3 +129,30 @@ def has_deb_packages(machine_snapshot):
         return False
     os_name = os_name.lower()
     return "ubuntu" in os_name or "debian" in os_name
+
+
+MACOS_BUILD_RE = re.compile(r"(?P<minor>[0-9]{1,2})(?P<patch_letter>[A-Z])[1-9]+[a-z]?")
+
+
+def macos_version_from_build(build):
+    match = MACOS_BUILD_RE.match(build)
+    if match:
+        minor = int(match.group("minor")) - 4
+        if minor < 8:
+            # the patch letters are not always consecutive for older versions
+            # probably because of the different architectures.
+            raise ValueError("Cannot parse build str for macos < 10.8")
+        if minor < 12:
+            name = "OS X"
+        else:
+            name = "macOS"
+        patch = ord(match.group("patch_letter")) - 65
+        return {
+            "name": name,
+            "major": 10,
+            "minor": minor,
+            "patch": patch,
+            "build": build
+        }
+    else:
+        raise ValueError("Bad build number")
