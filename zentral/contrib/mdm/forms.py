@@ -1,7 +1,7 @@
 import plistlib
 from django import forms
 from django.db import connection
-from utils.password_hash import build_password_hash_dict
+from realms.utils import build_password_hash_dict
 from zentral.contrib.inventory.models import MetaMachine
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient

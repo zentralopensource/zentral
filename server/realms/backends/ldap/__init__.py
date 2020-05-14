@@ -3,7 +3,7 @@ import logging
 from django.urls import reverse
 import ldap
 from realms.backends.base import BaseBackend
-from utils.password_hash import build_password_hash_dict
+from realms.utils import build_password_hash_dict
 
 
 logger = logging.getLogger("zentral.realms.backends.ldap")
