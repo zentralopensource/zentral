@@ -142,7 +142,7 @@
 {% endblock %}
 
 {% block extrajs %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   var WAIT_FOR_TASK_TIMEOUT_ID;
 
   function waitForTask(url) {

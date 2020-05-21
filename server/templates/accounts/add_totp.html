@@ -24,7 +24,7 @@
 
 {% block extrajs %}
 <script src="{% static 'qrious/qrious.4.0.2.min.js' %}"></script>
-<script>
+<script nonce="{{ request.csp_nonce }}">
   $(document).ready(function(){
     var $canvas = $("#qr");
     var qr = new QRious({

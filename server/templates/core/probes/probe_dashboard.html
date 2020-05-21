@@ -55,7 +55,7 @@
 {% endblock %}
 
 {% block extrajs %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   function get_data_and_make_charts() {
     $tabs = $("#dashboard-container");
     url = $tabs.data("url");

@@ -61,7 +61,7 @@
 {% endblock %}
 
 {% block extrajs %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   function toggle_form($exiting_tag_sel) {
     if ($exiting_tag_sel.val() > "") {
       $('#new-tag').hide();

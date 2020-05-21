@@ -380,7 +380,7 @@
 {% endblock %}
 
 {% block extrajs %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   function switchTabs(link) {
     var tabclass = link.data('tabclass'),
         tabid = link.data('tabid');

@@ -41,7 +41,7 @@
 {% endblock %}
 
 {% block extrajs %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   function apply_color_preset(preset_elm) {
     var color = preset_elm.data("color");
     $('#id_color').val(color);

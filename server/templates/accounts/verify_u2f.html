@@ -30,7 +30,7 @@
 {% block extrajs %}
 {% if u2f_challenge_json %}
 <script src="{% static 'yubico/u2f-api.js' %}"></script>
-<script>
+<script nonce="{{ request.csp_nonce }}">
   var request = JSON.parse('{{ u2f_challenge_json|safe }}');
 
   function show_message (message, retry) {

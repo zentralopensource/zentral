@@ -92,7 +92,7 @@
 {% endblock %}
 
 {% block extrajs %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   function test_checkbox() {
     return $('input[type=checkbox]:checked').length > 1;
   }

@@ -73,7 +73,7 @@
 {% endblock %}
 
 {% block extrajs %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   function toggle_delete_buttons(){
     $('.delete-item').toggle($(".item-form:visible").length > 1);
   }

@@ -32,7 +32,7 @@
 {% endblock %}
 
 {% block extrajs %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   function get_data_and_make_chart(url, charts) {
     $.getJSON(url, function(data) {
       for (var dataset in data.datasets) {

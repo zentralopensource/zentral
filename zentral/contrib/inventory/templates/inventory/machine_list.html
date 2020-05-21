@@ -208,7 +208,7 @@
 {% endblock %}
 
 {% block extrajs %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
   var filter_list_sorts = ["az", "za", "09", "90"];
   var filter_list_sort_logos = ["alphabet", "alphabet-alt", "order", "order-alt"];
 
