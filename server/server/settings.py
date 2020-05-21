@@ -95,6 +95,8 @@ AUTHENTICATION_BACKENDS = [
     'realms.auth_backends.RealmBackend',
 ]
 
+SESSION_COOKIE_SECURE = True
+
 if "SESSION_COOKIE_AGE" in django_zentral_settings:
     SESSION_COOKIE_AGE = django_zentral_settings["SESSION_COOKIE_AGE"]
 
