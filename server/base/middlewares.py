@@ -1,6 +1,9 @@
+# adapted from https://github.com/mozilla/django-csp
 from functools import partial
+from django.conf import settings
 from django.utils.crypto import get_random_string
 from django.utils.functional import SimpleLazyObject
+from http.client import INTERNAL_SERVER_ERROR, NOT_FOUND
 
 
 CSP_HEADER = 'Content-Security-Policy'
@@ -39,6 +42,11 @@ def csp_middleware(get_response):
         response = get_response(request)
 
         if CSP_HEADER in response:
+            # header already present (HOW ???)
+            return response
+
+        if response.status_code in (INTERNAL_SERVER_ERROR, NOT_FOUND) and settings.DEBUG:
+            # no policies in debug views
             return response
 
         response[CSP_HEADER] = build_csp_header(request)
