@@ -2,7 +2,7 @@ import logging
 from django.urls import reverse
 from zentral.conf import settings
 from realms.backends.base import BaseBackend
-from .lib import build_authorization_code_flow_url, generate_pkce_codes, get_id_token
+from .lib import build_authorization_code_flow_url, generate_pkce_codes, get_claims
 
 
 logger = logging.getLogger("zentral.realms.backends.openidc")
@@ -57,7 +57,7 @@ class OpenIDConnectRealmBackend(BaseBackend):
 
     def update_or_create_realm_user(self, authorization_code, code_verifier):
         config = self.instance.config
-        id_token = get_id_token(
+        claims = get_claims(
             config["discovery_url"],
             config["client_id"],
             self.ac_redirect_uri(),
@@ -67,10 +67,10 @@ class OpenIDConnectRealmBackend(BaseBackend):
         )
 
         # default realm user attributes for update or create
-        realm_user_defaults = {"claims": id_token}
+        realm_user_defaults = {"claims": claims}
 
         for user_claim, user_claim_source in self.instance.iter_user_claim_mappings():
-            value = id_token.get(user_claim_source) or ""
+            value = claims.get(user_claim_source) or ""
             realm_user_defaults[user_claim] = value
 
         # the username for the claim mappings

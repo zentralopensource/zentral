@@ -33,7 +33,7 @@ setuptools
 sqlparse
 tqdm
 XlsxWriter
-PyJWT
+josepy
 python-ldap
 
 # dependencies
