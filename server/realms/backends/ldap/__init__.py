@@ -31,6 +31,13 @@ def cleanup_user_attributes(d):
     return cleanup_value(d)
 
 
+def get_ldap_connection(host):
+    conn = ldap.initialize("ldap://{}".format(host))
+    conn.set_option(ldap.OPT_PROTOCOL_VERSION, ldap.VERSION3)
+    conn.start_tls_s()
+    return conn
+
+
 class LDAPRealmBackend(BaseBackend):
     name = "LDAP"
     can_get_password = True
@@ -50,9 +57,7 @@ class LDAPRealmBackend(BaseBackend):
 
     def _get_ldap_conn(self):
         if self._conn is None:
-            self._conn = ldap.initialize("ldap://{}".format(self.instance.config.get("host")))
-            self._conn.set_option(ldap.OPT_PROTOCOL_VERSION, ldap.VERSION3)
-            self._conn.start_tls_s()
+            self._conn = get_ldap_connection(self.instance.config.get("host"))
         return self._conn
 
     def _get_user_dn(self, username):
