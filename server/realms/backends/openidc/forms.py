@@ -7,6 +7,7 @@ class OpenIDConnectRealmForm(RealmForm):
     client_id = forms.CharField(required=True)
     client_secret = forms.CharField(
         required=False,
+        widget=forms.PasswordInput(render_value=True),
         help_text="Optional client secret if needed. If not set, a PKCE challenge will be used"
     )
     extra_scopes = forms.CharField(
