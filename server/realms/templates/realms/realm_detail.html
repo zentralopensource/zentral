@@ -50,10 +50,17 @@
         <td>Full name claim</td>
         <td>{{ object.full_name_claim|default:"-" }}</td>
       </tr>
-      {% for name, value in object.backend_instance.extra_attributes_for_display %}
+      {% for name, value, hidden in object.backend_instance.extra_attributes_for_display %}
       <tr>
         <td>{{ name }}</td>
-        <td>{{ value }}</td>
+        <td>
+          {% if hidden %}
+          <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+          <span hidden>{{ value }}</span>
+          {% else %}
+          {{ value }}
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
       </tbody>
@@ -75,4 +82,24 @@
     Update
   </a>
 </p>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  var openEyes = document.querySelectorAll(".glyphicon-eye-open");
+  openEyes.forEach(function(openEye) {
+    openEye.addEventListener("click", function(event) {
+      var valueSpan = openEye.nextElementSibling;
+      if (valueSpan.hidden) {
+        valueSpan.hidden = false;
+        openEye.classList.remove("glyphicon-eye-open");
+        openEye.classList.add("glyphicon-eye-close");
+      } else {
+        valueSpan.hidden = true;
+        openEye.classList.remove("glyphicon-eye-close");
+        openEye.classList.add("glyphicon-eye-open");
+      }
+    });
+  });
+</script>
 {% endblock %}
