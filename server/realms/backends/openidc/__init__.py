@@ -19,10 +19,10 @@ class OpenIDConnectRealmBackend(BaseBackend):
     def extra_attributes_for_display(self):
         config = self.instance.config
         return [
-            ("Discovery URL", config.get("discovery_url")),
-            ("Client ID", config.get("client_id")),
-            ("Client secret", config.get("client_secret")),
-            ("Authorization code flow redirect URI", self.ac_redirect_uri()),
+            ("Discovery URL", config.get("discovery_url"), False),
+            ("Client ID", config.get("client_id"), False),
+            ("Client secret", config.get("client_secret"), True),
+            ("Authorization code flow redirect URI", self.ac_redirect_uri(), False),
         ]
 
     def initialize_session(self, callback, **callback_kwargs):

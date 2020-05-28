@@ -49,10 +49,10 @@ class LDAPRealmBackend(BaseBackend):
     def extra_attributes_for_display(self):
         config = self.instance.config
         return [
-            ("Host", config.get("host")),
-            ("Bind DN", config.get("bind_dn")),
-            ("Bind password", config.get("bind_password")),
-            ("Users base DN", config.get("users_base_dn")),
+            ("Host", config.get("host"), False),
+            ("Bind DN", config.get("bind_dn"), False),
+            ("Bind password", config.get("bind_password"), True),
+            ("Users base DN", config.get("users_base_dn"), False),
         ]
 
     def _get_ldap_conn(self):

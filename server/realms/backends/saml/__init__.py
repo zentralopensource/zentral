@@ -63,8 +63,8 @@ class SAMLRealmBackend(BaseBackend):
 
     def extra_attributes_for_display(self):
         return [
-            ("Entity ID", self.entity_id()),
-            ("Assertion Consumer Service URL", self.acs_url()),
+            ("Entity ID", self.entity_id(), False),
+            ("Assertion Consumer Service URL", self.acs_url(), False),
         ]
 
     def initialize_session(self, callback, **callback_kwargs):
