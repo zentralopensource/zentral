@@ -13,7 +13,6 @@ DEFAULT_CSP_POLICIES = {
   "default-src": "'self'",
   "script-src": "'self'",
   "base-uri": "'none'",
-  "form-action": "'self'",
   "frame-ancestors": "'none'",
   "object-src": "'none'",
   "style-src": "'self' 'unsafe-inline'",
