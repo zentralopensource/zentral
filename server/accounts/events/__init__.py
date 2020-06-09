@@ -87,7 +87,7 @@ def user_login_failed_callback(sender, credentials, **kwargs):
     metadata = EventMetadata(FailedLoginEvent.event_type,
                              request=request,
                              tags=FailedLoginEvent.tags)
-    event = FailedLoginEvent(metadata, credentials)
+    event = FailedLoginEvent(metadata, {k: str(v) for k, v in credentials.items()})
     event.post()
 
 
