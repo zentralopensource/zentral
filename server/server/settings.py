@@ -197,6 +197,18 @@ STATIC_ROOT = django_zentral_settings.get("STATIC_ROOT", "/zentral_static")
 STATICFILES_STORAGE = "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
 
 
+# File storage override
+if "DEFAULT_FILE_STORAGE" in django_zentral_settings:
+    DEFAULT_FILE_STORAGE = django_zentral_settings["DEFAULT_FILE_STORAGE"]
+# Google cloud storage options
+# https://django-storages.readthedocs.io/en/latest/backends/gcloud.html
+# credentials file necessary to sign the file download URLs
+if "GS_BUCKET_NAME" in django_zentral_settings:
+    GS_BUCKET_NAME = django_zentral_settings["GS_BUCKET_NAME"]
+if "GS_CREDENTIALS" in django_zentral_settings:
+    GS_CREDENTIALS = django_zentral_settings["GS_CREDENTIALS"]
+
+
 # LOGGING
 # everything in the console.
 
