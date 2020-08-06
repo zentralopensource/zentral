@@ -150,7 +150,7 @@ WSGI_APPLICATION = 'server.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/1.8/ref/settings/#databases
+# https://docs.djangoproject.com/en/2.2/ref/settings/#databases
 
 DATABASES = {
     'default': {
@@ -162,7 +162,10 @@ DATABASES = {
     }
 }
 for key in ('HOST', 'PASSWORD', 'PORT'):
-    val = os.environ.get('POSTGRES_{}'.format(key))
+    config_key = 'POSTGRES_{}'.format(key)
+    val = os.environ.get(config_key)
+    if not val:
+        val = django_zentral_settings.get(config_key)
     if val:
         DATABASES['default'][key] = val
 
