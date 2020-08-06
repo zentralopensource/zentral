@@ -1,6 +1,6 @@
 asn1crypto
 boto3
-celery
+celery<4.5
 django-celery-results
 coverage
 cryptography
@@ -14,7 +14,7 @@ gunicorn
 hyper
 ipython
 jinja2
-kombu
+kombu<5
 pip
 prometheus_client
 psycopg2-binary
