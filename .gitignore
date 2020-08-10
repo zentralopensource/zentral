@@ -3,6 +3,7 @@
 *.pyc
 __pycache__
 *.sw[op]
+*credentials.json
 /*.yml
 !/docker-compose.yml
 !/docker-compose.basic-auth.yml

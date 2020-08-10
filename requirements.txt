@@ -15,6 +15,7 @@ hyper
 ipython
 jinja2
 kombu<5
+google-cloud-pubsub
 pip
 prometheus_client
 psycopg2-binary
