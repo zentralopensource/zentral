@@ -1,8 +1,8 @@
 from importlib import import_module
-import json
 import logging
 import time
 from django.utils.text import slugify
+from kombu.utils import json
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import pubsub_v1
 from google.oauth2 import service_account
