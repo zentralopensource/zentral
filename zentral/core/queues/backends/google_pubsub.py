@@ -84,7 +84,7 @@ class PreprocessWorker(LoggingMixin, PrometheusWorkerMixin):
         self.publisher_client = pubsub_v1.PublisherClient(credentials=self.credentials)
 
         # prometheus
-        prometheus_port = kwargs.pop("prometheus_port")
+        prometheus_port = kwargs.pop("prometheus_port", None)
         if prometheus_port:
             self.log_info("start prometheus server on port %s", prometheus_port)
             self.start_prometheus_server(prometheus_port)
@@ -158,7 +158,7 @@ class EnrichWorker(LoggingMixin, PrometheusWorkerMixin):
         self.publisher_client = pubsub_v1.PublisherClient(credentials=self.credentials)
 
         # prometheus
-        prometheus_port = kwargs.pop("prometheus_port")
+        prometheus_port = kwargs.pop("prometheus_port", None)
         if prometheus_port:
             self.log_info("start prometheus server on port %s", prometheus_port)
             self.start_prometheus_server(prometheus_port)
@@ -221,7 +221,7 @@ class ProcessWorker(LoggingMixin, PrometheusWorkerMixin):
             self.log_info("process worker subscription %s created", sub_path)
 
         # prometheus
-        prometheus_port = kwargs.pop("prometheus_port")
+        prometheus_port = kwargs.pop("prometheus_port", None)
         if prometheus_port:
             self.log_info("start prometheus server on port %s", prometheus_port)
             self.start_prometheus_server(prometheus_port)
@@ -289,7 +289,7 @@ class StoreWorker(LoggingMixin, PrometheusWorkerMixin):
             self.log_info("store worker subscription %s created", sub_path)
 
         # prometheus
-        prometheus_port = kwargs.pop("prometheus_port")
+        prometheus_port = kwargs.pop("prometheus_port", None)
         if prometheus_port:
             self.log_info("start prometheus server on port %s", prometheus_port)
             self.start_prometheus_server(prometheus_port)
