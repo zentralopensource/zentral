@@ -1,3 +1,4 @@
+import json
 import logging
 from multiprocessing import Process
 import random
@@ -23,6 +24,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--list-workers', action='store_true', dest='list_workers', default=False,
                             help='list workers')
+        parser.add_argument('--json', action='store_true', dest='json_output', default=False,
+                            help='output workers list in json format')
         parser.add_argument("--prometheus-base-port", type=int, default=9900)
         parser.add_argument("--prometheus-sd-file")
         parser.add_argument("--external-hostname", default="localhost")
@@ -79,16 +82,25 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         list_workers = options['list_workers']
+        json_output = options['json_output']
         self.prometheus_base_port = options['prometheus_base_port']
         self.prometheus_sd_file = None if list_workers else options.get('prometheus_sd_file')
         self.external_hostname = options['external_hostname']
         workers = options['worker']
+        all_workers = []
         for idx, worker in enumerate(sorted(get_workers(), key=lambda w: w.name)):
             if list_workers:
-                print("Worker '{}'".format(worker.name))
+                all_workers.append(worker.name)
                 continue
             elif workers and worker.name not in workers:
                 continue
             self.start_worker(idx, worker)
-        self.write_prometheus_sd_file()
-        self.watch_workers()
+        if list_workers:
+            if json_output:
+                print(json.dumps({"workers": all_workers}))
+            else:
+                for worker_name in all_workers:
+                    print("Worker '{}'".format(worker_name))
+        if self.processes:
+            self.write_prometheus_sd_file()
+            self.watch_workers()
