@@ -110,9 +110,11 @@ class PreprocessWorker(LoggingMixin, PrometheusWorkerMixin):
                 for event in preprocessor.process_raw_event(message.data):
                     new_message = json.dumps(event.serialize(machine_metadata=False)).encode("utf-8")
                     self.publisher_client.publish(self.events_topic, new_message)
-                    self.produced_events_counter.labels(event.event_type).inc()
+                    if self.prometheus_setup_done:
+                        self.produced_events_counter.labels(event.event_type).inc()
         message.ack()
-        self.preprocessed_events_counter.labels(routing_key or "UNKNOWN").inc()
+        if self.prometheus_setup_done:
+            self.preprocessed_events_counter.labels(routing_key or "UNKNOWN").inc()
 
 
 class EnrichWorker(LoggingMixin, PrometheusWorkerMixin):
@@ -178,14 +180,16 @@ class EnrichWorker(LoggingMixin, PrometheusWorkerMixin):
             for event in self.enrich_event(event_dict):
                 new_message = json.dumps(event.serialize(machine_metadata=False)).encode("utf-8")
                 self.publisher_client.publish(self.enriched_events_topic, new_message)
-                self.produced_events_counter.labels(event.event_type).inc()
+                if self.prometheus_setup_done:
+                    self.produced_events_counter.labels(event.event_type).inc()
         except Exception as exception:
             logger.exception("Requeuing message with 1s delay: %s", exception)
             time.sleep(1)
             message.nack()
         else:
             message.ack()
-            self.enriched_events_counter.labels(event_dict['_zentral']['type']).inc()
+            if self.prometheus_setup_done:
+                self.enriched_events_counter.labels(event_dict['_zentral']['type']).inc()
 
 
 class ProcessWorker(LoggingMixin, PrometheusWorkerMixin):
@@ -239,7 +243,8 @@ class ProcessWorker(LoggingMixin, PrometheusWorkerMixin):
         event_dict = json.loads(message.data)
         self.process_event(event_dict)
         message.ack()
-        self.processed_events_counter.labels(event_dict['_zentral']['type']).inc()
+        if self.prometheus_setup_done:
+            self.processed_events_counter.labels(event_dict['_zentral']['type']).inc()
 
 
 class StoreWorker(LoggingMixin, PrometheusWorkerMixin):
@@ -266,7 +271,8 @@ class StoreWorker(LoggingMixin, PrometheusWorkerMixin):
             message.nack()
         else:
             message.ack()
-            self.stored_events_counter.labels(event_dict['_zentral']['type']).inc()
+            if self.prometheus_setup_done:
+                self.stored_events_counter.labels(event_dict['_zentral']['type']).inc()
 
     def run(self, *args, **kwargs):
         self.log_info("run")

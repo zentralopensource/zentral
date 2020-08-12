@@ -9,11 +9,14 @@ logger = logging.getLogger("zentral.utils.prometheus")
 
 
 class PrometheusWorkerMixin(object):
+    prometheus_setup_done = False
+
     def setup_prometheus_metrics(self):
         pass
 
     def start_prometheus_server(self, port):
         self.setup_prometheus_metrics()
+        self.prometheus_setup_done = True
         logger.info("Starting prometheus http server on port %s", port)
         start_http_server(port)
 
