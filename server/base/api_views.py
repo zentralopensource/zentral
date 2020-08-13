@@ -2,8 +2,9 @@ import json
 import logging
 import celery.states
 from django_celery_results.models import TaskResult
-from django.http import FileResponse
-from django.shortcuts import get_object_or_404
+from django.core.files.storage import default_storage
+from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -40,7 +41,15 @@ class TaskResultFileDownloadView(APIView):
         task_result = get_object_or_404(TaskResult, task_id=str(kwargs["task_id"]), status="SUCCESS")
         result = json.loads(task_result.result)
         filepath = result["filepath"]
-        response = FileResponse(open(filepath, "rb"))
-        for k, v in result.get("headers").items():
-            response[k] = v
-        return response
+        if not default_storage.exists(filepath):
+            raise Http404
+        try:
+            filepath = default_storage.path(filepath)
+        except NotImplementedError:
+            url = default_storage.url(filepath)
+            return redirect(url)
+        else:
+            response = FileResponse(open(filepath, "rb"))
+            for k, v in result.get("headers").items():
+                response[k] = v
+            return response
