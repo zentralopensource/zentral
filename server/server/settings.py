@@ -209,7 +209,10 @@ if "DEFAULT_FILE_STORAGE" in django_zentral_settings:
 if "GS_BUCKET_NAME" in django_zentral_settings:
     GS_BUCKET_NAME = django_zentral_settings["GS_BUCKET_NAME"]
 if "GS_CREDENTIALS" in django_zentral_settings:
-    GS_CREDENTIALS = django_zentral_settings["GS_CREDENTIALS"]
+    from google.oauth2 import service_account
+    GS_CREDENTIALS = service_account.Credentials.from_service_account_file(
+        django_zentral_settings["GS_CREDENTIALS"]
+    )
 
 
 # LOGGING
