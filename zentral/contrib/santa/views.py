@@ -1,23 +1,22 @@
-import base64
 import json
 import logging
-from django.core.exceptions import SuspiciousOperation
+from uuid import UUID
+import zlib
 from django.urls import reverse
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
-from django.http import Http404, HttpResponseRedirect, JsonResponse
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
-from django.utils.crypto import get_random_string
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, FormView, UpdateView
+from zentral.contrib.inventory.conf import macos_version_from_build
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import Certificate, MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_trigger_events,
                                              verify_enrollment_secret)
-from zentral.core.events.base import post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
-from zentral.utils.api_views import APIAuthError, verify_secret, JSONPostAPIView
+from zentral.utils.certificates import parse_dn
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import build_santa_conf
 from .events import post_enrollment_event, post_events, post_preflight_event
@@ -25,8 +24,7 @@ from .forms import (CertificateSearchForm, CollectedApplicationSearchForm,
                     ConfigurationForm, CreateProbeForm, EnrollmentForm, RuleForm)
 from .models import CollectedApplication, Configuration, EnrolledMachine, Enrollment
 from .probes import Rule
-from .osx_package.builder import SantaZentralEnrollPkgBuilder
-from .utils import build_config_plist, build_configuration_profile
+from .utils import build_configuration_plist, build_configuration_profile
 
 logger = logging.getLogger('zentral.contrib.santa.views')
 
@@ -123,55 +121,22 @@ class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
             return self.forms_invalid(secret_form, enrollment_form)
 
 
-class EnrollmentPackageView(LoginRequiredMixin, View):
+class EnrollmentConfigurationView(LoginRequiredMixin, View):
+    format = None
+
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
-        builder = SantaZentralEnrollPkgBuilder(enrollment)
-        return builder.build_and_make_response()
-
-
-# enrollment endpoint called by enrollment script
-
-
-class EnrollView(View):
-    def post(self, request, *args, **kwargs):
-        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
-        try:
-            request_json = json.loads(request.body.decode("utf-8"))
-            secret = request_json["secret"]
-            serial_number = request_json["serial_number"]
-            uuid = request_json["uuid"]
-            es_request = verify_enrollment_secret(
-                "santa_enrollment", secret,
-                self.user_agent, self.ip,
-                serial_number, uuid
-            )
-        except (ValueError, KeyError, EnrollmentSecretVerificationFailed):
-            raise SuspiciousOperation
+        if self.format == "plist":
+            filename, content = build_configuration_plist(enrollment)
+            content_type = "application/x-plist"
+        elif self.format == "configuration_profile":
+            filename, content = build_configuration_profile(enrollment)
+            content_type = "application/octet-stream"
         else:
-            # get or create enrolled machine
-            enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.get_or_create(
-                enrollment=es_request.enrollment_secret.santa_enrollment,
-                serial_number=serial_number,
-                defaults={"machine_id": get_random_string(64)}
-            )
-
-            # apply enrollment secret tags
-            for tag in es_request.enrollment_secret.tags.all():
-                MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
-
-            # response
-            response = {"machine_id": enrolled_machine.machine_id}
-            cp_name, cp_content = build_configuration_profile(enrolled_machine)
-            cp_content = base64.b64encode(cp_content).decode("utf-8")
-            response["configuration_profile"] = {"name": cp_name, "content": cp_content}
-            cpl_name, cpl_content = build_config_plist(enrolled_machine)
-            response["config_plist"] = {"name": cpl_name, "content": cpl_content}
-
-            # post event
-            post_enrollment_event(serial_number, self.user_agent, self.ip,
-                                  {'action': "enrollment" if enrolled_machine_created else "re-enrollment"})
-        return JsonResponse(response)
+            raise ValueError("Unknown configuration format: {}".format(self.format))
+        response = HttpResponse(content, content_type)
+        response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
+        return response
 
 
 # probes
@@ -367,97 +332,147 @@ class PickRuleCertificateView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-# API
+# Sync API
 
 
-class BaseView(JSONPostAPIView):
-    def verify_enrolled_machine_id(self):
-        """Find the corresponding enrolled machine"""
-        try:
-            self.enrolled_machine = (EnrolledMachine.objects
-                                                    .select_related("enrollment__secret__meta_business_unit")
-                                                    .get(machine_id=self.machine_id))
-        except EnrolledMachine.DoesNotExist:
-            raise APIAuthError("Could not authorize the request")
+class BaseSyncView(View):
+    require_enrolled_machine = True
+
+    def get_client_cert(self):
+        dn = self.request.META.get("HTTP_X_SSL_CLIENT_S_DN")
+        if dn:
+            return parse_dn(dn)
         else:
+            return None
+
+    def _get_json_data(self, request):
+        payload = request.body
+        if not payload:
+            return None
+        try:
+            if request.META.get('HTTP_CONTENT_ENCODING', None) == "zlib":
+                payload = zlib.decompress(payload)
+            return json.loads(payload)
+        except ValueError:
+            raise SuspiciousOperation("Could not read JSON data")
+
+    def post(self, request, *args, **kwargs):
+        self.enrollment_secret_secret = kwargs["enrollment_secret"]
+        try:
+            self.hardware_uuid = str(UUID(kwargs["machine_id"]))
+        except ValueError:
+            raise PermissionDenied("Invalid machine id")
+        try:
+            self.enrolled_machine = EnrolledMachine.objects.select_related(
+                "enrollment__secret",
+                "enrollment__configuration"
+            ).get(
+                enrollment__secret__secret=self.enrollment_secret_secret,
+                hardware_uuid=self.hardware_uuid
+            )
+        except EnrolledMachine.DoesNotExist:
+            if self.require_enrolled_machine:
+                raise PermissionDenied("Unknown machine")
+            self.enrolled_machine = None
+        else:
+            if self.enrolled_machine.enrollment.configuration.client_auth_certificate_issuer_cn and \
+               self.get_client_cert() is None:
+                raise PermissionDenied("Missing client certificate")
             self.machine_serial_number = self.enrolled_machine.serial_number
             self.business_unit = self.enrolled_machine.enrollment.secret.get_api_enrollment_business_unit()
-
-    def verify_signed_machine_id(self):
-        """Verify the secret signature"""
-        # TODO: deprecate and remove
-        data = verify_secret(self.machine_id, "zentral.contrib.santa")
-        self.machine_serial_number = data.get('machine_serial_number', None)
-        self.business_unit = data.get('business_unit', None)
-
-    def check_request_secret(self, request, *args, **kwargs):
-        self.enrolled_machine = None
-        self.machine_id = kwargs['machine_id']
-        if ":" not in self.machine_id:
-            # new way, machine_id is an attribute of EnrolledMachine
-            self.verify_enrolled_machine_id()
-        else:
-            # old way
-            self.verify_signed_machine_id()
+        data = self._get_json_data(request)
+        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
+        return JsonResponse(self.do_post(data))
 
 
-class PreflightView(BaseView):
-    def check_data_secret(self, data):
-        reported_serial_number = data['serial_num']
-        if reported_serial_number != self.machine_serial_number:
-            # the SN reported by santa is not the one configured in the enrollment secret
-            auth_err = "santa reported SN {} different from enrollment SN {}".format(reported_serial_number,
-                                                                                     self.machine_serial_number)
-            machine_info = {k: v for k, v in data.items()
-                            if k in ("hostname", "os_build", "os_version", "serial_num", "primary_user") and v}
-            post_machine_conflict_event(self.request, "zentral.contrib.santa",
-                                        reported_serial_number, self.machine_serial_number,
-                                        machine_info)
-            raise APIAuthError(auth_err)
+class PreflightView(BaseSyncView):
+    require_enrolled_machine = False
 
-    @transaction.non_atomic_requests
-    def do_post(self, data):
-        post_preflight_event(self.machine_serial_number,
-                             self.user_agent,
-                             self.ip,
-                             data)
+    def enroll_machine(self, data):
+        try:
+            enrollment = (Enrollment.objects.select_related("configuration", "secret")
+                                    .get(secret__secret=self.enrollment_secret_secret))
+        except Enrollment.DoesNotExist:
+            raise PermissionDenied("Unknown enrollment secret")
+        if enrollment.configuration.client_auth_certificate_issuer_cn and self.get_client_cert() is None:
+            raise PermissionDenied("Missing client certificate")
+        try:
+            verify_enrollment_secret(
+                "santa_enrollment", self.enrollment_secret_secret,
+                self.user_agent, self.ip,
+                serial_number=self.machine_serial_number, udid=self.hardware_uuid,
+            )
+        except EnrollmentSecretVerificationFailed:
+            raise PermissionDenied("Wrong enrollment secret")
+
+        # get or create enrolled machine
+        self.enrolled_machine, _ = EnrolledMachine.objects.get_or_create(
+            enrollment=enrollment,
+            hardware_uuid=self.hardware_uuid,
+            defaults={"serial_number": self.machine_serial_number}
+        )
+
+        # apply enrollment secret tags
+        for tag in enrollment.secret.tags.all():
+            MachineTag.objects.get_or_create(serial_number=self.machine_serial_number, tag=tag)
+
+        # post event
+        post_enrollment_event(self.machine_serial_number, self.user_agent, self.ip, {'action': 'enrollment'})
+
+    def commit_machine_snapshot(self, data):
+        # os version
+        build = data["os_build"]
         os_version = dict(zip(('major', 'minor', 'patch'),
                               (int(s) for s in data['os_version'].split('.'))))
-        os_version.update({'name': 'Mac OS X',
-                           'build': data['os_build']})
+        os_version.update({'name': 'macOS', 'build': build})
+        try:
+            os_version.update(macos_version_from_build(build))
+        except ValueError:
+            pass
+
+        # tree
         tree = {'source': {'module': 'zentral.contrib.santa',
                            'name': 'Santa'},
+                'reference': self.hardware_uuid,
                 'serial_number': self.machine_serial_number,
                 'os_version': os_version,
                 'system_info': {'computer_name': data['hostname']},
                 'public_ip_address': self.ip,
                 }
-        if self.enrolled_machine:
-            # new way
-            tree["reference"] = self.enrolled_machine.machine_id
-        else:
-            # old way
-            # TODO: remove it
-            tree["reference"] = self.machine_serial_number
         if self.business_unit:
             tree['business_unit'] = self.business_unit.serialize()
+
         commit_machine_snapshot_and_trigger_events(tree)
-        config_dict = {'UploadLogsUrl': 'https://{host}{path}'.format(host=self.request.get_host(),
-                                                                      path=reverse('santa:logupload',
-                                                                                   args=(self.machine_id,)))}
-        if self.enrolled_machine:
-            config_dict.update(self.enrolled_machine.enrollment.configuration.get_sync_server_config())
-        else:
-            config_dict['BatchSize'] = Configuration.DEFAULT_BATCH_SIZE
+
+    def do_post(self, data):
+        self.machine_serial_number = data['serial_num']
+
+        if not self.enrolled_machine:
+            self.enroll_machine(data)
+        self.business_unit = self.enrolled_machine.enrollment.secret.get_api_enrollment_business_unit()
+
+        post_preflight_event(self.enrolled_machine.serial_number,
+                             self.user_agent,
+                             self.ip,
+                             data)
+
+        self.commit_machine_snapshot(data)
+
+        config_dict = {
+            'UploadLogsUrl': self.request.build_absolute_uri(reverse('santa:logupload',
+                                                                     args=(self.enrollment_secret_secret,
+                                                                           self.hardware_uuid,)))
+        }
+        config_dict.update(self.enrolled_machine.enrollment.configuration.get_sync_server_config())
         return config_dict
 
 
-class RuleDownloadView(BaseView):
+class RuleDownloadView(BaseSyncView):
     def do_post(self, data):
         return build_santa_conf(MetaMachine(self.machine_serial_number))
 
 
-class EventUploadView(BaseView):
+class EventUploadView(BaseSyncView):
     def do_post(self, data):
         post_events(self.machine_serial_number,
                     self.user_agent,
@@ -466,10 +481,10 @@ class EventUploadView(BaseView):
         return {}
 
 
-class LogUploadView(BaseView):
+class LogUploadView(BaseSyncView):
     pass
 
 
-class PostflightView(BaseView):
+class PostflightView(BaseSyncView):
     def do_post(self, data):
         return {}

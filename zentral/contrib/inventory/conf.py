@@ -146,10 +146,15 @@ def macos_version_from_build(build):
             name = "OS X"
         else:
             name = "macOS"
+        if minor >= 16:
+            major = 11
+            minor -= 16
+        else:
+            major = 10
         patch = ord(match.group("patch_letter")) - 65
         return {
             "name": name,
-            "major": 10,
+            "major": major,
             "minor": minor,
             "patch": patch,
             "build": build

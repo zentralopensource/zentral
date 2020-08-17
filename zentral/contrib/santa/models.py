@@ -39,6 +39,7 @@ class Configuration(models.Model):
         'mode_notification_lockdown',
         'machine_owner_plist',
         'machine_owner_key',
+        'client_auth_certificate_issuer_cn',
     }
     SYNC_SERVER_CONFIGURATION_ATTRIBUTES = {
         # 'client_mode', has to be translated to a string value
@@ -130,6 +131,17 @@ class Configuration(models.Model):
         help_text="The key to use on the machine owner plist."
     )
 
+    # TLS
+
+    # for the client cert authentication
+    client_auth_certificate_issuer_cn = models.CharField(
+        blank=True,
+        max_length=255,
+        help_text="If set, this is the Issuer Name of a certificate in the System keychain "
+                  "to be used for sync authentication. "
+                  "The corresponding private key must also be in the keychain."
+    )
+
     # the extra ones only provided via server sync
     # https://github.com/google/santa/blob/master/Docs/deployment/configuration.md#sync-server-provided-configuration
 
@@ -174,9 +186,23 @@ class Configuration(models.Model):
         return config
 
     def get_local_config(self):
-        return {"".join("URL" if s == "url" else s.capitalize() for s in k.split("_")): getattr(self, k)
-                for k in self.LOCAL_CONFIGURATION_ATTRIBUTES
-                if getattr(self, k)}
+        config = {}
+        for k in self.LOCAL_CONFIGURATION_ATTRIBUTES:
+            v = getattr(self, k)
+            if not v:
+                continue
+            config_attr_items = []
+            for i in k.split("_"):
+                if i == "url":
+                    i = "URL"
+                elif i == "cn":
+                    i = "CN"
+                else:
+                    i = i.capitalize()
+                config_attr_items.append(i)
+            config_attr = "".join(config_attr_items)
+            config[config_attr] = v
+        return config
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -188,7 +214,6 @@ class Configuration(models.Model):
 
 class Enrollment(BaseEnrollment):
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
-    santa_release = models.CharField(max_length=64, blank=True, null=False)
 
     def get_description_for_distributor(self):
         return "Santa configuration: {}".format(self.configuration)
@@ -197,8 +222,6 @@ class Enrollment(BaseEnrollment):
         enrollment_dict = super().serialize_for_event()
         enrollment_dict["configuration"] = {"pk": self.configuration.pk,
                                             "name": self.configuration.name}
-        if self.santa_release:
-            enrollment_dict["santa_release"] = self.santa_release
         return enrollment_dict
 
     def get_absolute_url(self):
@@ -207,9 +230,14 @@ class Enrollment(BaseEnrollment):
 
 class EnrolledMachine(models.Model):
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
-    serial_number = models.TextField(db_index=True)
-    machine_id = models.CharField(max_length=64, unique=True)
+    hardware_uuid = models.UUIDField()
+    serial_number = models.TextField()
+
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("enrollment", "hardware_uuid")
 
 
 # Collected applications

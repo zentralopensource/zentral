@@ -112,6 +112,12 @@
         <td>{{ object.machine_owner_key }}</td>
       </tr>
       {% endif %}
+      {% if object.client_auth_certificate_issuer_cn %}
+      <tr>
+        <td>Client auth certificate issuer CN</td>
+        <td>{{ object.client_auth_certificate_issuer_cn }}</td>
+      </tr>
+      {% endif %}
       <tr>
         <td>Batch size</td>
         <td>{{ object.batch_size }}</td>
@@ -153,7 +159,6 @@
     <th>Tags</th>
     <th>Created at</th>
     <th>Request count</th>
-    <th>Santa release</th>
     <th>Version</th>
     <th>Distributor</th>
     <th></th>
@@ -176,7 +181,6 @@
         {{ secret.created_at }}
       </td>
       <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
-      <td>{{ enrollment.santa_release|default:"-" }}</td>
       <td>{{ enrollment.version }}</td>
       <td>
         {% if distributor %}
@@ -188,11 +192,18 @@
       <td>
         {% if not distributor and not secret.is_used_up %}
         <a class="btn btn-default download-tool"
-           aria-label="Download macOS enrollment package"
-           title="macOS enrollment package"
-           href="{% url 'santa:enrollment_package' enrollment.configuration.id enrollment.id %}">
+           aria-label="Download Santa configuration plist"
+           title="Santa configuration plist"
+           href="{% url 'santa:enrollment_configuration_plist' enrollment.configuration.id enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-          <i class="fab fa-apple" aria-hidden="true"></i>
+          plist
+        </a>
+        <a class="btn btn-default download-tool"
+           aria-label="Download Santa configuration profile"
+           title="Santa configuration profile"
+           href="{% url 'santa:enrollment_configuration_profile' enrollment.configuration.id enrollment.id %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+          configuration profile
         </a>
         {% elif secret.is_used_up %}
         <span class="text-danger">Enrollment used up.</span>

@@ -1,10 +1,8 @@
 import json
-import uuid
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.santa.models import EnrolledMachine
 from accounts.models import User
 
 
@@ -99,45 +97,30 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.context["object"], configuration)
         # response contains enrollment secret meta business unit name
         self.assertContains(response, enrollment.secret.meta_business_unit.name)
-        # response contains link to download enrollment package
-        self.assertContains(response, reverse("santa:enrollment_package", args=(configuration.pk, enrollment.pk)))
+        # response contains link to download enrollment configuration plist
+        self.assertContains(response, reverse("santa:enrollment_configuration_plist",
+                                              args=(configuration.pk, enrollment.pk)))
+        # response contains link to download enrollment configuration profile
+        self.assertContains(response, reverse("santa:enrollment_configuration_profile",
+                                              args=(configuration.pk, enrollment.pk)))
 
-    def test_enrollment_package_view(self):
+    def test_enrollment_configuration_view(self):
         self.log_user_in()
         _, configuration = self.create_configuration()
         _, enrollment = self.create_enrollment(configuration)
         self.log_user_out()
-        enrollment_package_url = reverse("santa:enrollment_package", args=(configuration.pk, enrollment.pk))
-        self.login_redirect(enrollment_package_url)
+        enrollment_configuration_plist_url = reverse(
+            "santa:enrollment_configuration_plist", args=(configuration.pk, enrollment.pk)
+        )
+        self.login_redirect(enrollment_configuration_plist_url)
+        enrollment_configuration_profile_url = reverse(
+            "santa:enrollment_configuration_profile", args=(configuration.pk, enrollment.pk)
+        )
+        self.login_redirect(enrollment_configuration_profile_url)
         self.log_user_in()
-        response = self.client.get(enrollment_package_url)
+        response = self.client.get(enrollment_configuration_plist_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], "application/x-plist")
+        response = self.client.get(enrollment_configuration_profile_url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
-        self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_santa_enroll.pkg"')
-
-    def test_enroll_view(self):
-        self.log_user_in()
-        _, configuration = self.create_configuration()
-        _, enrollment = self.create_enrollment(configuration)
-        self.log_user_out()
-        response = self.post_as_json("enroll", {})
-        self.assertEqual(response.status_code, 400)
-        machine_serial_number = get_random_string(32)
-        response = self.post_as_json("enroll",
-                                     {"secret": "yolo",
-                                      "uuid": str(uuid.uuid4()),
-                                      "serial_number": machine_serial_number})
-        self.assertEqual(response.status_code, 400)
-        response = self.post_as_json("enroll",
-                                     {"secret": enrollment.secret.secret,
-                                      "uuid": str(uuid.uuid4()),
-                                      "serial_number": machine_serial_number})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], "application/json")
-        json_response = response.json()
-        self.assertCountEqual(["machine_id", "config_plist", "configuration_profile"],
-                              json_response.keys())
-        machine_id = json_response["machine_id"]
-        enrolled_machine = EnrolledMachine.objects.get(enrollment=enrollment,
-                                                       serial_number=machine_serial_number)
-        self.assertEqual(machine_id, enrolled_machine.machine_id)

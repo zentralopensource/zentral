@@ -1,10 +1,10 @@
 import json
+import uuid
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.santa.models import Configuration, EnrolledMachine, Enrollment
-from zentral.utils.api_views import make_secret
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -18,11 +18,9 @@ class SantaAPIViewsTestCase(TestCase):
                                                    secret=cls.enrollment_secret)
         cls.machine_serial_number = get_random_string(64)
         cls.enrolled_machine = EnrolledMachine.objects.create(enrollment=cls.enrollment,
-                                                              serial_number=cls.machine_serial_number,
-                                                              machine_id=get_random_string(64))
+                                                              hardware_uuid=uuid.uuid4(),
+                                                              serial_number=cls.machine_serial_number)
         cls.business_unit = cls.meta_business_unit.create_enrollment_business_unit()
-        cls.api_secret = "{}$SERIAL${}".format(make_secret("zentral.contrib.santa", cls.business_unit),
-                                               cls.machine_serial_number)
 
     def post_as_json(self, url, data):
         return self.client.post(url,
@@ -34,7 +32,7 @@ class SantaAPIViewsTestCase(TestCase):
                 "os_version": "10.13.17",
                 "os_build": "16G1113",
                 "hostname": "hostname"}
-        url = reverse("santa:preflight", args=(self.api_secret,))
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
 
@@ -43,7 +41,7 @@ class SantaAPIViewsTestCase(TestCase):
                 "os_version": "10.13.17",
                 "os_build": "16G1113",
                 "hostname": "hostname"}
-        url = reverse("santa:preflight", args=(self.enrolled_machine.machine_id,))
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         # MONITOR mode
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
