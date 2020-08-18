@@ -78,7 +78,7 @@ class PreprocessWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixi
 
     def run(self, *args, **kwargs):
         self.log_info("run")
-        prometheus_port = kwargs.pop("prometheus_port")
+        prometheus_port = kwargs.pop("prometheus_port", None)
         if prometheus_port:
             self.start_prometheus_server(prometheus_port)
         super().run(*args, **kwargs)
@@ -104,13 +104,15 @@ class PreprocessWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixi
                 logger.error("No preprocessor for routing key %s", routing_key)
             else:
                 for event in preprocessor.process_raw_event(body):
-                    self.produced_events_counter.labels(event.event_type).inc()
+                    if self.prometheus_setup_done:
+                        self.produced_events_counter.labels(event.event_type).inc()
                     self.producer.publish(event.serialize(machine_metadata=False),
                                           serializer='json',
                                           exchange=events_exchange,
                                           declare=[events_exchange])
         message.ack()
-        self.preprocessed_events_counter.labels(routing_key or "UNKNOWN").inc()
+        if self.prometheus_setup_done:
+            self.preprocessed_events_counter.labels(routing_key or "UNKNOWN").inc()
 
 
 class EnrichWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
@@ -133,7 +135,7 @@ class EnrichWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
 
     def run(self, *args, **kwargs):
         self.log_info("run")
-        prometheus_port = kwargs.pop("prometheus_port")
+        prometheus_port = kwargs.pop("prometheus_port", None)
         if prometheus_port:
             self.start_prometheus_server(prometheus_port)
         super().run(*args, **kwargs)
@@ -152,14 +154,16 @@ class EnrichWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
                                       serializer='json',
                                       exchange=enriched_events_exchange,
                                       declare=[enriched_events_exchange])
-                self.produced_events_counter.labels(event.event_type).inc()
+                if self.prometheus_setup_done:
+                    self.produced_events_counter.labels(event.event_type).inc()
         except Exception as exception:
             logger.exception("Requeuing message with 1s delay: %s", exception)
             time.sleep(1)
             message.requeue()
         else:
             message.ack()
-            self.enriched_events_counter.labels(event.event_type).inc()
+            if self.prometheus_setup_done:
+                self.enriched_events_counter.labels(event.event_type).inc()
 
 
 class ProcessWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
@@ -185,7 +189,7 @@ class ProcessWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
 
     def run(self, *args, **kwargs):
         self.log_info("run")
-        prometheus_port = kwargs.pop("prometheus_port")
+        prometheus_port = kwargs.pop("prometheus_port", None)
         if prometheus_port:
             self.start_prometheus_server(prometheus_port)
         super().run(*args, **kwargs)
@@ -198,9 +202,11 @@ class ProcessWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
 
     def do_process_event(self, body, message):
         self.log_debug("process event")
+        event_type = body['_zentral']['type']
         self.process_event(body)
         message.ack()
-        self.processed_events_counter.labels(body['_zentral']['type']).inc()
+        if self.prometheus_setup_done:
+            self.processed_events_counter.labels(event_type).inc()
 
 
 class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
@@ -229,7 +235,7 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
 
     def run(self, *args, **kwargs):
         self.log_info("run")
-        prometheus_port = kwargs.pop("prometheus_port")
+        prometheus_port = kwargs.pop("prometheus_port", None)
         if prometheus_port:
             self.start_prometheus_server(prometheus_port)
         super().run(*args, **kwargs)
@@ -243,6 +249,7 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
     def do_store_event(self, body, message):
         self.log_debug("store event")
         try:
+            event_type = body['_zentral']['type']
             self.event_store.store(body)
         except Exception:
             logger.exception("Could add event to store %s", self.event_store.name)
@@ -250,7 +257,8 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
             message.reject()
         else:
             message.ack()
-            self.stored_events_counter.labels(body['_zentral']['type']).inc()
+            if self.prometheus_setup_done:
+                self.stored_events_counter.labels(event_type).inc()
 
 
 class EventQueues(object):
