@@ -375,7 +375,7 @@ class BaseSyncView(View):
                 raise PermissionDenied("Unknown machine")
             self.enrolled_machine = None
         else:
-            if self.enrolled_machine.enrollment.configuration.client_auth_certificate_issuer_cn and \
+            if self.enrolled_machine.enrollment.configuration.client_certificate_auth and \
                self.get_client_cert() is None:
                 raise PermissionDenied("Missing client certificate")
             self.machine_serial_number = self.enrolled_machine.serial_number
@@ -394,7 +394,7 @@ class PreflightView(BaseSyncView):
                                     .get(secret__secret=self.enrollment_secret_secret))
         except Enrollment.DoesNotExist:
             raise PermissionDenied("Unknown enrollment secret")
-        if enrollment.configuration.client_auth_certificate_issuer_cn and self.get_client_cert() is None:
+        if enrollment.configuration.client_certificate_auth and self.get_client_cert() is None:
             raise PermissionDenied("Missing client certificate")
         try:
             verify_enrollment_secret(
@@ -463,7 +463,9 @@ class PreflightView(BaseSyncView):
                                                                      args=(self.enrollment_secret_secret,
                                                                            self.hardware_uuid,)))
         }
-        config_dict.update(self.enrolled_machine.enrollment.configuration.get_sync_server_config())
+        config_dict.update(
+            self.enrolled_machine.enrollment.configuration.get_sync_server_config(data["santa_version"])
+        )
         return config_dict
 
 

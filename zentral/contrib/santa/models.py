@@ -26,8 +26,8 @@ class Configuration(models.Model):
         'client_mode',
         'file_changes_regex',
         'file_changes_prefix_filters',
-        'whitelist_regex',
-        'blacklist_regex',
+        'allowed_path_regex',
+        'blocked_path_regex',
         'enable_page_zero_protection',
         'enable_bad_signature_protection',
         'more_info_url',
@@ -44,9 +44,15 @@ class Configuration(models.Model):
     SYNC_SERVER_CONFIGURATION_ATTRIBUTES = {
         # 'client_mode', has to be translated to a string value
         'batch_size',
-        'whitelist_regex',
-        'blacklist_regex',
-        'bundles_enabled'
+        'allowed_path_regex',
+        'blocked_path_regex',
+        'enable_bundles',
+        'enable_transitive_rules'
+    }
+    DEPRECATED_ATTRIBUTES_MAPPING_1_14 = {
+        'allowed_path_regex': 'whitelist_regex',
+        'blocked_path_regex': 'blacklist_regex',
+        'enable_transitive_rules': 'enabled_transitive_whitelisting',
     }
 
     name = models.CharField(max_length=256, unique=True)
@@ -61,12 +67,12 @@ class Configuration(models.Model):
         help_text=("A list of ignore prefixes which are checked in-kernel. "
                    "This is more performant than FileChangesRegex when ignoring whole directory trees.")
     )
-    whitelist_regex = models.TextField(
+    allowed_path_regex = models.TextField(
         blank=True,
         help_text="Matching binaries will be allowed to run, in both modes."
                   "Events will be logged with the 'ALLOW_SCOPE' decision."
     )
-    blacklist_regex = models.TextField(
+    blocked_path_regex = models.TextField(
         blank=True,
         help_text="In Monitor mode, executables whose paths are matched by this regex will be blocked."
     )
@@ -134,7 +140,18 @@ class Configuration(models.Model):
     # TLS
 
     # for the client cert authentication
+    client_certificate_auth = models.BooleanField(
+        "Client certificate authentication",
+        default=False,
+        help_text="If set, a client certificate will be required for sync authentication. "
+                  "Santa will automatically look for a matching certificate "
+                  "and its private key in the System keychain, "
+                  "if the TLS server advertises the accepted CA certificates. "
+                  "If the CA certificates are not sent to the client, "
+                  "use the Client Auth Certificate Issuer CN setting."
+    )
     client_auth_certificate_issuer_cn = models.CharField(
+        "Client auth certificate issuer CN",
         blank=True,
         max_length=255,
         help_text="If set, this is the Issuer Name of a certificate in the System keychain "
@@ -151,9 +168,13 @@ class Configuration(models.Model):
         help_text="The number of rules to download or events to upload per request. "
                   "Multiple requests will be made if there is more work than can fit in single request."
     )
-    bundles_enabled = models.BooleanField(
+    enable_bundles = models.BooleanField(
         default=False,
-        help_text="if set, the bundle scanning feature is enabled."
+        help_text="If set, the bundle scanning feature is enabled."
+    )
+    enable_transitive_rules = models.BooleanField(
+        default=False,
+        help_text="If set, the transitive rule feature is enabled."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -168,9 +189,10 @@ class Configuration(models.Model):
     def is_monitor_mode(self):
         return self.client_mode == self.MONITOR_MODE
 
-    def get_sync_server_config(self):
+    def get_sync_server_config(self, santa_version):
         config = {k: getattr(self, k)
                   for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
+
         # translate client mode
         if self.client_mode == self.MONITOR_MODE:
             config["client_mode"] = self.PREFLIGHT_MONITOR_MODE
@@ -178,19 +200,29 @@ class Configuration(models.Model):
             config["client_mode"] = self.PREFLIGHT_LOCKDOWN_MODE
         else:
             raise NotImplementedError("Unknown santa client mode: {}".format(self.client_mode))
+
         # provide non matching regexp if the regexp are empty
-        for attr in ("blacklist_regex",
-                     "whitelist_regex"):
+        for attr in ("allowed_path_regex",
+                     "blocked_path_regex"):
             if not config.get(attr):
                 config[attr] = "NON_MATCHING_PLACEHOLDER_{}".format(get_random_string(8))
+
+        # translate attributes for older santa agents
+        santa_version = tuple(int(i) for i in santa_version.split("."))
+        if santa_version < (1, 14):
+            for attr, deprecated_attr in self.DEPRECATED_ATTRIBUTES_MAPPING_1_14.items():
+                config[deprecated_attr] = config.pop(attr)
+
         return config
 
-    def get_local_config(self):
+    def get_local_config(self, min_supported_santa_version=(1, 13)):
         config = {}
         for k in self.LOCAL_CONFIGURATION_ATTRIBUTES:
             v = getattr(self, k)
             if not v:
                 continue
+            if min_supported_santa_version < (1, 14) and k in self.DEPRECATED_ATTRIBUTES_MAPPING_1_14:
+                k = self.DEPRECATED_ATTRIBUTES_MAPPING_1_14[k]
             config_attr_items = []
             for i in k.split("_"):
                 if i == "url":

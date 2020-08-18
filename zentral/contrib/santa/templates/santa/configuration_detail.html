@@ -42,16 +42,16 @@
         <td><code>{{ object.file_changes_prefix_filters }}</code></td>
       </tr>
       {% endif %}
-      {% if object.whitelist_regex %}
+      {% if object.allowed_path_regex %}
       <tr>
-        <td>Whitelist regex</td>
-        <td><code>{{ object.whitelist_regex }}</code></td>
+        <td>Allowed path regex</td>
+        <td><code>{{ object.allowed_path_regex }}</code></td>
       </tr>
       {% endif %}
-      {% if object.blacklist_regex %}
+      {% if object.blocked_path_regex %}
       <tr>
-        <td>Blacklist regex</td>
-        <td><code>{{ object.blacklist_regex }}</code></td>
+        <td>Blocked path regex</td>
+        <td><code>{{ object.blocked_path_regex }}</code></td>
       </tr>
       {% endif %}
       {% if not object.enable_page_zero_protection %}
@@ -112,6 +112,10 @@
         <td>{{ object.machine_owner_key }}</td>
       </tr>
       {% endif %}
+      <tr>
+        <td>Client certificate auth</td>
+        <td>{{ object.client_certificate_auth|yesno }}</td>
+      </tr>
       {% if object.client_auth_certificate_issuer_cn %}
       <tr>
         <td>Client auth certificate issuer CN</td>
@@ -123,8 +127,12 @@
         <td>{{ object.batch_size }}</td>
       </tr>
       <tr>
-        <td>Bundles enables</td>
-        <td>{{ object.bundles_enabled|yesno }}</td>
+        <td>Enable bundles</td>
+        <td>{{ object.enable_bundles|yesno }}</td>
+      </tr>
+      <tr>
+        <td>Enable transitive rules</td>
+        <td>{{ object.enable_transitive_rules|yesno }}</td>
       </tr>
       </tbody>
     </table>

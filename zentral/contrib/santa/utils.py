@@ -5,9 +5,10 @@ from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
 
 
 def build_santa_enrollment_configuration(enrollment):
-    config = enrollment.configuration.get_local_config()
+    configuration = enrollment.configuration
+    config = configuration.get_local_config()
     base_url_key = "tls_hostname"
-    if "ClientAuthCertificateIssuerCN" in config:
+    if configuration.client_certificate_auth:
         base_url_key = "tls_hostname_for_client_cert_auth"
     config["SyncBaseURL"] = "{}/santa/sync/{}/".format(settings["api"][base_url_key],
                                                        enrollment.secret.secret)

@@ -27,22 +27,22 @@ class SantaAPIViewsTestCase(TestCase):
                                 json.dumps(data),
                                 content_type="application/json")
 
-    def test_preflight_old_way(self):
-        data = {"serial_num": self.machine_serial_number,
-                "os_version": "10.13.17",
-                "os_build": "16G1113",
-                "hostname": "hostname"}
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
-        response = self.post_as_json(url, data)
-        self.assertEqual(response.status_code, 200)
-
     def test_preflight(self):
         data = {"serial_num": self.machine_serial_number,
                 "os_version": "10.13.17",
                 "os_build": "16G1113",
-                "hostname": "hostname"}
+                "hostname": "hostname",
+                "santa_version": "1.14"}
         url = reverse("santa:preflight", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         # MONITOR mode
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
+        self.assertTrue(json_response["blocked_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
+        self.assertTrue(json_response["allowed_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
+        # deprecated attributes
+        data["santa_version"] = "1.13"
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()

@@ -1,9 +1,9 @@
 from django import forms
+from zentral.conf import settings
 from zentral.core.probes.forms import BaseCreateProbeForm
 from zentral.utils.forms import validate_sha256
 from .models import Configuration, Enrollment
 from .probes import SantaProbe, Rule
-from .releases import Releases
 
 
 class ConfigurationForm(forms.ModelForm):
@@ -13,26 +13,34 @@ class ConfigurationForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+
+        # no blocked path regex in lockdown mode
         client_mode = cleaned_data.get("client_mode")
-        blacklist_regex = cleaned_data.get("blacklist_regex")
-        if client_mode == Configuration.LOCKDOWN_MODE and blacklist_regex:
-            self.add_error("blacklist_regex",
-                           "Can't use a blacklist regex in Lockdown mode.")
+        blocked_path_regex = cleaned_data.get("blocked_path_regex")
+        if client_mode == Configuration.LOCKDOWN_MODE and blocked_path_regex:
+            self.add_error("blocked_path_regex",
+                           "Can't use a bloked path regex in Lockdown mode.")
+
+        # client certificate authentication
+        client_certificate_auth = cleaned_data.get("client_certificate_auth", False)
+        client_auth_certificate_issuer_cn = cleaned_data.get("client_auth_certificate_issuer_cn")
+        if client_auth_certificate_issuer_cn and not client_certificate_auth:
+            self.add_error("client_certificate_auth",
+                           "Needs to be checked to use Client auth certificate issuer CN")
+        if (client_certificate_auth or client_auth_certificate_issuer_cn) and \
+           "tls_hostname_for_client_cert_auth" not in settings["api"]:
+            for field in ("client_certificate_auth", "client_auth_certificate_issuer_cn"):
+                self.add_error(
+                    field,
+                    "The server requiring the client cert for authentication is not configured."
+                )
         return cleaned_data
 
 
 class EnrollmentForm(forms.ModelForm):
-    santa_release = forms.ChoiceField(
-        label="Santa release",
-        choices=[],
-        initial="",
-        help_text="Choose a santa release to be installed by the enrollment package.",
-        required=False
-    )
-
     class Meta:
         model = Enrollment
-        fields = ("configuration", "santa_release")
+        fields = ("configuration",)
 
     def __init__(self, *args, **kwargs):
         # meta business unit not used in this enrollment form
@@ -44,17 +52,6 @@ class EnrollmentForm(forms.ModelForm):
         # hide configuration dropdown if configuration if fixed
         if self.configuration:
             self.fields["configuration"].widget = forms.HiddenInput()
-
-        # release
-        release_field = self.fields["santa_release"]
-        if self.update_for:
-            release_field.widget = forms.HiddenInput()
-        else:
-            r = Releases()
-            release_choices = [(version, version) for _, version, _, _, _ in r.get_versions()]
-            if not self.standalone:
-                release_choices.insert(0, ("", "Do not include santa"))
-            release_field.choices = release_choices
 
 
 class CertificateSearchForm(forms.Form):

@@ -32,34 +32,34 @@ class SantaProbeTestCase(TestCase):
                              "39203920392039203920392023232323")
         cls.certificate_sha256 = ("c7839029302930293029392039203920"
                                   "39203920392039203920392023232323")
-        # blacklist
-        cls.blacklist_rules = [{"policy": "BLACKLIST",
+        # blocklist
+        cls.blocklist_rules = [{"policy": "BLACKLIST",
                                 "rule_type": "BINARY",
                                 "sha256": cls.binary_sha256},
                                {"policy": "BLACKLIST",
                                 "rule_type": "CERTIFICATE",
                                 "sha256": cls.certificate_sha256}]
-        cls.probe_source_blacklist = ProbeSource.objects.create(
+        cls.probe_source_blocklist = ProbeSource.objects.create(
             model="SantaProbe",
-            name="santa probe blacklist",
+            name="santa probe blocklist",
             status=ProbeSource.ACTIVE,
-            body={"rules": cls.blacklist_rules}
+            body={"rules": cls.blocklist_rules}
         )
-        cls.probe_blacklist = cls.probe_source_blacklist.load()
-        # whitelist
-        cls.whitelist_rules = [{"policy": "WHITELIST",
+        cls.probe_blocklist = cls.probe_source_blocklist.load()
+        # allowlist
+        cls.allowlist_rules = [{"policy": "WHITELIST",
                                 "rule_type": "BINARY",
                                 "sha256": cls.binary_sha256},
                                {"policy": "WHITELIST",
                                 "rule_type": "CERTIFICATE",
                                 "sha256": cls.certificate_sha256}]
-        cls.probe_source_whitelist = ProbeSource.objects.create(
+        cls.probe_source_allowlist = ProbeSource.objects.create(
             model="SantaProbe",
-            name="santa probe whitelist",
+            name="santa probe allowlist",
             status=ProbeSource.ACTIVE,
-            body={"rules": cls.whitelist_rules}
+            body={"rules": cls.allowlist_rules}
         )
-        cls.probe_whitelist = cls.probe_source_whitelist.load()
+        cls.probe_allowlist = cls.probe_source_allowlist.load()
         # tablet
         cls.tablet_rules = [{"policy": "BLACKLIST",
                              "rule_type": "BINARY",
@@ -78,14 +78,14 @@ class SantaProbeTestCase(TestCase):
         all_probes.clear()
 
     def test_probes(self):
-        for probe in (self.probe_blacklist,
-                      self.probe_whitelist,
+        for probe in (self.probe_blocklist,
+                      self.probe_allowlist,
                       self.probe_tablet):
             self.assertTrue(isinstance(probe, SantaProbe))
 
     def test_probes_metadata_filters(self):
-        for probe in (self.probe_blacklist,
-                      self.probe_whitelist,
+        for probe in (self.probe_blocklist,
+                      self.probe_allowlist,
                       self.probe_tablet):
             self.assertEqual(len(probe.metadata_filters), 1)
             metadata_filter = probe.metadata_filters[0]
@@ -97,8 +97,8 @@ class SantaProbeTestCase(TestCase):
         self.assertEqual(len(santa_probes), 3)
 
     def test_probe_sources_event_type(self):
-        for probe_source in (self.probe_source_blacklist,
-                             self.probe_source_whitelist,
+        for probe_source in (self.probe_source_blocklist,
+                             self.probe_source_allowlist,
                              self.probe_source_tablet):
             self.assertEqual(probe_source.event_types, ["santa_event"])
 
@@ -125,8 +125,8 @@ class SantaProbeTestCase(TestCase):
                 ("CERTIFICATE", self.certificate_sha256, "ALLOW_CERTIFICATE", False, True),
                 ("CERTIFICATE", self.certificate_sha256, "BLOCK_CERTIFICATE", True, False)):
             event = build_matching_santa_event(rule_type, sha256, decision)
-            self.assertEqual(self.probe_blacklist.test_event(event), bl_result)
-            self.assertEqual(self.probe_whitelist.test_event(event), wl_result)
+            self.assertEqual(self.probe_blocklist.test_event(event), bl_result)
+            self.assertEqual(self.probe_allowlist.test_event(event), wl_result)
             # tablet
             sha256 = sha256[::-1]
             event = build_matching_santa_event(rule_type, sha256, decision)
@@ -145,14 +145,14 @@ class SantaProbeTestCase(TestCase):
         config = build_santa_conf(default_machine)
         self.assertEqual(len(config["rules"]), 4)
         self.assertEqual(frozenrules(config["rules"]),
-                         frozenrules(self.blacklist_rules +
-                                     self.whitelist_rules))
+                         frozenrules(self.blocklist_rules +
+                                     self.allowlist_rules))
 
         # tablet has all the rules
         tablet = MockMetaMachine([], [], None, "TABLET")
         config = build_santa_conf(tablet)
         self.assertEqual(len(config["rules"]), 6)
         self.assertEqual(frozenrules(config["rules"]),
-                         frozenrules(self.blacklist_rules +
-                                     self.whitelist_rules +
+                         frozenrules(self.blocklist_rules +
+                                     self.allowlist_rules +
                                      self.tablet_rules))
