@@ -1,0 +1,8 @@
+{% extends 'base_error.html' %}
+
+{% block content %}
+<h2>404 - Not Found</h2>
+{% if exception != "Resolver404" %}
+<p>{{ exception }}</p>
+{% endif %}
+{% endblock %}

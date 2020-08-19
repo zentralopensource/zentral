@@ -1,0 +1,33 @@
+{% load static base_extras %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" href="{% static 'favicon.ico' %}">
+    <title>Zentral</title>
+    <link href="{% static 'bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'pygments/highlight_style.css' %}" rel="stylesheet">
+    <link href="{% static 'fontawesome-free-5.8.1-web/css/all.min.css' %}" rel="stylesheet">
+    <link href="{% static 'css/style.css' %}" rel="stylesheet">
+  </head>
+  <body>
+    <header class="navbar navbar-default" role="banner">
+      <div class="container">
+        <!-- Brand and toggle get grouped for better mobile display -->
+        <div class="navbar-header">
+	  <a class="navbar-brand" href="{% url 'base:index' %}" style="padding:10px 15px;">
+	    <img src="{% static 'logox1.png' %}"
+	         srcset="{% static 'logox1.png' %} 1x, {% static 'logox2.png' %} 2x"
+		 alt="Zentral">
+	  </a>
+        </div>
+      </div><!-- /.container -->
+    </header>
+    <div class="container">
+      {% block content %}
+      {% endblock %}
+    </div>
+  </body>
+</html>
