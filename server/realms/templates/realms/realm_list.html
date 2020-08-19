@@ -9,7 +9,7 @@
 
 <h2>{{ realms_count }} Realm{{ realms_count|pluralize }}</h2>
 
-{% if not request.user.is_remote %}
+{% if can_manage_realms %}
 <div class="dropdown">
   <button class="btn btn-default dropdown-toggle" type="button" id="createRealm"
           data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
@@ -36,7 +36,7 @@
     {% for realm in object_list %}
     <tr>
       <td>
-        {% if not request.user.is_remote %}
+        {% if can_manage_realms %}
         <a href="{{ realm.get_absolute_url }}">{{ realm }}</a>
         {% else %}
         {{ realm }}
@@ -46,7 +46,7 @@
         {{ realm.backend }}
       </td>
       <td>
-        {% if not request.user.is_remote %}
+        {% if can_manage_realms %}
         <a class="btn btn-default" href="{% url 'realms:update' realm.uuid %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
           Update

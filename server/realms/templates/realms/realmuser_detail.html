@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% load base_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li><a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>Realm user <i>{{ object }}</i></h2>
+
+<h3>Orginal claims</h3>
+
+{{ object.claims|pythonprettyprint }}
+
+<h3>Mapped claims</h3>
+
+{% if error %}
+<p class="text-danger">{{ error }}</p>
+{% endif %}
+
+<dl class="dl-horizontal">
+  <dt>Username</dt>
+  <dd>{{ object.username }}</dd>
+  <dt>Email</dt>
+  <dd>{{ object.email|default:"-" }}</dd>
+  <dt>First name</dt>
+  <dd>{{ object.first_name|default:"-" }}</dd>
+  <dt>Last name</dt>
+  <dd>{{ object.last_name|default:"-" }}</dd>
+  <dt>Full name</dt>
+  <dd>{{ object.full_name|default:"-" }}</dd>
+</dl>
+{% endblock %}

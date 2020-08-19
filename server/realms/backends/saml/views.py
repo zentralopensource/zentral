@@ -1,3 +1,4 @@
+import logging
 from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -6,10 +7,15 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import View
 from saml2 import BINDING_HTTP_POST
 from saml2.metadata import entity_descriptor
+from realms.exceptions import RealmUserError
 from realms.models import Realm, RealmAuthenticationSession
+from realms.views import ras_finalization_error
 
 
 # adapted from https://github.com/jpf/okta-pysaml2-example/blob/master/app.py
+
+
+logger = logging.getLogger("zentral.realms.backends.saml.views")
 
 
 class BaseSPView(View):
@@ -39,15 +45,18 @@ class AssertionConsumerServiceView(BaseSPView):
         if ras.user:
             raise SuspiciousOperation("Realm authorization session already used")
 
-        # update or create realm user
-        realm_user = self.backend_instance.update_or_create_realm_user(session_info)
+        try:
+            realm_user = self.backend_instance.update_or_create_realm_user(session_info)
+        except RealmUserError as e:
+            logger.exception("Could not update or create realm user")
+            return ras_finalization_error(request, ras, exception=e)
 
         # finalize the authentication session
         redirect_url = None
         try:
             redirect_url = ras.finalize(request, realm_user)
-        except Exception:
-            raise ValueError("Could not finalize the authentication session")
+        except Exception as e:
+            return ras_finalization_error(request, ras, realm_user=realm_user, exception=e)
         else:
             if redirect_url:
                 return HttpResponseRedirect(redirect_url)

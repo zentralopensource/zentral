@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load base_extras %}
+
+{% block content %}
+<h2>Realm <i>{{ realm }}</i></h2>
+
+<p class="text-danger">{{ message }}</p>
+
+<h3>Orginal claims</h3>
+
+{{ original_claims|pythonprettyprint }}
+
+<h3>Mapped claims</h3>
+<dl class="dl-horizontal">
+  <dt>Username</dt>
+  <dd>{{ claims.username|default:"-" }}</dd>
+  <dt>Email</dt>
+  <dd>{{ claims.email|default:"-" }}</dd>
+  <dt>First name</dt>
+  <dd>{{ claims.first_name|default:"-" }}</dd>
+  <dt>Last name</dt>
+  <dd>{{ claims.last_name|default:"-" }}</dd>
+  <dt>Full name</dt>
+  <dd>{{ claims.full_name|default:"-" }}</dd>
+</dl>
+{% endblock %}

@@ -17,7 +17,14 @@
   <tbody>
     {% for managed_user in object_list %}
     <tr>
-      <td>{{ managed_user.username }}</td>
+      <td>
+        {% if managed_user.is_superuser %}
+        <span class="glyphicon glyphicon-fire" aria-hidden="true"></span>
+        {% else %}
+        <span class="glyphicon glyphicon-user" aria-hidden="true"></span>
+        {% endif %}
+        {{ managed_user.username }}
+      </td>
       <td>{{ managed_user.email }}</td>
       <td>
         {% if managed_user.editable %}

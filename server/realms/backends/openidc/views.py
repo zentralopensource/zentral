@@ -1,8 +1,14 @@
+import logging
 from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views.generic import View
+from realms.exceptions import RealmUserError
 from realms.models import Realm, RealmAuthenticationSession
+from realms.views import ras_finalization_error
+
+
+logger = logging.getLogger("zentral.realms.backends.openidc.views")
 
 
 class AuthorizationCodeFlowRedirectView(View):
@@ -33,14 +39,20 @@ class AuthorizationCodeFlowRedirectView(View):
         code_verifier = None
         if ras.backend_state:
             code_verifier = ras.backend_state.get("code_verifier")
-        realm_user = backend_instance.update_or_create_realm_user(code, code_verifier)
+
+        try:
+            realm_user = backend_instance.update_or_create_realm_user(code, code_verifier)
+        except RealmUserError as e:
+            logger.exception("Could not update or create realm user")
+            return ras_finalization_error(request, ras, exception=e)
 
         # finalize the authentication session
         redirect_url = None
         try:
             redirect_url = ras.finalize(request, realm_user)
-        except Exception:
-            raise ValueError("Could not finalize the authentication session")
+        except Exception as e:
+            logger.exception("Could not finalize the authentication session")
+            return ras_finalization_error(request, ras, realm_user=realm_user, exception=e)
         else:
             if redirect_url:
                 return HttpResponseRedirect(redirect_url)

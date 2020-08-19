@@ -76,11 +76,15 @@
   </div>
 </div>
 
-<p>
+<form action="{% url 'realms:test' realm.pk %}" method="POST" target="_blank">{% csrf_token %}
   <a class="btn btn-default" href="{% url 'realms:update' object.uuid %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
+  <button class="btn btn-default">
+    <span class="glyphicon glyphicon-sunglasses" aria-hidden="true"></span>
+    Test
+  </button>
 </p>
 {% endblock %}
 

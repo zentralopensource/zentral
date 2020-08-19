@@ -7,6 +7,7 @@ from saml2.config import Config as Saml2Config
 from saml2.saml import NAMEID_FORMAT_EMAILADDRESS
 from zentral.conf import settings
 from realms.backends.base import BaseBackend
+from realms.exceptions import RealmUserError
 
 
 logger = logging.getLogger("zentral.realms.backends.saml")
@@ -109,8 +110,7 @@ class SAMLRealmBackend(BaseBackend):
             username = name_id
 
         if not username:
-            logger.error("No username found in SAML session info")
-            return None
+            raise RealmUserError("No username found in SAML session info", realm_user_defaults)
         else:
             from realms.models import RealmUser
             realm_user, _ = RealmUser.objects.update_or_create(

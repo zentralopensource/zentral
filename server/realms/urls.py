@@ -12,6 +12,8 @@ urlpatterns = [
     path('<uuid:pk>/', views.RealmView.as_view(), name='view'),
     path('<uuid:pk>/update/', views.UpdateRealmView.as_view(), name='update'),
     path('<uuid:pk>/zentral_login/', views.ZentralLoginView.as_view(), name='zentral_login'),
+    path('<uuid:pk>/test/', views.TestRealmView.as_view(), name='test'),
+    path('<uuid:pk>/users/<uuid:user_pk>/', views.RealmUserView.as_view(), name='user'),
 ]
 urlpatterns += ldap_urlpatterns
 urlpatterns += saml_urlpatterns

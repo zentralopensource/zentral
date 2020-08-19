@@ -2,6 +2,7 @@ import logging
 from django.urls import reverse
 from zentral.conf import settings
 from realms.backends.base import BaseBackend
+from realms.exceptions import RealmUserError
 from .lib import build_authorization_code_flow_url, generate_pkce_codes, get_claims
 
 
@@ -74,18 +75,17 @@ class OpenIDConnectRealmBackend(BaseBackend):
             realm_user_defaults[user_claim] = value
 
         # the username for the claim mappings
-        username = realm_user_defaults.pop("username", None)
-        if not username:
-            logger.error("No username found in ID token")
-            return None
-        else:
-            from realms.models import RealmUser
-            realm_user, _ = RealmUser.objects.update_or_create(
-                realm=self.instance,
-                username=username,
-                defaults=realm_user_defaults
-            )
-            return realm_user
+        if "username" not in realm_user_defaults or not realm_user_defaults["username"]:
+            raise RealmUserError("No username found in ID token", realm_user_defaults)
+
+        username = realm_user_defaults.pop("username")
+        from realms.models import RealmUser
+        realm_user, _ = RealmUser.objects.update_or_create(
+            realm=self.instance,
+            username=username,
+            defaults=realm_user_defaults
+        )
+        return realm_user
 
     @staticmethod
     def get_form_class():

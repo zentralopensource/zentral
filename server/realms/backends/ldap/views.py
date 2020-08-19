@@ -1,8 +1,14 @@
+import logging
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views.generic import FormView
+from realms.exceptions import RealmUserError
 from realms.models import RealmAuthenticationSession
+from realms.views import ras_finalization_error
 from .forms import LoginForm
+
+
+logger = logging.getLogger("zentral.realms.backends.ldap.views")
 
 
 class LoginView(FormView):
@@ -40,15 +46,19 @@ class LoginView(FormView):
         if self.session.save_password_hash:
             password = form.cleaned_data["password"]
 
-        realm_user = self.backend_instance.update_or_create_realm_user(username, password)
+        try:
+            realm_user = self.backend_instance.update_or_create_realm_user(username, password)
+        except RealmUserError as e:
+            logger.exception("Could not update or create realm user")
+            return ras_finalization_error(self.request, self.session, exception=e)
 
         # finalize the authentication session
         redirect_url = None
         try:
             redirect_url = self.session.finalize(self.request, realm_user)
-        except Exception:
-            raise
-            raise ValueError("Could not finalize the authentication session")
+        except Exception as e:
+            logger.exception("Could not finalize the authentication session")
+            return ras_finalization_error(self.request, self.session, realm_user=realm_user, exception=e)
         else:
             if redirect_url:
                 return HttpResponseRedirect(redirect_url)

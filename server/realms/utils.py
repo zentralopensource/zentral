@@ -4,6 +4,7 @@ import logging
 import random
 from django.conf import settings
 from django.contrib.auth import authenticate, login
+from django.urls import reverse
 
 
 logger = logging.getLogger("zentral.realms.utils")
@@ -27,6 +28,13 @@ def login_callback(request, realm_user, next_url=None):
         request.session.set_expiry(0)
         login(request, user)
     return next_url or settings.LOGIN_REDIRECT_URL
+
+
+def test_callback(request, realm_user, next_url=None):
+    """
+    Realm authorization session callback used to test the realm
+    """
+    return reverse("realms:user", args=(realm_user.realm.pk, realm_user.pk))
 
 
 def build_password_hash_dict(password):

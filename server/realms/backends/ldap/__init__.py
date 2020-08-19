@@ -3,6 +3,7 @@ import logging
 from django.urls import reverse
 import ldap
 from realms.backends.base import BaseBackend
+from realms.exceptions import RealmUserError
 from realms.utils import build_password_hash_dict
 
 
@@ -114,19 +115,18 @@ class LDAPRealmBackend(BaseBackend):
                 value = ""
             realm_user_defaults[user_claim] = value
 
-        # the username from the claim mappings
+        # the username for the claim mappings
+        if "username" not in realm_user_defaults or not realm_user_defaults["username"]:
+            raise RealmUserError("No username found in ID token", realm_user_defaults)
+
         username = realm_user_defaults.pop("username", None)
-        if not username:
-            logger.error("No username found in LDAP user info")
-            return None
-        else:
-            from realms.models import RealmUser
-            realm_user, _ = RealmUser.objects.update_or_create(
-                realm=self.instance,
-                username=username,
-                defaults=realm_user_defaults
-            )
-            return realm_user
+        from realms.models import RealmUser
+        realm_user, _ = RealmUser.objects.update_or_create(
+            realm=self.instance,
+            username=username,
+            defaults=realm_user_defaults
+        )
+        return realm_user
 
     @staticmethod
     def get_form_class():
