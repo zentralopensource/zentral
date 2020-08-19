@@ -106,7 +106,7 @@ class ZentralLoginView(View):
 
 class TestRealmView(View):
     def post(self, request, *args, **kwargs):
-        realm = get_object_or_404(Realm, pk=kwargs["pk"], enabled_for_login=True)
+        realm = get_object_or_404(Realm, pk=kwargs["pk"])
         callback = "realms.utils.test_callback"
         callback_kwargs = {}
         next_url = request.POST.get("next")
