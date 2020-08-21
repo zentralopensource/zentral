@@ -70,7 +70,7 @@ def login(request):
 
     context = {
         'form': form,
-        'login_realms': [(r, reverse("realms:zentral_login", args=(r.pk,)))
+        'login_realms': [(r, reverse("realms:login", args=(r.pk,)))
                          for r in Realm.objects.filter(enabled_for_login=True)],
         REDIRECT_FIELD_NAME: redirect_to,
     }

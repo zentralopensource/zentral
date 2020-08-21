@@ -82,16 +82,17 @@ class UpdateRealmView(CanManageRealmsMixin, UpdateView):
         return self.object.backend_instance.get_form_class()
 
 
-class ZentralLoginView(View):
-    def post(self, request, *args, **kwargs):
+class LoginView(View):
+    def dispatch(self, request, *args, **kwargs):
         realm = get_object_or_404(Realm, pk=kwargs["pk"], enabled_for_login=True)
         callback = "realms.utils.login_callback"
         callback_kwargs = {}
-        next_url = request.POST.get("next")
-        if next_url and is_safe_url(url=next_url,
-                                    allowed_hosts={request.get_host()},
-                                    require_https=request.is_secure()):
-            callback_kwargs["next_url"] = next_url
+        if request.method == "POST":
+            next_url = request.POST.get("next")
+            if next_url and is_safe_url(url=next_url,
+                                        allowed_hosts={request.get_host()},
+                                        require_https=request.is_secure()):
+                callback_kwargs["next_url"] = next_url
         redirect_url = None
         try:
             redirect_url = realm.backend_instance.initialize_session(callback, **callback_kwargs)

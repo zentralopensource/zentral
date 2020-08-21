@@ -17,6 +17,10 @@ class OpenIDConnectRealmBackend(BaseBackend):
         return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
                              reverse("realms:openidc_ac_redirect", args=(self.instance.uuid,)))
 
+    def idp_initiated_login_uri(self):
+        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
+                             reverse("realms:login", args=(self.instance.uuid,)))
+
     def extra_attributes_for_display(self):
         config = self.instance.config
         return [
@@ -24,6 +28,7 @@ class OpenIDConnectRealmBackend(BaseBackend):
             ("Client ID", config.get("client_id"), False),
             ("Client secret", config.get("client_secret"), True),
             ("Authorization code flow redirect URI", self.ac_redirect_uri(), False),
+            ("IdP-initiated login URI", self.idp_initiated_login_uri(), False),
         ]
 
     def initialize_session(self, callback, **callback_kwargs):
