@@ -37,9 +37,19 @@ class AssertionConsumerServiceView(BaseSPView):
         relay_state = request.POST.get("RelayState")
         if not relay_state:
             raise SuspiciousOperation("Missing relay state")
+        ras = None
         try:
             ras = RealmAuthenticationSession.objects.select_for_update().get(realm=self.realm, pk=relay_state)
         except RealmAuthenticationSession.DoesNotExist:
+            if self.realm.enabled_for_login:
+                default_relay_state = self.realm.config.get("default_relay_state")
+                if default_relay_state and relay_state == default_relay_state:
+                    # IdP-initiated login
+                    ras = RealmAuthenticationSession.objects.create(
+                        realm=self.realm,
+                        callback="realms.utils.login_callback"
+                    )
+        if ras is None:
             raise SuspiciousOperation("Unknown relay state")
 
         if ras.user:

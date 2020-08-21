@@ -1,3 +1,4 @@
+import uuid
 from django import forms
 from saml2 import BINDING_HTTP_POST
 from saml2.config import Config as Saml2Config
@@ -62,4 +63,8 @@ class SAMLRealmForm(RealmForm):
             idp_metadata = self.instance.config.get("idp_metadata")
         if idp_metadata:
             config["idp_metadata"] = idp_metadata
+        default_relay_state = self.instance.config.get("default_relay_state")
+        if not default_relay_state:
+            default_relay_state = str(uuid.uuid4())
+        config["default_relay_state"] = default_relay_state
         return config

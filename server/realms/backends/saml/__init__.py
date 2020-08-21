@@ -63,10 +63,15 @@ class SAMLRealmBackend(BaseBackend):
         return Saml2Client(config=self.get_saml2_config())
 
     def extra_attributes_for_display(self):
-        return [
+        attributes = [
             ("Entity ID", self.entity_id(), False),
             ("Assertion Consumer Service URL", self.acs_url(), False),
         ]
+        if self.instance.enabled_for_login:
+            default_relay_state = self.instance.config.get("default_relay_state")
+            if default_relay_state:
+                attributes.append(("Default relay state", default_relay_state, True))
+        return attributes
 
     def initialize_session(self, callback, **callback_kwargs):
         from realms.models import RealmAuthenticationSession
