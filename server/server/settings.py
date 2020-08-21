@@ -218,6 +218,20 @@ if "GS_CREDENTIALS" in django_zentral_settings:
 # LOGGING
 # everything in the console.
 
+
+log_formatter = django_zentral_settings.get("LOG_FORMATTER")
+if log_formatter:
+    log_formatter_dict = {'()': log_formatter}
+else:
+    log_formatter_dict = {'format': '%(asctime)s PID%(process)d %(module)s %(levelname)s %(message)s'}
+
+
+if DEBUG:
+    log_level = "DEBUG"
+else:
+    log_level = "INFO"
+
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': True,
@@ -230,15 +244,13 @@ LOGGING = {
         },
     },
     'formatters': {
-        'verbose': {
-            'format': '%(asctime)s PID%(process)d %(module)s %(levelname)s %(message)s'
-        },
+        'ztl_formatter': log_formatter_dict
     },
     'handlers': {
         'console': {
-            'level': 'INFO',
+            'level': log_level,
             'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
+            'formatter': 'ztl_formatter',
         },
     },
     'loggers': {
