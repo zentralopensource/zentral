@@ -84,7 +84,10 @@ class UpdateRealmView(CanManageRealmsMixin, UpdateView):
 
 class LoginView(View):
     def dispatch(self, request, *args, **kwargs):
-        realm = get_object_or_404(Realm, pk=kwargs["pk"], enabled_for_login=True)
+        self.realm = get_object_or_404(Realm, pk=kwargs["pk"], enabled_for_login=True)
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
         callback = "realms.utils.login_callback"
         callback_kwargs = {}
         if request.method == "POST":
@@ -93,16 +96,15 @@ class LoginView(View):
                                         allowed_hosts={request.get_host()},
                                         require_https=request.is_secure()):
                 callback_kwargs["next_url"] = next_url
-        redirect_url = None
-        try:
-            redirect_url = realm.backend_instance.initialize_session(callback, **callback_kwargs)
-        except Exception:
-            logger.exception("Could not get realm %s redirect URL", realm.pk)
+        redirect_url = self.realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
+        if redirect_url:
+            return HttpResponseRedirect(redirect_url)
         else:
-            if redirect_url:
-                return HttpResponseRedirect(redirect_url)
-            else:
-                raise ValueError("Empty realm {} redirect URL".format(realm.pk))
+            raise ValueError("Empty realm {} redirect URL".format(self.realm.pk))
+
+    def get(self, request, *args, **kwargs):
+        redirect_url = "{}?realm={}".format(reverse("login"), self.realm.pk)
+        return HttpResponseRedirect(redirect_url)
 
 
 class TestRealmView(View):

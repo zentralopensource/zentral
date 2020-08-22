@@ -22,6 +22,11 @@ class AuthorizationCodeFlowRedirectView(View):
         state = request.GET.get("state")
         if not state:
             raise SuspiciousOperation("Missing state")
+
+        # verify that state is in the session
+        if not backend_instance.verify_session_state(request, state):
+            raise SuspiciousOperation("CSRF verification failed")
+
         try:
             ras = RealmAuthenticationSession.objects.select_for_update().get(realm=realm, pk=state)
         except RealmAuthenticationSession.DoesNotExist:

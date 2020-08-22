@@ -81,7 +81,7 @@ class LDAPRealmBackend(BaseBackend):
         results = conn.search_s(user_dn, ldap.SCOPE_BASE, attrlist=["*"])
         return cleanup_value(results[0][1])
 
-    def initialize_session(self, callback, save_password_hash=False, **callback_kwargs):
+    def initialize_session(self, request, callback, save_password_hash=False, **callback_kwargs):
         from realms.models import RealmAuthenticationSession
         ras = RealmAuthenticationSession(
             realm=self.instance,

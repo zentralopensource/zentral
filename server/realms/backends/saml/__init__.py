@@ -16,6 +16,14 @@ logger = logging.getLogger("zentral.realms.backends.saml")
 class SAMLRealmBackend(BaseBackend):
     name = "SAML"
 
+    @property
+    def allow_idp_initiated_login(self):
+        return self.instance.enabled_for_login and (self.instance.config.get("allow_idp_initiated_login") or False)
+
+    @property
+    def default_relay_state(self):
+        return self.instance.enabled_for_login and self.instance.config.get("default_relay_state")
+
     def acs_url(self):
         "Assertion Consumer Service URL"
         return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
@@ -46,7 +54,10 @@ class SAMLRealmBackend(BaseBackend):
                             (self.acs_url(), BINDING_HTTP_POST),
                         ],
                     },
+                    # skip built-in pysaml2 cache
+                    # https://github.com/IdentityPython/pysaml2/blob/9e5c9ab426ce8e602ca769c7fc259a2fb1325877/example/sp-wsgi/sp.py#L353  # NOQA
                     "allow_unsolicited": True,
+
                     "authn_requests_signed": False,
                     "logout_requests_signed": True,
                     "want_assertions_signed": True,
@@ -66,14 +77,13 @@ class SAMLRealmBackend(BaseBackend):
         attributes = [
             ("Entity ID", self.entity_id(), False),
             ("Assertion Consumer Service URL", self.acs_url(), False),
+            ("Allow IdP-initiated login", "yes" if self.allow_idp_initiated_login else "no", False),
         ]
-        if self.instance.enabled_for_login:
-            default_relay_state = self.instance.config.get("default_relay_state")
-            if default_relay_state:
-                attributes.append(("Default relay state", default_relay_state, True))
+        if self.default_relay_state:
+            attributes.append(("Default relay state", self.default_relay_state, False))
         return attributes
 
-    def initialize_session(self, callback, **callback_kwargs):
+    def initialize_session(self, request, callback, **callback_kwargs):
         from realms.models import RealmAuthenticationSession
         ras = RealmAuthenticationSession(
             realm=self.instance,
@@ -81,8 +91,14 @@ class SAMLRealmBackend(BaseBackend):
             callback_kwargs=callback_kwargs
         )
         ras.save()
+
         saml2_client = self.get_saml2_client()
-        _, request_info = saml2_client.prepare_for_authenticate(relay_state=str(ras.pk))
+        request_id, request_info = saml2_client.prepare_for_authenticate(relay_state=str(ras.pk))
+
+        # save request ID in auth session
+        ras.backend_state = {"request_id": request_id}
+        ras.save()
+
         return dict(request_info["headers"])["Location"]
 
     def update_or_create_realm_user(self, session_info):

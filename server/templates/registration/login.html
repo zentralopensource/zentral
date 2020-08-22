@@ -8,8 +8,11 @@
     <form action="{{ login_link }}" method="post">{% csrf_token %}
       <button href="{{ login_link }}" class="btn btn-large btn-primary">Sign in with {{ realm }}</button>
     </form>
+    {% if not forloop.last or form %}
     <h3 class="text-center">or</h3>
+    {% endif %}
     {% endfor %}
+    {% if form %}
     <form class="panel panel-default" method="POST">{% csrf_token %}
       <div class="panel-heading">
         <h3 class="panel-title">
@@ -32,6 +35,7 @@
         </div>
       </div>
     </form>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

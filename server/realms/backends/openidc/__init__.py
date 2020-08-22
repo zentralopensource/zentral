@@ -31,7 +31,7 @@ class OpenIDConnectRealmBackend(BaseBackend):
             ("IdP-initiated login URI", self.idp_initiated_login_uri(), False),
         ]
 
-    def initialize_session(self, callback, **callback_kwargs):
+    def initialize_session(self, request, callback, **callback_kwargs):
         config = self.instance.config
 
         if not config.get("client_secret"):
@@ -51,6 +51,9 @@ class OpenIDConnectRealmBackend(BaseBackend):
             callback_kwargs=callback_kwargs
         )
         ras.save()
+
+        # add state to session to prevent CSRF
+        self._add_ras_to_session(request, ras)
 
         return build_authorization_code_flow_url(
             config["discovery_url"],

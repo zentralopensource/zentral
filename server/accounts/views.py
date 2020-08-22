@@ -1,4 +1,5 @@
 import json
+import uuid
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login
@@ -34,6 +35,8 @@ def login(request):
     redirect_to = request.POST.get(REDIRECT_FIELD_NAME,
                                    request.GET.get(REDIRECT_FIELD_NAME, ''))
 
+    form = realm = None
+
     if request.method == "POST":
         form = ZentralAuthenticationForm(request, data=request.POST)
         if form.is_valid():
@@ -66,14 +69,23 @@ def login(request):
 
                 return HttpResponseRedirect(redirect_to)
     else:
-        form = ZentralAuthenticationForm(request)
+        try:
+            realm_pk = uuid.UUID(request.GET.get("realm"))
+            realm = Realm.objects.get(enabled_for_login=True, pk=realm_pk)
+        except (Realm.DoesNotExist, TypeError, ValueError):
+            form = ZentralAuthenticationForm(request)
 
     context = {
-        'form': form,
-        'login_realms': [(r, reverse("realms:login", args=(r.pk,)))
-                         for r in Realm.objects.filter(enabled_for_login=True)],
-        REDIRECT_FIELD_NAME: redirect_to,
+        REDIRECT_FIELD_NAME: redirect_to
     }
+    if form:
+        context["form"] = form
+    if realm:
+        login_realms = [realm]
+    else:
+        login_realms = Realm.objects.filter(enabled_for_login=True)
+    context["login_realms"] = [(r, reverse("realms:login", args=(r.pk,)))
+                               for r in login_realms]
 
     return TemplateResponse(request, "registration/login.html", context)
 

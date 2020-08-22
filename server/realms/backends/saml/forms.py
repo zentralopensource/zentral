@@ -8,10 +8,13 @@ from realms.forms import RealmForm
 
 class SAMLRealmForm(RealmForm):
     metadata_file = forms.FileField()
+    allow_idp_initiated_login = forms.BooleanField(required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["metadata_file"].required = self.instance is None
+        if self.instance:
+            self.fields["allow_idp_initiated_login"].initial = self.instance.config.get("allow_idp_initiated_login")
 
     def clean(self):
         super().clean()
@@ -63,7 +66,13 @@ class SAMLRealmForm(RealmForm):
             idp_metadata = self.instance.config.get("idp_metadata")
         if idp_metadata:
             config["idp_metadata"] = idp_metadata
-        default_relay_state = self.instance.config.get("default_relay_state")
+        if self.cleaned_data.get("allow_idp_initiated_login"):
+            config["allow_idp_initiated_login"] = True
+        else:
+            config["allow_idp_initiated_login"] = False
+        default_relay_state = None
+        if self.instance:
+            default_relay_state = self.instance.config.get("default_relay_state")
         if not default_relay_state:
             default_relay_state = str(uuid.uuid4())
         config["default_relay_state"] = default_relay_state
