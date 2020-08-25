@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load inventory_extras bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">{{ title }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+<p>
+  <a href="{% url 'jamf_protect:create_enrollment' %}" class="btn btn-default">Create</a>
+</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Business unit</th>
+      <th>Tags</th>
+      <th>Created at</th>
+      <th>Request count</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for enrollment in object_list %}
+    {% with enrollment.secret as secret %}
+    {% with enrollment.distributor as distributor %}
+    <tr>
+      <td><a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a></td>
+      <td>
+        {% for tag in secret.tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+      <td>
+        <a name="enrollment_{{ enrollment.pk }}"></a>
+        {{ secret.created_at }}
+      </td>
+      <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
+      <td>
+        {% if not distributor and not secret.is_used_up %}
+        <dl>
+          <dt>URL</dt>
+          <dd>{{ events_url }}</dd>
+          <dt>Authorization header</dt>
+          <dd><pre>Bearer {{ enrollment.secret.secret }}</pre></dd>
+        </dl>
+        {% elif secret.is_used_up %}
+        <span class="text-danger">Enrollment used up.</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'jamf_protect:enrollments' %}">Jamf Protect enrollments</a></li>
+  <li class="active">Create</li>
+</ol>
+
+<h2>Create Jamf Protect enrollment</h2>
+
+<form method="post" class="form">{% csrf_token %}
+  {{ secret_form|bootstrap }}
+  <p>
+    <a class="btn btn-default" href="{% url 'jamf_protect:enrollments' %}">
+      Cancel
+    </a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
+</form>
+{% endblock %}
