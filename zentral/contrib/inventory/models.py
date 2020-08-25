@@ -879,6 +879,19 @@ class MetaMachine(object):
     def archive(self):
         CurrentMachineSnapshot.objects.filter(serial_number=self.serial_number).delete()
 
+    def has_recent_source_snapshot(self, source_module, max_age=3600):
+        query = (
+            "select count(*) from inventory_currentmachinesnapshot as cms "
+            "join inventory_source as s on (cms.source_id = s.id) "
+            "join inventory_machinesnapshotcommit as msc on (cms.machine_snapshot_id=msc.machine_snapshot_id) "
+            "where cms.serial_number = %s and s.module = %s and msc.last_seen > %s"
+        )
+        args = [self.serial_number, source_module, timezone.now() - timedelta(seconds=max_age)]
+        with connection.cursor() as cursor:
+            cursor.execute(query, args)
+            t = cursor.fetchone()
+            return t[0] > 0
+
     def get_probe_filtering_values(self):
         query = (
             "select * from ("

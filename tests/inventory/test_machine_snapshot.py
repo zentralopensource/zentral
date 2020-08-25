@@ -1,5 +1,5 @@
 import copy
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import parser
 from django.test import TestCase
 from django.utils.timezone import is_aware, make_naive
@@ -223,6 +223,23 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(CurrentMachineSnapshot.objects.count(), 1)
         cms = CurrentMachineSnapshot.objects.get(serial_number=self.serial_number)
         self.assertEqual(cms.machine_snapshot, ms3)
+
+    def test_has_recent_source_snapshot(self):
+        tree = copy.deepcopy(self.machine_snapshot)
+        module = self.source["module"]
+        age = 7200
+        last_seen = datetime.utcnow() - timedelta(seconds=age)
+        tree["last_seen"] = last_seen
+        msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        mm = MetaMachine(self.serial_number + "e12908e1209")
+        self.assertFalse(mm.has_recent_source_snapshot(module, max_age=2*age))
+        mm = MetaMachine(self.serial_number)
+        self.assertFalse(mm.has_recent_source_snapshot(module + "lkjdelkwd", max_age=2*age))
+        self.assertFalse(mm.has_recent_source_snapshot(module))
+        self.assertTrue(mm.has_recent_source_snapshot(module, max_age=2*age))
+        mm.archive()
+        self.assertFalse(mm.has_recent_source_snapshot(module))
+        self.assertFalse(mm.has_recent_source_snapshot(module, max_age=2*age))
 
     def test_meta_machine(self):
         tree = copy.deepcopy(self.machine_snapshot)
