@@ -3,6 +3,7 @@ import os
 import shutil
 import tempfile
 import requests
+from urllib.parse import urlparse
 from requests.exceptions import ConnectionError, HTTPError
 from zentral.utils.local_dir import get_and_create_local_dir
 
@@ -11,12 +12,17 @@ logger = logging.getLogger("zentral.contrib.osquery.releases")
 
 
 GITHUB_API_URL = "https://api.github.com/repos/facebook/osquery/releases"
-ALTERNATIVE_PKG_DOWNLOAD_URL_TMPL = "https://pkg.osquery.io/darwin/osquery-{version}.pkg"
-
-SUFFIXES = (".amd64.deb", ".msi", ".x86_64.rpm", ".pkg")
 
 
-def get_osquery_versions(ignore_draft_release=True):
+SUFFIX_URLS = {
+    ".amd64.deb": "https://pkg.osquery.io/deb/osquery_{}_1.linux{}",
+    ".x86_64.rpm": "https://pkg.osquery.io/rpm/osquery-{}-1.linux{}",
+    ".msi": "https://pkg.osquery.io/windows/osquery-{}{}",
+    ".pkg": "https://pkg.osquery.io/darwin/osquery-{}{}",
+}
+
+
+def get_osquery_versions(ignore_draft_release=True, check_urls=True, last=3):
     try:
         resp = requests.get(GITHUB_API_URL)
         resp.raise_for_status()
@@ -28,44 +34,37 @@ def get_osquery_versions(ignore_draft_release=True):
         if release.get("draft") and ignore_draft_release:
             continue
         prerelease = release.get("prerelease", False)
+        tag_name = release["tag_name"]
         available_assets = {}
-        for asset in release.get("assets", []):
-            asset_name = asset.get("name")
-            for suffix in SUFFIXES:
-                if asset_name.endswith(suffix):
-                    browser_download_url = asset.get("browser_download_url")
-                    if browser_download_url:
-                        available_assets[suffix] = (asset_name, browser_download_url)
+        for suffix, url_tmpl in SUFFIX_URLS.items():
+            download_url = url_tmpl.format(tag_name, suffix)
+            if not check_urls or requests.head(download_url).status_code == 200:
+                available_assets[suffix] = download_url
         if available_assets:
-            versions.append((release["tag_name"], prerelease, available_assets))
+            versions.append((tag_name, prerelease, available_assets))
+            if last and len(versions) >= last:
+                break
     versions.sort(key=lambda t: [int(i) for i in t[0].split(".")], reverse=True)
     return versions
 
 
 def get_osquery_local_asset(version, suffix):
     asset_name = download_url = None
-    for release_version, prerelease, available_assets in get_osquery_versions():
+    for release_version, prerelease, available_assets in get_osquery_versions(check_urls=False, last=0):
         if version == release_version:
             try:
-                asset_name, download_url = available_assets[suffix]
+                download_url = available_assets[suffix]
             except KeyError:
-                pass
-            break
-    if asset_name is None and download_url is None and suffix == ".pkg":
-        # try alternative download
-        asset_name = "osquery-{version}.pkg".format(version=version)
-        download_url = ALTERNATIVE_PKG_DOWNLOAD_URL_TMPL.format(version=version)
-    if asset_name and download_url:
-        release_dir = get_and_create_local_dir("osquery", "releases")
-        local_asset_path = os.path.join(release_dir, asset_name)
-        if not os.path.exists(local_asset_path):
-            tmp_fh, tmp_path = tempfile.mkstemp(suffix=".osquery_asset{}".format(suffix))
-            resp = requests.get(download_url, stream=True)
-            resp.raise_for_status()
-            with os.fdopen(tmp_fh, "wb") as f:
-                for chunk in resp.iter_content(64 * 2**10):
-                    f.write(chunk)
-            shutil.move(tmp_path, local_asset_path)
-        return local_asset_path
-    else:
-        raise ValueError("Could not find requested asset")
+                raise ValueError("Could not find requested asset")
+    asset_name = os.path.basename(urlparse(download_url).path)
+    release_dir = get_and_create_local_dir("osquery", "releases")
+    local_asset_path = os.path.join(release_dir, asset_name)
+    if not os.path.exists(local_asset_path):
+        tmp_fh, tmp_path = tempfile.mkstemp(suffix=".osquery_asset{}".format(suffix))
+        resp = requests.get(download_url, stream=True)
+        resp.raise_for_status()
+        with os.fdopen(tmp_fh, "wb") as f:
+            for chunk in resp.iter_content(64 * 2**10):
+                f.write(chunk)
+        shutil.move(tmp_path, local_asset_path)
+    return local_asset_path
