@@ -119,7 +119,7 @@ class TestRealmView(View):
             callback_kwargs["next_url"] = next_url
         redirect_url = None
         try:
-            redirect_url = realm.backend_instance.initialize_session(callback, **callback_kwargs)
+            redirect_url = realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
         except Exception:
             logger.exception("Could not get realm %s redirect URL", realm.pk)
         else:
