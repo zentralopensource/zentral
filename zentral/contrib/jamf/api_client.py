@@ -1,6 +1,7 @@
 import logging
 from dateutil import parser
 from urllib.parse import urlparse
+from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape as xml_escape
 from django.urls import reverse
 import requests
@@ -10,6 +11,16 @@ from .events import JAMF_EVENTS
 
 
 logger = logging.getLogger('zentral.contrib.jamf.api_client')
+
+
+INVENTORY_DISPLAY_GENERAL = "General"
+INVENTORY_DISPLAY_HARDWARE = "Hardware"
+INVENTORY_DISPLAY_USER_AND_LOCATION = "User and Location"
+INVENTORY_DISPLAY_CHOICES = (
+    (INVENTORY_DISPLAY_GENERAL, INVENTORY_DISPLAY_GENERAL),
+    (INVENTORY_DISPLAY_HARDWARE, INVENTORY_DISPLAY_HARDWARE),
+    (INVENTORY_DISPLAY_USER_AND_LOCATION, INVENTORY_DISPLAY_USER_AND_LOCATION),
+)
 
 
 class APIClientError(Exception):
@@ -49,13 +60,15 @@ class APIClient(object):
     def get_webhook_name(self, event):
         return "{} {}".format(settings["api"]["tls_hostname"], event)
 
-    def _make_get_query(self, path):
+    def _make_get_query(self, path, missing_ok=False):
         url = "%s%s" % (self.api_base_url, path)
         try:
             r = self.session.get(url)
         except requests.exceptions.RequestException as e:
             raise APIClientError("jamf API error: {}".format(str(e)))
-        if r.status_code != requests.codes.ok:
+        if missing_ok and r.status_code == 404:
+            return None
+        elif r.status_code != requests.codes.ok:
             raise APIClientError("{} jamf API HTTP response status code {}".format(url, r.status_code))
         return r.json()
 
@@ -351,13 +364,55 @@ class APIClient(object):
         general_d.pop("network_limitations", None)  # TODO: any_ip_address is not an IP and triggers an elastic err
         return general_d
 
+    # computer extension attributes
+
+    def get_compute_extension_attribute_with_name(self, name):
+        return self._make_get_query('/computerextensionattributes/name/{}'.format(name), missing_ok=True)
+
+    def get_or_create_text_computer_extension_attribute(self, name, inventory_display):
+        assert(inventory_display in [s for s, _ in INVENTORY_DISPLAY_CHOICES])
+        cea_d = self.get_compute_extension_attribute_with_name(name)
+        if cea_d:
+            return cea_d["computer_extension_attribute"]["id"]
+        else:
+            url = '{}/computerextensionattributes/id/0'.format(self.api_base_url)
+            headers = {'content-type': 'text/xml'}
+            data_elm = ET.Element("computer_extension_attribute")
+            name_elm = ET.SubElement(data_elm, "name")
+            name_elm.text = name
+            inventory_display_elm = ET.SubElement(data_elm, "inventory_display")
+            inventory_display_elm.text = inventory_display
+            input_type_elm = ET.SubElement(data_elm, "input_type")
+            type_elm = ET.SubElement(input_type_elm, "type")
+            type_elm.text = "Text Field"
+            r = self.session.post(url, headers=headers, data=ET.tostring(data_elm, encoding="utf-8"))
+            if r.status_code != requests.codes.created:
+                raise APIClientError(r.text)
+            root = ET.fromstring(r.content)
+            for child in root:
+                if child.tag == "id":
+                    return int(child.text)
+            raise APIClientError("Could not get created text computer extension attribute ID")
+
+    def update_text_computer_extension_attribute(self, jamf_id, name, inventory_display, value):
+        url = "{}/computers/id/{}".format(self.api_base_url, jamf_id)
+        headers = {'content-type': 'text/xml'}
+        cea_id = self.get_or_create_text_computer_extension_attribute(name, inventory_display)
+        data_elm = ET.Element("computer")
+        extension_attributes_elm = ET.SubElement(data_elm, "extension_attributes")
+        attribute_elm = ET.SubElement(extension_attributes_elm, "attribute")
+        id_elm = ET.SubElement(attribute_elm, "id")
+        id_elm.text = str(cea_id)
+        value_elm = ET.SubElement(attribute_elm, "value")
+        value_elm.text = value
+        r = self.session.put(url, headers=headers, data=ET.tostring(data_elm, encoding="utf-8"))
+        if r.status_code != requests.codes.created:
+            raise APIClientError(r.text)
+
     # add to or remove from group
 
     def get_computer_group_with_name(self, group_name):
-        try:
-            return self._make_get_query('/computergroups/name/{}'.format(group_name))
-        except APIClientError:
-            return None
+        return self._make_get_query('/computergroups/name/{}'.format(group_name), missing_ok=True)
 
     def add_computer_to_group(self, jamf_id, group_name):
         jamf_id = int(jamf_id)
