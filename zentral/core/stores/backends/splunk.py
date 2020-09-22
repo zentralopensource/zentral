@@ -1,3 +1,12 @@
+#    base.json - example config
+#    "splunk": {
+#      "frontend": true,
+#      "backend": "zentral.core.stores.backends.splunk",
+#      "base_url": "https://si-i-xxx.prd-p-xxx.splunkcloud.com:8088/services/collector/raw",
+#      "api_token": "<ingest_api_here>",
+#      "verify_tls": true
+#    }
+
 import logging
 import requests
 from zentral.core.stores.backends.base import BaseEventStore
