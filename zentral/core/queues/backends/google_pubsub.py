@@ -107,7 +107,7 @@ class PreprocessWorker(LoggingMixin, PrometheusWorkerMixin):
             if not preprocessor:
                 self.log_error("No preprocessor for routing key %s", routing_key)
             else:
-                for event in preprocessor.process_raw_event(message.data):
+                for event in preprocessor.process_raw_event(json.loads(message.data)):
                     new_message = json.dumps(event.serialize(machine_metadata=False)).encode("utf-8")
                     self.publisher_client.publish(self.events_topic, new_message)
                     if self.prometheus_setup_done:
