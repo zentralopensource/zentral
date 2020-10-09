@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/munki/munki-python
 from Foundation import (CFPreferencesAppSynchronize,
                         CFPreferencesCopyAppValue,
                         CFPreferencesSetValue,
@@ -15,7 +15,7 @@ UUID_HEADER = 'X-Zentral-UUID'
 
 def get_serial_number_and_uuid():
     output = subprocess.check_output(["ioreg", "-a", "-c", "IOPlatformExpertDevice", "-d", "2"])
-    ioreg_result = plistlib.readPlistFromString(output)["IORegistryEntryChildren"][0]
+    ioreg_result = plistlib.loads(output)["IORegistryEntryChildren"][0]
     return ioreg_result["IOPlatformSerialNumber"], ioreg_result["IOPlatformUUID"]
 
 

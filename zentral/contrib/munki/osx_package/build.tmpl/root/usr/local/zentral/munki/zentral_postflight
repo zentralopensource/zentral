@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/munki/munki-python
 from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
@@ -9,7 +9,7 @@ import plistlib
 import ssl
 import subprocess
 import sys
-import urllib2
+import urllib.request
 import warnings
 import zlib
 
@@ -17,7 +17,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.5"
+USER_AGENT = "Zentral/munkipostflight 0.6"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -31,9 +31,10 @@ SYSTEM_PROFILER = "/usr/sbin/system_profiler"
 def get_osx_app_instances():
     apps = []
     try:
-        data = plistlib.readPlist(APPLICATION_INVENTORY)
+        with open(APPLICATION_INVENTORY, "rb") as f:
+            data = plistlib.load(f)
     except IOError:
-        print "Could not read application inventory plist"
+        print("Could not read application inventory plist")
     else:
         for app_d in data:
             apps.append({'app': {'bundle_id': app_d['bundleid'],
@@ -50,7 +51,8 @@ class ManagedInstallReport(object):
     def __init__(self, filename):
         self.basename = os.path.basename(filename)
         self.sha1sum = self._get_sha1_sum(filename)
-        self.data = plistlib.readPlist(filename)
+        with open(filename, "rb") as f:
+            self.data = plistlib.load(f)
         self.start_time = self.data['StartTime']
         self.end_time = self.data.get('EndTime', self.start_time)
         try:
@@ -78,7 +80,7 @@ class ManagedInstallReport(object):
             events.append((self.end_time, {'type': 'error', 'message': err}))
         for warn in self.data['Warnings']:
             events.append((self.end_time, {'type': 'warning', 'message': warn}))
-        events.sort()
+        events.sort(key=lambda t: t[0])
         return events
 
     def serialize(self):
@@ -125,7 +127,7 @@ class SystemProfilerReport(object):
                               'SPStorageDataType'],
                              stdout=subprocess.PIPE)
         stdoutdata, _ = p.communicate()
-        self.data = plistlib.readPlistFromString(stdoutdata)
+        self.data = plistlib.loads(stdoutdata)
 
     def _get_data_type(self, data_type):
         for subdata in self.data:
@@ -228,9 +230,9 @@ def parse_dn(dn):
 def read_cert_info(cert):
     p = subprocess.Popen(["/usr/bin/openssl", "x509", "-noout", "-issuer", "-subject"],
                          stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    stdout, _ = p.communicate(cert)
+    stdout, _ = p.communicate(cert.encode("utf-8"))
     info = {}
-    for line in stdout.splitlines():
+    for line in stdout.decode("utf-8").splitlines():
         line = line.strip()
         attr, dn = line.split("= ", 1)
         info[attr] = parse_dn(dn.strip())
@@ -243,7 +245,7 @@ def iter_certs():
     p = subprocess.Popen(["/usr/bin/security", "find-certificate", "-a", "-Z"], stdout=subprocess.PIPE)
     stdout, _ = p.communicate()
     current_sha1 = None
-    for line in stdout.splitlines():
+    for line in stdout.decode("utf-8").splitlines():
         line = line.strip()
         if not line:
             continue
@@ -255,7 +257,7 @@ def iter_certs():
     p = subprocess.Popen(["/usr/bin/security", "find-certificate", "-a", "-Z", "-p"], stdout=subprocess.PIPE)
     stdout, _ = p.communicate()
     current_cert = current_keychain = None
-    for line in stdout.splitlines():
+    for line in stdout.decode("utf-8").splitlines():
         line = line.strip()
         if not line:
             continue
@@ -300,7 +302,7 @@ def iter_users():
                           "NFSHomeDirectory", "RealName", "UniqueID"],
                          stdout=subprocess.PIPE)
     stdout, _ = p.communicate()
-    for dscl_d in plistlib.readPlistFromString(stdout):
+    for dscl_d in plistlib.loads(stdout):
         user_d = {}
         for dscl_attr, user_attr in (("NFSHomeDirectory", "directory"),
                                      ("RecordName", "username"),
@@ -364,16 +366,16 @@ def get_principal_user():
 
 
 def make_api_request(url, data=None):
-    req = urllib2.Request(url)
+    req = urllib.request.Request(url)
     req.add_header('User-Agent', USER_AGENT)
     req.add_header('Authorization', 'MunkiEnrolledMachine {}'.format(ZENTRAL_API_AUTH_TOKEN))
     if data:
         data = json.dumps(data)
         req.add_header('Content-Type', 'application/json')
-        data = zlib.compress(data, 9)
+        data = zlib.compress(data.encode("ascii"), 9)
         req.add_header('Content-Encoding', 'deflate')
-    ctx = ssl.create_default_context(cafile=ZENTRAL_API_SERVER_CERTIFICATE or None)
-    response = urllib2.urlopen(req, data=data, context=ctx)
+    ctx = ssl.create_default_context(cafile=ZENTRAL_API_SERVER_CERTIFICATE or "/private/etc/ssl/cert.pem")
+    response = urllib.request.urlopen(req, data=data, context=ctx)
     return json.load(response)
 
 
@@ -421,6 +423,6 @@ if __name__ == '__main__':
     # post the payload to zentral
     post_job(data)
 
-    print ('Zentral postflight job OK - '
-           'run type %s, last sha1sum %s') % (run_type or "-",
-                                              (last_seen_sha1sum or "-")[:7])
+    print('Zentral postflight job OK - '
+          'run type %s, last sha1sum %s' % (run_type or "-",
+                                            (last_seen_sha1sum or "-")[:7]))

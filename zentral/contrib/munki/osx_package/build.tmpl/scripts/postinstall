@@ -1,13 +1,13 @@
-#!/usr/bin/python
+#!/usr/local/munki/munki-python
 import json
 import os
 import plistlib
-import subprocess
 import ssl
-import urllib2
+import subprocess
+import urllib.request
 
 
-USER_AGENT = "Zentral/munkipostinstall 0.1"
+USER_AGENT = "Zentral/munkipostinstall 0.2"
 ENROLLMENT_URL = "%ENROLLMENT_URL%"
 ENROLLMENT_SECRET = "%ENROLLMENT_SECRET%"
 TLS_SERVER_CERTS = "%TLS_SERVER_CERTS%"
@@ -21,20 +21,20 @@ ZENTRAL_MUNKI_POSTFLIGHT_FILE = os.path.join(ZENTRAL_MUNKI_DIR, "zentral_postfli
 
 def get_serial_number_and_uuid():
     output = subprocess.check_output(["ioreg", "-a", "-c", "IOPlatformExpertDevice", "-d", "2"])
-    ioreg_result = plistlib.readPlistFromString(output)["IORegistryEntryChildren"][0]
+    ioreg_result = plistlib.loads(output)["IORegistryEntryChildren"][0]
     return ioreg_result["IOPlatformSerialNumber"], ioreg_result["IOPlatformUUID"]
 
 
 def enroll():
-    req = urllib2.Request(ENROLLMENT_URL)
+    req = urllib.request.Request(ENROLLMENT_URL)
     req.add_header("User-Agent", USER_AGENT)
     req.add_header("Content-Type", "application/json")
-    ctx = ssl.create_default_context(cafile=TLS_SERVER_CERTS or None)
     serial_number, uuid = get_serial_number_and_uuid()
     data = json.dumps({"secret": ENROLLMENT_SECRET,
                        "serial_number": serial_number,
                        "uuid": uuid})
-    resp = urllib2.urlopen(req, data=data, context=ctx)
+    ctx = ssl.create_default_context(cafile=TLS_SERVER_CERTS or "/private/etc/ssl/cert.pem")
+    resp = urllib.request.urlopen(req, data=data.encode("ascii"), context=ctx)
     return json.load(resp)["token"]
 
 
@@ -80,7 +80,7 @@ def prepare_munki_preflight_postflight():
 
         # run script
         if subprocess.call([ztl_script_path, "auto"]):
-            print "Could not run the Zentral", phase, "script"
+            print("Could not run the Zentral", phase, "script")
 
 
 # write zentral base url
@@ -88,7 +88,7 @@ def write_zentral_base_url():
     if subprocess.call(["defaults", "write",
                         "/Library/Preferences/io.zentral.plist",
                         "base_url", "https://{}".format(TLS_HOSTNAME)]):
-        print "Could not write the base url in the Zentral plist"
+        print("Could not write the base url in the Zentral plist")
 
 
 if __name__ == "__main__":

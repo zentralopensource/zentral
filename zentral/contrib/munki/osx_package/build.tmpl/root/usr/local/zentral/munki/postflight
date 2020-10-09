@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/munki/munki-python
 # Thanks to Graham Gilbert for
 # https://github.com/salsoftware/sal/blob/master/scripts/postflight
 import sys
@@ -12,7 +12,7 @@ def iter_postflight_scripts(postflight_dir):
     for script in os.listdir(postflight_dir):
         script_path = os.path.join(postflight_dir, script)
         if not os.access(script_path, os.X_OK):
-            print "'%s' is not executable or has bad permissions" % script_path
+            print(f"'{script_path}' is not executable or has bad permissions")
         else:
             yield script_path
 
@@ -22,7 +22,7 @@ def execute_postflight_scripts(postflight_dir):
         try:
             subprocess.call([script_path, sys.argv[1]])
         except OSError:
-            print "Could not execute script '%s'!" % script_path
+            print(f"Could not execute script '{script_path}'!")
 
 
 if __name__ == '__main__':
