@@ -61,7 +61,9 @@ def prepare_ms_tree_certificates(ms_tree):
         if is_ca(certificate):
             continue
         # build the cert tree
-        certificates.append(build_cert_tree(certificate))
+        cert_tree = build_cert_tree(certificate)
+        if cert_tree not in certificates:
+            certificates.append(cert_tree)
     # update the ms tree
     if certificates:
         ms_tree["certificates"] = certificates
