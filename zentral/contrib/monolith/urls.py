@@ -7,27 +7,6 @@ urlpatterns = [
     # repository sync configuration
     url(r'^webhook/$', views.WebHookView.as_view(), name='webhook'),
 
-    # configurations
-    url(r'^configurations/$',
-        views.ConfigurationListView.as_view(),
-        name='configuration_list'),
-    url(r'^configurations/create/$',
-        views.CreateConfigurationView.as_view(),
-        name='create_configuration'),
-    url(r'^configurations/(?P<pk>\d+)/$',
-        views.ConfigurationView.as_view(),
-        name='configuration'),
-    url(r'^configurations/(?P<pk>\d+)/update/$',
-        views.UpdateConfigurationView.as_view(),
-        name='update_configuration'),
-
-    # enrollment endpoint called by the postinstall script
-    url(r'^enroll/$', csrf_exempt(views.EnrollView.as_view()),
-        name='enroll'),
-    # registration endpoint called by the munki preflight or the run_once.py script
-    url(r'^register/$', csrf_exempt(views.RegisterView.as_view()),
-        name='register'),
-
     # pkg infos
     url(r'^pkg_infos/$', views.PkgInfosView.as_view(), name='pkg_infos'),
     url(r'^pkg_infos/(?P<pk>\d+)/update_catalog/$',
@@ -87,9 +66,12 @@ urlpatterns = [
     url(r'^manifests/(?P<pk>\d+)/add_enrollment/$',
         views.AddManifestEnrollmentView.as_view(),
         name="add_manifest_enrollment"),
-    url(r'^manifests/(?P<manifest_pk>\d+)/enrollment/(?P<pk>\d+)/package/$',
-        views.ManifestEnrollmentPackageView.as_view(),
-        name="manifest_enrollment_package"),
+    url(r'^manifests/(?P<manifest_pk>\d+)/enrollment/(?P<pk>\d+)/configuration_plist/$',
+        views.ManifestEnrollmentConfigurationProfileView.as_view(format="plist"),
+        name="manifest_enrollment_configuration_plist"),
+    url(r'^manifests/(?P<manifest_pk>\d+)/enrollment/(?P<pk>\d+)/configuration_profile/$',
+        views.ManifestEnrollmentConfigurationProfileView.as_view(format="configuration_profile"),
+        name="manifest_enrollment_configuration_profile"),
 
     # manifest catalogs
     url(r'^manifests/(?P<pk>\d+)/add_catalog/$',
@@ -151,6 +133,5 @@ main_menu_cfg = {
         ('conditions', 'Conditions'),
         ('manifests', 'Manifests'),
         ('sub_manifests', 'Sub manifests'),
-        ('configuration_list', 'Configurations'),
     )
 }

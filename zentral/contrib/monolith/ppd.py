@@ -14,7 +14,7 @@ def read_ppd_file(file_obj):
     content = file_obj.read()
     try:
         content = zlib.decompress(content, 16 + zlib.MAX_WBITS)
-    except:
+    except Exception:
         return content, False
     else:
         return content, True
@@ -28,7 +28,7 @@ def iter_ppd(content, encoding=None):
             continue
         try:
             keyword, value = line.split(b" ", 1)
-        except:
+        except Exception:
             # strange line ?
             continue
         keyword = keyword.strip(b"*").strip(b":")

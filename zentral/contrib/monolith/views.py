@@ -1,38 +1,31 @@
-import base64
 from itertools import chain
-import json
 import logging
-import dateutil.parser
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.urls import reverse_lazy
 from django.http import (FileResponse,
                          Http404,
-                         HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect,
-                         JsonResponse)
+                         HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect)
 from django.shortcuts import get_object_or_404, render
-from django.utils import timezone
-from django.utils.crypto import get_random_string
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
-from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine, Tag
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import verify_enrollment_secret
-from zentral.utils.api_views import (APIAuthError, make_secret, verify_secret,
-                                     SignedRequestHeaderJSONPostAPIView)
+from zentral.utils.api_views import make_secret, SignedRequestHeaderJSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import (post_monolith_cache_server_update_request,
-                     post_monolith_enrollment_event, post_monolith_registration_event,
+                     post_monolith_enrollment_event,
                      post_monolith_munki_request, post_monolith_repository_updates,
                      post_monolith_sync_catalogs_request)
 from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm,
                     CacheServersPostForm,
-                    ConfigurationForm,
                     ConfigureCacheServerForm,
                     DeleteManifestSubManifestForm,
                     EnrollmentForm,
@@ -43,13 +36,12 @@ from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
                     UploadPPDForm)
 from .models import (MunkiNameError, parse_munki_name,
                      Catalog, CacheServer,
-                     Configuration, EnrolledMachine, Enrollment,
+                     EnrolledMachine, Enrollment,
                      Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      Printer, PrinterPPD,
                      Condition,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
-from .osx_package.builder import MonolithZentralEnrollPkgBuilder
-from .utils import build_configuration_profile
+from .utils import build_configuration_plist, build_configuration_profile
 
 logger = logging.getLogger('zentral.contrib.monolith.views')
 
@@ -66,148 +58,6 @@ class WebHookView(LoginRequiredMixin, TemplateView):
         context['api_host'] = self.request.get_host()
         context['api_secret'] = make_secret('zentral.contrib.monolith')
         return context
-
-
-# configuration
-
-
-class ConfigurationListView(LoginRequiredMixin, ListView):
-    model = Configuration
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['monolith'] = True
-        ctx["configurations_count"] = ctx["object_list"].count()
-        return ctx
-
-
-class CreateConfigurationView(LoginRequiredMixin, CreateView):
-    model = Configuration
-    form_class = ConfigurationForm
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['monolith'] = True
-        return ctx
-
-
-class ConfigurationView(LoginRequiredMixin, DetailView):
-    model = Configuration
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['monolith'] = True
-        enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
-        ctx["enrollments"] = enrollments
-        ctx["enrollments_count"] = len(enrollments)
-        return ctx
-
-
-class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
-    model = Configuration
-    form_class = ConfigurationForm
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['monolith'] = True
-        return ctx
-
-
-# enrollment endpoint called by the postinstall script
-
-
-class EnrollView(View):
-    def post(self, request, *args, **kwargs):
-        user_agent, ip = user_agent_and_ip_address_from_request(request)
-        try:
-            request_json = json.loads(request.body.decode("utf-8"))
-            secret = request_json["secret"]
-            serial_number = request_json["serial_number"]
-            uuid = request_json["uuid"]
-            es_request = verify_enrollment_secret(
-                "monolith_enrollment", secret,
-                user_agent, ip, serial_number, uuid
-            )
-        except (KeyError, ValueError, EnrollmentSecretVerificationFailed) as e:
-            raise SuspiciousOperation
-        enrollment = es_request.enrollment_secret.monolith_enrollment
-        # get or create enrolled machine
-        enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.get_or_create(
-            enrollment=enrollment,
-            serial_number=serial_number,
-            defaults={"token": get_random_string(64)}
-        )
-
-        # apply enrollment secret tags
-        for tag in es_request.enrollment_secret.tags.all():
-            MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
-
-        action = "enrollment" if enrolled_machine_created else "re-enrollment"
-        post_monolith_enrollment_event(serial_number, user_agent, ip, {'action': action})
-
-        response_d = {"action": action}
-        configuration_profile_name, configuration_profile_data = build_configuration_profile(enrolled_machine)
-        configuration_profile_data = base64.b64encode(configuration_profile_data).decode("utf-8")
-        response_d["configuration_profile"] = {
-            "name": configuration_profile_name,
-            "data": configuration_profile_data
-        }
-        if enrollment.has_registration_steps() and not enrolled_machine.registered:
-            taxonomies = []
-            for taxonomy in enrollment.taxonomies.all():
-                taxonomies.append({"name": taxonomy.name,
-                                   "tags": [t["name"] for t in taxonomy.tag_set.values("name").order_by("name")]})
-            response_d["taxonomies"] = taxonomies
-        return JsonResponse(response_d)
-
-
-class RegisterView(View):
-    def post(self, request, *args, **kwargs):
-        user_agent, ip = user_agent_and_ip_address_from_request(request)
-        try:
-            token = request.META['HTTP_X_MONOLITH_TOKEN'].strip()
-        except (KeyError, AttributeError, EnrolledMachine.DoesNotExist):
-            raise PermissionDenied("Could not read token header")
-        try:
-            enrolled_machine = EnrolledMachine.objects.select_related("enrollment").get(token=token)
-        except EnrolledMachine.DoesNotExist:
-            raise PermissionDenied("Invalid token")
-        try:
-            request_json = json.loads(request.body.decode("utf-8"))
-        except (KeyError, ValueError):
-            raise SuspiciousOperation("Posted json data invalid")
-        registered = True
-        trigger_munki_run = False
-        tags = {}
-        for taxonomy in enrolled_machine.enrollment.taxonomies.all():
-            try:
-                tag_name = request_json[taxonomy.name]
-            except KeyError:
-                registered = False
-                # missing tag
-                continue
-            try:
-                tag = taxonomy.tag_set.get(name=tag_name)
-            except Tag.DoesNotExists:
-                registered = False
-                # unknown answer
-                continue
-            tags[taxonomy.name] = tag.name
-            _, tag_created = MachineTag.objects.get_or_create(serial_number=enrolled_machine.serial_number, tag=tag)
-            if tag_created:
-                trigger_munki_run = True
-        if registered:
-            try:
-                registered_at = dateutil.parser.parse(request_json["registration_date"])
-            except KeyError:
-                registered_at = timezone.now()
-            enrolled_machine.registered = True
-            enrolled_machine.registered_at = registered_at
-            enrolled_machine.save()
-        post_monolith_registration_event(enrolled_machine.serial_number, user_agent, ip,
-                                         {'registered': registered, 'tags': tags})
-        return JsonResponse({"do_munki_run": trigger_munki_run,
-                             "registered": registered})
 
 
 # pkg infos
@@ -892,11 +742,20 @@ class AddManifestEnrollmentView(LoginRequiredMixin, TemplateView):
             return self.forms_invalid(secret_form, enrollment_form)
 
 
-class ManifestEnrollmentPackageView(LoginRequiredMixin, View):
+class ManifestEnrollmentConfigurationProfileView(LoginRequiredMixin, View):
+    format = None
+
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], manifest__pk=kwargs["manifest_pk"])
-        builder = MonolithZentralEnrollPkgBuilder(enrollment)
-        return builder.build_and_make_response()
+        if self.format == "plist":
+            filename, content = build_configuration_plist(enrollment)
+        elif self.format == "configuration_profile":
+            filename, content = build_configuration_profile(enrollment)
+        else:
+            raise ValueError("Unknown configuration format: {}".format(self.format))
+        response = HttpResponse(content, "application/x-plist")
+        response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
+        return response
 
 
 # manifest catalogs
@@ -1232,63 +1091,70 @@ class MRBaseView(View):
                                "name": str(self.manifest)}
         post_monolith_munki_request(self.machine_serial_number, self.user_agent, self.ip, **payload)
 
-    def get_token(self, request):
+    def get_secret(self, request):
         try:
-            return request.META['HTTP_X_MONOLITH_TOKEN'].strip()
-        except (KeyError, AttributeError):
-            raise PermissionDenied("Could not read token header")
+            return request.META["HTTP_AUTHORIZATION"].strip().split()[-1]
+        except (AttributeError, IndexError, KeyError):
+            raise PermissionDenied("Could not read enrollment secret")
 
-    def verify_enrolled_machine_token(self, token):
-        """Find the corresponding enrolled machine"""
+    def get_serial_number(self, request):
         try:
-            enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__manifest__meta_business_unit")
-                                                       .get(token=token))
-        except EnrolledMachine.DoesNotExist:
-            raise PermissionDenied("Enrolled machine does not exist")
-        else:
-            self.token_machine_serial_number = enrolled_machine.serial_number
-            self.manifest = enrolled_machine.enrollment.manifest
-            self.meta_business_unit = self.manifest.meta_business_unit
+            return request.META["HTTP_X_ZENTRAL_SERIAL_NUMBER"].strip()
+        except (AttributeError, KeyError):
+            raise PermissionDenied("Missing custom serial number header")
 
-    def verify_signed_token(self, token):
-        """Verify the token signature"""
-        # TODO: deprecate and remove
+    def get_uuid(self, request):
         try:
-            api_data = verify_secret(token, 'zentral.contrib.monolith')
-        except APIAuthError:
-            raise PermissionDenied("Invalid API secret")
-        else:
-            self.token_machine_serial_number = api_data.get("machine_serial_number")
-            self.meta_business_unit = api_data['business_unit'].meta_business_unit
-            self.manifest = get_object_or_404(Manifest, meta_business_unit=self.meta_business_unit)
+            return request.META["HTTP_X_ZENTRAL_UUID"].strip()
+        except (AttributeError, KeyError):
+            raise PermissionDenied("Missing custom UUID header")
 
-    def set_machine(self, request):
-        header_machine_serial_number = request.META.get("HTTP_X_ZENTRAL_SERIAL_NUMBER")
-        if header_machine_serial_number and \
-           self.token_machine_serial_number and \
-           header_machine_serial_number != self.token_machine_serial_number:
-            logger.warning("Serial number mismatch. header: %s, token: %s",
-                           header_machine_serial_number,
-                           self.token_machine_serial_number)
-        self.machine_serial_number = header_machine_serial_number or self.token_machine_serial_number
-        if not self.machine_serial_number:
-            raise PermissionDenied("Unknown machine serial number")
-        # machine extra infos
-        self.machine = MetaMachine(self.machine_serial_number)
-        self.tags = self.machine.tags
+    def enroll_machine(self, request, secret, serial_number):
+        uuid = self.get_uuid(request)
+        try:
+            es_request = verify_enrollment_secret(
+                "monolith_enrollment", secret,
+                self.user_agent, self.ip, serial_number, uuid
+            )
+        except EnrollmentSecretVerificationFailed:
+            raise PermissionDenied("Enrollment secret verification failed")
+        enrollment = es_request.enrollment_secret.monolith_enrollment
+        # get or create enrolled machine
+        enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.get_or_create(
+            enrollment=enrollment,
+            serial_number=serial_number,
+        )
+        if enrolled_machine_created:
+            # apply enrollment secret tags
+            for tag in es_request.enrollment_secret.tags.all():
+                MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
+            post_monolith_enrollment_event(serial_number, self.user_agent, self.ip, {'action': "enrollment"})
+        return enrolled_machine
 
-    def authenticate(self, request):
-        self.token_msn = None
-        token = self.get_token(request)
-        if ":" not in token:
-            self.verify_enrolled_machine_token(token)
-        else:
-            self.verify_signed_token(token)
-        self.set_machine(request)
-        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
+    def get_enrolled_machine(self, request):
+        secret = self.get_secret(request)
+        serial_number = self.get_serial_number(request)
+        cache_key = "{}{}".format(secret, serial_number)
+        enrolled_machine = cache.get(cache_key)
+        if not enrolled_machine:
+            try:
+                enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__secret",
+                                                                           "enrollment__manifest__meta_business_unit")
+                                                           .get(enrollment__secret__secret=secret,
+                                                                serial_number=serial_number))
+            except EnrolledMachine.DoesNotExist:
+                enrolled_machine = self.enroll_machine(request, secret, serial_number)
+            cache.set(cache_key, enrolled_machine, 600)
+        return enrolled_machine
 
     def dispatch(self, request, *args, **kwargs):
-        self.authenticate(request)
+        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
+        enrolled_machine = self.get_enrolled_machine(request)
+        self.manifest = enrolled_machine.enrollment.manifest
+        self.meta_business_unit = self.manifest.meta_business_unit
+        self.machine_serial_number = enrolled_machine.serial_number
+        self.machine = MetaMachine(self.machine_serial_number)
+        self.tags = self.machine.tags
         return super().dispatch(request, *args, **kwargs)
 
 

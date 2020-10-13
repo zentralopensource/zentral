@@ -23,7 +23,6 @@
     <th>Created at</th>
     <th>Configuration</th>
     <th>Request count</th>
-    <th>Munki release</th>
     <th>Version</th>
     <th>Distributor</th>
     <th></th>
@@ -57,7 +56,6 @@
       </td>
       <td><a href="{{ enrollment.configuration.get_absolute_url }}">{{ enrollment.configuration }}</a></td>
       <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
-      <td>{{ enrollment.munki_release|default:"-" }}</td>
       <td>{{ enrollment.version }}</td>
       <td>
         {% if distributor %}
@@ -69,8 +67,12 @@
       <td>
         {% if not distributor and not secret.is_used_up %}
         <a class="btn btn-default download-tool"
-           href="{% url 'monolith:manifest_enrollment_package' enrollment.manifest.id enrollment.id %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+           href="{% url 'monolith:manifest_enrollment_configuration_plist' enrollment.manifest.id enrollment.id %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>plist
+        </a>
+        <a class="btn btn-default download-tool"
+           href="{% url 'monolith:manifest_enrollment_configuration_profile' enrollment.manifest.id enrollment.id %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>configuration profile
         </a>
         {% elif secret.is_used_up %}
         <span class="text-danger">Enrollment used up.</span>

@@ -8,13 +8,12 @@ from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.utils.api_views import make_secret
 from .attachments import MobileconfigFile, PackageFile
 from .exceptions import AttachmentError
-from .models import (CacheServer, Catalog, Configuration, Enrollment,
+from .models import (CacheServer, Catalog, Enrollment,
                      Manifest, ManifestCatalog, ManifestSubManifest,
                      Printer, PrinterPPD,
                      PkgInfoName, SubManifest,
                      SubManifestPkgInfo, SubManifestAttachment)
 from .ppd import get_ppd_information
-from .releases import DEPNotifyReleases, MunkiReleases
 
 
 class PkgInfoSearchForm(forms.Form):
@@ -410,65 +409,7 @@ class UploadPPDForm(forms.ModelForm):
         return ppd
 
 
-class ConfigurationForm(forms.ModelForm):
-    depnotify_release = forms.ChoiceField(
-        label="DEPNotify release",
-        choices=[],
-        initial="",
-        help_text="Choose a DEPNotify release to be installed",
-        required=False
-    )
-
-    class Meta:
-        model = Configuration
-        fields = "__all__"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # DEPNotifiy release
-        choices = [("", "---")]
-        depnotify_releases = DEPNotifyReleases()
-        for filename, version, created_at, download_url, is_local in depnotify_releases.get_versions():
-            choices.append((filename, filename))
-        self.fields["depnotify_release"].choices = choices
-
-    def clean(self):
-        super().clean()
-        if self.cleaned_data.get("depnotify_commands") and not self.cleaned_data.get("depnotify_release"):
-            self.add_error("depnotify_release",
-                           "You need to pick a DEPNotify release to use the commands.")
-        if self.cleaned_data.get("eula") and not self.cleaned_data.get("depnotify_release"):
-            self.add_error("depnotify_release",
-                           "You need to pick a DEPNotify release to display the EULA.")
-
-    def clean_depnotify_commands(self):
-        depnotify_commands = self.cleaned_data.get("depnotify_commands")
-        if depnotify_commands:
-            depnotify_commands = depnotify_commands.strip().replace("\r\n", "\n")
-        return depnotify_commands
-
-    def clean_setup_script(self):
-        setup_script = self.cleaned_data.get("setup_script")
-        if setup_script:
-            setup_script = setup_script.strip().replace("\r\n", "\n")
-        return setup_script
-
-    def clean_eula(self):
-        eula = self.cleaned_data.get("eula")
-        if eula:
-            eula = eula.strip().replace("\r\n", "\n")
-        return eula
-
-
 class EnrollmentForm(forms.ModelForm):
-    munki_release = forms.ChoiceField(
-        label="Munki release",
-        choices=[],
-        initial="",
-        help_text="Choose a munki release to be installed with the enrollment package.",
-        required=False
-    )
-
     class Meta:
         model = Enrollment
         fields = "__all__"
@@ -483,18 +424,6 @@ class EnrollmentForm(forms.ModelForm):
         if self.meta_business_unit:
             self.fields["manifest"].widget = forms.HiddenInput()
             self.fields["manifest"].required = False
-            self.fields["taxonomies"].queryset = self.fields["taxonomies"].queryset.filter(
-                meta_business_unit=self.meta_business_unit
-            )
-
-        # munki release
-        choices = []
-        if not self.standalone:
-            choices.append(("", "Do not include munki"))
-        munki_releases = MunkiReleases()
-        for filename, version, created_at, download_url, is_local in munki_releases.get_versions():
-            choices.append((filename, filename))
-        self.fields["munki_release"].choices = choices
 
     def clean_manifest(self):
         if self.meta_business_unit:

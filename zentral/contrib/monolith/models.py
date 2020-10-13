@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.conf import settings
-from zentral.contrib.inventory.models import BaseEnrollment, MetaBusinessUnit, Tag, Taxonomy
+from zentral.contrib.inventory.models import BaseEnrollment, MetaBusinessUnit, Tag
 from .conf import monolith_conf
 from .utils import build_manifest_enrollment_package, make_printer_package_info
 
@@ -944,83 +944,29 @@ class Printer(models.Model):
         return self.get_pkg_info_name().replace(" ", "_")
 
 
-# Configuration / Enrollment
-
-
-class Configuration(models.Model):
-    name = models.CharField(max_length=256, unique=True)
-
-    no_restart = models.BooleanField(
-        default=False,
-        help_text="Remove the launchd package restart requirement"
-    )
-    depnotify_release = models.CharField(
-        max_length=64, blank=True, null=False,
-        help_text="Choose a DEPNotify release to be installed"
-    )
-    depnotify_commands = models.TextField(
-        help_text="Configure DEPNotify with some commands",
-        blank=True, null=False
-    )
-    eula = models.TextField(
-        help_text="This text will be displayed in DEPNotify, and the user will be asked to accept it",
-        blank=True, null=False
-    )
-    setup_script = models.TextField(
-        help_text="A script that will be run when this enrollment package is installed",
-        blank=True, null=False
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.name
-
-    def get_absolute_url(self):
-        return reverse("monolith:configuration", args=(self.pk,))
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        for enrollment in self.enrollment_set.all():
-            # per default, will bump the enrollment version
-            # and notify their distributors
-            enrollment.save()
+# Enrollment
 
 
 class Enrollment(BaseEnrollment):
     manifest = models.ForeignKey(Manifest, on_delete=models.CASCADE)
-    configuration = models.ForeignKey(Configuration, on_delete=models.PROTECT)
-    munki_release = models.CharField(max_length=64, blank=True, null=False)
-    # taxonomies here, to be able to prompt for extra tags during the enrollment
-    taxonomies = models.ManyToManyField(
-        Taxonomy, blank=True,
-        help_text="The user will be asked to pick a tag of each one of the selected taxonomies during the enrollment."
-    )
 
     def get_description_for_distributor(self):
-        return "Monolith manifest {}, configuration {}".format(self.manifest, self.configuration)
+        return "Monolith manifest {}".format(self.manifest)
 
     def serialize_for_event(self):
         enrollment_dict = super().serialize_for_event()
-        enrollment_dict.update({"configuration": {"pk": self.configuration.pk,
-                                                  "name": self.configuration.name},
-                                "manifest": {"pk": self.manifest.pk,
+        enrollment_dict.update({"manifest": {"pk": self.manifest.pk,
                                              "name": str(self.manifest)}})
-        if self.munki_release:
-            enrollment_dict["munki_release"] = self.munki_release
         return enrollment_dict
 
     def get_absolute_url(self):
         return "{}#enrollment_{}".format(reverse("monolith:manifest", args=(self.manifest.pk,)), self.pk)
 
-    def has_registration_steps(self):
-        return self.taxonomies.count() > 0
-
 
 class EnrolledMachine(models.Model):
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
-    serial_number = models.TextField(db_index=True)
-    token = models.CharField(max_length=64, unique=True)
-    registered = models.BooleanField(default=False)
+    serial_number = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
-    registered_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ("enrollment", "serial_number")
