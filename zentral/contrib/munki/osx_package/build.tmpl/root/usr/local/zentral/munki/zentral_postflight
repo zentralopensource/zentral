@@ -256,30 +256,33 @@ def iter_certs():
     # second run, for the PEM values
     p = subprocess.Popen(["/usr/bin/security", "find-certificate", "-a", "-Z", "-p"], stdout=subprocess.PIPE)
     stdout, _ = p.communicate()
-    current_cert = current_keychain = None
+    current_cert = current_keychain = current_sha1 = None
     for line in stdout.decode("utf-8").splitlines():
         line = line.strip()
         if not line:
             continue
         if line.startswith("SHA-1 hash:"):
-            sha1 = line.replace("SHA-1 hash:", "").strip()
+            current_sha1 = line.replace("SHA-1 hash:", "").strip()
             try:
-                current_keychain = found_certs[sha1]
+                current_keychain = found_certs[current_sha1]
             except KeyError:
                 # TODO: probably a new certificate between the 2 runs...
                 current_keychain = None
+            continue
         elif "--BEGIN CERTIFICATE--" in line:
-            if current_cert:
-                yield current_keychain, current_cert.strip()
             current_cert = ""
         if current_cert is not None:
             current_cert += "{}\n".format(line)
-    if current_cert:
-        yield current_keychain, current_cert.strip()
+        if "--END CERTIFICATE--" in line:
+            yield current_keychain, current_cert.strip(), current_sha1
+            current_cert = None
 
 
 def iter_filtered_certs():
-    for keychain, cert in iter_certs():
+    seen_certs = set([])
+    for keychain, cert, sha1 in iter_certs():
+        if sha1 in seen_certs:
+            continue
         if keychain != "/Library/Keychains/System.keychain":
             # only system keychain certificates
             # TODO: verify
@@ -292,6 +295,7 @@ def iter_filtered_certs():
            issuer_cn == ["Microsoft Intune MDM Device CA"] or \
            any("JSS" in cn for cn in issuer_cn):
             yield cert
+            seen_certs.add(sha1)
 
 
 # Company portal user info
