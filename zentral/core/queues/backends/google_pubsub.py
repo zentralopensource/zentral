@@ -6,15 +6,27 @@ from kombu.utils import json
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import pubsub_v1
 from google.oauth2 import service_account
-from prometheus_client import Counter
 from zentral.conf import settings
-from zentral.utils.prometheus import PrometheusWorkerMixin
 
 
 logger = logging.getLogger('zentral.core.queues.backends.google_pubsub')
 
 
-class LoggingMixin(object):
+class BaseWorker:
+    name = "UNDEFINIED"
+    counters = []
+
+    def setup_metrics_exporter(self, *args, **kwargs):
+        self.metrics_exporter = kwargs.pop("metrics_exporter", None)
+        if self.metrics_exporter:
+            for name, label in self.counters:
+                self.metrics_exporter.add_counter(name, [label])
+            self.metrics_exporter.start()
+
+    def inc_counter(self, name, label):
+        if self.metrics_exporter:
+            self.metrics_exporter.inc(name, label)
+
     def log(self, msg, level, *args):
         logger.log(level, "{} - {}".format(self.name, msg), *args)
 
@@ -28,8 +40,12 @@ class LoggingMixin(object):
         self.log(msg, logging.ERROR, *args)
 
 
-class PreprocessWorker(LoggingMixin, PrometheusWorkerMixin):
+class PreprocessWorker(BaseWorker):
     name = "preprocess worker"
+    counters = (
+        ("preprocessed_events", "routing_key"),
+        ("produced_events", "event_type"),
+    )
 
     def __init__(self, raw_events_topic, events_topic, credentials):
         self.raw_events_topic = raw_events_topic
@@ -50,20 +66,9 @@ class PreprocessWorker(LoggingMixin, PrometheusWorkerMixin):
             else:
                 yield from getattr(preprocessors_module, "get_preprocessors")()
 
-    def setup_prometheus_metrics(self):
-        self.preprocessed_events_counter = Counter(
-            "preprocessed_events",
-            "Preprocessed events",
-            ["routing_key"]
-        )
-        self.produced_events_counter = Counter(
-            "produced_events",
-            "Produced events",
-            ["event_type"]
-        )
-
     def run(self, *args, **kwargs):
         self.log_info("run")
+        super().setup_metrics_exporter(*args, **kwargs)
 
         # subscriber client
         self.log_info("initialize subscriber")
@@ -82,12 +87,6 @@ class PreprocessWorker(LoggingMixin, PrometheusWorkerMixin):
         # publisher client
         self.log_info("initialize publisher")
         self.publisher_client = pubsub_v1.PublisherClient(credentials=self.credentials)
-
-        # prometheus
-        prometheus_port = kwargs.pop("prometheus_port", None)
-        if prometheus_port:
-            self.log_info("start prometheus server on port %s", prometheus_port)
-            self.start_prometheus_server(prometheus_port)
 
         # async pull
         self.log_info("start async pull")
@@ -110,15 +109,17 @@ class PreprocessWorker(LoggingMixin, PrometheusWorkerMixin):
                 for event in preprocessor.process_raw_event(json.loads(message.data)):
                     new_message = json.dumps(event.serialize(machine_metadata=False)).encode("utf-8")
                     self.publisher_client.publish(self.events_topic, new_message)
-                    if self.prometheus_setup_done:
-                        self.produced_events_counter.labels(event.event_type).inc()
+                    self.inc_counter("produced_events", event.event_type)
         message.ack()
-        if self.prometheus_setup_done:
-            self.preprocessed_events_counter.labels(routing_key or "UNKNOWN").inc()
+        self.inc_counter("preprocessed_events", routing_key or "UNKNOWN")
 
 
-class EnrichWorker(LoggingMixin, PrometheusWorkerMixin):
+class EnrichWorker(BaseWorker):
     name = "enrich worker"
+    counters = (
+        ("enriched_events", "event_type"),
+        ("produced_events", "event_type"),
+    )
 
     def __init__(self, events_topic, enriched_events_topic, credentials, enrich_event):
         self.events_topic = events_topic
@@ -126,20 +127,9 @@ class EnrichWorker(LoggingMixin, PrometheusWorkerMixin):
         self.credentials = credentials
         self.enrich_event = enrich_event
 
-    def setup_prometheus_metrics(self):
-        self.enriched_events_counter = Counter(
-            "enriched_events",
-            "Enriched events",
-            ["event_type"]
-        )
-        self.produced_events_counter = Counter(
-            "produced_events",
-            "Produced events",
-            ["event_type"]
-        )
-
     def run(self, *args, **kwargs):
         self.log_info("run")
+        super().setup_metrics_exporter(*args, **kwargs)
 
         # subscriber client
         self.log_info("initialize subscriber")
@@ -159,12 +149,6 @@ class EnrichWorker(LoggingMixin, PrometheusWorkerMixin):
         self.log_info("initialize publisher")
         self.publisher_client = pubsub_v1.PublisherClient(credentials=self.credentials)
 
-        # prometheus
-        prometheus_port = kwargs.pop("prometheus_port", None)
-        if prometheus_port:
-            self.log_info("start prometheus server on port %s", prometheus_port)
-            self.start_prometheus_server(prometheus_port)
-
         # async pull
         self.log_info("start async pull")
         pull_future = subscriber_client.subscribe(sub_path, self.callback)
@@ -180,35 +164,30 @@ class EnrichWorker(LoggingMixin, PrometheusWorkerMixin):
             for event in self.enrich_event(event_dict):
                 new_message = json.dumps(event.serialize(machine_metadata=False)).encode("utf-8")
                 self.publisher_client.publish(self.enriched_events_topic, new_message)
-                if self.prometheus_setup_done:
-                    self.produced_events_counter.labels(event.event_type).inc()
+                self.inc_counter("produced_events", event.event_type)
         except Exception as exception:
             logger.exception("Requeuing message with 1s delay: %s", exception)
             time.sleep(1)
             message.nack()
         else:
             message.ack()
-            if self.prometheus_setup_done:
-                self.enriched_events_counter.labels(event_dict['_zentral']['type']).inc()
+            self.inc_counter("enriched_events", event_dict['_zentral']['type'])
 
 
-class ProcessWorker(LoggingMixin, PrometheusWorkerMixin):
+class ProcessWorker(BaseWorker):
     name = "process worker"
+    counters = (
+        ("processed_events", "event_type"),
+    )
 
     def __init__(self, enriched_events_topic, credentials, process_event):
         self.enriched_events_topic = enriched_events_topic
         self.credentials = credentials
         self.process_event = process_event
 
-    def setup_prometheus_metrics(self):
-        self.processed_events_counter = Counter(
-            "processed_events",
-            "Processed events",
-            ["event_type"]
-        )
-
     def run(self, *args, **kwargs):
         self.log_info("run")
+        super().setup_metrics_exporter(*args, **kwargs)
 
         # subscriber client
         self.log_info("initialize subscriber")
@@ -224,12 +203,6 @@ class ProcessWorker(LoggingMixin, PrometheusWorkerMixin):
         else:
             self.log_info("process worker subscription %s created", sub_path)
 
-        # prometheus
-        prometheus_port = kwargs.pop("prometheus_port", None)
-        if prometheus_port:
-            self.log_info("start prometheus server on port %s", prometheus_port)
-            self.start_prometheus_server(prometheus_port)
-
         # async pull
         self.log_info("start async pull")
         pull_future = subscriber_client.subscribe(sub_path, self.callback)
@@ -243,39 +216,23 @@ class ProcessWorker(LoggingMixin, PrometheusWorkerMixin):
         event_dict = json.loads(message.data)
         self.process_event(event_dict)
         message.ack()
-        if self.prometheus_setup_done:
-            self.processed_events_counter.labels(event_dict['_zentral']['type']).inc()
+        self.inc_counter("processed_events", event_dict['_zentral']['type'])
 
 
-class StoreWorker(LoggingMixin, PrometheusWorkerMixin):
+class StoreWorker(BaseWorker):
+    counters = (
+        ("stored_events", "event_type"),
+    )
+
     def __init__(self, enriched_events_topic, credentials, event_store):
         self.enriched_events_topic = enriched_events_topic
         self.credentials = credentials
         self.event_store = event_store
         self.name = "store worker {}".format(self.event_store.name)
 
-    def setup_prometheus_metrics(self):
-        self.stored_events_counter = Counter(
-            "stored_events",
-            "Stored events",
-            ["event_type"]
-        )
-
-    def callback(self, message):
-        self.log_debug("store event")
-        event_dict = json.loads(message.data)
-        try:
-            self.event_store.store(event_dict)
-        except Exception:
-            logger.exception("Could add event to store %s", self.event_store.name)
-            message.nack()
-        else:
-            message.ack()
-            if self.prometheus_setup_done:
-                self.stored_events_counter.labels(event_dict['_zentral']['type']).inc()
-
     def run(self, *args, **kwargs):
         self.log_info("run")
+        super().setup_metrics_exporter(*args, **kwargs)
 
         # subscriber client
         self.log_info("initialize subscriber")
@@ -308,6 +265,18 @@ class StoreWorker(LoggingMixin, PrometheusWorkerMixin):
                 pull_future.result()
             except Exception:
                 pull_future.cancel()
+
+    def callback(self, message):
+        self.log_debug("store event")
+        event_dict = json.loads(message.data)
+        try:
+            self.event_store.store(event_dict)
+        except Exception:
+            logger.exception("Could add event to store %s", self.event_store.name)
+            message.nack()
+        else:
+            message.ack()
+            self.inc_counter("stored_events", event_dict['_zentral']['type'])
 
 
 class EventQueues(object):

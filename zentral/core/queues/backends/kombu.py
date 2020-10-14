@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 from importlib import import_module
 import logging
 import time
@@ -6,9 +5,7 @@ from zentral.conf import settings
 from kombu import Connection, Consumer, Exchange, Queue
 from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 from kombu.pools import producers
-from prometheus_client import Counter
 from zentral.utils.json import save_dead_letter
-from zentral.utils.prometheus import PrometheusWorkerMixin
 
 
 logger = logging.getLogger('zentral.core.queues.backends.kombu')
@@ -26,36 +23,51 @@ process_events_queue = Queue('process_events',
                              durable=True)
 
 
-class LoggingMixin(object):
-    def log(self, msg, level):
-        logger.log(level, "{} - {}".format(self.name, msg))
+class BaseWorker:
+    name = "UNDEFINIED"
+    counters = []
 
-    def log_info(self, msg):
-        self.log(msg, logging.INFO)
+    def setup_metrics_exporter(self, *args, **kwargs):
+        self.log_info("run")
+        self.metrics_exporter = kwargs.pop("metrics_exporter", None)
+        if self.metrics_exporter:
+            for name, label in self.counters:
+                self.metrics_exporter.add_counter(name, [label])
+            self.metrics_exporter.start()
 
-    def log_debug(self, msg):
-        self.log(msg, logging.DEBUG)
+    def inc_counter(self, name, label):
+        if self.metrics_exporter:
+            self.metrics_exporter.inc(name, label)
+
+    def log(self, msg, level, *args):
+        logger.log(level, "{} - {}".format(self.name, msg), *args)
+
+    def log_debug(self, msg, *args):
+        self.log(msg, logging.DEBUG, *args)
+
+    def log_info(self, msg, *args):
+        self.log(msg, logging.INFO, *args)
+
+    def log_error(self, msg, *args):
+        self.log(msg, logging.ERROR, *args)
 
 
-class PreprocessWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
+class PreprocessWorker(ConsumerProducerMixin, BaseWorker):
+    name = "preprocess worker"
+    counters = (
+        ("preprocessed_events", "routing_key"),
+        ("produced_events", "event_type"),
+    )
+
     def __init__(self, connection):
         self.connection = connection
-        self.name = "preprocess worker"
+        # preprocessors
         self.preprocessors = {
             preprocessor.routing_key: preprocessor
-            for preprocessor in self.get_preprocessors()
+            for preprocessor in self._get_preprocessors()
         }
 
-    @contextmanager
-    def extra_context(self, connection, channel):
-        # TODO: migration! remove ?
-        logger.info("PreprocessWorker migration")
-        for routing_key in self.preprocessors.keys():
-            legacy_exchange = Exchange(routing_key, type='fanout', channel=channel, durable=True)
-            legacy_exchange.delete()
-        yield
-
-    def get_preprocessors(self):
+    def _get_preprocessors(self):
         for app in settings['apps']:
             try:
                 preprocessors_module = import_module("{}.preprocessors".format(app))
@@ -64,23 +76,9 @@ class PreprocessWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixi
             else:
                 yield from getattr(preprocessors_module, "get_preprocessors")()
 
-    def setup_prometheus_metrics(self):
-        self.preprocessed_events_counter = Counter(
-            "preprocessed_events",
-            "Preprocessed events",
-            ["routing_key"]
-        )
-        self.produced_events_counter = Counter(
-            "produced_events",
-            "Produced events",
-            ["event_type"]
-        )
-
     def run(self, *args, **kwargs):
         self.log_info("run")
-        prometheus_port = kwargs.pop("prometheus_port", None)
-        if prometheus_port:
-            self.start_prometheus_server(prometheus_port)
+        super().setup_metrics_exporter(*args, **kwargs)
         super().run(*args, **kwargs)
 
     def get_consumers(self, _, default_channel):
@@ -104,40 +102,30 @@ class PreprocessWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixi
                 logger.error("No preprocessor for routing key %s", routing_key)
             else:
                 for event in preprocessor.process_raw_event(body):
-                    if self.prometheus_setup_done:
-                        self.produced_events_counter.labels(event.event_type).inc()
                     self.producer.publish(event.serialize(machine_metadata=False),
                                           serializer='json',
                                           exchange=events_exchange,
                                           declare=[events_exchange])
+                    self.inc_counter("produced_events", event.event_type)
         message.ack()
-        if self.prometheus_setup_done:
-            self.preprocessed_events_counter.labels(routing_key or "UNKNOWN").inc()
+        self.inc_counter("preprocessed_events", routing_key or "UNKNOWN")
 
 
-class EnrichWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
+class EnrichWorker(ConsumerProducerMixin, BaseWorker):
+    name = "enrich worker"
+    counters = (
+        ("enriched_events", "event_type"),
+        ("produced_events", "event_type"),
+    )
+
     def __init__(self, connection, enrich_event):
         self.connection = connection
         self.enrich_event = enrich_event
         self.name = "enrich worker"
 
-    def setup_prometheus_metrics(self):
-        self.enriched_events_counter = Counter(
-            "enriched_events",
-            "Enriched events",
-            ["event_type"]
-        )
-        self.produced_events_counter = Counter(
-            "produced_events",
-            "Produced events",
-            ["event_type"]
-        )
-
     def run(self, *args, **kwargs):
         self.log_info("run")
-        prometheus_port = kwargs.pop("prometheus_port", None)
-        if prometheus_port:
-            self.start_prometheus_server(prometheus_port)
+        super().setup_metrics_exporter(*args, **kwargs)
         super().run(*args, **kwargs)
 
     def get_consumers(self, _, default_channel):
@@ -154,44 +142,29 @@ class EnrichWorker(ConsumerProducerMixin, LoggingMixin, PrometheusWorkerMixin):
                                       serializer='json',
                                       exchange=enriched_events_exchange,
                                       declare=[enriched_events_exchange])
-                if self.prometheus_setup_done:
-                    self.produced_events_counter.labels(event.event_type).inc()
+                self.inc_counter("produced_events", event.event_type)
         except Exception as exception:
             logger.exception("Requeuing message with 1s delay: %s", exception)
             time.sleep(1)
             message.requeue()
         else:
             message.ack()
-            if self.prometheus_setup_done:
-                self.enriched_events_counter.labels(event.event_type).inc()
+            self.inc_counter("enriched_events", event.event_type)
 
 
-class ProcessWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
+class ProcessWorker(ConsumerMixin, BaseWorker):
+    name = "process worker"
+    counters = (
+        ("processed_events", "event_type"),
+    )
+
     def __init__(self, connection, process_event):
         self.connection = connection
         self.process_event = process_event
-        self.name = "process worker"
-
-    @contextmanager
-    def extra_context(self, connection, channel):
-        # TODO: migration! remove ?
-        logger.info("ProcessWorker migration")
-        bound_process_events_queue = process_events_queue.bind(channel)
-        bound_process_events_queue.unbind_from(events_exchange)
-        yield
-
-    def setup_prometheus_metrics(self):
-        self.processed_events_counter = Counter(
-            "processed_events",
-            "Processed events",
-            ["event_type"]
-        )
 
     def run(self, *args, **kwargs):
         self.log_info("run")
-        prometheus_port = kwargs.pop("prometheus_port", None)
-        if prometheus_port:
-            self.start_prometheus_server(prometheus_port)
+        super().setup_metrics_exporter(*args, **kwargs)
         super().run(*args, **kwargs)
 
     def get_consumers(self, _, default_channel):
@@ -205,11 +178,14 @@ class ProcessWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
         event_type = body['_zentral']['type']
         self.process_event(body)
         message.ack()
-        if self.prometheus_setup_done:
-            self.processed_events_counter.labels(event_type).inc()
+        self.inc_counter("processed_events", event_type)
 
 
-class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
+class StoreWorker(ConsumerMixin, BaseWorker):
+    counters = (
+        ("stored_events", "event_type"),
+    )
+
     def __init__(self, connection, event_store):
         self.connection = connection
         self.event_store = event_store
@@ -218,26 +194,9 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
                                  exchange=enriched_events_exchange,
                                  durable=True)
 
-    @contextmanager
-    def extra_context(self, connection, channel):
-        # TODO: migration! remove ?
-        logger.info("StoreWorker migration")
-        bound_store_worker_input_queue = self.input_queue.bind(channel)
-        bound_store_worker_input_queue.unbind_from(events_exchange)
-        yield
-
-    def setup_prometheus_metrics(self):
-        self.stored_events_counter = Counter(
-            "stored_events",
-            "Stored events",
-            ["event_type"]
-        )
-
     def run(self, *args, **kwargs):
         self.log_info("run")
-        prometheus_port = kwargs.pop("prometheus_port", None)
-        if prometheus_port:
-            self.start_prometheus_server(prometheus_port)
+        super().setup_metrics_exporter(*args, **kwargs)
         super().run(*args, **kwargs)
 
     def get_consumers(self, _, default_channel):
@@ -248,8 +207,8 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
 
     def do_store_event(self, body, message):
         self.log_debug("store event")
+        event_type = body['_zentral']['type']
         try:
-            event_type = body['_zentral']['type']
             self.event_store.store(body)
         except Exception:
             logger.exception("Could add event to store %s", self.event_store.name)
@@ -257,8 +216,7 @@ class StoreWorker(ConsumerMixin, LoggingMixin, PrometheusWorkerMixin):
             message.reject()
         else:
             message.ack()
-            if self.prometheus_setup_done:
-                self.stored_events_counter.labels(event_type).inc()
+            self.inc_counter("stored_events", event_type)
 
 
 class EventQueues(object):

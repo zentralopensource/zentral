@@ -1,13 +1,12 @@
 import logging
 import time
-from zentral.utils.prometheus import PrometheusWorkerMixin
 from .clients import clients, InventoryError
 
 
 logger = logging.getLogger("zentral.contrib.inventory.workers")
 
 
-class InventoryWorker(PrometheusWorkerMixin):
+class InventoryWorker:
     sleep = 30
 
     def __init__(self, client):
@@ -15,12 +14,13 @@ class InventoryWorker(PrometheusWorkerMixin):
         self.name = "inventory worker {}".format(client.source["name"])
 
     def log_info(self, msg):
-        logger.info("{} - {}".format(self.name, msg))
+        logger.info("{} - {}".format(self.name, msg))
 
-    def run(self, prometheus_port=None):
+    def run(self, metrics_exporter=None):
         self.log_info("run")
-        if prometheus_port:
-            self.start_prometheus_server(prometheus_port)
+        self.metrics_exporter = metrics_exporter
+        if self.metrics_exporter:
+            self.metrics_exporter.start()
         while True:
             try:
                 self.client.sync()

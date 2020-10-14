@@ -1,24 +1,31 @@
 import logging
 from django.http import HttpResponse, HttpResponseForbidden
 from django.views import View
-from prometheus_client import start_http_server, CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import generate_latest, start_http_server, Counter, CONTENT_TYPE_LATEST
 from zentral.conf import settings
 
 
 logger = logging.getLogger("zentral.utils.prometheus")
 
 
-class PrometheusWorkerMixin(object):
-    prometheus_setup_done = False
+class PrometheusMetricsExporter:
+    def __init__(self, port):
+        self.port = port
+        self.counters = {}
 
-    def setup_prometheus_metrics(self):
-        pass
+    def start(self):
+        logger.info("Starting prometheus http server on port %s", self.port)
+        start_http_server(self.port)
 
-    def start_prometheus_server(self, port):
-        self.setup_prometheus_metrics()
-        self.prometheus_setup_done = True
-        logger.info("Starting prometheus http server on port %s", port)
-        start_http_server(port)
+    def add_counter(self, name, labels):
+        description = name.replace("_", " ").capitalize()
+        self.counters[name] = Counter(name, description, labels)
+
+    def inc(self, counter_name, *label_values):
+        try:
+            self.counters[counter_name].labels(*label_values).inc()
+        except KeyError:
+            logger.error("Missing counter %s", counter_name)
 
 
 class BasePrometheusMetricsView(View):

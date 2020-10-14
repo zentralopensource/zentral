@@ -26,24 +26,42 @@ class Command(BaseCommand):
                             help='list workers')
         parser.add_argument('--json', action='store_true', dest='json_output', default=False,
                             help='output workers list in json format')
-        parser.add_argument("--prometheus-base-port", type=int, default=9900)
+
+        # prometheus metrics exporter
+        parser.add_argument("--prometheus", action="store_true")
         parser.add_argument("--prometheus-sd-file")
+        parser.add_argument("--prometheus-base-port", type=int, default=9900)
         parser.add_argument("--external-hostname", default="localhost")
+
+        # statsd metrics exporter
+        parser.add_argument("--statsd", action="store_true")
+        parser.add_argument("--statsd-host", default="localhost")
+        parser.add_argument("--statsd-port", type=int, default=9125)
+        parser.add_argument("--statsd-prefix", default="zentral")
+
         parser.add_argument("worker", nargs="*")
 
     def start_worker(self, idx, worker):
         logger.info("Starting worker '%s'", worker.name)
-        prometheus_port = self.prometheus_base_port + idx
+        metrics_exporter = None
+        if self.prometheus:
+            from zentral.utils.prometheus import PrometheusMetricsExporter
+            prometheus_port = self.prometheus_base_port + idx
+            metrics_exporter = PrometheusMetricsExporter(prometheus_port)
+        elif self.statsd:
+            from zentral.utils.statsd import StatsdMetricsExporter
+            metrics_exporter = StatsdMetricsExporter(self.statsd_host, self.statsd_port, self.statsd_prefix)
         p = Process(target=worker.run,
-                    kwargs={"prometheus_port": prometheus_port},
+                    kwargs={"metrics_exporter": metrics_exporter},
                     name=worker.name)
         p.daemon = 1
         p.start()
         self.processes[idx] = (worker, p)
-        self.prometheus_targets[idx] = {
-            "targets": ["{}:{}".format(self.external_hostname, prometheus_port)],
-            "labels": {"job": worker.name}
-        }
+        if self.prometheus:
+            self.prometheus_targets[idx] = {
+                "targets": ["{}:{}".format(self.external_hostname, prometheus_port)],
+                "labels": {"job": worker.name}
+            }
 
     def write_prometheus_sd_file(self):
         if self.prometheus_sd_file:
@@ -77,15 +95,26 @@ class Command(BaseCommand):
                     logger.debug("Worker '%s' OK", worker.name)
             for idx, (deadline, worker) in list(self.processes_to_restart.items()):
                 if deadline < time.time():
+                    print("OUPS", flush=True)
                     self.start_worker(idx, worker)
                     self.processes_to_restart.pop(idx)
 
     def handle(self, *args, **options):
         list_workers = options['list_workers']
         json_output = options['json_output']
-        self.prometheus_base_port = options['prometheus_base_port']
+
+        # prometheus metrics exporter
+        self.prometheus = options['prometheus']
         self.prometheus_sd_file = None if list_workers else options.get('prometheus_sd_file')
+        self.prometheus_base_port = options['prometheus_base_port']
         self.external_hostname = options['external_hostname']
+
+        # statsd metrics exporter
+        self.statsd = options['statsd']
+        self.statsd_host = options['statsd_host']
+        self.statsd_port = options['statsd_port']
+        self.statsd_prefix = options['statsd_prefix']
+
         workers = options['worker']
         all_workers = []
         for idx, worker in enumerate(sorted(get_workers(), key=lambda w: w.name)):
@@ -102,5 +131,6 @@ class Command(BaseCommand):
                 for worker_name in all_workers:
                     print("Worker '{}'".format(worker_name))
         if self.processes:
-            self.write_prometheus_sd_file()
+            if self.prometheus:
+                self.write_prometheus_sd_file()
             self.watch_workers()
