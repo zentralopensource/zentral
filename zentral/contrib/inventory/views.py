@@ -390,26 +390,30 @@ class MachineView(LoginRequiredMixin, TemplateView):
             context['max_source_tab_with'] = 100 // machine_snapshots_count
         context['serial_number'] = machine.serial_number
         prepared_heartbeats = []
-        last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(machine.serial_number)
-        for event_class, source_name, ua_max_dates in last_machine_heartbeats:
-            heartbeat_timeout = event_class.heartbeat_timeout
-            if heartbeat_timeout:
-                heartbeat_timeout = timedelta(seconds=heartbeat_timeout)
-            ua_max_dates.sort(key=lambda t: (t[1], t[0]), reverse=True)
-            date_class = None
-            if ua_max_dates:
-                # should always be the case
-                all_ua_max_date = timezone.make_naive(ua_max_dates[0][1])
+        try:
+            last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(machine.serial_number)
+        except Exception:
+            logger.exception("Could not get machine heartbeats")
+        else:
+            for event_class, source_name, ua_max_dates in last_machine_heartbeats:
+                heartbeat_timeout = event_class.heartbeat_timeout
                 if heartbeat_timeout:
-                    if datetime.utcnow() - all_ua_max_date > heartbeat_timeout:
-                        date_class = "danger"
-                    else:
-                        date_class = "success"
-            prepared_heartbeats.append(
-                (event_class.get_event_type_display(),
-                 source_name, ua_max_dates, date_class)
-            )
-        prepared_heartbeats.sort()
+                    heartbeat_timeout = timedelta(seconds=heartbeat_timeout)
+                ua_max_dates.sort(key=lambda t: (t[1], t[0]), reverse=True)
+                date_class = None
+                if ua_max_dates:
+                    # should always be the case
+                    all_ua_max_date = timezone.make_naive(ua_max_dates[0][1])
+                    if heartbeat_timeout:
+                        if datetime.utcnow() - all_ua_max_date > heartbeat_timeout:
+                            date_class = "danger"
+                        else:
+                            date_class = "success"
+                prepared_heartbeats.append(
+                    (event_class.get_event_type_display(),
+                     source_name, ua_max_dates, date_class)
+                )
+            prepared_heartbeats.sort()
         context['heartbeats'] = prepared_heartbeats
         return context
 
