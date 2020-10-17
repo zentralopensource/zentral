@@ -171,6 +171,7 @@ for key in ('HOST', 'PASSWORD', 'PORT'):
 
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_BROKER_URL = django_zentral_settings.get("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
+CELERY_BROKER_TRANSPORT_OPTIONS = django_zentral_settings.get("CELERY_BROKER_TRANSPORT_OPTIONS", {})
 
 # Internationalization
 # https://docs.djangoproject.com/en/1.8/topics/i18n/

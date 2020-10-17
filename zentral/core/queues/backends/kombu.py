@@ -222,19 +222,23 @@ class StoreWorker(ConsumerMixin, BaseWorker):
 class EventQueues(object):
     def __init__(self, config_d):
         self.backend_url = config_d['backend_url']
-        self.connection = Connection(self.backend_url)
+        self.transport_options = config_d.get('transport_options')
+        self.connection = self._get_connection()
+
+    def _get_connection(self):
+        return Connection(self.backend_url, transport_options=self.transport_options)
 
     def get_preprocess_worker(self):
-        return PreprocessWorker(Connection(self.backend_url))
+        return PreprocessWorker(self._get_connection())
 
     def get_enrich_worker(self, enrich_event):
-        return EnrichWorker(Connection(self.backend_url), enrich_event)
+        return EnrichWorker(self._get_connection(), enrich_event)
 
     def get_process_worker(self, process_event):
-        return ProcessWorker(Connection(self.backend_url), process_event)
+        return ProcessWorker(self._get_connection(), process_event)
 
     def get_store_worker(self, event_store):
-        return StoreWorker(Connection(self.backend_url), event_store)
+        return StoreWorker(self._get_connection(), event_store)
 
     def post_raw_event(self, routing_key, raw_event):
         with producers[self.connection].acquire(block=True) as producer:
