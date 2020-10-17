@@ -214,6 +214,12 @@ if "GS_CREDENTIALS" in django_zentral_settings:
     GS_CREDENTIALS = service_account.Credentials.from_service_account_file(
         django_zentral_settings["GS_CREDENTIALS"]
     )
+# AWS S3 storage options
+# https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
+if "AWS_S3_ENDPOINT_URL" in django_zentral_settings:
+    AWS_S3_ENDPOINT_URL = django_zentral_settings["AWS_S3_ENDPOINT_URL"]
+if "AWS_STORAGE_BUCKET_NAME" in django_zentral_settings:
+    AWS_STORAGE_BUCKET_NAME = django_zentral_settings["AWS_STORAGE_BUCKET_NAME"]
 
 
 # LOGGING
