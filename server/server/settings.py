@@ -216,6 +216,9 @@ if "GS_CREDENTIALS" in django_zentral_settings:
     )
 # AWS S3 storage options
 # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
+AWS_S3_SIGNATURE_VERSION = "s3v4"
+if "AWS_S3_REGION_NAME" in django_zentral_settings:
+    AWS_S3_REGION_NAME = django_zentral_settings["AWS_S3_REGION_NAME"]
 if "AWS_S3_ENDPOINT_URL" in django_zentral_settings:
     AWS_S3_ENDPOINT_URL = django_zentral_settings["AWS_S3_ENDPOINT_URL"]
 if "AWS_STORAGE_BUCKET_NAME" in django_zentral_settings:
