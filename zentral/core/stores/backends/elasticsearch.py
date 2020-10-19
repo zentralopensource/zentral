@@ -84,6 +84,8 @@ class EventStore(BaseEventStore):
                                           ('port', o.port),
                                           ('url_prefix', o.path)) if v}
                 if o.scheme == "https" or o.port == 443:
+                    if o.port is None:
+                        host['port'] = 443
                     host['use_ssl'] = True
             hosts.append(host)
         kwargs['hosts'] = hosts
