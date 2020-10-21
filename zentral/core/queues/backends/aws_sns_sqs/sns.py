@@ -1,8 +1,8 @@
-import json
 import logging
 import queue
 import threading
 import boto3
+from kombu.utils import json
 
 
 logger = logging.getLogger("zentral.core.queues.backends.aws_sns_sqs.sns")

@@ -1,4 +1,3 @@
-import json
 import logging
 import queue
 import random
@@ -6,6 +5,7 @@ import threading
 import time
 import uuid
 import boto3
+from kombu.utils import json
 
 
 logger = logging.getLogger("zentral.core.queues.backends.aws_sns_sqs.sqs")
