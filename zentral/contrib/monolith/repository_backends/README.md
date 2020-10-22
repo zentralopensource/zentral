@@ -6,14 +6,14 @@
 
 |Attribute|Required|Description|
 |---|---|---|
-|bucket|X|The name of the bucket containing the Munki repository|
-|region\_name||The name of the region where the bucket is located|
-|prefix||Relative path to the repository in the bucket, if not at the root.|
-|aws\_access\_key\_id|||
-|aws\_secret\_access\_key|||
-|assume\_role\_arn|||
-|signature\_version||`s3v4` if not set|
-|endpoint\_url|| use it for override the default S3 endpoints (to use minio for example)|
+|`bucket`|✅|The name of the bucket containing the Munki repository|
+|`region_name`||The name of the region where the bucket is located|
+|`prefix`||Relative path to the repository in the bucket, if not at the root.|
+|`aws_access_key_id`|||
+|`aws_secret_access_key`|||
+|`assume_role_arn`|||
+|`signature_version`||`s3v4` if not set|
+|`endpoint_url`|| use it to override the default S3 endpoints (to use [minio](https://min.io/) for example)|
 
 ### Permissions
 
