@@ -232,7 +232,7 @@ class EventStore(BaseEventStore):
         kibana_params = {
             "columns": ["_source"],
             "interval": "auto",
-            "query": body["query"],
+            "query": {"language": "lucene", "query": body["query"]},
             "sort": ["created_at", "desc"]
         }
         if self.kibana_index_pattern_uuid:
