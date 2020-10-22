@@ -46,7 +46,7 @@ class SQSReceiveThread(threading.Thread):
                 logger.error("retry in {:.1f}s".format(seconds))
                 slices = 50
                 for i in range(slices):
-                    time.sleep(seconds / i)
+                    time.sleep(seconds / slices)
                     if self.stop_event.is_set():
                         break
             else:
