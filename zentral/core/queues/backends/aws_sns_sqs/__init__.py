@@ -29,7 +29,7 @@ logger = logging.getLogger('zentral.core.queues.backends.aws_sns_sqs')
 
 
 class BaseWorker:
-    name = "UNDEFINIED"
+    name = "UNDEFINED"
     counters = []
 
     def setup_metrics_exporter(self, *args, **kwargs):

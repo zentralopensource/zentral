@@ -24,7 +24,7 @@ process_events_queue = Queue('process_events',
 
 
 class BaseWorker:
-    name = "UNDEFINIED"
+    name = "UNDEFINED"
     counters = []
 
     def setup_metrics_exporter(self, *args, **kwargs):

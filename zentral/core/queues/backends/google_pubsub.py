@@ -13,7 +13,7 @@ logger = logging.getLogger('zentral.core.queues.backends.google_pubsub')
 
 
 class BaseWorker:
-    name = "UNDEFINIED"
+    name = "UNDEFINED"
     counters = []
 
     def setup_metrics_exporter(self, *args, **kwargs):
