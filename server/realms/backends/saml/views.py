@@ -1,5 +1,5 @@
 import logging
-from django.core.exceptions import SuspiciousOperation
+from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -8,6 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import View
 from saml2 import BINDING_HTTP_POST
 from saml2.metadata import entity_descriptor
+from saml2.response import AuthnResponse, VerificationError
 from saml2.sigver import SignatureError
 from realms.exceptions import RealmUserError
 from realms.models import Realm, RealmAuthenticationSession
@@ -35,8 +36,18 @@ class AssertionConsumerServiceView(BaseSPView):
         try:
             authn_response = saml2_client.parse_authn_request_response(request.POST['SAMLResponse'], BINDING_HTTP_POST)
         except SignatureError:
-            raise SuspiciousOperation("Bad SAML signature")
-        session_info = authn_response.session_info()
+            raise PermissionDenied("Bad SAML signature")
+        except VerificationError:
+            raise PermissionDenied("VerificationError")
+        if not isinstance(authn_response, AuthnResponse):
+            logger.error("Excepted AuthnResponse, got %s", type(authn_response).__name__)
+            raise PermissionDenied("Invalid SAML response - 1/2")
+        try:
+            session_info = authn_response.session_info()
+        except AttributeError:
+            logger.error("Excepted Assertion, got %s", type(authn_response.assertion).__name__)
+            raise PermissionDenied("Invalid SAML response - 2/2")
+
         # get the InResponseTo data
         in_response_to = None
         for assertion in authn_response.assertions:
@@ -47,26 +58,26 @@ class AssertionConsumerServiceView(BaseSPView):
         # find realm auth session
         relay_state = request.POST.get("RelayState")
         if not relay_state:
-            raise SuspiciousOperation("Missing relay state")
+            raise PermissionDenied("Missing relay state")
 
         ras = None
         if relay_state != self.backend_instance.default_relay_state:
             if not in_response_to:
-                raise SuspiciousOperation("Missing InResponseTo")
+                raise PermissionDenied("Missing InResponseTo")
             try:
                 ras = RealmAuthenticationSession.objects.select_for_update().get(realm=self.realm, pk=relay_state)
             except RealmAuthenticationSession.DoesNotExist:
-                raise SuspiciousOperation("Unknown relay state")
+                raise PermissionDenied("Unknown relay state")
             if ras.user:
-                raise SuspiciousOperation("Realm authorization session already used")
+                raise PermissionDenied("Realm authorization session already used")
             request_id = None
             if ras.backend_state:
                 request_id = ras.backend_state.get("request_id")
             if not request_id:
-                raise SuspiciousOperation("Missing request ID in auth session")
+                raise PermissionDenied("Missing request ID in auth session")
             if request_id != in_response_to:
                 logger.error("SAML request ID %s != InResponseTo %s", request_id, in_response_to)
-                raise SuspiciousOperation("Unsolicited response")
+                raise PermissionDenied("Unsolicited response")
             else:
                 logger.debug("SAML request ID = InResponseTo = {}".format(request_id))
             logger.info("Allow SAML response on realm '{}' {}".format(
