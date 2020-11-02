@@ -14,6 +14,7 @@ class Realm(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     enabled_for_login = models.BooleanField(default=False)
+    login_session_expiry = models.PositiveIntegerField(null=True, default=0)
 
     # backend + backend config
     backend = models.CharField(max_length=255, editable=False)

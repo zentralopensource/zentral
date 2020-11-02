@@ -64,6 +64,10 @@ def post_event(event_cls, request, user, payload=None):
     eru = EventRequestUser.build_from_user(user)
     if eru:
         payload["user"] = eru.serialize()
+        seabc = request.session.get_expire_at_browser_close()
+        payload["session"] = {"expire_at_browser_close": seabc}
+        if not seabc:
+            payload["session"].update({"expiry_age": request.session.get_expiry_age()})
 
     # realm user
     payload["realm_session"] = False

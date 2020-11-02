@@ -23,12 +23,22 @@ def login_callback(request, realm_authentication_session, next_url=None):
     as Zentral users
     """
     # session expiry
-    session_expiry = None
-    if realm_authentication_session.expires_at:
-        session_expiry = (realm_authentication_session.expires_at - datetime.utcnow()).seconds
+    # default to 5 min, to be really annoying!
+    session_expiry = 5 * 60
+    if realm_authentication_session.realm.login_session_expiry is not None:
+        # the session expiry configured in the realm takes precedence
+        session_expiry = realm_authentication_session.realm.login_session_expiry
+    elif realm_authentication_session.expires_at:
+        # fall back to the session expiry attached to the realm authentication session
+        expiry_delta = realm_authentication_session.expires_at - datetime.utcnow()
+        session_expiry = expiry_delta.days * 86400 + expiry_delta.seconds
         if session_expiry < 0:
+            # should not happen, but who knows
             raise ValueError("The SSO session has already expired")
-    session_expiry = session_expiry or 0
+    else:
+        logger.error("No session expiry found in the realm %s authentication session. "
+                     "Use default expiry of %s seconds.",
+                     realm_authentication_session.realm, session_expiry)
 
     # login
     realm_user = realm_authentication_session.user

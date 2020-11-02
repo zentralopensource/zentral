@@ -25,3 +25,14 @@
   </p>
 </form>
 {% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  var checkBoxLogin = document.querySelector("#id_enabled_for_login"),
+      sessionExpiryGroup = document.querySelector("#id_login_session_expiry").parentElement.parentElement;
+  sessionExpiryGroup.toggleAttribute("hidden", !checkBoxLogin.checked);
+  checkBoxLogin.addEventListener("click", function(event) {
+    sessionExpiryGroup.toggleAttribute("hidden", !event.target.checked);
+  });
+</script>
+{% endblock %}

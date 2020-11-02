@@ -28,7 +28,20 @@
       </tr>
       <tr>
         <td>Enabled for login</td>
-        <td>{{ object.enabled_for_login|yesno }}</td>
+        <td>
+          {{ object.enabled_for_login|yesno }}
+          {% if object.enabled_for_login %} —
+          {% if object.login_session_expiry == 0 %}
+          The user’s session cookie will expire when the user’s Web browser is closed.
+          {% else %}
+          {% if object.login_session_expiry > 0 %}
+          The user’s session cookie will expire after {{ object.login_session_expiry }}s.
+          {% else %}
+          The IDP response NotOnOrAfter value will be used for the session expiry.
+          {% endif %}
+          {% endif %}
+          {% endif %}
+        </td>
       </tr>
       <tr>
         <td>Username claim</td>

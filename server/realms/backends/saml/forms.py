@@ -9,6 +9,13 @@ from realms.forms import RealmForm
 class SAMLRealmForm(RealmForm):
     metadata_file = forms.FileField()
     allow_idp_initiated_login = forms.BooleanField(required=False)
+    login_session_expiry = forms.IntegerField(
+        required=False, min_value=0, max_value=1296000,
+        help_text="Session expiry in seconds. If value is 0, the user’s session"
+                  " cookie will expire when the user’s Web browser is closed. "
+                  "Leave blank, and the session reverts to using the "
+                  "NotOnOrAfter value provided by the IDP in the SAML response."
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
