@@ -1,9 +1,12 @@
+from datetime import datetime
 import logging
+from dateutil import parser
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.decorators import method_decorator
+from django.utils.timezone import is_aware, make_naive, utc
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import View
 from saml2 import BINDING_HTTP_POST
@@ -108,10 +111,27 @@ class AssertionConsumerServiceView(BaseSPView):
             logger.exception("Could not update or create realm user")
             return ras_finalization_error(request, ras, exception=e)
 
+        # session NotOnOrAfter
+        expires_at = None
+        nooa = session_info.get("not_on_or_after")
+        if nooa:
+            if isinstance(nooa, int):
+                try:
+                    expires_at = datetime.fromtimestamp(nooa)
+                except OverflowError:
+                    pass
+            else:
+                try:
+                    expires_at = parser.parse(nooa)
+                except (TypeError, parser.ParserError):
+                    pass
+        if expires_at and is_aware(expires_at):
+            expires_at = make_naive(expires_at, utc)
+
         # finalize the authentication session
         redirect_url = None
         try:
-            redirect_url = ras.finalize(request, realm_user)
+            redirect_url = ras.finalize(request, realm_user, expires_at)
         except Exception as e:
             return ras_finalization_error(request, ras, realm_user=realm_user, exception=e)
         else:
