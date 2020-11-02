@@ -87,8 +87,10 @@ def realm_user_session_key(dep_enrollment_session):
     return "_dep_enrollment_session_{}_realm_user_pk".format(dep_enrollment_session.pk)
 
 
-def dep_web_enroll_callback(request, realm_user, dep_profile_pk, serial_number, udid, payload):
+def dep_web_enroll_callback(request, realm_authentication_session, dep_profile_pk, serial_number, udid, payload):
     dep_profile = DEPProfile.objects.get(pk=dep_profile_pk, realm__isnull=False)
+
+    realm_user = realm_authentication_session.realm_user
 
     # Start a DEP enrollment session
     dep_enrollment_session = DEPEnrollmentSession.objects.create_from_dep_profile(

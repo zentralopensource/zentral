@@ -11,7 +11,7 @@ from django.utils.http import is_safe_url
 from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
 from .backends import backend_classes
 from .exceptions import RealmUserError
-from .models import Realm, RealmUser
+from .models import Realm, RealmAuthenticationSession
 
 
 logger = logging.getLogger("zentral.realms.views")
@@ -112,11 +112,6 @@ class TestRealmView(View):
         realm = get_object_or_404(Realm, pk=kwargs["pk"])
         callback = "realms.utils.test_callback"
         callback_kwargs = {}
-        next_url = request.POST.get("next")
-        if next_url and is_safe_url(url=next_url,
-                                    allowed_hosts={request.get_host()},
-                                    require_https=request.is_secure()):
-            callback_kwargs["next_url"] = next_url
         redirect_url = None
         try:
             redirect_url = realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
@@ -129,13 +124,14 @@ class TestRealmView(View):
                 raise ValueError("Empty realm {} redirect URL".format(realm.pk))
 
 
-class RealmUserView(CanManageRealmsMixin, DetailView):
-    model = RealmUser
-    pk_url_kwarg = "user_pk"
+class RealmAuthenticationSessionView(CanManageRealmsMixin, DetailView):
+    model = RealmAuthenticationSession
+    pk_url_kwarg = "ras_pk"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        realm_user = ctx["object"]
+        realm_user = ctx["object"].user
+        ctx["realm_user"] = realm_user
         if not realm_user.email:
             ctx["error"] = "Missing email. Cannot be used for Zentral login."
         return ctx

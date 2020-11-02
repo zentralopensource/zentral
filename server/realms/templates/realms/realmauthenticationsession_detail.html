@@ -6,14 +6,16 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'realms:list' %}">Realms</a></li>
   <li><a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="active">{{ realm_user }}</li>
 </ol>
 
-<h2>Realm user <i>{{ object }}</i></h2>
+<h2>Realm user <i>{{ realm_user }}</i></h2>
+
+<p>Session expires at: {{ object.expires_at|default:"-" }}</p>
 
 <h3>Orginal claims</h3>
 
-{{ object.claims|pythonprettyprint }}
+{{ realm_user.claims|pythonprettyprint }}
 
 <h3>Mapped claims</h3>
 
@@ -23,14 +25,14 @@
 
 <dl class="dl-horizontal">
   <dt>Username</dt>
-  <dd>{{ object.username }}</dd>
+  <dd>{{ realm_user.username }}</dd>
   <dt>Email</dt>
-  <dd>{{ object.email|default:"-" }}</dd>
+  <dd>{{ realm_user.email|default:"-" }}</dd>
   <dt>First name</dt>
-  <dd>{{ object.first_name|default:"-" }}</dd>
+  <dd>{{ realm_user.first_name|default:"-" }}</dd>
   <dt>Last name</dt>
-  <dd>{{ object.last_name|default:"-" }}</dd>
+  <dd>{{ realm_user.last_name|default:"-" }}</dd>
   <dt>Full name</dt>
-  <dd>{{ object.full_name|default:"-" }}</dd>
+  <dd>{{ realm_user.full_name|default:"-" }}</dd>
 </dl>
 {% endblock %}

@@ -16,25 +16,28 @@ except NotImplementedError:
     logger.warning('No secure pseudo random number generator available.')
 
 
-def login_callback(request, realm_user, next_url=None):
+def login_callback(request, realm_authentication_session, next_url=None):
     """
     Realm authorization session callback used to log realm users in,
     as Zentral users
     """
+    realm_user = realm_authentication_session.user
     user = authenticate(request=request, realm_user=realm_user)
     if not user:
         raise ValueError("Could not authenticate realm user")
     else:
-        request.session.set_expiry(0)
+        request.session.set_expiry(realm_authentication_session.expires_at or 0)
         login(request, user)
     return next_url or settings.LOGIN_REDIRECT_URL
 
 
-def test_callback(request, realm_user, next_url=None):
+def test_callback(request, realm_authentication_session):
     """
     Realm authorization session callback used to test the realm
     """
-    return reverse("realms:user", args=(realm_user.realm.pk, realm_user.pk))
+    return reverse("realms:authentication_session",
+                   args=(realm_authentication_session.realm.pk,
+                         realm_authentication_session.pk))
 
 
 def build_password_hash_dict(password):

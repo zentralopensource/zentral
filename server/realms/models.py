@@ -97,6 +97,8 @@ class RealmAuthenticationSession(models.Model):
     callback = models.CharField(max_length=255)
     callback_kwargs = JSONField(default=dict)
 
+    expires_at = models.DateTimeField(null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -112,11 +114,14 @@ class RealmAuthenticationSession(models.Model):
             logger.exception("Could not find function %s in callback module %s", module_name, function_name)
         return callback
 
-    def finalize(self, request, realm_user):
+    def finalize(self, request, realm_user, expires_at=None):
         if self.user:
             raise ValueError("Session already finalized")
+        elif not isinstance(realm_user, RealmUser):
+            raise ValueError("invalid realm user")
         self.user = realm_user
+        self.expires_at = expires_at
         self.save()
         callback_function = self.get_callback_function()
         if callback_function:
-            return callback_function(request=request, realm_user=realm_user, **self.callback_kwargs)
+            return callback_function(request=request, realm_authentication_session=self, **self.callback_kwargs)
