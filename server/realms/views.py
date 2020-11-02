@@ -91,7 +91,7 @@ class LoginView(View):
         callback = "realms.utils.login_callback"
         callback_kwargs = {}
         if request.method == "POST":
-            next_url = request.POST.get("next")
+            next_url = request.POST.get(REDIRECT_FIELD_NAME)
             if next_url and is_safe_url(url=next_url,
                                         allowed_hosts={request.get_host()},
                                         require_https=request.is_secure()):

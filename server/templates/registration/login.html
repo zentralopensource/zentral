@@ -6,6 +6,7 @@
   <div class="col-md-4 col-md-offset-4">
     {% for realm, login_link in login_realms %}
     <form action="{{ login_link }}" method="post">{% csrf_token %}
+      <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_to }}">
       <button href="{{ login_link }}" class="btn btn-large btn-primary">Sign in with {{ realm }}</button>
     </form>
     {% if not forloop.last or form %}

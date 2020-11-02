@@ -76,7 +76,8 @@ def login(request):
             form = ZentralAuthenticationForm(request)
 
     context = {
-        REDIRECT_FIELD_NAME: redirect_to
+        "redirect_to": redirect_to,
+        "redirect_field_name": REDIRECT_FIELD_NAME,
     }
     if form:
         context["form"] = form
