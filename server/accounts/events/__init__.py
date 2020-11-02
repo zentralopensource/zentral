@@ -1,5 +1,10 @@
+import logging
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, EventRequestUser, register_event_type
+from realms.models import RealmAuthenticationSession
+
+
+logger = logging.getLogger("server.realms.utils")
 
 
 ALL_EVENTS_SEARCH_DICT = {"event_type": ["zentral_login", "zentral_logout", "zentral_failed_login"]}
@@ -51,16 +56,39 @@ register_event_type(VerificationDeviceEvent)
 
 
 def post_event(event_cls, request, user, payload=None):
-    request = EventRequest.build_from_request(request)
     if payload is None:
         payload = {}
+
     # TODO: check if user can be different than request.user
     # remove the following bit if not
     eru = EventRequestUser.build_from_user(user)
     if eru:
         payload["user"] = eru.serialize()
+
+    # realm user
+    payload["realm_session"] = False
+    ras_uuid = request.session.get("_realm_authentication_session")
+    if ras_uuid:
+        try:
+            ras = RealmAuthenticationSession.objects.select_related("realm", "user").get(uuid=ras_uuid)
+        except RealmAuthenticationSession.DoesNotExist:
+            logger.error("Could not find realm authentication session %s", ras_uuid)
+        else:
+            realm = ras.realm
+            payload["realm_session"] = True
+            payload["realm_user"] = {"realm": {"uuid": realm.uuid,
+                                               "name": str(realm),
+                                               "backend": realm.backend},
+                                     "session": {"uuid": ras.uuid,
+                                                 "created_at": ras.created_at,
+                                                 "updated_at": ras.updated_at,
+                                                 "expires": ras.expires_at is not None,
+                                                 "expires_at": ras.expires_at},
+                                     "uuid": ras.user.uuid}
+
+    event_request = EventRequest.build_from_request(request)
     metadata = EventMetadata(event_cls.event_type,
-                             request=request,
+                             request=event_request,
                              tags=event_cls.tags)
     event = event_cls(metadata, payload)
     event.post()

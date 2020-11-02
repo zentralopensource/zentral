@@ -22,18 +22,22 @@ def login_callback(request, realm_authentication_session, next_url=None):
     Realm authorization session callback used to log realm users in,
     as Zentral users
     """
-    expiry = None
+    # session expiry
+    session_expiry = None
     if realm_authentication_session.expires_at:
-        expiry = (realm_authentication_session.expires_at - datetime.utcnow()).seconds
-        if expiry < 0:
+        session_expiry = (realm_authentication_session.expires_at - datetime.utcnow()).seconds
+        if session_expiry < 0:
             raise ValueError("The SSO session has already expired")
+    session_expiry = session_expiry or 0
+
+    # login
     realm_user = realm_authentication_session.user
     user = authenticate(request=request, realm_user=realm_user)
     if not user:
         raise ValueError("Could not authenticate realm user")
     else:
-
-        request.session.set_expiry(expiry or 0)
+        request.session.set_expiry(session_expiry)
+        request.session["_realm_authentication_session"] = str(realm_authentication_session.uuid)
         login(request, user)
     return next_url or settings.LOGIN_REDIRECT_URL
 
