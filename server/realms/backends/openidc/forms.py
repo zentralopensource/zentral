@@ -3,6 +3,13 @@ from realms.forms import RealmForm
 
 
 class OpenIDConnectRealmForm(RealmForm):
+    login_session_expiry = forms.IntegerField(
+        required=False, min_value=0, max_value=1296000,
+        help_text="Session expiry in seconds. If value is 0, the user’s session"
+                  " cookie will expire when the user’s Web browser is closed. "
+                  "Leave blank, and the session reverts to using the "
+                  "'exp' claim provided by the IDP in the ID token."
+    )
     discovery_url = forms.URLField(required=True)
     client_id = forms.CharField(required=True)
     client_secret = forms.CharField(

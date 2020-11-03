@@ -1,5 +1,4 @@
 import base64
-from datetime import datetime
 import hashlib
 import logging
 import random
@@ -22,31 +21,13 @@ def login_callback(request, realm_authentication_session, next_url=None):
     Realm authorization session callback used to log realm users in,
     as Zentral users
     """
-    # session expiry
-    # default to 5 min, to be really annoying!
-    session_expiry = 5 * 60
-    if realm_authentication_session.realm.login_session_expiry is not None:
-        # the session expiry configured in the realm takes precedence
-        session_expiry = realm_authentication_session.realm.login_session_expiry
-    elif realm_authentication_session.expires_at:
-        # fall back to the session expiry attached to the realm authentication session
-        expiry_delta = realm_authentication_session.expires_at - datetime.utcnow()
-        session_expiry = expiry_delta.days * 86400 + expiry_delta.seconds
-        if session_expiry < 0:
-            # should not happen, but who knows
-            raise ValueError("The SSO session has already expired")
-    else:
-        logger.error("No session expiry found in the realm %s authentication session. "
-                     "Use default expiry of %s seconds.",
-                     realm_authentication_session.realm, session_expiry)
-
     # login
     realm_user = realm_authentication_session.user
     user = authenticate(request=request, realm_user=realm_user)
     if not user:
         raise ValueError("Could not authenticate realm user")
     else:
-        request.session.set_expiry(session_expiry)
+        request.session.set_expiry(realm_authentication_session.computed_expiry())
         request.session["_realm_authentication_session"] = str(realm_authentication_session.uuid)
         login(request, user)
     return next_url or settings.LOGIN_REDIRECT_URL

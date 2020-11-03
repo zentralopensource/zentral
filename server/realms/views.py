@@ -130,10 +130,20 @@ class RealmAuthenticationSessionView(CanManageRealmsMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        realm_user = ctx["object"].user
-        ctx["realm_user"] = realm_user
+        ras = ctx["object"]
+
+        # session expiry
+        computed_expiry = ctx["computed_expiry"] = ras.computed_expiry()
+        ctx["login_session_expire_at_browser_close"] = computed_expiry == 0
+        if ras.expires_at:
+            idp_expiry_delta = ras.expires_at - ras.updated_at
+            ctx["idp_expiry_age"] = 86400 * idp_expiry_delta.days + idp_expiry_delta.seconds
+
+        # realm user
+        realm_user = ctx["realm_user"] = ras.user
         if not realm_user.email:
             ctx["error"] = "Missing email. Cannot be used for Zentral login."
+
         return ctx
 
 

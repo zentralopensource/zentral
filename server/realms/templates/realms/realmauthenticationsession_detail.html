@@ -11,7 +11,26 @@
 
 <h2>Realm user <i>{{ realm_user }}</i></h2>
 
-<p>Session expiry: {{ object.expires_at|default:"-" }}</p>
+{% if realm_user.realm.enabled_for_login %}
+<h3>Login session expiry</h3>
+
+<dl>
+  <dt>IDP</dt>
+  <dd>{{ object.expires_at|default:"-" }}{% if idp_expiry_age %} — ~{{ idp_expiry_age }} seconds{% endif %}</dd>
+  <dt>User’s session cookie</dt>
+  <dd>
+    {% if login_session_expire_at_browser_close %}
+    The user’s session cookie will expire when the user’s Web browser is closed.
+    {% else %}
+    {% if object.realm.login_session_expiry %}
+    {{ computed_expiry }} seconds
+    {% else %}
+    same as IDP
+    {% endif %}
+    {% endif %}
+  </dd>
+</dl>
+{% endif %}
 
 <h3>Orginal claims</h3>
 

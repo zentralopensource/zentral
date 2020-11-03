@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponseRedirect
@@ -51,10 +52,16 @@ class AuthorizationCodeFlowRedirectView(View):
             logger.exception("Could not update or create realm user")
             return ras_finalization_error(request, ras, exception=e)
 
+        # use the 'exp' claim as default session expiry
+        try:
+            expires_at = datetime.fromtimestamp(realm_user.claims["exp"])
+        except (KeyError, TypeError, ValueError):
+            expires_at = None
+
         # finalize the authentication session
         redirect_url = None
         try:
-            redirect_url = ras.finalize(request, realm_user)
+            redirect_url = ras.finalize(request, realm_user, expires_at)
         except Exception as e:
             logger.exception("Could not finalize the authentication session")
             return ras_finalization_error(request, ras, realm_user=realm_user, exception=e)

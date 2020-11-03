@@ -7,6 +7,11 @@ from . import get_ldap_connection
 
 
 class LDAPRealmForm(RealmForm):
+    login_session_expiry = forms.IntegerField(
+        required=False, min_value=0, max_value=1296000, initial=0,
+        help_text="Session expiry in seconds. If value is 0, the user’s session"
+                  " cookie will expire when the user’s Web browser is closed."
+    )
     host = forms.CharField(required=True)
     bind_dn = forms.CharField(required=True)
     bind_password = forms.CharField(required=True, widget=forms.PasswordInput(render_value=True))
@@ -39,6 +44,13 @@ class LDAPRealmForm(RealmForm):
                     self.add_error("bind_password", e_dict.get("desc", e_dict.get("info", str(e))))
                 except Exception as e:
                     self.add_error("bind_password", str(e))
+
+    def clean_login_session_expiry(self):
+        login_session_expiry = self.cleaned_data.get("login_session_expiry")
+        if login_session_expiry in (None, "") and self.cleaned_data.get("enabled_for_login"):
+            # None is not a valid value, because this backend does not provide session expiry
+            raise forms.ValidationError("You need to pick a value between 0 and 1296000 seconds")
+        return login_session_expiry
 
     def get_config(self):
         return {attr: self.cleaned_data.get(attr)

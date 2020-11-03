@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from importlib import import_module
 import uuid
@@ -126,3 +127,24 @@ class RealmAuthenticationSession(models.Model):
         callback_function = self.get_callback_function()
         if callback_function:
             return callback_function(request=request, realm_authentication_session=self, **self.callback_kwargs)
+
+    def computed_expiry(self, default_session_expiry=300, from_dt=None):
+        # returns the effective session expiry in seconds, based on the realm settings and its on expires_at attribute
+        # default to 5 min to be really annoying!
+        session_expiry = default_session_expiry
+        if self.realm.login_session_expiry is not None:
+            # the session expiry configured in the realm takes precedence
+            session_expiry = self.realm.login_session_expiry
+        elif self.expires_at:
+            # fall back to the session expiry attached to the realm authentication session
+            if not from_dt:
+                from_dt = datetime.utcnow()
+            expiry_delta = self.expires_at - from_dt
+            session_expiry = expiry_delta.days * 86400 + expiry_delta.seconds
+            if session_expiry < 0:
+                # should not happen, but who knows
+                raise ValueError("This session has already expired!")
+        else:
+            logger.error("No session expiry found in the realm %s authentication session. "
+                         "Use default expiry of %s seconds.", self.realm, session_expiry)
+        return session_expiry
