@@ -13,6 +13,7 @@ from saml2 import BINDING_HTTP_POST
 from saml2.metadata import entity_descriptor
 from saml2.response import AuthnResponse, VerificationError
 from saml2.sigver import SignatureError
+from saml2.validate import ResponseLifetimeExceed
 from realms.exceptions import RealmUserError
 from realms.models import Realm, RealmAuthenticationSession
 from realms.views import ras_finalization_error
@@ -38,10 +39,16 @@ class AssertionConsumerServiceView(BaseSPView):
         saml2_client = self.backend_instance.get_saml2_client()
         try:
             authn_response = saml2_client.parse_authn_request_response(request.POST['SAMLResponse'], BINDING_HTTP_POST)
+        except ResponseLifetimeExceed:
+            raise PermissionDenied("Response lifetime exceed")
         except SignatureError:
             raise PermissionDenied("Bad SAML signature")
         except VerificationError:
             raise PermissionDenied("VerificationError")
+        except Exception:
+            message = "Could not parse authn response"
+            logger.exception(message)
+            raise PermissionDenied(message)
         if not isinstance(authn_response, AuthnResponse):
             logger.error("Excepted AuthnResponse, got %s", type(authn_response).__name__)
             raise PermissionDenied("Invalid SAML response - 1/2")
