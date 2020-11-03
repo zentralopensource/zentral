@@ -26,7 +26,9 @@ class CanManageRealmsMixin:
                                      settings.LOGIN_URL,
                                      REDIRECT_FIELD_NAME)
         if request.user.is_remote:
-            raise PermissionDenied("Remote users cannot access realms settings")
+            raise PermissionDenied("Remote users cannot access the realms settings")
+        if request.session.get("_realm_authentication_session"):
+            raise PermissionDenied("Log in without using a realm to access the realms settings")
         if not self.request.user.has_perms(('accounts.add_user', 'accounts.change_user', 'accounts.delete_user')):
             raise PermissionDenied("You do not have the required permissions to manage the realms.")
         return super().dispatch(request, *args, **kwargs)
@@ -46,6 +48,7 @@ class RealmListView(LoginRequiredMixin, ListView):
         ]
         ctx["can_manage_realms"] = (
             not self.request.user.is_remote
+            and not self.request.session.get("_realm_authentication_session")
             and self.request.user.has_perms(('accounts.add_user', 'accounts.change_user', 'accounts.delete_user'))
         )
         return ctx

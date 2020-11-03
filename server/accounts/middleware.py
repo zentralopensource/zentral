@@ -17,6 +17,7 @@ def force_password_change_middleware(get_response):
         user = request.user
         if user.is_authenticated and \
            not user.is_remote and \
+           not request.session.get("_realm_authentication_session") and \
            user.has_usable_password() and \
            user.password_updated_at is not None and \
            (timezone.now() - user.password_updated_at) > max_password_age and \
