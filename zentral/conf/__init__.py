@@ -3,8 +3,6 @@ from zentral.core.exceptions import ImproperlyConfigured
 from .utils import find_conf_file, load_config_file
 
 ZENTRAL_CONF_DIR_ENV_VAR = "ZENTRAL_CONF_DIR"
-ZENTRAL_SAML2_IDP_NAME_ENV_VAR = "ZENTRAL_SAML2_IDP_NAME"
-ZENTRAL_SAML2_IDP_METADATA_FILE_ENV_VAR = "ZENTRAL_SAML2_IDP_METADATA_FILE"
 
 
 __all__ = ['contact_groups', 'settings', 'user_templates_dir']
