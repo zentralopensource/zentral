@@ -57,7 +57,7 @@ KNOWN_COMMANDS_CHDIR = {
     "celery": "/zentral/server"
 }
 
-KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC = {'runserver', 'gunicorn'}
+KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC = {'runserver'}
 
 
 if __name__ == '__main__':
