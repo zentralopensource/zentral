@@ -115,7 +115,7 @@ def serialize_dep_profile(dep_profile):
     if dep_profile.include_tls_certificates:
         anchor_certs = []
         crypto_backend = default_backend()
-        for pem_data in split_certificate_chain(settings["api"]["tls_server_certs"]):
+        for pem_data in split_certificate_chain(settings["api"]["tls_fullchain"]):
             certificate = x509.load_pem_x509_certificate(pem_data.encode("utf-8"), crypto_backend)
             der_bytes = certificate.public_bytes(serialization.Encoding.DER)
             anchor_certs.append(base64.b64encode(der_bytes).decode("utf-8"))

@@ -31,14 +31,12 @@ class OsqueryZentralEnrollPowershellScriptBuilder(APIConfigToolsMixin):
         serialized_flags = self.build_kwargs["serialized_flags"]
 
         # tls server certs
-        tls_server_certs = self.get_tls_server_certs()
-        if tls_server_certs:
+        tls_fullchain = self.get_tls_fullchain()
+        if tls_fullchain:
             content = content.replace("%INCLUDE_TLS_SERVER_CERTS%", "1")
             tls_server_certs_file = 'C:\Program files\osquery\certs\{}.pem'.format(tls_hostname)
             content = content.replace("%TLS_SERVER_CERTS_FILE%", tls_server_certs_file)
-            with open(tls_server_certs, "r") as f:
-                tls_server_certs_data = f.read()
-                content = content.replace("%TLS_SERVER_CERTS%", tls_server_certs_data)
+            content = content.replace("%TLS_SERVER_CERTS%", tls_fullchain)
             serialized_flags.append(
                 "--tls_server_certs='{}'".format(tls_server_certs_file)
             )

@@ -3,18 +3,17 @@ import re
 from asn1crypto.core import load as load_asn1
 
 
-def split_certificate_chain(filename):
+def split_certificate_chain(chain):
     pem_certificates = []
-    current_certificate = ""
-    with open(filename, "r") as f:
-        for line in f:
-            if "--BEGIN" in line:
-                if current_certificate:
-                    pem_certificates.append(current_certificate)
-                    current_certificate = ""
-            current_certificate = "{}{}".format(current_certificate, line)
-    if current_certificate:
-        pem_certificates.append(current_certificate)
+    current_lines = []
+    for line in chain.splitlines():
+        if "--BEGIN" in line:
+            if current_lines:
+                pem_certificates.append("\n".join(current_lines))
+                current_lines = []
+        current_lines.append(line)
+    if current_lines:
+        pem_certificates.append("\n".join(current_lines))
     return pem_certificates
 
 

@@ -49,9 +49,9 @@ def build_payload(payload_type, payload_display_name, suffix, content, payload_v
     return payload
 
 
+# TODO: BAD. Must check if this is really a root CA before building returning anything
 def build_root_ca_payloads():
-    certificate_chain_filename = settings["api"]["tls_server_certs"]
-    root_certificate = split_certificate_chain(certificate_chain_filename)[-1]
+    root_certificate = split_certificate_chain(settings["api"]["tls_fullchain"])[-1]
     return [
         build_payload("com.apple.security.pem",
                       "Zentral - root CA", "tls-root-ca-cert",

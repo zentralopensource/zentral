@@ -1,8 +1,8 @@
 {
   "api": {
     "tls_hostname": "https://zentral",
-    "tls_server_certs": "/zentral/conf/start/docker/tls/zentral_fullchain.crt",
-    "tls_server_key": "/zentral/conf/start/docker/tls/zentral.key",
+    "tls_fullchain": "{{ file:/zentral/conf/start/docker/tls/zentral_fullchain.crt }}",
+    "tls_privkey": "{{ file:/zentral/conf/start/docker/tls/zentral.key }}",
     "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
   },
   "extra_links": [
@@ -23,7 +23,9 @@
     "DEFAULT_FROM_EMAIL": "changethis@example.com",
     "ALLOWED_HOSTS": [
       "*"
-    ]
+    ],
+    "POSTGRES_HOST": "{{ env:POSTGRES_HOST }}",
+    "POSTGRES_PASSWORD": "{{ env:POSTGRES_PASSWORD }}"
   },
   "queues": {
     "backend": "zentral.core.queues.backends.kombu",

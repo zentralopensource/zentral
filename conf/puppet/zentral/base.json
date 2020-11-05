@@ -24,7 +24,9 @@
     "DEFAULT_FROM_EMAIL": "changethis@example.com",
     "ALLOWED_HOSTS": [
       "*"
-    ]
+    ],
+    "POSTGRES_HOST": "{{ env:POSTGRES_HOST }}",
+    "POSTGRES_PASSWORD": "{{ env:POSTGRES_PASSWORD }}"
   },
   "queues": {
     "backend": "zentral.core.queues.backends.kombu",

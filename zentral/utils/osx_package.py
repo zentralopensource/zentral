@@ -237,9 +237,9 @@ class APIConfigToolsMixin(object):
     def get_tls_hostname(self, for_client_cert_auth=False):
         return get_tls_hostname(for_client_cert_auth)
 
-    def get_tls_server_certs(self):
+    def get_tls_fullchain(self):
         if distribute_tls_server_certs():
-            return settings["api"]["tls_server_certs"]
+            return settings["api"]["tls_fullchain"]
 
 
 class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
@@ -396,10 +396,11 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             plistlib.dump(pl, f)
 
     def include_tls_server_certs(self):
-        local_certs_path = self.get_tls_server_certs()
-        if local_certs_path:
+        tls_fullchain = self.get_tls_fullchain()
+        if tls_fullchain:
             tls_server_certs_rel_path = os.path.relpath(TLS_SERVER_CERTS_CLIENT_PATH, "/")
-            shutil.copy(local_certs_path, self.get_root_path(tls_server_certs_rel_path))
+            with open(self.get_root_path(tls_server_certs_rel_path), "w") as f:
+                f.write(tls_fullchain)
             return TLS_SERVER_CERTS_CLIENT_PATH
 
     def is_product_archive(self):

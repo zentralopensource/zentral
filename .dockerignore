@@ -1,8 +1,5 @@
-*/__pycache__*
-.git/*
-.gitignore
-./conf/*
-./docs/*
-./tests/*
-./venv/*
-*-amd64
+*
+!docker-entrypoint.py
+!requirements.txt
+!./server
+!./zentral

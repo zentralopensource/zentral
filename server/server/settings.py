@@ -155,17 +155,17 @@ WSGI_APPLICATION = 'server.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_DB', 'zentral'),
-        'USER': os.environ.get('POSTGRES_USER', 'zentral'),
         'ATOMIC_REQUESTS': True,
         'CONN_MAX_AGE': 3600
     }
 }
-for key in ('HOST', 'PASSWORD', 'PORT'):
+for key, default in (('HOST', None),
+                     ('PORT', None),
+                     ('NAME', 'zentral'),
+                     ('USER', 'zentral'),
+                     ('PASSWORD', None),):
     config_key = 'POSTGRES_{}'.format(key)
-    val = os.environ.get(config_key)
-    if not val:
-        val = django_zentral_settings.get(config_key)
+    val = django_zentral_settings.get(config_key, default)
     if val:
         DATABASES['default'][key] = val
 

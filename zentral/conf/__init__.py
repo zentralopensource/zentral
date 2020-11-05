@@ -1,6 +1,12 @@
+import logging
 import os
 from zentral.core.exceptions import ImproperlyConfigured
+from .config import ConfigDict, FileProxy
 from .utils import find_conf_file, load_config_file
+
+
+logger = logging.getLogger("zentral.conf")
+
 
 ZENTRAL_CONF_DIR_ENV_VAR = "ZENTRAL_CONF_DIR"
 
@@ -29,7 +35,29 @@ conf_dir = get_conf_dir()
 user_templates_dir = os.path.join(conf_dir, 'templates')
 
 
-settings = load_config_file(find_conf_file(conf_dir, "base"))
+class APIDict(ConfigDict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # load deprecated tls_server_certs
+        tls_server_certs = self.get("tls_server_certs")
+        if tls_server_certs and "tls_fullchain" not in self:
+            logger.warning("Loading tls_fullchain from deprecated tls_server_certs")
+            self._collection["tls_fullchain"] = FileProxy(tls_server_certs)
+        # load deprecated tls_server_key
+        tls_server_key = self.get("tls_server_key")
+        if tls_server_key and "tls_privkey" not in self:
+            logger.warning("Loading tls_privkey from deprecated tls_server_key")
+            self._collection["tls_privkey"] = FileProxy(tls_server_key)
+
+
+class ZentralConfigDict(ConfigDict):
+    custom_classes = {
+        ("api",): APIDict
+    }
+
+
+settings = ZentralConfigDict(load_config_file(find_conf_file(conf_dir, "base")))
+
 
 # add default apps
 for app in ["zentral.core.incidents", "zentral.core.probes"]:
