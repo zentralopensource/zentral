@@ -14,7 +14,9 @@ class TemplateLoader(object):
 
     def _get_j2env(self):
         if self._j2env is None:
-            templates_dirs = [user_templates_dir]
+            templates_dirs = []
+            if user_templates_dir:
+                templates_dirs.append(user_templates_dir)
             for app_name, app_config in apps.app_configs.items():
                 app_events_template_dir = getattr(app_config, 'events_templates_dir', None)
                 if app_events_template_dir:
