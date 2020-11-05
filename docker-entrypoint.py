@@ -40,6 +40,7 @@ KNOWN_COMMANDS = {
                              "--access-logfile", "-",
                              "--error-logfile", "-",
                              "server.wsgi"],
+    "runworker": ["python", 'server/manage.py', 'runworker'],
     "runworkers": ["python", 'server/manage.py', 'runworkers'],
     "celery": ["/usr/local/bin/celery", "-A", "server", "worker"],
     # extras
