@@ -11,29 +11,30 @@ https://docs.djangoproject.com/en/1.8/ref/settings/
 """
 
 import os
+from django.core.management import utils
 # Import the zentral settings (base.json)
 from zentral.conf import settings as zentral_settings
 from .celery import app as celery_app
 
 __all__ = ('celery_app',)
 
-django_zentral_settings = zentral_settings['django']
+django_zentral_settings = zentral_settings.get('django', {})
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = django_zentral_settings['SECRET_KEY']
+SECRET_KEY = django_zentral_settings.get('SECRET_KEY', utils.get_random_secret_key())
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = django_zentral_settings.get('DEBUG', False)
 
 ADMINS = ((admin_name, admin_email)
-          for admin_name, admin_email in django_zentral_settings.get('ADMINS'))
+          for admin_name, admin_email in django_zentral_settings.get('ADMINS', []))
 DEFAULT_FROM_EMAIL = django_zentral_settings.get('DEFAULT_FROM_EMAIL', None)
 SERVER_EMAIL = django_zentral_settings.get('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
 
-ALLOWED_HOSTS = django_zentral_settings['ALLOWED_HOSTS']
+ALLOWED_HOSTS = django_zentral_settings.get('ALLOWED_HOSTS', ["*"])
 
 MEDIA_ROOT = django_zentral_settings.get("MEDIA_ROOT", "")
 
