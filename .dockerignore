@@ -1,5 +1,12 @@
-*
-!docker-entrypoint.py
-!requirements.txt
-!./server
-!./zentral
+**/.*
+**/*.pyc
+**/*.swp
+conf
+docs
+docker-compose*
+tests
+venv
+tox.ini
+Dockerfile
+LICENSE
+README.md
