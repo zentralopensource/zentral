@@ -106,9 +106,6 @@ class BaseConfig:
         else:
             return value
 
-    def __iter__(self):
-        return self._collection.__iter__()
-
     def __len__(self):
         return len(self._collection)
 
@@ -142,6 +139,10 @@ class ConfigList(BaseConfig):
             logger.debug("Get /%s[%s] config key", "/".join(self._path), key)
             return self._to_python(value)
 
+    def __iter__(self):
+        for element in self._collection:
+            yield self._to_python(element)
+
 
 class ConfigDict(BaseConfig):
     def __init__(self, config_d, path=None):
@@ -161,6 +162,9 @@ class ConfigDict(BaseConfig):
         except KeyError:
             value = self._to_python(default)
         return value
+
+    def __iter__(self):
+        yield from self._collection
 
     def keys(self):
         return self._collection.keys()
@@ -188,7 +192,7 @@ class ConfigDict(BaseConfig):
         return key, self._to_python(value)
 
     def copy(self):
-        return self._collection.copy()
+        return ConfigDict(self._collection.copy(), path=self._path)
 
     def update(self, *args, **kwargs):
         chain = []
