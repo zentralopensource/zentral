@@ -46,11 +46,23 @@ class Base64DecodeProxy(Proxy):
         return base64.b64decode(self._child_proxy.get())
 
 
+class ElementProxy(Proxy):
+    def __init__(self, key, child_proxy):
+        try:
+            self._key = int(key)
+        except ValueError:
+            self._key = key
+        self._child_proxy = child_proxy
+
+    def get(self):
+        return self._child_proxy.get()[self._key]
+
+
 class BaseConfig:
     PROXY_VAR_RE = re.compile(
         r"^\{\{\s*"
         r"(?P<type>env|file)\:(?P<key>[^\}\|]+)"
-        r"(?P<filters>(\s*\|\s*(jsondecode|base64decode))*)"
+        r"(?P<filters>(\s*\|\s*(jsondecode|base64decode|element:[a-zA-Z_\-/0-9]+))*)"
         r"\s*\}\}$"
     )
     custom_classes = {}
@@ -71,6 +83,9 @@ class BaseConfig:
                 proxy = JSONDecodeProxy(proxy)
             elif filter_name == "base64decode":
                 proxy = Base64DecodeProxy(proxy)
+            elif filter_name.startswith("element:"):
+                key = filter_name.split(":", 1)[-1]
+                proxy = ElementProxy(key, proxy)
         return proxy
 
     def _from_python(self, key, value):
