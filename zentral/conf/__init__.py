@@ -90,6 +90,12 @@ class APIDict(ConfigDict):
         if tls_server_key and "tls_privkey" not in self:
             logger.warning("Loading tls_privkey from deprecated tls_server_key")
             self._collection["tls_privkey"] = FileProxy(tls_server_key)
+        # if no fullchain but cert and chain, build fullchain
+        cert = self.get("tls_cert")
+        chain = self.get("tls_chain")
+        if cert and chain and "tls_fullchain" not in self:
+            logger.info("Build tls_fullchain from tls_cert & tls_chain")
+            self._collection["tls_fullchain"] = "\n".join(c.strip() for c in (cert, chain))
 
 
 class ZentralSettings(ConfigDict):
