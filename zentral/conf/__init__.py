@@ -1,3 +1,5 @@
+import base64
+import gzip
 import json
 import logging
 import os
@@ -21,7 +23,7 @@ logger = logging.getLogger("zentral.conf")
 #
 
 
-ZENTRAL_CONF_ENV_VAR = "ZENTRAL_CONF"
+ZENTRAL_CONF_ENV_VARS = ("B64GZIP_ZENTRAL_CONF", "ZENTRAL_CONF")
 ZENTRAL_CONF_DIR_ENV_VAR = "ZENTRAL_CONF_DIR"
 
 
@@ -38,10 +40,16 @@ def get_conf_dir():
 
 def get_raw_configuration():
     # env
-    raw_cfg = os.environ.get(ZENTRAL_CONF_ENV_VAR)
-    if raw_cfg:
-        logger.info("Got raw configuration from environment")
-        return raw_cfg, "ENV"
+    for env_var in ZENTRAL_CONF_ENV_VARS:
+        raw_cfg = os.environ.get(env_var)
+        if raw_cfg:
+            if env_var.startswith("B64GZIP"):
+                try:
+                    raw_cfg = gzip.decompress(base64.b64decode(raw_cfg))
+                except Exception:
+                    raise ImproperlyConfigured("Could not read base64gzipped zentral conf")
+            logger.info("Got raw configuration from environment")
+            return raw_cfg, "ENV"
 
     # file
     conf_dir = get_conf_dir()
