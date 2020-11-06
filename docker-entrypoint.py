@@ -32,6 +32,20 @@ def django_collectstatic():
     subprocess.check_call(['python', 'server/manage.py', 'collectstatic', '-v0', '--noinput'])
 
 
+def create_zentral_superuser():
+    username = os.environ.get("ZENTRAL_ADMIN_USERNAME")
+    email = os.environ.get("ZENTRAL_ADMIN_EMAIL")
+    if username and email:
+        print("Found admin username and email in environment. "
+              "Create superuser if missing.")
+        try:
+            subprocess.check_call(['python', 'server/manage.py', 'create_zentral_user',
+                                   '--superuser', '--skip-if-existing',
+                                   username, email])
+        except subprocess.CalledProcessError:
+            print("Could not create superuser!!!")
+
+
 KNOWN_COMMANDS = {
     "runserver": ["python", 'server/manage.py', 'runserver', '0.0.0.0:8000'],
     "gunicorn": ["gunicorn", "--chdir", "/zentral/server",
@@ -71,6 +85,7 @@ if __name__ == '__main__':
         filename = args[0]
         args.extend(sys.argv[2:])
         wait_for_db_migration()
+        create_zentral_superuser()
         if cmd in KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC:
             django_collectstatic()
         env.update(KNOWN_COMMANDS_EXTRA_ENV.get(cmd, {}))

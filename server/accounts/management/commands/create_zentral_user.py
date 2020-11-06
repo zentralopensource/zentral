@@ -18,6 +18,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('username')
         parser.add_argument('email')
+        parser.add_argument('--skip-if-existing', action='store_true')
         parser.add_argument('--superuser', action='store_true',
                             help="User has all permissions without explicitly assigning them")
         parser.add_argument('--with-api-token', action='store_true',
@@ -25,12 +26,12 @@ class Command(BaseCommand):
         parser.add_argument('--json', action='store_true',
                             help="Set output mode to 'json'")
 
-    def exit_with_error(self, message):
+    def exit_with_error(self, message, exit_code=1):
         if self.json:
             print(json.dumps({"error": message}, indent=2))
         else:
             print("ERROR", message)
-        sys.exit(1)
+        sys.exit(exit_code)
 
     def handle(self, *args, **kwargs):
         self.json = kwargs.get("json", False)
@@ -70,6 +71,8 @@ class Command(BaseCommand):
             if not self.json:
                 print("Superuser" if superuser else "User", username, email, "created")
         else:
+            if kwargs.get("skip_if_existing"):
+                self.exit_with_error("User {} already exists. Nothing to do.".format(username), exit_code=0)
             if user.is_superuser != superuser:
                 updated = True
                 user.is_superuser = superuser
