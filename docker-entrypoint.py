@@ -37,13 +37,18 @@ def create_zentral_superuser():
     email = os.environ.get("ZENTRAL_ADMIN_EMAIL")
     if username and email:
         print("Found admin username and email in environment. "
-              "Create superuser if missing.")
+              "Create superuser if missing.", flush=True)
+        args = ['python', 'server/manage.py', 'create_zentral_user', '--superuser']
+        force = os.environ.get("ZENTRAL_FORCE_ADMIN_PASSWORD_RESET")
+        if not force or force.upper() not in ("1", "TRUE", "YES", "Y"):
+            args.append("--skip-if-existing")
+        args.extend([username, email])
         try:
-            subprocess.check_call(['python', 'server/manage.py', 'create_zentral_user',
-                                   '--superuser', '--skip-if-existing',
-                                   username, email])
+            subprocess.run(args, check=True)
         except subprocess.CalledProcessError:
-            print("Could not create superuser!!!")
+            print("Could not create superuser!!!", flush=True)
+    else:
+        print("Admin username and email not found", flush=True)
 
 
 KNOWN_COMMANDS = {
@@ -93,7 +98,7 @@ if __name__ == '__main__':
         wd = KNOWN_COMMANDS_CHDIR.get(cmd)
         if wd:
             os.chdir(wd)
-        print('Launch known command "{}"'.format(cmd))
+        print('Launch known command "{}"'.format(cmd), flush=True)
     else:
         filename = cmd
         args = sys.argv[1:]
