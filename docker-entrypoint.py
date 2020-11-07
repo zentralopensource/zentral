@@ -77,7 +77,10 @@ KNOWN_COMMANDS_CHDIR = {
     "celery": "/zentral/server"
 }
 
-KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC = {'runserver'}
+KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC = {
+    'gunicorn',  # the staticfiles manifest is needed!
+    'runserver',
+}
 
 
 if __name__ == '__main__':
