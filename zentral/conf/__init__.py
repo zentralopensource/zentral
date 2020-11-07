@@ -104,6 +104,12 @@ class APIDict(ConfigDict):
         if cert and chain and "tls_fullchain" not in self:
             logger.info("Build tls_fullchain from tls_cert & tls_chain")
             self._collection["tls_fullchain"] = "\n".join(c.strip() for c in (cert, chain))
+        # if fqdn or fqdn_mtls build tls hostnames
+        for src, dest in (("fqdn", "tls_hostname"),
+                          ("fqdn_mtls", "tls_hostname_for_client_cert_auth")):
+            value = self.get(src)
+            if value:
+                self._collection[dest] = "https://{}".format(value)
 
 
 class ZentralSettings(ConfigDict):
