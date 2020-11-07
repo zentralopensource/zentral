@@ -234,7 +234,10 @@ log_formatter = django_zentral_settings.get("LOG_FORMATTER")
 if log_formatter:
     log_formatter_dict = {'()': log_formatter}
 else:
-    log_formatter_dict = {'format': '%(asctime)s PID%(process)d %(module)s %(levelname)s %(message)s'}
+    log_asctime = django_zentral_settings.get("LOG_ASCTIME", True)
+    log_formatter_dict = {
+        'format': '{}PID%(process)d %(module)s %(levelname)s %(message)s'.format('%(asctime)s ' if log_asctime else '')
+    }
 
 
 if DEBUG:
