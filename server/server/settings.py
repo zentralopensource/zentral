@@ -274,8 +274,16 @@ LOGGING = {
         'server': {
             'handlers': ['console'],
         },
+        'gunicorn.access': {
+            'level': 'INFO',
+            'handlers': ['console'],
+        },
+        'gunicorn.error': {
+            'level': 'INFO',
+            'handlers': ['console'],
+        },
         'zentral': {
-            'level': 'DEBUG',
+            'level': log_level,
             'handlers': ['console'],
         },
         'elasticsearch': {

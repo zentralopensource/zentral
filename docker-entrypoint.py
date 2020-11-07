@@ -52,6 +52,7 @@ KNOWN_COMMANDS = {
                              "-b", "0.0.0.0:8000",
                              "-w", str(2 * multiprocessing.cpu_count() + 1),
                              "--access-logfile", "-",
+                             "--access-logformat", '"%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"',
                              "--error-logfile", "-",
                              "server.wsgi"],
     "runworker": ["python", 'server/manage.py', 'runworker'],
