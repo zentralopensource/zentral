@@ -62,7 +62,7 @@ KNOWN_COMMANDS = {
                              "server.wsgi"],
     "runworker": ["python", 'server/manage.py', 'runworker'],
     "runworkers": ["python", 'server/manage.py', 'runworkers'],
-    "celery": ["/usr/local/bin/celery", "-A", "server", "worker"],
+    "celery": ["celery", "-A", "server", "worker"],
     # extras
     "shell": ["python", 'server/manage.py', 'shell'],
     "tests": ["python", 'server/manage.py', 'test', 'tests/'],
