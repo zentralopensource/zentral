@@ -94,7 +94,8 @@ if __name__ == '__main__':
         filename = args[0]
         args.extend(sys.argv[2:])
         wait_for_db_migration()
-        create_zentral_superuser()
+        if cmd != "tests":
+            create_zentral_superuser()
         if cmd in KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC:
             django_collectstatic()
         env.update(KNOWN_COMMANDS_EXTRA_ENV.get(cmd, {}))
