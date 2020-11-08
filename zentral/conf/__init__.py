@@ -122,7 +122,7 @@ class ZentralSettings(ConfigDict):
         super().__init__(*args, **kwargs)
         # add default apps
         for app in ["zentral.core.incidents", "zentral.core.probes", "zentral.contrib.inventory"]:
-            self.setdefault("apps", {})[app] = {}
+            self.setdefault("apps", {}).setdefault(app, {})
 
 
 settings = ZentralSettings(get_configuration())
