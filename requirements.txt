@@ -2,7 +2,6 @@ asn1crypto
 boto3
 celery<4.5
 django-celery-results
-coverage
 cryptography
 django-bootstrap-form
 django>=2.2,<2.3
@@ -15,7 +14,6 @@ hyper
 ipython
 jinja2
 kombu<5
-google-cloud-pubsub<2
 pip
 prometheus_client
 psycopg2-binary
@@ -26,9 +24,7 @@ pysaml2
 python-dateutil
 python-u2flib-server
 pyyaml
-redis
 requests
-requests_aws4auth
 requests_oauthlib
 setuptools
 sqlparse

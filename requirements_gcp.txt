@@ -1,0 +1,6 @@
+# to be able to use a bucket for the file storage
+django-storages[google]
+# for the google_pubsub queues backend
+google-cloud-pubsub<2
+# to be able to use redis as a celery broker
+redis

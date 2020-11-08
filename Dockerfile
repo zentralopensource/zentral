@@ -1,8 +1,16 @@
-################################################################################
-# Build stage 0 `builder`:
-################################################################################
+# Defining environment
+ARG APP_ENV=dev
 
-FROM python:3.9-buster AS builder
+
+####
+# Build stage 0:
+# - Install apt build dependencies
+# - Download and build tini
+# - Download and build bomutils and xar
+# - Make venv and install common requirements
+#
+
+FROM python:3.9-buster AS base-builder
 
 # zentral apt dependencies
 RUN apt-get update && \
@@ -58,14 +66,38 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 
-################################################################################
+####
 # Build stage 1:
-# Copy tini and virtualenv from stage 0
-# Add entrypoint
-################################################################################
+# - install extra APP_ENV requirements
+#
 
-FROM python:3.9-slim
-MAINTAINER Éric Falconnier <eric@zentral.pro>
+# Installing the extra requirements for dev
+FROM base-builder as dev-builder
+COPY requirements_*.txt ./
+RUN pip install -r requirements_dev.txt -r requirements_aws.txt -r requirements_gcp.txt
+
+
+# Installing the extra requirements for aws
+FROM base-builder as aws-builder
+COPY requirements_aws.txt .
+RUN pip install -r requirements_aws.txt
+
+
+# Installing the extra requirements for gcp
+FROM base-builder as gcp-builder
+COPY requirements_gcp.txt .
+RUN pip install -r requirements_gcp.txt
+
+
+#####
+# Build stage 2:
+# - install apt dependencies
+# - add zentral user & home
+# - create common app dirs
+# - copy tini, mkbom and xar from stage 0
+#
+
+FROM python:3.9-slim as base-runner
 
 # zentral apt dependencies
 RUN apt-get update && \
@@ -90,23 +122,68 @@ RUN apt-get update && \
 RUN groupadd -g 999 zentral && \
     useradd -u 999 -g 999 -m -d /zentral zentral
 
-# copy files from builder
-COPY --from=builder /tini /tini
-COPY --from=builder /opt/venv /opt/venv
-COPY --from=builder /usr/bin/mkbom /usr/bin/mkbom
-COPY --from=builder /usr/local/lib/libxar.so.1 /usr/local/lib/libxar.so.1
-COPY --from=builder /usr/local/bin/xar /usr/local/bin/xar
-
-# app
-COPY . /zentral
-
-# mount points
-RUN mkdir /prometheus_sd && chown zentral:zentral /prometheus_sd
+# common app dirs
 RUN mkdir /zentral_static && chown zentral:zentral /zentral_static
 RUN mkdir /var/zentral && chown zentral:zentral /var/zentral
+
+# copy files from builder
+COPY --from=base-builder /tini /tini
+COPY --from=base-builder /usr/bin/mkbom /usr/bin/mkbom
+COPY --from=base-builder /usr/local/lib/libxar.so.1 /usr/local/lib/libxar.so.1
+COPY --from=base-builder /usr/local/bin/xar /usr/local/bin/xar
+
+
+####
+# Build stage 3:
+# - run extra APP_ENV setup
+# - copy venv from APP_ENV builder
+#
+
+FROM base-runner as dev-runner
+COPY ./tests /zentral/tests
+RUN mkdir /prometheus_sd && chown zentral:zentral /prometheus_sd
+COPY --from=dev-builder /opt/venv /opt/venv
+# extra zentral apt dependencies
+RUN apt-get update && \
+    apt-get autoremove -y && \
+    apt-get install -y --no-install-recommends \
+            # pycurl for kombu[sqs]
+            libcurl4-openssl-dev && \
+# clean cache
+    rm -rf /var/lib/apt/lists/*
+
+
+FROM base-runner as aws-runner
+COPY --from=aws-builder /opt/venv /opt/venv
+# extra zentral apt dependencies
+RUN apt-get update && \
+    apt-get autoremove -y && \
+    apt-get install -y --no-install-recommends \
+            # pycurl for kombu[sqs]
+            libcurl4-openssl-dev && \
+# clean cache
+    rm -rf /var/lib/apt/lists/*
+
+
+FROM base-runner as gcp-runner
+COPY --from=gcp-builder /opt/venv /opt/venv
+
+
+####
+# Build stage 4:
+# - copy the app
+# - set workdir, user, port, env, and entrypoint
+#
+
+FROM ${APP_ENV}-runner as final
+MAINTAINER Éric Falconnier <eric@zentral.pro>
+
+COPY docker-entrypoint.py /zentral/
+COPY ./server /zentral/server
+COPY ./zentral /zentral/zentral
 
 WORKDIR /zentral
 USER zentral
 EXPOSE 8000
 ENV PATH="/opt/venv/bin:$PATH"
-ENTRYPOINT ["/zentral/docker-entrypoint.py"]
+ENTRYPOINT ["/tini", "--", "/zentral/docker-entrypoint.py"]

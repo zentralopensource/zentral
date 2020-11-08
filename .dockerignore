@@ -4,7 +4,6 @@
 conf
 docs
 docker-compose*
-tests
 venv
 tox.ini
 Dockerfile

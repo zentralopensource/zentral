@@ -1,0 +1,9 @@
+# to be able to use AWS credentials for ES
+requests_aws4auth
+# to be able to use a bucket for the file storage
+django-storages[boto3]
+# to be able to use sqs with kombu/celery
+kombu[sqs]<4.7  # 4.7 for compatibility with celery<4.5
+# to make sure that the celery workers will start
+# TODO: understand why!!!
+pycurl

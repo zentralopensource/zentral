@@ -6,7 +6,6 @@ import urllib.parse
 from dateutil import parser
 from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch.exceptions import ConnectionError, RequestError
-from requests_aws4auth import AWS4Auth
 from zentral.core.events import event_from_event_d, event_tags, event_types
 from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.probes.base import PayloadFilter
@@ -99,10 +98,14 @@ class EventStore(BaseEventStore):
         if aws_auth:
             kwargs["connection_class"] = RequestsHttpConnection
             try:
+                from requests_aws4auth import AWS4Auth
                 kwargs['http_auth'] = AWS4Auth(aws_auth['access_id'],
                                                aws_auth['secret_key'],
                                                aws_auth['region'],
                                                'es')
+            except ImportError:
+                raise ImproperlyConfigured("Missing requests_aws4auth pip dependency "
+                                           "for ES AWS credentials")
             except KeyError:
                 raise ImproperlyConfigured("access_id, secret_key or region missing "
                                            "in aws_auth config")
