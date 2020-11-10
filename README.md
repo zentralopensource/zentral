@@ -1,6 +1,6 @@
 # Zentral
 
-[![Build Status](https://travis-ci.org/zentralopensource/zentral.svg?branch=master)](https://travis-ci.org/zentralopensource/zentral)
+![Tests](https://github.com/zentralopensource/zentral/workflows/Tests/badge.svg?branch=master)
 
 Zentral is an Event Hub to gather, process, and monitor system events and link them to an inventory.
 
