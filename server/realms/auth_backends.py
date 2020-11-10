@@ -42,11 +42,14 @@ class RealmBackend(ModelBackend):
             else:
                 try:
                     # Create user
-                    return User.objects.create(email=email,
-                                               username=username,
-                                               is_remote=True,
-                                               first_name=realm_user.first_name or "",
-                                               last_name=realm_user.last_name or "")
+                    user = User(email=email,
+                                username=username,
+                                is_remote=True,
+                                first_name=realm_user.first_name or "",
+                                last_name=realm_user.last_name or "")
+                    user.set_unusable_password()
+                    user.save()
+                    return user
                 except IntegrityError as e:
                     # A similar user was created in the meantime
                     try:

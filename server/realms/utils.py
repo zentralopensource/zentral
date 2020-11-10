@@ -27,9 +27,9 @@ def login_callback(request, realm_authentication_session, next_url=None):
     if not user:
         raise ValueError("Could not authenticate realm user")
     else:
+        login(request, user)
         request.session.set_expiry(realm_authentication_session.computed_expiry())
         request.session["_realm_authentication_session"] = str(realm_authentication_session.uuid)
-        login(request, user)
     return next_url or settings.LOGIN_REDIRECT_URL
 
 

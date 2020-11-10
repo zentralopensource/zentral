@@ -20,6 +20,10 @@ class User(AbstractUser):
     def __str__(self):
         return self.email or self.username
 
+    def set_password(self, *args, **kwargs):
+        super().set_password(*args, **kwargs)
+        self.password_updated_at = timezone.now()
+
     def save(self, *args, **kwargs):
         if self.pk:
             old_user = self._meta.model.objects.get(pk=self.pk)
@@ -28,7 +32,7 @@ class User(AbstractUser):
                     UserPasswordHistory.objects.create(
                         user=self,
                         password=old_user.password,
-                        created_at=old_user.password_updated_at
+                        created_at=old_user.password_updated_at or old_user.date_joined
                     )
                 self.password_updated_at = timezone.now()
         elif self.password:
