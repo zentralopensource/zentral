@@ -2,8 +2,12 @@ import base64
 import itertools
 import json
 import logging
-import re
 import os
+import re
+import time
+from .buckets import get_bucket_client
+from .params import get_param_client
+from .secrets import get_secret_client
 
 
 logger = logging.getLogger("zentral.conf.config")
@@ -15,22 +19,31 @@ class Proxy:
 
 class EnvProxy(Proxy):
     def __init__(self, name):
-        self._value = os.environ[name]
+        self._name = name
 
     def get(self):
-        return self._value
+        return os.environ[self._name]
 
 
-class FileProxy(Proxy):
-    def __init__(self, filepath):
-        self._filepath = filepath
+class ResolverMethodProxy(Proxy):
+    def __init__(self, resolver, proxy_type, key):
+        if proxy_type == "file":
+            self._method = resolver.get_file_content
+        elif proxy_type == "param":
+            self._method = resolver.get_parameter_value
+        elif proxy_type == "secret":
+            self._method = resolver.get_secret_value
+        elif proxy_type == "bucket_file":
+            self._method = resolver.get_bucket_file
+        else:
+            raise ValueError("Unknown proxy type %s", proxy_type)
+        self._key = key
 
     def get(self):
-        with open(self._filepath, "r") as f:
-            return f.read()
+        return self._method(self._key)
 
 
-class JSONDecodeProxy(Proxy):
+class JSONDecodeFilter(Proxy):
     def __init__(self, child_proxy):
         self._child_proxy = child_proxy
 
@@ -38,7 +51,7 @@ class JSONDecodeProxy(Proxy):
         return json.loads(self._child_proxy.get())
 
 
-class Base64DecodeProxy(Proxy):
+class Base64DecodeFilter(Proxy):
     def __init__(self, child_proxy):
         self._child_proxy = child_proxy
 
@@ -46,7 +59,7 @@ class Base64DecodeProxy(Proxy):
         return base64.b64decode(self._child_proxy.get())
 
 
-class ElementProxy(Proxy):
+class ElementFilter(Proxy):
     def __init__(self, key, child_proxy):
         try:
             self._key = int(key)
@@ -58,34 +71,109 @@ class ElementProxy(Proxy):
         return self._child_proxy.get()[self._key]
 
 
+class Resolver:
+    def __init__(self):
+        self._cache = {}
+        self._bucket_client = None
+        self._param_client = None
+        self._secret_client = None
+
+    def _get_or_create_cached_value(self, key, getter, ttl=None):
+        # happy path
+        try:
+            expiry, value = self._cache[key]
+        except KeyError:
+            pass
+        else:
+            if expiry is None or time.time() < expiry:
+                logger.debug("Key %s from cache", key)
+                return value
+            logger.debug("Cache for key %s has expired", key)
+
+        # get value
+        value = getter()
+        if ttl:
+            expiry = time.time() + ttl
+        else:
+            expiry = None
+        self._cache[key] = (expiry, value)
+        logger.debug("Set cache for key %s", key)
+
+        return value
+
+    def get_file_content(self, filepath):
+        cache_key = ("FILE", filepath)
+
+        def getter():
+            with open(filepath, "r") as f:
+                return f.read()
+
+        return self._get_or_create_cached_value(cache_key, getter)
+
+    def get_secret_value(self, name):
+        cache_key = ("SECRET", name)
+        if not self._secret_client:
+            self._secret_client = get_secret_client()
+
+        def getter():
+            return self._secret_client.get(name)
+
+        return self._get_or_create_cached_value(cache_key, getter, ttl=600)
+
+    def get_bucket_file(self, key):
+        cache_key = ("BUCKET_FILE", key)
+        if not self._bucket_client:
+            self._bucket_client = get_bucket_client()
+
+        def getter():
+            return self._bucket_client.download_to_tmpfile(key)
+
+        return self._get_or_create_cached_value(cache_key, getter)
+
+    def get_parameter_value(self, key):
+        cache_key = ("PARAM", key)
+        if not self._param_client:
+            self._param_client = get_param_client()
+
+        def getter():
+            return self._param_client.get(key)
+
+        return self._get_or_create_cached_value(cache_key, getter, ttl=600)
+
+
 class BaseConfig:
     PROXY_VAR_RE = re.compile(
         r"^\{\{\s*"
-        r"(?P<type>env|file)\:(?P<key>[^\}\|]+)"
+        r"(?P<type>bucket_file|env|file|param|secret)\:(?P<key>[^\}\|]+)"
         r"(?P<filters>(\s*\|\s*(jsondecode|base64decode|element:[a-zA-Z_\-/0-9]+))*)"
         r"\s*\}\}$"
     )
     custom_classes = {}
 
-    @staticmethod
-    def _make_proxy(key, match):
+    def __init__(self, path=None, resolver=None):
+        self._path = path or ()
+        if not resolver:
+            resolver = Resolver()
+        self._resolver = resolver
+
+    def _make_proxy(self, key, match):
         proxy_type = match.group("type")
-        proxy_key = match.group("key").strip()
+        key = match.group("key").strip()
         if proxy_type == "env":
-            proxy = EnvProxy(proxy_key)
-        elif proxy_type == "file":
-            proxy = FileProxy(proxy_key)
+            proxy = EnvProxy(key)
         else:
-            raise ValueError("Unknown proxy type {}".format(proxy_type))
+            proxy = ResolverMethodProxy(self._resolver, proxy_type, key)
         filters = [f for f in [rf.strip() for rf in match.group("filters").split("|")] if f]
         for filter_name in filters:
             if filter_name == "jsondecode":
-                proxy = JSONDecodeProxy(proxy)
+                proxy = JSONDecodeFilter(proxy)
             elif filter_name == "base64decode":
-                proxy = Base64DecodeProxy(proxy)
+                proxy = Base64DecodeFilter(proxy)
             elif filter_name.startswith("element:"):
                 key = filter_name.split(":", 1)[-1]
-                proxy = ElementProxy(key, proxy)
+                proxy = ElementFilter(key, proxy)
+            else:
+                raise ValueError("Unknown filter %s", filter_name)
         return proxy
 
     def _from_python(self, key, value):
@@ -123,8 +211,8 @@ class BaseConfig:
 
 
 class ConfigList(BaseConfig):
-    def __init__(self, config_l, path=None):
-        self._path = path or ()
+    def __init__(self, config_l, path=None, resolver=None):
+        super().__init__(path=path, resolver=resolver)
         self._collection = []
         for key, value in enumerate(config_l):
             self._collection.append(self._from_python(str(key), value))
@@ -145,8 +233,8 @@ class ConfigList(BaseConfig):
 
 
 class ConfigDict(BaseConfig):
-    def __init__(self, config_d, path=None):
-        self._path = path or ()
+    def __init__(self, config_d, path=None, resolver=None):
+        super().__init__(path=path, resolver=resolver)
         self._collection = {}
         for key, value in config_d.items():
             self._collection[key] = self._from_python(key, value)
@@ -192,7 +280,7 @@ class ConfigDict(BaseConfig):
         return key, self._to_python(value)
 
     def copy(self):
-        return ConfigDict(self._collection.copy(), path=self._path)
+        return ConfigDict(self._collection.copy(), path=self._path, resolver=self._resolver)
 
     def update(self, *args, **kwargs):
         chain = []

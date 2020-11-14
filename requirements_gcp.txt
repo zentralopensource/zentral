@@ -1,6 +1,15 @@
-# to be able to use a bucket for the file storage
+# Django file storage
 django-storages[google]
-# for the google_pubsub queues backend
+
+# Zentral conf secrets
+google-auth
+google-cloud-secret-manager
+
+# Zentral conf buckets
+google-cloud-storage
+
+# Zentral google_pubsub queues backend
 google-cloud-pubsub<2
-# to be able to use redis as a celery broker
+
+# Redis for celery broker
 redis

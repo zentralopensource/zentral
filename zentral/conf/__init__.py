@@ -5,7 +5,7 @@ import logging
 import os
 import yaml
 from zentral.core.exceptions import ImproperlyConfigured
-from .config import ConfigDict, FileProxy
+from .config import ConfigDict, ResolverMethodProxy
 
 
 __all__ = ['contact_groups', 'settings', 'user_templates_dir']
@@ -92,12 +92,12 @@ class APIDict(ConfigDict):
         tls_server_certs = self.get("tls_server_certs")
         if tls_server_certs and "tls_fullchain" not in self:
             logger.warning("Loading tls_fullchain from deprecated tls_server_certs")
-            self._collection["tls_fullchain"] = FileProxy(tls_server_certs)
+            self._collection["tls_fullchain"] = ResolverMethodProxy(self._resolver, "file", tls_server_certs)
         # load deprecated tls_server_key
         tls_server_key = self.get("tls_server_key")
         if tls_server_key and "tls_privkey" not in self:
             logger.warning("Loading tls_privkey from deprecated tls_server_key")
-            self._collection["tls_privkey"] = FileProxy(tls_server_key)
+            self._collection["tls_privkey"] = ResolverMethodProxy(self._resolver, "file", tls_server_key)
         # if no fullchain but cert and chain, build fullchain
         cert = self.get("tls_cert")
         chain = self.get("tls_chain")
