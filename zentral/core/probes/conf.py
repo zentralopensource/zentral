@@ -1,8 +1,12 @@
+import logging
 import os
 import threading
 import weakref
 from .models import ProbeSource
 from .sync import ProbeViewSync
+
+
+logger = logging.getLogger("zentral.core.probes.conf")
 
 
 class ProbeView(object):
@@ -25,7 +29,12 @@ class ProbeView(object):
             yield from self.parent
 
     def _start_sync(self):
-        if self.sync is None and self.with_sync:
+        if self.with_sync:
+            if self.sync is not None:
+                if self.sync.is_alive():
+                    return
+                else:
+                    logger.error("Sync thread is not alive. Last heartbeat %s.", self.sync.last_heartbeat or "-")
             # separate thread to listen to the probe change signal
             self.sync = ProbeViewSync(self)
             self.sync.start()
@@ -51,8 +60,8 @@ class ProbesDict(ProbeView):
         self.unique_key = unique_key
 
     def _load(self):
+        self._start_sync()
         if self._probes is None:
-            self._start_sync()
             self._probes = {}
             for probe in self.iter_parent_probes():
                 for key, val in self.item_func(probe):
@@ -90,8 +99,8 @@ class ProbeList(ProbeView):
                 child.clear()
 
     def _load(self):
+        self._start_sync()
         if self._probes is None:
-            self._start_sync()
             self._probes = []
             for probe in self.iter_parent_probes():
                 if self.filter_func is None or self.filter_func(probe):
