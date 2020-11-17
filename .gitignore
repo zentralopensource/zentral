@@ -13,6 +13,7 @@ __pycache__
 !/docker-compose.puppet.yml
 !/docker-compose.saml2.yml
 !/docker-compose.syslog.yml
+!/mkdocs.yml
 !/.travis.yml
 /conf/*
 !/conf/start
@@ -21,9 +22,6 @@ __pycache__
 !/conf/puppet
 !/conf/saml2
 !/conf/syslog
-/docs/_build/
-/docs/_static/
-/docs/_templates/
 /fabfile.py
 /venv/
 /wheels/

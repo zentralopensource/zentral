@@ -1,0 +1,17 @@
+site_name: Zentral
+theme: readthedocs
+
+repo_url: https://github.com/zentralopensource/zentral
+edit_uri: https://github.com/zentralopensource/zentral/edit/master/docs/
+docs_dir: docs/
+site_dir: build/
+
+nav:
+- Introduction:
+  - Welcome to Zentral: index.md
+- Deployment:
+  - Intro: deployment/index.md
+  - Docker: deployment/docker-compose.md
+  - ZAIO on AWS: deployment/zaio-aws.md
+  - ZAIO on GCP: deployment/zaio-gcp.md
+  - ZAIO setup: deployment/zaio-setup.md
