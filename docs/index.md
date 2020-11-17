@@ -1,5 +1,6 @@
 # Welcome to Zentral
-![](images/logo_big.png)
+
+![Zentral](images/logo_640_160.svg)
 
 Zentral is an open-source hub for endpoint protection.
 
