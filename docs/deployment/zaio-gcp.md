@@ -29,7 +29,7 @@ zentralopensource/zentral_all_in_one.json
 
 Pick a location.
 
-![Create image form example](/images/deployment/zaio-gcp/create_zaio_image.png)
+![Create image form example](../../images/deployment/zaio-gcp/create_zaio_image.png)
 
 Click on the **Create** button to import the image. The process can take several minutes. The image is now included on the [Images page](https://console.cloud.google.com/compute/images).
 
@@ -71,19 +71,19 @@ Select a **Region** and a **Zone**.
 
 The default _General-purpose_ **Machine family**, and _n1-standard-1_ **Machine type** are OK to test Zentral.
 
-![Create instance form first sections](/images/deployment/zaio-gcp/create_instance_top_form.png)
+![Create instance form first sections](../../images/deployment/zaio-gcp/create_instance_top_form.png)
 
 In the **Boot disk** section, click on the [Change] button, go to the [Custom images] tab. Select the `zentral-all-in-one` image that you created at the beginning of this tutorial.
 
-![Select zentral-all-in-one custom image](/images/deployment/zaio-gcp/select_image.png)
+![Select zentral-all-in-one custom image](../../images/deployment/zaio-gcp/select_image.png)
 
 You can start with one 10GB SSD persistent disk. But that would be only enough to store a limited amount of events. As a rule of thumb, you will need about 7GB + 1GB for every million of events stored, but that can vary a lot depending on your inventory sources, and the kind of events you are collecting.
 
-![SSD persistent disk size](/images/deployment/zaio-gcp/ssd_persistent_disk.png)
+![SSD persistent disk size](../../images/deployment/zaio-gcp/ssd_persistent_disk.png)
 
 This is what you should see in the *Boot disk* menu:
 
-![zentral-all-in-one-image-selected](/images/deployment/zaio-gcp/boot_disk_selected.png)
+![zentral-all-in-one-image-selected](../../images/deployment/zaio-gcp/boot_disk_selected.png)
 
 We will use the **Compute engine default service account** and the **default access scopes**. Again, not recemmended for production.
 
@@ -91,7 +91,7 @@ In the **Firewall** section, tick the _Allow HTTP traffic_ and _Allow HTTPS traf
 
 If you want to try the filebeat / logstash functionality, you need to add the `logstash` network tag you have created to the instance, in order to attach the firewall rule. You can skip this step if you do not want to try this integration. Expand the _Management, security, disks, networking, sole tenancy_ section, open the _Networking_ tab, and add _logstash_ in the **Network tags** field. 
 
-![Create instance form network section](/images/deployment/zaio-gcp/network_section.png)
+![Create instance form network section](../../images/deployment/zaio-gcp/network_section.png)
 
 Click on the **Create** button to launch the instance.
 
@@ -108,6 +108,6 @@ Zentral requires at leat one domain name resolving to the IP address of the laun
 
 You can open a ssh session via the Google Cloud. Click on the instance in the [list of all instance](https://console.cloud.google.com/compute/instances). At the top of the instance page, open the **Remote access / SSH** menu and select _Open in browser window_. A new tab will open and a ssh session will start.
 
-![open ssh in browser window](/images/deployment/zaio-gcp/open_ssh_in_browser_window.png)
+![open ssh in browser window](../../images/deployment/zaio-gcp/open_ssh_in_browser_window.png)
 
 Once logged in, you can use a [command line tool to setup your instance](../zaio-setup). Because this last step is the same for a AWS deployment, we have kept it on a separate wiki page.
