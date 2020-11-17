@@ -11,6 +11,8 @@ extra_css:
 nav:
 - Introduction:
   - Welcome to Zentral: index.md
+- Apps:
+  - Monolith: apps/monolith.md
 - Deployment:
   - Intro: deployment/index.md
   - Docker: deployment/docker-compose.md
