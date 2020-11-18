@@ -3,6 +3,7 @@ import gzip
 import json
 import logging
 import os
+from urllib.parse import urlparse
 import yaml
 from zentral.core.exceptions import ImproperlyConfigured
 from .config import ConfigDict, ResolverMethodProxy
@@ -110,6 +111,10 @@ class APIDict(ConfigDict):
             value = self.get(src)
             if value:
                 self._collection[dest] = "https://{}".format(value)
+            else:
+                deprecated_value = self.get(dest)
+                if deprecated_value:
+                    self._collection[src] = urlparse(deprecated_value).netloc
 
 
 class ZentralSettings(ConfigDict):

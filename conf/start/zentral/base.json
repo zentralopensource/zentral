@@ -12,18 +12,11 @@
   "django": {
     "SECRET_KEY": "DJANGO SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
     "DEBUG": true,
-    "MEDIA_ROOT": "/var/zentral",
-    "ADMINS": [
-      [
-        "Admin",
-        "changethis@example.com"
-      ]
-    ],
-    "SERVER_EMAIL": "changethis@example.com",
-    "DEFAULT_FROM_EMAIL": "changethis@example.com",
     "ALLOWED_HOSTS": [
-      "*"
+      "zentral",
+      "web"
     ],
+    "MEDIA_ROOT": "/var/zentral",
     "POSTGRES_HOST": "{{ env:POSTGRES_HOST }}",
     "POSTGRES_PASSWORD": "{{ env:POSTGRES_PASSWORD }}"
   },

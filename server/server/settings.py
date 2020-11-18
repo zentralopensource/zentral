@@ -29,20 +29,24 @@ SECRET_KEY = django_zentral_settings.get('SECRET_KEY', utils.get_random_secret_k
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = django_zentral_settings.get('DEBUG', False)
 
-ADMINS = ((admin_name, admin_email)
-          for admin_name, admin_email in django_zentral_settings.get('ADMINS', []))
-DEFAULT_FROM_EMAIL = django_zentral_settings.get('DEFAULT_FROM_EMAIL', None)
-SERVER_EMAIL = django_zentral_settings.get('SERVER_EMAIL', DEFAULT_FROM_EMAIL)
-
-ALLOWED_HOSTS = django_zentral_settings.get('ALLOWED_HOSTS', ["*"])
-
-MEDIA_ROOT = django_zentral_settings.get("MEDIA_ROOT", "")
+ALLOWED_HOSTS = django_zentral_settings.get('ALLOWED_HOSTS', [])
+if not ALLOWED_HOSTS:
+    fqdn = zentral_settings.get("api", {}).get("fqdn")
+    if fqdn:
+        ALLOWED_HOSTS.append(fqdn)
+    fqdn_mtls = zentral_settings.get("api", {}).get("fqdn_mtls")
+    if fqdn_mtls:
+        ALLOWED_HOSTS.append(fqdn_mtls)
 
 if "CACHES" in django_zentral_settings:
     CACHES = django_zentral_settings["CACHES"]
 
 # django default is 2.5MB. increased to 10MB.
 DATA_UPLOAD_MAX_MEMORY_SIZE = django_zentral_settings.get('DATA_UPLOAD_MAX_MEMORY_SIZE', 10485760)
+
+# Email configuration
+
+DEFAULT_FROM_EMAIL = django_zentral_settings.get('DEFAULT_FROM_EMAIL', 'webmaster@localhost')
 
 EMAIL_BACKEND = django_zentral_settings.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 EMAIL_HOST = django_zentral_settings.get("EMAIL_HOST", 'localhost')
@@ -175,7 +179,7 @@ CELERY_BROKER_URL = django_zentral_settings.get("CELERY_BROKER_URL", "amqp://gue
 CELERY_BROKER_TRANSPORT_OPTIONS = django_zentral_settings.get("CELERY_BROKER_TRANSPORT_OPTIONS", {})
 
 # Internationalization
-# https://docs.djangoproject.com/en/1.8/topics/i18n/
+# https://docs.djangoproject.com/en/2.2/topics/i18n/
 
 LANGUAGE_CODE = django_zentral_settings.get("LANGUAGE_CODE", "en-us")
 
@@ -189,7 +193,7 @@ USE_TZ = False
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/1.8/howto/static-files/
+# https://docs.djangoproject.com/en/2.2/howto/static-files/
 
 STATICFILES_DIRS = (
     os.path.join(BASE_DIR, 'static'),
@@ -205,6 +209,8 @@ STATICFILES_STORAGE = "django.contrib.staticfiles.storage.ManifestStaticFilesSto
 # File storage override
 if "DEFAULT_FILE_STORAGE" in django_zentral_settings:
     DEFAULT_FILE_STORAGE = django_zentral_settings["DEFAULT_FILE_STORAGE"]
+# Directory that will hold the files if the default file storage is used
+MEDIA_ROOT = django_zentral_settings.get("MEDIA_ROOT", "")
 # Google cloud storage options
 # https://django-storages.readthedocs.io/en/latest/backends/gcloud.html
 # credentials file necessary to sign the file download URLs
