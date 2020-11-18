@@ -11,6 +11,10 @@ extra_css:
 nav:
 - Introduction:
   - Welcome to Zentral: index.md
+- Configuration:
+  - Intro: configuration/index.md
+  - API: configuration/api.md
+  - Django: configuration/django.md
 - Apps:
   - Monolith: apps/monolith.md
 - Deployment:
