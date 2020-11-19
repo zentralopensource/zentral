@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'jamf:jamf_instances' %}">Jamf instances</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+<dl class="dl-horizontal">
+  <dt>Business unit</dt>
+  <dd>
+    {% if object.business_unit %}
+    <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.id %}">
+      {{ object.business_unit }}
+    </a>
+    {% else %}
+    -
+    {% endif %}
+  </dd>
+  <dt>API URL</dt>
+  <dd>{{ object.api_base_url }}</dd>
+  <dt>API User</dt>
+  <dd>{{ object.user }}</dd>
+</dl>
+
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">Version</dt>
+  <dd class="small" style="opacity:0.5">{{ object.version }}</dd>
+  <dt class="small" style="opacity:0.5">Created at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.created_at }}</dd>
+  <dt class="small" style="opacity:0.5">Updated at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.updated_at }}</dd>
+</dl>
+
+<div class="btn-group" role="group">
+  <a href="{{ object.api_doc_url }}" target="_blank" class="btn btn-default" data-toggle="tooltip" data-placement="bottom" title="API resource documentation">
+    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> API docs
+  </a>
+  <a href="{% url 'jamf:setup_jamf_instance' object.pk %}" class="btn btn-default" data-toggle="tooltip" data-placement="bottom" title="Setup jamf instance">
+    <span class="glyphicon glyphicon-transfer" aria-hidden="true"></span> Setup webhooks
+  </a>
+  <a href="{% url 'jamf:update_jamf_instance' object.pk %}" class="btn btn-default">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Update
+  </a>
+  <a href="{% url 'jamf:delete_jamf_instance' object.pk %}" class="btn btn-danger">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span> Delete
+  </a>
+</div>
+
+<h3>{{ tag_config_count }} Tag config{{ tag_config_count|pluralize }}</h3>
+
+<p>
+  <a href="{% url 'jamf:create_tag_config' object.pk %}" class="btn btn-default">
+    Create
+  </a>
+</p>
+
+{% if tag_configs %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Source</th>
+      <th>Taxonomy</th>
+      <th>Regex</th>
+      <th>Replacement</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for tag_config in tag_configs %}
+    <tr id="tag-config-{{ tag_config.pk }}">
+      <td>{{ tag_config.get_source_display }}</td>
+      <td>{{ tag_config.taxonomy }}</td>
+      <td>{{ tag_config.regex }}</td>
+      <td>{{ tag_config.replacement }}</td>
+      <td>
+        <a href="{% url 'jamf:update_tag_config' object.pk tag_config.pk %}" class="btn btn-default">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        </a>
+        <a href="{% url 'jamf:delete_tag_config' object.pk tag_config.pk %}" class="btn btn-danger">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+{% endif %}
+</table>
+
+
+
+{% endblock %}

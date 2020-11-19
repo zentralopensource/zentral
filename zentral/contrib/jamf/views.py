@@ -1,16 +1,15 @@
 import logging
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404
-from django.urls import reverse, reverse_lazy
-from django.views.generic import View, ListView
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse_lazy
+from django.views.generic import DetailView, View, ListView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from .api_client import APIClient, APIClientError
 from .events import post_jamf_webhook_event
-from .forms import JamfInstanceForm
-from .models import JamfInstance
+from .forms import JamfInstanceForm, TagConfigForm
+from .models import JamfInstance, TagConfig
 
 
 logger = logging.getLogger('zentral.contrib.jamf.views')
@@ -37,12 +36,23 @@ class JamfInstancesView(LoginRequiredMixin, ListView):
 class CreateJamfInstanceView(LoginRequiredMixin, CreateView):
     model = JamfInstance
     form_class = JamfInstanceForm
-    success_url = reverse_lazy("jamf:jamf_instances")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
         ctx["title"] = "Create jamf instance"
+        return ctx
+
+
+class JamfInstanceView(LoginRequiredMixin, DetailView):
+    model = JamfInstance
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["title"] = str(ctx["object"])
+        ctx["tag_configs"] = list(ctx["object"].tagconfig_set.select_related("taxonomy").all())
+        ctx["tag_config_count"] = len(ctx["tag_configs"])
         return ctx
 
 
@@ -61,13 +71,12 @@ class SetupJamfInstanceView(LoginRequiredMixin, View):
             msg = "{}: {}".format(jamf_instance_base_url, setup_msg)
             messages.info(request, msg)
             logger.info(msg)
-        return HttpResponseRedirect(reverse("jamf:jamf_instances"))
+        return redirect(jamf_instance)
 
 
 class UpdateJamfInstanceView(LoginRequiredMixin, UpdateView):
     model = JamfInstance
     form_class = JamfInstanceForm
-    success_url = reverse_lazy("jamf:jamf_instances")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -101,6 +110,68 @@ class DeleteJamfInstanceView(LoginRequiredMixin, DeleteView):
             messages.info(request, msg)
             logger.info(msg)
         return response
+
+
+class CreateTagConfigView(LoginRequiredMixin, CreateView):
+    model = TagConfig
+    form_class = TagConfigForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.jamf_instance = get_object_or_404(JamfInstance, pk=kwargs.get("pk"))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["title"] = "Create tag config"
+        ctx["jamf_instance"] = self.jamf_instance
+        return ctx
+
+    def form_valid(self, form):
+        tc = form.save(commit=False)
+        tc.instance = self.jamf_instance
+        tc.save()
+        return redirect(tc)
+
+
+class UpdateTagConfigView(LoginRequiredMixin, UpdateView):
+    model = TagConfig
+    form_class = TagConfigForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.jamf_instance = get_object_or_404(JamfInstance, pk=kwargs.get("ji_pk"))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["title"] = "Update tag config"
+        ctx["jamf_instance"] = self.jamf_instance
+        return ctx
+
+    def form_valid(self, form):
+        tc = form.save(commit=False)
+        tc.instance = self.jamf_instance
+        tc.save()
+        return redirect(tc)
+
+
+class DeleteTagConfigView(LoginRequiredMixin, DeleteView):
+    model = TagConfig
+
+    def dispatch(self, request, *args, **kwargs):
+        self.jamf_instance = get_object_or_404(JamfInstance, pk=kwargs.get("ji_pk"))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["title"] = "Delete tag config"
+        ctx["jamf_instance"] = self.jamf_instance
+        return ctx
+
+    def get_success_url(self):
+        return self.jamf_instance.get_absolute_url()
 
 
 # API

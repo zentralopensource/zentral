@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">{{ title }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+<p>
+  <a href="{% url 'jamf:create_jamf_instance' %}" class="btn btn-default">Create</a>
+</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Host</th>
+      <th>API User</th>
+      <th>Business unit</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for jamf_instance in object_list %}
+    <tr>
+      <td><a href="{{ jamf_instance.get_absolute_url }}">{{ jamf_instance.host }}</a></td>
+      <td>{{ jamf_instance.user }}</td>
+      <td>
+        {% if jamf_instance.business_unit %}
+        {{ jamf_instance.business_unit }}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      <td>
+        <a href="{% url 'jamf:update_jamf_instance' jamf_instance.pk %}" class="btn btn-default">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>Update
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
