@@ -1,7 +1,7 @@
 asn1crypto
 boto3
 celery<4.5
-django-celery-results
+django-celery-results==1.2.1
 cryptography
 django-bootstrap-form
 django>=2.2,<2.3
