@@ -1,5 +1,7 @@
 import logging
-from zentral.contrib.inventory.models import MachineGroup, MachineSnapshot, MachineSnapshotCommit
+from django.db import transaction
+from zentral.contrib.inventory.models import (MachineGroup, MachineSnapshot, MachineSnapshotCommit,
+                                              MetaMachine, Taxonomy)
 from zentral.contrib.inventory.utils import inventory_events_from_machine_snapshot_commit
 from zentral.contrib.jamf.api_client import APIClient
 from zentral.core.events import event_cls_from_type
@@ -14,6 +16,7 @@ class WebhookEventPreprocessor(object):
 
     def __init__(self):
         self.clients = {}
+        self.taxonomies = {}
 
     def get_client(self, jamf_instance_d):
         key = (jamf_instance_d["pk"], jamf_instance_d["version"])
@@ -22,6 +25,14 @@ class WebhookEventPreprocessor(object):
             client = APIClient(**jamf_instance_d)
             self.clients[key] = client
         return client
+
+    def get_taxonomy(self, taxonomy_id):
+        if taxonomy_id not in self.taxonomies:
+            try:
+                self.taxonomies[taxonomy_id] = Taxonomy.objects.get(pk=taxonomy_id)
+            except Taxonomy.DoesNotExist:
+                logger.error("Could not get taxonomy %s", taxonomy_id)
+        return self.taxonomies.get(taxonomy_id)
 
     def is_known_machine(self, client, serial_number):
         kwargs = {"serial_number": serial_number}
@@ -32,13 +43,14 @@ class WebhookEventPreprocessor(object):
     def update_machine(self, client, device_type, jamf_id):
         logger.info("Update machine %s %s %s", client.get_source_d(), device_type, jamf_id)
         try:
-            machine_d = client.get_machine_d(device_type, jamf_id)
+            machine_d, tags = client.get_machine_d_and_tags(device_type, jamf_id)
         except Exception:
-            logger.exception("Could not get machine_d. %s %s %s",
+            logger.exception("Could not get machine_d and tags. %s %s %s",
                              client.get_source_d(), device_type, jamf_id)
         else:
             try:
-                msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
+                with transaction.atomic():
+                    msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
             except Exception:
                 logger.exception("Could not commit machine snapshot")
             else:
@@ -53,6 +65,12 @@ class WebhookEventPreprocessor(object):
                                                  tags=event_cls.tags)
                         event = event_cls(metadata, payload)
                         yield event
+            if tags:
+                machine = MetaMachine(machine_d["serial_number"])
+                for taxonomy_id, tag_names in tags.items():
+                    taxonomy = self.get_taxonomy(taxonomy_id)
+                    if taxonomy:
+                        machine.update_taxonomy_tags(taxonomy, tag_names)
 
     def get_inventory_groups(self, client, device_type, jamf_id, is_smart):
         kwargs = {"reference": client.group_reference(device_type, jamf_id, is_smart)}

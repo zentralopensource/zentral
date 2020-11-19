@@ -3,6 +3,7 @@ import os.path
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.db.models import F
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 
@@ -39,6 +40,9 @@ class JamfInstance(models.Model):
     def __str__(self):
         return self.host
 
+    def get_absolute_url(self):
+        return reverse("jamf:jamf_instance", args=(self.pk,))
+
     def save(self, *args, **kwargs):
         if not self.id:
             self.version = 0
@@ -65,6 +69,7 @@ class JamfInstance(models.Model):
             "user": self.user,
             "password": self.password,
             "secret": self.secret,
+            "tag_configs": [tm.serialize() for tm in self.tagconfig_set.select_related("taxonomy").all()],
         }
         if self.business_unit:
             d["business_unit"] = self.business_unit.serialize()
@@ -76,3 +81,36 @@ class JamfInstance(models.Model):
                 "type": "Jamf Pro",
                 "content_type": "jamf.jamfinstance",
                 "pk": self.pk}
+
+
+class TagConfig(models.Model):
+    GROUP_SOURCE = "GROUP"
+    SOURCE_CHOICES = (
+        (GROUP_SOURCE, "Group"),
+    )
+    instance = models.ForeignKey(JamfInstance, on_delete=models.CASCADE)
+    source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default=GROUP_SOURCE)
+    taxonomy = models.ForeignKey("inventory.Taxonomy", on_delete=models.CASCADE)
+    regex = models.CharField(
+        max_length=256,
+        help_text="matching names will be used to automatically generate tags"
+    )
+    replacement = models.CharField(
+        max_length=32,
+        help_text="replacement pattern used to generate a tag name from a tag regex match"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def get_absolute_url(self):
+        return "{}#tag-config-{}".format(self.instance.get_absolute_url(), self.pk)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.instance.save()
+
+    def serialize(self):
+        return {"source": self.source,
+                "taxonomy_id": self.taxonomy.id,
+                "regex": self.regex,
+                "replacement": self.replacement}

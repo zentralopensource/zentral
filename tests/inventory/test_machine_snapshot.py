@@ -2,6 +2,7 @@ import copy
 from datetime import datetime, timedelta
 from dateutil import parser
 from django.test import TestCase
+from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
 from zentral.contrib.inventory.conf import DESKTOP, MACOS, SERVER, update_ms_tree_type, VM
 from zentral.contrib.inventory.models import (BusinessUnit,
@@ -12,7 +13,7 @@ from zentral.contrib.inventory.models import (BusinessUnit,
                                               MetaBusinessUnitTag,
                                               MetaMachine,
                                               Source,
-                                              Tag)
+                                              Tag, Taxonomy)
 from zentral.utils.mt_models import MTOError
 
 
@@ -266,6 +267,42 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(MachineSnapshot.objects.count(), 3)
         self.assertEqual(MachineSnapshotCommit.objects.count(), 3)
         self.assertEqual(CurrentMachineSnapshot.objects.count(), 0)
+
+    def test_meta_machine_update_taxonomy_tags(self):
+        # one machine
+        serial_number = get_random_string(13)
+        # two tags from taxonomy1
+        taxonomy1 = Taxonomy.objects.create(name=get_random_string(34))
+        tag11 = Tag.objects.create(taxonomy=taxonomy1, name=get_random_string(17))
+        MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag11)
+        tag12 = Tag.objects.create(taxonomy=taxonomy1, name=get_random_string(18))
+        MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag12)
+        # one tag from taxonomy2
+        taxonomy2 = Taxonomy.objects.create(name=get_random_string(27))
+        tag21 = Tag.objects.create(taxonomy=taxonomy2, name=get_random_string(20))
+        MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag21)
+        # one detached tag
+        tag31 = Tag.objects.create(name=get_random_string(21))
+        MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag31)
+        # update the taxonomy1  tags. keep one, add two new ones, one collision, remove one.
+        new_tag_names = [get_random_string(22), get_random_string(33)]
+        updated_tag_names = [
+            tag11.name,  # existing,
+            # tag12.name  # removed
+            tag31.name,  # collision, because we will try to add a tag with the same name, but within the taxonomy1
+        ] + new_tag_names  # new ones
+        mm = MetaMachine(serial_number)
+        mm.update_taxonomy_tags(taxonomy1, updated_tag_names)
+        # verify
+        # two new tags
+        new_tags = list(Tag.objects.filter(name__in=new_tag_names))
+        self.assertEqual(len(new_tags), 2)
+        # in the taxonomy1
+        self.assertTrue(all(t.taxonomy == taxonomy1 for t in new_tags))
+        # expected tags for the machine
+        expected_tags = [("machine", t)
+                         for t in [tag11, tag21, tag31] + new_tags]
+        self.assertEqual(set(expected_tags), set(mm.tags_with_types))
 
     def test_machine_name(self):
         tree = {"source": {"module": "godzilla",

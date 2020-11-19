@@ -4,8 +4,13 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'jamf:jamf_instances' %}">jamf instances</a></li>
-  <li class="active">{{ title }}</li>
+  <li><a href="{% url 'jamf:jamf_instances' %}">Jamf instances</a></li>
+  {% if object %}
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="active">Update</li>
+  {% else %}
+  <li class="active">Create</li>
+  {% endif %}
 </ol>
 
 <h2>{{ title }}</h2>
@@ -13,7 +18,11 @@
 <form method="POST">{% csrf_token %}
   {{ form|bootstrap }}
   <p>
+    {% if object %}
+    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    {% else %}
     <a href="{% url 'jamf:jamf_instances' %}" class="btn btn-default">Cancel</a>
+    {% endif %}
     <button class="btn btn-primary">Save</button>
   </p>
 </form>

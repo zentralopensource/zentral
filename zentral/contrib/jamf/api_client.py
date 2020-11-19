@@ -1,5 +1,6 @@
 import logging
 from dateutil import parser
+import re
 from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape as xml_escape
@@ -43,6 +44,13 @@ class APIClient(object):
                            requests.adapters.HTTPAdapter(max_retries=max_retries))
         self.mobile_device_groups = {}
         self.reverse_computer_groups = {}
+        self.group_tag_regex = None
+        # tags from groups
+        self.tag_configs = []
+        for tag_config in kwargs.get("tag_configs", []):
+            tag_config = tag_config.copy()
+            tag_config["regex"] = re.compile(tag_config.pop("regex"))
+            self.tag_configs.append(tag_config)
 
     def get_source_d(self):
         return {"module": "zentral.contrib.jamf",
@@ -168,6 +176,28 @@ class APIClient(object):
             return self.get_mobile_device_machine_d(jamf_id)
         else:
             raise APIClientError("Unknown device type %s", device_type)
+
+    def get_machine_d_and_tags(self, device_type, jamf_id):
+        machine_d = self.get_machine_d(device_type, jamf_id)
+        tags = {}
+        groups = None
+        for tag_config in self.tag_configs:
+            tag_names = tags.setdefault(tag_config["taxonomy_id"], [])
+            if tag_config["source"] == "GROUP":
+                if groups is None:
+                    groups = machine_d.get("groups", [])
+                for group in groups:
+                    regex = tag_config["regex"]
+                    group_name = group["name"]
+                    if regex.match(group_name):
+                        tag_name = regex.sub(tag_config["replacement"], group_name)
+                        if tag_name:
+                            tag_names.append(tag_name)
+                        else:
+                            logger.error("Empty group tag name %s %s %s", device_type, jamf_id, regex)
+            else:
+                logger.error("Unknown tag config source: %s", tag_config["source"])
+        return machine_d, tags
 
     def get_computer_machine_d(self, jamf_id):
         computer = self._computer(jamf_id)
