@@ -156,8 +156,6 @@ You will also need to install [extra python requirements](https://github.com/zen
 
 `GS_CREDENTIALS` is needed for Zentral to be able to presign URLs to give access to the private files. You can [generate a private key](https://cloud.google.com/iam/docs/creating-managing-service-account-keys) for the service account used by the google instance for example, and give this service account the [`roles/storage.admin`](https://cloud.google.com/storage/docs/access-control/iam-roles#standard-roles) role on the bucket.
 
-### `django.GS_CREDENTIALS`
-
 ### `django.AWS_*`
 
  * `AWS_S3_REGION_NAME`
