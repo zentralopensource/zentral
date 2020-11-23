@@ -17,3 +17,6 @@ jobs:
 
       - name: run docker-compose tests
         run: docker-compose run --rm web tests
+        env:
+          COMPOSE_DOCKER_CLI_BUILD: 1
+          DOCKER_BUILDKIT: 1
