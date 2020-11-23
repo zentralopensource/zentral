@@ -58,12 +58,12 @@ class AppHistogramDataView(LoginRequiredMixin, View):
             unique_msn_data.append(unique_msn)
         datasets = {"event_count": {
                         "label": "{} events".format(app),
-                        "backgroundColor": "rgba(120, 198, 188, 0.7)",
+                        "backgroundColor": "rgba(122, 182, 160, 0.7)",
                         "data": event_count_data
                     },
                     "unique_msn": {
                         "label": "{} machines".format(app),
-                        "backgroundColor": "rgba(234, 81, 100, 0.7)",
+                        "backgroundColor": "rgba(225, 100, 86, 0.7)",
                         "data": unique_msn_data
                     }}
         return JsonResponse({"app": app,
