@@ -1,6 +1,8 @@
 from django.urls import reverse
+from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import User
+from zentral.contrib.inventory.models import Taxonomy
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -56,14 +58,14 @@ class JamfSetupViewsTestCase(TestCase):
                                      "user": "godzilla",
                                      "password": "pwd"},
                                     follow=True)
-        object_list = response.context["object_list"]
-        jamf_instance = object_list[0]
+        self.assertEqual(response.template_name, ["jamf/jamfinstance_detail.html"])
+        self.assertContains(response, "0 Tag configs")
+        jamf_instance = response.context["object"]
         self.assertEqual(jamf_instance.version, 0)
         return response, jamf_instance
 
     def test_create_jamf_instance_post(self):
         response, jamf_instance = self.create_jamf_instance()
-        self.assertContains(response, "1 jamf instance")
         self.assertContains(response, "https://yo.example.com:8443/JSSResource")
         self.assertContains(response, "godzilla")
         self.assertNotContains(response, "pwd")
@@ -105,7 +107,72 @@ class JamfSetupViewsTestCase(TestCase):
                                      "user": "godzilla",
                                      "password": "pwd"},
                                     follow=True)
-        self.assertContains(response, "1 jamf instance")
+        self.assertEqual(response.template_name, ["jamf/jamfinstance_detail.html"])
+        self.assertContains(response, "0 Tag configs")
         self.assertContains(response, "https://yo.example2.com:8443/JSSResource")
-        jamf_instance = response.context["object_list"][0]
+        jamf_instance = response.context["object"]
         self.assertEqual(jamf_instance.version, 1)
+
+    def test_create_tag_config(self):
+        _, jamf_instance = self.create_jamf_instance()
+        t, _ = Taxonomy.objects.get_or_create(name=get_random_string(34))
+        regex = r"^YOLOFOMO: (.*)$"
+        response = self.client.post(reverse("jamf:create_tag_config", args=(jamf_instance.id,)),
+                                    {"source": "GROUP",
+                                     "taxonomy": t.pk,
+                                     "regex": regex,
+                                     "replacement": r"\1"},
+                                    follow=True)
+        self.assertEqual(response.template_name, ["jamf/jamfinstance_detail.html"])
+        self.assertContains(response, "1 Tag config")
+        self.assertContains(response, t.name)
+
+    def test_create_tag_config_error(self):
+        _, jamf_instance = self.create_jamf_instance()
+        t, _ = Taxonomy.objects.get_or_create(name=get_random_string(34))
+        regex = r"^YOLOFOMO: ("
+        response = self.client.post(reverse("jamf:create_tag_config", args=(jamf_instance.id,)),
+                                    {"source": "GROUP",
+                                     "taxonomy": t.pk,
+                                     "regex": regex,
+                                     "replacement": r"\1"},
+                                    follow=True)
+        self.assertEqual(response.template_name, ["jamf/tagconfig_form.html"])
+        self.assertContains(response, "Not a valid regex")
+
+    def test_update_tag_config(self):
+        _, jamf_instance = self.create_jamf_instance()
+        t, _ = Taxonomy.objects.get_or_create(name=get_random_string(34))
+        regex = r"^YOLOFOMO: (.*)$"
+        response = self.client.post(reverse("jamf:create_tag_config", args=(jamf_instance.id,)),
+                                    {"source": "GROUP",
+                                     "taxonomy": t.pk,
+                                     "regex": regex,
+                                     "replacement": r"\1"},
+                                    follow=True)
+        tag_config = response.context["tag_configs"][0]
+        response = self.client.post(reverse("jamf:update_tag_config", args=(jamf_instance.pk, tag_config.pk)),
+                                    {"source": "GROUP",
+                                     "taxonomy": t.pk,
+                                     "regex": regex,
+                                     "replacement": r"haha: \1"},
+                                    follow=True)
+        self.assertEqual(response.template_name, ["jamf/jamfinstance_detail.html"])
+        self.assertContains(response, "1 Tag config")
+        self.assertContains(response, "haha")
+
+    def test_delete_tag_config(self):
+        _, jamf_instance = self.create_jamf_instance()
+        t, _ = Taxonomy.objects.get_or_create(name=get_random_string(34))
+        regex = r"^YOLOFOMO: (.*)$"
+        response = self.client.post(reverse("jamf:create_tag_config", args=(jamf_instance.id,)),
+                                    {"source": "GROUP",
+                                     "taxonomy": t.pk,
+                                     "regex": regex,
+                                     "replacement": r"\1"},
+                                    follow=True)
+        tag_config = response.context["tag_configs"][0]
+        response = self.client.post(reverse("jamf:delete_tag_config", args=(jamf_instance.pk, tag_config.pk)),
+                                    follow=True)
+        self.assertEqual(response.template_name, ["jamf/jamfinstance_detail.html"])
+        self.assertContains(response, "0 Tag configs")
