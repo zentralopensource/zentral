@@ -18,11 +18,10 @@ class BaseInventory(object):
     def __init__(self, config_d):
         if not hasattr(self, 'name'):
             self.name = self.__module__.split('.')[-1]
-        config_d = copy.deepcopy(config_d)
-        config_d.pop('backend')
-        if self.source_config_secret_attributes:
-            for attr in self.source_config_secret_attributes:
-                config_d.pop(attr, None)
+        config_d = {k: v for k, v in config_d.items()
+                    if (k != "backend" and
+                        (not self.source_config_secret_attributes or
+                         k not in self.source_config_secret_attributes))}
         self.source = {'module': self.__module__,
                        'name': self.name,
                        'config': config_d}
