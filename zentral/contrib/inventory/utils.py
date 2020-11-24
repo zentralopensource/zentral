@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import csv
 from datetime import datetime
+import ipaddress
 from itertools import chain
 import logging
 import os
@@ -1372,3 +1373,25 @@ def verify_enrollment_secret(model, secret,
     else:
         post_enrollment_secret_verification_success(request, model)
         return request
+
+
+def clean_ip_address(addr):
+    if not isinstance(addr, str):
+        return None
+    addr = addr.strip()
+    if not addr:
+        return None
+    try:
+        addr = ipaddress.IPv4Address(addr)
+    except ValueError:
+        try:
+            addr = ipaddress.IPv6Address(addr)
+        except ValueError:
+            return None
+        else:
+            if addr.ipv4_mapped:
+                return str(addr.ipv4_mapped)
+            else:
+                return str(addr)
+    else:
+        return str(addr)

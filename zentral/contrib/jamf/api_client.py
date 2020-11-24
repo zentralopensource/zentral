@@ -8,6 +8,7 @@ from django.urls import reverse
 import requests
 from requests.packages.urllib3.util import Retry
 from zentral.conf import settings
+from zentral.contrib.inventory.utils import clean_ip_address
 from .events import JAMF_EVENTS
 
 
@@ -299,7 +300,7 @@ class APIClient(object):
         ct['system_info'] = system_info
 
         # public ip
-        last_reported_ip = computer['general'].get('ip_address', None)
+        last_reported_ip = clean_ip_address(computer['general'].get('ip_address', None))
         if last_reported_ip:
             ct['public_ip_address'] = last_reported_ip
 
@@ -309,7 +310,10 @@ class APIClient(object):
                               ('last_reported_ip', 'address')):
             value = computer['general'].get(attr, None)
             if value:
-                network_interface[ni_attr] = value
+                if attr == "last_reported_ip":
+                    value = clean_ip_address(value)
+                if value:
+                    network_interface[ni_attr] = value
         if len(network_interface) == 2:
             network_interface['interface'] = 'primary'
             ct['network_interfaces'] = [network_interface]
