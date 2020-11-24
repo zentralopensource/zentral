@@ -86,10 +86,14 @@ def setup_dropdown(context):
     return context
 
 
-@register.filter(is_safe=True, needs_autoescape=True)
-def prettydescription(value, autoescape=True):
+@register.filter()
+def prettydescription(value):
     """combine linebreaks and urlize"""
-    return mark_safe(linebreaks(urlize(value, nofollow=True, autoescape=autoescape)))
+    return urlize(
+        mark_safe(linebreaks(value, autoescape=True)),
+        nofollow=True,
+        autoescape=True
+    )
 
 
 @register.filter()
