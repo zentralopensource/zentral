@@ -1,9 +1,10 @@
+import re
 from django import template
 from django.urls import reverse
 from django.utils.html import escape
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
-from zentral.contrib.inventory.conf import IOS, IPADOS, LINUX, MACOS, TVOS, WINDOWS
+from zentral.contrib.inventory.conf import IOS, IPADOS, LINUX, MACOS, TVOS, TYPE_CHOICES_DICT, WINDOWS
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.color import text_color_for_background_color
 
@@ -12,6 +13,8 @@ register = template.Library()
 
 @register.simple_tag
 def base_inventory_tag(display_name, color):
+    if not re.match(r'^[0-9a-fA-F]{3,6}$', color):
+        color = "FFFFFF"
     style = {'background-color': "#%s" % color,
              'color': "#%s" % text_color_for_background_color(color)}
     if color.upper() in ["FFFFFF", "FFF"]:
@@ -27,6 +30,8 @@ def inventory_tag(tag):
 
 @register.simple_tag
 def base_machine_type_icon(machine_type):
+    if machine_type not in TYPE_CHOICES_DICT:
+        return ""
     icon = None
     if machine_type == "VM":
         icon = "cube"
@@ -65,7 +70,7 @@ def machine_platform_icon(meta_machine):
 
 @register.simple_tag
 def sha_256_link(sha_256):
-    if sha_256:
+    if sha_256 and re.match(r"^[a-fA-F0-9]{64}$", sha_256):
         url = "{}?{}".format(reverse("inventory:macos_apps"),
                              urlencode({"sha_256": sha_256}))
         return mark_safe('<a href="{}">{}</a>'.format(url, sha_256))
