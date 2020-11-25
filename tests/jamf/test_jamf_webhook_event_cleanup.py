@@ -17,7 +17,7 @@ class TestJamfWebhookEventCleanup(SimpleTestCase):
             "dix": "              "
         }
         wep = WebhookEventPreprocessor()
-        wep.cleanup_jamf_event(d)
+        wep._cleanup_jamf_event(d)
         self.assertEqual(
             {"un": 1,
              "deux": [{"un": 1}, {"trois": 3}],
