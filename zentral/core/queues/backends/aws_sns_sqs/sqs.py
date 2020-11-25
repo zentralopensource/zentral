@@ -51,7 +51,10 @@ class SQSReceiveThread(threading.Thread):
                         break
             else:
                 i = 0
-                for message in response.get("Messages", []):
+                messages = response.get("Messages", [])
+                for message in messages:
+                    if self.stop_event.is_set():
+                        break
                     i += 1
                     receipt_handle = message['ReceiptHandle']
                     try:
@@ -59,8 +62,15 @@ class SQSReceiveThread(threading.Thread):
                     except KeyError:
                         routing_key = None
                     event_d = json.loads(message['Body'])
-                    self.out_queue.put((receipt_handle, routing_key, event_d))
-                logger.debug("%d event(s) received and queued", i)
+                    while True:
+                        try:
+                            self.out_queue.put((receipt_handle, routing_key, event_d), timeout=1)
+                        except queue.Full:
+                            if self.stop_event.is_set():
+                                break
+                        else:
+                            break
+                logger.debug("%d/%d event(s) received and queued", i, len(messages))
         logger.debug("receive thread gracefull exit")
 
 

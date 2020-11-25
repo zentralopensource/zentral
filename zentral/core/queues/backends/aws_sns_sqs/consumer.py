@@ -15,20 +15,25 @@ class Consumer:
             client_kwargs = {}
         self.process_message_queue = queue.Queue(maxsize=15)
         self.delete_message_queue = queue.Queue(maxsize=15)
+        self.signal_received_event = threading.Event()
         self.stop_event = threading.Event()
         self._threads = [
             SQSDeleteThread(queue_url, self.stop_event, self.delete_message_queue, client_kwargs),
-            SQSReceiveThread(queue_url, self.stop_event, self.process_message_queue, client_kwargs)
+            SQSReceiveThread(queue_url, self.signal_received_event, self.process_message_queue, client_kwargs)
         ]
 
-    def _gracefull_stop(self, signum, frame):
+    def _handle_signal(self, signum, frame):
         if signum == signal.SIGTERM:
             signum = "SIGTERM"
         elif signum == signal.SIGINT:
             signum = "SIGINT"
         logger.debug("Received signal %s", signum)
-        if not self.stop_event.is_set():
+        if not self.signal_received_event.is_set():
             logger.error("Signal %s. Initiate gracefull stop.", signum)
+            self.signal_received_event.set()
+
+    def _gracefull_stop(self):
+        if not self.stop_event.is_set():
             self.stop_event.set()
             for thread in self._threads:
                 thread.join()
@@ -39,24 +44,27 @@ class Consumer:
 
     def run(self, *args, **kwargs):
         self.log_info("run")
-        signal.signal(signal.SIGTERM, self._gracefull_stop)
-        signal.signal(signal.SIGINT, self._gracefull_stop)
+        signal.signal(signal.SIGTERM, self._handle_signal)
+        signal.signal(signal.SIGINT, self._handle_signal)
         for thread in self._threads:
             thread.start()
         while True:
             try:
                 receipt_handle, routing_key, event_d = self.process_message_queue.get(block=True, timeout=1)
             except queue.Empty:
-                if self.stop_event.is_set():
+                logger.debug("no new event to process")
+                if self.signal_received_event.is_set():
                     break
             else:
+                logger.debug("process new message %s", receipt_handle)
                 try:
                     self.process_event(routing_key, event_d)
                 except Exception:
-                    logger.exception("Could not process event")
+                    logger.exception("could not process event")
                 else:
-                    logger.debug("Queue message for deletion %s", receipt_handle)
+                    logger.debug("queue message for deletion %s", receipt_handle)
                     self.delete_message_queue.put((receipt_handle, time.time()))
+        self._gracefull_stop()
 
 
 class ConsumerProducer(Consumer):
