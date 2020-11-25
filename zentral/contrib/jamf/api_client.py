@@ -62,13 +62,6 @@ class APIClient(object):
                     "port": self.port,
                 }}
 
-    def get_webhook_url(self):
-        return "{}{}".format(settings["api"]["tls_hostname"],
-                             reverse("jamf:post_event", args=(self.secret,)))
-
-    def get_webhook_name(self, event):
-        return "{} {}".format(settings["api"]["tls_hostname"], event)
-
     def _make_get_query(self, path, missing_ok=False):
         url = "%s%s" % (self.api_base_url, path)
         try:
@@ -514,7 +507,22 @@ class APIClient(object):
 
     # webhooks setup
 
-    def iter_instance_webhooks(self):
+    def _get_webhook_xml(self, event_name):
+        webhook = ET.Element("webhook")
+        event = ET.SubElement(webhook, "event")
+        event.text = event_name
+        enabled = ET.SubElement(webhook, "enabled")
+        enabled.text = "false" if event_name == "RestAPIOperation" else "true"
+        name = ET.SubElement(webhook, "name")
+        name.text = "{} {}".format(settings["api"]["tls_hostname"], event_name)
+        url = ET.SubElement(webhook, "url")
+        url.text = "{}{}".format(settings["api"]["tls_hostname"],
+                                 reverse("jamf:post_event", args=(self.secret,)))
+        content_type = ET.SubElement(webhook, "content_type")
+        content_type.text = "application/json"
+        return ET.tostring(webhook)
+
+    def _iter_instance_webhooks(self):
         for webhook in self._make_get_query('/webhooks')['webhooks']:
             webhook = self._make_get_query('/webhooks/id/{}'.format(webhook['id']))['webhook']
             o = urlparse(webhook["url"])
@@ -523,28 +531,17 @@ class APIClient(object):
 
     def setup(self):
         existing_webhooks = {}
-        for webhook in self.iter_instance_webhooks():
+        for webhook in self._iter_instance_webhooks():
             existing_webhooks[webhook['event']] = webhook['id']
-        for event in JAMF_EVENTS:
-            if event not in existing_webhooks:
-                data = (
-                    "<webhook>"
-                    "<name>{name}</name>"
-                    "<enabled>true</enabled>"
-                    "<url>{url}</url>"
-                    "<content_type>application/json</content_type>"
-                    "<event>{event}</event>"
-                    "</webhook>"
-                ).format(name=xml_escape(self.get_webhook_name(event)),
-                         url=xml_escape(self.get_webhook_url()),
-                         event=xml_escape(event))
+        for event_name in JAMF_EVENTS:
+            if event_name not in existing_webhooks:
                 r = self.session.post("{}/webhooks/id/0".format(self.api_base_url),
                                       headers={'content-type': 'text/xml'},
-                                      data=data)
+                                      data=self._get_webhook_xml(event_name))
                 if r.status_code != requests.codes.created:
                     raise APIClientError("Could not create webhook")
         return "Webhooks setup OK. {} machine(s).".format(len(self._computers()))
 
     def cleanup(self):
-        for webhook in self.iter_instance_webhooks():
+        for webhook in self._iter_instance_webhooks():
             self.session.delete("{}/webhooks/id/{}".format(self.api_base_url, webhook["id"]))
