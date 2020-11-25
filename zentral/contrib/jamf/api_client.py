@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape as xml_escape
 from django.urls import reverse
+from django.utils.functional import cached_property
 import requests
 from requests.packages.urllib3.util import Retry
 from zentral.conf import settings
@@ -61,6 +62,13 @@ class APIClient(object):
                     "path": self.path,
                     "port": self.port,
                 }}
+
+    @cached_property
+    def source_repr(self):
+        return "".join(s for s in (self.host,
+                                   f":{self.port}" if self.port not in (80, 443, 8443) else None,
+                                   self.path if self.path != "/JSSResource" else None)
+                       if s)
 
     def _make_get_query(self, path, missing_ok=False):
         url = "%s%s" % (self.api_base_url, path)

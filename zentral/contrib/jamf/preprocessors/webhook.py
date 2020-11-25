@@ -59,12 +59,12 @@ class WebhookEventPreprocessor(object):
         return MachineSnapshotCommit.objects.filter(**kwargs).count() > 0
 
     def _update_machine(self, client, device_type, jamf_id):
-        logger.info("Update machine %s %s %s", client.get_source_d(), device_type, jamf_id)
+        logger.info("Update machine %s %s %s", client.source_repr, device_type, jamf_id)
         try:
             machine_d, tags = client.get_machine_d_and_tags(device_type, jamf_id)
         except Exception:
             logger.exception("Could not get machine_d and tags. %s %s %s",
-                             client.get_source_d(), device_type, jamf_id)
+                             client.source_repr, device_type, jamf_id)
         else:
             try:
                 with transaction.atomic():
@@ -105,7 +105,7 @@ class WebhookEventPreprocessor(object):
             current_machine_references = set(client.get_group_machine_references(device_type, jamf_group_id))
         except Exception:
             logger.exception("Could not get group machines. %s %s %s",
-                             client.get_source_d(), device_type, jamf_group_id)
+                             client.source_repr, device_type, jamf_group_id)
         else:
             inventory_groups = self.get_inventory_groups(client, device_type, jamf_group_id, is_smart)
             if not inventory_groups:
