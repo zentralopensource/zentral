@@ -2,6 +2,7 @@
 import json
 import os
 import plistlib
+import shutil
 import ssl
 import subprocess
 import urllib.request
@@ -12,11 +13,16 @@ ENROLLMENT_URL = "%ENROLLMENT_URL%"
 ENROLLMENT_SECRET = "%ENROLLMENT_SECRET%"
 TLS_SERVER_CERTS = "%TLS_SERVER_CERTS%"
 TLS_HOSTNAME = "%TLS_HOSTNAME%"
+CLEAN_INSTALL = "%CLEAN_INSTALL%"
 
 
 MUNKI_DIR = "/usr/local/munki"
 ZENTRAL_MUNKI_DIR = "/usr/local/zentral/munki/"
 ZENTRAL_MUNKI_POSTFLIGHT_FILE = os.path.join(ZENTRAL_MUNKI_DIR, "zentral_postflight")
+
+
+def is_clean_install():
+    return CLEAN_INSTALL == "YES"
 
 
 def get_serial_number_and_uuid():
@@ -53,6 +59,12 @@ def prepare_munki_preflight_postflight():
     for phase in ("preflight", "postflight"):
         script_path = os.path.join(MUNKI_DIR, phase)
         dir_path = os.path.join(MUNKI_DIR, "{}.d".format(phase))
+
+        # remove old stuff if necessary
+        if is_clean_install():
+            if os.path.isfile(script_path):
+                os.unlink(script_path)
+            shutil.rmtree(dir_path, ignore_errors=True)
 
         # .d dir
         if not os.path.isdir(dir_path):

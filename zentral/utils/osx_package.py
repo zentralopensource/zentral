@@ -423,7 +423,8 @@ class EnrollmentPackageBuilder(PackageBuilder):
         # build kwargs
         build_kwargs = {"version": "{}.0".format(version or enrollment.version),
                         "package_identifier_suffix": "pk-{}".format(enrollment.pk),
-                        "enrollment_secret_secret": enrollment.secret.secret}
+                        "enrollment_secret_secret": enrollment.secret.secret,
+                        "has_distributor": enrollment.distributor is not None}
         build_kwargs.update(extra_build_kwargs)
 
         # business unit
