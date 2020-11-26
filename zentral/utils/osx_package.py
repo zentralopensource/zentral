@@ -9,6 +9,7 @@ from subprocess import check_call, check_output
 import tempfile
 from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpResponse
 from zentral.conf import settings
 
@@ -424,6 +425,12 @@ class EnrollmentPackageBuilder(PackageBuilder):
         build_kwargs = {"version": "{}.0".format(version or enrollment.version),
                         "package_identifier_suffix": "pk-{}".format(enrollment.pk),
                         "enrollment_secret_secret": enrollment.secret.secret}
+        try:
+            enrollment.distributor
+        except ObjectDoesNotExist:
+            build_kwargs["has_distributor"] = False
+        else:
+            build_kwargs["has_distributor"] = True
         build_kwargs.update(extra_build_kwargs)
 
         # business unit
