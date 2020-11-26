@@ -27,7 +27,7 @@ class MunkiZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         postinstall_script = self.get_build_path("scripts", "postinstall")
         replacements.extend([
             ("%ENROLLMENT_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
-            ("%ENROLLMENT_URL%", "https://{}{}".format(tls_hostname, reverse("munki:enroll")))
+            ("%ENROLLMENT_URL%", "https://{}{}".format(tls_hostname, reverse("munki:enroll"))),
             ("%CLEAN_INSTALL%", "YES" if self.build_kwargs.get("has_distributor") else "NO"),
         ])
         self.replace_in_file(postinstall_script, replacements)
