@@ -6,13 +6,13 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
   <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
-  <li class="active">Add catalog</li>
+  <li class="active">{{ title }}</li>
 </ol>
 
-<h2>Add catalog</h2>
+<h2>{{ title }}</h2>
 <form method="POST" class="form">{% csrf_token %}
   {{ form|bootstrap }}
   <a href="{{ manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
-  <button type="submit" class="btn btn-default">Add</button>
+  <button type="submit" class="btn btn-primary">Save</button>
 </form>
 {% endblock %}

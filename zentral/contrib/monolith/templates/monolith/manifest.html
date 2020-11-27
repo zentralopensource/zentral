@@ -114,6 +114,9 @@
         {% endfor %}
       </td>
       <td width="15%">
+        <a class="btn btn-default" href="{% url 'monolith:edit_manifest_catalog' object.id manifest_catalog.catalog.id %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        </a>
         <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_catalog' object.id manifest_catalog.catalog.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>

@@ -257,7 +257,8 @@ class AddManifestCatalogForm(forms.Form):
         self.manifest = kwargs.pop('manifest')
         super().__init__(*args, **kwargs)
         field = self.fields['catalog']
-        field.queryset = field.queryset.exclude(id__in=[c.id for c in self.manifest.catalogs()])
+        field.queryset = field.queryset.exclude(id__in=[mc.catalog_id
+                                                        for mc in self.manifest.manifestcatalog_set.all()])
         field = self.fields['tags']
         field.queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
 
@@ -268,6 +269,23 @@ class AddManifestCatalogForm(forms.Form):
         mc.tags.set(self.cleaned_data['tags'])
         self.manifest.save()  # updated_at
         return mc
+
+
+class EditManifestCatalogForm(forms.Form):
+    tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.none(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        self.manifest = kwargs.pop('manifest')
+        self.mc = ManifestCatalog.objects.get(manifest=self.manifest, catalog=kwargs.pop("catalog"))
+        super().__init__(*args, **kwargs)
+        field = self.fields['tags']
+        field.queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
+        field.initial = self.mc.tags.all()
+
+    def save(self):
+        self.mc.tags.set(self.cleaned_data['tags'])
+        self.manifest.save()  # updated_at
+        return self.mc
 
 
 class DeleteManifestCatalogForm(forms.Form):

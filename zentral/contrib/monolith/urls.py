@@ -74,9 +74,11 @@ urlpatterns = [
         name="manifest_enrollment_configuration_profile"),
 
     # manifest catalogs
-    url(r'^manifests/(?P<pk>\d+)/add_catalog/$',
+    url(r'^manifests/(?P<pk>\d+)/catalogs/add/$',
         views.AddManifestCatalogView.as_view(), name='add_manifest_catalog'),
-    url(r'^manifests/(?P<pk>\d+)/delete_catalog/(?P<m2m_pk>\d+)/$',
+    url(r'^manifests/(?P<pk>\d+)/catalogs/(?P<m2m_pk>\d+)/edit/$',
+        views.EditManifestCatalogView.as_view(), name='edit_manifest_catalog'),
+    url(r'^manifests/(?P<pk>\d+)/catalogs/(?P<m2m_pk>\d+)/delete/$',
         views.DeleteManifestCatalogView.as_view(), name='delete_manifest_catalog'),
 
     # manifest enrollment packages

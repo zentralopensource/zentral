@@ -22,7 +22,7 @@ from .events import (post_monolith_cache_server_update_request,
                      post_monolith_enrollment_event,
                      post_monolith_munki_request, post_monolith_repository_updates,
                      post_monolith_sync_catalogs_request)
-from .forms import (AddManifestCatalogForm, DeleteManifestCatalogForm,
+from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm,
                     CacheServersPostForm,
@@ -794,7 +794,28 @@ class BaseManifestM2MView(LoginRequiredMixin, FormView):
 
 class AddManifestCatalogView(BaseManifestM2MView):
     form_class = AddManifestCatalogForm
-    template_name = "monolith/add_manifest_catalog.html"
+    template_name = "monolith/manifest_catalog_form.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Add catalog"
+        return ctx
+
+
+class EditManifestCatalogView(BaseManifestM2MView):
+    form_class = EditManifestCatalogForm
+    template_name = "monolith/manifest_catalog_form.html"
+    m2m_model = Catalog
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["catalog"] = self.m2m_object
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = f"Edit {self.m2m_object} catalog tags"
+        return ctx
 
 
 class DeleteManifestCatalogView(BaseManifestM2MView):
