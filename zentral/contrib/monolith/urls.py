@@ -63,6 +63,7 @@ urlpatterns = [
     url(r'^manifests/$', views.ManifestsView.as_view(), name='manifests'),
     url(r'^manifests/create/$', views.CreateManifestView.as_view(), name='create_manifest'),
     url(r'^manifests/(?P<pk>\d+)/$', views.ManifestView.as_view(), name='manifest'),
+    url(r'^manifests/(?P<pk>\d+)/update/$', views.UpdateManifestView.as_view(), name='update_manifest'),
     url(r'^manifests/(?P<pk>\d+)/add_enrollment/$',
         views.AddManifestEnrollmentView.as_view(),
         name="add_manifest_enrollment"),

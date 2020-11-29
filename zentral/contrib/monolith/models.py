@@ -460,13 +460,14 @@ class SubManifestAttachment(models.Model):
 
 
 class Manifest(models.Model):
-    meta_business_unit = models.OneToOneField(MetaBusinessUnit, on_delete=models.PROTECT)
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.PROTECT)
+    name = models.CharField(max_length=256)
 
     class Meta:
-        ordering = ('meta_business_unit__name',)
+        ordering = ('name', 'meta_business_unit__name',)
 
     def __str__(self):
-        return str(self.meta_business_unit)
+        return self.name
 
     def get_absolute_url(self):
         return reverse('monolith:manifest', args=(self.pk,))

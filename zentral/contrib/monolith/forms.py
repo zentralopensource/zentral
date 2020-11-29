@@ -29,27 +29,26 @@ class PkgInfoSearchForm(forms.Form):
 class ManifestForm(forms.ModelForm):
     class Meta:
         model = Manifest
-        fields = ('meta_business_unit',)
+        fields = ('meta_business_unit', 'name')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        mbu_qs = MetaBusinessUnit.objects.available_for_api_enrollment()
         if self.instance.pk:
-            mbu_qs = mbu_qs.filter(Q(manifest=None) | Q(pk=self.instance.meta_business_unit.id))
-        else:
-            mbu_qs = mbu_qs.filter(manifest=None)
-        self.fields['meta_business_unit'].queryset = mbu_qs
+            self.fields["meta_business_unit"].widget = forms.HiddenInput()
+        self.fields['meta_business_unit'].queryset = MetaBusinessUnit.objects.available_for_api_enrollment()
 
 
 class ManifestSearchForm(forms.Form):
-    meta_business_unit_name = forms.CharField(label="Business unit name", required=False,
-                                              widget=forms.TextInput(attrs={"placeholder": "Business unit name…"}))
+    name = forms.CharField(label="Name", required=False,
+                           widget=forms.TextInput(attrs={"autofocus": "true",
+                                                         "size": 32,
+                                                         "placeholder": "Name or business unit name"}))
 
     def get_queryset(self):
         qs = Manifest.objects.select_related("meta_business_unit").all()
-        meta_business_unit_name = self.cleaned_data.get("meta_business_unit_name")
-        if meta_business_unit_name:
-            qs = qs.filter(meta_business_unit__name__icontains=meta_business_unit_name)
+        name = self.cleaned_data.get("name")
+        if name:
+            qs = qs.filter(Q(name__icontains=name) | Q(meta_business_unit__name__icontains=name))
         return qs
 
 
@@ -434,17 +433,27 @@ class EnrollmentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.meta_business_unit = kwargs.pop("meta_business_unit", None)
+        self.manifest = kwargs.pop("manifest", None)
+        assert(self.manifest is None or self.meta_business_unit is None)
         self.standalone = kwargs.pop("standalone", False)
         super().__init__(*args, **kwargs)
-        # hide manifest dropdown if manifest/mbu is fixed
+        # hide manifest dropdown if manifest is fixed
         # the value will be set in the clean_manifest method
         # TODO: kind of a hack
-        if self.meta_business_unit:
+        if self.manifest:
             self.fields["manifest"].widget = forms.HiddenInput()
             self.fields["manifest"].required = False
 
     def clean_manifest(self):
-        if self.meta_business_unit:
-            return self.meta_business_unit.manifest
+        if self.manifest:
+            return self.manifest
         else:
             return self.cleaned_data.get("manifest")
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.meta_business_unit:
+            manifest = cleaned_data.get("manifest")
+            if manifest and manifest.meta_business_unit != self.meta_business_unit:
+                raise forms.ValidationError("Manifest business unit != meta business unit")
+        return cleaned_data

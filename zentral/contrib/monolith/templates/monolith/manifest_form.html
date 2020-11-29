@@ -17,6 +17,6 @@
 <form method="POST" class="form">{% csrf_token %}
   {{ form|bootstrap }}
   <a href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'monolith:manifests' %}{% endif %}" class="btn btn-default">Cancel</a>
-  <button type="submit" class="btn btn-default">{% if object %}Update{% else %}Create{% endif %}</button>
+  <button type="submit" class="btn btn-primary">Save</button>
 </form>
 {% endblock %}

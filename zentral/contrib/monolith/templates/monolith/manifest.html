@@ -8,7 +8,16 @@
   <li class="active">{{ object }}</li>
 </ol>
 
-<h2><a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object }}</a> Manifest</h2>
+<h2>Manifest - {{ object }}</h2>
+
+<p>
+  <a href="{% url 'monolith:update_manifest' object.id %}" class="btn btn-default">Rename</a>
+</p>
+
+<p>
+  <strong>Business unit:</strong>
+  <a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a></dd>
+</p>
 
 <h3>{{ enrollments|length }} Enrollment{{ enrollments|length|pluralize }}</h3>
 
@@ -19,11 +28,9 @@
 {% if enrollments %}
 <table class="table">
   <thead>
-    <th>Tags</th>
+    <th>Enrollment tags</th>
     <th>Created at</th>
-    <th>Configuration</th>
     <th>Request count</th>
-    <th>Version</th>
     <th>Distributor</th>
     <th></th>
   </thead>
@@ -31,22 +38,12 @@
     {% for enrollment in enrollments %}
     {% with enrollment.secret as secret %}
     {% with secret.tags.count as secret_tags_count %}
-    {% with enrollment.taxonomies.count as enrollment_taxonomies_count %}
     {% with enrollment.distributor as distributor %}
     <tr>
       <td>
         {% if secret_tags_count %}
-        <b>Enrollment:</b>
         {% for tag in secret.tags.all %}
-        <br>{% inventory_tag tag %}
-        {% endfor %}
-        {% endif %}
-
-        {% if enrollment_taxonomies_count %}
-        {% if secret_tags_count %}<br>{% endif %}
-        <b>Taxonom{{ enrollment_taxonomies_count|pluralize:"y,ies" }}:</b>
-        {% for taxonomy in enrollment.taxonomies.all %}
-        <br>{{ taxonomy }}
+        {% inventory_tag tag %}
         {% endfor %}
         {% endif %}
       </td>
@@ -54,9 +51,7 @@
         <a name="enrollment_{{ enrollment.pk }}"></a>
         {{ secret.created_at|date:"SHORT_DATETIME_FORMAT" }}
       </td>
-      <td><a href="{{ enrollment.configuration.get_absolute_url }}">{{ enrollment.configuration }}</a></td>
       <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
-      <td>{{ enrollment.version }}</td>
       <td>
         {% if distributor %}
         <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
@@ -68,18 +63,17 @@
         {% if not distributor and not secret.is_used_up %}
         <a class="btn btn-default download-tool"
            href="{% url 'monolith:manifest_enrollment_configuration_plist' enrollment.manifest.id enrollment.id %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>plist
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span> .plist
         </a>
         <a class="btn btn-default download-tool"
            href="{% url 'monolith:manifest_enrollment_configuration_profile' enrollment.manifest.id enrollment.id %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>configuration profile
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span> .mobileconfig
         </a>
         {% elif secret.is_used_up %}
         <span class="text-danger">Enrollment used up.</span>
         {% endif %}
       </td>
     </tr>
-    {% endwith %}
     {% endwith %}
     {% endwith %}
     {% endwith %}

@@ -7,7 +7,7 @@ from django.urls import reverse_lazy
 from django.http import (FileResponse,
                          Http404,
                          HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect)
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
@@ -629,6 +629,8 @@ class ManifestsView(LoginRequiredMixin, ListView):
     def get(self, request, *args, **kwargs):
         self.form = ManifestSearchForm(request.GET)
         self.form.is_valid()
+        if self.get_queryset().count() == 1:
+            return redirect(self.get_queryset().first())
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
@@ -654,7 +656,6 @@ class ManifestsView(LoginRequiredMixin, ListView):
 class CreateManifestView(LoginRequiredMixin, CreateView):
     model = Manifest
     form_class = ManifestForm
-    template_name = "monolith/edit_manifest.html"
 
     def get_context_data(self, **kwargs):
         context = super(CreateManifestView, self).get_context_data(**kwargs)
@@ -693,6 +694,16 @@ class ManifestView(LoginRequiredMixin, DetailView):
         return context
 
 
+class UpdateManifestView(LoginRequiredMixin, UpdateView):
+    model = Manifest
+    form_class = ManifestForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['monolith'] = True
+        return context
+
+
 class AddManifestEnrollmentView(LoginRequiredMixin, TemplateView):
     template_name = "monolith/enrollment_form.html"
 
@@ -704,7 +715,7 @@ class AddManifestEnrollmentView(LoginRequiredMixin, TemplateView):
         secret_form_kwargs = {"prefix": "secret",
                               "meta_business_unit": self.manifest.meta_business_unit,
                               "initial": {"meta_business_unit": self.manifest.meta_business_unit}}
-        enrollment_form_kwargs = {"meta_business_unit": self.manifest.meta_business_unit,
+        enrollment_form_kwargs = {"manifest": self.manifest,
                                   "initial": {"manifest": self.manifest}}
         if self.request.method == "POST":
             secret_form_kwargs["data"] = self.request.POST
