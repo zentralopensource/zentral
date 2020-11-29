@@ -60,7 +60,7 @@ def parse_santa_log_message(message):
             if c == "[":
                 current_attr = "timestamp"
                 state = "VAL"
-            elif c == ":":
+            elif d.get("timestamp") and c == ":":
                 state = "ATTR"
                 current_attr = ""
         elif state == "ATTR":
@@ -89,6 +89,8 @@ def parse_santa_log_message(message):
                 d[attr] = int(val)
             except ValueError:
                 pass
+    if "timestamp" not in d:
+        raise ValueError("Could not find timestamp")
     args = d.get("args")
     if args:
         d["args"] = args.split()

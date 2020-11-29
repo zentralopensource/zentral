@@ -30,7 +30,7 @@ class SantaLogPreprocessor(object):
             if event_data:
                 yield from SantaLogEvent.build_from_machine_request_payloads(
                     serial_number, user_agent, ip_address, [event_data],
-                    get_created_at=lambda d: d.pop("timestamp", None)
+                    get_created_at=lambda d: d.pop("timestamp")
                 )
             else:
                 # probably a log rotation line
