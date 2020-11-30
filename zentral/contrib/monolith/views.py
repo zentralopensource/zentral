@@ -459,10 +459,9 @@ class SubManifestAddPkgInfoView(LoginRequiredMixin, FormView):
         smpi = form.save(commit=False)
         smpi.sub_manifest = self.sub_manifest
         smpi.save()
-        return HttpResponseRedirect(self.get_success_url())
-
-    def get_success_url(self):
-        return self.sub_manifest.get_absolute_url()
+        for _, manifest in self.sub_manifest.manifests_with_tags():
+            manifest.bump_version()
+        return redirect(self.sub_manifest)
 
 
 class DeleteSubManifestPkgInfoView(LoginRequiredMixin, DeleteView):
@@ -474,8 +473,13 @@ class DeleteSubManifestPkgInfoView(LoginRequiredMixin, DeleteView):
         context['monolith'] = True
         return context
 
-    def get_success_url(self):
-        return self.object.sub_manifest.get_absolute_url()
+    def delete(self, *args, **kwargs):
+        smpi = self.get_object()
+        sub_manifest = smpi.sub_manifest
+        smpi.delete()
+        for _, manifest in sub_manifest.manifests_with_tags():
+            manifest.bump_version()
+        return redirect(sub_manifest)
 
 
 class SubManifestAddAttachmentView(LoginRequiredMixin, FormView):
@@ -501,7 +505,9 @@ class SubManifestAddAttachmentView(LoginRequiredMixin, FormView):
         smpi = form.save(commit=False)
         smpi.sub_manifest = self.sub_manifest
         smpi.save()
-        return HttpResponseRedirect(smpi.get_absolute_url())
+        for _, manifest in self.sub_manifest.manifests_with_tags():
+            manifest.bump_version()
+        return redirect(smpi)
 
 
 class SubManifestAddScriptView(LoginRequiredMixin, FormView):
@@ -527,10 +533,9 @@ class SubManifestAddScriptView(LoginRequiredMixin, FormView):
         smpi = form.save(commit=False)
         smpi.sub_manifest = self.sub_manifest
         smpi.save()
-        return HttpResponseRedirect(self.get_success_url())
-
-    def get_success_url(self):
-        return self.sub_manifest.get_absolute_url()
+        for _, manifest in self.sub_manifest.manifests_with_tags():
+            manifest.bump_version()
+        return redirect(smpi)
 
 
 class SubManifestUpdateScriptView(LoginRequiredMixin, FormView):
@@ -564,10 +569,9 @@ class SubManifestUpdateScriptView(LoginRequiredMixin, FormView):
         smpi = form.save(commit=False)
         smpi.sub_manifest = self.sub_manifest
         smpi.save()
-        return HttpResponseRedirect(self.get_success_url())
-
-    def get_success_url(self):
-        return self.sub_manifest.get_absolute_url()
+        for _, manifest in self.sub_manifest.manifests_with_tags():
+            manifest.bump_version()
+        return redirect(smpi)
 
 
 class DeleteSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
@@ -579,15 +583,13 @@ class DeleteSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
         context['monolith'] = True
         return context
 
-    def get_success_url(self):
-        return self.object.get_absolute_url()
-
     def delete(self, request, *args, **kwargs):
-        # TODO we can't just use the DeleteView delete method, but can we do better than that ?
         self.object = self.get_object()
-        success_url = self.get_success_url()
-        SubManifestAttachment.objects.trash(self.object.sub_manifest, self.object.name)
-        return HttpResponseRedirect(success_url)
+        sub_manifest = self.object.sub_manifest
+        SubManifestAttachment.objects.trash(sub_manifest, self.object.name)
+        for _, manifest in sub_manifest.manifests_with_tags():
+            manifest.bump_version()
+        return redirect(self.object)
 
 
 class PurgeSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
@@ -599,8 +601,13 @@ class PurgeSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
         context['monolith'] = True
         return context
 
-    def get_success_url(self):
-        return self.object.sub_manifest.get_absolute_url()
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        sub_manifest = self.object.sub_manifest
+        self.object.delete()
+        for _, manifest in sub_manifest.manifests_with_tags():
+            manifest.bump_version()
+        return redirect(sub_manifest)
 
 
 class DownloadSubManifestAttachmentView(LoginRequiredMixin, View):
@@ -800,6 +807,7 @@ class BaseManifestM2MView(LoginRequiredMixin, FormView):
 
     def form_valid(self, form):
         form.save()
+        self.manifest.bump_version()
         return HttpResponseRedirect(self.get_success_url())
 
 
@@ -922,7 +930,8 @@ class AddManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView):
         # link from enrollment to manifest enrollment package, for config update propagation
         enrollment.distributor = mep
         enrollment.save()  # bump mep version and build package via callback call
-        return HttpResponseRedirect(self.manifest.get_absolute_url())
+        self.manifest.bump_version()
+        return redirect(self.manifest)
 
 
 class UpdateManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView):
@@ -930,7 +939,8 @@ class UpdateManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView)
         self.manifest_enrollment_package.tags.set(mep_form.cleaned_data["tags"])
         self.manifest_enrollment_package.save()
         builder_form.save()  # bump mep version and build package via callback call
-        return HttpResponseRedirect(self.manifest.get_absolute_url())
+        self.manifest.bump_version()
+        return redirect(self.manifest)
 
 
 class DeleteManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
@@ -950,9 +960,10 @@ class DeleteManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
-        redirect_url = self.manifest_enrollment_package.manifest.get_absolute_url()
+        manifest = self.manifest_enrollment_package.manifest
         self.manifest_enrollment_package.delete()
-        return HttpResponseRedirect(redirect_url)
+        manifest.bump_version()
+        return redirect(manifest)
 
 
 # manifest printers
@@ -982,6 +993,7 @@ class AddManifestPrinterView(LoginRequiredMixin, CreateView):
         printer.manifest = self.manifest
         printer.save()
         form.save_m2m()
+        self.manifest.bump_version()
         return HttpResponseRedirect("{}#printers".format(self.manifest.get_absolute_url()))
 
 
@@ -1004,6 +1016,11 @@ class UpdateManifestPrinterView(LoginRequiredMixin, UpdateView):
         kwargs['manifest'] = self.manifest
         return kwargs
 
+    def form_valid(self, *args, **kwargs):
+        response = super().form_valid(*args, **kwargs)
+        self.manifest.bump_version()
+        return response
+
     def get_success_url(self):
         return "{}#printers".format(self.manifest.get_absolute_url())
 
@@ -1024,6 +1041,7 @@ class DeleteManifestPrinterView(LoginRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
         self.object.mark_as_trashed()
+        self.manifest.bump_version()
         return HttpResponseRedirect("{}#printers".format(self.manifest.get_absolute_url()))
 
 
@@ -1058,9 +1076,12 @@ class ConfigureManifestCacheServerView(LoginRequiredMixin, FormView):
         ctx["manifest"] = self.manifest
         return ctx
 
+    def get_initial(self):
+        return {"manifest": self.manifest}
+
     def form_valid(self, form):
         ctx = self.get_context_data()
-        ctx["curl_command"] = form.build_curl_command(self.manifest)
+        ctx["curl_command"] = form.build_curl_command()
         return render(self.request, 'monolith/manifest_cache_server_setup.html', ctx)
 
 
@@ -1090,8 +1111,7 @@ class CacheServersView(SignedRequestHeaderJSONPostAPIView):
     def do_post(self, data):
         form = CacheServersPostForm(data)
         if form.is_valid():
-            manifest = get_object_or_404(Manifest, meta_business_unit=self.business_unit.meta_business_unit)
-            cache_server = form.save(manifest, self.ip)
+            cache_server = form.save(self.ip)
             post_monolith_cache_server_update_request(self.user_agent, self.ip, cache_server=cache_server)
             return {'status': 0}
         else:

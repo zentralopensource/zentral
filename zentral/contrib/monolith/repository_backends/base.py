@@ -3,7 +3,7 @@ import logging
 import os.path
 import plistlib
 from zentral.contrib.monolith.events import post_monolith_repository_updates
-from zentral.contrib.monolith.models import Catalog, PkgInfo, PkgInfoCategory, PkgInfoName
+from zentral.contrib.monolith.models import Catalog, Manifest, PkgInfo, PkgInfoCategory, PkgInfoName
 from zentral.utils.local_dir import get_and_create_local_dir
 
 logger = logging.getLogger('zentral.contrib.monolith.repository_backends.base')
@@ -203,4 +203,7 @@ class BaseRepository(object):
                                                     "version": pkg_info.version},
                                        "type": "pkg_info",
                                        "action": "archived"})
+        # bump versions of manifests connected to found catalogs
+        for manifest in Manifest.objects.distinct().filter(manifestcatalog__catalog__in=found_catalogs):
+            manifest.bump_version()
         post_monolith_repository_updates(self, event_payloads)

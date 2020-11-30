@@ -266,7 +266,6 @@ class AddManifestCatalogForm(forms.Form):
                              catalog=self.cleaned_data['catalog'])
         mc.save()
         mc.tags.set(self.cleaned_data['tags'])
-        self.manifest.save()  # updated_at
         return mc
 
 
@@ -283,7 +282,6 @@ class EditManifestCatalogForm(forms.Form):
 
     def save(self):
         self.mc.tags.set(self.cleaned_data['tags'])
-        self.manifest.save()  # updated_at
         return self.mc
 
 
@@ -299,10 +297,8 @@ class DeleteManifestCatalogForm(forms.Form):
                                                        for mc in self.manifest.manifestcatalog_set.all()])
 
     def save(self):
-        number_deleted, _ = ManifestCatalog.objects.filter(manifest=self.manifest,
-                                                           catalog=self.cleaned_data['catalog']).delete()
-        if number_deleted:
-            self.manifest.save()  # updated_at
+        ManifestCatalog.objects.filter(manifest=self.manifest,
+                                       catalog=self.cleaned_data['catalog']).delete()
 
 
 class AddManifestEnrollmentPackageForm(forms.Form):
@@ -373,16 +369,17 @@ class DeleteManifestSubManifestForm(forms.Form):
 
 
 class CacheServerBaseForm(forms.Form):
+    manifest = forms.ModelChoiceField(queryset=Manifest.objects.all(), widget=forms.HiddenInput)
     name = forms.CharField(max_length=256)
     base_url = forms.URLField(label="base URL")
 
 
 class CacheServersPostForm(CacheServerBaseForm):
-    def save(self, manifest, public_ip_address):
+    def save(self, public_ip_address):
         cd = self.cleaned_data
         cache_server, _ = CacheServer.objects.update_or_create(
+            manifest=cd["manifest"],
             name=cd["name"],
-            manifest=manifest,
             defaults={"public_ip_address": public_ip_address,
                       "base_url": cd["base_url"]}
         )
@@ -390,10 +387,15 @@ class CacheServersPostForm(CacheServerBaseForm):
 
 
 class ConfigureCacheServerForm(CacheServerBaseForm):
-    def build_curl_command(self, manifest):
+    def build_curl_command(self):
+        manifest = self.cleaned_data["manifest"]
         business_unit = manifest.meta_business_unit.api_enrollment_business_units()[0]
         api_secret = make_secret('zentral.contrib.monolith', business_unit)
-        json_payload = json.dumps(self.cleaned_data)
+        json_payload = json.dumps({
+            "manifest": self.cleaned_data["manifest"].pk,
+            "name": self.cleaned_data["name"],
+            "base_url": self.cleaned_data["base_url"],
+        })
         tls_hostname = settings["api"]["tls_hostname"]
         path = reverse("monolith:cache_servers")
         # TODO: what if there is a ' in the json payload ?

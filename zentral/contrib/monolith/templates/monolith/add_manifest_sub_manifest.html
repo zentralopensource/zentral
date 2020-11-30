@@ -13,6 +13,6 @@
 <form method="POST" class="form">{% csrf_token %}
   {{ form|bootstrap }}
   <a href="{{ manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
-  <button type="submit" class="btn btn-default">Add</button>
+  <button type="submit" class="btn btn-primary">Add</button>
 </form>
 {% endblock %}

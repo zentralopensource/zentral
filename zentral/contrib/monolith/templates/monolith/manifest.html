@@ -14,10 +14,20 @@
   <a href="{% url 'monolith:update_manifest' object.id %}" class="btn btn-default">Rename</a>
 </p>
 
-<p>
-  <strong>Business unit:</strong>
-  <a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a></dd>
-</p>
+<dl class="dl-horizontal">
+  <dt>Business unit</dt>
+  <dd>
+    <a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a></dd>
+  </dd>
+  <dt>Version</dt>
+  <dd>{{ object.version }}</dd>
+</dl>
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">Created at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.created_at }}</dd>
+  <dt class="small" style="opacity:0.5">Updated at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.updated_at }}</dd>
+</dl>
 
 <h3>{{ enrollments|length }} Enrollment{{ enrollments|length|pluralize }}</h3>
 

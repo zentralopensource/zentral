@@ -103,6 +103,8 @@ urlpatterns = [
         views.AddManifestSubManifestView.as_view(), name='add_manifest_sub_manifest'),
     url(r'^manifests/(?P<pk>\d+)/delete_sub_manifest/(?P<m2m_pk>\d+)/$',
         views.DeleteManifestSubManifestView.as_view(), name='delete_manifest_sub_manifest'),
+
+    # manifest cache servers
     url(r'^manifests/(?P<pk>\d+)/configure_cache_server/$',
         views.ConfigureManifestCacheServerView.as_view(), name='configure_manifest_cache_server'),
     url(r'^manifests/(?P<pk>\d+)/delete_cache_server/(?P<cs_pk>\d+)/$',

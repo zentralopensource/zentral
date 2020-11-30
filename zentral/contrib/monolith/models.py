@@ -462,6 +462,9 @@ class SubManifestAttachment(models.Model):
 class Manifest(models.Model):
     meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.PROTECT)
     name = models.CharField(max_length=256)
+    version = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ('name', 'meta_business_unit__name',)
@@ -471,6 +474,10 @@ class Manifest(models.Model):
 
     def get_absolute_url(self):
         return reverse('monolith:manifest', args=(self.pk,))
+
+    def bump_version(self):
+        self.version = F("version") + 1
+        self.save()
 
     def catalogs(self, tags=None):
         if tags is None:
