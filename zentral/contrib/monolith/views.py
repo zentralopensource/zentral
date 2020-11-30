@@ -1183,12 +1183,13 @@ class MRBaseView(View):
             post_monolith_enrollment_event(serial_number, self.user_agent, self.ip, {'action': "enrollment"})
         return enrolled_machine
 
-    def get_enrolled_machine(self, request):
+    def get_enrolled_machine_and_tags(self, request):
         secret = self.get_secret(request)
         serial_number = self.get_serial_number(request)
         cache_key = "{}{}".format(secret, serial_number)
-        enrolled_machine = cache.get(cache_key)
-        if not enrolled_machine:
+        try:
+            enrolled_machine, tags = cache.get(cache_key)
+        except TypeError:
             try:
                 enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__secret",
                                                                            "enrollment__manifest__meta_business_unit")
@@ -1196,17 +1197,17 @@ class MRBaseView(View):
                                                                 serial_number=serial_number))
             except EnrolledMachine.DoesNotExist:
                 enrolled_machine = self.enroll_machine(request, secret, serial_number)
-            cache.set(cache_key, enrolled_machine, 600)
-        return enrolled_machine
+            machine = MetaMachine(serial_number)
+            tags = machine.tags
+            cache.set(cache_key, (enrolled_machine, tags), 600)
+        return enrolled_machine, tags
 
     def dispatch(self, request, *args, **kwargs):
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
-        enrolled_machine = self.get_enrolled_machine(request)
+        enrolled_machine, self.tags = self.get_enrolled_machine_and_tags(request)
+        self.machine_serial_number = enrolled_machine.serial_number
         self.manifest = enrolled_machine.enrollment.manifest
         self.meta_business_unit = self.manifest.meta_business_unit
-        self.machine_serial_number = enrolled_machine.serial_number
-        self.machine = MetaMachine(self.machine_serial_number)
-        self.tags = self.machine.tags
         return super().dispatch(request, *args, **kwargs)
 
 
