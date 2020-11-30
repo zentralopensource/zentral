@@ -1245,8 +1245,8 @@ class MRCatalogView(MRNameView):
         catalog_data = None
         if model == "manifest_catalog":
             # intercept calls for special enrollment catalog
-            mbu_id = int(key)
-            if mbu_id == self.meta_business_unit.id:
+            manifest_pk = int(key)
+            if manifest_pk == self.manifest.pk:
                 catalog_data = self.manifest.serialize_catalog(self.tags)
         if catalog_data:
             return HttpResponse(catalog_data, content_type="application/xml")

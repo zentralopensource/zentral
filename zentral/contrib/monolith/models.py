@@ -629,7 +629,7 @@ class Manifest(models.Model):
     # the manifest catalog - for a given set of tags
 
     def get_catalog_munki_name(self):
-        return build_munki_name("manifest_catalog", self.meta_business_unit.id, str(self.meta_business_unit))
+        return build_munki_name("manifest_catalog", self.pk, self.name)
 
     def serialize_catalog(self, tags=None):
         pkginfo_list = []
