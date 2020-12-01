@@ -66,6 +66,9 @@ class WebhookEventPreprocessor(object):
             logger.exception("Could not get machine_d and tags. %s %s %s",
                              client.source_repr, device_type, jamf_id)
         else:
+            if not machine_d.get("serial_number"):
+                logger.warning("Machine %s %s %s without serial number", client.source_repr, device_type, jamf_id)
+                return
             try:
                 with transaction.atomic():
                     msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
