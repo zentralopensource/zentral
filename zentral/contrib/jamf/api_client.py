@@ -233,8 +233,7 @@ class APIClient(object):
         org_cg_num = len(cg_names)
         cg_names = set(cg_names)
         if len(cg_names) < org_cg_num:
-            logger.warning('Dupplicated group. source %s, machine %s',
-                           self.get_source_d(), jamf_id)
+            logger.warning("%s computer %s: duplicated group(s)", self.api_base_url, jamf_id)
         for computer_group_name in cg_names:
             try:
                 group_id, is_smart = self.get_computer_group(computer_group_name)
