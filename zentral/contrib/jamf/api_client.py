@@ -320,10 +320,17 @@ class APIClient(object):
 
         # osx apps
         osx_app_instances = []
+        has_duplicated_apps = False
         for app_d in computer['software']['applications']:
-            osx_app_instances.append({'bundle_path': app_d['path'],
-                                      'app': {'bundle_name': app_d['name'],
-                                              'bundle_version_str': app_d['version']}})
+            osx_app_d = {'bundle_path': app_d['path'],
+                         'app': {'bundle_name': app_d['name'],
+                                 'bundle_version_str': app_d['version']}}
+            if osx_app_d not in osx_app_instances:
+                osx_app_instances.append(osx_app_d)
+            else:
+                has_duplicated_apps = True
+        if has_duplicated_apps:
+            logger.warning("%s computer %s: duplicated app(s)", self.api_base_url, jamf_id)
         ct['osx_app_instances'] = osx_app_instances
         return ct
 
