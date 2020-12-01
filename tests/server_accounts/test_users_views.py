@@ -1,5 +1,7 @@
-from django.urls import reverse
+import uuid
 from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils.crypto import get_random_string
 from accounts.models import User
 
 
@@ -8,14 +10,20 @@ class AccountUsersViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # superuser
-        cls.su_pwd = "godzillapwd"
-        cls.superuser = User.objects.create_user("godzilla", "godzilla@zentral.io", cls.su_pwd,
+        cls.su_pwd = get_random_string(17)
+        cls.superuser = User.objects.create_user(get_random_string(21),
+                                                 "{}@zentral.io".format(str(uuid.uuid4())),
+                                                 cls.su_pwd,
                                                  is_superuser=True)
         # user
-        cls.pwd = "yo"
-        cls.user = User.objects.create_user("yo", "yo@zentral.io", cls.pwd)
+        cls.pwd = get_random_string(18)
+        cls.user = User.objects.create_user(get_random_string(19),
+                                            "{}@zentral.io".format(str(uuid.uuid4())),
+                                            cls.pwd)
         # remote user
-        cls.remoteuser = User.objects.create_user("remote", "remote@zentral.io", "remote",
+        cls.remoteuser = User.objects.create_user(get_random_string(19),
+                                                  "{}@zentral.io".format(str(uuid.uuid4())),
+                                                  get_random_string(45),
                                                   is_remote=True)
 
     # auth utils
