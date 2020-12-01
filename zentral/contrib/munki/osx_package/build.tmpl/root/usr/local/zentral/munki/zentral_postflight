@@ -325,8 +325,7 @@ def iter_users():
             yield user_d
 
 
-def get_principal_o365_user():
-    # ATM, only the company portal info
+def get_company_portal_principal_user():
     selected_plist_ctime = principal_user = None
     for user_d in iter_users():
         plist_path = os.path.join(
@@ -352,7 +351,7 @@ def get_principal_o365_user():
             pass
         else:
             selected_plist_ctime = plist_ctime
-            principal_o365_user = {
+            principal_user = {
                 "source": {
                     "type": "COMPANY_PORTAL",
                     "properties": {
@@ -363,41 +362,43 @@ def get_principal_o365_user():
                 "unique_id": company_portal_info["aadUniqueId"],
                 "principal_name": company_portal_info["aadUserId"],
             }
-    return principal_o365_user
+    return principal_user
 
 
-def get_principal_chrome_user():
-    # ATM, only the company portal info
-    selected_json_ctime = principal_chrome_user = None
+def get_google_chrome_principal_user():
+    principal_user_active_time = principal_user = None
     for user_d in iter_users():
         json_path = os.path.join(
             user_d["directory"],
             "Library/Application Support/Google/Chrome/Local State"
         )
         try:
-            json_ctime = os.stat(json_path).st_ctime
-        except OSError:
-            # statefile doesn't exist
-            continue
-        if json_ctime < selected_json_ctime:
-            # we have already found a more recent statefile
-            # TODO: same concerns as with o365...
-            continue
-        try:
             with open(json_path, 'r') as statefile:
-                chrome_info = json.loads(statefile)
+                chrome_info = json.load(statefile)
         except Exception:
             pass
         else:
-            selected_json_ctime = json_ctime
-            default_info_cache = chrome_info['profile']['info_cache']['Default']
-            principal_chrome_user = {
-                "gaia_name": default_info_cache["gaia_name"],
-                "gaia_given_name": default_info_cache["gaia_given_name"],
-                "user_name": default_info_cache["user_name"]
-                "hosted_domain": default_info_cache["hosted_domain"]
-            }
-    return principal_chrome_user
+            try:
+                for key, data in chrome_info['profile']['info_cache'].items():
+                    active_time = data["active_time"]
+                    if principal_user_active_time and principal_user_active_time > active_time:
+                        # we have already found a more recent profile
+                        continue
+                    principal_user = {
+                        "source": {
+                            "type": "GOOGLE_CHROME",
+                            "properties": {
+                                "hosted_domain": data["hosted_domain"]
+                            },
+                        },
+                        "unique_id": data["gaia_id"],
+                        "principal_name": data["user_name"],
+                        "display_name": data["gaia_name"],
+                    }
+                    principal_user_active_time = active_time
+            except Exception:
+                pass
+    return principal_user
 
 
 # Zentral Munki API calls
@@ -428,16 +429,15 @@ def post_job(data):
 
 
 def get_machine_snapshot():
-    principal_o365_user = get_principal_o365_user()
-    principal_chrome_user = get_principal_chrome_user()
     spr = SystemProfilerReport()
     machine_snapshot = spr.get_machine_snapshot()
     machine_snapshot['pem_certificates'] = list(iter_filtered_certs())
     machine_snapshot['osx_app_instances'] = get_osx_app_instances()
-    if principal_o365_user:
-        machine_snapshot["principal_user"] = principal_o365_user
-    elif principal_chrome_user:
-        machine_snapshot["principal_chorme_user"] = principal_chrome_user
+    for f in (get_company_portal_principal_user, get_google_chrome_principal_user):
+        principal_user = f()
+        if principal_user:
+            machine_snapshot['principal_user'] = principal_user
+            break
     return machine_snapshot
 
 
