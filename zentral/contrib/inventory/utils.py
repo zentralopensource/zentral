@@ -699,6 +699,38 @@ class ComputerNameFilter(BaseMSFilter):
             record.setdefault("system_info", {})["computer_name"] = self.unknown_value
 
 
+class PrincipalUserNameFilter(BaseMSFilter):
+    query_kwarg = "pu"
+    free_input = True
+    non_grouping_expression = "pu.principal_name, pu.display_name"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.value:
+            self.value = self.value.strip()
+
+    def joins(self):
+        yield "left join inventory_principaluser as pu on (ms.principal_user_id = pu.id)"
+
+    def wheres(self):
+        if self.value:
+            if self.value != self.none_value:
+                yield "pu.id is not null and (pu.principal_name ~* %s or pu.display_name ~* %s)"
+            else:
+                yield "pu.id is null or pu.principal_name is null"
+
+    def where_args(self):
+        if self.value and self.value != self.none_value:
+            yield self.value
+            yield self.value
+
+    def process_fetched_record(self, record, for_filtering):
+        for attr in ("principal_name", "display_name"):
+            val = record.pop(attr, None)
+            if val:
+                record.setdefault("principal_user", {})[attr] = val
+
+
 class HardwareModelFilter(BaseMSFilter):
     title = "Hardware models"
     optional = True
@@ -819,6 +851,7 @@ class MSQuery:
         OSVersionFilter,
         SerialNumberFilter,
         ComputerNameFilter,
+        PrincipalUserNameFilter,
     ]
 
     def __init__(self, query_dict=None):

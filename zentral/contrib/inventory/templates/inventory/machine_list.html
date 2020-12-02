@@ -76,6 +76,10 @@
         <label for="id_name" class="sr-only">Name</label>
         <input type="text" id="id_name" value="{{ msquery.query_dict.cn }}" name="cn" class="form-control" placeholder="computer name">
       </div>
+      <div class="form-group">
+        <label for="id_principal_user_name" class="sr-only">Principal user</label>
+        <input type="text" id="id_principal_user_name" value="{{ msquery.query_dict.pu }}" name="pu" class="form-control" placeholder="principal user">
+      </div>
       <button class="btn btn-success" type="button" data-toggle="modal" data-target="#add-filter"
                                       aria-expanded="false" aria-controls="add-filter">
         <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
