@@ -409,9 +409,11 @@ class PuppetNode(AbstractMTObject):
 class PrincipalUserSource(AbstractMTObject):
     COMPANY_PORTAL = "COMPANY_PORTAL"
     GOOGLE_CHROME = "GOOGLE_CHROME"
+    LOGGED_IN_USER = "LOGGED_IN_USER"
     TYPE_CHOICES = (
         (COMPANY_PORTAL, "Company portal"),
         (GOOGLE_CHROME, "Google Chrome"),
+        (LOGGED_IN_USER, "Logged-in user"),
     )
     type = models.CharField(choices=TYPE_CHOICES, max_length=64)
     properties = JSONField(blank=True, null=True)

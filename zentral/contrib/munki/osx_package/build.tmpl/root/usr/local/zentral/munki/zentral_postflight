@@ -325,7 +325,7 @@ def iter_users():
             yield user_d
 
 
-def get_company_portal_principal_user():
+def get_company_portal_principal_user(domains):
     selected_plist_ctime = principal_user = None
     for user_d in iter_users():
         plist_path = os.path.join(
@@ -365,7 +365,7 @@ def get_company_portal_principal_user():
     return principal_user
 
 
-def get_google_chrome_principal_user():
+def get_google_chrome_principal_user(domains):
     principal_user_active_time = principal_user = None
     for user_d in iter_users():
         json_path = os.path.join(
@@ -384,21 +384,46 @@ def get_google_chrome_principal_user():
                     if principal_user_active_time and principal_user_active_time > active_time:
                         # we have already found a more recent profile
                         continue
+                    hosted_domain = data["hosted_domain"]
+                    if hosted_domain not in domains:
+                        continue
+                    principal_name = data["user_name"]
+                    if hosted_domain not in principal_name:
+                        continue
                     principal_user = {
                         "source": {
                             "type": "GOOGLE_CHROME",
                             "properties": {
-                                "hosted_domain": data["hosted_domain"]
+                                "hosted_domain": hosted_domain,
                             },
                         },
                         "unique_id": data["gaia_id"],
-                        "principal_name": data["user_name"],
+                        "principal_name": principal_name,
                         "display_name": data["gaia_name"],
                     }
                     principal_user_active_time = active_time
             except Exception:
                 pass
     return principal_user
+
+
+def get_logged_in_user_principal_user(domains):
+    try:
+        import Quartz
+        session_d = Quartz.CGSessionCopyCurrentDictionary()
+        return {
+            "source": {
+                "type": "LOGGED_IN_USER",
+                "properties": {
+                  "method": "Quartz",
+                },
+            },
+            "unique_id": session_d["kCGSSessionUserIDKey"],
+            "principal_name": session_d["kCGSSessionUserNameKey"],
+            "display_name": session_d["kCGSessionLongUserNameKey"],
+        }
+    except Exception:
+        pass
 
 
 # Zentral Munki API calls
@@ -433,20 +458,52 @@ def get_machine_snapshot():
     machine_snapshot = spr.get_machine_snapshot()
     machine_snapshot['pem_certificates'] = list(iter_filtered_certs())
     machine_snapshot['osx_app_instances'] = get_osx_app_instances()
-    for f in (get_company_portal_principal_user, get_google_chrome_principal_user):
-        principal_user = f()
-        if principal_user:
-            machine_snapshot['principal_user'] = principal_user
-            break
     return machine_snapshot
+
+
+def get_principal_user(principal_user_detection):
+    if not principal_user_detection:
+        return None
+    domains = principal_user_detection.get("domains", [])
+    for source in principal_user_detection.get("sources", []):
+        if source == "company_portal":
+            f = get_company_portal_principal_user
+        elif source == "google_chrome":
+            f = get_google_chrome_principal_user
+        elif source == "logged_in_user":
+            f = get_logged_in_user_principal_user
+        else:
+            continue
+        principal_user = f(domains)
+        if principal_user:
+            return principal_user
+            break
 
 
 # Main
 
 
 if __name__ == '__main__':
+    machine_snapshot = get_machine_snapshot()
+
+    # get job info
+    msn = machine_snapshot['serial_number']
+    job_details = get_job_details(msn)
+
     # machine snapshot
-    data = {'machine_snapshot': get_machine_snapshot()}
+    principal_user_detection = job_details.get('principal_user_detection')
+    principal_user = get_principal_user(principal_user_detection)
+    if principal_user:
+        machine_snapshot['principal_user'] = principal_user
+
+    data = {'machine_snapshot': machine_snapshot}
+
+    # add the new reports
+    last_seen_sha1sum = job_details.get('last_seen_sha1sum')
+    data['reports'] = build_reports_payload(last_seen_sha1sum)
+
+    # post the payload to zentral
+    post_job(data)
 
     # run type
     run_type = None
@@ -455,17 +512,7 @@ if __name__ == '__main__':
     except IndexError:
         pass
 
-    # get job info
-    msn = data['machine_snapshot']['serial_number']
-    job_details = get_job_details(msn)
-    last_seen_sha1sum = job_details.get('last_seen_sha1sum', None)
-
-    # add the new reports
-    data['reports'] = build_reports_payload(last_seen_sha1sum)
-
-    # post the payload to zentral
-    post_job(data)
-
+    # log line
     print('Zentral postflight job OK - '
           'run type %s, last sha1sum %s' % (run_type or "-",
                                             (last_seen_sha1sum or "-")[:7]))

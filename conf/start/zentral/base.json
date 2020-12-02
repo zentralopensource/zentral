@@ -76,7 +76,12 @@
     },
     "zentral.contrib.jamf": {},
     "zentral.contrib.simplemdm": {},
-    "zentral.contrib.munki": {},
+    "zentral.contrib.munki": {
+      "principal_user_detection": {
+        "sources": ["company_portal", "google_chrome", "logged_in_user"],
+        "domains": ["zentral.pro"]
+      }
+    },
     "zentral.contrib.nagios": {},
     "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {}

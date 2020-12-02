@@ -8,6 +8,7 @@ from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
 from django.views.generic import FormView, ListView, TemplateView, View
+from zentral.conf import settings
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MachineTag
@@ -243,7 +244,7 @@ class JobDetailsView(BaseView):
         if self.enrollment:
             event_data["enrollment"] = {"pk": self.enrollment.pk}
         post_munki_request_event(self.machine_serial_number, self.user_agent, self.ip, **event_data)
-        response_d = {}
+        response_d = settings['apps']['zentral.contrib.munki']
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
         except MunkiState.DoesNotExist:
