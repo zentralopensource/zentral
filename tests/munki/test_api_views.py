@@ -44,7 +44,7 @@ class MunkiAPIViewsTestCase(TestCase):
                                      {"machine_serial_number": machine_serial_number},
                                      HTTP_ZENTRAL_API_SECRET=api_secret)
         self.assertEqual(response.status_code, 200)
-        self.assertCountEqual([], response.json().keys())
+        self.assertCountEqual(["principal_user_detection"], response.json().keys())
 
     def test_job_details_old_way_conflict(self):
         _, api_secret = self.make_api_secret()
@@ -59,7 +59,7 @@ class MunkiAPIViewsTestCase(TestCase):
                                      {"machine_serial_number": enrolled_machine.serial_number},
                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
-        self.assertCountEqual([], response.json().keys())
+        self.assertCountEqual(["principal_user_detection"], response.json().keys())
 
     def test_job_details_conflict(self):
         enrolled_machine = self.make_enrolled_machine()
@@ -88,7 +88,7 @@ class MunkiAPIViewsTestCase(TestCase):
                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
-        self.assertCountEqual(["last_seen_sha1sum"], response_json.keys())
+        self.assertCountEqual(["principal_user_detection", "last_seen_sha1sum"], response_json.keys())
         self.assertEqual(response_json["last_seen_sha1sum"], report_sha1sum)
         ms = MachineSnapshot.objects.current().get(serial_number=enrolled_machine.serial_number)
         ms2 = MachineSnapshot.objects.current().get(reference=enrolled_machine.serial_number)
