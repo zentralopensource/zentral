@@ -186,6 +186,7 @@
       </td>
       {% endif %}
       <td>{{ machine_snapshot.system_info.computer_name|default:"" }}</td>
+      <td>{{ machine_snapshot.principal_user.principal_name|default:"" }}</td>
       <td>{{ machine_snapshot.system_info.hardware_model|default:"" }}</td>
       <td>{{ machine_snapshot.os_version.display_name }}</td>
       <td>
