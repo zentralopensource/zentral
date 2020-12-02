@@ -1192,7 +1192,7 @@ class MRBaseView(View):
         except TypeError:
             try:
                 enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__secret",
-                                                                           "enrollment__manifest__meta_business_unit")
+                                                                           "enrollment__manifest")
                                                            .get(enrollment__secret__secret=secret,
                                                                 serial_number=serial_number))
             except EnrolledMachine.DoesNotExist:
@@ -1207,7 +1207,6 @@ class MRBaseView(View):
         enrolled_machine, self.tags = self.get_enrolled_machine_and_tags(request)
         self.machine_serial_number = enrolled_machine.serial_number
         self.manifest = enrolled_machine.enrollment.manifest
-        self.meta_business_unit = self.manifest.meta_business_unit
         return super().dispatch(request, *args, **kwargs)
 
 
