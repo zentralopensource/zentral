@@ -244,7 +244,7 @@ class JobDetailsView(BaseView):
         if self.enrollment:
             event_data["enrollment"] = {"pk": self.enrollment.pk}
         post_munki_request_event(self.machine_serial_number, self.user_agent, self.ip, **event_data)
-        response_d = settings['apps']['zentral.contrib.munki']
+        response_d = settings['apps']['zentral.contrib.munki'].serialize()
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
         except MunkiState.DoesNotExist:
