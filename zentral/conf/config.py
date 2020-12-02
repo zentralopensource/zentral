@@ -231,6 +231,14 @@ class ConfigList(BaseConfig):
         for element in self._collection:
             yield self._to_python(element)
 
+    def serialize(self):
+        s = []
+        for v in self:
+            if isinstance(v, BaseConfig):
+                v = v.serialize()
+            s.append(v)
+        return s
+
 
 class ConfigDict(BaseConfig):
     def __init__(self, config_d, path=None, resolver=None):
@@ -294,3 +302,11 @@ class ConfigDict(BaseConfig):
             chain = itertools.chain(chain, kwargs.items())
         for key, value in iterator:
             self._collection[key] = self._from_python(key, value)
+
+    def serialize(self):
+        s = {}
+        for k, v in self.items():
+            if isinstance(v, BaseConfig):
+                v = v.serialize()
+            s[k] = v
+        return s
