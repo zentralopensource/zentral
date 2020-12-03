@@ -11,7 +11,7 @@ On every _Zentral all in one_ instance, there is a setup script that will automa
 ## How to run it
 
 Once you are logged into your instance, use the following command:
- 
+
 ```cmd
 sudo /home/zentral/app/utils/setup.py \
      zentral.example.com \
@@ -54,10 +54,10 @@ Some commands to manage your _Zentral all in one_ instance.
 To restart the application, after having changed the configuration for example:
 
 ```bash
-sudo /home/zentral/app/utils/reload_restart.sh 
+sudo /home/zentral/app/utils/reload_restart.sh
 ```
 
-To deploy the master branch from the github repository:
+To deploy the main branch from the github repository:
 
 ```bash
 sudo /home/zentral/app/utils/deploy.py
