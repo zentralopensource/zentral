@@ -1123,7 +1123,14 @@ class CacheServersView(SignedRequestHeaderJSONPostAPIView):
             raise SuspiciousOperation("Posted json data invalid")
 
 
+def file_storage_has_signed_urls():
+    # TODO better detection!
+    return get_storage_class().__name__ in ('S3Boto3Storage', 'GoogleCloudStorage')
+
+
 class DownloadPrinterPPDView(View):
+    redirect_to_files = lazy(file_storage_has_signed_urls)()
+
     def get(self, request, *args, **kwargs):
         try:
             printer_ppd = PrinterPPD.objects.get_with_token(kwargs["token"])
@@ -1134,7 +1141,10 @@ class DownloadPrinterPPDView(View):
             logger.warning("Could not find printer PPD with token %s", kwargs["token"])
             raise Http404
         else:
-            return FileResponse(printer_ppd.file)
+            if self.redirect_to_files:
+                return FileResponse(printer_ppd.file)
+            else:
+                return HttpResponseRedirect(printer_ppd.file.url)
 
 
 # managedsoftwareupdate API
@@ -1316,11 +1326,6 @@ class MRManifestView(MRNameView):
                 event_payload["sub_manifest"]["name"] = sub_manifest_name
         if manifest_data:
             return HttpResponse(manifest_data, content_type="application/xml")
-
-
-def file_storage_has_signed_urls():
-    # TODO better detection!
-    return get_storage_class().__name__ in ('S3Boto3Storage', 'GoogleCloudStorage')
 
 
 class MRPackageView(MRNameView):
