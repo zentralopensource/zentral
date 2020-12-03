@@ -1,8 +1,10 @@
 from itertools import chain
 import logging
+import random
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.core.files.storage import get_storage_class
 from django.urls import reverse_lazy
 from django.http import (FileResponse,
                          Http404,
@@ -16,6 +18,7 @@ from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.utils.api_views import make_secret, SignedRequestHeaderJSONPostAPIView
+from django.utils.functional import lazy
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import (post_monolith_cache_server_update_request,
@@ -1140,7 +1143,8 @@ class DownloadPrinterPPDView(View):
 class MRBaseView(View):
     def post_monolith_munki_request(self, **payload):
         payload["manifest"] = {"id": self.manifest.id,
-                               "name": str(self.manifest)}
+                               "name": str(self.manifest),
+                               "version": self.manifest.version}
         post_monolith_munki_request(self.machine_serial_number, self.user_agent, self.ip, **payload)
 
     def get_secret(self, request):
@@ -1218,15 +1222,35 @@ class MRNameView(MRBaseView):
             model = key = None
         return model, key
 
+    def get_cache_key(self, model, key):
+        items = ["monolith",
+                 self.manifest.pk, self.manifest.version]
+        items.extend(sorted(t.id for t in self.tags))
+        items.append(model)
+        if isinstance(key, list):
+            items.extend(key)
+        else:
+            items.append(key)
+        return ".".join(str(i) for i in items)
+
     def get(self, request, *args, **kwargs):
-        event_payload = {"type": self.event_payload_type}
-        model, key = self.get_request_args(kwargs["name"])
+        name = kwargs["name"]
+        event_payload = {"type": self.event_payload_type,
+                         "name": name}
+        model, key = self.get_request_args(name)
         if model is None or key is None:
             error = True
             response = HttpResponseForbidden("No no no!")
         else:
-            event_payload["subtype"] = model
-            response = self.do_get(model, key, event_payload)
+            cache_key = self.get_cache_key(model, key)
+            event_payload.update({
+                "subtype": model,
+                "cache": {
+                    "key": cache_key,
+                    "hit": False
+                }
+            })
+            response = self.do_get(model, key, cache_key, event_payload)
             if not response:
                 error = True
                 response = HttpResponseNotFound("Not found!")
@@ -1240,14 +1264,14 @@ class MRNameView(MRBaseView):
 class MRCatalogView(MRNameView):
     event_payload_type = "catalog"
 
-    def do_get(self, model, key, event_payload):
-        catalog_data = None
-        if model == "manifest_catalog":
-            # intercept calls for special enrollment catalog
-            manifest_pk = int(key)
-            if manifest_pk == self.manifest.pk:
+    def do_get(self, model, key, cache_key, event_payload):
+        if model == "manifest_catalog" and key == self.manifest.pk:
+            catalog_data = cache.get(cache_key)
+            if catalog_data is None:
                 catalog_data = self.manifest.serialize_catalog(self.tags)
-        if catalog_data:
+                cache.set(cache_key, catalog_data, timeout=None)
+            else:
+                event_payload["cache"]["hit"] = True
             return HttpResponse(catalog_data, content_type="application/xml")
 
 
@@ -1263,36 +1287,81 @@ class MRManifestView(MRNameView):
             key = self.manifest.id
         return model, key
 
-    def do_get(self, model, key, event_payload):
+    def do_get(self, model, key, cache_key, event_payload):
         manifest_data = None
         if model == "manifest":
-            manifest_data = self.manifest.serialize(self.tags)
+            manifest_data = cache.get(cache_key)
+            if manifest_data is None:
+                manifest_data = self.manifest.serialize(self.tags)
+                cache.set(cache_key, manifest_data, timeout=None)
+            else:
+                event_payload["cache"]["hit"] = True
         elif model == "sub_manifest":
-            sm_id = int(key)
-            # verify machine access to sub manifest and respond
-            sub_manifest = self.manifest.sub_manifest(sm_id, self.tags)
+            sm_id = key
             event_payload["sub_manifest"] = {"id": sm_id}
-            if sub_manifest:
-                event_payload["sub_manifest"]["name"] = sub_manifest.name
-                manifest_data = sub_manifest.serialize()
+            sub_manifest_name = None
+            try:
+                sub_manifest_name, manifest_data = cache.get(cache_key)
+            except TypeError:
+                # verify machine access to sub manifest and respond
+                sub_manifest = self.manifest.sub_manifest(sm_id, self.tags)
+                if sub_manifest:
+                    sub_manifest_name = sub_manifest.name
+                    manifest_data = sub_manifest.serialize()
+                # set the cache value, even if sub_manifest_name and manifest_data are None
+                cache.set(cache_key, (sub_manifest_name, manifest_data), timeout=None)
+            else:
+                event_payload["cache"]["hit"] = True
+            if sub_manifest_name:
+                event_payload["sub_manifest"]["name"] = sub_manifest_name
         if manifest_data:
             return HttpResponse(manifest_data, content_type="application/xml")
 
 
+def file_storage_has_signed_urls():
+    # TODO better detection!
+    return get_storage_class().__name__ in ('S3Boto3Storage', 'GoogleCloudStorage')
+
+
 class MRPackageView(MRNameView):
     event_payload_type = "package"
+    redirect_to_files = lazy(file_storage_has_signed_urls)()
 
-    def do_get(self, model, key, event_payload):
+    def _get_cache_server(self):
+        cache_key = f"monolith.{self.manifest.pk}.cache-servers"
+        cache_servers = cache.get(cache_key)
+        if cache_servers is None:
+            cache_servers = list(CacheServer.objects.get_current_for_manifest(self.manifest))
+            cache.set(cache_key, cache_servers, timeout=int((CacheServer.MAX_AGE / 2).total_seconds()))
+        if cache_servers:
+            try:
+                return random.choice([cs for cs in cache_servers if cs.ip == self.ip])
+            except IndexError:
+                return
+
+    def do_get(self, model, key, cache_key, event_payload):
         if model == "enrollment_pkg":
             # intercept calls for mbu enrollment packages
-            mep_id = int(key)
+            mep_id = key
             event_payload["manifest_enrollment_package"] = {"id": mep_id}
-            try:
-                mep = ManifestEnrollmentPackage.objects.get(manifest=self.manifest, pk=mep_id)
-            except ManifestEnrollmentPackage.DoesNotExist:
-                return
-            event_payload["manifest_enrollment_package"]["filename"] = mep.file.name
-            return FileResponse(mep.file)
+            file_obj = cache.get(cache_key)
+            if file_obj is None:
+                try:
+                    mep = ManifestEnrollmentPackage.objects.get(manifest=self.manifest, pk=mep_id)
+                except ManifestEnrollmentPackage.DoesNotExist:
+                    pass
+                else:
+                    file_obj = mep.file
+                # set the cache value, even if file_obj is None
+                cache.set(cache_key, file_obj, timeout=None)
+            else:
+                event_payload["cache"]["hit"] = True
+            if file_obj:
+                event_payload["manifest_enrollment_package"]["filename"] = file_obj.name
+                if self.redirect_to_files:
+                    return HttpResponseRedirect(file_obj.url)
+                else:
+                    return FileResponse(mep.file)
         elif model == "sub_manifest_attachment":
             # intercept calls for sub manifest attachments
             # the sma key is sub_manifest, name, version, but we encoded only sub_manifest id and sma id
@@ -1300,41 +1369,67 @@ class MRPackageView(MRNameView):
             sm_id, sma_id = key
             event_payload["sub_manifest"] = {"id": sm_id}
             event_payload["sub_manifest_attachment"] = {"req_id": sma_id}
+            sub_manifest_name = sma = None
             try:
-                req_sma = SubManifestAttachment.objects.get(sub_manifest__id=sm_id, pk=sma_id)
-            except SubManifestAttachment.DoesNotExist:
-                return
-            event_payload["sub_manifest_attachment"]["name"] = req_sma.name
-            sub_manifest = self.manifest.sub_manifest(sm_id, self.tags)
-            if sub_manifest:
-                event_payload["sub_manifest"]["name"] = sub_manifest.name
-                try:
-                    sma = SubManifestAttachment.objects.active().get(sub_manifest=sub_manifest,
-                                                                     name=req_sma.name)
-                except SubManifestAttachment.DoesNotExist:
-                    pass
-                else:
-                    event_payload["sub_manifest_attachment"].update({"id": sma.id,
-                                                                     "filename": sma.file.name})
-                    return FileResponse(sma.file)
+                sub_manifest_name, sma = cache.get(cache_key)
+            except TypeError:
+                sub_manifest = self.manifest.sub_manifest(sm_id, self.tags)
+                if sub_manifest:
+                    sub_manifest_name = sub_manifest.name
+                    try:
+                        req_sma = SubManifestAttachment.objects.get(sub_manifest=sub_manifest, pk=sma_id)
+                    except SubManifestAttachment.DoesNotExist:
+                        pass
+                    else:
+                        try:
+                            sma = SubManifestAttachment.objects.active().get(sub_manifest=sub_manifest,
+                                                                             name=req_sma.name)
+                        except SubManifestAttachment.DoesNotExist:
+                            pass
+                # set the cache value, even if sub_manifest_name and sma are None
+                cache.set(cache_key, (sub_manifest_name, sma), timeout=None)
             else:
-                return
+                event_payload["cache"]["hit"] = True
+            if sub_manifest_name:
+                event_payload["sub_manifest"]["name"] = sub_manifest_name
+            if sma:
+                event_payload["sub_manifest_attachment"].update({
+                    "id": sma.id,
+                    "name": sma.name,
+                    "filename": sma.file.name
+                })
+                if self.redirect_to_files:
+                    return HttpResponseRedirect(sma.file.url)
+                else:
+                    return FileResponse(sma.file)
         elif model == "repository_package":
-            pk = int(key)
+            pk = key
             event_payload["repository_package"] = {"id": pk}
-            # TODO: cache
-            for pkginfo in chain(self.manifest.pkginfos_with_deps_and_updates(self.tags),
-                                 self.manifest.enrollment_packages_pkginfo_deps(self.tags),
-                                 self.manifest.printers_pkginfo_deps(self.tags),
-                                 self.manifest.default_managed_installs_deps(self.tags)):
-                if pkginfo.pk == pk:
-                    event_payload["repository_package"].update({"name": pkginfo.name.name,
-                                                                "version": pkginfo.version})
-                    cache_server = CacheServer.objects.get_current_for_manifest_and_ip(self.manifest, self.ip)
-                    return monolith_conf.repository.make_munki_repository_response(
-                        "pkgs", pkginfo.data["installer_item_location"],
-                        cache_server=cache_server
-                    )
+            pkginfo_name = pkginfo_version = pkginfo_iil = None
+            try:
+                pkginfo_name, pkginfo_version, pkginfo_iil = cache.get(cache_key)
+            except TypeError:
+                for pkginfo in chain(self.manifest.pkginfos_with_deps_and_updates(self.tags),
+                                     self.manifest.enrollment_packages_pkginfo_deps(self.tags),
+                                     self.manifest.printers_pkginfo_deps(self.tags),
+                                     self.manifest.default_managed_installs_deps(self.tags)):
+                    if pkginfo.pk == pk:
+                        pkginfo_name = pkginfo.name.name
+                        pkginfo_version = pkginfo.version
+                        pkginfo_iil = pkginfo.data["installer_item_location"]
+                        break
+                # set the cache value, even if pkginfo_name, pkginfo_version and pkginfo_iil are None
+                cache.set(cache_key, (pkginfo_name, pkginfo_version, pkginfo_iil), timeout=None)
+            else:
+                event_payload["cache"]["hit"] = True
+            if pkginfo_name is not None:
+                event_payload["repository_package"]["name"] = pkginfo_name
+            if pkginfo_version is not None:
+                event_payload["repository_package"]["version"] = pkginfo_version
+            if pkginfo_iil:
+                return monolith_conf.repository.make_munki_repository_response(
+                    "pkgs", pkginfo_iil, cache_server=self._get_cache_server()
+                )
 
 
 class MRRedirectView(MRBaseView):

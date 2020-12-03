@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 import logging
 import os.path
 import plistlib
-import random
 import re
 import unicodedata
 import urllib.parse
@@ -784,17 +783,12 @@ class ManifestEnrollmentPackage(models.Model):
 
 
 class CacheServerManager(models.Manager):
-    MAX_AGE = timedelta(minutes=5)
+    MAX_AGE = timedelta(minutes=10)
 
-    def get_current_for_manifest_and_ip(self, manifest, ip):
-        min_updated_at = timezone.now() - self.MAX_AGE
-        qs = self.filter(manifest=manifest,
-                         public_ip_address=ip,
-                         updated_at__gte=min_updated_at)
-        try:
-            return random.choice(qs)
-        except IndexError:
-            return None
+    def get_current_for_manifest(self, manifest):
+        min_updated_at = timezone.now() - self.MAX_AGE / 2
+        return self.filter(manifest=manifest,
+                           updated_at__gte=min_updated_at)
 
 
 class CacheServer(models.Model):
