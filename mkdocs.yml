@@ -2,7 +2,7 @@ site_name: Zentral
 theme: readthedocs
 
 repo_url: https://github.com/zentralopensource/zentral
-edit_uri: https://github.com/zentralopensource/zentral/edit/master/docs/
+edit_uri: https://github.com/zentralopensource/zentral/edit/main/docs/
 docs_dir: docs/
 site_dir: build/
 extra_css:
