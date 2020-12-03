@@ -113,6 +113,9 @@ def build_reports_payload(last_seen=None):
         if last_seen is not None and mir.sha1sum == last_seen:
             break
         payload.append(mir.serialize())
+        # stop after one report the first time
+        if last_seen is None:
+            break
     return payload
 
 
