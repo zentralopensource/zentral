@@ -33,25 +33,38 @@ class MunkiAPIViewsTestCase(TestCase):
                                 content_type="application/json",
                                 **extra)
 
-    def test_job_details_auth_err(self):
+    def test_job_details_missing_auth_header_err(self):
         response = self.post_as_json(reverse("munki:job_details"), {})
-        self.assertContains(response, "Could not authenticate the request", status_code=403)
+        self.assertContains(response, "Missing or empty Authorization header", status_code=403)
 
-    def test_job_details_old_way(self):
-        # TODO: deprecate and remove
-        machine_serial_number, api_secret = self.make_api_secret()
-        response = self.post_as_json(reverse("munki:job_details"),
-                                     {"machine_serial_number": machine_serial_number},
-                                     HTTP_ZENTRAL_API_SECRET=api_secret)
-        self.assertEqual(response.status_code, 200)
-        self.assertCountEqual(["principal_user_detection"], response.json().keys())
+    def test_job_details_wrong_auth_token_err(self):
+        response = self.post_as_json(reverse("munki:job_details"), {},
+                                     HTTP_AUTHORIZATION=get_random_string(23))
+        self.assertContains(response, "Wrong authorization token", status_code=403)
 
-    def test_job_details_old_way_conflict(self):
-        _, api_secret = self.make_api_secret()
+    def test_job_details_enrolled_machine_does_not_exist_err(self):
+        response = self.post_as_json(reverse("munki:job_details"), {},
+                                     HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(get_random_string(34)))
+        self.assertContains(response, "Enrolled machine does not exist", status_code=403)
+
+    def test_job_details_missing_serial_number_err(self):
+        enrolled_machine = self.make_enrolled_machine()
+        response = self.post_as_json(reverse("munki:job_details"), {},
+                                     HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertContains(response,
+                            f"No reported machine serial number. Request SN {enrolled_machine.serial_number}.",
+                            status_code=403)
+
+    def test_job_details_machine_conflict_err(self):
+        enrolled_machine = self.make_enrolled_machine()
+        data_sn = get_random_string(9)
         response = self.post_as_json(reverse("munki:job_details"),
-                                     {"machine_serial_number": get_random_string(3)},
-                                     HTTP_ZENTRAL_API_SECRET=api_secret)
-        self.assertContains(response, "different from enrollment SN", status_code=403)
+                                     {"machine_serial_number": data_sn},
+                                     HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertContains(response,
+                            (f"Zentral postflight reported SN {data_sn} "
+                             f"different from enrollment SN {enrolled_machine.serial_number}"),
+                            status_code=403)
 
     def test_job_details(self):
         enrolled_machine = self.make_enrolled_machine()

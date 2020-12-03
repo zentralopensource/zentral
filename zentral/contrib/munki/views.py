@@ -2,6 +2,7 @@ import json
 import logging
 from dateutil import parser
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
 from django.http import HttpResponseRedirect, JsonResponse
@@ -15,7 +16,7 @@ from zentral.contrib.inventory.models import MachineTag
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events, verify_enrollment_secret
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
-from zentral.utils.api_views import APIAuthError, JSONPostAPIView, SignedRequestHeaderJSONPostAPIView, verify_secret
+from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .forms import CreateInstallProbeForm, EnrollmentForm, UpdateInstallProbeForm
@@ -178,59 +179,41 @@ class BaseView(JSONPostAPIView):
     enrollment = None
 
     def get_enrolled_machine_token(self, request):
-        # new way
         authorization_header = request.META.get("HTTP_AUTHORIZATION")
         if not authorization_header:
-            return None
+            raise APIAuthError("Missing or empty Authorization header")
         if "MunkiEnrolledMachine" not in authorization_header:
             raise APIAuthError("Wrong authorization token")
         return authorization_header.replace("MunkiEnrolledMachine", "").strip()
 
     def verify_enrolled_machine_token(self, token):
+        cache_key = f"munki.{token}"
         try:
-            enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__secret__meta_business_unit")
-                                                       .get(token=token))
-        except EnrolledMachine.DoesNotExist:
-            raise APIAuthError("Enrolled machine does not exist")
-        else:
-            self.enrollment = enrolled_machine.enrollment
-            self.machine_serial_number = enrolled_machine.serial_number
-            self.business_unit = self.enrollment.secret.get_api_enrollment_business_unit()
-
-    def get_request_secret(self, request):
-        # old way
-        # TODO: deprecate and remove
-        return request.META.get(SignedRequestHeaderJSONPostAPIView.api_secret_header_key)
-
-    def verify_request_secret(self, secret):
-        data = verify_secret(secret, "zentral.contrib.munki")
-        self.machine_serial_number = data.get('machine_serial_number', None)
-        self.business_unit = data.get('business_unit', None)
+            self.enrollment, self.machine_serial_number, self.business_unit = cache.get(cache_key)
+        except TypeError:
+            try:
+                enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__secret__meta_business_unit")
+                                                           .get(token=token))
+            except EnrolledMachine.DoesNotExist:
+                raise APIAuthError("Enrolled machine does not exist")
+            else:
+                self.enrollment = enrolled_machine.enrollment
+                self.machine_serial_number = enrolled_machine.serial_number
+                self.business_unit = self.enrollment.secret.get_api_enrollment_business_unit()
+            cache.set(cache_key, (self.enrollment, self.machine_serial_number, self.business_unit), timeout=600)
 
     def check_request_secret(self, request, *args, **kwargs):
         enrolled_machine_token = self.get_enrolled_machine_token(request)
-        if enrolled_machine_token:
-            # new way
-            self.request_secret = enrolled_machine_token
-            self.verify_enrolled_machine_token(enrolled_machine_token)
-        else:
-            # old way
-            self.request_secret = self.get_request_secret(request)
-            if self.request_secret:
-                self.verify_request_secret(self.request_secret)
-            else:
-                raise APIAuthError("Could not authenticate the request")
+        self.verify_enrolled_machine_token(enrolled_machine_token)
 
 
 class JobDetailsView(BaseView):
     def check_data_secret(self, data):
-        if not self.machine_serial_number:
-            logger.error("No machine serial number. Request secret %s", self.request_secret)
-            return
-        msn = data['machine_serial_number']
+        msn = data.get('machine_serial_number')
         if not msn:
-            logger.error("No reported machine serial number. Request secret %s", self.request_secret)
-            return
+            raise APIAuthError(
+                f"No reported machine serial number. Request SN {self.machine_serial_number}."
+            )
         if msn != self.machine_serial_number:
             # the serial number reported by the zentral postflight is not the one in the enrollment secret.
             auth_err = "Zentral postflight reported SN {} different from enrollment SN {}".format(
