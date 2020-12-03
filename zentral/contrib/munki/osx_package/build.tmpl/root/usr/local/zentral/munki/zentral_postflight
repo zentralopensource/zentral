@@ -324,7 +324,8 @@ def iter_users():
                     except (TypeError, ValueError):
                         continue
                 user_d[user_attr] = value
-        if user_d["directory"].startswith("/Users"):
+        directory = user_d.get("directory")
+        if isinstance(directory, str) and directory.startswith("/Users"):
             yield user_d
 
 
