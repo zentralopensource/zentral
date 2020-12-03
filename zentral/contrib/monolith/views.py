@@ -4,7 +4,7 @@ import random
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import default_storage, get_storage_class
 from django.urls import reverse_lazy
 from django.http import (FileResponse,
                          Http404,
@@ -1350,24 +1350,24 @@ class MRPackageView(MRNameView):
             # intercept calls for mbu enrollment packages
             mep_id = key
             event_payload["manifest_enrollment_package"] = {"id": mep_id}
-            file_obj = cache.get(cache_key)
-            if file_obj is None:
+            filename = cache.get(cache_key)
+            if filename is None:
                 try:
                     mep = ManifestEnrollmentPackage.objects.get(manifest=self.manifest, pk=mep_id)
                 except ManifestEnrollmentPackage.DoesNotExist:
                     pass
                 else:
-                    file_obj = mep.file
-                # set the cache value, even if file_obj is None
-                cache.set(cache_key, file_obj, timeout=None)
+                    filename = mep.file.name
+                # set the cache value, even if filename is None
+                cache.set(cache_key, filename, timeout=None)
             else:
                 event_payload["cache"]["hit"] = True
-            if file_obj:
-                event_payload["manifest_enrollment_package"]["filename"] = file_obj.name
+            if filename:
+                event_payload["manifest_enrollment_package"]["filename"] = filename
                 if self.redirect_to_files:
-                    return HttpResponseRedirect(file_obj.url)
+                    return HttpResponseRedirect(default_storage.url(filename))
                 else:
-                    return FileResponse(mep.file)
+                    return FileResponse(default_storage.open(filename))
         elif model == "sub_manifest_attachment":
             # intercept calls for sub manifest attachments
             # the sma key is sub_manifest, name, version, but we encoded only sub_manifest id and sma id
@@ -1404,10 +1404,11 @@ class MRPackageView(MRNameView):
                     "name": sma.name,
                     "filename": sma.file.name
                 })
+                # see https://github.com/django/django/commit/f600e3fad6e92d9fe1ad8b351dc8446415f24345
                 if self.redirect_to_files:
-                    return HttpResponseRedirect(sma.file.url)
+                    return HttpResponseRedirect(default_storage.url(sma.file.name))
                 else:
-                    return FileResponse(sma.file)
+                    return FileResponse(default_storage.open(sma.file.name))
         elif model == "repository_package":
             pk = key
             event_payload["repository_package"] = {"id": pk}
