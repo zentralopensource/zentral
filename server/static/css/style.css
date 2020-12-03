@@ -1,6 +1,10 @@
 textarea#id_body, textarea#id_query {font-family: Menlo,Monaco,Consolas,"Courier New",monospace}
 table.probe-panel tr td:first-child {font-weight:700; width:1%; white-space:nowrap; padding-right: 2em}
 #main-footer {padding:50px 0 0 0;}
+#deployment-info-header {padding:3px 10px;color:#777;font-size:11px}
+#deployment-info {padding:3px 10px 0 10px;font-size:11px;color:#333}
+.deployment-info-attr {font-weight:bold;}
+.deployment-info-attr:after {content:":"}
 
 div.item-form {margin: 1em 0;}
 

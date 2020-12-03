@@ -125,6 +125,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'base.middlewares.csp_middleware',
+    'base.middlewares.deployment_info_middleware',
 ]
 
 if MAX_PASSWORD_AGE_DAYS:

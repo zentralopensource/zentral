@@ -53,3 +53,22 @@ def csp_middleware(get_response):
         return response
 
     return middleware
+
+
+def deployment_info_middleware(get_response):
+    deployment_info = {}
+    try:
+        import base.deployment as deployment
+    except ImportError:
+        pass
+    else:
+        for attr in ("version", "image_id", "instance_id", "setup_at"):
+            val = getattr(deployment, attr, None)
+            if val is not None:
+                deployment_info[attr] = val
+
+    def middleware(request):
+        request.zentral_deployment = deployment_info
+        return get_response(request)
+
+    return middleware
