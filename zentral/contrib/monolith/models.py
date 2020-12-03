@@ -783,10 +783,8 @@ class ManifestEnrollmentPackage(models.Model):
 
 
 class CacheServerManager(models.Manager):
-    MAX_AGE = timedelta(minutes=10)
-
-    def get_current_for_manifest(self, manifest):
-        min_updated_at = timezone.now() - self.MAX_AGE / 2
+    def get_current_for_manifest(self, manifest, max_age):
+        min_updated_at = timezone.now() - timedelta(seconds=max_age)
         return self.filter(manifest=manifest,
                            updated_at__gte=min_updated_at)
 

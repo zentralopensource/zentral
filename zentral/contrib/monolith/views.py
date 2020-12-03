@@ -1331,8 +1331,9 @@ class MRPackageView(MRNameView):
         cache_key = f"monolith.{self.manifest.pk}.cache-servers"
         cache_servers = cache.get(cache_key)
         if cache_servers is None:
-            cache_servers = list(CacheServer.objects.get_current_for_manifest(self.manifest))
-            cache.set(cache_key, cache_servers, timeout=int((CacheServer.MAX_AGE / 2).total_seconds()))
+            max_age = 10 * 60
+            cache_servers = list(CacheServer.objects.get_current_for_manifest(self.manifest, max_age // 2))
+            cache.set(cache_key, cache_servers, timeout=max_age // 2)
         if cache_servers:
             try:
                 return random.choice([cs for cs in cache_servers if cs.ip == self.ip])
