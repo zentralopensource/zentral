@@ -33,7 +33,6 @@ class BaseWorker:
     counters = []
 
     def setup_metrics_exporter(self, *args, **kwargs):
-        self.log_info("run")
         self.metrics_exporter = kwargs.pop("metrics_exporter", None)
         if self.metrics_exporter:
             for name, label in self.counters:
