@@ -639,7 +639,7 @@ class ManifestsView(LoginRequiredMixin, ListView):
     def get(self, request, *args, **kwargs):
         self.form = ManifestSearchForm(request.GET)
         self.form.is_valid()
-        if self.get_queryset().count() == 1:
+        if self.form.has_changed() and self.get_queryset().count() == 1:
             return redirect(self.get_queryset().first())
         return super().get(request, *args, **kwargs)
 
