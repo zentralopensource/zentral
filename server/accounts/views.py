@@ -145,7 +145,10 @@ class NginxAuthRequestView(View):
             response.status_code = status_code
             return response
         else:
-            return HttpResponse("OK")
+            response = HttpResponse("OK")
+            response["X-Zentral-Username"] = request.user.username
+            response["X-Zentral-Email"] = request.user.email
+            return response
 
 
 class AddUserView(CanManageUsersMixin, FormView):

@@ -24,6 +24,8 @@ class AccountUsersViewsTestCase(TestCase):
         self.log_user_in()
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get("X-Zentral-Username"), self.user.username)
+        self.assertEqual(response.get("X-Zentral-Email"), self.user.email)
 
     def test_401(self):
         response = self.client.get(self.url)
