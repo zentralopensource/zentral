@@ -18,7 +18,7 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
     installer_item_size = len(package_content)
     installed_size = installer_item_size * 10  # TODO: bug
     postinstall_script = (
-        '#!/usr/bin/python\n'
+        '#!/usr/local/munki/munki-python\n'
         'import os\n'
         '\n'
         'RECEIPTS_DIR = "/var/db/receipts/"\n'
