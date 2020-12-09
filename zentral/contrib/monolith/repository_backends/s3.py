@@ -1,9 +1,16 @@
+from datetime import datetime, timedelta
 import logging
 import os.path
 import boto3
 from botocore.client import Config
+from botocore.signers import CloudFrontSigner
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 from django.http import HttpResponseRedirect
 from django.utils.functional import cached_property
+from requests.utils import requote_uri
 from zentral.contrib.monolith.exceptions import RepositoryError
 from zentral.utils.boto3 import make_refreshable_assume_role_session
 from .base import BaseRepository
@@ -48,6 +55,38 @@ class Repository(BaseRepository):
         # endpoint URL (optional, use it for special S3 like services)
         self.endpoint_url = config.get("endpoint_url")
 
+        # cloudfront (optional)
+        self.cloudfront_signer = None
+        cloudfront_cfg = config.get("cloudfront")
+        if not cloudfront_cfg:
+            return
+        self.cloudfront_domain = cloudfront_cfg.get("domain")
+        if not self.cloudfront_domain:
+            logger.error("Missing cloudfront domain")
+            return
+        key_id = cloudfront_cfg.get("key_id")
+        if not key_id:
+            logger.error("Missing cloudfront Key ID")
+            return
+        privkey_pem = cloudfront_cfg.get("privkey_pem")
+        if not privkey_pem:
+            logger.error("Missing cloudfront privkey PEM")
+            return
+        try:
+            privkey = serialization.load_pem_private_key(
+                privkey_pem.encode("utf-8"),
+                password=None,
+                backend=default_backend()
+            )
+        except Exception:
+            logger.exception("Cloud not load cloudfront privkey")
+            return
+
+        def rsa_signer(message):
+            return privkey.sign(message, padding.PKCS1v15(), hashes.SHA1())
+
+        self.cloudfront_signer = CloudFrontSigner(key_id, rsa_signer)
+
     @cached_property
     def _session(self):
         main_session = boto3.Session(**self.credentials)
@@ -89,17 +128,23 @@ class Repository(BaseRepository):
         return filepath
 
     def make_munki_repository_response(self, section, name, cache_server=None):
-        # max AWS sig v4 = 7 days
-        # For EC2 credentials:
-        # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
-        # Last retrieved: 2020-10-22
-        # "We make new credentials available at least five minutes before the expiration of the old credentials"
         expires_in = 180  # 3 minutes
         key = os.path.join(self.prefix, section, name)
-        url = self._client.generate_presigned_url('get_object',
-                                                  Params={'Bucket': self.bucket,
-                                                          'Key': key},
-                                                  ExpiresIn=expires_in)
-        if cache_server:
-            url = cache_server.get_cache_url(url)
+        if self.cloudfront_signer:
+            url = self.cloudfront_signer.generate_presigned_url(
+                requote_uri(f"https://{self.cloudfront_domain}/{key}"),
+                date_less_than=datetime.utcnow() + timedelta(seconds=expires_in)
+            )
+        else:
+            # max AWS sig v4 = 7 days
+            # For EC2 credentials:
+            # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
+            # Last retrieved: 2020-10-22
+            # "We make new credentials available at least five minutes before the expiration of the old credentials"
+            url = self._client.generate_presigned_url('get_object',
+                                                      Params={'Bucket': self.bucket,
+                                                              'Key': key},
+                                                      ExpiresIn=expires_in)
+            if cache_server:
+                url = cache_server.get_cache_url(url)
         return HttpResponseRedirect(url)
