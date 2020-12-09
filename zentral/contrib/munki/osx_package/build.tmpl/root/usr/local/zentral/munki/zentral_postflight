@@ -167,10 +167,9 @@ class SystemProfilerReport(object):
             raise ValueError('0 or more than one item in a SPSoftwareDataType output!')
         item_d = data['_items'][0]
 
-        try:
-            system_info['computer_name'] = item_d['local_host_name']
-        except KeyError:
-            pass
+        # preferable name to track since end users screw with other labels
+        # oddly, falls back to hostname's bonjour-alike output if scutil would return Not Set
+        system_info['computer_name'] = os.uname()[1]
 
         # uptime
         # up 7:21:19:44
