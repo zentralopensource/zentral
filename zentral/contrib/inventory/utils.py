@@ -12,6 +12,7 @@ import zipfile
 from django import forms
 from django.db import connection
 from django.http import QueryDict
+from django.urls import reverse
 from django.utils.text import slugify
 from prometheus_client import CollectorRegistry, Gauge
 import xlsxwriter
@@ -909,14 +910,28 @@ class MSQuery:
         return "-".join(f.serialize() for f in chain(self.filters, [filter_to_add])
                         if f and f.optional and not f == filter_to_remove and (include_hidden or not f.hidden))
 
-    def get_url(self):
+    def get_url(self, page=None):
         qd = self.query_dict.copy()
         qd["sf"] = self.serialize_filters()
+        if page is not None:
+            qd["page"] = page
         return "?{}".format(urllib.parse.urlencode(qd))
 
     def redirect_url(self):
         if self._redirect:
+            # bad filters
             return self.get_url()
+        elif self.count() < (self.page - 1) * self.paginate_by:
+            # out of the page range. redirect to first page.
+            return self.get_url(page=1)
+        elif (
+            self.count() == 1 and
+            any(isinstance(f.value, str) and f.value > "" for f in self.filters if f.free_input)
+        ):
+            # redirect to machine
+            for serial_number, machine_snapshots in self.fetch():
+                for machine_snapshot in machine_snapshots:
+                    return reverse("inventory:machine", args=(machine_snapshot["urlsafe_serial_number"],))
 
     def get_canonical_query_dict(self):
         # used to serialize the state of the msquery object
