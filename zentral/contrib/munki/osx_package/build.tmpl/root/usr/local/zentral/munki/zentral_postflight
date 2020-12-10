@@ -169,7 +169,7 @@ class SystemProfilerReport(object):
 
         # preferable name to track since end users screw with other labels
         # oddly, falls back to hostname's bonjour-alike output if scutil would return Not Set
-        system_info['computer_name'] = os.uname()[1]
+        system_info['computer_name'] = os.uname().nodename
 
         # uptime
         # up 7:21:19:44
