@@ -237,7 +237,7 @@ class CarverContinueView(BaseNodeView):
                                  "session_finished": session_finished,
                                  "session_id": self.session_id}])
         if session_finished:
-            build_carve_session_archive.apply_async((self.session_id,))
+            transaction.on_commit(lambda: build_carve_session_archive.apply_async((self.session_id,)))
         return {}
 
 
