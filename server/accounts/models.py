@@ -136,4 +136,7 @@ class UserU2F(UserVerificationDevice):
         return reverse("verify_u2f")
 
     def test_user_agent(self, user_agent):
-        return user_agent and 'safari' not in user_agent.lower()
+        if user_agent:
+            user_agent = user_agent.lower()
+            return 'safari' not in user_agent or 'chrome' in user_agent
+        return False
