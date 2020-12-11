@@ -1,13 +1,16 @@
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponse, HttpResponseRedirect
+from django.core.files.storage import default_storage
+from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
+from django.utils.functional import lazy
 from django.views import View
 from django.views.generic import ListView
 from django.views.generic.edit import FormView
 from zentral.core.probes.models import ProbeSource
 from zentral.contrib.osquery.forms import CreateFileCarveProbeForm, FileCarveForm
 from zentral.contrib.osquery.models import CarveSession
+from zentral.utils.storage import file_storage_has_signed_urls
 
 logger = logging.getLogger('zentral.contrib.osquery.views.osquery_file_carve_probe')
 
@@ -60,14 +63,20 @@ class UpdateFileCarveProbePathView(LoginRequiredMixin, FormView):
 
 
 class DownloadFileCarveSessionArchiveView(LoginRequiredMixin, View):
+    redirect_to_files = lazy(file_storage_has_signed_urls)()
+
     def dispatch(self, request, *args, **kwargs):
         self.carve_session = get_object_or_404(CarveSession, pk=kwargs["session_id"], archive__isnull=False)
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
-        response = HttpResponse(self.carve_session.archive, content_type='application/x-tar')
-        response['Content-Disposition'] = 'attachment; filename={}'.format(self.carve_session.get_archive_name())
-        return response
+        if self.redirect_to_files:
+            return HttpResponseRedirect(default_storage.url(self.carve_session.archive.name))
+        else:
+            return FileResponse(self.carve_session.archive,
+                                content_type='application/x-tar',
+                                as_attachment=True,
+                                filename=self.carve_session.get_archive_name())
 
 
 class FileCarveProbeSessionsView(LoginRequiredMixin, ListView):

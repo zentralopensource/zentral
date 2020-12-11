@@ -4,13 +4,14 @@ import random
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
-from django.core.files.storage import default_storage, get_storage_class
+from django.core.files.storage import default_storage
 from django.urls import reverse_lazy
 from django.http import (FileResponse,
                          Http404,
                          HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.functional import lazy
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
@@ -18,8 +19,8 @@ from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.utils.api_views import make_secret, SignedRequestHeaderJSONPostAPIView
-from django.utils.functional import lazy
 from zentral.utils.http import user_agent_and_ip_address_from_request
+from zentral.utils.storage import file_storage_has_signed_urls
 from .conf import monolith_conf
 from .events import (post_monolith_cache_server_update_request,
                      post_monolith_enrollment_event,
@@ -1123,11 +1124,6 @@ class CacheServersView(SignedRequestHeaderJSONPostAPIView):
             raise SuspiciousOperation("Posted json data invalid")
 
 
-def file_storage_has_signed_urls():
-    # TODO better detection!
-    return get_storage_class().__name__ in ('S3Boto3Storage', 'GoogleCloudStorage')
-
-
 class DownloadPrinterPPDView(View):
     redirect_to_files = lazy(file_storage_has_signed_urls)()
 
@@ -1142,9 +1138,9 @@ class DownloadPrinterPPDView(View):
             raise Http404
         else:
             if self.redirect_to_files:
-                return FileResponse(printer_ppd.file)
+                return HttpResponseRedirect(default_storage.url(printer_ppd.file.name))
             else:
-                return HttpResponseRedirect(printer_ppd.file.url)
+                return FileResponse(printer_ppd.file)
 
 
 # managedsoftwareupdate API
