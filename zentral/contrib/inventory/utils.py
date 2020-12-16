@@ -1155,6 +1155,8 @@ class MSQuery:
             "Name",
             "Hardware model",
             "OS",
+            "Principal user principal name",
+            "Principal user display name",
             "tags"
         ]
         row_idx = 0
@@ -1189,6 +1191,13 @@ class MSQuery:
                 else:
                     os_version_dn = ""
                 row.append(os_version_dn)
+                principal_user = machine_snapshot.get("principal_user")
+                if principal_user:
+                    pu_pn = principal_user.get("principal_name") or ""
+                    pu_dn = principal_user.get("display_name") or ""
+                else:
+                    pu_pn = pu_dn = ""
+                row.extend([pu_pn, pu_dn])
                 row.append(
                     "|".join(dn for dn in (t.get("display_name") for t in machine_snapshot.get("tags", [])) if dn)
                 )
