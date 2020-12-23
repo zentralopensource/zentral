@@ -350,7 +350,7 @@ class BaseSyncView(View):
         if not payload:
             return None
         try:
-            if request.META.get('HTTP_CONTENT_ENCODING', None) == "zlib":
+            if request.META.get('HTTP_CONTENT_ENCODING', None) in ("zlib", "deflate"):
                 payload = zlib.decompress(payload)
             return json.loads(payload)
         except ValueError:
