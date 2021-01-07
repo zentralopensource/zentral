@@ -40,7 +40,7 @@
       {% for header, link in table_headers %}
       <th>
         {% if link %}
-        <a href="{{ link }}">{{ header }}</a>
+        <a href="{{ link }}" style="white-space:nowrap;">{{ header }}</a>
         {% else %}
         {{ header }}
         {% endif %}
