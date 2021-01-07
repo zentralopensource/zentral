@@ -1,6 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db import connection
+from django.http import QueryDict
 from django.utils.text import slugify
 from zentral.utils.forms import validate_sha256
 from .models import (EnrollmentSecret,
@@ -175,11 +176,46 @@ class MacOSAppSearchForm(forms.Form):
                               help_text="sha 256 signature of the binary or "
                                         "one of the certificate in the chain")
     page = forms.IntegerField(required=False)
+    order = forms.ChoiceField(choices=[], required=False)
+    order_mapping = {"bn": "bundle_name",
+                     "mc": "machine_count"}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["order"].choices = [(f"{k}-{d}", f"{k}-{d}") for k in self.order_mapping for d in ("a", "d")]
+
+    def _get_current_order(self):
+        try:
+            order_attr_abv, order_dir = self.cleaned_data["order"].split("-")
+            return self.order_mapping[order_attr_abv], "ASC" if order_dir == "a" else "DESC"
+        except (KeyError, TypeError, ValueError):
+            return "bundle_name", "ASC"
+
+    def get_header_label_and_link(self, attr, label):
+        reversed_order_mapping = {v: k for k, v in self.order_mapping.items()}
+        link = None
+        attr_abv = reversed_order_mapping.get(attr)
+        if attr_abv:
+            order_attr, order_dir = self._get_current_order()
+            if order_attr == attr:
+                label = "{} {}".format("↑" if order_dir == "ASC" else "↓", label)
+                # reverse order link
+                order = "{}-{}".format(attr_abv, "d" if order_dir == "ASC" else "a")
+            else:
+                # ASC order link
+                order = f"{attr_abv}-a"
+            qd = QueryDict(mutable=True)
+            qd.update({k: v for k, v in self.data.items() if v and k != "page"})
+            qd["order"] = order
+            link = "?{}".format(qd.urlencode())
+        return label, link
 
     def search(self, limit):
         args = []
-        query = ("SELECT DISTINCT a.*, "
-                 "string_agg(distinct src.name, ',  ') as source_names, count(*) OVER() AS full_count "
+        query = ("SELECT a.id, a.bundle_id, a.bundle_name, a.bundle_version, a.bundle_version_str, "
+                 "string_agg(distinct src.name, ',  ') as source_names, "
+                 "count(distinct cms.serial_number) as machine_count, "
+                 "count(*) over () as full_count "
                  "FROM inventory_osxapp AS a "
                  "JOIN inventory_osxappinstance AS i ON (i.app_id = a.id) "
                  "JOIN inventory_machinesnapshot_osx_app_instances AS si ON (si.osxappinstance_id = i.id) "
@@ -214,15 +250,18 @@ class MacOSAppSearchForm(forms.Form):
             args.append(sha_256)
             wheres.append("(fc.id is NULL AND i.sha_256 = %s) OR (fc.id is not NULL)")
         if wheres:
-            query = "{} WHERE {}".format(query,
-                                         " AND ".join("({})".format(w) for w in wheres))
-        # pagination / ordering
+            query = "{} WHERE {}".format(query, " AND ".join(f"({w})" for w in wheres))
+        # ordering / pagination
+        order_attr, order_dir = self._get_current_order()
+        order_str = f"{order_attr} {order_dir}"
+        if order_attr == "machine_count":
+            order_str = f"{order_str}, a.bundle_name ASC"
         page = self.cleaned_data['page']
         offset = (page - 1) * limit
         args.extend([offset, limit])
-        query = ("{} GROUP BY a.id "
-                 "ORDER BY a.bundle_name, a.bundle_id, a.bundle_version_str, a.bundle_version "
-                 "OFFSET %s LIMIT %s").format(query)
+        query = (f"{query} GROUP BY a.id, a.bundle_id, a.bundle_name, a.bundle_version, a.bundle_version_str "
+                 f"ORDER BY {order_str}, a.bundle_id, a.bundle_version_str, a.bundle_version "
+                 "OFFSET %s LIMIT %s")
         cursor = connection.cursor()
         cursor.execute(query, args)
         columns = [col[0] for col in cursor.description]

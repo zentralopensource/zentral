@@ -708,6 +708,10 @@ class MacOSAppsView(LoginRequiredMixin, TemplateView):
         breadcrumbs.append((None, "page {} of {}".format(self.search_form.cleaned_data['page'],
                                                          ctx.get('total_pages', 1))))
         ctx['breadcrumbs'] = breadcrumbs
+        ctx['table_headers'] = [self.search_form.get_header_label_and_link("bundle_name", "Bundle name")]
+        ctx['table_headers'].extend((name, None) for name in ("Bundle ID", "Version", "Version str."))
+        ctx['table_headers'].append(self.search_form.get_header_label_and_link("machine_count", "Machines"))
+        ctx['table_headers'].append(("Sources", None))
         return ctx
 
 

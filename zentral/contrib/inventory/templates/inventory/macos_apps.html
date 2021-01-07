@@ -37,28 +37,35 @@
 <div class="table-reponsive">
   <table class="table">
     <thead>
-      <th>Bundle ID</th>
-      <th>Bundle name</th>
-      <th>Bundle version</th>
-      <th>Bundle version str</th>
-      <th>Sources</th>
+      {% for header, link in table_headers %}
+      <th>
+        {% if link %}
+        <a href="{{ link }}">{{ header }}</a>
+        {% else %}
+        {{ header }}
+        {% endif %}
+      </th>
+      {% endfor %}
     </thead>
     <tbody>
     {% for macos_app in object_list %}
     <tr>
       <td>
-          {{ macos_app.bundle_id|default:"-" }}
+          <a href="{% url 'inventory:macos_app' macos_app.id %}">
+              {{ macos_app.bundle_name|default:"-" }}
+          </a>
       </td>
       <td>
-          <a href="{% url 'inventory:macos_app' macos_app.id %}">
-              {{ macos_app.bundle_name }}
-          </a>
+          {{ macos_app.bundle_id|default:"-" }}
       </td>
       <td>
           {{ macos_app.bundle_version|default:"-" }}
       </td>
       <td>
           {{ macos_app.bundle_version_str }}
+      </td>
+      <td>
+          {{ macos_app.machine_count }}
       </td>
       <td>
           {{ macos_app.source_names }}
