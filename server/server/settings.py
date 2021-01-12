@@ -162,21 +162,26 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'ATOMIC_REQUESTS': True,
-        'CONN_MAX_AGE': 3600
+        'CONN_MAX_AGE': 3600,
+        'HOST': os.env.get('ZENTRAL_DB_HOST'),
+        'PORT': '5432',
+        'NAME': 'zentral',
+        'USER': os.env.get('ZENTRAL_DB_USER'),
+        'PASSWORD': os.env.get('ZENTRAL_DB_PASS')
     }
 }
-for key, default in (('HOST', None),
-                     ('PORT', None),
+for key, default in (('HOST', os.env.get('ZENTRAL_DB_HOST')),
+                     ('PORT', 5432),
                      ('NAME', 'zentral'),
-                     ('USER', 'zentral'),
-                     ('PASSWORD', None),):
+                     ('USER', os.env.get('ZENTRAL_DB_USER')),
+                     ('PASSWORD', os.env.get('ZENTRAL_DB_PASS')),):
     config_key = 'POSTGRES_{}'.format(key)
     val = django_zentral_settings.get(config_key, default)
     if val:
         DATABASES['default'][key] = val
 
 CELERY_RESULT_BACKEND = 'django-db'
-CELERY_BROKER_URL = django_zentral_settings.get("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
+CELERY_BROKER_URL = django_zentral_settings.get("CELERY_BROKER_URL", os.env.get('ZENTRAL_RABBITMQ_CONN'))
 CELERY_BROKER_TRANSPORT_OPTIONS = django_zentral_settings.get("CELERY_BROKER_TRANSPORT_OPTIONS", {})
 
 # Internationalization

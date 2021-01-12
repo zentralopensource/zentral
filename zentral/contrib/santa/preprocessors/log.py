@@ -24,8 +24,6 @@ class SantaLogPreprocessor(object):
             event_data = parse_santa_log_message(raw_event_d["message"])
         except Exception:
             logger.exception("Could not process santa_log raw event")
-            if raw_event_d:
-                save_dead_letter(raw_event_d, "santa log preprocessing error")
         else:
             if event_data:
                 yield from SantaLogEvent.build_from_machine_request_payloads(

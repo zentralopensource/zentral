@@ -211,7 +211,6 @@ class StoreWorker(ConsumerMixin, BaseWorker):
             self.event_store.store(body)
         except Exception:
             logger.exception("Could add event to store %s", self.event_store.name)
-            save_dead_letter(body, "event store {} error".format(self.event_store.name))
             message.reject()
         else:
             message.ack()

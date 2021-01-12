@@ -1403,7 +1403,6 @@ def commit_machine_snapshot_and_trigger_events(tree):
         machine_snapshot_commit, machine_snapshot = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
     except Exception:
         logger.exception("Could not commit machine snapshot")
-        save_dead_letter(tree, "machine snapshot commit error")
     else:
         if machine_snapshot_commit:
             post_inventory_events(machine_snapshot_commit.serial_number,

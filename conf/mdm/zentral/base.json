@@ -1,17 +1,17 @@
 {
   "api": {
-    "tls_hostname": "https://zentral",
+    "tls_hostname": "{{ env:ZENTRAL_URL }}",
     "tls_hostname_for_client_cert_auth": "https://zentral-clicertauth",
     "tls_server_certs": "/zentral/conf/start/docker/tls/zentral_fullchain.crt",
     "tls_server_key": "/zentral/conf/start/docker/tls/zentral.key",
-    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
+    "secret": "{{ env:ZENTRAL_URL }}"
   },
   "extra_links": [
     {"anchor_text": "Prometheus",
-     "url": "https://zentral/prometheus/"}
+     "url": "$ZENTRAL_URL/prometheus/"}
   ],
   "django": {
-    "SECRET_KEY": "DJANGO SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
+    "SECRET_KEY": "$DJANGOSECRET",
     "DEBUG": true,
     "MEDIA_ROOT": "/var/zentral",
     "ADMINS": [
@@ -30,17 +30,17 @@
   },
   "queues": {
     "backend": "zentral.core.queues.backends.kombu",
-    "backend_url": "amqp://guest:guest@rabbitmq:5672//"
+    "backend_url": "{{ env:RABBIT_MQ_CONN }}"
   },
   "stores": {
     "elasticsearch": {
       "frontend": true,
       "backend": "zentral.core.stores.backends.elasticsearch",
       "hosts": [
-        "http://elastic:9200"
+        "{{ env:ES_URL }}"
       ],
       "index": "zentral-events",
-      "kibana_base_url": "https://zentral/kibana/"
+      "kibana_base_url": "{{ env:KIBANA_URL }}"
     }
   },
   "processor_workers": {
@@ -55,7 +55,7 @@
   },
   "apps": {
     "zentral.contrib.inventory": {
-      "prometheus_bearer_token": "CHANGE ME!!!",
+      "prometheus_bearer_token": "{{ env:PROMETHEUS_BEARER_TOKEN }}",
       "clients": [
         {
           "backend": "zentral.contrib.inventory.clients.dummy"
