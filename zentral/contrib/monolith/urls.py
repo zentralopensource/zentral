@@ -99,9 +99,11 @@ urlpatterns = [
         views.DeleteManifestPrinterView.as_view(), name='delete_manifest_printer'),
 
     # manifest sub manifests
-    url(r'^manifests/(?P<pk>\d+)/add_sub_manifest/$',
+    url(r'^manifests/(?P<pk>\d+)/sub_manifests/add/$',
         views.AddManifestSubManifestView.as_view(), name='add_manifest_sub_manifest'),
-    url(r'^manifests/(?P<pk>\d+)/delete_sub_manifest/(?P<m2m_pk>\d+)/$',
+    url(r'^manifests/(?P<pk>\d+)/sub_manifests/(?P<m2m_pk>\d+)/edit/$',
+        views.EditManifestSubManifestView.as_view(), name='edit_manifest_sub_manifest'),
+    url(r'^manifests/(?P<pk>\d+)/sub_manifests/(?P<m2m_pk>\d+)/delete/$',
         views.DeleteManifestSubManifestView.as_view(), name='delete_manifest_sub_manifest'),
 
     # manifest cache servers

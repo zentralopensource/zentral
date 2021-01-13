@@ -28,10 +28,9 @@ from .events import (post_monolith_cache_server_update_request,
                      post_monolith_sync_catalogs_request)
 from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
-                    AddManifestSubManifestForm,
+                    AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
                     CacheServersPostForm,
                     ConfigureCacheServerForm,
-                    DeleteManifestSubManifestForm,
                     EnrollmentForm,
                     ManifestForm, ManifestPrinterForm, ManifestSearchForm,
                     PkgInfoSearchForm,
@@ -1054,7 +1053,28 @@ class DeleteManifestPrinterView(LoginRequiredMixin, DeleteView):
 
 class AddManifestSubManifestView(BaseManifestM2MView):
     form_class = AddManifestSubManifestForm
-    template_name = "monolith/add_manifest_sub_manifest.html"
+    template_name = "monolith/manifest_sub_manifest_form.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Add sub manifest"
+        return ctx
+
+
+class EditManifestSubManifestView(BaseManifestM2MView):
+    form_class = EditManifestSubManifestForm
+    template_name = "monolith/manifest_sub_manifest_form.html"
+    m2m_model = SubManifest
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["sub_manifest"] = self.m2m_object
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = f"Edit {self.m2m_object} sub manifest tags"
+        return ctx
 
 
 class DeleteManifestSubManifestView(BaseManifestM2MView):

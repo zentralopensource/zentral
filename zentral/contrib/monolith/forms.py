@@ -350,6 +350,22 @@ class AddManifestSubManifestForm(forms.Form):
         return msn
 
 
+class EditManifestSubManifestForm(forms.Form):
+    tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.none(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        self.manifest = kwargs.pop('manifest')
+        self.msm = ManifestSubManifest.objects.get(manifest=self.manifest, sub_manifest=kwargs.pop("sub_manifest"))
+        super().__init__(*args, **kwargs)
+        field = self.fields['tags']
+        field.queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
+        field.initial = self.msm.tags.all()
+
+    def save(self):
+        self.msm.tags.set(self.cleaned_data['tags'])
+        return self.msm
+
+
 class DeleteManifestSubManifestForm(forms.Form):
     sub_manifest = forms.ModelChoiceField(queryset=SubManifest.objects.all(),
                                           widget=forms.HiddenInput)
