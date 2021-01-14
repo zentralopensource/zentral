@@ -22,6 +22,7 @@ class Configuration(models.Model):
     PREFLIGHT_MONITOR_MODE = "MONITOR"
     PREFLIGHT_LOCKDOWN_MODE = "LOCKDOWN"
     DEFAULT_BATCH_SIZE = 50
+    DEFAULT_FULL_SYNC_INTERVAL = 600
     LOCAL_CONFIGURATION_ATTRIBUTES = {
         'client_mode',
         'file_changes_regex',
@@ -30,6 +31,7 @@ class Configuration(models.Model):
         'blocked_path_regex',
         'enable_page_zero_protection',
         'enable_bad_signature_protection',
+        'enable_sysx_cache',
         'more_info_url',
         'event_detail_url',
         'event_detail_text',
@@ -44,6 +46,7 @@ class Configuration(models.Model):
     SYNC_SERVER_CONFIGURATION_ATTRIBUTES = {
         # 'client_mode', has to be translated to a string value
         'batch_size',
+        'full_sync_interval',
         'allowed_path_regex',
         'blocked_path_regex',
         'enable_bundles',
@@ -85,6 +88,12 @@ class Configuration(models.Model):
         default=False,
         help_text="When enabled, a binary that is signed but has a bad signature (cert revoked, binary tampered with, "
                   "etc.) will be blocked regardless of client-mode unless a binary whitelist."
+    )
+    enable_sysx_cache = models.BooleanField(
+        "Enable system extension cache",
+        default=False,
+        help_text="When enabled, a self-managed cache for decision responses will be used to help improve performance "
+                  "when running Santa as a system extension alongside another system extension."
     )
     more_info_url = models.URLField(
         blank=True,
@@ -160,13 +169,19 @@ class Configuration(models.Model):
     )
 
     # the extra ones only provided via server sync
-    # https://github.com/google/santa/blob/master/Docs/deployment/configuration.md#sync-server-provided-configuration
+    # https://santa.readthedocs.io/en/latest/deployment/configuration/#sync-server-provided-configuration
 
     batch_size = models.IntegerField(
         default=DEFAULT_BATCH_SIZE,
         validators=[MinValueValidator(5), MaxValueValidator(100)],
         help_text="The number of rules to download or events to upload per request. "
                   "Multiple requests will be made if there is more work than can fit in single request."
+    )
+    full_sync_interval = models.IntegerField(
+        default=DEFAULT_FULL_SYNC_INTERVAL,
+        validators=[MinValueValidator(60), MaxValueValidator(86400)],
+        help_text="The max time to wait in seconds before performing a full sync with the server. "
+                  "Minimum: 60s, hardcoded in Santa."
     )
     enable_bundles = models.BooleanField(
         default=False,

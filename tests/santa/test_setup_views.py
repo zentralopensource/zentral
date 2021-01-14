@@ -1,4 +1,5 @@
 import json
+import plistlib
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
@@ -53,9 +54,11 @@ class SantaSetupViewsTestCase(TestCase):
                                      "client_mode": "1",
                                      "banned_block_message": "yo",
                                      "enable_page_zero_protection": "on",
+                                     "enable_sysx_cache": "on",
                                      "mode_notification_lockdown": "lockdown",
                                      "mode_notification_monitor": "monitor",
                                      "unknown_block_message": "block",
+                                     "full_sync_interval": 602,
                                      }, follow=True)
         configuration = response.context["object"]
         return response, configuration
@@ -65,6 +68,8 @@ class SantaSetupViewsTestCase(TestCase):
         # without mbu
         response, configuration = self.create_configuration()
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(configuration.enable_sysx_cache, True)
+        self.assertEqual(configuration.full_sync_interval, 602)
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertContains(response, configuration.name)
 
@@ -121,6 +126,11 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(enrollment_configuration_plist_url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/x-plist")
+        plist_config = plistlib.loads(response.content)
+        self.assertTrue(plist_config["SyncBaseURL"].endswith(
+            f"/santa/sync/{enrollment.secret.secret}/"
+        ))
+        self.assertEqual(plist_config["EnableSysxCache"], configuration.enable_sysx_cache)
         response = self.client.get(enrollment_configuration_profile_url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")

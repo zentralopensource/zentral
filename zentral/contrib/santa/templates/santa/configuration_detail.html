@@ -66,6 +66,12 @@
         <td>{{ object.enable_bad_signature_protection|yesno }}</td>
       </tr>
       {% endif %}
+      {% if object.enable_sysx_cache %}
+      <tr>
+        <td>Enable system extension cache</td>
+        <td>{{ object.enable_sysx_cache|yesno }}</td>
+      </tr>
+      {% endif %}
       {% if object.more_info_url %}
       <tr>
         <td>More info URL</td>
@@ -125,6 +131,10 @@
       <tr>
         <td>Batch size</td>
         <td>{{ object.batch_size }}</td>
+      </tr>
+      <tr>
+        <td>Full sync interval</td>
+        <td>{{ object.full_sync_interval }}s</td>
       </tr>
       <tr>
         <td>Enable bundles</td>
