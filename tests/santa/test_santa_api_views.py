@@ -19,7 +19,9 @@ class SantaAPIViewsTestCase(TestCase):
         cls.machine_serial_number = get_random_string(64)
         cls.enrolled_machine = EnrolledMachine.objects.create(enrollment=cls.enrollment,
                                                               hardware_uuid=uuid.uuid4(),
-                                                              serial_number=cls.machine_serial_number)
+                                                              serial_number=cls.machine_serial_number,
+                                                              client_mode=Configuration.MONITOR_MODE,
+                                                              santa_version="1.17")
         cls.business_unit = cls.meta_business_unit.create_enrollment_business_unit()
 
     def post_as_json(self, url, data):
@@ -28,11 +30,19 @@ class SantaAPIViewsTestCase(TestCase):
                                 content_type="application/json")
 
     def test_preflight(self):
-        data = {"serial_num": self.machine_serial_number,
-                "os_version": "10.13.17",
-                "os_build": "16G1113",
-                "hostname": "hostname",
-                "santa_version": "1.14"}
+        data = {
+            "os_build": "20C69",
+            "santa_version": "2021.1",
+            "hostname": "hostname",
+            "transitive_rule_count": 0,
+            "os_version": "11.1",
+            "certificate_rule_count": 2,
+            "client_mode": "LOCKDOWN",
+            "serial_num": self.machine_serial_number,
+            "binary_rule_count": 1,
+            "primary_user": "",
+            "compiler_rule_count": 0
+        }
         url = reverse("santa:preflight", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         # MONITOR mode
         response = self.post_as_json(url, data)

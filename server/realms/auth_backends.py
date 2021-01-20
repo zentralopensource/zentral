@@ -25,6 +25,8 @@ class RealmBackend(ModelBackend):
             elif user_count == 1:
                 # Update user if necessary
                 user = users.first()
+                if user.is_service_account:
+                    raise ValueError("User is a service account")
                 # Do not change the is_remote attribute!
                 # we allow matching local users to login with a realm.
                 user_updated = False

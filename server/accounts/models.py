@@ -1,5 +1,5 @@
 from itertools import chain
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
 from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.urls import reverse
@@ -7,20 +7,44 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 import pyotp
+from rest_framework.authtoken.models import Token
+
+
+class UserManager(DjangoUserManager):
+    def create_service_account(self, username, email):
+        user = User(
+            username=username,
+            email=email,
+            is_service_account=True
+        )
+        user.set_unusable_password()
+        user.save()
+        Token.objects.get_or_create(user=user)
+        return user
 
 
 class User(AbstractUser):
     email = models.EmailField(unique=True)
     is_remote = models.BooleanField(default=False)
+    is_service_account = models.BooleanField(default=False)
     password_updated_at = models.DateTimeField(blank=True, null=True, editable=False)
+
+    objects = UserManager()
 
     class Meta:
         ordering = ("username",)
 
     def __str__(self):
-        return self.email or self.username
+        if self.is_service_account:
+            return self.username
+        else:
+            return self.email or self.username
+
+    def get_type_display(self):
+        return "user" if not self.is_service_account else "service account"
 
     def set_password(self, *args, **kwargs):
+        assert(self.is_service_account is False)
         super().set_password(*args, **kwargs)
         self.password_updated_at = timezone.now()
 
@@ -37,6 +61,8 @@ class User(AbstractUser):
                 self.password_updated_at = timezone.now()
         elif self.password:
             self.password_updated_at = timezone.now()
+        if self.is_service_account:
+            self.is_superuser = False
         super().save(*args, **kwargs)
 
     def username_and_email_editable(self):

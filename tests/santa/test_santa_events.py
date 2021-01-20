@@ -1,6 +1,6 @@
 import datetime
 from django.test import TestCase
-from zentral.contrib.santa.events import build_collected_app_tree_from_santa_event
+from zentral.contrib.santa.events import _build_file_tree_from_santa_event
 
 
 class SantaEventTestCase(TestCase):
@@ -43,7 +43,8 @@ class SantaEventTestCase(TestCase):
                                'valid_from': 1146001236,
                                'valid_until': 2054670036}]
         }
-        app_d = {
+        file_d = {
+            'source': {'module': 'zentral.contrib.santa', 'name': 'Santa events'},
             'bundle': {'bundle_id': 'servicecontroller:com.apple.stomp.transcoderx',
                        'bundle_name': 'CompressorTranscoderX',
                        'bundle_version': '3.5.3',
@@ -79,7 +80,7 @@ class SantaEventTestCase(TestCase):
                 },
              }
         }
-        self.assertEqual(build_collected_app_tree_from_santa_event(event_d), app_d)
+        self.assertEqual(_build_file_tree_from_santa_event(event_d), file_d)
 
     def test_event_with_unsigned_bundle(self):
         event_d = {
@@ -106,7 +107,8 @@ class SantaEventTestCase(TestCase):
             'quarantine_timestamp': 0,
             'signing_chain': []
         }
-        app_d = {
+        file_d = {
+            'source': {'module': 'zentral.contrib.santa', 'name': 'Santa events'},
             'bundle': {
                 'bundle_id': 'com.googlecode.munki.ManagedSoftwareCenter',
                 'bundle_name': 'Managed Software Center',
@@ -119,7 +121,7 @@ class SantaEventTestCase(TestCase):
             'sha_256': '3bccb77072bbc3eac675e2d95f6ef0f23362f015941dd3175bbc7f2d630040f2',
             'signed_by': None
         }
-        self.assertEqual(build_collected_app_tree_from_santa_event(event_d), app_d)
+        self.assertEqual(_build_file_tree_from_santa_event(event_d), file_d)
 
     def test_event_without_bundle(self):
         event_d = {
@@ -140,7 +142,8 @@ class SantaEventTestCase(TestCase):
             'quarantine_timestamp': 0,
             'signing_chain': []
         }
-        app_d = {
+        file_d = {
+            'source': {'module': 'zentral.contrib.santa', 'name': 'Santa events'},
             'bundle': None,
             'bundle_path': None,
             'name': 'act',
@@ -148,4 +151,4 @@ class SantaEventTestCase(TestCase):
             'sha_256': '13735e5fba4e11988645f0fa02f8dfa0c6caaf13a1e6c1cf06a47f80a7aab236',
             'signed_by': None
         }
-        self.assertEqual(build_collected_app_tree_from_santa_event(event_d), app_d)
+        self.assertEqual(_build_file_tree_from_santa_event(event_d), file_d)

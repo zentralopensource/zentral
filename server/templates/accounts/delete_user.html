@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h3>Delete user {{ managed_user }}</h3>
+<h3>Delete {{ user.get_type_display }} {{ user }}</h3>
 
-<p>Please confirm you want to delete the user {{ managed_user }}.</p>
+<p>Please confirm you want to delete the {{ user.get_type_display }}: {{ user }}.</p>
 <form class="form" method="POST">{% csrf_token %}
   <p>
     <a href="{% url 'users:list' %}" class="btn btn-default">Cancel</a>
-    <button type="submit" class="btn btn-danger">Delete user</button>
+    <button type="submit" class="btn btn-danger">Delete {{ user.get_type_display }}</button>
   </p>
 </form>
 

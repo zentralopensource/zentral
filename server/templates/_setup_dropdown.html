@@ -4,6 +4,10 @@
       Setup <span class="caret"></span></a>
     </a>
     <ul class="dropdown-menu">
+      {% if user.is_superuser %}
+      <li><a href="{% url 'users:list' %}">manage users</a></li>
+      <li role="separator" class="divider"></li>
+      {% endif %}
       {% for section in section_list %}
       <li class="dropdown-header">{{ section.title }}</li>
       {% for link, anchor_text in section.link_list %}

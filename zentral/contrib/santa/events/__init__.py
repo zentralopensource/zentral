@@ -1,7 +1,9 @@
 from datetime import datetime
 import logging
 from zentral.core.events.base import BaseEvent, register_event_type
-from zentral.contrib.santa.models import CollectedApplication
+from zentral.contrib.inventory.models import File
+from zentral.contrib.santa.models import Bundle, Target
+
 
 logger = logging.getLogger('zentral.contrib.santa.events')
 
@@ -61,7 +63,7 @@ class SantaLogEvent(BaseEvent):
 register_event_type(SantaLogEvent)
 
 
-def build_certificate_tree_from_santa_event_cert(in_d):
+def _build_certificate_tree_from_santa_event_cert(in_d):
     out_d = {}
     for from_a, to_a, is_dt in (("cn", "common_name", False),
                                 ("org", "organization", False),
@@ -76,14 +78,14 @@ def build_certificate_tree_from_santa_event_cert(in_d):
     return out_d
 
 
-def build_siging_chain_tree_from_santa_event(event_d):
+def _build_siging_chain_tree_from_santa_event(event_d):
     event_signing_chain = event_d.get("signing_chain")
     if not event_signing_chain:
         return
     signing_chain = None
     current_cert = None
     for in_d in event_signing_chain:
-        cert_d = build_certificate_tree_from_santa_event_cert(in_d)
+        cert_d = _build_certificate_tree_from_santa_event_cert(in_d)
         if current_cert:
             current_cert["signed_by"] = cert_d
         else:
@@ -92,7 +94,7 @@ def build_siging_chain_tree_from_santa_event(event_d):
     return signing_chain
 
 
-def build_bundle_tree_from_santa_event(event_d):
+def _build_bundle_tree_from_santa_event(event_d):
     bundle_d = {}
     for from_a, to_a in (("file_bundle_id", "bundle_id"),
                          ("file_bundle_name", "bundle_name"),
@@ -105,38 +107,145 @@ def build_bundle_tree_from_santa_event(event_d):
         return bundle_d
 
 
-def build_collected_app_tree_from_santa_event(event_d):
-    app_d = {}
+def _build_file_tree_from_santa_event(event_d):
+    app_d = {
+        "source": {
+            "module": "zentral.contrib.santa",
+            "name": "Santa events"
+        }
+    }
     for from_a, to_a in (("file_name", "name"),
                          ("file_path", "path"),
                          ("file_bundle_path", "bundle_path"),
                          ("file_sha256", "sha_256")):
         app_d[to_a] = event_d.get(from_a)
-    for a, val in (("bundle", build_bundle_tree_from_santa_event(event_d)),
-                   ("signed_by", build_siging_chain_tree_from_santa_event(event_d))):
+    for a, val in (("bundle", _build_bundle_tree_from_santa_event(event_d)),
+                   ("signed_by", _build_siging_chain_tree_from_santa_event(event_d))):
         app_d[a] = val
     return app_d
 
 
-def get_created_at(payload):
-    return datetime.utcfromtimestamp(payload['execution_time'])
+def _is_bundle_binary_pseudo_event(event_d):
+    return event_d.get('decision') == "BUNDLE_BINARY"
 
 
-def post_events(msn, user_agent, ip, data):
-    events = data.get("events", [])
+def _create_missing_bundles(events):
+    bundle_events = {
+        sha256: event_d
+        for sha256, event_d in (
+            (event_d.get("file_bundle_hash"), event_d)
+            for event_d in events
+            if not _is_bundle_binary_pseudo_event(event_d)
+        )
+        if sha256
+    }
+    if not bundle_events:
+        return
+    existing_sha256_set = set(
+        Bundle.objects.filter(
+            target__type=Target.BUNDLE,
+            target__sha256__in=bundle_events.keys(),
+            uploaded_at__isnull=False,  # to recover from blocked uploads
+        ).values_list("target__sha256", flat=True)
+    )
+    unknown_file_bundle_hashes = list(set(bundle_events.keys()) - existing_sha256_set)
+    for sha256 in unknown_file_bundle_hashes:
+        target, _ = Target.objects.get_or_create(type=Target.BUNDLE, sha256=sha256)
+        defaults = {}
+        event_d = bundle_events[sha256]
+        for event_attr, bundle_attr in (("file_bundle_path", "path"),
+                                        ("file_bundle_executable_rel_path", "executable_rel_path"),
+                                        ("file_bundle_id", "bundle_id"),
+                                        ("file_bundle_name", "name"),
+                                        ("file_bundle_version", "version"),
+                                        ("file_bundle_version_string", "version_str"),
+                                        ("file_bundle_binary_count", "binary_count")):
+            val = event_d.get(event_attr)
+            if val is None:
+                if bundle_attr == "binary_count":
+                    val = 0
+                else:
+                    val = ""
+            defaults[bundle_attr] = val
+        Bundle.objects.get_or_create(target=target, defaults=defaults)
+    return unknown_file_bundle_hashes
+
+
+def _create_bundle_binaries(events):
+    bundle_binary_events = {}
+    for event_d in events:
+        if _is_bundle_binary_pseudo_event(event_d):
+            bundle_sha256 = event_d.get("file_bundle_hash")
+            if bundle_sha256:
+                bundle_binary_events.setdefault(bundle_sha256, []).append(event_d)
+    for bundle_sha256, events in bundle_binary_events.items():
+        try:
+            bundle = Bundle.objects.get(target__type=Target.BUNDLE, target__sha256=bundle_sha256)
+        except Bundle.DoesNotExist:
+            logger.error("Unknown bundle: %s", bundle_sha256)
+            continue
+        if bundle.uploaded_at:
+            logger.info("Bundle %s already uploaded", bundle_sha256)
+            continue
+        binary_targets = []
+        binary_count = bundle.binary_count
+        for event_d in events:
+            if not binary_count:
+                event_binary_count = event_d.get("file_bundle_binary_count")
+                if event_binary_count:
+                    binary_count = event_binary_count
+            binary_sha256 = event_d.get("file_sha256")
+            binary_target, _ = Target.objects.get_or_create(type=Target.BINARY, sha256=binary_sha256)
+            binary_targets.append(binary_target)
+        bundle.binary_targets.add(*binary_targets)
+        save_bundle = False
+        if not bundle.binary_count and binary_count:
+            bundle.binary_count = binary_count
+            save_bundle = True
+        if bundle.binary_count:
+            binary_target_count = bundle.binary_targets.count()
+            if binary_target_count > bundle.binary_count:
+                logger.error("Bundle %s as wrong number of binary targets", bundle_sha256)
+            elif binary_target_count == bundle.binary_count:
+                bundle.uploaded_at = datetime.utcnow()
+                save_bundle = True
+        if save_bundle:
+            bundle.save()
+
+
+def _commit_files(events):
     for event_d in events:
         try:
-            app_d = build_collected_app_tree_from_santa_event(event_d)
+            file_d = _build_file_tree_from_santa_event(event_d)
         except Exception:
             logger.exception("Could not build app tree from santa event")
         else:
             try:
-                CollectedApplication.objects.commit(app_d)
+                File.objects.commit(file_d)
             except Exception:
-                logger.exception("Could not commit collected appi %s", app_d)
-    SantaEventEvent.post_machine_request_payloads(msn, user_agent, ip,
-                                                  data.get('events', []),
-                                                  get_created_at)
+                logger.exception("Could not commit file")
+
+
+def _post_santa_events(enrolled_machine, user_agent, ip, events):
+    def get_created_at(payload):
+        return datetime.utcfromtimestamp(payload['execution_time'])
+
+    SantaEventEvent.post_machine_request_payloads(
+        enrolled_machine.serial_number, user_agent, ip,
+        (event_d for event_d in events if not _is_bundle_binary_pseudo_event(event_d)),
+        get_created_at
+    )
+
+
+def process_events(enrolled_machine, user_agent, ip, data):
+    events = data.get("events", [])
+    if not events:
+        return []
+    unknown_file_bundle_hashes = _create_missing_bundles(events)
+    _create_bundle_binaries(events)
+    _commit_files(events)
+    _post_santa_events(enrolled_machine, user_agent, ip, events)
+    return unknown_file_bundle_hashes
 
 
 def post_preflight_event(msn, user_agent, ip, data):

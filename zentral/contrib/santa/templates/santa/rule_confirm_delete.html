@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'santa:configuration_list' %}">Santa configurations</a></li>
+  <li><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li><a href="{% url 'santa:configuration_rules' configuration.pk %}">rules</a></li>
+  <li class="active">{{ title }}</li>
+</ol>
+
+<h2>{{ title }}</h2>
+
+<div class="panel panel-default">
+  <table class="table table-condensed probe-panel">
+    <tr>
+      <td style="width:15%">Policy</td>
+      <td>
+        <span class="label label-{% if rule.is_blocking_rule %}danger{% else %}success{% endif %}">
+          {{ rule.get_policy_display }}
+        </span>
+      </td>
+    </tr>
+    <tr>
+      <td>{{ target.get_type_display }}</td>
+      <td>
+        {{ target.sha256 }}
+        {% if target.type == "BINARY" %}
+        {% for file in target.files %}
+        <dl class="dl-horizontal">
+          <dt>name</dt>
+          <dd>{{ file.name }}</dd>
+          <dt>path</dt>
+          <dd>{{ file.path }}</dd>
+          {% if file.bundle %}
+          <dt>bundle id</dd>
+          <dd>{{ file.bundle.bundle_id }}</dd>
+          <dt>bundle name</dt>
+          <dd>{{ file.bundle.bundle_name }}</dd>
+          <dt>bundle version</dt>
+          <dd>{{ file.bundle.bundle_version_str }}</dd>
+          {% if file.bundle_path %}
+          <dt>bundle path</dt>
+          <dd>{{ file.bundle_path }}</dd>
+          {% endif %}
+          {% endif %}
+        </dl>
+        {% endfor %}
+        {% endif %}
+        {% if target.type == "BUNDLE" %}
+        {% with target.bundle as bundle %}
+        <dl class="dl-horizontal">
+          <dt>id</dd>
+          <dd>{{ bundle.bundle_id }}</dd>
+          <dt>name</dt>
+          <dd>{{ bundle.name }}</dd>
+          <dt>version</dt>
+          <dd>{{ bundle.version_str }}</dd>
+          <dt>binaries</dt>
+          <dd>{{ bundle.binary_targets.count }}</dd>
+        </dl>
+        {% endwith %}
+        {% endif %}
+        {% if target.type == "CERTIFICATE" %}
+        {% for cert in target.certificates %}
+        <dl class="dl-horizontal">
+          <dt>common name</dt>
+          <dd>{{ cert.common_name|default:"-" }}</dd>
+          <dt>organization</dt>
+          <dd>{{ cert.organization|default:"-" }}</dd>
+          <dt>organizational_unit</dt>
+          <dd>{{ cert.organizational_unit|default:"-" }}</dd>
+          <dt>validity</dt>
+          <dd>{{ cert.valid_from }} - {{ cert.valid_until }}</dd>
+        </dl>
+        {% endfor %}
+        {% endif %}
+      </td>
+    </tr>
+    {% if rule.custom_msg %}
+    <tr>
+      <td>Custom message</td>
+      <td>{{ rule.custom_msg }}</td>
+    </tr>
+    {% endif %}
+    {% if rule.serial_numbers %}
+    <tr>
+      <td>Serial number{{ rule.serial_numbers|length|pluralize }}</td>
+      <td>
+        <ul>
+          {% for serial_number in rule.serial_numbers %}
+          <li>{{ serial_number }}</li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+    {% endif %}
+    {% if rule.primary_users %}
+    <tr>
+      <td>Primary user{{ rule.primary_users|length|pluralize }}</td>
+      <td>
+        <ul>
+          {% for primary_user in rule.primary_users %}
+          <li>{{ primary_user }}</li>
+          {% endfor %}
+        </ul>
+    </tr>
+    {% endif %}
+    {% with rule.tags.count as tag_count %}
+    {% if rule.tags.count %}
+    <tr>
+      <td>Tag{{ tag_count|pluralize }}</td>
+      <td>
+        {% for tag in rule.tags.all %}
+        {% inventory_tag tag %}
+        {% endfor %}
+      </td>
+    </tr>
+    {% endif %}
+    {% endwith %}
+  </table>
+</div>
+
+<form method="POST">{% csrf_token %}
+  <p>Do you really want to delete this rule?</p>
+  <p>
+    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endblock %}

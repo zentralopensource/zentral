@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'santa:configuration_list' %}">Santa configurations</a></li>
+  <li><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li><a href="{% url 'santa:configuration_rules' configuration.pk %}">rules</a></li>
+  <li class="active">Pick Santa rule bundle</li>
+</ol>
+
+<h2>Pick Santa rule bundle</h2>
+
+<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
+  <div class="form-group">
+    {{ form.name|bootstrap_inline }}
+  </div>
+  <button type="submit" class="btn btn-default">Search</button>
+</form>
+
+{% if bundles %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>ID</th>
+      <th>Version</th>
+      <th>Binaries</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for bundle, rule in bundles %}
+    <tr>
+      <td>{{ bundle.name }}</td>
+      <td>{{ bundle.bundle_id }}</td>
+      <td>{{ bundle.version_str }}</td>
+      <td>{{ bundle.binary_target_count }}</td>
+      <td>
+        {% if rule %}
+        {% if not rule.ruleset %}
+        <a class="btn btn-default" href="{% url 'santa:update_configuration_rule' configuration.pk rule.pk %}">
+          Update rule
+        </a>
+        {% else %}
+        Ruleset rule exists
+        {% endif %}
+        {% else %}
+        {% if bundle.uploaded_at %}
+        <a class="btn btn-primary" href="{% url 'santa:create_configuration_rule' configuration.id %}?bun={{ bundle.id }}">
+          Create rule
+        </a>
+        {% else %}
+        Bundle not uploaded yet
+        {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

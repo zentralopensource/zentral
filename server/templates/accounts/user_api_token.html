@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'users:list' %}">Users</a></li>
+  <li><a href="{% url 'users:user' user.pk %}">{{ user.get_type_display|title }} {{ user }}</a></li>
+  <li class="active">API token</li>
+</ol>
+
+<h3>{{ user.get_type_display|title }} {{ user }} API token</h3>
+
+<p>
+  <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+  <code hidden>
+    {{ user.auth_token.key }}
+  </code>
+</p>
+
+<p>
+  <a href="{% url 'users:user' user.pk %}" class="btn btn-default">OK</a>
+</p>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  var openEyes = document.querySelectorAll(".glyphicon-eye-open");
+  openEyes.forEach(function(openEye) {
+    openEye.addEventListener("click", function(event) {
+      var valueSpan = openEye.nextElementSibling;
+      if (valueSpan.hidden) {
+        valueSpan.hidden = false;
+        openEye.classList.remove("glyphicon-eye-open");
+        openEye.classList.add("glyphicon-eye-close");
+      } else {
+        valueSpan.hidden = true;
+        openEye.classList.remove("glyphicon-eye-close");
+        openEye.classList.add("glyphicon-eye-open");
+      }
+    });
+  });
+</script>
+{% endblock %}

@@ -56,10 +56,10 @@ class AccountUsersViewsTestCase(TestCase):
         self.log_user_in()
         self.permission_denied("list")
 
-    def test_user_add_redirect(self):
-        self.login_redirect("add")
+    def test_user_invite_redirect(self):
+        self.login_redirect("invite")
         self.log_user_in()
-        self.permission_denied("add")
+        self.permission_denied("invite")
 
     def test_user_update_redirect(self):
         self.login_redirect("update", self.user.id)
@@ -88,32 +88,32 @@ class AccountUsersViewsTestCase(TestCase):
             self.assertContains(response, text)
         self.assertNotContains(response, reverse("users:delete", args=(self.superuser.pk,)))
 
-    # add
+    # invite
 
-    def test_user_add_get(self):
+    def test_user_invite_get(self):
         self.log_user_in(superuser=True)
-        response = self.client.get(reverse("users:add"))
+        response = self.client.get(reverse("users:invite"))
         self.assertContains(response, "Send an email invitation")
 
-    def test_user_add_username_error(self):
+    def test_user_invite_username_error(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:add"),
+        response = self.client.post(reverse("users:invite"),
                                     {"username": self.user.username,
                                      "email": "test@example.com"},
                                     follow=True)
         self.assertFormError(response, "form", "username", "A user with that username already exists.")
 
-    def test_user_add_email_error(self):
+    def test_user_invite_email_error(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:add"),
+        response = self.client.post(reverse("users:invite"),
                                     {"username": "test",
                                      "email": self.user.email},
                                     follow=True)
         self.assertFormError(response, "form", "email", "User with this Email already exists.")
 
-    def test_user_add_ok(self):
+    def test_user_invite_ok(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:add"),
+        response = self.client.post(reverse("users:invite"),
                                     {"username": "test",
                                      "email": "test@example.com"},
                                     follow=True)
@@ -162,9 +162,9 @@ class AccountUsersViewsTestCase(TestCase):
                                      "email": "tata@example.com",
                                      "is_superuser": self.user.is_superuser},
                                     follow=True)
-        for text in ("3 Users", "toto", "tata@example.com"):
+        self.assertTemplateUsed(response, "accounts/user_detail.html")
+        for text in ("User tata@example.com", "toto"):
             self.assertContains(response, text)
-        self.assertNotContains(response, self.user.username)
 
     # delete
 
