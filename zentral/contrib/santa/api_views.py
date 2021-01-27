@@ -1,12 +1,16 @@
 from django.db.models import F
+from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_yaml.parsers import YAMLParser
 from zentral.contrib.inventory.models import Tag
 from .models import Rule, RuleSet, Target
 from .serializers import RuleSetUpdateSerializer
 
 
 class RuleSetUpdate(APIView):
+    parser_classes = [JSONParser, YAMLParser]
+
     def post(self, request, *args, **kwargs):
         serializer = RuleSetUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
