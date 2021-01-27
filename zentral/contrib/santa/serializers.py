@@ -1,4 +1,6 @@
+from datetime import datetime
 import logging
+import os.path
 from rest_framework import serializers
 from .models import Bundle, Configuration, Rule, Target
 
@@ -91,5 +93,65 @@ class RuleSetUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError({"rules": rule_errors})
         return data
 
-    def all_tag_names(self):
-        return set(n for r in self.data["rules"] for n in r.get("tags", []))
+
+# Santa fileinfo
+
+
+def _build_certificate_tree_from_santa_fileinfo_cert(in_d):
+    out_d = {}
+    for from_a, to_a, is_dt in (("Common Name", "common_name", False),
+                                ("Organization", "organization", False),
+                                ("Organizational Unit", "organizational_unit", False),
+                                ("SHA-256", "sha_256", False),
+                                ("Valid From", "valid_from", True),
+                                ("Valid Until", "valid_until", True)):
+        val = in_d.get(from_a)
+        if is_dt:
+            val = datetime.strptime(val, "%Y/%m/%d %H:%M:%S %z")
+        out_d[to_a] = val
+    return out_d
+
+
+def _build_siging_chain_tree_from_santa_fileinfo(fi_d):
+    fi_signing_chain = fi_d.get("Signing Chain")
+    if not fi_signing_chain:
+        return
+    signing_chain = None
+    current_cert = None
+    for in_d in fi_signing_chain:
+        cert_d = _build_certificate_tree_from_santa_fileinfo_cert(in_d)
+        if current_cert:
+            current_cert["signed_by"] = cert_d
+        else:
+            signing_chain = cert_d
+        current_cert = cert_d
+    return signing_chain
+
+
+def _build_bundle_tree_from_santa_fileinfo(fi_d):
+    bundle_d = {}
+    for from_a, to_a in (("Bundle Name", "bundle_name"),
+                         ("Bundle Version", "bundle_version"),
+                         ("Bundle Version Str", "bundle_version_str")):
+        val = fi_d.get(from_a)
+        if val:
+            bundle_d[to_a] = val
+    if bundle_d:
+        return bundle_d
+
+
+def build_file_tree_from_santa_fileinfo(fi_d):
+    file_d = {
+        "source": {
+            "module": "zentral.contrib.santa",
+            "name": "Santa fileinfo"
+        }
+    }
+    for from_a, to_a in (("SHA-256", "sha_256"),):
+        file_d[to_a] = fi_d.get(from_a)
+    path = fi_d.get("Path")
+    file_d["path"], file_d["name"] = os.path.split(path)
+    for a, val in (("bundle", _build_bundle_tree_from_santa_fileinfo(fi_d)),
+                   ("signed_by", _build_siging_chain_tree_from_santa_fileinfo(fi_d))):
+        file_d[a] = val
+    return file_d

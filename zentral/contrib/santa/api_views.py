@@ -3,9 +3,57 @@ from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
-from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.models import File, Tag
 from .models import Rule, RuleSet, Target
-from .serializers import RuleSetUpdateSerializer
+from .serializers import RuleSetUpdateSerializer, build_file_tree_from_santa_fileinfo
+
+
+class IngestFileInfo(APIView):
+    parser_classes = [JSONParser]
+
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        if isinstance(data, dict):
+            data = [data]
+        deserialization_errors = 0
+        db_errors = 0
+        present = 0
+        added = 0
+        ignored = 0
+        for fi_d in data:
+            # only dicts
+            if not isinstance(fi_d, dict):
+                deserialization_errors += 1
+                continue
+            # only Executable fileinfo
+            fi_type = fi_d.get("Type")
+            if not fi_type:
+                deserialization_errors += 1
+                continue
+            elif not fi_type.startswith("Executable"):
+                ignored += 1
+                continue
+            # build tree
+            try:
+                file_d = build_file_tree_from_santa_fileinfo(fi_d)
+            except Exception:
+                deserialization_errors += 1
+                continue
+            # commit File
+            try:
+                _, created = File.objects.commit(file_d)
+            except Exception:
+                db_errors += 1
+            else:
+                if created:
+                    added += 1
+                else:
+                    present += 1
+        return Response({"deserialization_errors": deserialization_errors,
+                         "db_errors": db_errors,
+                         "present": present,
+                         "added": added,
+                         "ignored": ignored})
 
 
 class RuleSetUpdate(APIView):
