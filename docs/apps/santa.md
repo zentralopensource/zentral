@@ -197,3 +197,299 @@ Once the events have been uploaded, the rules are downloaded. Zentral will send 
 ### Postflight
 
 Santa finally makes an extra request to indicate the end of the full synchronization.
+
+## HTTP API
+
+There are two HTTP API endpoints available.
+
+### Requests
+
+#### Authentication
+
+API requests are authenticated using a token in the `Authorization` HTTP header.
+
+To get a token, you can create a service account. As a superuser, go to Setup > Manage users, and in the "Service accounts" subsection, click on the [Create] button. Pick a name for your service account and [Save]. You will be redirected to a token view. The token is only displayed once. To reveal it, click on the eye icon. Once you have saved it (in a password manager, in a configuration variable, …), you can click on the [OK] button.
+
+You can also add an API token to a normal user, although it is not recommended. To do so, click on the user in the User list, and click on the [+] button next to the API token boolean.
+
+If you have lost or leaked a token, you can delete it by clicking on the user or service account name, and then click on the 🗑 next to the API token boolean.
+
+The format for the `Authorization` header is the following:
+
+```
+Authorization: Token the_token_string
+```
+
+#### Content type
+
+Zentral will parse the body of the request based on the `Content-Type` HTTP header:
+
+* `Content-Type: application/json`
+* `Content-Type: application/yaml`
+
+### /api/santa/ingest/fileinfo/
+
+* method: POST
+* Content-Type: application/json
+
+This endpoint is designed to ingest the JSON output of the [`santactl fileinfo` command](https://santa.readthedocs.io/en/latest/details/santactl/#fileinfo). This can be used to quickly and automatically upload information about binaries and certificates to Zentral. This information will be used to add context to sha256 rules, and in the rule forms.
+
+Example:
+
+```
+$ santactl fileinfo --json \
+  --filter "Type=Executable" \
+  -r /Applications/TeamViewer.app/ \
+  | curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @- \
+  https://zentral.example.com/api/santa/ingest/fileinfo/
+```
+
+This response is a JSON object with some counters:
+
+```json
+{
+    "deserialization_errors": 0,
+    "db_errors": 0,
+    "present": 0,
+    "added": 9,
+    "ignored": 0
+}
+```
+
+This operation is idempotent. The second time you run the command, and if the application has not changed, you will get the following response:
+
+```json
+{
+    "deserialization_errors": 0,
+    "db_errors": 0,
+    "present": 9,
+    "added": 0,
+    "ignored": 0
+}
+```
+
+### /api/santa/rulesets/update/
+
+* method: POST
+* Content-Type: application/json or application/yaml
+
+This endpoint is designed to help automatically maintain Zentral Santa configuration rulesets. It can be used in a CI/CD workflow.
+
+#### Definition of a ruleset
+
+A ruleset is a set of rules, with a unique name, that can be applied to some Zentral configurations.
+
+Ruleset updates are applied idempotently. Rules will be added, updated or deleted in the scoped configurations to match the definition of the posted ruleset.
+
+The key for each rule is the target (type, sha256). Only **one rule** can exist **for a given target** in a configuration.
+
+Ruleset allows to automatically manage a set of rules in a configuration, without modifying rules from a different ruleset, or manually created in Zentral.
+
+But if a manual rule or a rule from a different ruleset on a given target already exists, adding a rule on the same target in a ruleset will create a conflict, and the update will be rejected.
+
+Finally, rules belonging to a ruleset cannot be manually edited in Zentral.
+
+#### Examples
+
+ruleset.json
+
+```json
+{
+  "name": "First ruleset test",
+  "rules": [
+    {
+      "rule_type": "BINARY",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "policy": "ALLOWLIST"
+    },
+    {
+      "rule_type": "BINARY",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "policy": "ALLOWLIST",
+      "serial_numbers": ["SN1", "SN2"],
+      "primary_users": ["user1@example.com", "user2@example.com"],
+      "tags": ["tag1", "tag2"]
+    }
+  ]
+}
+```
+
+Post the ruleset.json update to Zentral:
+
+```
+$ curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @ruleset.json \
+  https://zentral.example.com/api/santa/rulesets/update/\
+  |python -m json.tool
+```
+
+You should get a response close to this one:
+
+```json
+{
+    "ruleset": {
+        "pk": 1,
+        "name": "First ruleset test",
+        "result": "created"
+    },
+    "configurations": [
+        {
+            "name": "Name of your configuration",
+            "pk": 1,
+            "rule_results": {
+                "created": 2,
+                "deleted": 0,
+                "present": 0,
+                "updated": 0
+            }
+        }
+    ]
+}
+```
+
+If you post the same file again, you will get this answer:
+
+```json
+{
+    "ruleset": {
+        "pk": 1,
+        "name": "First ruleset test",
+        "result": "present"
+    },
+    "configurations": [
+        {
+            "name": "Name of your configuration",
+            "pk": 1,
+            "rule_results": {
+                "created": 0,
+                "deleted": 0,
+                "present": 2,
+                "updated": 0
+            }
+        }
+    ]
+}
+```
+
+ruleset2.json, scoped to only one configuration, but with a conflict with ruleset.json:
+
+```json
+{
+  "name": "Second ruleset test",
+  "configurations": ["Name of your configuration"],
+  "rules": [
+    {
+      "rule_type": "BINARY",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "policy": "ALLOWLIST"
+    }
+  ]
+}
+```
+
+If you POST it, you will get the following error:
+
+```json
+{
+    "rules": {
+        "0": {
+            "non_field_errors": [
+                "conflict"
+            ]
+        }
+    }
+}
+```
+
+This indicates that there is an existing rule in the configuration, on the same target as the first rule in ruleset2.json, but not belonging to this ruleset. If we change the sha256, a new rule will be created without conflict, and without modifying the manual rules, or the rules from ruleset.json.
+
+```json
+{
+  "name": "Second ruleset test",
+  "configurations": ["Name of your configuration"],
+  "rules": [
+    {
+      "rule_type": "BINARY",
+      "sha256": "9876987698769876987698769876987698769876987698769876987698769876",
+      "policy": "ALLOWLIST"
+    }
+  ]
+}
+```
+
+```json
+{
+    "ruleset": {
+        "pk": 2,
+        "name": "Second ruleset test",
+        "result": "created"
+    },
+    "configurations": [
+        {
+            "name": "Name of your configuration",
+            "pk": 1,
+            "rule_results": {
+                "created": 1,
+                "deleted": 0,
+                "present": 0,
+                "updated": 0
+            }
+        }
+    ]
+}
+```
+
+You can also use a YAML payload. This can be useful if you would like to use comments in the source.
+
+ruleset2.yml
+
+```yaml
+---
+name: Second ruleset test
+configurations:
+  - Name of your configuration
+rules:
+  - rule_type: BINARY
+    sha256: 9876987698769876987698769876987698769876987698769876987698769876
+    policy: ALLOWLIST
+```
+
+Post the yml source to Zentral:
+
+```
+$ curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/yaml' \
+  --data-binary @ruleset2.yml \
+  https://zentral.example.com/api/santa/rulesets/update/\
+  |python -m json.tool
+```
+
+Nothing was changed:
+
+```json
+{
+    "ruleset": {
+        "pk": 2,
+        "name": "Second ruleset test",
+        "result": "present"
+    },
+    "configurations": [
+        {
+            "name": "Name of your configuration",
+            "pk": 1,
+            "rule_results": {
+                "created": 0,
+                "deleted": 0,
+                "present": 1,
+                "updated": 0
+            }
+        }
+    ]
+}
+```
