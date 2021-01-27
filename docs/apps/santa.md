@@ -32,10 +32,10 @@ Enrollments can be restricted by machine serial numbers and UUIDs – all machin
 #### Save and download
 
 Save the enrollment form, you will be redirected to the configuration, and the new enrollment will be available. You can download two different versions of the enrollment:
- 
- * a plist containing only the Santa specific configuration keys. This plist is can be uploaded to Jamf, to create a custom settings payload for the `com.google.santa` Preference Domain. 
+
+ * a plist containing only the Santa specific configuration keys. This plist is can be uploaded to Jamf, to create a custom settings payload for the `com.google.santa` Preference Domain.
  * a configuration profile with a [ManagedPreferences](https://developer.apple.com/documentation/devicemanagement/managedpreferences) payload, that can be further customized or distributed as is.
- 
+
 #### How it works
 
 Each enrollment has a secret associated with it, and this secret is part of the Santa `SyncBaseURL` that is set in the plists or configuration profiles when you download them. This is how Zentral associate machines with configurations. Machines can be re-enrolled to a different configuration by simply deploying a different santa payload. The old rules will be erased and replaced by the new configuration rules.
@@ -108,11 +108,75 @@ The payload is an array of [NotificationSettingItem](https://developer.apple.com
 |SoundsEnabled|false|
 
 
+## Santa rules
+
+### Definitions
+
+Zentral Santa rule combine a *target* and a *policy*. The target can be of type `Binary`, `Bundle` or `Certificate`. A target is uniquely identified by its type, and its sha256. The policy can be one of `Allowlist`, `Blocklist`, `Silent blocklist` and `Allowlist compiler`.
+
+To avoid conflicts, there is at most **one rule per target** for each configuration.
+
+**Rule precedence** applies. You can have a `Blocklist` rule on a certificate, and an `Allowlist` rule on one of the binaries signed using the certificate.
+
+**Bundle** targets are only available when Zentral managed to get the full bundle information from Santa. This happens only when Santa blocks a binary that is part of a bundle, and when `Enable bundles` is set to true in the Zentral Santa configuration. Rules on a bundle target only exist in Zentral. There are expanded to a list of binary rules when sent to the Santa agent – this is the reason why we need the bundle information.
+
+**Allowlist compiler** rules will only generate local transitive rules when `Enable transitive rules` is set to true in the Zentral Santa configuration. A transitive Allowlist rule will be created locally for each file written by the targets of those Santa rules.
+
+### Quick start
+
+On any Zentral configuration page (the one with the configuration information and the enrollments), there is a "Rules" sub section at the bottom, with a count and a [Manage rules] button. Click on it to access the configuration rule list.
+
+You can filter the list using the search form at the top. From this list, you can edit or delete existing rules (if they are not part of a ruleset, see API section below), and add more rules. To add a rule, click on the [Add] button at the top, and select the kind of rule you want to add. We will start with a "Base rule".
+
+To get the necessary information about a binary or a certificate you want to block or allow, use the [`santactl fileinfo` command](https://santa.readthedocs.io/en/latest/details/santactl/#fileinfo).
+
+Once you have set the rule type, the sha256 and the policy, you can click on the [Save] button, and the rule will be added to the configuration for all the machines.
+
+If you do not want to wait for a full sync to happen on your machine, you can trigger one using the following command:
+
+```
+$ sudo santactl sync
+```
+
+You should see a rule being downloaded in the command output.
+
+### Rule forms
+
+Zentral is collecting information about all the binary, bundles and certificates that are present in the events that Santa uploads.
+
+Using this information, it is possible to build a rule without knowing the sha256, using the "Binary rule", "Bundle rule" or "Certificate rule" options in Rules > [Add] dropdown menu. But it might be that the binary, bundle or certificate information is not in Zentral. In that case, use the "Base rule" form.
+
+### Rule scope
+
+By default, a rule will be synced to all the machines enrolled on its Zentral Santa configuration.
+
+Rules can be scoped to machine serial numbers. A list of serial numbers separated by `,` can be used in the `Serial numbers` field of the rule forms.
+
+Rules can also be scoped to machine primary users. A list of primary user (id, emails, …) separated by `,` can be used in the `Primary users` field of the rule forms. If one of them matches the primary user reported by Santa, the rule will be in scope. For this to be effective, you need to configure the primary user reported by Santa using either the `MachineOwner` key of the Santa payload, or the combination of the `MachineOwnerPlist` and `MachineOwnerKey` keys, with local plists on each machine.
+
+Finally, rules can be scoped to machine tags. Select the matching tags in the rule forms.
+
+**IMPORTANT:** The rule is in scope if **any** serial number, primary user or tag is a match.
+
 ## Santa sync
 
 The Santa agent is configured to sync periodically with the Zentral server. The `Full sync interval` can be adjusted for each Santa configuration – 10 min by default, cannot be shorter than 10 min. No need to distribute the updated Santa payload. The agent will apply the new interval during the next sync.
 
-A full synchronization as 4 phases:
+To check the santa sync configuration and status, use the following command:
+
+```
+$ santactl status
+```
+
+Verify that the `Sync Server` URL is pointing to your Santa server.
+
+To manually trigger a full synchronization (for example, for applying new rules without having to wait for a full sync interval), use the following command:
+
+```
+$ sudo santactl sync
+```
+
+A full synchronization has 4 phases:
 
 ### Preflight
 
