@@ -93,6 +93,9 @@ class RuleSetUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError({"rules": rule_errors})
         return data
 
+    def all_tag_names(self):
+        return set(n for r in self.data["rules"] for n in r.get("tags", []))
+
 
 # Santa fileinfo
 
