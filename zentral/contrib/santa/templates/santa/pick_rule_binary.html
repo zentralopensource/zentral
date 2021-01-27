@@ -23,8 +23,7 @@
 <table class="table">
   <thead>
     <tr>
-      <th>Name</th>
-      <th>Bundle / Path</th>
+      <th>Binary</th>
       <th></th>
     </tr>
   </thead>
@@ -32,25 +31,31 @@
     {% for binary, rule in binaries %}
     <tr>
       <td>
-        {{ binary.name }}
-      </td>
-      <td>
+        <p><code>{{ binary.sha_256 }}</code></p>
         {% if binary.bundle %}
         <dl class="dl-horizontal">
-          <dt>id</dd>
+          {% if binary.bundle.bundle_id %}
+          <dt>bundle id</dd>
           <dd>{{ binary.bundle.bundle_id }}</dd>
-          <dt>name</dt>
+          {% endif %}
+          {% if binary.bundle.bundle_name %}
+          <dt>bundle name</dt>
           <dd>{{ binary.bundle.bundle_name }}</dd>
-          <dt>version</dt>
-          <dd>{{ binary.bundle.bundle_version_str }}</dd>
+          {% endif %}
+          <dt>bundle version</dt>
+          <dd>{% if  binary.bundle.bundle_version_str %}{{ binary.bundle.bundle_version_str }}{% else %}{% if binary.bundle.bundle_version %}{{ binary.bundle.bundle_version }}{% else %}-{% endif %}{% endif %}</dd>
           {% if binary.bundle_path %}
-          <dt>path</dt>
+          <dt>bundle path</dt>
           <dd>{{ binary.bundle_path }}</dd>
           {% endif %}
         </dl>
-        {% else %}
-        {{ binary.path }}
         {% endif %}
+        <dl class="dl-horizontal">
+          <dt>binary path</dt>
+          <dd>{{ binary.path }}</dd>
+          <dt>binary name</dt>
+          <dd>{{ binary.name }}</dd>
+        </dl>
       </td>
       <td>
         {% if rule %}
