@@ -153,8 +153,6 @@ class ConfigurationRulesView(LoginRequiredMixin, ListView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_queryset(self):
-        for i in range(200):
-            print(self.form.cleaned_data, flush=True)
         return self.form.get_queryset()
 
     def get_context_data(self, **kwargs):
