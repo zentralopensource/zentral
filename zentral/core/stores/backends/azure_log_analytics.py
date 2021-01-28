@@ -11,7 +11,7 @@ from zentral.core.events import event_from_event_d
 from zentral.core.stores.backends.base import BaseEventStore
 
 
-logger = logging.getLogger('zentral.core.stroes.backends.azure_log_analytics')
+logger = logging.getLogger('zentral.core.stores.backends.azure_log_analytics')
 
 
 def datetime_to_iso8601z_truncated_to_milliseconds(dt):
