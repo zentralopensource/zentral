@@ -67,7 +67,7 @@ class RuleSetUpdateSerializer(serializers.Serializer):
     def validate(self, data):
         # all configurations if no configurations key
         if "configurations" not in data:
-            self.configurations = Configuration.objects.all()
+            self.configurations = Configuration.objects.all().order_by("pk")
         # validate rules
         keys = set([])
         rule_errors = {}

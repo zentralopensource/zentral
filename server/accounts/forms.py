@@ -75,7 +75,7 @@ class ServiceAccountForm(forms.Form):
                     self.add_error("name", "A user with this name already exists.")
             return {"username": username, "email": email}
 
-    def save(self, request):
+    def save(self, request=None):
         username = self.cleaned_data.get("username")
         email = self.cleaned_data.get("email")
         if not self.user:
