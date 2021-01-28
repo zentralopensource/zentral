@@ -3,7 +3,6 @@ from django.core.exceptions import ValidationError
 from django.db import connection
 from django.http import QueryDict
 from django.utils.text import slugify
-from zentral.utils.forms import validate_sha256
 from .models import (EnrollmentSecret,
                      MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
@@ -168,21 +167,20 @@ class AddMachineTagForm(AddTagForm):
 
 
 class MacOSAppSearchForm(forms.Form):
-    bundle_name = forms.CharField(label='Bundle name', max_length=64, required=False)
+    bundle_name = forms.CharField(label='Bundle name', max_length=64,
+                                  widget=forms.TextInput(attrs={"autofocus": "true"}))
     source = forms.ModelChoiceField(queryset=Source.objects.current_macos_apps_sources(),
                                     required=False)
-    sha_256 = forms.CharField(label="SHA 256", max_length=64, required=False,
-                              validators=[validate_sha256],
-                              help_text="sha 256 signature of the binary or "
-                                        "one of the certificate in the chain")
-    page = forms.IntegerField(required=False)
     order = forms.ChoiceField(choices=[], required=False)
     order_mapping = {"bn": "bundle_name",
                      "mc": "machine_count"}
 
     def __init__(self, *args, **kwargs):
+        export = kwargs.pop("export", False)
         super().__init__(*args, **kwargs)
         self.fields["order"].choices = [(f"{k}-{d}", f"{k}-{d}") for k in self.order_mapping for d in ("a", "d")]
+        if export:
+            self.fields["bundle_name"].required = False
 
     def _get_current_order(self):
         try:
@@ -205,12 +203,12 @@ class MacOSAppSearchForm(forms.Form):
                 # ASC order link
                 order = f"{attr_abv}-a"
             qd = QueryDict(mutable=True)
-            qd.update({k: v for k, v in self.data.items() if v and k != "page"})
+            qd.update({k: v for k, v in self.data.items() if v})
             qd["order"] = order
             link = "?{}".format(qd.urlencode())
         return label, link
 
-    def search(self, limit):
+    def iter_results(self, page=None, limit=None):
         args = []
         query = ("SELECT a.id, a.bundle_id, a.bundle_name, a.bundle_version, a.bundle_version_str, "
                  "string_agg(distinct src.name, ',  ') as source_names, "
@@ -232,46 +230,39 @@ class MacOSAppSearchForm(forms.Form):
         if source:
             args.append(source.id)
             wheres.append("src.id = %s")
-        sha_256 = self.cleaned_data["sha_256"]
-        if sha_256:
-            args.insert(0, sha_256)
-            query = (
-                "WITH RECURSIVE filtered_certificates AS ("
-                "SELECT id, signed_by_id "
-                "FROM inventory_certificate "
-                "WHERE sha_256 = %s "
-                "UNION "
-                "SELECT c.id, c.signed_by_id "
-                "FROM inventory_certificate c "
-                "INNER JOIN filtered_certificates fc ON fc.id = c.signed_by_id) "
-                "{} "
-                "LEFT JOIN filtered_certificates fc ON (i.signed_by_id = fc.id)"
-            ).format(query)
-            args.append(sha_256)
-            wheres.append("(fc.id is NULL AND i.sha_256 = %s) OR (fc.id is not NULL)")
         if wheres:
             query = "{} WHERE {}".format(query, " AND ".join(f"({w})" for w in wheres))
-        # ordering / pagination
+        # ordering
         order_attr, order_dir = self._get_current_order()
         order_str = f"{order_attr} {order_dir}"
         if order_attr == "machine_count":
             order_str = f"{order_str}, a.bundle_name ASC"
-        page = self.cleaned_data['page']
-        offset = (page - 1) * limit
-        args.extend([offset, limit])
         query = (f"{query} GROUP BY a.id, a.bundle_id, a.bundle_name, a.bundle_version, a.bundle_version_str "
-                 f"ORDER BY {order_str}, a.bundle_id, a.bundle_version_str, a.bundle_version "
-                 "OFFSET %s LIMIT %s")
+                 f"ORDER BY {order_str}, a.bundle_id, a.bundle_version_str, a.bundle_version")
+        # pagination
+        if page and limit:
+            offset = (page - 1) * limit
+            args.extend([offset, limit])
+            query += " OFFSET %s LIMIT %s"
+        # execute
         cursor = connection.cursor()
         cursor.execute(query, args)
         columns = [col[0] for col in cursor.description]
-        results = []
-        full_count = 0
-        for t in cursor.fetchall():
-            d = dict(zip(columns, t))
-            full_count = d.pop('full_count')
-            results.append(d)
-        if full_count > offset + limit:
+        self.full_count = 0
+        while True:
+            results = cursor.fetchmany(size=2000)
+            if not results:
+                break
+            for t in results:
+                d = dict(zip(columns, t))
+                self.full_count = d.pop('full_count')
+                yield d
+
+    def search(self, page=1, limit=50):
+        page = max(1, page)
+        limit = max(1, limit)
+        results = list(self.iter_results(page, limit))
+        if self.full_count > page * limit:
             next_page = page + 1
         else:
             next_page = None
@@ -279,8 +270,10 @@ class MacOSAppSearchForm(forms.Form):
             previous_page = page - 1
         else:
             previous_page = None
-        total_pages = full_count // limit + 1
-        return results, full_count, previous_page, next_page, total_pages
+        total_pages, rest = divmod(self.full_count, limit)
+        if rest or total_pages == 0:
+            total_pages += 1
+        return results, self.full_count, previous_page, next_page, total_pages
 
     def clean(self):
         cleaned_data = self.cleaned_data
