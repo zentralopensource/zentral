@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'santa:configuration_list' %}">Santa configurations</a></li>
+  <li><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li><a href="{% url 'santa:configuration_rules' configuration.pk %}">rules</a></li>
+  <li class="active">Pick Santa rule binary</li>
+</ol>
+
+<h2>Pick Santa rule binary</h2>
+
+<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
+  <div class="form-group">
+    {{ form.name|bootstrap_inline }}
+  </div>
+  <button type="submit" class="btn btn-default">Search</button>
+</form>
+
+{% if binaries %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Binary</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for binary, rule in binaries %}
+    <tr>
+      <td>
+        <p><code>{{ binary.sha_256 }}</code></p>
+        {% if binary.bundle %}
+        <dl class="dl-horizontal">
+          {% if binary.bundle.bundle_id %}
+          <dt>bundle id</dd>
+          <dd>{{ binary.bundle.bundle_id }}</dd>
+          {% endif %}
+          {% if binary.bundle.bundle_name %}
+          <dt>bundle name</dt>
+          <dd>{{ binary.bundle.bundle_name }}</dd>
+          {% endif %}
+          <dt>bundle version</dt>
+          <dd>{% if  binary.bundle.bundle_version_str %}{{ binary.bundle.bundle_version_str }}{% else %}{% if binary.bundle.bundle_version %}{{ binary.bundle.bundle_version }}{% else %}-{% endif %}{% endif %}</dd>
+          {% if binary.bundle_path %}
+          <dt>bundle path</dt>
+          <dd>{{ binary.bundle_path }}</dd>
+          {% endif %}
+        </dl>
+        {% endif %}
+        <dl class="dl-horizontal">
+          <dt>binary path</dt>
+          <dd>{{ binary.path }}</dd>
+          <dt>binary name</dt>
+          <dd>{{ binary.name }}</dd>
+        </dl>
+      </td>
+      <td>
+        {% if rule %}
+        {% if not rule.ruleset %}
+        <a class="btn btn-default" href="{% url 'santa:update_configuration_rule' configuration.pk rule.pk %}">
+          Update rule
+        </a>
+        {% else %}
+        Ruleset rule exists
+        {% endif %}
+        {% else %}
+        <a class="btn btn-primary" href="{% url 'santa:create_configuration_rule' configuration.id %}?bin={{ binary.id }}">
+          Create rule
+        </a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

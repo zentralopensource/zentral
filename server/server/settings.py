@@ -96,7 +96,7 @@ AUTH_USER_MODEL = 'accounts.User'
 AUTH_PASSWORD_VALIDATORS = django_zentral_settings.get("AUTH_PASSWORD_VALIDATORS", [])
 
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
+    'accounts.auth_backends.ZentralBackend',
     'realms.auth_backends.RealmBackend',
 ]
 

@@ -59,9 +59,6 @@
                 {{ user }} <span class="caret"></span>
               </a>
               <ul class="dropdown-menu">
-                {% if user.is_superuser %}
-                <li><a href="{% url 'users:list' %}">manage users</a></li>
-                {% endif %}
                 {% if not user.is_remote %}
                 <li><a href="{% url 'password_change' %}">change password</a></li>
                 <li><a href="{% url 'users:verification_devices' %}">verification devices</a></li>

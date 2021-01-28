@@ -76,42 +76,7 @@ class MacOSAppsViewsTestCase(TestCase):
     def test_macos_apps(self):
         self.log_user_in()
         response = self.client.get(reverse("inventory:macos_apps"))
-        self.assertContains(response, "1 macOS application")
-
-    def test_macos_apps_sha_256_search(self):
-        self.log_user_in()
-        # cert signature
-        response = self.client.get("{}?{}".format(
-            reverse("inventory:macos_apps"),
-            urlencode({"sha_256": "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"})
-        ))
-        self.assertContains(response, "1 macOS application")
-        # binary signature
-        response = self.client.get("{}?{}".format(
-            reverse("inventory:macos_apps"),
-            urlencode({"sha_256": 64 * "a"})
-        ))
-        self.assertContains(response, "1 macOS application")
-        # bad sha 256
-        response = self.client.get("{}?{}".format(
-            reverse("inventory:macos_apps"),
-            urlencode({"sha_256": 64 * "z"})
-        ))
-        self.assertFormError(response, "search_form", "sha_256", "Enter a valid sha256.")
-        # another sha 256
-        response = self.client.get("{}?{}".format(
-            reverse("inventory:macos_apps"),
-            urlencode({"sha_256": 64 * "f"})
-        ))
-        self.assertContains(response, "0 macOS applications")
-
-    def test_macos_apps_source_search(self):
-        self.log_user_in()
-        response = self.client.get("{}?{}".format(
-            reverse("inventory:macos_apps"),
-            urlencode({"source": self.ms.source.id})
-        ))
-        self.assertContains(response, "1 macOS application")
+        self.assertContains(response, "Search macOS applications")
 
     def test_macos_apps_bundle_name(self):
         self.log_user_in()
@@ -119,12 +84,21 @@ class MacOSAppsViewsTestCase(TestCase):
             reverse("inventory:macos_apps"),
             urlencode({"bundle_name": "baller"})
         ))
-        self.assertContains(response, "1 macOS application")
+        self.assertContains(response, "1 result")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
             urlencode({"bundle_name": "yolo"})
         ))
-        self.assertContains(response, "0 macOS applications")
+        self.assertContains(response, "0 results")
+
+    def test_macos_apps_bundle_name_and_source_search(self):
+        self.log_user_in()
+        response = self.client.get("{}?{}".format(
+            reverse("inventory:macos_apps"),
+            urlencode({"bundle_name": "baller",
+                       "source": self.ms.source.id})
+        ))
+        self.assertContains(response, "1 result")
 
     def test_macos_app(self):
         self.log_user_in()

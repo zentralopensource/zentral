@@ -2,7 +2,8 @@ from urllib.parse import urlparse
 from django import forms
 from django.conf import settings as django_settings
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, UsernameField
-from django.core import signing
+from django.core import signing, validators
+from django.db.models import Q
 from django.utils.crypto import get_random_string
 from django.utils.translation import ugettext_lazy as _
 import pyotp
@@ -20,14 +21,14 @@ class ZentralAuthenticationForm(AuthenticationForm):
     )
 
 
-class AddUserForm(forms.ModelForm):
+class InviteUserForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ("username", "email")
         field_classes = {'username': UsernameField}
 
     def save(self, request):
-        user = super(AddUserForm, self).save(commit=False)
+        user = super(InviteUserForm, self).save(commit=False)
         user.set_password(get_random_string(1024))
         user.save()
         prf = PasswordResetForm({"email": user.email})
@@ -36,6 +37,54 @@ class AddUserForm(forms.ModelForm):
                      email_template_name='registration/invitation_email.html',
                      subject_template_name='registration/invitation_subject.txt')
         return user
+
+
+class ServiceAccountNameValidator(validators.RegexValidator):
+    regex = r'^[\w.+-]+$'
+    message = _(
+        'Enter a valid name. This value may contain only letters, '
+        'digits, and ./+/-/_ characters.'
+    )
+    flags = 0
+
+
+class ServiceAccountForm(forms.Form):
+    name_validator = ServiceAccountNameValidator()
+    name = forms.CharField(
+        max_length=150,
+        required=True,
+        help_text="Required. 150 characters or fewer. Letters, digits and ./+/-/_ only.",
+        validators=[name_validator],
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop("instance", None)
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        username = self.cleaned_data.get("name")
+        if username:
+            email = "{}@{}".format(username, zentral_settings["api"]["fqdn"])
+            user_qs = User.objects.filter(Q(username=username) | Q(email=email))
+            if self.user:
+                user_qs = user_qs.exclude(pk=self.user.pk)
+            if user_qs.count():
+                if user_qs.filter(is_service_account=True).count():
+                    self.add_error("name", "A service account with this name already exists.")
+                elif user_qs.filter(is_service_account=False).count():
+                    self.add_error("name", "A user with this name already exists.")
+            return {"username": username, "email": email}
+
+    def save(self, request=None):
+        username = self.cleaned_data.get("username")
+        email = self.cleaned_data.get("email")
+        if not self.user:
+            return User.objects.create_service_account(username, email)
+        else:
+            self.user.username = username
+            self.user.email = email
+            self.user.save()
+            return self.user
 
 
 class UpdateUserForm(forms.ModelForm):

@@ -16,13 +16,17 @@ class MacOSBuildTestCase(TestCase):
             self.assertEqual(cm.exception.args[0], "Cannot parse build str for macos < 10.8")
 
     def test_ok(self):
-        for build, (name, minor, patch) in (("12E4022", ("OS X", 8, 4)),
-                                            ("15G31", ("OS X", 11, 6)),
-                                            ("19A471t", ("macOS", 15, 0)),
-                                            ("19D76", ("macOS", 15, 3))):
+        for build, (name, major, minor, patch) in (("12E4022", ("OS X", 10, 8, 4)),
+                                                   ("15G31", ("OS X", 10, 11, 6)),
+                                                   ("19A471t", ("macOS", 10, 15, 0)),
+                                                   ("19D76", ("macOS", 10, 15, 3)),
+                                                   ("20A2411", ("macOS", 11, 0, 0)),
+                                                   ("20B29", ("macOS", 11, 0, 1)),
+                                                   ("20B50", ("macOS", 11, 0, 1)),
+                                                   ("20C69", ("macOS", 11, 1, 0))):
             self.assertEqual(macos_version_from_build(build),
                              {"name": name,
-                              "major": 10,
+                              "major": major,
                               "minor": minor,
                               "patch": patch,
                               "build": build})

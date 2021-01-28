@@ -6,6 +6,7 @@ cryptography
 django-bootstrap-form
 django>=2.2,<2.3
 djangorestframework
+djangorestframework-yaml
 django-filter
 elasticsearch
 geoip2

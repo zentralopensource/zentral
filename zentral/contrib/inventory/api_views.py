@@ -5,9 +5,10 @@ from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from .forms import MacOSAppSearchForm
 from .models import MetaBusinessUnit, Tag
 from .serializers import MetaBusinessUnitSerializer, TagSerializer
-from .tasks import export_inventory
+from .tasks import export_inventory, export_macos_apps
 from .utils import MSQuery
 
 
@@ -19,6 +20,21 @@ class MachinesExport(APIView):
         msquery = MSQuery(request.GET)
         filename = "inventory_export_{:%Y-%m-%d_%H-%M-%S}.{}".format(timezone.now(), export_format)
         result = export_inventory.apply_async((msquery.get_urlencoded_canonical_query_dict(), filename))
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)
+
+
+class MacOSAppsExport(APIView):
+    def post(self, request, *args, **kwargs):
+        export_format = request.data.pop("export_format", "xlsx")
+        if export_format not in ("xlsx", "csv"):
+            raise ValidationError("Invalid export format")
+        form = MacOSAppSearchForm(request.data, export=True)
+        if not form.is_valid():
+            raise ValidationError("Invalid search parameters")
+        filename = "macos_apps_export_{:%Y-%m-%d_%H-%M-%S}.{}".format(timezone.now(), export_format)
+        result = export_macos_apps.apply_async((request.data, filename,))
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)

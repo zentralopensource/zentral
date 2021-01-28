@@ -137,6 +137,7 @@ MACOS_BUILD_RE = re.compile(r"(?P<minor>[0-9]{1,2})(?P<patch_letter>[A-Z])[1-9]+
 def macos_version_from_build(build):
     match = MACOS_BUILD_RE.match(build)
     if match:
+        patch = ord(match.group("patch_letter")) - 65
         minor = int(match.group("minor")) - 4
         if minor < 8:
             # the patch letters are not always consecutive for older versions
@@ -148,10 +149,13 @@ def macos_version_from_build(build):
             name = "macOS"
         if minor >= 16:
             major = 11
-            minor -= 16
+            minor = max(0, patch - 1)
+            if build in ("20B29", "20B50"):
+                patch = 1
+            else:
+                patch = 0
         else:
             major = 10
-        patch = ord(match.group("patch_letter")) - 65
         return {
             "name": name,
             "major": major,

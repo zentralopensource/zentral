@@ -164,7 +164,7 @@
   </a>
 </p>
 
-<h2>{{ enrollments_count }} Enrollment{{ enrollments_count|pluralize }}</h2>
+<h3>{{ enrollments_count }} Enrollment{{ enrollments_count|pluralize }}</h3>
 
 <p>
   <a class="btn btn-default" href="{% url 'santa:create_enrollment' object.id %}">Create</a>
@@ -234,5 +234,11 @@
   </tbody>
 </table>
 {% endif %}
+
+<h3>{{ rules_count }} Rule{{ rules_count|pluralize }}</h3>
+
+<p>
+  <a class="btn btn-default" href="{% url 'santa:configuration_rules' object.id %}">Manage rules</a>
+</p>
 
 {% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'users:list' %}">Users</a></li>
+  <li class="active">{{ user.get_type_display|title }} {{ user }}</li>
+</ol>
+
+<h3>{{ user.get_type_display|title }} {{ user }}</h3>
+
+<dl class="dl-horizontal">
+  {% if user.is_service_account %}
+  <dt>name</dt>
+  <dd>{{ user.username }}</dd>
+  {% else %}
+  <dt>username</dt>
+  <dd>{{ user.username }}</dd>
+  <dt>email</dt>
+  <dd>{{ user.email }}</dd>
+  <dt>superuser?</dt>
+  <dd>{{ user.is_superuser|yesno }}</dd>
+  <dt>remote?</dt>
+  <dd>{{ user.is_remote|yesno }}</dd>
+  {% endif %}
+  {% if not user.is_remote %}
+  <dt>API Token?</dt>
+  <dd>
+    {% if user.auth_token %}
+    Yes
+    <a href="{% url 'users:delete_user_api_token' user.pk %}" class="btn btn-xs btn-danger">
+      <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    </a>
+    {% else %}
+    <form method="post" action="{% url 'users:create_user_api_token' user.pk %}">{% csrf_token %}
+    No
+    <button class="btn btn-xs btn-default" type="submit">
+      <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+    </button>
+    </form>
+    {% endif %}
+  </dd>
+  {% endif %}
+</dl>
+
+<p>
+  {% if user.editable %}
+  <a href="{% url 'users:update' user.pk %}" class="btn btn-default">Update</a>
+  {% endif %}
+  {% if user.deletable %}
+  <a href="{% url 'users:delete' user.pk %}" class="btn btn-danger">Delete</a>
+  {% endif %}
+</p>
+{% endblock %}

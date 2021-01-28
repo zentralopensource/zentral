@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import json
 import uuid
 from django.conf import settings
@@ -6,22 +7,23 @@ from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core import signing
 from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, resolve_url
+from django.shortcuts import get_object_or_404, redirect, resolve_url
 from django.template.response import TemplateResponse
 from django.urls import reverse, reverse_lazy
 from django.utils.http import is_safe_url
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
-from django.views.generic import DetailView, FormView, ListView, TemplateView, View
+from django.views.generic import DetailView, FormView, TemplateView, View
+from rest_framework.authtoken.models import Token
 from u2flib_server.u2f import begin_registration, complete_registration
 from zentral.conf import settings as zentral_settings
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from realms.models import Realm
 from .events import post_failed_verification_event, post_verification_device_event
-from .forms import (ZentralAuthenticationForm,
-                    AddTOTPForm, AddUserForm, CheckPasswordForm, RegisterU2FDeviceForm, UpdateUserForm,
-                    VerifyTOTPForm, VerifyU2FForm)
+from .forms import (AddTOTPForm, CheckPasswordForm,
+                    InviteUserForm, RegisterU2FDeviceForm, ServiceAccountForm, UpdateUserForm,
+                    VerifyTOTPForm, VerifyU2FForm, ZentralAuthenticationForm)
 from .models import User, UserTOTP, UserU2F
 
 
@@ -130,8 +132,17 @@ class CanManageUsersMixin(PermissionRequiredMixin):
     permission_required = ('accounts.add_user', 'accounts.change_user', 'accounts.delete_user')
 
 
-class UsersView(CanManageUsersMixin, ListView):
-    model = User
+class UsersView(CanManageUsersMixin, TemplateView):
+    template_name = "accounts/user_list.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["users"] = User.objects.filter(is_service_account=False)
+        ctx["user_count"] = ctx["users"].count()
+        ctx["service_accounts"] = User.objects.filter(is_service_account=True)
+        ctx["service_account_count"] = ctx["service_accounts"].count()
+        return ctx
 
 
 class NginxAuthRequestView(View):
@@ -151,9 +162,9 @@ class NginxAuthRequestView(View):
             return response
 
 
-class AddUserView(CanManageUsersMixin, FormView):
+class InviteUserView(CanManageUsersMixin, FormView):
     template_name = "accounts/user_form.html"
-    form_class = AddUserForm
+    form_class = InviteUserForm
     success_url = reverse_lazy("users:list")
 
     def form_valid(self, form):
@@ -162,14 +173,93 @@ class AddUserView(CanManageUsersMixin, FormView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
         ctx["title"] = "Send an email invitation"
         return ctx
+
+
+class CreateServiceAccountView(CanManageUsersMixin, FormView):
+    template_name = "accounts/service_account_form.html"
+    form_class = ServiceAccountForm
+    success_url = reverse_lazy("users:list")
+
+    def form_valid(self, form):
+        user = form.save(self.request)
+        return redirect("users:user_api_token", user.pk)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["title"] = "Create service account"
+        return ctx
+
+
+class UserView(CanManageUsersMixin, DetailView):
+    template_name = "accounts/user_detail.html"
+    model = User
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        user = ctx["user"]
+        ctx["title"] = "{} {}".format(user.get_type_display().title(), user)
+        return ctx
+
+
+class CreateUserAPITokenView(CanManageUsersMixin, View):
+    def post(self, request, *args, **kwargs):
+        user = get_object_or_404(User.objects.filter(is_remote=False), pk=kwargs["pk"])
+        _, created = Token.objects.get_or_create(user=user)
+        if not created:
+            messages.warning(request, "User already has an API token")
+            return redirect("users:list")
+        else:
+            return redirect("users:user_api_token", user.pk)
+
+
+class UserAPITokenView(CanManageUsersMixin, DetailView):
+    template_name = "accounts/user_api_token.html"
+
+    def get_queryset(self):
+        min_created = datetime.now() - timedelta(seconds=30)
+        return User.objects.filter(auth_token__created__gte=min_created)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        user = ctx["user"]
+        ctx["title"] = "{} API token".format(user.get_type_display().title())
+        return ctx
+
+
+class DeleteUserAPITokenView(CanManageUsersMixin, TemplateView):
+    template_name = "accounts/api_token_confirm_delete.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.user = get_object_or_404(User, pk=kwargs["pk"])
+        if not Token.objects.filter(user=self.user).count():
+            messages.warning(request, "User has no API token")
+            return redirect("users:user", self.user.pk)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["user"] = self.user
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        deleted_token_count, _ = Token.objects.filter(user=self.user).delete()
+        if deleted_token_count:
+            messages.info(request, "User API token deleted")
+        else:
+            messages.warning(request, "No API token deleted")
+        return redirect("users:user", self.user.pk)
 
 
 class UpdateUserView(CanManageUsersMixin, FormView):
     template_name = "accounts/user_form.html"
     form_class = UpdateUserForm
-    success_url = reverse_lazy("users:list")
 
     def dispatch(self, request, *args, **kwargs):
         self.user = get_object_or_404(User, pk=kwargs["pk"])
@@ -177,10 +267,19 @@ class UpdateUserView(CanManageUsersMixin, FormView):
             return HttpResponseRedirect(self.success_url)
         return super().dispatch(request, *args, **kwargs)
 
+    def get_form_class(self):
+        if self.user.is_service_account:
+            return ServiceAccountForm
+        else:
+            return UpdateUserForm
+
     def get_initial(self):
-        return {"username": self.user.username,
-                "email": self.user.email,
-                "is_superuser": self.user.is_superuser}
+        if self.user.is_service_account:
+            return {"name": self.user.username}
+        else:
+            return {"username": self.user.username,
+                    "email": self.user.email,
+                    "is_superuser": self.user.is_superuser}
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -189,12 +288,13 @@ class UpdateUserView(CanManageUsersMixin, FormView):
 
     def form_valid(self, form):
         form.save(self.request)
-        return super().form_valid(form)
+        return redirect("users:user", self.user.pk)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["managed_user"] = self.user
-        ctx["title"] = "Update user {}".format(self.user)
+        ctx["setup"] = True
+        ctx["user"] = self.user
+        ctx["title"] = "Update {} {}".format(self.user.get_type_display(), self.user)
         return ctx
 
 
@@ -209,11 +309,16 @@ class DeleteUserView(CanManageUsersMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["managed_user"] = self.user
+        ctx["setup"] = True
+        ctx["user"] = self.user
+        ctx["title"] = "Delete {}".format(self.user.get_type_display())
         return ctx
 
     def post(self, request, *args, **kwargs):
-        msg = "User {} deleted".format(self.user)
+        if self.user.is_service_account:
+            msg = "Service account {} deleted".format(self.user)
+        else:
+            msg = "User {} deleted".format(self.user)
         self.user.delete()
         messages.info(request, msg)
         return HttpResponseRedirect(reverse("users:list"))

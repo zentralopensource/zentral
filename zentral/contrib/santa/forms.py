@@ -1,9 +1,10 @@
 from django import forms
+from django.contrib.postgres.forms import SimpleArrayField
+from django.db.models import Count
 from zentral.conf import settings
-from zentral.core.probes.forms import BaseCreateProbeForm
+from zentral.contrib.inventory.models import Tag
 from zentral.utils.forms import validate_sha256
-from .models import Configuration, Enrollment
-from .probes import SantaProbe, Rule
+from .models import Bundle, Configuration, Enrollment, Rule, RuleSet, Target
 
 
 class ConfigurationForm(forms.ModelForm):
@@ -54,48 +55,168 @@ class EnrollmentForm(forms.ModelForm):
             self.fields["configuration"].widget = forms.HiddenInput()
 
 
+class BinarySearchForm(forms.Form):
+    name = forms.CharField(label="Name", required=False,
+                           widget=forms.TextInput(attrs={"placeholder": "name",
+                                                         "size": 50}))
+
+
+class BundleSearchForm(forms.Form):
+    name = forms.CharField(label="Name", required=False,
+                           widget=forms.TextInput(attrs={"placeholder": "bundle name, id",
+                                                         "size": 50}))
+
+
 class CertificateSearchForm(forms.Form):
     query = forms.CharField(required=False,
                             widget=forms.TextInput(attrs={"placeholder": "common name, organization",
                                                           "size": 50}))
 
 
-class CollectedApplicationSearchForm(forms.Form):
-    name = forms.CharField(label="Name", required=False,
-                           widget=forms.TextInput(attrs={"placeholder": "name",
-                                                         "size": 50}))
+class RuleSearchForm(forms.Form):
+    ruleset = forms.ModelChoiceField(queryset=RuleSet.objects.none(), required=False)
+    target_type = forms.ChoiceField(choices=(("", "----"),) + Target.TYPE_CHOICES, required=False)
+    policy = forms.ChoiceField(choices=(("", "----"),) + Rule.POLICY_CHOICES, required=False)
+    sha256 = forms.CharField(required=False,
+                             widget=forms.TextInput(attrs={"autofocus": "true",
+                                                           "size": 32,
+                                                           "placeholder": "sha256"}))
+
+    def __init__(self, *args, **kwargs):
+        self.configuration = kwargs.pop("configuration")
+        super().__init__(*args, **kwargs)
+        self.fields["ruleset"].queryset = (
+            RuleSet.objects.distinct()
+                           .filter(rule__configuration=self.configuration)
+                           .annotate(rule_count=Count("rule"))
+                           .filter(rule_count__gte=1)
+                           .order_by("name")
+        )
+
+    def get_queryset(self):
+        qs = (Rule.objects.select_related("target")
+                          .filter(configuration=self.configuration)
+                          .order_by("-pk"))
+        ruleset = self.cleaned_data.get("ruleset")
+        if ruleset:
+            qs = qs.filter(ruleset=ruleset)
+        target_type = self.cleaned_data.get("target_type")
+        if target_type:
+            qs = qs.filter(target__type=target_type)
+        policy = self.cleaned_data.get("policy")
+        if policy:
+            qs = qs.filter(policy=policy)
+        sha256 = self.cleaned_data.get("sha256")
+        if sha256:
+            qs = qs.filter(target__sha256__icontains=sha256)
+        return qs
 
 
 class RuleForm(forms.Form):
+    target_type = forms.ChoiceField(choices=Target.TYPE_CHOICES)
+    target_sha256 = forms.CharField(validators=[validate_sha256])
     policy = forms.ChoiceField(choices=Rule.POLICY_CHOICES)
-    rule_type = forms.ChoiceField(choices=Rule.RULE_TYPE_CHOICES)
-    sha256 = forms.CharField(validators=[validate_sha256])
-    custom_msg = forms.CharField(label="Custom message", required=False)
+    custom_msg = forms.CharField(label="Custom message", required=False,
+                                 widget=forms.Textarea(attrs={"cols": "40", "rows": "10"}))
+    serial_numbers = SimpleArrayField(forms.CharField(), required=False)
+    primary_users = SimpleArrayField(forms.CharField(), required=False)
+    tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.all(), required=False)
 
     def __init__(self, *args, **kwargs):
-        collected_app = kwargs.pop("collected_app", None)
-        certificate = kwargs.pop("certificate", None)
+        self.configuration = kwargs.pop("configuration")
+        self.binary = kwargs.pop("binary", None)
+        self.bundle = kwargs.pop("bundle", None)
+        self.certificate = kwargs.pop("certificate", None)
         super().__init__(*args, **kwargs)
-        if collected_app or certificate:
-            self.fields["rule_type"].widget = forms.HiddenInput()
-            self.fields["sha256"].widget = forms.HiddenInput()
+        if self.binary or self.bundle or self.certificate:
+            del self.fields["target_type"]
+            del self.fields["target_sha256"]
+        if self.bundle:
+            self.fields["policy"].choices = (
+                (k, v)
+                for k, v in Rule.POLICY_CHOICES
+                if k in Rule.BUNDLE_POLICIES
+            )
+        if not any(k == Rule.BLOCKLIST for k, _ in self.fields["policy"].choices):
+            del self.fields["custom_msg"]
 
-    def get_rule_d(self):
-        return {f: v for f, v in self.cleaned_data.items() if v}
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.binary:
+            target_type = Target.BINARY
+            target_sha256 = self.binary.sha_256
+        elif self.bundle:
+            target_type = Target.BUNDLE
+            target_sha256 = self.bundle.target.sha256
+        elif self.certificate:
+            target_type = Target.CERTIFICATE
+            target_sha256 = self.certificate.sha_256
+        else:
+            target_type = cleaned_data.get("target_type")
+            target_sha256 = cleaned_data.get("target_sha256")
 
-    @staticmethod
-    def get_initial(rule):
-        initial = {}
-        for attr in ("policy", "rule_type", "sha256", "custom_msg"):
-            value = getattr(rule, attr, None)
-            if value:
-                initial[attr] = value
-        return initial
+        if target_type and target_sha256 and Rule.objects.filter(configuration=self.configuration,
+                                                                 target__type=target_type,
+                                                                 target__sha256=target_sha256).count():
+            self.add_error(None, "A rule for this target already exists")
+
+        try:
+            policy = int(cleaned_data.get("policy"))
+        except (TypeError, ValueError):
+            pass
+
+        if target_type == Target.BUNDLE:
+            try:
+                bundle = Bundle.objects.get(target__sha256=target_sha256)
+            except Bundle.DoesNotExist:
+                self.add_error("bundle", 'Unknown bundle.')
+            else:
+                if not bundle.uploaded_at:
+                    self.add_error("bundle", "This bundle has not been uploaded yet.")
+            if policy and policy not in Rule.BUNDLE_POLICIES:
+                self.add_error("policy", "Policy not allowed for bundles.")
+
+        if policy and policy != Rule.BLOCKLIST:
+            custom_msg = cleaned_data.get("custom_msg")
+            if custom_msg:
+                self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")
+
+        cleaned_data["target_type"] = target_type
+        cleaned_data["target_sha256"] = target_sha256
+        return cleaned_data
+
+    def save(self):
+        target, _ = Target.objects.get_or_create(type=self.cleaned_data["target_type"],
+                                                 sha256=self.cleaned_data["target_sha256"])
+        rule = Rule.objects.create(configuration=self.configuration,
+                                   target=target,
+                                   policy=self.cleaned_data["policy"],
+                                   custom_msg=self.cleaned_data.get("custom_msg", ""),
+                                   serial_numbers=self.cleaned_data.get("serial_numbers") or [],
+                                   primary_users=self.cleaned_data.get("primary_users") or [])
+        tags = self.cleaned_data.get("tags")
+        if tags:
+            rule.tags.set(tags)
+        return rule
 
 
-class CreateProbeForm(BaseCreateProbeForm, RuleForm):
-    model = SantaProbe
-    field_order = ("name", "custom_msg", "policy", "rule_type", "sha256")
+class UpdateRuleForm(forms.ModelForm):
+    class Meta:
+        model = Rule
+        fields = ("policy", "custom_msg", "serial_numbers", "primary_users", "tags")
 
-    def get_body(self):
-        return {"rules": [self.get_rule_d()]}
+    def clean(self):
+        cleaned_data = super().clean()
+        target_type = cleaned_data.get("target_type")
+
+        try:
+            policy = int(cleaned_data.get("policy"))
+        except (TypeError, ValueError):
+            pass
+        else:
+            if target_type == Target.BUNDLE and policy not in Rule.BUNDLE_POLICIES:
+                self.add_error("policy", "Policy not allowed for bundles.")
+            if policy != Rule.BLOCKLIST:
+                custom_msg = cleaned_data.get("custom_msg")
+                if custom_msg:
+                    self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")

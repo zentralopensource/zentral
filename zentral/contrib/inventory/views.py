@@ -673,20 +673,30 @@ class DeleteTaxonomyView(LoginRequiredMixin, DeleteView):
 class MacOSAppsView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/macos_apps.html"
 
-    def get(self, request, *args, **kwargs):
-        self.search_form = MacOSAppSearchForm(request.GET)
-        return super(MacOSAppsView, self).get(request, *args, **kwargs)
-
     def get_context_data(self, **kwargs):
-        ctx = super(MacOSAppsView, self).get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         ctx['inventory'] = True
-        ctx['search_form'] = self.search_form
-        if self.search_form.is_valid():
+        if self.request.GET:
+            search_form = MacOSAppSearchForm(self.request.GET)
+        else:
+            search_form = MacOSAppSearchForm()
+        ctx['search_form'] = search_form
+        qd = self.request.GET.copy()
+        try:
+            page = int(qd.pop('page', None)[0])
+        except (IndexError, TypeError, ValueError):
+            page = 1
+        if page > 1:
+            reset_link = "?{}".format(qd.urlencode())
+        else:
+            reset_link = "?"
+        breadcrumbs = [(reset_link, "Search macOS applications")]
+        if search_form.has_changed() and search_form.is_valid():
             (ctx['object_list'],
              ctx['total_objects'],
              previous_page,
              next_page,
-             ctx['total_pages']) = self.search_form.search(limit=50)
+             ctx['total_pages']) = search_form.search(page=page, limit=50)
             if next_page:
                 qd = self.request.GET.copy()
                 qd['page'] = next_page
@@ -695,23 +705,13 @@ class MacOSAppsView(LoginRequiredMixin, TemplateView):
                 qd = self.request.GET.copy()
                 qd['page'] = previous_page
                 ctx['previous_url'] = "?{}".format(qd.urlencode())
-        qd = self.request.GET.copy()
-        qd.pop('page', None)
-        reset_link = "?{}".format(qd.urlencode())
-        breadcrumbs = []
-        if self.search_form.is_valid() \
-           and len([i for k, i in self.search_form.cleaned_data.items() if i and not k == 'page']):
-            breadcrumbs.append((reverse('inventory:macos_apps'), "macOS applications"))
-            breadcrumbs.append((reset_link, "Search"))
-        else:
-            breadcrumbs.append((reset_link, "macOS applications"))
-        breadcrumbs.append((None, "page {} of {}".format(self.search_form.cleaned_data['page'],
-                                                         ctx.get('total_pages', 1))))
+            breadcrumbs.append((None, "page {} of {}".format(search_form.cleaned_data['page'],
+                                                             ctx.get('total_pages', 1))))
+            ctx['table_headers'] = [search_form.get_header_label_and_link("bundle_name", "Bundle name")]
+            ctx['table_headers'].extend((name, None) for name in ("Bundle ID", "Version", "Version str."))
+            ctx['table_headers'].append(search_form.get_header_label_and_link("machine_count", "Machines"))
+            ctx['table_headers'].append(("Sources", None))
         ctx['breadcrumbs'] = breadcrumbs
-        ctx['table_headers'] = [self.search_form.get_header_label_and_link("bundle_name", "Bundle name")]
-        ctx['table_headers'].extend((name, None) for name in ("Bundle ID", "Version", "Version str."))
-        ctx['table_headers'].append(self.search_form.get_header_label_and_link("machine_count", "Machines"))
-        ctx['table_headers'].append(("Sources", None))
         return ctx
 
 
