@@ -4,3 +4,5 @@
 .wy-nav-top {
   background-color: rgb(225, 113, 97);
 }
+table {margin-bottom: 24px;}
+td, th {padding: 12px;}
