@@ -55,7 +55,7 @@ This is the payload that is generated when creating an enrollment on a Zentral s
 Santa, the santa daemon, and the santa bundle service need access to all protected files, including system administration files. A [privacy preference policy control payload](https://developer.apple.com/documentation/devicemanagement/privacypreferencespolicycontrol) must be distributed to allow the *System Policy All Files* (`SystemPolicyAllFiles` key) [Service](https://support.apple.com/guide/mdm/privacy-preferences-policy-control-payload-mdm38df53c2a/1/web/1.0#mdm00b8cbaf5) for these three santa components, identified by their bundle IDs and code requirements.
 
 |IdentifierType|Identifier|CodeRequirement|Allowed|
-|---|---|---|---|
+|---|---|---|:---:|
 |bundleID|com.google.santa|identifier "com.google.santa" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /\* exists \*/ and certificate leaf[field.1.2.840.113635.100.6.1.13] /\* exists \*/ and certificate leaf[subject.OU] = EQHXZ8M8AV|true|
 |bundleID|com.google.santa.daemon|identifier "com.google.santa.daemon" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /\* exists \*/ and certificate leaf[field.1.2.840.113635.100.6.1.13] /\* exists \*/ and certificate leaf[subject.OU] = EQHXZ8M8AV|true|
 |bundleID|com.google.santa.bundleservice|identifier "com.google.santa.bundleservice" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /\* exists \*/ and certificate leaf[field.1.2.840.113635.100.6.1.13] /\* exists \*/ and certificate leaf[subject.OU] = EQHXZ8M8AV|true|
