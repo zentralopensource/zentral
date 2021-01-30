@@ -24,7 +24,7 @@ Click the **Source** menu and select _Cloud Storage file_.
 Enter the path to the public _Zentral all in one_ image file:
 
 ```
-zentralopensource/zentral_all_in_one.json
+zentralopensource/zentral-all-in-one.tar.gz
 ```
 
 Pick a location.
