@@ -70,15 +70,15 @@ class ManagedInstallReport(object):
 
     def _events(self):
         events = [(self.start_time, {'type': 'start'})]
-        for ir in self.data['InstallResults']:
+        for ir in self.data.get('InstallResults', []):
             events.append((ir.pop('time').strftime('%Y-%m-%d %H:%M:%S +0000'),
                            dict(ir, type='install')))
-        for rr in self.data['RemovalResults']:
+        for rr in self.data.get('RemovalResults', []):
             events.append((rr.pop('time').strftime('%Y-%m-%d %H:%M:%S +0000'),
                            dict(rr, type='removal')))
-        for err in self.data['Errors']:
+        for err in self.data.get('Errors', []):
             events.append((self.end_time, {'type': 'error', 'message': err}))
-        for warn in self.data['Warnings']:
+        for warn in self.data.get('Warnings', []):
             events.append((self.end_time, {'type': 'warning', 'message': warn}))
         events.sort(key=lambda t: t[0])
         return events
