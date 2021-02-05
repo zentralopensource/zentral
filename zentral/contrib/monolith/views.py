@@ -10,6 +10,7 @@ from django.http import (FileResponse,
                          Http404,
                          HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect)
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.functional import lazy
 from django.views.generic import DetailView, ListView, TemplateView, View
@@ -47,6 +48,34 @@ from .models import (MunkiNameError, parse_munki_name,
 from .utils import build_configuration_plist, build_configuration_profile
 
 logger = logging.getLogger('zentral.contrib.monolith.views')
+
+
+# inventory machine subview
+
+
+class InventoryMachineSubview:
+    template_name = "monolith/_inventory_machine_subview.html"
+    source_key = ("zentral.contrib.munki", "Munki")
+    err_message = None
+    enrolled_machine = None
+
+    def __init__(self, serial_number):
+        qs = (EnrolledMachine.objects.select_related("enrollment__manifest")
+                                     .filter(serial_number=serial_number).order_by("-created_at"))
+        count = qs.count()
+        if count > 1:
+            self.err_message = f"{count} machines found!!!"
+        if count > 0:
+            self.enrolled_machine = qs.first()
+
+    def render(self):
+        em = self.enrolled_machine
+        return render_to_string(
+            self.template_name,
+            {"enrolled_machine": em,
+             "manifest": em.enrollment.manifest if em else None,
+             "err_message": self.err_message}
+        )
 
 
 # repository sync configuration

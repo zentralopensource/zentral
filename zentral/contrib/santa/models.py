@@ -282,11 +282,16 @@ class EnrolledMachine(models.Model):
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
 
     hardware_uuid = models.UUIDField()  # DB index?
-    serial_number = models.TextField()
+    serial_number = models.TextField(db_index=True)
 
     primary_user = models.TextField(null=True)
     client_mode = models.IntegerField(choices=Configuration.CLIENT_MODE_CHOICES)
     santa_version = models.TextField()
+
+    binary_rule_count = models.IntegerField(null=True)
+    certificate_rule_count = models.IntegerField(null=True)
+    compiler_rule_count = models.IntegerField(null=True)
+    transitive_rule_count = models.IntegerField(null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

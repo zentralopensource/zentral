@@ -1,0 +1,10 @@
+{% if enrolled_machine %}
+<h3>Monolith</h3>
+{% if err_message %}
+<p class="text-danger">{{ err_message }}</p>
+{% endif %}
+<dl class="dl-horizontal">
+  <dt>Manifest</dt>
+  <dd><a href="{% url 'monolith:manifest' manifest.pk %}">{{ manifest }}</a></dd>
+</dl>
+{% endif %}

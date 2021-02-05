@@ -9,6 +9,7 @@ from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.db.models import F
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.conf import macos_version_from_build
@@ -26,6 +27,40 @@ from .models import Bundle, Configuration, EnrolledMachine, Enrollment, MachineR
 from .utils import build_configuration_plist, build_configuration_profile
 
 logger = logging.getLogger('zentral.contrib.santa.views')
+
+
+# inventory machine subview
+
+
+class InventoryMachineSubview:
+    template_name = "santa/_inventory_machine_subview.html"
+    source_key = ("zentral.contrib.santa", "Santa")
+    err_message = None
+    enrolled_machine = None
+
+    def __init__(self, serial_number):
+        qs = (EnrolledMachine.objects.select_related("enrollment__configuration")
+                                     .filter(serial_number=serial_number).order_by("-updated_at"))
+        count = qs.count()
+        if count > 1:
+            self.err_message = f"{count} machines found!!!"
+        if count > 0:
+            self.enrolled_machine = qs.first()
+
+    def render(self):
+        ctx = {"err_message": self.err_message}
+        if self.enrolled_machine:
+            em = self.enrolled_machine
+            ctx.update({
+                "enrolled_machine": em,
+                "configuration": em.enrollment.configuration,
+                "err_message": self.err_message,
+                "binary_rule_count": "-" if em.binary_rule_count is None else em.binary_rule_count,
+                "certificate_rule_count": "-" if em.certificate_rule_count is None else em.certificate_rule_count,
+                "compiler_rule_count": "-" if em.compiler_rule_count is None else em.compiler_rule_count,
+                "transitive_rule_count": "-" if em.transitive_rule_count is None else em.transitive_rule_count
+            })
+        return render_to_string(self.template_name, ctx)
 
 
 # configuration / enrollment
@@ -462,9 +497,13 @@ class PreflightView(BaseSyncView):
     def _get_enrolled_machine_defaults(self):
         defaults = {
             'serial_number': self.request_data['serial_num'],
-            'santa_version': self.request_data['santa_version'],
             'primary_user': self._get_primary_user(),
             'client_mode': Configuration.MONITOR_MODE,
+            'santa_version': self.request_data['santa_version'],
+            'binary_rule_count': self.request_data.get('binary_rule_count'),
+            'certificate_rule_count': self.request_data.get('certificate_rule_count'),
+            'compiler_rule_count': self.request_data.get('compiler_rule_count'),
+            'transitive_rule_count': self.request_data.get('transitive_rule_count'),
         }
         # client mode
         req_client_mode = self.request_data['client_mode']

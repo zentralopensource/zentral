@@ -55,7 +55,7 @@
 <div class="row">
   <div class="col-md-6">
     <ul class="nav nav-tabs">
-      {% for source_display, ms in machine_snapshots %}
+      {% for source_display, ms, source_subviews in machine_snapshots %}
       <li role="presentation"{% if forloop.first %} class="active"{% endif %} style="max-width:{{ max_source_tab_with }}%">
         <a href="#" data-tabclass="detailstab" data-tabid="details-{{ ms.id }}" style="overflow:hidden;text-overflow: ellipsis">
           {{ source_display }}
@@ -63,7 +63,7 @@
       </li>
       {% endfor %}
     </ul>
-    {% for source_display, ms in machine_snapshots %}
+    {% for source_display, ms, source_subviews in machine_snapshots %}
     <div class="detailstab" id="details-{{ ms.id }}"{% if not forloop.first %}style="display:none;"{% endif %}>
       {% if ms.business_unit %}
       <h3>Business unit</h3>
@@ -300,6 +300,10 @@
       {% endfor %}
       {% endif %}
       {% endwith %}
+
+      {% for source_subview in source_subviews %}
+      {{ source_subview.render }}
+      {% endfor %}
 
       <dl class="dl-horizontal">
         <dt class="small" style="opacity:0.5">last change</dt>

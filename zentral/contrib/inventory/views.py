@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from importlib import import_module
 import logging
 from math import ceil
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -8,6 +9,7 @@ from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
+from zentral.conf import settings
 from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores import frontend_store
 from zentral.utils.prometheus import BasePrometheusMetricsView
@@ -28,6 +30,27 @@ from .utils import (get_prometheus_inventory_metrics,
 
 
 logger = logging.getLogger("zentral.contrib.inventory.views")
+
+
+source_machine_subviews = {"_loaded": False}
+
+
+def _load_source_machine_subviews():
+    for app in settings["apps"]:
+        try:
+            subview = getattr(import_module(f"{app}.views"), "InventoryMachineSubview")
+        except (ModuleNotFoundError, AttributeError):
+            pass
+        else:
+            source_machine_subviews.setdefault(subview.source_key, []).append(subview)
+    source_machine_subviews["_loaded"] = True
+
+
+def _get_source_machine_subview(source, serial_number):
+    if not source_machine_subviews["_loaded"]:
+        _load_source_machine_subviews()
+    source_key = (source.module, source.name)
+    return [subview(serial_number) for subview in source_machine_subviews.get(source_key, [])]
 
 
 class MachineListView(LoginRequiredMixin, FormView):
@@ -381,10 +404,12 @@ class MachineView(LoginRequiredMixin, TemplateView):
         context = super(MachineView, self).get_context_data(**kwargs)
         context['inventory'] = True
         context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
-        context['machine_snapshots'] = sorted(
-            [(ms.source.get_display_name(), ms) for ms in machine.snapshots],
-            key=lambda t: t[0].lower()
-        )
+        context['machine_snapshots'] = []
+        for source_display, source, ms in sorted(((ms.source.get_display_name(), ms.source, ms)
+                                                  for ms in machine.snapshots),
+                                                 key=lambda t: t[0].lower()):
+            source_subview = _get_source_machine_subview(source, machine.serial_number)
+            context['machine_snapshots'].append((source_display, ms, source_subview))
         machine_snapshots_count = len(context['machine_snapshots'])
         if machine_snapshots_count:
             context['max_source_tab_with'] = 100 // machine_snapshots_count

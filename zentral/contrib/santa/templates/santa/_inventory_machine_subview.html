@@ -1,0 +1,26 @@
+{% if enrolled_machine %}
+<h3>Santa</h3>
+{% if err_message %}
+<p class="text-danger">{{ err_message }}</p>
+{% endif %}
+<dl class="dl-horizontal">
+  {% if configuration %}
+  <dt>Configuration</dt>
+  <dd><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration }}</a></dd>
+  {% endif %}
+  <dt>Primary user</dt>
+  <dd>{{ enrolled_machine.primary_user|default:"-" }}</dd>
+  <dt>Client mode</dt>
+  <dd>{{ enrolled_machine.get_client_mode_display }}</dd>
+  <dt>Version</dt>
+  <dd>{{ enrolled_machine.santa_version }}</dd>
+  <dt>Binary rule{% if binary_rule_count != "-" %}{{ binary_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd>{{ binary_rule_count }}</dd>
+  <dt>Certicate rule{% if certificate_rule_count != "-" %}{{ certificate_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd>{{ certificate_rule_count }}</dd>
+  <dt>Compiler rule{% if compiler_rule_count != "-" %}{{ compiler_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd>{{ compiler_rule_count }}</dd>
+  <dt>Transitive rule{% if transitive_rule_count != "-" %}{{ transitive_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd>{{ transitive_rule_count }}</dd>
+</dl>
+{% endif %}
