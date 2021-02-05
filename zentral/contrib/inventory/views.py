@@ -397,23 +397,12 @@ class MBUMachinesView(MachineListView):
                 (None, self.object.name)]
 
 
-class MachineView(LoginRequiredMixin, TemplateView):
-    template_name = "inventory/machine_detail.html"
+class MachineHeartbeatsView(LoginRequiredMixin, TemplateView):
+    template_name = "inventory/_machine_heartbeats.html"
 
     def get_context_data(self, **kwargs):
-        context = super(MachineView, self).get_context_data(**kwargs)
-        context['inventory'] = True
-        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
-        context['machine_snapshots'] = []
-        for source_display, source, ms in sorted(((ms.source.get_display_name(), ms.source, ms)
-                                                  for ms in machine.snapshots),
-                                                 key=lambda t: t[0].lower()):
-            source_subview = _get_source_machine_subview(source, machine.serial_number)
-            context['machine_snapshots'].append((source_display, ms, source_subview))
-        machine_snapshots_count = len(context['machine_snapshots'])
-        if machine_snapshots_count:
-            context['max_source_tab_with'] = 100 // machine_snapshots_count
-        context['serial_number'] = machine.serial_number
+        ctx = super().get_context_data(**kwargs)
+        ctx["machine"] = machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
         prepared_heartbeats = []
         try:
             last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(machine.serial_number)
@@ -439,7 +428,27 @@ class MachineView(LoginRequiredMixin, TemplateView):
                      source_name, ua_max_dates, date_class)
                 )
             prepared_heartbeats.sort()
-        context['heartbeats'] = prepared_heartbeats
+        ctx["heartbeats"] = prepared_heartbeats
+        return ctx
+
+
+class MachineView(LoginRequiredMixin, TemplateView):
+    template_name = "inventory/machine_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(MachineView, self).get_context_data(**kwargs)
+        context['inventory'] = True
+        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
+        context['machine_snapshots'] = []
+        for source_display, source, ms in sorted(((ms.source.get_display_name(), ms.source, ms)
+                                                  for ms in machine.snapshots),
+                                                 key=lambda t: t[0].lower()):
+            source_subview = _get_source_machine_subview(source, machine.serial_number)
+            context['machine_snapshots'].append((source_display, ms, source_subview))
+        machine_snapshots_count = len(context['machine_snapshots'])
+        if machine_snapshots_count:
+            context['max_source_tab_with'] = 100 // machine_snapshots_count
+        context['serial_number'] = machine.serial_number
         return context
 
 
