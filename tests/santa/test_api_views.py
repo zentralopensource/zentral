@@ -131,8 +131,9 @@ class APIViewsTestCase(TestCase):
             json_response,
             {'ruleset': {
                 'name': ruleset.name,
-                'pk': ruleset.pk,
-                'result': 'created'},
+                'pk': ruleset.pk
+             },
+             'result': 'created',
              'configurations': [
                 {'name': self.configuration.name,
                  'pk': self.configuration.pk,
@@ -177,8 +178,9 @@ class APIViewsTestCase(TestCase):
             json_response,
             {'ruleset': {
                 'name': ruleset.name,
-                'pk': ruleset.pk,
-                'result': 'present'},
+                'pk': ruleset.pk
+              },
+             'result': 'present',
              'configurations': [
                 {'name': self.configuration.name,
                  'pk': self.configuration.pk,
@@ -206,8 +208,9 @@ class APIViewsTestCase(TestCase):
             json_response,
             {'ruleset': {
                 'name': ruleset.name,
-                'pk': ruleset.pk,
-                'result': 'present'},
+                'pk': ruleset.pk
+             },
+             'result': 'present',
              'configurations': [
                 {'name': self.configuration.name,
                  'pk': self.configuration.pk,
@@ -274,8 +277,9 @@ class APIViewsTestCase(TestCase):
             json_response,
             {'ruleset': {
                 'name': ruleset2.name,
-                'pk': ruleset2.pk,
-                'result': 'created'},
+                'pk': ruleset2.pk
+             },
+             'result': 'created',
              'configurations': [
                 {'name': self.configuration.name,
                  'pk': self.configuration.pk,
@@ -304,8 +308,9 @@ class APIViewsTestCase(TestCase):
             json_response,
             {'ruleset': {
                 'name': ruleset2.name,
-                'pk': ruleset2.pk,
-                'result': 'present'},
+                'pk': ruleset2.pk
+             },
+             'result': 'present',
              'configurations': [
                 {'name': self.configuration.name,
                  'pk': self.configuration.pk,

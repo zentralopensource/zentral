@@ -261,6 +261,12 @@ class Configuration(models.Model):
             # and notify their distributors
             enrollment.save()
 
+    def serialize_for_event(self, basic=False):
+        d = {"pk": self.pk, "name": self.name}
+        if basic:
+            return d
+        return d
+
 
 class Enrollment(BaseEnrollment):
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
@@ -332,6 +338,9 @@ class Target(models.Model):
         else:
             return []
 
+    def serialize_for_event(self):
+        return {"type": self.type, "sha256": self.sha256}
+
 
 class BundleManager(models.Manager):
     def search(self, **kwargs):
@@ -379,6 +388,26 @@ class RuleSet(models.Model):
     def __str__(self):
         return self.name
 
+    def serialize_for_event(self):
+        return {"pk": self.pk, "name": self.name}
+
+
+def translate_rule_policy(policy):
+    if not isinstance(policy, int):
+        policy = int(policy)
+    if policy == Rule.ALLOWLIST:
+        return "ALLOWLIST"
+    elif policy == Rule.ALLOWLIST_COMPILER:
+        return "ALLOWLIST_COMPILER"
+    elif policy == Rule.BLOCKLIST:
+        return "BLOCKLIST"
+    elif policy == Rule.SILENT_BLOCKLIST:
+        return "SILENT_BLOCKLIST"
+    elif policy == MachineRule.REMOVE:
+        return "REMOVE"
+    else:
+        raise ValueError(f"Unknown santa policy: {policy}")
+
 
 class Rule(models.Model):
     ALLOWLIST = 1
@@ -417,20 +446,25 @@ class Rule(models.Model):
     def get_absolute_url(self):
         return reverse("santa:configuration_rules", args=(self.configuration_id,))
 
-
-def translate_rule_policy(policy):
-    if policy == Rule.ALLOWLIST:
-        return "ALLOWLIST"
-    elif policy == Rule.ALLOWLIST_COMPILER:
-        return "ALLOWLIST_COMPILER"
-    elif policy == Rule.BLOCKLIST:
-        return "BLOCKLIST"
-    elif policy == Rule.SILENT_BLOCKLIST:
-        return "SILENT_BLOCKLIST"
-    elif policy == MachineRule.REMOVE:
-        return "REMOVE"
-    else:
-        raise ValueError(f"Unknown santa policy: {policy}")
+    def serialize_for_event(self):
+        d = {
+            "configuration": self.configuration.serialize_for_event(basic=True),
+            "target": self.target.serialize_for_event(),
+            "policy": translate_rule_policy(self.policy),
+        }
+        if self.ruleset:
+            d["ruleset"] = self.ruleset.serialize_for_event()
+        if self.custom_msg:
+            d["custom_msg"] = self.custom_msg
+        if self.serial_numbers:
+            d["serial_numbers"] = sorted(self.serial_numbers)
+        if self.primary_users:
+            d["primary_users"] = sorted(self.primary_users)
+        tags = list(self.tags.all())
+        if tags:
+            d["tags"] = [{"pk": t.pk, "name": t.name} for t in tags]
+            d["tags"].sort(key=lambda t: t["pk"])
+        return d
 
 
 class MachineRuleManager(models.Manager):

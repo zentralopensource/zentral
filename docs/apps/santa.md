@@ -334,9 +334,9 @@ You should get a response close to this one:
 {
     "ruleset": {
         "pk": 1,
-        "name": "First ruleset test",
-        "result": "created"
+        "name": "First ruleset test"
     },
+    "result": "created",
     "configurations": [
         {
             "name": "Name of your configuration",
@@ -358,9 +358,9 @@ If you post the same file again, you will get this answer:
 {
     "ruleset": {
         "pk": 1,
-        "name": "First ruleset test",
-        "result": "present"
+        "name": "First ruleset test"
     },
+    "result": "present",
     "configurations": [
         {
             "name": "Name of your configuration",
@@ -426,9 +426,9 @@ This indicates that there is an existing rule in the configuration, on the same 
 {
     "ruleset": {
         "pk": 2,
-        "name": "Second ruleset test",
-        "result": "created"
+        "name": "Second ruleset test"
     },
+    "result": "created",
     "configurations": [
         {
             "name": "Name of your configuration",
@@ -476,9 +476,9 @@ Nothing was changed:
 {
     "ruleset": {
         "pk": 2,
-        "name": "Second ruleset test",
-        "result": "present"
+        "name": "Second ruleset test"
     },
+    "result": "present",
     "configurations": [
         {
             "name": "Name of your configuration",

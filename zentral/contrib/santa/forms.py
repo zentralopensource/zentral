@@ -1,10 +1,12 @@
 from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
-from django.db.models import Count
+from django.db import transaction
+from django.db.models import Count, F
 from zentral.conf import settings
 from zentral.contrib.inventory.models import Tag
 from zentral.utils.forms import validate_sha256
-from .models import Bundle, Configuration, Enrollment, Rule, RuleSet, Target
+from .events import post_santa_rule_update_event
+from .models import Bundle, Configuration, Enrollment, Rule, RuleSet, Target, translate_rule_policy
 
 
 class ConfigurationForm(forms.ModelForm):
@@ -220,3 +222,71 @@ class UpdateRuleForm(forms.ModelForm):
                 custom_msg = cleaned_data.get("custom_msg")
                 if custom_msg:
                     self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")
+
+    def save(self, request):
+        # to reverse changes made by the ModelForm validation
+        self.instance.refresh_from_db()
+        updates = {}
+        updated = False
+        # policy
+        policy = self.cleaned_data["policy"]
+        if self.instance.policy != policy:
+            updates.setdefault("removed", {})["policy"] = translate_rule_policy(self.instance.policy)
+            self.instance.policy = policy
+            updated = True
+            updates.setdefault("added", {})["policy"] = translate_rule_policy(self.instance.policy)
+        # custom_msg
+        custom_msg = self.cleaned_data["custom_msg"]
+        if self.instance.custom_msg != custom_msg:
+            if self.instance.custom_msg:
+                updates.setdefault("removed", {})["custom_msg"] = self.instance.custom_msg
+            self.instance.custom_msg = custom_msg
+            self.instance.version = F("version") + 1  # bump version to trigger rule distribution
+            updated = True
+            if self.instance.custom_msg:
+                updates.setdefault("added", {})["custom_msg"] = self.instance.custom_msg
+        # serial_numbers
+        serial_numbers = set(self.cleaned_data["serial_numbers"])
+        old_serial_numbers = set(self.instance.serial_numbers)
+        if serial_numbers != old_serial_numbers:
+            self.instance.serial_numbers = self.cleaned_data["serial_numbers"]
+            updated = True
+            added_serial_numbers = serial_numbers - old_serial_numbers
+            if added_serial_numbers:
+                updates.setdefault("added", {})["serial_numbers"] = sorted(added_serial_numbers)
+            removed_serial_numbers = old_serial_numbers - serial_numbers
+            if removed_serial_numbers:
+                updates.setdefault("removed", {})["serial_numbers"] = sorted(removed_serial_numbers)
+        # primary_users
+        primary_users = set(self.cleaned_data["primary_users"])
+        old_primary_users = set(self.instance.primary_users)
+        if primary_users != old_primary_users:
+            self.instance.primary_users = self.cleaned_data["primary_users"]
+            updated = True
+            added_primary_users = primary_users - old_primary_users
+            if added_primary_users:
+                updates.setdefault("added", {})["primary_users"] = sorted(added_primary_users)
+            removed_primary_users = old_primary_users - primary_users
+            if removed_primary_users:
+                updates.setdefault("removed", {})["primary_users"] = sorted(removed_primary_users)
+        if updated:
+            self.instance.save()
+        # tags
+        tags = set(self.cleaned_data["tags"])
+        old_tags = set(self.instance.tags.all())
+        if tags != old_tags:
+            self.instance.tags.set(tags)
+            added_tags = tags - old_tags
+            if added_tags:
+                updates.setdefault("added", {})["tags"] = [{"pk": t.pk, "name": t.name} for t in added_tags]
+            removed_tags = old_tags - tags
+            if removed_tags:
+                updates.setdefault("removed", {})["tags"] = [{"pk": t.pk, "name": t.name} for t in removed_tags]
+        # event
+        if updates:
+            rule_update_data = {"rule": self.instance.serialize_for_event(),
+                                "result": "updated",
+                                "updates": updates}
+            transaction.on_commit(lambda: post_santa_rule_update_event(request, rule_update_data))
+
+        return self.instance

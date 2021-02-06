@@ -2,14 +2,14 @@ import json
 import logging
 from uuid import UUID
 import zlib
-from django.urls import reverse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
-from django.db.models import F
+from django.db import transaction
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.conf import macos_version_from_build
@@ -20,7 +20,7 @@ from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_trigger
                                              verify_enrollment_secret)
 from zentral.utils.certificates import parse_dn
 from zentral.utils.http import user_agent_and_ip_address_from_request
-from .events import post_enrollment_event, process_events, post_preflight_event
+from .events import post_enrollment_event, process_events, post_preflight_event, post_santa_rule_update_event
 from .forms import (BinarySearchForm, BundleSearchForm, CertificateSearchForm,
                     ConfigurationForm, EnrollmentForm, RuleForm, RuleSearchForm, UpdateRuleForm)
 from .models import Bundle, Configuration, EnrolledMachine, Enrollment, MachineRule, Rule, Target
@@ -271,6 +271,8 @@ class CreateConfigurationRuleView(LoginRequiredMixin, FormView):
 
     def form_valid(self, form):
         rule = form.save()
+        rule_update_data = {"rule": rule.serialize_for_event(), "result": "created"}
+        transaction.on_commit(lambda: post_santa_rule_update_event(self.request, rule_update_data))
         return redirect(rule)
 
 
@@ -278,14 +280,12 @@ class UpdateConfigurationRuleView(LoginRequiredMixin, UpdateView):
     form_class = UpdateRuleForm
 
     def get_object(self):
-        rule = get_object_or_404(
+        return get_object_or_404(
             Rule.objects.select_related("configuration", "target"),
             pk=self.kwargs["pk"],
             configuration__pk=self.kwargs["configuration_pk"],
             ruleset__isnull=True
         )
-        self.old_custom_msg = rule.custom_msg
-        return rule
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -300,11 +300,7 @@ class UpdateConfigurationRuleView(LoginRequiredMixin, UpdateView):
         return ctx
 
     def form_valid(self, form):
-        rule = form.save(commit=False)
-        if rule.custom_msg != self.old_custom_msg:
-            rule.version = F("version") + 1
-        rule.save()
-        form.save_m2m()
+        rule = form.save(self.request)
         return redirect(rule)
 
 
@@ -326,6 +322,11 @@ class DeleteConfigurationRuleView(LoginRequiredMixin, DeleteView):
         return ctx
 
     def get_success_url(self):
+        # see DeletionMixin
+        # called before self.object.delete()
+        # and after self.get_object()
+        rule_update_data = {"rule": self.object.serialize_for_event(), "result": "deleted"}
+        transaction.on_commit(lambda: post_santa_rule_update_event(self.request, rule_update_data))
         return reverse("santa:configuration_rules", args=(self.kwargs["configuration_pk"],))
 
 
