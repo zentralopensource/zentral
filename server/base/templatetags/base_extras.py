@@ -65,8 +65,7 @@ def setup_dropdown(context):
             app_shortname = app_name.rsplit('.', 1)[-1]
             try:
                 url_module = import_module('{}.urls'.format(app_name))
-            except ImportError:
-                # TODO: ModuleNotFoundError for python >= 3.6
+            except ModuleNotFoundError:
                 continue
             setup_menu_cfg = getattr(url_module, 'setup_menu_cfg', None)
             if not setup_menu_cfg:
