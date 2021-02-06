@@ -69,7 +69,7 @@ class EventObserver(object):
 class EventRequestUser(object):
     user_attr_list = ["id", "username", "email",
                       "has_verification_device",
-                      "is_remote", "is_superuser"]
+                      "is_remote", "is_service_account", "is_superuser"]
 
     def __init__(self, **kwargs):
         for attr in self.user_attr_list:
