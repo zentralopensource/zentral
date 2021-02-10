@@ -131,6 +131,8 @@ class SourceManager(MTObjectManager):
                     .order_by("module", "name"))
 
     def current_macos_apps_sources(self):
+        # can get really expensive if there are a lot of machines and apps
+        # it is recommended to use current_machine_snapshot_sources() instead
         return (self.filter(machinesnapshot__currentmachinesnapshot__isnull=False,
                             machinesnapshot__osx_app_instances__isnull=False)
                     .distinct()

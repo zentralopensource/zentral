@@ -169,7 +169,7 @@ class AddMachineTagForm(AddTagForm):
 class MacOSAppSearchForm(forms.Form):
     bundle_name = forms.CharField(label='Bundle name', max_length=64,
                                   widget=forms.TextInput(attrs={"autofocus": "true"}))
-    source = forms.ModelChoiceField(queryset=Source.objects.current_macos_apps_sources(),
+    source = forms.ModelChoiceField(queryset=Source.objects.current_machine_snapshot_sources(),
                                     required=False)
     order = forms.ChoiceField(choices=[], required=False)
     order_mapping = {"bn": "bundle_name",
