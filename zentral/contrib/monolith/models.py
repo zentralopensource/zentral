@@ -483,6 +483,7 @@ class Manifest(models.Model):
             tags = []
         return [mc.catalog
                 for mc in (self.manifestcatalog_set
+                               .distinct()
                                .select_related("catalog")
                                .filter(Q(tags__isnull=True) | Q(tags__in=tags)))]
 
@@ -491,6 +492,7 @@ class Manifest(models.Model):
             tags = []
         return [msm.sub_manifest
                 for msm in (self.manifestsubmanifest_set
+                                .distinct()
                                 .select_related("sub_manifest")
                                 .filter(Q(tags__isnull=True) | Q(tags__in=tags)))]
 
@@ -499,6 +501,7 @@ class Manifest(models.Model):
             tags = []
         try:
             msm = (self.manifestsubmanifest_set
+                       .distinct()
                        .select_related("sub_manifest")
                        .filter(Q(tags__isnull=True) | Q(tags__in=tags))
                        .get(sub_manifest__id=sm_id))
