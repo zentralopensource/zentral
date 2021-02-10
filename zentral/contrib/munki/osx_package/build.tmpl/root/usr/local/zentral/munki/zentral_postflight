@@ -412,13 +412,14 @@ def get_google_chrome_principal_user(domains):
 
 def get_logged_in_user_principal_user(domains):
     try:
-        import Quartz
-        session_d = Quartz.CGSessionCopyCurrentDictionary()
+        from SystemConfiguration import SCDynamicStoreCreate, SCDynamicStoreCopyValue
+        net_config = SCDynamicStoreCreate(None, "net", None, None)
+        session_d = SCDynamicStoreCopyValue(net_config, "State:/Users/ConsoleUser")["SessionInfo"][0]
         return {
             "source": {
                 "type": "LOGGED_IN_USER",
                 "properties": {
-                  "method": "Quartz",
+                    "method": "System Configuration",
                 },
             },
             "unique_id": session_d["kCGSSessionUserIDKey"],
