@@ -39,8 +39,7 @@
       "hosts": [
         "http://elastic:9200"
       ],
-      "index": "zentral-events",
-      "kibana_base_url": "https://zentral/kibana/"
+      "index": "zentral-events"
     }
   },
   "processor_workers": {
