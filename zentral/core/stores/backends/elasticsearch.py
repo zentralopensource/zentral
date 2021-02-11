@@ -2,7 +2,7 @@ from itertools import product
 import logging
 import random
 import time
-import urllib.parse
+from urllib.parse import urlencode, urljoin, urlparse
 from dateutil import parser
 from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch.exceptions import ConnectionError, RequestError
@@ -78,7 +78,7 @@ class EventStore(BaseEventStore):
         configured_hosts = config_d.get("hosts", config_d.get("servers"))
         for host in configured_hosts:
             if not isinstance(host, dict):
-                o = urllib.parse.urlparse(host)
+                o = urlparse(host)
                 host = {k: v for k, v in (('host', o.hostname),
                                           ('port', o.port),
                                           ('url_prefix', o.path)) if v}
@@ -115,7 +115,12 @@ class EventStore(BaseEventStore):
 
         self.index = config_d['index']
         self.read_index = config_d.get('read_index', self.index)
-        self.kibana_base_url = config_d.get('kibana_base_url', None)
+        self.kibana_discover_url = config_d.get('kibana_discover_url')
+        if not self.kibana_discover_url:
+            # TODO deprecated. Remove.
+            kibana_base_url = config_d.get('kibana_base_url')
+            if kibana_base_url:
+                self.kibana_discover_url = urljoin(kibana_base_url, "app/discover#/")
         self.kibana_index_pattern_uuid = config_d.get('kibana_index_pattern_uuid')
         self.index_settings = {
             "index.mapping.total_fields.limit": config_d.get("index.mapping.total_fields.limit", 2000),
@@ -230,7 +235,7 @@ class EventStore(BaseEventStore):
             self._es.indices.refresh(self.index)
 
     def _build_kibana_url(self, body):
-        if not self.kibana_base_url:
+        if not self.kibana_discover_url:
             return
         kibana_params = {
             "columns": ["_source"],
@@ -242,9 +247,9 @@ class EventStore(BaseEventStore):
             kibana_params["index"] = self.kibana_index_pattern_uuid
         query = {"_g": "()",  # rison for []
                  "_a": rison_dumps(kibana_params)}
-        return "{kibana_base_url}#/discover?{query}".format(
-                   kibana_base_url=self.kibana_base_url,
-                   query=urllib.parse.urlencode(query, safe='/:,')
+        return "{base_url}?{query}".format(
+                   base_url=self.kibana_discover_url,
+                   query=urlencode(query, safe='/:,')
                )
 
     # machine events
