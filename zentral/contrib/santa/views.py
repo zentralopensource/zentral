@@ -507,7 +507,7 @@ class PreflightView(BaseSyncView):
             'transitive_rule_count': self.request_data.get('transitive_rule_count'),
         }
         # client mode
-        req_client_mode = self.request_data['client_mode']
+        req_client_mode = self.request_data.get('client_mode')
         if req_client_mode == "LOCKDOWN":
             defaults['client_mode'] = Configuration.LOCKDOWN_MODE
         elif req_client_mode != "MONITOR":

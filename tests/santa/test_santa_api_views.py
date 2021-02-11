@@ -101,6 +101,21 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_LOCKDOWN_MODE)
         Configuration.objects.update(client_mode=Configuration.MONITOR_MODE)
 
+    def test_preflight_missing_client_mode(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        del data["client_mode"]
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+
+        # MONITOR mode
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
+
+        # Enrolled machine
+        enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
+        self.assertEqual(enrolled_machine.client_mode, Configuration.MONITOR_MODE)
+
     def test_rule_download_not_enrolled(self):
         url = reverse("santa:ruledownload", args=(self.enrollment_secret.secret, uuid.uuid4()))
         # no rules
