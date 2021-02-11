@@ -245,7 +245,7 @@ class EventStore(BaseEventStore):
         }
         if self.kibana_index_pattern_uuid:
             kibana_params["index"] = self.kibana_index_pattern_uuid
-        query = {"_g": "()",  # rison for []
+        query = {"_g": rison_dumps({"time": {"from": "now-6h", "to": "now"}}),
                  "_a": rison_dumps(kibana_params)}
         return "{base_url}?{query}".format(
                    base_url=self.kibana_discover_url,
