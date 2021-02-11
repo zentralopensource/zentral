@@ -13,6 +13,7 @@ class ConfigurationForm(forms.ModelForm):
     class Meta:
         model = Configuration
         fields = '__all__'
+        widgets = {"event_detail_url": forms.Textarea(attrs={"cols": "40", "rows": "3"})}
 
     def clean(self):
         cleaned_data = super().clean()

@@ -105,6 +105,7 @@ class Configuration(models.Model):
     )
     event_detail_url = models.URLField(
         blank=True,
+        max_length=1024,
         help_text="When the user gets a block notification, a button can be displayed which will take them "
                   "to a web page with more information about that event."
                   "This property contains a kind of format string to be turned into the URL to send them to. "
