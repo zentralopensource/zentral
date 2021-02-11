@@ -86,10 +86,6 @@ class Catalog(models.Model):
     def get_munki_name(self):
         return build_munki_name("catalog", self.id, self.name)
 
-    def iter_pkginfos(self):
-        for pkginfo in self.pkginfo_set.select_related("name").filter(archived_at__isnull=True):
-            yield pkginfo.get_pkg_info()
-
     def get_absolute_url(self):
         return reverse("monolith:catalog", args=(self.pk,))
 
@@ -636,10 +632,12 @@ class Manifest(models.Model):
     def serialize_catalog(self, tags=None):
         pkginfo_list = []
 
-        # the repository catalogs
-        for catalog in self.catalogs(tags):
-            for pkginfo in catalog.iter_pkginfos():
-                pkginfo_list.append(pkginfo)
+        # the repository catalogs pkginfos
+        for pkginfo in (PkgInfo.objects.distinct()
+                                       .select_related("name")
+                                       .filter(archived_at__isnull=True,
+                                               catalogs__in=self.catalogs(tags))):
+            pkginfo_list.append(pkginfo.get_pkg_info())
 
         # the sub manifests attachments
         for sma in SubManifestAttachment.objects.newest().filter(sub_manifest__in=self.sub_manifests(tags)):
