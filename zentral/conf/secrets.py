@@ -23,7 +23,7 @@ class GCPSecretClient:
 
     def __init__(self):
         import google.auth
-        from google.cloud import secretmanager_v1beta1 as sm
+        from google.cloud import secretmanager as sm
         _, project = google.auth.default()
         if project:
             self._client = sm.SecretManagerServiceClient()
