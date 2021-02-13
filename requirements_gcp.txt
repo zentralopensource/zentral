@@ -15,3 +15,6 @@ google-cloud-pubsub<2
 
 # Redis for celery broker
 redis
+
+# Redis for Django cache
+django-redis
