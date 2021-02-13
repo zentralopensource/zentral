@@ -29,7 +29,7 @@ class GCPSecretClient:
             self._client = sm.SecretManagerServiceClient()
             self._project = project
         else:
-            raise RuntimeError("Could get default GCP project")
+            raise RuntimeError("Could not get default GCP project")
 
     def get(self, name):
         logger.info("Get GCP secret %s", name)
