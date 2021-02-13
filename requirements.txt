@@ -1,35 +1,37 @@
-asn1crypto
-boto3
+-c constraints.txt
+
+asn1crypto                      # MDM, mTLS, SCEP
+boto3                           # conf, monolith, events (kinesis, sns/sqs)
 celery<4.5
 django-celery-results==1.2.1
-cryptography
+cryptography                    # MDM, monolith (cloudfront), munki
 django-bootstrap-form
 django>=2.2,<2.3
 djangorestframework
 djangorestframework-yaml
-django-filter
+django-filter                   # API
 elasticsearch
 geoip2
 gunicorn
-hyper
+hyper                           # MDM (apns)
 ipython
-jinja2
-kombu<5
+jinja2                          # events templates
+kombu<5                         # events queues
 pip
-prometheus_client
+prometheus_client               # publish prometheus metrics
 psycopg2-binary
-pygments
-pyopenssl
-pyotp
-pysaml2
+pygments                        # SQL syntax highlighting
+pyopenssl                       # MDM
+pyotp                           # Auth / 2nd factor
+pysaml2                         # Auth / SAML
 python-dateutil
-python-u2flib-server
+python-u2flib-server            # Auth / U2F
 pyyaml
 requests
-requests_oauthlib
+requests_oauthlib               # MDM DEP
 setuptools
-sqlparse
+sqlparse                        # SQL syntax highlighting
 tqdm
 XlsxWriter
-josepy
-python-ldap
+josepy                          # Auth / OpenID Connect
+python-ldap                     # Auth / LDAP

@@ -62,7 +62,7 @@ RUN curl -fsSL https://github.com/mackyle/xar/archive/xar-1.6.1.tar.gz | tar xvz
 RUN python -m venv /opt/venv && /opt/venv/bin/pip install -U pip setuptools wheel
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
+COPY constraints.txt requirements.txt .
 RUN pip install -r requirements.txt
 
 
@@ -73,19 +73,19 @@ RUN pip install -r requirements.txt
 
 # Installing the extra requirements for dev
 FROM base-builder as dev-builder
-COPY requirements_*.txt ./
+COPY constraints.txt requirements_*.txt .
 RUN pip install -r requirements_dev.txt -r requirements_aws.txt -r requirements_gcp.txt
 
 
 # Installing the extra requirements for aws
 FROM base-builder as aws-builder
-COPY requirements_aws.txt .
+COPY constraints.txt requirements_aws.txt .
 RUN pip install -r requirements_aws.txt
 
 
 # Installing the extra requirements for gcp
 FROM base-builder as gcp-builder
-COPY requirements_gcp.txt .
+COPY constraints.txt requirements_gcp.txt .
 RUN pip install -r requirements_gcp.txt
 
 
