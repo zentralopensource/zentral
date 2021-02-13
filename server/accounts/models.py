@@ -140,7 +140,7 @@ class UserTOTP(UserVerificationDevice):
         unique_together = (("user", "name"),)
 
     def get_verification_url(self):
-        return reverse("verify_totp")
+        return reverse("users:verify_totp")
 
     def verify(self, code):
         return pyotp.TOTP(self.secret).verify(code)
@@ -159,7 +159,7 @@ class UserU2F(UserVerificationDevice):
         unique_together = (("user", "device"), ("user", "name"))
 
     def get_verification_url(self):
-        return reverse("verify_u2f")
+        return reverse("users:verify_u2f")
 
     def test_user_agent(self, user_agent):
         if user_agent:

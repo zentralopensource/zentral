@@ -30,8 +30,12 @@ urlpatterns = [
          name="add_totp"),
     path('totp/<int:pk>/delete/', views.DeleteTOTPView.as_view(),
          name="delete_totp"),
+    path('verify_totp/', views.VerifyTOTPView.as_view(),
+         name='verify_totp'),
     path('u2f_devices/register/', views.RegisterU2FDeviceView.as_view(),
          name="register_u2f_device"),
     path('u2f_devices/<int:pk>/delete/', views.DeleteU2FDeviceView.as_view(),
          name="delete_u2f_device"),
+    path(r'verify_u2f/', views.VerifyU2FView.as_view(),
+         name='verify_u2f'),
 ]

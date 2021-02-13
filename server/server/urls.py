@@ -1,37 +1,48 @@
 import logging
-from django.conf.urls import include, url
-from django.contrib.auth.urls import urlpatterns as auth_urlpatterns
+from django.urls import include, path
+from django.contrib.auth import views as auth_views
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-from accounts.views import login, VerifyTOTPView, VerifyU2FView
+from accounts.views import login
 from zentral.conf import settings as zentral_settings
 
 logger = logging.getLogger(__name__)
 
 # base
 urlpatterns = [
-    url(r'^', include('base.urls')),
-    url(r'^api/', include('base.api_urls')),
-    url(r'^admin/users/', include('accounts.urls')),
-    url(r'^realms/', include('realms.urls')),
-    # special login view with verification device redirect
-    url(r'^accounts/login/$', login, name='login'),
-    url(r'^accounts/verify_totp/$', VerifyTOTPView.as_view(), name='verify_totp'),
-    url(r'^accounts/verify_u2f/$', VerifyU2FView.as_view(), name='verify_u2f'),
-]
+    path('', include('base.urls')),
+    path('api/', include('base.api_urls')),
+    path('realms/', include('realms.urls')),
 
-# add all the auth url patterns except the login
-for up in auth_urlpatterns:
-    if up.name != 'login':
-        urlpatterns.append(up)
+    # user admin views
+    path('accounts/', include('accounts.urls')),
+
+    # special login view with verification device redirect
+    path('accounts/login/', login, name='login'),
+
+    # add all the auth urls except the login
+    path('accounts/logout/', auth_views.LogoutView.as_view(),
+         name='logout'),
+    path('accounts/password_change/', auth_views.PasswordChangeView.as_view(),
+         name='password_change'),
+    path('accounts/password_change/done/', auth_views.PasswordChangeDoneView.as_view(),
+         name='password_change_done'),
+    path('accounts/password_reset/', auth_views.PasswordResetView.as_view(),
+         name='password_reset'),
+    path('accounts/password_reset/done/', auth_views.PasswordResetDoneView.as_view(),
+         name='password_reset_done'),
+    path('accounts/reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(),
+         name='password_reset_confirm'),
+    path('accounts/reset/done/', auth_views.PasswordResetCompleteView.as_view(),
+         name='password_reset_complete'),
+]
 
 # zentral apps
 for app_name in zentral_settings.get('apps', []):
     app_shortname = app_name.rsplit('.', 1)[-1]
     for url_prefix, url_module_name in (("", "urls"),
                                         ("api/", "api_urls")):
-        url_module = "{}.{}".format(app_name, url_module_name)
         try:
-            urlpatterns.append(url(r'^{p}{a}/'.format(p=url_prefix, a=app_shortname), include(url_module)))
+            urlpatterns.append(path(f"{url_prefix}{app_shortname}/", include(f"{app_name}.{url_module_name}")))
         except ModuleNotFoundError:
             pass
 
