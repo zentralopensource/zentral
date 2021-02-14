@@ -107,7 +107,7 @@ def pythonprettyprint(val):
 def maybetimestamp(val):
     try:
         dt = datetime.utcfromtimestamp(int(val))
-    except (OSError, TypeError, ValueError):
+    except (OSError, OverflowError, TypeError, ValueError):
         pass
     else:
         now = timezone.now()
