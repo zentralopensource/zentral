@@ -16,7 +16,7 @@ class OsqueryZentralEnrollPowershellScriptBuilder(APIConfigToolsMixin):
         self.build_kwargs = {
             "enrollment_secret_secret": enrollment.secret.secret,
             "release": enrollment.osquery_release,
-            "serialized_flags": enrollment.configuration.get_serialized_flag_list(),
+            "serialized_flags": enrollment.configuration.get_serialized_flags(),
         }
 
     def build_and_make_response(self):
@@ -34,7 +34,7 @@ class OsqueryZentralEnrollPowershellScriptBuilder(APIConfigToolsMixin):
         tls_fullchain = self.get_tls_fullchain()
         if tls_fullchain:
             content = content.replace("%INCLUDE_TLS_SERVER_CERTS%", "1")
-            tls_server_certs_file = 'C:\Program files\osquery\certs\{}.pem'.format(tls_hostname)
+            tls_server_certs_file = f"C:\\Program files\\osquery\\certs\\{tls_hostname}.pem"
             content = content.replace("%TLS_SERVER_CERTS_FILE%", tls_server_certs_file)
             content = content.replace("%TLS_SERVER_CERTS%", tls_fullchain)
             serialized_flags.append(

@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:packs' %}">Packs</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>Pack <i>{{ object.name }}</i></h2>
+
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th>Attribute</th>
+        <th>Value</th>
+      </thead>
+      <tbody>
+      <tr>
+        <td>Name</td>
+        <td>{{ object.name }}</td>
+      </tr>
+      <tr>
+        <td>Slug</td>
+        <td><code>{{ object.slug }}</code></td>
+      </tr>
+      <tr>
+        <td>Description</td>
+        <td>{{ object.description|default:"-"|linebreaksbr }}</td>
+      </tr>
+      <tr>
+        <td>Discovery quer{{ object.discovery_queries|length|pluralize:"y,ies" }}</td>
+        <td>{% if object.discovery_queries %}<pre>{{ object.discovery_queries|join:"&#10;" }}</pre>{% else %}-{% endif %}</td>
+      </tr>
+      <tr>
+        <td>Platform{{ object.platforms|length|pluralize }}</td>
+        <td>{% if object.platforms %}{{ object.platforms|join:", " }}{% else %}-{% endif %}</td>
+      </tr>
+      <tr>
+        <td>Min. osquery ver.</td>
+        <td>{{ object.minimum_osquery_version|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Shard</td>
+        <td>{% if object.shard %}{{ object.shard }}%{% else %}-{% endif %}</td>
+      </tr>
+      </tbody>
+    </table>
+
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+    </dl>
+
+  </div>
+</div>
+
+<p>
+  <a class="btn btn-default" href="{% url 'osquery:update_pack' object.id %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Update
+  </a>
+  <a class="btn btn-danger" href="{% url 'osquery:delete_pack' object.id %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    Delete
+  </a>
+</p>
+
+<h3>Used in {{ configuration_pack_count }} configuration{{ configuration_pack_count|pluralize }}</h3>
+
+{% if configuration_pack_count %}
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th>Name</th>
+        <th>Tags</th>
+      </thead>
+      <tbody>
+      {% for configuration_pack in configuration_packs %}
+      <tr>
+        <td><a href="{{ configuration_pack.configuration.get_absolute_url }}">{{ configuration_pack.configuration }}</a></td>
+        <td>
+          {% for tag in configuration_pack.tags.all %}
+          {% inventory_tag tag %}
+          {% empty %}
+          -
+          {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<h3 id="queries">{{ pack_query_count }} scheduled quer{{ pack_query_count|pluralize:"y,ies" }}</h3>
+{% if can_add_pack_query %}
+<p>
+  <a class="btn btn-default" href="{% url 'osquery:add_pack_query' object.pk %}">
+    Add
+  </a>
+</p>
+{% endif %}
+
+{% for pack_query in pack_queries %}
+{% with pack_query.query as query %}
+<div id="pq{{ pack_query.pk }}" class="panel panel-default">
+  <div class="panel-heading">
+    <h3 class="panel-title">{{ query.name|default:"-" }}</h3>
+  </div>
+  <table class="table table-condensed probe-panel">
+    <tr>
+      <td style="width:15%">Query</td>
+      <td>
+        {{ query.get_sql_html|safe }}
+      </td>
+    </tr>
+    <tr>
+      <td>Description</td>
+      <td>{{ query.description|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>Value</td>
+      <td>{{ pack_query.value|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>Interval</td>
+      <td>{{ pack_query.interval }}s</td>
+    </tr>
+    <tr>
+      <td>Log removed actions?</td>
+      <td>{{ pack_query.log_removed_actions|yesno }}</td>
+    </tr>
+    <tr>
+      <td>Snapshot mode?</td>
+      <td>{{ pack_query.snapshot_mode|yesno }}</td>
+    </tr>
+    <tr>
+      <td>Platform{{ pack_query.platforms|length|pluralize }}</td>
+      <td>{% if pack_query.platforms %}{{ pack_query.platforms|join:", " }}{% else %}-{% endif %}</td>
+    </tr>
+    <tr>
+      <td>Min. osquery ver.</td>
+      <td>{{ pack_query.minimum_osquery_version|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>Shard</td>
+      <td>{% if pack_query.shard %}{{ pack_query.shard }}%{% else %}-{% endif %}</td>
+    </tr>
+    <tr>
+      <td>Can be denylisted?</td>
+      <td>{{ pack_query.can_be_denylisted|yesno }}</td>
+    </tr>
+  </table>
+  <div class="panel-footer">
+    <div class="btn-group" role="group">
+      <a class="btn btn-sm btn-default" href="{% url 'osquery:update_pack_query' object.pk pack_query.pk %}">
+        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+      </a>
+      <a class="btn btn-sm btn-danger" href="{% url 'osquery:delete_pack_query' object.pk pack_query.pk %}">
+        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+      </a>
+    </div>
+  </div>
+</div>
+{% endwith %}
+{% endfor %}
+
+{% endblock %}

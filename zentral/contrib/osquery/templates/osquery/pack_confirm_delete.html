@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:packs' %}">Packs</a></li>
+  <li><a href="{% url 'osquery:pack' object.pk %}">{{ object }}</a></li>
+  <li class="active">Delete</li>
+</ol>
+
+<h3>Delete pack <i>{{ object }}</i></h3>
+
+<form method="POST">{% csrf_token %}
+  {% with object.configurationpack_set.count as configurationpack_count %}
+  <p>Do you really want to delete this pack{% if configuration_count %} <b>used in {{ configuration_count }} configuration{{ configuration_count|pluralize }}</b>{% endif %}?</p>
+  {% endwith %}
+  <p>
+    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+
+{% endblock %}

@@ -65,11 +65,11 @@ class OsqueryDistributedQueryResultEvent(OsqueryEvent):
 register_event_type(OsqueryDistributedQueryResultEvent)
 
 
-class OsqueryFileCarveEvent(OsqueryEvent):
-    event_type = "osquery_file_carve"
+class OsqueryFileCarvingEvent(OsqueryEvent):
+    event_type = "osquery_file_carving"
 
 
-register_event_type(OsqueryFileCarveEvent)
+register_event_type(OsqueryFileCarvingEvent)
 
 
 class OsqueryStatusEvent(OsqueryEvent):
@@ -79,35 +79,7 @@ class OsqueryStatusEvent(OsqueryEvent):
 register_event_type(OsqueryStatusEvent)
 
 
-# Utility functions used by the osquery enrollment / log API
-
-def post_distributed_query_result(msn, user_agent, ip, payloads):
-    OsqueryDistributedQueryResultEvent.post_machine_request_payloads(msn, user_agent, ip, payloads)
-
-
-def post_file_carve_events(msn, user_agent, ip, payloads):
-    OsqueryFileCarveEvent.post_machine_request_payloads(msn, user_agent, ip, payloads)
-
-
-def post_finished_file_carve_session(session_id):
-    queues.post_raw_event("osquery_finished_file_carve_session",
-                          {"session_id": session_id})
-
-
-def get_osquery_result_created_at(payload):
-    return datetime.utcfromtimestamp(float(payload['unixTime']))
-
-
-def post_events_from_osquery_log(msn, user_agent, ip, data):
-    if data["log_type"] == "status":
-        event_cls = OsqueryStatusEvent
-        get_created_at = None
-    elif data["log_type"] == "result":
-        event_cls = OsqueryResultEvent
-        get_created_at = get_osquery_result_created_at
-    else:
-        raise NotImplementedError("Unknown log type.")
-    event_cls.post_machine_request_payloads(msn, user_agent, ip, data['data'], get_created_at)
+# Utility functions used by the osquery API views
 
 
 def post_enrollment_event(msn, user_agent, ip, data):
@@ -115,10 +87,42 @@ def post_enrollment_event(msn, user_agent, ip, data):
 
 
 def post_request_event(msn, user_agent, ip, request_type, enrollment):
-    data = {"request_type": request_type}
-    if enrollment:
-        configuration = enrollment.configuration
-        data["enrollment"] = {"pk": enrollment.pk,
-                              "configuration": {"pk": configuration.pk,
-                                                "name": configuration.name}}
+    configuration = enrollment.configuration
+    data = {"request_type": request_type,
+            "enrollment": {"pk": enrollment.pk,
+                           "configuration": {"pk": configuration.pk,
+                                             "name": configuration.name}}}
     OsqueryRequestEvent.post_machine_request_payloads(msn, user_agent, ip, [data])
+
+
+def post_distributed_query_result(msn, user_agent, ip, payloads):
+    OsqueryDistributedQueryResultEvent.post_machine_request_payloads(msn, user_agent, ip, payloads)
+
+
+def post_file_carve_events(msn, user_agent, ip, payloads):
+    OsqueryFileCarvingEvent.post_machine_request_payloads(msn, user_agent, ip, payloads)
+
+
+def post_finished_file_carve_session(session_id):
+    queues.post_raw_event("osquery_finished_file_carve_session",
+                          {"session_id": session_id})
+
+
+def _get_osquery_log_record_created_at(payload):
+    return datetime.utcfromtimestamp(float(payload.pop('unixTime')))
+
+
+def _post_events_from_osquery_log(msn, user_agent, ip, event_cls, records):
+    for record in records:
+        for k in ("decorations", "numerics", "calendarTime", "hostIdentifier"):
+            if k in record:
+                del record[k]
+    event_cls.post_machine_request_payloads(msn, user_agent, ip, records, _get_osquery_log_record_created_at)
+
+
+def post_results(msn, user_agent, ip, results):
+    _post_events_from_osquery_log(msn, user_agent, ip, OsqueryResultEvent, results)
+
+
+def post_status_logs(msn, user_agent, ip, logs):
+    _post_events_from_osquery_log(msn, user_agent, ip, OsqueryStatusEvent, logs)

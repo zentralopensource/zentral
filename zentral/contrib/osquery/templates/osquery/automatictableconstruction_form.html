@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:atcs' %}">Automatic table constructions</a></li>
+  {% if object %}
+  <li><a href="{% url 'osquery:atc' object.pk %}">{{ object }}</a></li>
+  <li class="active">Update</li>
+  {% else %}
+  <li class="active">Create</li>
+  {% endif %}
+</ol>
+
+<h2>{% if object %}Update{% else %}Create{% endif %} Automatic table construction</h2>
+
+<form method="post" class="form">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    <a class="btn btn-default" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'osquery:atcs' %}{% endif %}">
+      Cancel
+    </a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
+</form>
+{% endblock %}

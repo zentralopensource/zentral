@@ -2,7 +2,6 @@ import hashlib
 from django.urls import reverse_lazy
 from django.utils.functional import cached_property
 from rest_framework import serializers
-from zentral.core.probes import register_probe_class
 from zentral.core.probes.base import BaseProbe, BaseProbeSerializer
 from zentral.utils.sql import format_sql
 
@@ -140,7 +139,7 @@ class OsqueryQuerySerializer(serializers.Serializer):
     platform = serializers.MultipleChoiceField(choices=PLATFORM_CHOICES, required=False)
     shard = serializers.IntegerField(min_value=1, max_value=100, required=False,
                                      help_text="Restrict this query to a percentage (1-100) of target hosts")
-    version = serializers.RegexField('^[0-9]+\.[0-9]+\.[0-9]+\Z', required=False,
+    version = serializers.RegexField(r'^[0-9]+\.[0-9]+\.[0-9]+\Z', required=False,
                                      help_text="Only run on osquery versions greater than or equal-to *")
 
     def validate(self, data):
@@ -187,6 +186,3 @@ class OsqueryProbe(OsqueryResultProbe):
     def get_extra_event_search_dict(self):
         return {'event_type': self.forced_event_type,
                 'name__regexp': '(pack_[0-9a-f]{{{l}}}_)?{s}_[0-9a-f]{{{l}}}'.format(s=self.slug, l=self.hash_length)}
-
-
-register_probe_class(OsqueryProbe)

@@ -7,10 +7,13 @@ from zentral.utils.certificates import parse_text_dn
 logger = logging.getLogger("zentral.contrib.osquery.views.utils")
 
 
-def clean_dict(d):
+def clean_dict(d, keys_to_keep=None):
     for k, v in list(d.items()):
+        if keys_to_keep and k not in keys_to_keep:
+            del d[k]
+            continue
         if isinstance(v, str):
-            v = v.strip()
+            v = v.replace("\u0000", "").strip()
         if v is None or v == "":
             del d[k]
         elif v != d[k]:
@@ -19,13 +22,18 @@ def clean_dict(d):
 
 
 def update_os_version(tree, t):
-    os_version = clean_dict(t)
+    os_version = clean_dict(t, {"name", "major", "minor", "patch", "build"})
     if os_version:
         tree['os_version'] = os_version
 
 
 def update_system_info(tree, t):
-    system_info = clean_dict(t)
+    system_info = clean_dict(
+        t,
+        {"computer_name", "hostname", "hardware_model", "hardware_serial",
+         "cpu_type", "cpu_subtype", "cpu_brand", "cpu_physical_cores",
+         "cpu_logical_cores", "physical_memory"}
+    )
     if system_info:
         tree['system_info'] = system_info
 
@@ -126,6 +134,19 @@ def collect_certificate(certificates, t):
             "domain": get_domain_from_dn_d(issuer_d)
         }
     })
+
+
+def update_tree_with_enrollment_host_details(tree, host_details):
+    """
+    apply the host details info to the machine snapshot tree
+    """
+    if host_details:
+        os_version = host_details.get("os_version")
+        if os_version:
+            update_os_version(tree, os_version)
+        system_info = host_details.get("system_info")
+        if system_info:
+            update_system_info(tree, system_info)
 
 
 def update_tree_with_inventory_query_snapshot(tree, snapshot):

@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:queries' %}">Queries</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>Query <i>{{ object.name }}</i></h2>
+
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th>Attribute</th>
+        <th>Value</th>
+      </thead>
+      <tbody>
+      <tr>
+        <td>Name</td>
+        <td>{{ object.name }}</td>
+      </tr>
+      <tr>
+        <td>SQL</td>
+        <td>{{ object.get_sql_html|safe }}</td>
+      </tr>
+      <tr>
+        <td>Description</td>
+        <td>{{ object.description|default:"-"|linebreaksbr }}</td>
+      </tr>
+      <tr>
+        <td>Value</td>
+        <td>{{ object.value|default:"-"|linebreaksbr }}</td>
+      </tr>
+      <tr>
+        <td>Pack</td>
+        <td>{% if pack_query %}<a href="{{ pack_query.get_absolute_url }}">{{ pack_query.pack }}</a>{% else %}-{% endif %}</td>
+      </tr>
+      </tbody>
+    </table>
+
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Version</dt>
+      <dd class="small" style="opacity:0.5">{{ object.version }}</dd>
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+    </dl>
+
+  </div>
+</div>
+
+<p>
+  <a class="btn btn-default" href="{% url 'osquery:update_query' object.id %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Update
+  </a>
+  <a class="btn btn-danger" href="{% url 'osquery:delete_query' object.id %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    Delete
+  </a>
+</p>
+
+<h3 id="runs">{{ distributed_query_count }} Run{{ distributed_query_count|pluralize }}</h3>
+
+<p>
+  <a class="btn btn-default" href="{% url 'osquery:create_distributed_query' %}?q={{ object.pk }}">
+    🚀 Launch
+  </a>
+</p>
+
+{% if distributed_query_count %}
+<table class="table">
+  <thead>
+    <th>#</th>
+    <th>Query version</th>
+    <th>Valid from</th>
+    <th>Valid until</th>
+    <th>In flight</th>
+    <th>OK</th>
+    <th>Err</th>
+  </thead>
+  <tbody>
+  {% for distributed_query in distributed_queries %}
+  <tr>
+    <td><a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a></td>
+    <td>{{ distributed_query.query_version }}</td>
+    <td>{{ distributed_query.valid_from }}</td>
+    <td>{{ distributed_query.valid_util|default:"-" }}</td>
+    <td>{{ distributed_query.in_flight_count }}</td>
+    <td>{{ distributed_query.ok_count }}</td>
+    <td>{{ distributed_query.error_count }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

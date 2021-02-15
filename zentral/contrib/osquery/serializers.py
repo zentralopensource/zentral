@@ -7,9 +7,10 @@ from .models import Configuration, Enrollment
 class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
-        fields = ("id", "name",
-                  "config_refresh", "distributed_interval",
-                  "disable_carver", "buffered_log_max")
+        fields = ("id", "name", "description",
+                  "inventory", "inventory_apps", "inventory_interval",
+                  "options",
+                  "created_at", "updated_at")
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):

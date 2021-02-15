@@ -67,7 +67,7 @@ def get_feed_serializer_classes():
     yield from feed_serializers
 
 
-def get_feed_serializer(url):
+def fetch_feed(url):
     try:
         r = requests.get(url, stream=True)
         r.raise_for_status()
@@ -75,9 +75,13 @@ def get_feed_serializer(url):
         raise FeedError("Connection error")
     except requests.exceptions.HTTPError as e:
         raise FeedError("HTTP error {}".format(e.response.status_code))
+    return r.text
+
+
+def get_feed_serializer(url):
     # TODO next line to fix import of osquery packs
     try:
-        feed_data = json.loads(r.text.replace("\\\n", " "))
+        feed_data = json.loads(fetch_feed(url).replace("\\\n", " "))
     except ValueError:
         raise FeedError("Invalid JSON")
     for feed_serializer_cls in get_feed_serializer_classes():
@@ -155,8 +159,8 @@ def sync_feed(feed):
     for feed_probe in feed_probe_not_in_feed_qs.filter(probesource__isnull=True):
         feed_probe.delete()
         removed += 1
-    operations = OrderedDict((l, v)
-                             for l, v in (("created", created),
+    operations = OrderedDict((k, v)
+                             for k, v in (("created", created),
                                           ("updated", updated),
                                           ("archived", archived),
                                           ("removed", removed))

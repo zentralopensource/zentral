@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="active">Automatic table constructions</li>
+  <li class="active">{{ atc_count }} record{{ atc_count|pluralize }}</li>
+</ol>
+
+<h2>{{ atc_count }} Automatic table construction{{ atc_count|pluralize }}</h2>
+
+<p>
+  <a href="{% url 'osquery:create_atc' %}" class="btn btn-default">Create</a>
+</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for atc in object_list %}
+    <tr>
+      <td>
+        <a href="{{ atc.get_absolute_url }}">{{ atc }}</a>
+      </td>
+      <td>
+        <a class="btn btn-default" href="{% url 'osquery:update_atc' atc.id %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+          Update
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

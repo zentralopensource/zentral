@@ -4,12 +4,13 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:configuration_list' %}">Osquery configurations</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:configurations' %}">Configurations</a></li>
   {% if object %}
   <li><a href="{% url 'osquery:configuration' object.pk %}">{{ object }}</a></li>
-  <li class="active">Create</li>
-  {% else %}
   <li class="active">Update</li>
+  {% else %}
+  <li class="active">Create</li>
   {% endif %}
 </ol>
 
@@ -18,7 +19,7 @@
 <form method="post" class="form">{% csrf_token %}
   {{ form|bootstrap }}
   <p>
-    <a class="btn btn-default" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'osquery:configuration_list' %}{% endif %}">
+    <a class="btn btn-default" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'osquery:configurations' %}{% endif %}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

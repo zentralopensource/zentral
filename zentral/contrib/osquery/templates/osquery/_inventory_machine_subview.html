@@ -1,0 +1,14 @@
+{% if enrolled_machine %}
+<h3>osquery</h3>
+{% if err_message %}
+<p class="text-danger">{{ err_message }}</p>
+{% endif %}
+<dl class="dl-horizontal">
+  {% if configuration %}
+  <dt>Configuration</dt>
+  <dd><a href="{% url 'osquery:configuration' configuration.pk %}">{{ configuration }}</a></dd>
+  {% endif %}
+  <dt>Version</dt>
+  <dd>{{ enrolled_machine.osquery_version }}</dd>
+</dl>
+{% endif %}

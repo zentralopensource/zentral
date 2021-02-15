@@ -1,0 +1,36 @@
+# List of CLI only flags blocked by Zentral to make sure that the
+# offered packages and installation scripts work correctly. 
+# 
+# osquery 4.6.0
+# 2021-02-12
+
+# not compatible with the Zentral install scripts or packages
+--D                                              Run as a daemon process
+--S                                              Run as a shell process
+--daemonize                                      Attempt to daemonize (POSIX only)
+--config_check                                   Check the format of an osquery config and exit
+--config_dump                                    Dump the contents of the configuration, then exit
+--database_dump                                  Dump the contents of the backing store
+--enroll_secret_env VALUE                        Name of environment variable holding enrollment-auth secret
+--force                                          Force osqueryd to kill previously-running daemons
+--install                                        Install osqueryd as a service
+--pidfile VALUE                                  Path to the daemon pidfile mutex
+--uninstall                                      Uninstall osqueryd as a service
+
+# forced for Zentral / TLS
+--carver_compression                             Compress archives using zstd prior to upload (default false)
+--carver_continue_endpoint VALUE                 TLS/HTTPS endpoint that receives carved content after session creation
+--carver_start_endpoint VALUE                    TLS/HTTPS init endpoint for forensic carver
+--config_path VALUE                              Path to JSON config file
+--config_plugin VALUE                            Config plugin name
+--config_tls_endpoint VALUE                      TLS/HTTPS endpoint for config retrieval
+--disable_enrollment                             Disable enrollment functions on related config/logger plugins
+--enroll_tls_endpoint VALUE                      TLS/HTTPS endpoint for client enrollment
+--tls_client_cert VALUE                          Optional path to a TLS client-auth PEM certificate
+--tls_client_key VALUE                           Optional path to a TLS client-auth PEM private key
+--tls_hostname VALUE                             TLS/HTTPS hostname for Config, Logger, and Enroll plugins
+--tls_server_certs VALUE                         Optional path to a TLS server PEM certificate(s) bundle
+
+# forced in the Zentral install scripts or packages
+--database_path VALUE                            If using a disk-based backing store, specify a path
+--enroll_secret_path VALUE                       Path to an optional client enrollment-auth secret

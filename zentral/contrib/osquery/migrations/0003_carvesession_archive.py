@@ -16,6 +16,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='carvesession',
             name='archive',
-            field=models.FileField(null=True, upload_to=zentral.contrib.osquery.models.carve_session_archive_path),
+            # hack: use current existing upload_to function
+            field=models.FileField(null=True,
+                                   upload_to=zentral.contrib.osquery.models.file_carving_session_archive_path),
         ),
     ]

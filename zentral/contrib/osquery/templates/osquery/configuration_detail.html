@@ -4,11 +4,12 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:configuration_list' %}">Osquery configurations</a></li>
-  <li class="active">{{ object.name }}</li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:configurations' %}">Configurations</a></li>
+  <li class="active">{{ object }}</li>
 </ol>
 
-<h2>Osquery configuration <i>{{ object.name }}</i></h2>
+<h2>Configuration <i>{{ object.name }}</i></h2>
 
 <div class="row">
   <div class="col-md-12">
@@ -22,12 +23,52 @@
         <td>Name</td>
         <td>{{ object.name }}</td>
       </tr>
-      {% for f, v in object.get_flags.items %}
       <tr>
-        <td><span style="font-family:monospace">--{{ f }}</span></td>
-        <td>{{ v }}</td>
+        <td>Inventory</td>
+        <td>{{ object.inventory|yesno }}</td>
       </tr>
-      {% endfor %}
+      <tr>
+        <td>Inventory apps</td>
+        <td>{{ object.inventory_apps|yesno }}</td>
+      </tr>
+      <tr>
+        <td>Inventory interval</td>
+        <td>{{ object.inventory_interval}}s</td>
+      </tr>
+      <tr>
+        <td>Automatic table construction{{ atc_count|pluralize }}</td>
+        <td>
+          {% if atc_count %}
+          <ul class="list-unstyled">
+            {% for atc in atcs %}
+            <li><a href="{{ atc.get_absolute_url }}">{{ atc }}</a></li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>File categor{{ file_category_count|pluralize:"y,ies" }}</td>
+        <td>
+          {% if file_categories %}
+          <ul class="list-unstyled">
+            {% for fc in file_categories %}
+            <li><a href="{{ fc.get_absolute_url }}">{{ fc }}</a></li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Flags</td>
+        <td>
+<pre>{% for flag in configuration.get_serialized_flags %}
+{{ flag }}{% endfor %}</pre>
+        </td>
       </tbody>
     </table>
 
@@ -48,8 +89,50 @@
   </a>
 </p>
 
-<h2>{{ enrollments_count }} Enrollment{{ enrollments_count|pluralize }}</h2>
+<h3 id="packs">{{ configuration_pack_count }} Pack{{ configuration_pack_count|pluralize }}</h3>
+{% if can_add_configuration_pack %}
+<p>
+  <a class="btn btn-default" href="{% url 'osquery:add_configuration_pack' object.id %}">Add</a>
+</p>
+{% endif %}
 
+{% if configuration_pack_count %}
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Query count</th>
+    <th>Tags</th>
+    <th></th>
+  </thead>
+  <tbody>
+    {% for configuration_pack in configuration_packs %}
+    {% with configuration_pack.pack as pack %}
+    <tr id="cp{{ configuration_pack.pk }}">
+      <td><a href="{{ pack.get_absolute_url }}">{{ pack }}</a></td>
+      <td>{{ configuration_pack.query_count }}</td>
+      <td>
+        {% for tag in configuration_pack.tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+      <td>
+        <a class="btn btn-sm btn-default" href="{% url 'osquery:update_configuration_pack' configuration.pk configuration_pack.pk %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        </a>
+        <a class="btn btn-sm btn-danger" href="{% url 'osquery:remove_configuration_pack' configuration.pk configuration_pack.pk %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+      </td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h3>{{ enrollments_count }} Enrollment{{ enrollments_count|pluralize }}</h3>
 <p>
   <a class="btn btn-default" href="{% url 'osquery:create_enrollment' object.id %}">Create</a>
 </p>

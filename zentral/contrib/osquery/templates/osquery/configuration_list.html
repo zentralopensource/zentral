@@ -4,10 +4,12 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">{{ configurations_count }} Osquery configuration{{ configurations_count|pluralize }}</li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="active">Configurations</li>
+  <li class="active">{{ configuration_count }} record{{ configuration_count|pluralize }}</li>
 </ol>
 
-<h2>{{ configurations_count }} Osquery configuration{{ configurations_count|pluralize }}</h2>
+<h2>{{ configuration_count }} Configuration{{ configuration_count|pluralize }}</h2>
 
 <p>
   <a href="{% url 'osquery:create_configuration' %}" class="btn btn-default">Create</a>

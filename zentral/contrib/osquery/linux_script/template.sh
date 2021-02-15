@@ -172,28 +172,14 @@ sudo mkdir -p /var/osquery/zentral
 # flags file
 get_host_identifier
 cat << OSQUERY_FLAGS | sudo tee /etc/osquery/osquery.flags
---tls_hostname=%TLS_HOSTNAME%
+%EXTRA_FLAGS%
 --database_path=/var/osquery/zentral
---enroll_tls_endpoint=/osquery/enroll
 --enroll_secret_path=/etc/zentral/osquery/enroll_secret.txt
---config_plugin=tls
---config_tls_endpoint=/osquery/config
---config_tls_refresh=120
---logger_plugin=tls
---logger_tls_endpoint=/osquery/log
---logger_tls_period=60
---logger_tls_compress=true
---disable_distributed=false
---distributed_plugin=tls
---distributed_tls_read_endpoint=/osquery/distributed/read
---distributed_tls_write_endpoint=/osquery/distributed/write
---distributed_interval=60
 --disable_audit=false
 --audit_allow_config=true
 --audit_persist=true
 --host_identifier=specified
 --specified_identifier="$HOST_IDENTIFIER"
-%EXTRA_FLAGS%
 OSQUERY_FLAGS
 
 restart_osqueryd

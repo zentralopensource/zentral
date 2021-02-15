@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:atcs' %}">Automatic table constructions</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h3>Automatic table construction <i>{{ object }}</i></h3>
+
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th>Attribute</th>
+        <th>Value</th>
+      </thead>
+      <tbody>
+      <tr>
+        <td>Name</td>
+        <td>{{ object.name }}</td>
+      </tr>
+      <tr>
+        <td>Description</td>
+        <td>{{ object.description|default:"-"|linebreaksbr }}</td>
+      </tr>
+      <tr>
+        <td>Table name</td>
+        <td><code>{{ object.table_name }}</code></td>
+      </tr>
+      <tr>
+        <td>Query</td>
+        <td>{{ object.get_query_html|safe }}</td>
+      </tr>
+      <tr>
+        <td>Path</td>
+        <td><pre>{{ object.path }}</pre></td>
+      </tr>
+      <tr>
+        <td>Column{{ object.columns|length|pluralize }}</td>
+        <td><pre>{{ object.columns|join:"&#10;" }}</pre></td>
+      </tr>
+      </tbody>
+    </table>
+
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+    </dl>
+  </div>
+</div>
+
+<p>
+  <a class="btn btn-default" href="{% url 'osquery:update_atc' object.id %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Update
+  </a>
+  <a class="btn btn-danger" href="{% url 'osquery:delete_atc' object.id %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    Delete
+  </a>
+</p>
+
+<h3>Used in {{ configuration_count }} configuration{{ configuration_count|pluralize }}</h3>
+
+{% if configurations %}
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th>Name</th>
+        <th></th>
+      </thead>
+      <tbody>
+      {% for configuration in configurations %}
+      <tr>
+        <td><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></td>
+        <td></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

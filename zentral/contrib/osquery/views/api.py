@@ -1,373 +1,405 @@
 from base64 import b64decode
+from gzip import GzipFile
+from itertools import chain, islice
+import json
 import logging
-from django.core.exceptions import SuspiciousOperation
+import uuid
+from django.core.exceptions import SuspiciousOperation, PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
-from django.db.models import Q
+from django.http import Http404, JsonResponse
 from django.utils.crypto import get_random_string
+from django.views.generic import View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
-from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
+from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine, MachineTag
 from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_trigger_events,
                                              verify_enrollment_secret)
-from zentral.core.events.base import post_machine_conflict_event
-from zentral.core.probes.models import ProbeSource
-from zentral.utils.api_views import JSONPostAPIView, verify_secret, APIAuthError
-from zentral.contrib.inventory.conf import MACOS, platform_with_os_name
-from zentral.contrib.osquery.conf import (build_osquery_conf,
-                                          get_distributed_inventory_queries,
-                                          INVENTORY_QUERY_NAME,
-                                          INVENTORY_DISTRIBUTED_QUERY_PREFIX)
-from zentral.contrib.osquery.events import (post_distributed_query_result, post_enrollment_event,
+from zentral.contrib.osquery.conf import build_osquery_conf, INVENTORY_QUERY_NAME
+from zentral.contrib.osquery.events import (post_enrollment_event,
                                             post_file_carve_events,
-                                            post_events_from_osquery_log, post_request_event)
-from zentral.contrib.osquery.models import (CarveBlock, CarveSession,
-                                            DistributedQueryProbeMachine,
-                                            enroll, EnrolledMachine,
-                                            SOURCE_MODULE)
-from zentral.contrib.osquery.tasks import build_carve_session_archive
-from .utils import update_tree_with_inventory_query_snapshot
+                                            post_request_event, post_results, post_status_logs)
+from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
+                                            EnrolledMachine,
+                                            FileCarvingBlock, FileCarvingSession,
+                                            PackQuery)
+from zentral.contrib.osquery.tasks import build_file_carving_session_archive
+from zentral.core.events.base import post_machine_conflict_event
+from zentral.utils.http import user_agent_and_ip_address_from_request
+from zentral.utils.json import remove_null_character
+from .utils import update_tree_with_enrollment_host_details, update_tree_with_inventory_query_snapshot
+
 
 logger = logging.getLogger('zentral.contrib.osquery.views.api')
 
 
-class EnrollView(JSONPostAPIView):
-    def get_enroll_secret(self, data):
-        try:
-            return data["enroll_secret"]
-        except KeyError:
-            raise SuspiciousOperation("Missing enroll_secret key in osquery enroll request")
+class BaseJsonPostView(View):
+    def authenticate(self):
+        pass
 
-    def get_serial_number(self, data):
+    def post(self, request, *args, **kwargs):
         try:
-            serial_number = data["host_details"]["system_info"]["hardware_serial"].strip()
+            if request.META.get("HTTP_CONTENT_ENCODING") == "gzip":
+                self.data = json.load(GzipFile(fileobj=request))
+            else:
+                self.data = json.loads(request.body)
+        except ValueError:
+            raise SuspiciousOperation("Could not read JSON data")
+        self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
+        self.authenticate()
+        return JsonResponse(self.do_post())
+
+
+class EnrollView(BaseJsonPostView):
+    def get_enroll_secret(self):
+        enroll_secret = self.data.get("enroll_secret")
+        if not enroll_secret:
+            raise SuspiciousOperation("Missing 'enroll_secret' key")
+        return enroll_secret
+
+    def get_serial_number(self):
+        try:
+            serial_number = self.data["host_details"]["system_info"]["hardware_serial"].strip()
         except (KeyError, AttributeError):
             serial_number = None
         if serial_number is None:
             # special configuration for linux machines. see install script.
-            serial_number = data.get("host_identifier", None)
+            serial_number = self.data.get("host_identifier")
         if not serial_number:
-            raise APIAuthError("No serial number")
+            raise SuspiciousOperation("Missing serial number")
         return serial_number
 
-    def get_uuid(self, data):
+    def get_uuid(self):
         try:
-            return data["host_details"]["system_info"]["uuid"].strip()
+            return self.data["host_details"]["system_info"]["uuid"].strip()
         except (KeyError, AttributeError):
             pass
 
-    def verify_enrollment_secret(self, enroll_secret, serial_number, uuid):
+    def authenticate(self):
+        self.serial_number = self.get_serial_number()
         try:
-            es_request = verify_enrollment_secret(
-                "osquery_enrollment", enroll_secret,
+            self.es_request = verify_enrollment_secret(
+                "osquery_enrollment",
+                self.get_enroll_secret(),
                 self.user_agent, self.ip,
-                serial_number, uuid
+                self.serial_number,
+                self.get_uuid()
             )
         except EnrollmentSecretVerificationFailed:
-            raise APIAuthError("Unknown enrolled machine")
-        else:
-            self.enrollment = es_request.enrollment_secret.osquery_enrollment
-            self.machine_serial_number = serial_number
-            self.business_unit = self.enrollment.secret.get_api_enrollment_business_unit()
+            raise PermissionDenied("Wrong enrollment secret")
 
-    def verify_signed_secret(self, enroll_secret):
-        api_secret_data = verify_secret(enroll_secret, SOURCE_MODULE)
-        self.machine_serial_number = api_secret_data.get('machine_serial_number', None)
-        if not self.machine_serial_number:
-            raise APIAuthError("No serial number")
-        self.business_unit = api_secret_data.get("business_unit", None)
+    def do_post(self):
+        enrollment = self.es_request.enrollment_secret.osquery_enrollment
 
-    def check_data_secret(self, data):
-        enroll_secret = self.get_enroll_secret(data)
-        self.enrollment = None
-        if ":" not in enroll_secret:
-            # new way, with Enrollment model
-            serial_number = self.get_serial_number(data)
-            uuid = self.get_uuid(data)
-            self.verify_enrollment_secret(enroll_secret, serial_number, uuid)
-        else:
-            # old way, with a signed enroll_secret
-            self.verify_signed_secret(enroll_secret)
-
-    def do_post(self, data):
-        machine_snapshot, action = enroll(self.enrollment,
-                                          self.machine_serial_number,
-                                          self.business_unit,
-                                          data.get("host_identifier"),
-                                          self.ip)
-        if machine_snapshot and action:
-            post_enrollment_event(machine_snapshot.serial_number,
-                                  self.user_agent, self.ip,
-                                  {'action': action})
-            return {'node_key': machine_snapshot.reference}
-        else:
-            raise SuspiciousOperation("Could not enroll machine")
-
-
-class BaseNodeView(JSONPostAPIView):
-    enrollment = None
-    machine_snapshot = None
-
-    def get_enrolled_machine(self):
+        # update or create enrolled machine
+        enrolled_machine_defaults = {"node_key": get_random_string(32)}
         try:
-            return (EnrolledMachine.objects.select_related("enrollment__configuration",
-                                                           "enrollment__secret__meta_business_unit")
-                                           .get(node_key=self.node_key))
-        except EnrolledMachine.DoesNotExist:
-            pass
-
-    def get_machine_snapshot(self):
-        if not self.machine_snapshot:
-            auth_err = None
-            try:
-                self.machine_snapshot = MachineSnapshot.objects.current().get(source__module=SOURCE_MODULE,
-                                                                              reference=self.node_key)
-            except MachineSnapshot.DoesNotExist:
-                auth_err = "Wrong node_key"
-            except MachineSnapshot.MultipleObjectsReturned:
-                auth_err = "Multiple current osquery machine snapshots for node key '{}'".format(self.node_key)
-            if auth_err:
-                logger.error("APIAuthError %s", auth_err)
-                raise APIAuthError(auth_err)
-        return self.machine_snapshot
-
-    def check_data_secret(self, data):
-        # get the node_key
-        try:
-            self.node_key = data["node_key"]
+            enrolled_machine_defaults["osquery_version"] = self.data["host_details"]["osquery_info"]["version"]
         except KeyError:
-            raise APIAuthError("Missing node_key in osquery request")
+            pass
+        enrolled_machine, _ = EnrolledMachine.objects.update_or_create(
+            enrollment=enrollment,
+            serial_number=self.serial_number,
+            defaults=enrolled_machine_defaults
+        )
 
-        enrolled_machine = self.get_enrolled_machine()
-        if enrolled_machine:
-            # new way
-            self.enrollment = enrolled_machine.enrollment
-            self.machine_serial_number = enrolled_machine.serial_number
-            self.business_unit = self.enrollment.secret.get_api_enrollment_business_unit()
-        if not enrolled_machine:
-            # old way, look for a MachineSnapshot with the node_key as reference
-            # TODO: deprecate and remove
-            machine_snapshot = self.get_machine_snapshot()
-            self.machine_serial_number = machine_snapshot.serial_number
-            self.business_unit = machine_snapshot.business_unit
+        # apply enrollment secret tags
+        for tag in enrollment.secret.tags.all():
+            MachineTag.objects.get_or_create(serial_number=self.serial_number, tag=tag)
 
-    def do_post(self, data):
-        post_request_event(self.machine_serial_number,
+        # delete other enrolled machines
+        other_enrolled_machines = (EnrolledMachine.objects.exclude(pk=enrolled_machine.pk)
+                                                          .filter(serial_number=self.serial_number))
+        if other_enrolled_machines.count():
+            enrollment_action = 're-enrollment'
+            other_enrolled_machines.delete()
+        else:
+            enrollment_action = 'enrollment'
+
+        # create machine snapshot if necessary
+        if not MachineSnapshot.objects.filter(source__module="zentral.contrib.osquery",
+                                              source__name="osquery",
+                                              serial_number=self.serial_number,
+                                              reference=enrolled_machine.node_key).exists():
+            tree = {"source": {"module": "zentral.contrib.osquery",
+                               "name": "osquery"},
+                    "serial_number": self.serial_number,
+                    "reference": enrolled_machine.node_key,
+                    "public_ip_address": self.ip}
+            business_unit = enrollment.secret.get_api_enrollment_business_unit()
+            if business_unit:
+                tree["business_unit"] = business_unit.serialize()
+            update_tree_with_enrollment_host_details(tree, self.data.get("host_details"))
+            commit_machine_snapshot_and_trigger_events(tree)
+
+        post_enrollment_event(self.serial_number,
+                              self.user_agent, self.ip,
+                              {'action': enrollment_action})
+
+        return {'node_key': enrolled_machine.node_key}
+
+
+class BaseNodeView(BaseJsonPostView):
+    request_type = None
+
+    def get_node_key(self):
+        node_key = self.data.get("node_key")
+        if not node_key:
+            raise SuspiciousOperation("Missing node_key")
+        return node_key
+
+    def authenticate(self):
+        try:
+            self.enrolled_machine = EnrolledMachine.objects.select_related(
+                "enrollment__configuration",
+                "enrollment__secret__meta_business_unit"
+            ).get(node_key=self.get_node_key())
+        except EnrolledMachine.DoesNotExist:
+            raise PermissionDenied("Wrong node_key")
+        self.machine = MetaMachine(self.enrolled_machine.serial_number)
+        self.enrollment = self.enrolled_machine.enrollment
+
+    def do_post(self):
+        post_request_event(self.machine.serial_number,
                            self.user_agent, self.ip,
                            self.request_type,
                            self.enrollment)
-        return self.do_node_post(data)
-
-    def commit_inventory_query_result(self, snapshot):
-        tree = self.get_machine_snapshot().serialize()
-        tree["serial_number"] = self.machine_serial_number
-        tree["public_ip_address"] = self.ip
-        if self.business_unit:
-            tree['business_unit'] = self.business_unit.serialize()
-
-        update_tree_with_inventory_query_snapshot(tree, snapshot)
-
-        commit_machine_snapshot_and_trigger_events(tree)
+        return self.do_node_post()
 
 
 class ConfigView(BaseNodeView):
     request_type = "config"
 
-    def do_node_post(self, data):
-        return build_osquery_conf(MetaMachine(self.machine_serial_number), self.enrollment)
+    def do_node_post(self):
+        return build_osquery_conf(self.machine, self.enrollment)
 
 
-class CarverStartView(BaseNodeView):
-    request_type = "carve_start"
+class StartFileCarvingView(BaseNodeView):
+    request_type = "start_file_carving"
 
-    def do_node_post(self, data):
-        probe_source_id = int(data["request_id"].split("_")[-1])
-        probe_source = ProbeSource.objects.get(pk=probe_source_id)
-        session_id = get_random_string(64)
-        CarveSession.objects.create(probe_source=probe_source,
-                                    machine_serial_number=self.machine_serial_number,
-                                    session_id=session_id,
-                                    carve_guid=data["carve_id"],
-                                    carve_size=int(data["carve_size"]),
-                                    block_size=int(data["block_size"]),
-                                    block_count=int(data["block_count"]))
-        post_file_carve_events(self.machine_serial_number, self.user_agent, self.ip,
-                               [{"probe": {"id": probe_source.pk,
-                                           "name": probe_source.name},
-                                 "action": "start",
+    def do_node_post(self):
+        request_id = self.data.get("request_id")
+        if not request_id:
+            raise SuspiciousOperation("Missing request_id")
+
+        # origin
+        distributed_query = pack_query = None
+        try:
+            # distributed queries are sent with the distributed query machine pk as key
+            dqm_pk = int(request_id)
+        except ValueError:
+            # pack query
+            try:
+                pack_query = PackQuery.objects.get_with_config_key(request_id)
+            except ValueError:
+                raise SuspiciousOperation("Unknown request_id format")
+            except PackQuery.DoesNotExist:
+                raise Http404("Unknown pack query")
+        else:
+            try:
+                dqm = DistributedQueryMachine.objects.select_related("distributed_query").get(pk=dqm_pk)
+            except DistributedQueryMachine.DoesNotExist:
+                raise Http404("Unknown distributed query")
+            distributed_query = dqm.distributed_query
+
+        fcs = FileCarvingSession.objects.create(
+            id=uuid.uuid4(),
+            distributed_query=distributed_query,
+            pack_query=pack_query,
+            serial_number=self.machine.serial_number,
+            carve_guid=self.data["carve_id"],
+            carve_size=int(self.data["carve_size"]),
+            block_size=int(self.data["block_size"]),
+            block_count=int(self.data["block_count"])
+        )
+        session_id = str(fcs.pk)
+        post_file_carve_events(self.machine.serial_number, self.user_agent, self.ip,
+                               [{"action": "start",
                                  "session_id": session_id}])
         return {"session_id": session_id}
 
 
-class CarverContinueView(BaseNodeView):
-    request_type = "carve_continue"
+class ContinueFileCarvingView(BaseNodeView):
+    request_type = "continue_file_carving"
 
-    def check_data_secret(self, data):
-        # no node_key, use the session_id
-        # TODO: better?
-        auth_err = None
+    def authenticate(self):
         try:
-            self.session_id = data["session_id"]
-            self.carve_session = CarveSession.objects.get(session_id=self.session_id)
-            self.machine_serial_number = self.carve_session.machine_serial_number
+            session_id = self.data["session_id"]
         except KeyError:
-            auth_err = "Missing session id"
-        except CarveSession.DoesNotExist:
-            auth_err = "Unknown session id"
-        if auth_err:
-            logger.error("APIAuthError %s", auth_err, extra=data)
-            raise APIAuthError(auth_err)
+            raise SuspiciousOperation("Missing session_id")
+        try:
+            self.session = FileCarvingSession.objects.select_for_update().get(pk=session_id)
+        except FileCarvingSession.DoesNotExist:
+            raise PermissionDenied("Unknown session_id")
+        # TODO: better. "There can be only one"
+        try:
+            self.enrolled_machine = (
+                EnrolledMachine.objects.select_related("enrollment__configuration")
+                                       .filter(serial_number=self.session.serial_number)
+                                       .order_by("-pk")[0]
+            )
+        except IndexError:
+            raise PermissionDenied("Unknown machine")
+        self.machine = MetaMachine(self.session.serial_number)
+        self.enrollment = self.enrolled_machine.enrollment
 
-    def do_node_post(self, data):
-        data_data = data.pop("data")
+    def do_node_post(self):
+        try:
+            block_id = int(self.data["block_id"])
+        except KeyError:
+            raise SuspiciousOperation("Missing block_id")
+        except ValueError:
+            raise SuspiciousOperation("Invalid block_id")
+        else:
+            block_filename = str(block_id)
+        try:
+            block_data = b64decode(self.data["data"])
+        except KeyError:
+            raise SuspiciousOperation("Missing block data")
+        except Exception:
+            raise SuspiciousOperation("Could not read block data")
 
-        block_id = data["block_id"]
-        cb = CarveBlock.objects.create(carve_session=self.carve_session,
-                                       block_id=int(block_id))
-        cb.file.save(str(block_id), SimpleUploadedFile(str(block_id), b64decode(data_data)))
+        cb = FileCarvingBlock.objects.create(file_carving_session=self.session, block_id=block_id)
+        cb.file.save(block_filename, SimpleUploadedFile(block_filename, block_data))
 
-        session_finished = (CarveBlock.objects.filter(carve_session=self.carve_session).count()
-                            == self.carve_session.block_count)
-        probe_source = self.carve_session.probe_source
-        post_file_carve_events(self.machine_serial_number, self.user_agent, self.ip,
-                               [{"probe": {"id": probe_source.pk,
-                                           "name": probe_source.name},
-                                 "action": "continue",
+        session_finished = (FileCarvingBlock.objects.filter(file_carving_session=self.session).count()
+                            == self.session.block_count)
+        post_file_carve_events(self.machine.serial_number, self.user_agent, self.ip,
+                               [{"action": "continue",
                                  "block_id": block_id,
-                                 "block_size": len(data_data),
                                  "session_finished": session_finished,
-                                 "session_id": self.session_id}])
+                                 "session_id": str(self.session.pk)}])
         if session_finished:
-            transaction.on_commit(lambda: build_carve_session_archive.apply_async((self.session_id,)))
+            transaction.on_commit(lambda: build_file_carving_session_archive.apply_async((str(self.session.pk),)))
         return {}
 
 
 class DistributedReadView(BaseNodeView):
     request_type = "distributed_read"
+    batch_size = 10  # TODO: hard coded
 
-    def do_node_post(self, data):
+    def do_node_post(self):
+        dqm_list = []
+        for distributed_query in islice(
+            DistributedQuery.objects.iter_queries_for_machine(self.machine),
+            self.batch_size
+        ):
+            dqm_list.append(
+                DistributedQueryMachine(
+                    distributed_query=distributed_query,
+                    serial_number=self.machine.serial_number
+                )
+            )
         queries = {}
-        if self.machine_serial_number:
-            machine = MetaMachine(self.machine_serial_number)
-            queries = DistributedQueryProbeMachine.objects.new_queries_for_machine(machine)
-            for query_name, query in get_distributed_inventory_queries(machine, self.get_machine_snapshot()):
-                if query_name in queries:
-                    logger.error("Conflict on the distributed query name %s", query_name)
-                else:
-                    queries[query_name] = query
+        if dqm_list:
+            DistributedQueryMachine.objects.bulk_create(dqm_list)
+            for dqm in dqm_list:
+                queries[str(dqm.pk)] = dqm.distributed_query.sql
         return {'queries': queries}
 
 
 class DistributedWriteView(BaseNodeView):
     request_type = "distributed_write"
+    batch_size = 100  # TODO hard coded
 
-    @transaction.non_atomic_requests
-    def do_node_post(self, data):
-        dq_payloads = []
-        fc_payloads = []
+    def do_node_post(self):
+        results = self.data.get("queries", {})
+        statuses = self.data.get("statuses", {})
+        messages = self.data.get("messages", {})
+        dqm_pk_set = set(chain(results.keys(), statuses.keys(), messages.keys()))
+        if not dqm_pk_set:
+            return {}
+        dqm_cache = {str(dqm.pk): dqm
+                     for dqm in DistributedQueryMachine.objects.select_related("distributed_query")
+                                                               .filter(pk__in=dqm_pk_set)}
 
-        def get_probe_pk(key):
-            return int(key.split('_')[-1])
+        # update distributed query machines
+        for dqm_pk, dqm in dqm_cache.items():
+            status = statuses.get(dqm_pk)
+            if status is None:
+                logger.warning("Missing status for DistributedQueryMachine %s", dqm_pk)
+                status = 999  # TODO: better?
+            dqm.status = status
+            dqm.error_message = messages.get(dqm_pk)
+            dqm.save()
 
-        queries = data['queries']
+        # save_results
+        dq_results = (
+            DistributedQueryResult(
+                distributed_query=dqm.distributed_query,
+                serial_number=self.machine.serial_number,
+                row=remove_null_character(row)
+            )
+            for dqm_pk, dqm in dqm_cache.items()
+            for row in results.get(dqm_pk, [])
+        )
+        while True:
+            batch = list(islice(dq_results, self.batch_size))
+            if not batch:
+                break
+            DistributedQueryResult.objects.bulk_create(batch, self.batch_size)
 
-        ps_d = {ps.id: ps
-                for ps in ProbeSource.objects.filter(
-                    pk__in=[get_probe_pk(k) for k in queries.keys()
-                            if not k.startswith(INVENTORY_DISTRIBUTED_QUERY_PREFIX)]
-                ).filter(
-                    Q(model='OsqueryDistributedQueryProbe') | Q(model='OsqueryFileCarveProbe')
-                )}
-        inventory_snapshot = []
-        for key, val in queries.items():
-            try:
-                status = int(data['statuses'][key])
-            except KeyError:
-                # osquery < 2.1.2 has no statuses
-                status = 0
-            if key.startswith(INVENTORY_DISTRIBUTED_QUERY_PREFIX):
-                if status == 0 and val:
-                    inventory_snapshot.extend(val)
-                else:
-                    logger.warning("Inventory distributed query write with status = %s and val = %s",
-                                   status, val)
-            else:
-                try:
-                    probe_source = ps_d[get_probe_pk(key)]
-                except KeyError:
-                    logger.error("Unknown distributed query probe %s", key)
-                else:
-                    payload = {'probe': {'id': probe_source.pk,
-                                         'name': probe_source.name}}
-                    if status > 0:
-                        # error
-                        payload["error"] = True
-                        payload["empty"] = True
-                    elif status == 0:
-                        payload["error"] = False
-                        if val:
-                            payload["result"] = val
-                            payload["empty"] = False
-                        else:
-                            payload["empty"] = True
-                    else:
-                        raise ValueError("Unknown distributed query status '{}'".format(status))
-                    if probe_source.model == 'OsqueryDistributedQueryProbe':
-                        dq_payloads.append(payload)
-                    else:
-                        fc_payloads.append(payload)
-            if dq_payloads:
-                post_distributed_query_result(self.machine_serial_number,
-                                              self.user_agent, self.ip,
-                                              dq_payloads)
-            if fc_payloads:
-                post_file_carve_events(self.machine_serial_number,
-                                       self.user_agent, self.ip,
-                                       fc_payloads)
-        if inventory_snapshot:
-            self.commit_inventory_query_result(inventory_snapshot)
         return {}
 
 
 class LogView(BaseNodeView):
     request_type = "log"
 
-    def check_data_secret(self, data):
-        super().check_data_secret(data)
-        self.data_data = data.pop("data")
-        for r in self.data_data:
-            decorations = r.pop("decorations", None)
-            if decorations:
-                platform = platform_with_os_name(decorations.get("os_name"))
-                if platform == MACOS:
-                    hardware_serial = decorations.get("hardware_serial")
-                    if hardware_serial and hardware_serial != self.machine_serial_number:
-                        # The SN reported by osquery is not the one configured in the enrollment secret.
-                        # For other platforms than MACOS, it could happen. For example, we take the GCE instance ID as
-                        # serial number in the enrollment secret for linux, if possible.
-                        # Osquery builds one from the SMBIOS/DMI.
-                        auth_err = "osquery reported SN {} different from enrollment SN {}".format(
-                            hardware_serial,
-                            self.machine_serial_number
-                        )
-                        post_machine_conflict_event(self.request, SOURCE_MODULE,
-                                                    hardware_serial, self.machine_serial_number,
-                                                    decorations)
-                        raise APIAuthError(auth_err)
+    def process_decorations(self, records):
+        if not records:
+            return
+        decorations = records[-1].get("decorations", {})
+
+        # verify serial number
+        serial_number = decorations.get("serial_number")
+        if serial_number and serial_number != self.machine.serial_number:
+            logger.warning(f"osquery reported SN {serial_number} "
+                           f"different from enrolled machine SN {self.machine.serial_number}")
+            post_machine_conflict_event(self.request, "zentral.contrib.osquery",
+                                        serial_number, self.machine.serial_number,
+                                        decorations)
+            return {"node_invalid": True}
+
+        # update osquery version if necessary
+        osquery_version = decorations.get("version")
+        if osquery_version and self.enrolled_machine.osquery_version != osquery_version:
+            self.enrolled_machine.osquery_version = osquery_version
+            self.enrolled_machine.save()
 
     @transaction.non_atomic_requests
-    def do_node_post(self, data):
-        inventory_results = []
-        other_results = []
-        for r in self.data_data:
-            if r.get('name', None) == INVENTORY_QUERY_NAME:
-                inventory_results.append((r['unixTime'], r['snapshot']))
-            else:
-                other_results.append(r)
-        if inventory_results:
-            inventory_results.sort(reverse=True)
-            last_snapshot = inventory_results[0][1]
-            self.commit_inventory_query_result(last_snapshot)
-        data['data'] = other_results
-        post_events_from_osquery_log(self.machine_serial_number,
-                                     self.user_agent, self.ip, data)
+    def do_node_post(self):
+        records = self.data.pop("data", [])
+        if not records:
+            logger.warning("No records found")
+            return {}
+
+        records.sort(key=lambda r: r.get("unixTime", 0))
+        self.process_decorations(records)
+
+        log_type = self.data.get("log_type")
+        if log_type == "result":
+            results = []
+            last_inventory_snapshot = None
+            for record in records:
+                if record.get("name") == INVENTORY_QUERY_NAME:
+                    last_inventory_snapshot = record.get("snapshot")
+                else:
+                    results.append(record)
+            if last_inventory_snapshot:
+                tree = {"source": {"module": "zentral.contrib.osquery",
+                                   "name": "osquery"},
+                        "serial_number": self.machine.serial_number,
+                        "reference": self.enrolled_machine.node_key,
+                        "public_ip_address": self.ip}
+                business_unit = self.enrollment.secret.get_api_enrollment_business_unit()
+                if business_unit:
+                    tree["business_unit"] = business_unit.serialize()
+                update_tree_with_inventory_query_snapshot(tree, last_inventory_snapshot)
+                commit_machine_snapshot_and_trigger_events(tree)
+            post_results(self.machine.serial_number, self.user_agent, self.ip, results)
+        elif log_type == "status":
+            # TODO: configuration option to filter some of those (severity) or maybe simply ignore them
+            post_status_logs(self.machine.serial_number, self.user_agent, self.ip, records)
+        else:
+            logger.error("Unknown log type %s", log_type)
+
         return {}

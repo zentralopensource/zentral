@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="active">Runs</li>
+  <li class="active">{{ distributed_query_count }} record{{ distributed_query_count|pluralize }}</li>
+</ol>
+
+<h2>{{ distributed_query_count }} Run{{ distributed_query_count|pluralize }}</h2>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Query</th>
+      <th>Tables</th>
+      <th>Machines</th>
+      <th>Results</th>
+      <th>File carving sessions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for distributed_query in object_list %}
+    {% with distributed_query.query as query %}
+    <tr>
+      <td>
+        <a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a>
+      </td>
+      <td>
+        {% if query %}<a href="{{ query.get_absolute_url }}">{{ query }}</a>{% else %}-{% endif %}
+      </td>
+      <td>
+        {% for table in distributed_query.tables %}<code>{{ table }}</code> {% endfor %}
+      </td>
+      <td>
+        {% if distributed_query.machine_count %}{{ distributed_query.machine_count }}{% else %}-{% endif %}
+      </td>
+      <td>
+        {% if distributed_query.result_count %}{{ distributed_query.result_count }}{% else %}-{% endif %}
+      </td>
+      <td>
+        {% if distributed_query.file_carving_session_count %}{{ distributed_query.file_carving_session_count }}{% else %}-{% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

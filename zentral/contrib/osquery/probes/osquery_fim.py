@@ -1,7 +1,7 @@
 import hashlib
 from django.urls import reverse_lazy
 from rest_framework import serializers
-from .base import register_probe_class, BaseProbeSerializer, OsqueryResultProbe, OsqueryQuery
+from .base import BaseProbeSerializer, OsqueryResultProbe, OsqueryQuery
 
 
 class FilePath(object):
@@ -51,6 +51,3 @@ class OsqueryFIMProbe(OsqueryResultProbe):
     def get_extra_event_search_dict(self):
         return {'event_type': self.forced_event_type,
                 'name__regexp': '{s}_[0-9a-f]{{{l}}}'.format(s=self.slug, l=self.hash_length)}
-
-
-register_probe_class(OsqueryFIMProbe)

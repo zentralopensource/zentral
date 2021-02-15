@@ -4,33 +4,17 @@
 <dict>
   <key>KeepAlive</key>
   <true/>
+  <key>Disabled</key>
+  <false/>
   <key>Label</key>
   <string>com.facebook.osqueryd</string>
   <key>ProgramArguments</key>
   <array>
     <string>/usr/local/bin/osqueryd</string>
     <string>--database_path=/usr/local/zentral/osquery/db</string>
-    <string>--tls_hostname=%TLS_HOSTNAME%</string>
-    <string>--enroll_tls_endpoint=/osquery/enroll</string>
     <string>--enroll_secret_path=/usr/local/zentral/osquery/enroll_secret.txt</string>
-    <string>--config_plugin=tls</string>
-    <string>--config_refresh=120</string>
-    <string>--config_tls_endpoint=/osquery/config</string>
-    <string>--logger_plugin=tls,filesystem</string>
-    <string>--logger_min_status=1</string>
-    <string>--logger_tls_endpoint=/osquery/log</string>
-    <string>--logger_tls_compress=true</string>
-    <string>--disable_distributed=false</string>
-    <string>--distributed_plugin=tls</string>
-    <string>--distributed_tls_read_endpoint=/osquery/distributed/read</string>
-    <string>--distributed_tls_write_endpoint=/osquery/distributed/write</string>
-    <string>--distributed_interval=60</string>
   </array>
   <key>RunAtLoad</key>
-  <true/>
-  <key>Disabled</key>
-  <false/>
-  <key>KeepAlive</key>
   <true/>
   <key>ThrottleInterval</key>
   <integer>60</integer>

@@ -17,7 +17,7 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
     def __init__(self, enrollment, version=None):
         super().__init__(enrollment, version,
                          release=enrollment.osquery_release,
-                         serialized_flags=enrollment.configuration.get_serialized_flag_list())
+                         serialized_flags=enrollment.configuration.get_serialized_flags())
 
     def get_product_archive_title(self):
         return self.name
@@ -30,21 +30,22 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         return extra_packages
 
     def extra_build_steps(self):
-        launchd_plist = self.get_root_path("Library/LaunchDaemons/com.facebook.osqueryd.plist")
-        # tls_hostname
+        # enroll secret secret in preinstall
+        self.replace_in_file(self.get_build_path("scripts", "preinstall"),
+                             (("%ENROLL_SECRET_SECRET%", self.build_kwargs["enrollment_secret_secret"]),))
+
+        # tls_hostname in postinstall
         hostname_replacement = (("%TLS_HOSTNAME%", self.get_tls_hostname()),)
-        self.replace_in_file(launchd_plist, hostname_replacement)
         self.replace_in_file(self.get_build_path("scripts", "postinstall"), hostname_replacement)
 
+        # Launch daemon extra ProgramArguments
         extra_prog_args = self.build_kwargs["serialized_flags"]
 
-        # tls_server_certs
+        # include the certs and point to them in the ProgramArguments if necessary
         tls_server_certs_install_path = self.include_tls_server_certs()
         if tls_server_certs_install_path:
             extra_prog_args.append("--tls_server_certs={}".format(tls_server_certs_install_path))
+        launchd_plist = self.get_root_path("Library/LaunchDaemons/com.facebook.osqueryd.plist")
 
+        # add the extra prog args in the plist
         self.append_to_plist_key(launchd_plist, "ProgramArguments", extra_prog_args)
-
-        # enroll secret secret
-        self.replace_in_file(self.get_build_path("scripts", "preinstall"),
-                             (("%ENROLL_SECRET_SECRET%", self.build_kwargs["enrollment_secret_secret"]),))

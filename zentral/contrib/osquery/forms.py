@@ -1,20 +1,77 @@
+from datetime import datetime
 from django import forms
-from zentral.core.probes.forms import BaseCreateProbeForm
-from zentral.utils.forms import validate_sha256
-from .models import Configuration, Enrollment
-from .probes import (OsqueryProbe, OsqueryComplianceProbe,
-                     OsqueryDistributedQueryProbe, OsqueryFileCarveProbe,
-                     OsqueryFIMProbe)
+from django.db.models import Count, F, Q
+from django.utils.text import slugify
+from .models import (AutomaticTableConstruction, Configuration, ConfigurationPack,
+                     DistributedQuery, Enrollment, FileCategory, Pack, PackQuery, Query)
 from .releases import get_osquery_versions
 
 
-# Configuration / Enrollment
+# ATC
+
+class ATCForm(forms.ModelForm):
+    class Meta:
+        model = AutomaticTableConstruction
+        fields = "__all__"
+
+
+# Configuration
 
 class ConfigurationForm(forms.ModelForm):
     class Meta:
         model = Configuration
-        fields = '__all__'
+        fields = "__all__"
 
+    def clean_options(self):
+        options = self.cleaned_data.get("options")
+        if not options:
+            options = {}
+        return options
+
+
+# Configuration pack
+
+class ConfigurationPackForm(forms.ModelForm):
+    class Meta:
+        model = ConfigurationPack
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        self.configuration = kwargs.pop("configuration", None)
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["pack"].widget = forms.HiddenInput()
+            self.configuration = self.instance.configuration
+            self.fields["pack"].queryset = Pack.objects.filter(pk=self.instance.pack.pk)
+        else:
+            self.fields["pack"].queryset = (Pack.objects.exclude(configurationpack__configuration=self.configuration)
+                                                        .order_by("name", "pk"))
+
+    def clean(self):
+        super().clean()
+        self.instance.configuration = self.configuration
+
+
+# Distributed query
+
+class DistributedQueryForm(forms.ModelForm):
+    class Meta:
+        model = DistributedQuery
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        self.query = kwargs.pop("query", None)
+        super().__init__(*args, **kwargs)
+        self.fields["valid_from"].initial = datetime.utcnow()
+
+    def clean(self):
+        if self.query:
+            self.instance.query = self.query
+            self.instance.sql = self.query.sql
+            self.instance.query_version = self.query.version
+
+
+# Enrollment
 
 class EnrollmentForm(forms.ModelForm):
     osquery_release = forms.ChoiceField(
@@ -59,348 +116,121 @@ class EnrollmentForm(forms.ModelForm):
             release_field.choices = release_choices
 
 
-# OsqueryProbe
+# File category
 
-
-class DiscoveryForm(forms.Form):
-    query = forms.CharField(widget=forms.Textarea(attrs={'rows': 5}))
-
-    def get_item_d(self):
-        return self.cleaned_data["query"]
-
-    @staticmethod
-    def get_initial(discovery):
-        return {"query": discovery}
-
-
-class QueryForm(forms.Form):
-    query = forms.CharField(widget=forms.Textarea(attrs={'rows': 5}))
-    description = forms.CharField(required=False,
-                                  help_text="Description of what this query does. Can be left empty",
-                                  widget=forms.Textarea(attrs={'rows': 3}))
-    value = forms.CharField(required=False,
-                            help_text="Why is this query relevant. Can be left empty",
-                            widget=forms.Textarea(attrs={'rows': 3}))
-    removed = forms.BooleanField(label='Include {"action": "removed"} results?',
-                                 help_text='If False, only {"action": "added"} results will be in the logs',
-                                 initial=True,
-                                 required=False)
-    snapshot = forms.BooleanField(label='Run this query in "snapshot" mode?',
-                                  help_text=('If True, osquery will not store differentials '
-                                             'and will not emulate an event stream'),
-                                  initial=False,
-                                  required=False)
-    interval = forms.IntegerField(min_value=10,  # 10 seconds
-                                  max_value=2678400,  # 31 days
-                                  initial=3600)
-    shard = forms.IntegerField(min_value=1, max_value=100, required=False,
-                               help_text="Restrict this query to a percentage (1-100) of target hosts")
-
-    def clean_removed(self):
-        remove = self.cleaned_data.get("removed")
-        if not remove:
-            remove = False
-        return remove
-
-    def clean_snapshot(self):
-        snapshot = self.cleaned_data.get("snapshot")
-        if not snapshot:
-            snapshot = False
-        return snapshot
-
-    def clean_description(self):
-        description = self.cleaned_data.get("description")
-        if not description:
-            return None
-        else:
-            return description
-
-    def clean_value(self):
-        value = self.cleaned_data.get("value")
-        if not value:
-            return None
-        else:
-            return value
+class FileCategoryForm(forms.ModelForm):
+    class Meta:
+        model = FileCategory
+        fields = "__all__"
 
     def clean(self):
-        cleaned_data = super().clean()
-        removed = cleaned_data["removed"]
-        snapshot = cleaned_data["snapshot"]
-        if removed and snapshot:
-            raise forms.ValidationError('{"action": "removed"} results are not available in "snapshot" mode')
-        return cleaned_data
-
-    def get_item_d(self):
-        return {f: v for f, v in self.cleaned_data.items() if v is not None}
-
-    @staticmethod
-    def get_initial(query):
-        initial = {}
-        for attr in ("query", "description", "value", "interval", "removed", "shard", "snapshot"):
-            value = getattr(query, attr, None)
-            if value is not None:
-                initial[attr] = value
-        return initial
-
-
-class CreateProbeForm(BaseCreateProbeForm, QueryForm):
-    model = OsqueryProbe
-    field_order = ("name", "query", "description", "value", "removed", "snapshot", "interval", "shard")
-
-    def get_body(self):
-        return {"queries": [self.get_item_d()]}
-
-
-# OsqueryComplianceProbe
-
-
-class PreferenceFileForm(forms.Form):
-    rel_path = forms.CharField(label="Relative path")
-    type = forms.ChoiceField(label='Location',
-                             choices=(('USERS', '/Users/%/Library/Preferences/'),
-                                      ('GLOBAL', '/Library/Preferences/')))
-    description = forms.CharField(required=False,
-                                  widget=forms.Textarea(attrs={'rows': 3}))
-    interval = forms.IntegerField(min_value=10,  # 10 seconds
-                                  max_value=2678400,  # 31 days
-                                  initial=3600)
-
-    def clean_description(self):
-        description = self.cleaned_data.get("description")
-        if not description:
-            return None
-        else:
-            return description
-
-    def get_item_d(self):
-        return {f: v for f, v in self.cleaned_data.items() if v is not None}
-
-    @staticmethod
-    def get_initial(query):
-        initial = {}
-        for attr in ("rel_path", "type", "description", "interval"):
-            value = getattr(query, attr, None)
-            if value is not None:
-                initial[attr] = value
-        return initial
-
-
-class KeyForm(forms.Form):
-    key = forms.CharField()
-    test = forms.ChoiceField(choices=(('EQ', ' = '),
-                                      ('INT_LTE', 'integer ≤'),
-                                      ('INT_GTE', 'integer ≥'),
-                                      ('INT_GTE_LTE', '≤ integer ≤')),
-                             initial='STR',
-                             widget=forms.Select(attrs={'class': 'key-test-sel'}))
-    arg_l = forms.CharField(required=False)
-    arg_r = forms.CharField(required=True)
-
-    def clean(self):
-        cd = self.cleaned_data
-        test = cd.get('test')
-        arg_l = cd.get('arg_l')
-        arg_r = cd.get('arg_r')
-        if test and test != 'EQ':
-            if arg_r:
-                try:
-                    cd['arg_r'] = int(arg_r)
-                except ValueError:
-                    self.add_error('arg_r', 'not an integer')
-            if test == 'INT_GTE_LTE':
-                if arg_l is None:
-                    self.add_error('arg_l', 'missing value')
-                else:
-                    try:
-                        cd['arg_l'] = int(arg_l)
-                    except ValueError:
-                        self.add_error('arg_l', 'not an integer')
-        return cd
-
-
-class BaseKeyFormSet(forms.BaseFormSet):
-    def clean(self):
-        """Checks that no two keys are the same"""
-        if any(self.errors):
-            # Don't bother validating the formset unless each form is valid on its own
-            return
-        keys = []
-        for form in self.forms:
-            key = form.cleaned_data['key']
-            if key in keys:
-                raise forms.ValidationError("Articles in a set must have distinct titles.")
-            keys.append(key)
-
-    def get_keys(self):
-        keys = []
-        for kcd in self.cleaned_data:
-            if not kcd.get("DELETE"):
-                k = {'key': kcd['key']}
-                test = kcd['test']
-                arg_r = kcd['arg_r']
-                if test == 'EQ':
-                    k['value'] = arg_r
-                elif test == 'INT_LTE':
-                    k['max_value'] = arg_r
-                elif test == 'INT_GTE':
-                    k['min_value'] = arg_r
-                else:
-                    k['min_value'] = kcd['arg_l']
-                    k['max_value'] = arg_r
-                keys.append(k)
-        return sorted(keys, key=lambda k: k['key'])
-
-    @staticmethod
-    def get_initial(preference_file):
-        initial = []
-        for k in preference_file.keys:
-            key = {'key': k.key}
-            if k.value is not None:
-                key['arg_r'] = k.value
-                key['test'] = 'EQ'
+        super().clean()
+        name = self.cleaned_data.get("name")
+        if name:
+            slug = slugify(name)
+            fc_qs = FileCategory.objects.all()
+            if self.instance.pk:
+                fc_qs = fc_qs.exclude(pk=self.instance.pk)
+            if fc_qs.filter(slug=slug).exists():
+                self.add_error("name", f"A file category with the slug '{slug}' already exists")
             else:
-                min_value = k.min_value
-                max_value = k.max_value
-                if min_value is not None and max_value is not None:
-                    key['test'] = 'INT_GTE_LTE'
-                    key['arg_l'] = min_value
-                    key['arg_r'] = max_value
-                elif min_value is not None:
-                    key['test'] = 'INT_GTE'
-                    key['arg_r'] = min_value
-                elif max_value is not None:
-                    key['test'] = 'INT_LTE'
-                    key['arg_r'] = max_value
-            initial.append(key)
-        return sorted(initial, key=lambda d: d['key'])
+                self.instance.slug = slug
 
 
-KeyFormSet = forms.formset_factory(KeyForm,
-                                   formset=BaseKeyFormSet,
-                                   min_num=1, max_num=10, extra=0, can_delete=True)
+# Pack
+
+class PackForm(forms.ModelForm):
+    class Meta:
+        model = Pack
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        name = self.cleaned_data.get("name")
+        if name:
+            slug = slugify(name)
+            pack_qs = Pack.objects.all()
+            if self.instance.pk:
+                pack_qs = pack_qs.exclude(pk=self.instance.pk)
+            if pack_qs.filter(slug=slug).exists():
+                self.add_error("name", f"A pack with the slug '{slug}' already exists")
+            else:
+                self.instance.slug = slug
 
 
-class FileChecksumForm(forms.Form):
-    path = forms.CharField()
-    sha256 = forms.CharField(validators=[validate_sha256],
-                             help_text="The result of shasum -a 256 /path/to/file")
-    description = forms.CharField(required=False,
-                                  widget=forms.Textarea(attrs={'rows': 3}))
-    interval = forms.IntegerField(min_value=10,  # 10 seconds
-                                  max_value=2678400,  # 31 days
-                                  initial=3600)
+# Pack query
 
-    def clean_description(self):
-        description = self.cleaned_data.get("description")
-        if not description:
-            return None
+class PackQueryForm(forms.ModelForm):
+    class Meta:
+        model = PackQuery
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        self.pack = kwargs.pop("pack", None)
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["query"].widget = forms.HiddenInput()
+            self.pack = self.instance.pack
+            self.fields["query"].queryset = Query.objects.filter(pk=self.instance.query.pk)
         else:
-            return description
+            self.fields["query"].queryset = (Query.objects.filter(packquery__isnull=True)
+                                                          .order_by("name", "pk"))
 
-    def get_item_d(self):
-        return {f: v for f, v in self.cleaned_data.items() if v is not None}
-
-    @staticmethod
-    def get_initial(file_checksum):
-        initial = {}
-        for field in ("path", "sha256", "description", "interval"):
-            val = getattr(file_checksum, field, None)
-            if val:
-                initial[field] = val
-        return initial
-
-
-class CreateComplianceProbeForm(BaseCreateProbeForm):
-    model = OsqueryComplianceProbe
-
-    def get_body(self):
-        return {}
+    def clean(self):
+        super().clean()
+        if self.cleaned_data.get("log_removed_actions") and self.cleaned_data.get("snapshot_mode"):
+            for field in ("log_removed_actions", "snapshot_mode"):
+                self.add_error(field, "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
+        self.instance.pack = self.pack
+        query = self.cleaned_data.get("query")
+        if query:
+            self.instance.slug = slugify(query.name)
 
 
-# OsqueryDistributedQueryProbe
+# Query
+
+class QueryForm(forms.ModelForm):
+    class Meta:
+        model = Query
+        fields = "__all__"
+
+    def clean_sql(self):
+        sql = self.cleaned_data.get("sql")
+        if self.instance.pk:
+            if sql and sql != self.instance.sql:
+                self.instance.version = F("version") + 1
+        return sql
 
 
-class DistributedQueryForm(forms.Form):
-    query = forms.CharField(widget=forms.Textarea(attrs={'class': 'form-control',
-                                                         'rows': 5}))
-
-    def get_body(self):
-        return {'distributed_query': self.cleaned_data['query']}
-
-
-class CreateDistributedQueryProbeForm(BaseCreateProbeForm, DistributedQueryForm):
-    model = OsqueryDistributedQueryProbe
-    field_order = ("name", "query")
-
-
-class DistributedQueryResultFilterForm(forms.Form):
-    ERROR = "error"
-    EMPTY = "empty"
-    NON_EMPTY = "non_empty"
-    ALL = "all"
-    STATUS_CHOICES = (
-        (ERROR, "Error"),
-        (EMPTY, "Empty"),
-        (NON_EMPTY, "Non-Empty"),
-        (ALL, "All")
+class QuerySearchForm(forms.Form):
+    q = forms.CharField(
+        label="Query", required=False,
+        widget=forms.TextInput(attrs={"autofocus": True,
+                                      "size": 36,
+                                      "placeholder": "Query name, pack name, SQL, …"})
     )
-    status = forms.ChoiceField(choices=STATUS_CHOICES, initial=ALL)
+    pack = forms.ModelChoiceField(queryset=Pack.objects.all(), required=False)
 
-    def get_filter_dict(self):
-        cleaned_data = self.cleaned_data
-        status = cleaned_data.get("status")
-        if status == self.ERROR:
-            return {"error": True, "empty": True}
-        elif status == self.EMPTY:
-            return {"error": False, "empty": True}
-        elif status == self.NON_EMPTY:
-            return {"error": False, "empty": False}
-        else:
-            return {}
-
-
-# OsqueryFileCarveProbe
-
-
-class FileCarveForm(forms.Form):
-    path = forms.CharField(help_text="Example: /Users/%/Downloads/%.jpg or /etc/hosts")
-
-    def get_body(self):
-        return {'path': self.cleaned_data['path']}
-
-
-class CreateFileCarveProbeForm(BaseCreateProbeForm, FileCarveForm):
-    model = OsqueryFileCarveProbe
-    field_order = ("name", "path")
-
-
-# FIM probes
-
-
-class FilePathForm(forms.Form):
-    file_path = forms.CharField(help_text="Example: /Users/%/Library or /Users/%/Library/ or /Users/%/Library/%%")
-    file_access = forms.BooleanField(label="Observe file access events ?", initial=False, required=False,
-                                     help_text="File accesses on Linux using inotify may induce "
-                                               "unexpected and unwanted performance reduction.")
-
-    def clean_file_access(self):
-        file_access = self.cleaned_data.get("file_access")
-        if not file_access:
-            file_access = False
-        return file_access
-
-    def get_item_d(self):
-        return self.cleaned_data
-
-    @staticmethod
-    def get_initial(file_path):
-        return {"file_path": file_path.file_path,
-                "file_access": file_path.file_access}
-
-
-class CreateFIMProbeForm(BaseCreateProbeForm, FilePathForm):
-    model = OsqueryFIMProbe
-    field_order = ("name", "file_path", "file_access")
-
-    def get_body(self):
-        return {'file_paths': [self.get_item_d()]}
+    def get_queryset(self):
+        qs = (
+            Query.objects
+                 .prefetch_related("packquery__pack")
+                 .annotate(distributed_query_count=Count("distributedquery"))
+                 .order_by("name", "pk")
+        )
+        q = self.cleaned_data.get("q")
+        pack = self.cleaned_data.get("pack")
+        if q or pack:
+            qs = qs.distinct()
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q)
+                | Q(sql__icontains=q)
+                | Q(packquery__pack__name__icontains=q)
+            )
+        if pack:
+            qs = qs.filter(packquery__pack=pack)
+        return qs

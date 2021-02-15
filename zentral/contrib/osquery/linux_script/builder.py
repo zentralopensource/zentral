@@ -16,7 +16,7 @@ class OsqueryZentralEnrollScriptBuilder(APIConfigToolsMixin):
         self.build_kwargs = {
             "enrollment_secret_secret": enrollment.secret.secret,
             "release": enrollment.osquery_release,
-            "serialized_flags": enrollment.configuration.get_serialized_flag_list(),
+            "serialized_flags": enrollment.configuration.get_serialized_flags(),
         }
 
     def build_and_make_response(self):

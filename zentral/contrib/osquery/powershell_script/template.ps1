@@ -18,19 +18,7 @@ $enrollment_secret = "%ENROLL_SECRET_SECRET%"
 # flags
 $flags_file = 'C:\Program Files\osquery\osquery.flags'
 $flags = @"
---tls_hostname=%TLS_HOSTNAME%
---enroll_tls_endpoint=/osquery/enroll
 --enroll_secret_path=$enrollment_secret_file
---config_plugin=tls
---config_tls_endpoint=/osquery/config
---logger_plugin=tls
---logger_tls_endpoint=/osquery/log
---logger_tls_period=60
---logger_tls_compress=true
---disable_distributed=false
---distributed_plugin=tls
---distributed_tls_read_endpoint=/osquery/distributed/read
---distributed_tls_write_endpoint=/osquery/distributed/write
 %EXTRA_FLAGS%
 "@
 [System.IO.File]::WriteAllLines($flags_file, $flags, $Utf8NoBomEncoding)

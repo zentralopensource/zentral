@@ -1,7 +1,7 @@
 import os.path
 from django.urls import reverse_lazy
 from rest_framework import serializers
-from .base import register_probe_class, BaseProbeSerializer, OsqueryResultProbe, OsqueryQuery
+from .base import BaseProbeSerializer, OsqueryResultProbe, OsqueryQuery
 
 
 class PreferenceFileKey(object):
@@ -155,7 +155,7 @@ class FileChecksum(object):
 
 class FileChecksumSerializer(serializers.Serializer):
     path = serializers.CharField()
-    sha256 = serializers.RegexField('^[a-f0-9]{64}\Z')
+    sha256 = serializers.RegexField(r'^[a-f0-9]{64}\Z')
     description = serializers.CharField(required=False)
     interval = serializers.IntegerField(min_value=10, max_value=2678400, default=3600)
 
@@ -217,6 +217,3 @@ class OsqueryComplianceProbe(OsqueryResultProbe):
         return {'event_type': self.forced_event_type,
                 'name__regexp': '{s}_(pf|fc)_[0-9a-f]{{{l}}}'.format(s=self.slug,
                                                                      l=self.hash_length)}
-
-
-register_probe_class(OsqueryComplianceProbe)

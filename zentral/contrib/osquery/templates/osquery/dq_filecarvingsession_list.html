@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
+  <li><a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a></li>
+  {% if reset_link %}
+  <li><a href="{{ reset_link }}">File carving sessions</a></li>
+  {% else %}
+  <li class="active">File carving sessions</li>
+  {% endif %}
+  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+</ol>
+
+<h2>Run <i>{{ object }}</i></h2>
+
+<h3 id="results">{{ page_obj.paginator.count }} File carving session{{ page_obj.paginator.count|pluralize }}</h3>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% if page_obj %}
+<table class="table">
+  <thead>
+    <th>Serial number</th>
+    <th>Created at</th>
+    <th>Blocks</th>
+  </thead>
+  <tbody>
+  {% for file_carving_session in page_obj %}
+  <tr>
+    <td>{{ file_carving_session.serial_number }}</a></td>
+    <td>{{ file_carving_session.created_at }}</a></td>
+    <td>{{ file_carving_session.block_seen }}/{{ file_carving_session.block_count }}</td>
+    <td>
+      {% if file_carving_session.archive %}
+      <a href="{% url 'osquery:download_file_carving_session_archive' file_carving_session.pk %}" class="btn btn-default">
+        <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+        Download
+      </a>
+      {% endif %}
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

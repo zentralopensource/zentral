@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>Run <i>{{ object }}</i></h2>
+
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th>Attribute</th>
+        <th>Value</th>
+      </thead>
+      <tbody>
+      <tr>
+        <td>SQL</td>
+        <td>{{ object.get_sql_html|safe }}</td>
+      </tr>
+      {% if object.query %}
+      <tr>
+        <td>Query</td>
+        <td>
+          <a href="{{ object.query.get_absolute_url }}">{{ query }}</a>, version: {{ query.version }}</p>
+        </td>
+      </tr>
+      {% endif %}
+      <tr>
+        <td>Validity</td>
+        <td>{{ object.valid_from }} → {% if object.valid_until %}{{ object.valid_until }}{% endif %}</td>
+      </tr>
+      <tr>
+        <td>Serial number{{ object.serial_numbers|length|pluralize }}</td>
+        <td>{{ object.serial_numbers|default:"-"|join:", " }}</td>
+      </tr>
+      <tr>
+        <td>Tag{{ object.tags.count|pluralize }}</td>
+        <td>{% for tag in object.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</td>
+      </tr>
+      <tr>
+        <td>Shard</td>
+        <td>{{ object.shard }}%</td>
+      </tr>
+      </tbody>
+    </table>
+
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+    </dl>
+
+  </div>
+</div>
+
+<p>
+  <a class="btn btn-default" href="{% url 'osquery:update_distributed_query' object.id %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Update
+  </a>
+  <a class="btn btn-danger" href="{% url 'osquery:delete_distributed_query' object.id %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    Delete
+  </a>
+</p>
+
+<h3 id="machines">{{ dqm_count }} Machine{{ dqm_count|pluralize }}</h3>
+
+{% if dqm_count %}
+<a class="btn btn-default" href="{% url 'osquery:distributed_query_machines' object.pk %}">See the machine{{ dqm_count|pluralize }}</a>
+{% endif %}
+
+<h3 id="results">{{ result_count }} Result{{ result_count|pluralize }}</h3>
+
+{% if result_count %}
+<a class="btn btn-default" href="{% url 'osquery:distributed_query_results' object.pk %}">See the result{{ result_count|pluralize }}</a>
+{% endif %}
+
+<h3 id="results">{{ file_carving_session_count }} File carving session{{ file_carving_session_count|pluralize }}</h3>
+
+{% if file_carving_session_count %}
+<a class="btn btn-default" href="{% url 'osquery:distributed_query_file_carving_sessions' object.pk %}">See file carving session{{ file_carving_session_count|pluralize }}</a>
+{% endif %}
+
+{% endblock %}

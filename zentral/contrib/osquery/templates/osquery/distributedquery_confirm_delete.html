@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="active">Delete</li>
+</ol>
+
+<h2>Delete run</h2>
+
+<form method="post" class="form">{% csrf_token %}
+  <p>Do you really want to delete this run with {{ result_count }} result{{ result_count|pluralize }} from {{ machine_count }} machine{{ machine_count|pluralize }}{% if file_carving_session_count %}, and {{ file_carving_session_count }} file carving session{{ file_carving_session_count|pluralize }}{% endif %}?</p>
+  <p>
+    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endblock %}

@@ -1,7 +1,7 @@
 import logging
 from django.urls import reverse, reverse_lazy
 from rest_framework import serializers
-from .base import register_probe_class, BaseProbe, BaseProbeSerializer
+from .base import BaseProbe, BaseProbeSerializer
 
 logger = logging.getLogger("zentral.contrib.osquery.probes.osquery_file_carve")
 
@@ -45,6 +45,3 @@ class OsqueryFileCarveProbe(BaseProbe):
         # match probe pk
         return {'event_type': self.forced_event_type,
                 'probe.id': self.pk}
-
-
-register_probe_class(OsqueryFileCarveProbe)

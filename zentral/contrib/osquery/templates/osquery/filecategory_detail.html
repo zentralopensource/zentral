@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:file_categories' %}">File categories</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h3>File category <i>{{ object }}</i></h3>
+
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th>Attribute</th>
+        <th>Value</th>
+      </thead>
+      <tbody>
+      <tr>
+        <td>Name</td>
+        <td>{{ object.name }}</td>
+      </tr>
+      <tr>
+        <td>Slug</td>
+        <td><code>{{ object.slug }}</slug></td>
+      </tr>
+      <tr>
+        <td>Description</td>
+        <td>{{ object.description|default:"-"|linebreaksbr }}</td>
+      </tr>
+      {% if object.file_paths %}
+      <tr>
+        <td>File path{{ object.file_paths|length|pluralize }}</td>
+        <td>
+          <pre>{{ object.file_paths|join:"&#10;" }}</pre>
+        </td>
+      </tr>
+      {% endif %}
+      {% if object.exclude_paths %}
+      <tr>
+        <td>Exclude path{{ object.exclude_paths|length|pluralize }}</td>
+        <td>
+          <pre>{{ object.exclude_paths|join:"&#10;" }}</pre>
+        </td>
+      </tr>
+      {% endif %}
+      {% if object.file_paths_queries %}
+      <tr>
+        <td>File paths quer{{ object.file_paths_queries|length|pluralize:"y,ies" }}</td>
+        <td>
+          <pre>{{ object.file_paths_queries|join:"&#10;" }}</pre>
+        </td>
+      </tr>
+      {% endif %}
+      <tr>
+        <td>Access monitoring</td>
+        <td>{{ object.access_monitoring|yesno }}</td>
+      </tr>
+      </tbody>
+    </table>
+
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+    </dl>
+  </div>
+</div>
+
+<p>
+  <a class="btn btn-default" href="{% url 'osquery:update_file_category' object.id %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Update
+  </a>
+  <a class="btn btn-danger" href="{% url 'osquery:delete_file_category' object.id %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    Delete
+  </a>
+</p>
+
+<h3>Used in {{ configuration_count }} configuration{{ configuration_count|pluralize }}</h3>
+
+{% if configurations %}
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th>Name</th>
+        <th></th>
+      </thead>
+      <tbody>
+      {% for configuration in configurations %}
+      <tr>
+        <td><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></td>
+        <td></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

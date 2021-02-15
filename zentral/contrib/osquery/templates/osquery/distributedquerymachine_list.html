@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
+  <li><a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a></li>
+  {% if reset_link %}
+  <li><a href="{{ reset_link }}">Machines</a></li>
+  {% else %}
+  <li class="active">Machines</li>
+  {% endif %}
+  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+</ol>
+
+<h2>Run <i>{{ distributed_query }}</i></h2>
+
+<h3 id="machines">{{ page_obj.paginator.count }} Machine{{ page_obj.paginator.count|pluralize }}</h3>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% if page_obj %}
+<table class="table">
+  <thead>
+    <th>Serial number</th>
+    <th>Status</th>
+    <th>Error message</th>
+  </thead>
+  <tbody>
+  {% for dqm in page_obj %}
+  <tr>
+    <td>{{ dqm.serial_number }}</a></td>
+    <td>{% if dqm.status > 0 %}Error{% else %}{% if dqm.status == 0 %}OK{% else %}In flight{% endif %}{% endif %}</td>
+    <td>{{ dqm.error_message|default:"-" }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

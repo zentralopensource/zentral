@@ -20,7 +20,8 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('block_id', models.IntegerField()),
-                ('file', models.FileField(upload_to=zentral.contrib.osquery.models.carve_session_block_path)),
+                # hack: use current existing upload_to function
+                ('file', models.FileField(upload_to=zentral.contrib.osquery.models.file_carving_block_path)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
             ],
         ),

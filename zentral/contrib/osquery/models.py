@@ -1,17 +1,19 @@
+import enum
+from hashlib import md5
 import logging
 import os.path
-from datetime import timedelta
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.contrib.postgres.fields import ArrayField, JSONField
+from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from django.db import models
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
-from django.utils.text import slugify
 from zentral.conf import settings
-from zentral.contrib.inventory.models import BaseEnrollment, MachineSnapshotCommit, MachineTag, MetaMachine
-from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.core.probes.conf import all_probes
+from zentral.contrib.inventory.models import BaseEnrollment, Tag
+from zentral.utils.sql import tables_in_query, format_sql
+from .specs import cli_only_flags
+
 
 logger = logging.getLogger("zentral.contrib.osquery.models")
 
@@ -20,110 +22,267 @@ SOURCE_MODULE = "zentral.contrib.osquery"
 SOURCE_NAME = "osquery"
 
 
-# Configuration / Enrollment
+# Configuration
 
 
-def get_or_create_machine_snapshot(serial_number, host_identifier, node_key):
-    try:
-        msc = (MachineSnapshotCommit.objects.filter(source__module=SOURCE_MODULE,
-                                                    source__name=SOURCE_NAME,
-                                                    serial_number=serial_number)
-                                            .order_by("-version"))[0]
-    except IndexError:
-        action = 'enrollment'
-        if node_key:
-            # apply the enrolled machine node_key
-            reference = node_key
-        else:
-            # old way. TODO: deprecate and remove
-            # generate a new reference that we can use as node_key
-            reference = get_random_string(64)
-        tree = {'source': {'module': SOURCE_MODULE,
-                           'name': SOURCE_NAME},
-                'reference': reference,
-                'serial_number': serial_number}
-        if host_identifier:
-            tree["system_info"] = {"computer_name": host_identifier}
-    else:
-        action = 're-enrollment'
-        tree = msc.machine_snapshot.serialize()
-        if node_key:
-            # apply the enrolled machine node_key
-            tree["reference"] = node_key
+class Platform(enum.Enum):
+    # https://osquery.readthedocs.io/en/stable/deployment/configuration/#schedule
+    DARWIN = "darwin"  # for macOS hosts
+    FREEBSD = "freebsd"  # or FreeBSD hosts
+    LINUX = "linux"  # for any RedHat or Debian-based hosts
+    POSIX = "posix"  # darwin or freebsd or linux
+    WINDOWS = "windows"  # for any Windows desktop or server hosts
 
-    return action, tree
+    @classmethod
+    def choices(cls):
+        return tuple((i.value, i.value) for i in cls)
 
 
-def get_or_create_enrolled_machine(enrollment, serial_number):
-    enrolled_machine, _ = EnrolledMachine.objects.get_or_create(
-         enrollment=enrollment,
-         serial_number=serial_number,
-         defaults={"node_key": get_random_string(64)}
+class Query(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+
+    sql = models.TextField()
+    description = models.TextField(blank=True)
+    value = models.TextField(blank=True)
+
+    version = models.PositiveIntegerField(default=1, editable=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("osquery:query", args=(self.pk,))
+
+    def get_sql_html(self):
+        return format_sql(self.sql)
+
+    @cached_property
+    def tables(self):
+        return sorted(tables_in_query(self.sql))
+
+
+class Pack(models.Model):
+    DELIMITER = "/"
+
+    name = models.CharField(max_length=256, unique=True)
+    slug = models.CharField(max_length=256, unique=True, editable=False)
+    description = models.TextField(blank=True)
+
+    discovery_queries = ArrayField(
+        models.TextField(),
+        blank=True,
+        default=list,
+        help_text="This pack will only execute if all discovery queries return results."
     )
-    return enrolled_machine
+    platforms = ArrayField(
+        models.CharField(max_length=32, choices=Platform.choices()),
+        blank=True,
+        default=list,
+        help_text="Restrict this pack to some platforms, default is 'all' platforms"
+    )
+    minimum_osquery_version = models.CharField(
+        max_length=14,
+        validators=[RegexValidator(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}")],
+        null=True,
+        blank=True,
+        help_text="This pack will only execute on osquery versions greater than or equal-to this version string"
+    )
+    shard = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        null=True,
+        blank=True,
+        help_text="Restrict every pack queries to a percentage (1-100) of target hosts"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("osquery:pack", args=(self.pk,))
+
+    def configuration_key(self):
+        return f"{self.slug}{self.DELIMITER}{self.pk}"
+
+    def serialize(self):
+        d = {"queries": {pq.pack_key(): pq.serialize()
+                         for pq in self.packquery_set.select_related("query").all()}}
+        if self.discovery_queries:
+            d["discovery"] = self.discovery_queries
+        if self.platforms:
+            d["platform"] = ",".join(self.platforms)
+        if self.minimum_osquery_version:
+            d["version"] = self.minimum_osquery_version
+        if self.shard and self.shard != 100:
+            d["shard"] = self.shard
+        return d
 
 
-def enroll(enrollment, serial_number, business_unit, host_identifier, ip):
-    node_key = None
-    if enrollment:
-        # new way
-        enrolled_machine = get_or_create_enrolled_machine(enrollment, serial_number)
-        node_key = enrolled_machine.node_key
+class PackQueryManager(models.Manager):
+    def get_with_config_key(self, key):
+        try:
+            _, pack_pk, _, query_pk, _ = key.split(Pack.DELIMITER)
+            pack_pk = int(pack_pk)
+            query_pk = int(query_pk)
+        except (AttributeError, ValueError):
+            raise ValueError("Not an osquery pack query configuration key")
+        return self.get(pack__pk=pack_pk, query__pk=query_pk)
 
-        # apply the enrollment secret tags
-        for tag in enrollment.secret.tags.all():
-            MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
 
-    # machine snapshot commit
-    action, tree = get_or_create_machine_snapshot(serial_number, host_identifier, node_key)
+class PackQuery(models.Model):
+    pack = models.ForeignKey(Pack, on_delete=models.CASCADE, editable=False)
+    query = models.OneToOneField(Query, on_delete=models.PROTECT)
+    slug = models.CharField(max_length=256, editable=False)
 
-    # update and commit the machine snapshot tree
-    if business_unit:
-        tree['business_unit'] = business_unit.serialize()
-    if ip:
-        tree["public_ip_address"] = ip
-    ms = commit_machine_snapshot_and_trigger_events(tree)
-    if not ms:
-        logger.error("Could not commit machine snapshot tree during the osquery enrollment")
+    interval = models.IntegerField(
+        validators=[MinValueValidator(10),  # 10s
+                    MaxValueValidator(86400)],  # 1d
+        help_text="interval in seconds to run the query (subject to splay/smoothing)"
+    )
+    log_removed_actions = models.BooleanField(
+        default=True,
+        help_text="If 'removed' action should be logged"
+    )
+    snapshot_mode = models.BooleanField(
+        default=False,
+        help_text="Run this query in 'snapshot' mode"
+    )
+    platforms = ArrayField(
+        models.CharField(max_length=32, choices=Platform.choices()),
+        blank=True,
+        default=list,
+        help_text="restrict this query to some platforms, default is 'all' platforms"
+    )
+    minimum_osquery_version = models.CharField(
+        max_length=14,
+        validators=[RegexValidator(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}")],
+        null=True,
+        blank=True,
+        help_text="only run this query on osquery versions greater than or equal-to this version string"
+    )
+    shard = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        null=True,
+        blank=True,
+        help_text="restrict this query to a percentage (1-100) of target hosts"
+    )
+    can_be_denylisted = models.BooleanField(
+        default=True,
+        help_text="If this query can be denylisted when stopped for excessive resource consumption."
+    )
 
-    return ms, action
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = PackQueryManager()
+
+    class Meta:
+        unique_together = (("pack", "slug"),)
+
+    def get_absolute_url(self):
+        return "{}#pq{}".format(self.pack.get_absolute_url(), self.pk)
+
+    def pack_key(self):
+        return f"{self.slug}{Pack.DELIMITER}{self.query.pk}{Pack.DELIMITER}{self.query.version}"
+
+    def serialize(self):
+        d = {"query": self.query.sql,
+             "interval": self.interval}
+        if not self.log_removed_actions:
+            d["removed"] = False
+        if self.snapshot_mode:
+            d["snapshot"] = True
+        if self.platforms:
+            d["platform"] = ",".join(self.platforms)
+        if self.minimum_osquery_version:
+            d["version"] = self.minimum_osquery_version
+        if self.shard and self.shard != 100:
+            d["shard"] = self.shard
+        if not self.can_be_denylisted:
+            d["denylist"] = False
+        return d
+
+
+class FileCategory(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+    slug = models.CharField(max_length=256, unique=True, editable=False)
+    description = models.TextField(blank=True)
+
+    file_paths = ArrayField(models.CharField(max_length=256), blank=True, default=list)
+    exclude_paths = ArrayField(models.CharField(max_length=256), blank=True, default=list)
+    file_paths_queries = ArrayField(models.TextField(), blank=True, default=list)
+    access_monitoring = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("osquery:file_category", args=(self.pk,))
+
+
+class AutomaticTableConstruction(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+    description = models.TextField(blank=True)
+
+    table_name = models.CharField(
+        max_length=64, unique=True,
+        validators=[RegexValidator(r"[a-z_]+")]
+    )
+    query = models.TextField()
+    path = models.CharField(max_length=256)
+    columns = ArrayField(models.CharField(max_length=64, validators=[RegexValidator(r"[a-z_]")]))
+    platforms = ArrayField(
+        models.CharField(max_length=32, choices=Platform.choices()),
+        blank=True,
+        default=list,
+        help_text="Restrict this automatic table construction to some platforms, default is 'all' platforms"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("osquery:atc", args=(self.pk,))
+
+    def get_query_html(self):
+        return format_sql(self.query)
 
 
 class Configuration(models.Model):
-    DYNAMIC_FLAGS = {
-        'config_refresh',
-        'distributed_interval',
-    }
-    STARTUP_ONLY_FLAGS = {
-        'disable_carver',
-        'buffered_log_max',
-    }
-
     name = models.CharField(max_length=256, unique=True)
+    description = models.TextField(blank=True)
 
-    config_refresh = models.IntegerField(
-        validators=[MinValueValidator(60), MaxValueValidator(86400)],
-        help_text=("Configuration refresh interval in seconds. If the configuration endpoint cannot be reached "
-                   "during runtime, the normal retry approach is applied."),
-        default=1200
+    inventory = models.BooleanField(
+        default=True,
+        help_text="Schedule regular inventory queries"
     )
-    distributed_interval = models.IntegerField(
-        validators=[MinValueValidator(60), MaxValueValidator(86400)],
-        help_text=("In seconds, the amount of time that osqueryd will wait between periodically checking in with "
-                   "a distributed query server to see if there are any queries to execute."),
-        default=180
+    inventory_apps = models.BooleanField(
+        default=False,
+        help_text="Include macOS apps or linux packages in the inventory"
     )
-    disable_carver = models.BooleanField(
-        help_text="Disable the osquery file carver",
-        default=True
+    inventory_interval = models.IntegerField(
+        default=86400,  # 1d
+        validators=[MinValueValidator(300),  # 5m
+                    MaxValueValidator(172800)],  # 2d
+        help_text="Inventory refresh interval in seconds"
     )
-    buffered_log_max = models.IntegerField(
-        validators=[MinValueValidator(0), MaxValueValidator(1000000)],
-        help_text=("Maximum number of logs (status and result) "
-                   "kept on disk if Zentral is unavailable "
-                   "(0 = unlimited, max 1000000)"),
-        default=500000
-    )
+
+    options = JSONField(default=dict, blank=True, help_text="Osquery options")
+
+    file_categories = models.ManyToManyField(FileCategory, blank=True)
+    automatic_table_constructions = models.ManyToManyField(AutomaticTableConstruction, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -133,22 +292,55 @@ class Configuration(models.Model):
     def get_absolute_url(self):
         return reverse("osquery:configuration", args=(self.pk,))
 
-    def get_dynamic_flags(self):
-        return {k: getattr(self, k) for k in self.DYNAMIC_FLAGS}
+    def get_all_flags(self):
+        flags = {
+            "tls_hostname": settings["api"]["fqdn"],
 
-    def get_flags(self):
-        flags = self.get_dynamic_flags()
-        for k in self.STARTUP_ONLY_FLAGS:
-            flags[k] = getattr(self, k)
-        if not self.disable_carver:
-            flags.update({"carver_start_endpoint": reverse('osquery:carver_start'),
-                          "carver_continue_endpoint": reverse('osquery:carver_continue')})
-        if self.config_refresh:
-            flags["config_accelerated_refresh"] = max(60, self.config_refresh // 4)
+            # tls config every 1200s
+            "config_plugin": "tls",
+            "config_tls_endpoint": reverse("osquery:config"),
+            "config_refresh": 1200,
+
+            # distributed queries enabled with a 60s interval
+            "disable_distributed": False,
+            "distributed_plugin": "tls",
+            "distributed_interval": 60,
+            "distributed_tls_read_endpoint": reverse("osquery:distributed_read"),
+            "distributed_tls_write_endpoint": reverse("osquery:distributed_write"),
+
+            # force tls enrollment
+            "disable_enrollment": False,
+            "enroll_tls_endpoint": reverse("osquery:enroll"),
+
+            # tls logger with a 60s period, and compression
+            "logger_plugin": "tls",
+            "logger_tls_endpoint": reverse("osquery:log"),
+            "logger_tls_period": 60,
+            "logger_tls_compress": True,
+        }
+        flags.update(self.options)
+        if not flags.get("disable_carver", True) or not flags.get("carver_disable_function", True):
+            flags.update({
+                "carver_disable_function": False,
+                "disable_carver": False,
+                "carver_continue_endpoint": reverse("osquery:carver_continue"),
+                "carver_start_endpoint": reverse("osquery:carver_start"),
+                "carver_compression": False,  # TODO: implement!
+            })
+        # Forced because we need the Osquery API views to work
+        flags["pack_delimiter"] = Pack.DELIMITER
         return flags
 
-    def get_serialized_flag_list(self):
-        return ["--{}={}".format(f, str(v).lower()) for f, v in self.get_flags().items()]
+    def serialize_options(self):
+        return {k: v for k, v in self.get_all_flags().items() if k not in cli_only_flags}
+
+    def get_serialized_flags(self):
+        flags = []
+        for k, v in self.get_all_flags().items():
+            if isinstance(v, bool):
+                v = str(v).lower()
+            flags.append(f"--{k}={v}")
+        return flags
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -159,6 +351,21 @@ class Configuration(models.Model):
 
     def can_be_deleted(self):
         return self.enrollment_set.all().count() == 0
+
+
+class ConfigurationPack(models.Model):
+    configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE, editable=False)
+    pack = models.ForeignKey(Pack, on_delete=models.CASCADE)
+    tags = models.ManyToManyField(Tag, blank=True)
+
+    class Meta:
+        unique_together = (("configuration", "pack"),)
+
+    def get_absolute_url(self):
+        return "{}#cp{}".format(self.configuration.get_absolute_url(), self.pk)
+
+
+# Enrollment
 
 
 class Enrollment(BaseEnrollment):
@@ -182,105 +389,165 @@ class Enrollment(BaseEnrollment):
 
 class EnrolledMachine(models.Model):
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
+
     serial_number = models.TextField(db_index=True)
     node_key = models.CharField(max_length=64, unique=True)
+    osquery_version = models.CharField(max_length=14, blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("enrollment", "serial_number"),)
 
 
 # Distributed queries
 
 
-MAX_DISTRIBUTED_QUERY_AGE = timedelta(days=1)
+class DistributedQueryManager(models.Manager):
+    def active(self):
+        now = timezone.now()
+        return (
+            self.filter(Q(valid_until__isnull=True) | Q(valid_until__gte=now))
+                .filter(valid_from__lte=now)
+        )
+
+    def iter_queries_for_machine(self, machine):
+        qs = (
+            self.active()
+                .distinct()
+                .filter(Q(serial_numbers__len=0) | Q(serial_numbers__contains=[machine.serial_number]))
+                .filter(Q(tags__isnull=True) | Q(tags__in=machine.tags))
+                .exclude(distributedquerymachine__serial_number=machine.serial_number)
+                .order_by("pk")
+        )
+        for dq in qs:
+            if dq.shard == 100:
+                yield dq
+            else:
+                # consistant sharding per dq and serial number
+                # md5 used because part of the stdlib
+                test = int(md5((str(dq.pk) + machine.serial_number).encode("utf-8")).hexdigest(), 16) % 100
+                if test <= dq.shard:
+                    yield dq
 
 
-class DistributedQueryProbeMachineManager(models.Manager):
-    distributed_query_probes = all_probes.model_filter("OsqueryDistributedQueryProbe", "OsqueryFileCarveProbe")
+class DistributedQuery(models.Model):
+    query = models.ForeignKey(Query, on_delete=models.SET_NULL, null=True, editable=False)
+    query_version = models.IntegerField(editable=False)
+    sql = models.TextField(editable=False)
 
-    def new_queries_for_machine(self, machine):
-        queries = {}
+    valid_from = models.DateTimeField()
+    valid_until = models.DateTimeField(blank=True, null=True)
 
-        seen_probe_id = {dqpm.probe_source_id for dqpm in self.filter(machine_serial_number=machine.serial_number)}
+    serial_numbers = ArrayField(models.TextField(), blank=True, default=list)
+    tags = models.ManyToManyField(Tag, blank=True)
+    shard = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        default=100,
+        help_text="Restrict this query to a percentage (1-100) of target hosts"
+    )
 
-        def not_seen_probe_filter(probe):
-            return probe.pk not in seen_probe_id
-        min_age = timezone.now() - MAX_DISTRIBUTED_QUERY_AGE
-
-        def recent_probe_filter(probe):
-            return probe.created_at > min_age
-        # TODO: slow
-        # could filter the probes that are too old in the db
-        probe_list = (self.distributed_query_probes.machine_filtered(machine)
-                                                   .filter(not_seen_probe_filter)
-                                                   .filter(recent_probe_filter))
-        for probe in probe_list:
-            dqpm, created = self.get_or_create(probe_source_id=probe.pk,
-                                               machine_serial_number=machine.serial_number)
-            if created:
-                queries[probe.distributed_query_name] = probe.distributed_query
-
-        return queries
-
-
-class DistributedQueryProbeMachine(models.Model):
-    """Link a machine to a OsqueryDistributedQueryProbe
-
-    Necessary to keep track of the distributed queries received by each machine.
-    """
-    probe_source = models.ForeignKey('probes.ProbeSource', on_delete=models.CASCADE)
-    machine_serial_number = models.CharField(max_length=255, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    objects = DistributedQueryProbeMachineManager()
+    objects = DistributedQueryManager()
+
+    def __str__(self):
+        return str(self.pk)
+
+    def get_absolute_url(self):
+        return reverse("osquery:distributed_query", args=(self.pk,))
+
+    def get_sql_html(self):
+        return format_sql(self.sql)
+
+    @cached_property
+    def tables(self):
+        return sorted(tables_in_query(self.sql))
+
+    def is_active(self):
+        now = timezone.now()
+        if self.valid_from > now:
+            return False
+        if self.valid_until and self.valid_until < now:
+            return False
+        return True
 
 
-def carve_session_dir_path(carve_session):
-    return os.path.join('osquery/carves/',
-                        str(carve_session.probe_source.id),
-                        carve_session.machine_serial_number,
-                        carve_session.session_id[:16])
+class DistributedQueryMachine(models.Model):
+    distributed_query = models.ForeignKey(DistributedQuery, on_delete=models.CASCADE)
+    serial_number = models.TextField(db_index=True)
+
+    status = models.IntegerField(null=True)
+    error_message = models.TextField(null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("distributed_query", "serial_number"),)
 
 
-def carve_session_archive_path(instance, filename):
-    return os.path.join(carve_session_dir_path(instance), "archive.tar")
+class DistributedQueryResult(models.Model):
+    distributed_query = models.ForeignKey(DistributedQuery, on_delete=models.CASCADE)
+    serial_number = models.TextField()
+    row = JSONField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["distributed_query", "serial_number"])
+        ]
 
 
-class CarveSession(models.Model):
-    probe_source = models.ForeignKey('probes.ProbeSource', on_delete=models.CASCADE)
-    machine_serial_number = models.CharField(max_length=255, db_index=True)
-    session_id = models.CharField(max_length=255, db_index=True)
-    carve_guid = models.CharField(max_length=255, db_index=True)
+# File carving
+
+
+def file_carving_session_dir_path(file_carving_session):
+    if file_carving_session.distributed_query_id:
+        subpath = f"runs/{file_carving_session.distributed_query_id}"
+    elif file_carving_session.pack_query_id:
+        subpath = f"scheduled/{file_carving_session.pack_query_id}"
+    else:
+        # should never happend
+        subpath = "orphans"
+    return os.path.join('osquery/file_carvings/', subpath, str(file_carving_session))
+
+
+def file_carving_session_archive_path(instance, filename):
+    return os.path.join(file_carving_session_dir_path(instance), "archive.tar")
+
+
+class FileCarvingSession(models.Model):
+    id = models.UUIDField(primary_key=True)
+
+    distributed_query = models.ForeignKey(DistributedQuery, on_delete=models.CASCADE, null=True)
+    pack_query = models.ForeignKey(PackQuery, on_delete=models.CASCADE, null=True)
+
+    serial_number = models.TextField(db_index=True)
+    carve_guid = models.TextField()
     carve_size = models.BigIntegerField()
     block_size = models.IntegerField()
     block_count = models.IntegerField()
-    archive = models.FileField(upload_to=carve_session_archive_path, null=True)
+    archive = models.FileField(upload_to=file_carving_session_archive_path, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.pk}_{self.serial_number}"
 
     def get_archive_name(self):
-        return "{}_{}.tar".format(slugify(self.probe_source.name),
-                                  self.machine_serial_number)
-
-    def get_archive_url(self):
-        return "{}{}".format(settings["api"]["tls_hostname"],
-                             reverse("osquery:download_file_carve_session_archive", args=(self.pk,)))
-
-    def get_machine(self):
-        return MetaMachine(self.machine_serial_number)
-
-    @cached_property
-    def block_number(self):
-        return self.carveblock_set.count()
-
-    @cached_property
-    def progress(self):
-        return self.block_number * 100 // self.block_count
+        return f"{self}.tar"
 
 
-def carve_session_block_path(instance, filename):
-    return os.path.join(carve_session_dir_path(instance.carve_session), str(instance.block_id))
+def file_carving_block_path(instance, filename):
+    return os.path.join(file_carving_session_dir_path(instance.file_carving_session), str(instance.block_id))
 
 
-class CarveBlock(models.Model):
-    carve_session = models.ForeignKey(CarveSession, on_delete=models.CASCADE)
+class FileCarvingBlock(models.Model):
+    file_carving_session = models.ForeignKey(FileCarvingSession, on_delete=models.CASCADE)
     block_id = models.IntegerField()
-    file = models.FileField(upload_to=carve_session_block_path)
+    file = models.FileField(upload_to=file_carving_block_path)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (("file_carving_session", "block_id"),)

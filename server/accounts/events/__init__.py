@@ -99,7 +99,9 @@ def post_event(event_cls, request, user, payload=None):
 
 
 def user_logged_in_callback(sender, request, user, **kwargs):
-    post_event(LoginEvent, request, user)
+    # login from the force_login test client method is not going through the middlewares
+    if hasattr(request, "user"):
+        post_event(LoginEvent, request, user)
 
 
 user_logged_in.connect(user_logged_in_callback)

@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="active">File categories</li>
+  <li class="active">{{ file_category_count }} record{{ file_category_count|pluralize }}</li>
+</ol>
+
+<h2>{{ file_category_count }} File categor{{ file_category_count|pluralize:"y,ies" }}</h2>
+
+<p>
+  <a href="{% url 'osquery:create_file_category' %}" class="btn btn-default">Create</a>
+</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for file_category in object_list %}
+    <tr>
+      <td>
+        <a href="{{ file_category.get_absolute_url }}">{{ file_category }}</a>
+      </td>
+      <td>
+        <a class="btn btn-default" href="{% url 'osquery:update_file_category' file_category.id %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+          Update
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

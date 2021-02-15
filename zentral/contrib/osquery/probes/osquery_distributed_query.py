@@ -2,7 +2,7 @@ import logging
 from django.urls import reverse, reverse_lazy
 from rest_framework import serializers
 from zentral.utils.sql import format_sql
-from .base import register_probe_class, BaseProbe, BaseProbeSerializer
+from .base import BaseProbe, BaseProbeSerializer
 
 logger = logging.getLogger("zentral.contrib.osquery.probes.osquery_distributed_query")
 
@@ -43,6 +43,3 @@ class OsqueryDistributedQueryProbe(BaseProbe):
 
     def get_distributed_query_html(self):
         return format_sql(self.distributed_query)
-
-
-register_probe_class(OsqueryDistributedQueryProbe)
