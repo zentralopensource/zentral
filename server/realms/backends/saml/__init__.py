@@ -6,6 +6,7 @@ from saml2.client import Saml2Client
 from saml2.config import Config as Saml2Config
 from saml2.saml import NAMEID_FORMAT_EMAILADDRESS
 from zentral.conf import settings
+from zentral.utils.json import remove_null_character
 from realms.backends.base import BaseBackend
 from realms.exceptions import RealmUserError
 
@@ -88,7 +89,7 @@ class SAMLRealmBackend(BaseBackend):
         ras = RealmAuthenticationSession(
             realm=self.instance,
             callback=callback,
-            callback_kwargs=callback_kwargs
+            callback_kwargs=remove_null_character(callback_kwargs)
         )
         ras.save()
 

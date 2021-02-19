@@ -3,6 +3,7 @@ from django.urls import reverse
 from zentral.conf import settings
 from realms.backends.base import BaseBackend
 from realms.exceptions import RealmUserError
+from zentral.utils.json import remove_null_character
 from .lib import build_authorization_code_flow_url, generate_pkce_codes, get_claims
 
 
@@ -48,7 +49,7 @@ class OpenIDConnectRealmBackend(BaseBackend):
             realm=self.instance,
             backend_state=backend_state,
             callback=callback,
-            callback_kwargs=callback_kwargs
+            callback_kwargs=remove_null_character(callback_kwargs)
         )
         ras.save()
 

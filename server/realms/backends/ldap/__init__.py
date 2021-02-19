@@ -5,6 +5,7 @@ import ldap
 from realms.backends.base import BaseBackend
 from realms.exceptions import RealmUserError
 from realms.utils import build_password_hash_dict
+from zentral.utils.json import remove_null_character
 
 
 logger = logging.getLogger("zentral.realms.backends.ldap")
@@ -87,7 +88,7 @@ class LDAPRealmBackend(BaseBackend):
             realm=self.instance,
             save_password_hash=save_password_hash,
             callback=callback,
-            callback_kwargs=callback_kwargs
+            callback_kwargs=remove_null_character(callback_kwargs)
         )
         ras.save()
 

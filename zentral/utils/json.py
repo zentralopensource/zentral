@@ -8,6 +8,17 @@ from django.utils.text import get_valid_filename
 logger = logging.getLogger("zentral.utils.json")
 
 
+def remove_null_character(obj):
+    if isinstance(obj, str):
+        obj = obj.replace("\u0000", "")
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            obj[k] = remove_null_character(v)
+    elif isinstance(obj, list):
+        obj = [remove_null_character(i) for i in obj]
+    return obj
+
+
 def save_dead_letter(data, file_suffix, directory="/tmp/zentral_dead_letters"):
     now = timezone.now()
     filename = "{}_{}.json".format(
