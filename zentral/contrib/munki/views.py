@@ -176,8 +176,6 @@ class UpdateInstallProbeView(LoginRequiredMixin, FormView):
 
 
 class BaseView(JSONPostAPIView):
-    enrollment = None
-
     def get_enrolled_machine_token(self, request):
         authorization_header = request.META.get("HTTP_AUTHORIZATION")
         if not authorization_header:
@@ -223,10 +221,12 @@ class JobDetailsView(BaseView):
             raise APIAuthError(auth_err)
 
     def do_post(self, data):
-        event_data = {"request_type": "job_details"}
-        if self.enrollment:
-            event_data["enrollment"] = {"pk": self.enrollment.pk}
-        post_munki_request_event(self.machine_serial_number, self.user_agent, self.ip, **event_data)
+        post_munki_request_event(
+            self.machine_serial_number,
+            self.user_agent, self.ip,
+            request_type="job_details",
+            enrollment={"pk": self.enrollment.pk}
+        )
         response_d = settings['apps']['zentral.contrib.munki'].serialize()
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
@@ -257,18 +257,29 @@ class PostJobView(BaseView):
         if not ms:
             raise RuntimeError("Could not commit machine snapshot")
 
-        msn = ms.serial_number
-
         # reports
-        reports = [(parser.parse(r.pop('start_time')),
-                    parser.parse(r.pop('end_time')),
-                    r) for r in data.pop('reports')]
+        reports = []
+        report_count = event_count = 0
+        for r in data.pop('reports'):
+            report_count += 1
+            event_count += len(r.get("events", []))
+            reports.append((
+                parser.parse(r.pop('start_time')),
+                parser.parse(r.pop('end_time')),
+                r
+            ))
+
         # events
-        event_data = {"request_type": "postflight"}
-        if self.enrollment:
-            event_data["enrollment"] = {"pk": self.enrollment.pk}
-        post_munki_request_event(msn, self.user_agent, self.ip, **event_data)
-        post_munki_events(msn,
+        post_munki_request_event(
+            self.machine_serial_number,
+            self.user_agent, self.ip,
+            request_type="postflight",
+            enrollment={"pk": self.enrollment.pk},
+            report_count=report_count,
+            event_count=event_count
+        )
+
+        post_munki_events(self.machine_serial_number,
                           self.user_agent,
                           self.ip,
                           (r for _, _, r in reports))
@@ -285,6 +296,6 @@ class PostJobView(BaseView):
                                 'start_time': start_time,
                                 'end_time': end_time})
         with transaction.atomic():
-            MunkiState.objects.update_or_create(machine_serial_number=msn,
+            MunkiState.objects.update_or_create(machine_serial_number=self.machine_serial_number,
                                                 defaults=update_dict)
         return {}
