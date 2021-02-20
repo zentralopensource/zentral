@@ -399,7 +399,7 @@ If you POST it, you will get the following error:
     "rules": {
         "0": {
             "non_field_errors": [
-                "conflict"
+                "BINARY/1111111111111111111111111111111111111111111111111111111111111111: conflict"
             ]
         }
     }

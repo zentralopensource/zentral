@@ -74,7 +74,9 @@ class RuleSetUpdateSerializer(serializers.Serializer):
         for rule_id, rule in enumerate(data.get("rules", [])):
             key = rule["rule_type"], rule["sha256"]
             if key in keys:
-                rule_errors[str(rule_id)] = {"non_field_errors": ["duplicated"]}
+                rule_errors[str(rule_id)] = {
+                    "non_field_errors": ["{rule_type}/{sha256}: duplicated".format(**rule)]
+                }
             keys.add(key)
             # TODO: optimize
             if (Rule.objects.exclude(ruleset__name=data["name"])
@@ -82,13 +84,17 @@ class RuleSetUpdateSerializer(serializers.Serializer):
                                 configuration__in=self.configurations,
                                 target__type=rule["rule_type"], target__sha256=rule["sha256"]
                             ).exists()):
-                rule_errors[str(rule_id)] = {"non_field_errors": ["conflict"]}
+                rule_errors[str(rule_id)] = {
+                    "non_field_errors": ["{rule_type}/{sha256}: conflict".format(**rule)]
+                }
             elif (
                 rule["rule_type"] == Target.BUNDLE and
                 not Bundle.objects.filter(target__sha256=rule["sha256"],
                                           uploaded_at__isnull=False).exists()
             ):
-                rule_errors[str(rule_id)] = {"non_field_errors": ["bundle unknown or not uploaded"]}
+                rule_errors[str(rule_id)] = {
+                    "non_field_errors": ["{rule_type}/{sha256}: bundle unknown or not uploaded".format(**rule)]
+                }
         if rule_errors:
             raise serializers.ValidationError({"rules": rule_errors})
         return data

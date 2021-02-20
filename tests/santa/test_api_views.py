@@ -261,7 +261,7 @@ class APIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(
             json_response,
-            {"rules": {"0": {"non_field_errors": ["conflict"]}}}
+            {"rules": {"0": {"non_field_errors": [f'BINARY/{data["rules"][0]["sha256"]}: conflict']}}}
         )
         self.assertEqual(self.configuration.rule_set.count(), 1)
         self.assertEqual(self.configuration2.rule_set.count(), 1)
@@ -321,3 +321,36 @@ class APIViewsTestCase(TestCase):
         )
         self.assertEqual(self.configuration.rule_set.count(), 1)
         self.assertEqual(self.configuration2.rule_set.count(), 1)
+
+        # duplicated
+        sha256 = get_random_string(64, "0123456789abcdef")
+        response = self.post_json_data(
+            url,
+            {"name": get_random_string(),
+             "rules": [
+                 {"rule_type": "BINARY", "sha256": sha256, "policy": "ALLOWLIST"},
+                 {"rule_type": "BINARY", "sha256": sha256, "policy": "ALLOWLIST"},
+             ]}
+        )
+        self.assertEqual(response.status_code, 400)
+        json_response = response.json()
+        self.assertEqual(
+            json_response,
+            {"rules": {"1": {"non_field_errors": [f'BINARY/{sha256}: duplicated']}}}
+        )
+
+        # unknown bundle
+        sha256 = get_random_string(64, "0123456789abcdef")
+        response = self.post_json_data(
+            url,
+            {"name": get_random_string(),
+             "rules": [
+                 {"rule_type": "BUNDLE", "sha256": sha256, "policy": "ALLOWLIST"},
+             ]}
+        )
+        self.assertEqual(response.status_code, 400)
+        json_response = response.json()
+        self.assertEqual(
+            json_response,
+            {"rules": {"0": {"non_field_errors": [f'BUNDLE/{sha256}: bundle unknown or not uploaded']}}}
+        )
