@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from urllib.parse import urlparse, parse_qs
 import uuid
 from django.test import TestCase, override_settings
@@ -5,14 +6,6 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmAuthenticationSession
 from zentral.conf import settings
-
-
-def mocked_get_openid_configuration(discovery_url):
-    return {"authorization_endpoint": "https://www.example.com/authorization"}
-
-
-from realms.backends.openidc import lib as openidc_lib  # NOQA
-openidc_lib._get_openid_configuration = mocked_get_openid_configuration
 
 
 SAML2_IDP_METADATA_TEST_STRING = """
@@ -120,7 +113,12 @@ class RealmModelsTestCase(TestCase):
         self.assertEqual(ras.callback_kwargs, {"next_url": next_url})
         self.assertRedirects(response, reverse("realms:ldap_login", args=(ras.realm.pk, ras.pk)))
 
-    def test_openidc_login(self):
+    @patch("realms.backends.openidc.lib._get_openid_configuration")
+    def test_openidc_login(self, _get_openid_configuration):
+        authorization_endpoint_url = "https://www.example.com/authorization"
+        _get_openid_configuration.return_value = {
+            "authorization_endpoint": authorization_endpoint_url
+        }
         next_url = "/{}".format(get_random_string())
         response = self.client.post(
             reverse("realms:login", args=(self.openidc_realm.pk,)),
@@ -130,9 +128,10 @@ class RealmModelsTestCase(TestCase):
         self.assertEqual(ras.callback, "realms.utils.login_callback")
         self.assertEqual(ras.callback_kwargs, {"next_url": next_url})
         url = urlparse(response.url)
-        self.assertEqual(url.scheme, "https")
-        self.assertEqual(url.netloc, "www.example.com")
-        self.assertEqual(url.path, "/authorization")
+        auth_url = urlparse(authorization_endpoint_url)
+        self.assertEqual(url.scheme, auth_url.scheme)
+        self.assertEqual(url.netloc, auth_url.netloc)
+        self.assertEqual(url.path, auth_url.path)
         query = parse_qs(url.query)
         self.assertEqual(query["client_id"], [self.openidc_realm.config["client_id"]])
         self.assertEqual(
@@ -141,6 +140,7 @@ class RealmModelsTestCase(TestCase):
                                    reverse("realms:openidc_ac_redirect", args=(self.openidc_realm.pk,)))]
         )
         self.assertEqual(query["state"], [str(ras.pk)])
+        _get_openid_configuration.assert_called_once_with(self.openidc_realm.config["discovery_url"])
 
     def test_saml_login(self):
         next_url = "/{}".format(get_random_string())
