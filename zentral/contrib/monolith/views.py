@@ -12,7 +12,7 @@ from django.http import (FileResponse,
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils.functional import lazy
+from django.utils.functional import cached_property
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
@@ -1174,7 +1174,9 @@ class CacheServersView(SignedRequestHeaderJSONPostAPIView):
 
 
 class DownloadPrinterPPDView(View):
-    redirect_to_files = lazy(file_storage_has_signed_urls)()
+    @cached_property
+    def _redirect_to_files(self):
+        return file_storage_has_signed_urls()
 
     def get(self, request, *args, **kwargs):
         try:
@@ -1186,7 +1188,7 @@ class DownloadPrinterPPDView(View):
             logger.warning("Could not find printer PPD with token %s", kwargs["token"])
             raise Http404
         else:
-            if self.redirect_to_files:
+            if self._redirect_to_files:
                 return HttpResponseRedirect(default_storage.url(printer_ppd.file.name))
             else:
                 return FileResponse(printer_ppd.file)
@@ -1375,7 +1377,6 @@ class MRManifestView(MRNameView):
 
 class MRPackageView(MRNameView):
     event_payload_type = "package"
-    redirect_to_files = lazy(file_storage_has_signed_urls)()
 
     def _get_cache_server(self):
         cache_key = f"monolith.{self.manifest.pk}.cache-servers"
@@ -1389,6 +1390,10 @@ class MRPackageView(MRNameView):
                 return random.choice([cs for cs in cache_servers if cs.ip == self.ip])
             except IndexError:
                 return
+
+    @cached_property
+    def _redirect_to_files(self):
+        return file_storage_has_signed_urls()
 
     def do_get(self, model, key, cache_key, event_payload):
         if model == "enrollment_pkg":
@@ -1409,7 +1414,7 @@ class MRPackageView(MRNameView):
                 event_payload["cache"]["hit"] = True
             if filename:
                 event_payload["manifest_enrollment_package"]["filename"] = filename
-                if self.redirect_to_files:
+                if self._redirect_to_files:
                     return HttpResponseRedirect(default_storage.url(filename))
                 else:
                     return FileResponse(default_storage.open(filename))
@@ -1450,7 +1455,7 @@ class MRPackageView(MRNameView):
                     "filename": sma.file.name
                 })
                 # see https://github.com/django/django/commit/f600e3fad6e92d9fe1ad8b351dc8446415f24345
-                if self.redirect_to_files:
+                if self._redirect_to_files:
                     return HttpResponseRedirect(default_storage.url(sma.file.name))
                 else:
                     return FileResponse(default_storage.open(sma.file.name))
