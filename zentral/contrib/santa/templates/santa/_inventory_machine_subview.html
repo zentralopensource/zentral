@@ -10,6 +10,10 @@
   {% endif %}
   <dt>Primary user</dt>
   <dd>{{ enrolled_machine.primary_user|default:"-" }}</dd>
+  {% if enrolled_machine.hardware_uuid %}
+  <dt>UUID</dt>
+  <dd>{{ enrolled_machine.hardware_uuid }}</dd>
+  {% endif %}
   <dt>Client mode</dt>
   <dd>{{ enrolled_machine.get_client_mode_display }}</dd>
   <dt>Version</dt>
