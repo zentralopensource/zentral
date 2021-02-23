@@ -549,17 +549,25 @@ class MachineRuleManager(models.Manager):
 
     def get_next_rule_batch(self, enrolled_machine, tags, cursor=None):
         qs = self.filter(enrolled_machine=enrolled_machine).select_for_update()
-        if cursor is None:
-            # fresh start, from last known OK state
-            # remove all unacknowlegded machine rules, except the REMOVE ones
-            # this will ultimately refresh all the rules that haven't been acknowleged
-            qs.exclude(policy=MachineRule.REMOVE).filter(cursor__isnull=False).delete()
-        else:
+
+        # fresh start from last known OK state
+        # remove all unacknowlegded machine rules, except the REMOVE ones
+        # this will ultimately refresh all the rules that haven't been acknowleged
+        qs_cleanup = qs.exclude(policy=MachineRule.REMOVE).filter(cursor__isnull=False)
+        if cursor:
+            # do not delete request cursor rules. We will acknowlege them
+            qs_cleanup = qs_cleanup.exclude(cursor=cursor)
+        qs_cleanup.delete()
+
+        # acknowlege the cursor rules
+        if cursor:
             qs = qs.filter(cursor=cursor)
             # remove the REMOVE machine rules from the last batch
             qs.filter(policy=MachineRule.REMOVE).delete()
             # acknowlege the other machine rules from the last batch
             qs.update(cursor=None)
+
+        # return next batch
         rules = []
         new_cursor = None
         for rule in self._iter_new_rules(enrolled_machine, tags):

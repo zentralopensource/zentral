@@ -14,7 +14,7 @@ def new_sha256():
 class SantaRuleEngineTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.configuration = Configuration.objects.create(name=get_random_string(256))
+        cls.configuration = Configuration.objects.create(name=get_random_string(256), batch_size=5)
         cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit)
         cls.enrollment = Enrollment.objects.create(configuration=cls.configuration,
@@ -213,13 +213,13 @@ class SantaRuleEngineTestCase(TestCase):
 
     def test_next_rule_batch_pagination(self):
         serialized_rules = []
-        for _ in range(51):
+        for _ in range(6):
             _, _, serialized_rule = self.create_and_serialize_rule()
             serialized_rules.append(serialized_rule)
         serialized_rules.sort(key=lambda r: r["sha256"])
         i = 0
         response_cursor = None
-        for batch_len in (50, 1):
+        for batch_len in (5, 1):
             rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(
                 self.enrolled_machine, [],
                 response_cursor
@@ -231,15 +231,123 @@ class SantaRuleEngineTestCase(TestCase):
             self.assertEqual(rule_batch, serialized_rules[i: i + batch_len])
             i += batch_len
         machine_rule_qs = self.enrolled_machine.machinerule_set.all()
-        self.assertEqual(machine_rule_qs.count(), 51)
-        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 50)
+        self.assertEqual(machine_rule_qs.count(), 6)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 5)
         rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(
             self.enrolled_machine, [],
             response_cursor
         )
         self.assertEqual(len(rule_batch), 0)
         self.assertIsNone(response_cursor)
-        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 51)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 6)
+
+    def test_lost_response_batch_pagination(self):
+        serialized_rules = []
+        for _ in range(11):
+            _, _, serialized_rule = self.create_and_serialize_rule()
+            serialized_rules.append(serialized_rule)
+        serialized_rules.sort(key=lambda r: r["sha256"])
+        response_cursor = None
+        machine_rule_qs = self.enrolled_machine.machinerule_set.all()
+        i = 0
+        # first client request, first 5 rules
+        batch_len = 5
+        rule_batch, response_cursor1 = MachineRule.objects.get_next_rule_batch(
+            self.enrolled_machine, [],
+            response_cursor
+        )
+        self.assertIsNotNone(response_cursor1)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 0)
+        self.assertEqual(machine_rule_qs.filter(cursor=response_cursor1).count(), batch_len)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=False).exclude(cursor=response_cursor1).count(), 0)
+        self.assertEqual(rule_batch, serialized_rules[i: i + batch_len])
+        i += batch_len
+        # second client request, next 5 rules
+        rule_batch, response_cursor2 = MachineRule.objects.get_next_rule_batch(
+            self.enrolled_machine, [],
+            response_cursor1
+        )
+        self.assertIsNotNone(response_cursor2)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), batch_len)
+        self.assertEqual(machine_rule_qs.filter(cursor=response_cursor2).count(), batch_len)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=False).exclude(cursor=response_cursor2).count(), 0)
+        self.assertEqual(rule_batch, serialized_rules[i: i + batch_len])
+        i += batch_len
+        # third client request, with first cursor.
+        # the client has never received a response for the second request, and is retrying it.
+        i -= batch_len
+        rule_batch, response_cursor3 = MachineRule.objects.get_next_rule_batch(
+            self.enrolled_machine, [],
+            response_cursor1
+        )
+        self.assertIsNotNone(response_cursor3)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), batch_len)
+        self.assertEqual(machine_rule_qs.filter(cursor=response_cursor3).count(), batch_len)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=False).exclude(cursor=response_cursor3).count(), 0)
+        self.assertEqual(rule_batch, serialized_rules[i: i + batch_len])
+        i += batch_len
+        # the client received the last batch and makes another request
+        batch_len = 1
+        rule_batch, response_cursor4 = MachineRule.objects.get_next_rule_batch(
+            self.enrolled_machine, [],
+            response_cursor3
+        )
+        self.assertIsNotNone(response_cursor4)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 10)
+        self.assertEqual(machine_rule_qs.filter(cursor=response_cursor4).count(), batch_len)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=False).exclude(cursor=response_cursor4).count(), 0)
+        self.assertEqual(rule_batch, serialized_rules[i: i + batch_len])
+        i += batch_len
+        # last batch
+        rule_batch, response_cursor5 = MachineRule.objects.get_next_rule_batch(
+            self.enrolled_machine, [],
+            response_cursor4
+        )
+        self.assertIsNone(response_cursor5)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 11)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=False).count(), 0)
+        self.assertEqual(rule_batch, [])
+
+    def test_reset_batch_pagination(self):
+        serialized_rules = []
+        for _ in range(6):
+            _, _, serialized_rule = self.create_and_serialize_rule()
+            serialized_rules.append(serialized_rule)
+        serialized_rules.sort(key=lambda r: r["sha256"])
+        machine_rule_qs = self.enrolled_machine.machinerule_set.all()
+        # first 2 requests OK
+        i = 0
+        response_cursor = None
+        for batch_len in (5, 1):
+            rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(
+                self.enrolled_machine, [],
+                response_cursor
+            )
+            self.assertIsNotNone(response_cursor)
+            self.assertEqual(machine_rule_qs.filter(cursor=response_cursor).count(), batch_len)
+            self.assertEqual(rule_batch, serialized_rules[i: i + batch_len])
+            i += batch_len
+        self.assertEqual(machine_rule_qs.count(), 6)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 5)
+        # last batch, never acknowleged, the client keeps making new requests without cursor
+        # and getting the last unacknowlegded rule
+        for i in range(2):
+            rule_batch, response_cursor_post_reset = MachineRule.objects.get_next_rule_batch(
+                self.enrolled_machine, []
+            )
+            self.assertIsNotNone(response_cursor_post_reset)
+            self.assertEqual(rule_batch, [serialized_rules[-1]])
+            self.assertEqual(machine_rule_qs.count(), 6)
+            self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 5)
+            self.assertEqual(machine_rule_qs.filter(cursor=response_cursor_post_reset).count(), 1)
+        # the client acknowleges the last rule
+        rule_batch, final_response_cursor = MachineRule.objects.get_next_rule_batch(
+            self.enrolled_machine, [],
+            response_cursor_post_reset
+        )
+        self.assertEqual(machine_rule_qs.count(), 6)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 6)
+        self.assertEqual(rule_batch, [])
 
     def test_updated_rule(self):
         target, rule, serialized_rule = self.create_and_serialize_rule()
