@@ -17,7 +17,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.6"
+USER_AGENT = "Zentral/munkipostflight 0.7"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -54,7 +54,7 @@ class ManagedInstallReport(object):
         with open(filename, "rb") as f:
             self.data = plistlib.load(f)
         self.start_time = self.data['StartTime']
-        self.end_time = self.data.get('EndTime', self.start_time)
+        self.end_time = self.data.get('EndTime')
         try:
             self.munki_version = self.data['MachineInfo']['munki_version']
         except KeyError:
@@ -106,10 +106,12 @@ def iter_manage_install_reports():
 
 def build_reports_payload(last_seen=None):
     """ Unpacks ManagedInstallReport generator object, initializes MIR objects,
-    skips if already processed, otherwise serializes & returns payload"""
+    skips if already processed or not finished, otherwise serializes & returns payload"""
     payload = []
     for filepath in iter_manage_install_reports():
         mir = ManagedInstallReport(filepath)
+        if not mir.end_time:
+            continue
         if last_seen is not None and mir.sha1sum == last_seen:
             break
         payload.append(mir.serialize())
