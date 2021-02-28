@@ -150,8 +150,10 @@ def macos_version_from_build(build):
         if minor >= 16:
             major = 11
             minor = max(0, patch - 1)
-            if build in ("20B29", "20B50"):
+            if build in ("20B29", "20B50", "20D74", "20D75"):
                 patch = 1
+            elif build in ("20D80",):
+                patch = 2
             else:
                 patch = 0
         else:
