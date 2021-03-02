@@ -9,26 +9,28 @@ logger = logging.getLogger("zentral.core.queues.backends.aws_sns_sqs.sns")
 
 
 class SNSPublishThread(threading.Thread):
-    def __init__(self, topic_arn, stop_event, in_queue, client_kwargs=None):
+    def __init__(self, thread_id, topic_arn, stop_event, in_queue, out_queue, client_kwargs=None):
         if client_kwargs is None:
             client_kwargs = {}
         self.client = boto3.client("sns", **client_kwargs)
         self.topic_arn = topic_arn
         self.stop_event = stop_event
         self.in_queue = in_queue
-        super().__init__()
+        self.out_queue = out_queue
+        super().__init__(name=f"SNS publish thread {thread_id}")
 
     def run(self):
+        logger.info("[%s] start on topic %s", self.name, self.topic_arn)
         while True:
             try:
-                routing_key, event_d, event_ts = self.in_queue.get(block=True, timeout=1)
+                receipt_handle, routing_key, event_d, event_ts = self.in_queue.get(block=True, timeout=1)
             except queue.Empty:
-                logger.debug("no new event to publish")
+                logger.debug("[%s] no new event to publish", self.name)
                 if self.stop_event.is_set():
-                    logger.debug("publish thread gracefull exit")
+                    logger.info("[%s] graceful exit", self.name)
                     break
             else:
-                logger.debug("new event to publish %s %s", routing_key, event_ts)
+                logger.debug("[%s] new event to publish %s %s", self.name, routing_key, event_ts)
                 message = json.dumps(event_d)
                 message_attributes = {}
                 if routing_key:
@@ -43,6 +45,8 @@ class SNSPublishThread(threading.Thread):
                         MessageAttributes=message_attributes
                     )
                 except Exception:
-                    logger.exception("could not publish event")
+                    logger.exception("[%s] could not publish event", self.name)
                 else:
-                    logger.debug("event with MessageID %s published", response["MessageId"])
+                    logger.debug("[%s] event with MessageID %s published", self.name, response["MessageId"])
+                    self.out_queue.put(receipt_handle)
+                    logger.debug("[%s] receipt handle %s: put to out queue", self.name, receipt_handle[-7:])

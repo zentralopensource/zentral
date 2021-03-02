@@ -70,6 +70,7 @@ class PreprocessWorker(ConsumerProducer, BaseWorker):
                 event_queues.setup_queue("events"),
                 self.stop_event,
                 self.publish_message_queue,
+                self.published_message_queue,
                 event_queues.client_kwargs
             )
         )
@@ -113,17 +114,21 @@ class EnrichWorker(ConsumerProducer, BaseWorker):
         ("enriched_events", "event_type"),
         ("produced_events", "event_type"),
     )
+    publish_thread_number = 10
 
     def __init__(self, event_queues, enrich_event):
         super().__init__(event_queues.setup_queue("events"), event_queues.client_kwargs)
-        self._threads.append(
-            SNSPublishThread(
-                event_queues.setup_topic("enriched-events"),
-                self.stop_event,
-                self.publish_message_queue,
-                event_queues.client_kwargs
+        for thread_id in range(self.publish_thread_number):
+            self._threads.append(
+                SNSPublishThread(
+                    thread_id,
+                    event_queues.setup_topic("enriched-events"),
+                    self.stop_event,
+                    self.publish_message_queue,
+                    self.published_message_queue,
+                    event_queues.client_kwargs
+                )
             )
-        )
         self._enrich_event = enrich_event
 
     def run(self, *args, **kwargs):
@@ -308,54 +313,56 @@ class EventQueues(object):
         for signum in (signal.SIGTERM, signal.SIGINT):
             signal.signal(signum, self._handle_sigterm)
 
-    def _gracefull_stop(self, signum, frame):
+    def _graceful_stop(self, signum, frame):
         if signum == signal.SIGTERM:
             signum = "SIGTERM"
         elif signum == signal.SIGINT:
             signum = "SIGINT"
         logger.debug("Received signal %s", signum)
         if not self._stop_event.is_set():
-            logger.error("Signal %s. Initiate gracefull stop.", signum)
+            logger.error("Signal %s. Initiate graceful stop.", signum)
             self._stop_event.set()
             for thread in self._threads:
                 thread.join()
             logger.error("All threads stopped. Exit 0.")
             sys.exit(0)
 
-    def _setup_gracefull_stop(self):
+    def _setup_graceful_stop(self):
         if self._stop_event is None:
             self._stop_event = threading.Event()
             if threading.current_thread() is threading.main_thread():
-                logger.debug("setup gracefull stop")
+                logger.debug("setup graceful stop")
                 for signum in (signal.SIGINT, signal.SIGTERM):
-                    signal.signal(signum, self._gracefull_stop)
+                    signal.signal(signum, self._graceful_stop)
             else:
-                logger.warning("could not setup gracefull stop: not running on main thread")
+                logger.warning("could not setup graceful stop: not running on main thread")
 
     def post_raw_event(self, routing_key, raw_event):
-        self._setup_gracefull_stop()
+        self._setup_graceful_stop()
         if self._raw_events_queue is None:
             self._raw_events_queue = queue.Queue(maxsize=20)
             thread = SQSSendThread(
                 self.setup_queue("raw-events"),
                 self._stop_event,
                 self._raw_events_queue,
+                None,
                 self.client_kwargs
             )
             thread.start()
             self._threads.append(thread)
-        self._raw_events_queue.put((routing_key, raw_event, time.time()))
+        self._raw_events_queue.put((None, routing_key, raw_event, time.monotonic()))
 
     def post_event(self, event):
-        self._setup_gracefull_stop()
+        self._setup_graceful_stop()
         if self._events_queue is None:
             self._events_queue = queue.Queue(maxsize=20)
             thread = SQSSendThread(
                 self.setup_queue("events"),
                 self._stop_event,
                 self._events_queue,
+                None,
                 self.client_kwargs
             )
             thread.start()
             self._threads.append(thread)
-        self._events_queue.put((None, event.serialize(machine_metadata=False), time.time()))
+        self._events_queue.put((None, None, event.serialize(machine_metadata=False), time.monotonic()))

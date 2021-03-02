@@ -26,10 +26,10 @@ class SQSReceiveThread(threading.Thread):
         self.queue_url = queue_url
         self.stop_event = stop_event
         self.out_queue = out_queue
-        super().__init__()
+        super().__init__(name="SQS receive thread")
 
     def run(self):
-        logger.debug("start receive thread on SQS queue %s", self.queue_url)
+        logger.info("[%s] start on queue %s", self.name, self.queue_url)
         while not self.stop_event.is_set():
             try:
                 response = self.client.receive_message(
@@ -41,13 +41,14 @@ class SQSReceiveThread(threading.Thread):
                     WaitTimeSeconds=self.wait_time_seconds
                 )
             except Exception:
-                logger.exception("could not receive events")
+                logger.exception("[%s] could not receive events", self.name)
                 seconds = random.uniform(10, 60)
-                logger.error("retry in {:.1f}s".format(seconds))
+                logger.error("[%s] retry in %.1fs", self.name, seconds)
                 slices = 50
                 for i in range(slices):
                     time.sleep(seconds / slices)
                     if self.stop_event.is_set():
+                        logger.info("[%s] graceful exit", self.name)
                         break
             else:
                 i = 0
@@ -70,8 +71,7 @@ class SQSReceiveThread(threading.Thread):
                                 break
                         else:
                             break
-                logger.debug("%d/%d event(s) received and queued", i, len(messages))
-        logger.debug("receive thread gracefull exit")
+                logger.debug("[%s] %d/%d event(s) received and queued", self.name, i, len(messages))
 
 
 class SQSDeleteThread(threading.Thread):
@@ -85,33 +85,35 @@ class SQSDeleteThread(threading.Thread):
         self.queue_url = queue_url
         self.stop_event = stop_event
         self.in_queue = in_queue
-        super().__init__()
+        super().__init__(name="SQS delete thread")
 
     def run(self):
+        logger.info("[%s] start on queue %s", self.name, self.queue_url)
         entries = {}
         min_receipt_handle_ts = None
         while True:
             try:
                 receipt_handle, receipt_handle_ts = self.in_queue.get(block=True, timeout=1)
             except queue.Empty:
-                logger.debug("no new event to delete")
+                logger.debug("[%s] no new events", self.name)
                 if entries:
                     if self.stop_event.is_set():
-                        logger.debug("delete events before gracefull exit")
+                        logger.debug("[%s] delete events before graceful exit", self.name)
                         self.delete_entries(entries)
                         entries = {}
                         min_receipt_handle_ts = None
                     else:
-                        if time.time() > min_receipt_handle_ts + self.max_receipt_handle_age_seconds:
-                            logger.debug("delete events because max event age reached")
+                        if time.monotonic() > min_receipt_handle_ts + self.max_receipt_handle_age_seconds:
+                            logger.debug("[%s] delete events because max event age reached", self.name)
                             self.delete_entries(entries)
                             entries = {}
                             min_receipt_handle_ts = None
                 if self.stop_event.is_set():
-                    logger.debug("delete thread gracefull exit")
+                    logger.info("[%s] graceful exit", self.name)
                     break
             else:
-                logger.debug("new event to delete %s %s", receipt_handle, receipt_handle_ts)
+                logger.debug("[%s] receipt handle %s: new event to delete %s",
+                             self.name, receipt_handle[-7:], receipt_handle_ts)
                 entry_id = str(uuid.uuid4())
                 entry = {"Id": entry_id,
                          "ReceiptHandle": receipt_handle}
@@ -123,7 +125,7 @@ class SQSDeleteThread(threading.Thread):
                     min_receipt_handle_ts = None
 
     def delete_entries(self, entries):
-        logger.debug("delete %s event(s)", len(entries))
+        logger.debug("[%s] delete %s event(s)", self.name, len(entries))
         try:
             response = self.client.delete_message_batch(
                 QueueUrl=self.queue_url,
@@ -132,55 +134,54 @@ class SQSDeleteThread(threading.Thread):
         except Exception:
             logger.exception("could not delete event(s)")
         else:
-            total_entries = len(entries)
-            logger.debug("%s/%s event(s) deleted", len(response.get("Successful", [])), total_entries)
+            entry_count = len(entries)
+            logger.debug("[%s] %s/%s event(s) deleted", self.name, len(response.get("Successful", [])), entry_count)
             i = 0
             for failed_entry in response.get("Failed", []):
                 i += 1
-                logger.debug("event deletion error: %s", failed_entry)
+                logger.debug("[%s] event deletion error: %s", self.name, failed_entry)
             if i:
-                logger.error("%s/%s event deletion error(s)", i, total_entries)
+                logger.error("[%s] %s/%s event deletion error(s)", self.name, i, entry_count)
 
 
 class SQSSendThread(threading.Thread):
     max_number_of_messages = 10
     max_event_age_seconds = 5
 
-    def __init__(self, queue_url, stop_event, in_queue, client_kwargs=None):
+    def __init__(self, queue_url, stop_event, in_queue, out_queue, client_kwargs=None):
         if client_kwargs is None:
             client_kwargs = {}
         self.client = boto3.client("sqs", **client_kwargs)
         self.queue_url = queue_url
         self.stop_event = stop_event
         self.in_queue = in_queue
-        super().__init__()
+        self.out_queue = out_queue
+        super().__init__(name="SQS send thread")
 
     def run(self):
-        entries = {}
-        min_event_ts = None
+        logger.info("[%s] start on queue %s", self.name, self.queue_url)
+        self.entries = {}
+        self.min_event_ts = None
         while True:
-            logger.debug("%s event(s) to send", len(entries))
+            logger.debug("[%s] %s event(s) to send", self.name, len(self.entries))
             try:
-                routing_key, event_d, event_ts = self.in_queue.get(block=True, timeout=1)
+                receipt_handle, routing_key, event_d, event_ts = self.in_queue.get(block=True, timeout=1)
             except queue.Empty:
-                logger.debug("no new event to send")
-                if entries:
+                logger.debug("[%s] no new event to send", self.name)
+                if self.entries:
                     if self.stop_event.is_set():
-                        logger.debug("send current event(s) before gracefull exit")
-                        self.send_entries(entries)
-                        entries = {}
-                        min_event_ts = None
+                        logger.debug("[%s] send current event(s) before graceful exit", self.name)
+                        self.send_entries()
                     else:
-                        if time.time() > min_event_ts + self.max_event_age_seconds:
-                            logger.debug("send %s event(s) because max event age reached", len(entries))
-                            self.send_entries(entries)
-                            entries = {}
-                            min_event_ts = None
+                        if time.monotonic() > self.min_event_ts + self.max_event_age_seconds:
+                            logger.debug("[%s] send %s event(s) because max event age reached",
+                                         self.name, len(self.entries))
+                            self.send_entries()
                 if self.stop_event.is_set():
-                    logger.debug("send thread gracefull exit")
+                    logger.info("[%s] graceful exit", self.name)
                     break
             else:
-                logger.debug("new event to send %s %s", routing_key, event_ts)
+                logger.debug("[%s] new event to send %s %s", self.name, routing_key, event_ts)
                 entry_id = str(uuid.uuid4())
                 entry = {"Id": entry_id,
                          "MessageBody": json.dumps(event_d)}
@@ -191,28 +192,42 @@ class SQSSendThread(threading.Thread):
                             "StringValue": routing_key
                         }
                     }
-                entries[entry_id] = entry
-                min_event_ts = min(min_event_ts or event_ts, event_ts)
-                if len(entries) == self.max_number_of_messages:
-                    self.send_entries(entries)
-                    entries = {}
-                    min_event_ts = None
+                self.entries[entry_id] = (receipt_handle, entry)
+                self.min_event_ts = min(self.min_event_ts or event_ts, event_ts)
+                if len(self.entries) == self.max_number_of_messages:
+                    self.send_entries()
 
-    def send_entries(self, entries):
-        logger.debug("send %s event(s)", len(entries))
+    def send_entries(self):
+        entry_count = len(self.entries)
+        logger.debug("[%s] send %s event(s)", self.name, entry_count)
         try:
             response = self.client.send_message_batch(
                 QueueUrl=self.queue_url,
-                Entries=list(entries.values())
+                Entries=list(entry for _, entry in self.entries.values())
             )
         except Exception:
-            logger.exception("could not send event(s)")
+            logger.exception("[%s] could not send event(s)", self.name)
         else:
-            total_entries = len(entries)
-            logger.debug("%s/%s event(s) sent", len(response.get("Successful", [])), total_entries)
-            i = 0
+            successful_entry_count = 0
+            for successful_entry in response.get("Successful", []):
+                successful_entry_count += 1
+                if self.out_queue:
+                    try:
+                        receipt_handle, _ = self.entries[successful_entry["Id"]]
+                    except KeyError:
+                        logger.error("[%s] could not put receipt receipt handle to out queue", self.name)
+                    else:
+                        if receipt_handle:
+                            self.out_queue.put(receipt_handle)
+                            logger.debug("[%s] receipt handle %s: put to out queue", self.name, receipt_handle[-7:])
+            logger.debug("[%s] %s/%s event(s) sent", self.name, successful_entry_count, entry_count)
+            failed_entry_count = 0
             for failed_entry in response.get("Failed", []):
-                i += 1
-                logger.debug("event sending error: %s", failed_entry)
-            if i:
-                logger.error("%s/%s event sending error(s)", i, total_entries)
+                failed_entry_count += 1
+                logger.error("[%s] event sending error - sender fault: %s code: %s",
+                             self.name, failed_entry.get("SenderFault", "-"), failed_entry.get("Code", "-"))
+            if failed_entry_count:
+                logger.error("[%s] %s/%s event sending error(s)", self.name, failed_entry_count, entry_count)
+        # update state
+        self.entries = {}
+        self.min_event_ts = None
