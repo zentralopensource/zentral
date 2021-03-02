@@ -1,8 +1,11 @@
 class BaseEventStore(object):
+    max_batch_size = 1
+
     def __init__(self, config_d):
         self.name = config_d['store_name']
         self.frontend = config_d.get('frontend', False)
         self.configured = False
+        self.batch_size = min(self.max_batch_size, max(config_d.get("batch_size") or 1, 1))
 
     def wait_and_configure(self):
         self.configured = True

@@ -5,6 +5,7 @@ import time
 from urllib.parse import urlencode, urljoin, urlparse
 from dateutil import parser
 from elasticsearch import Elasticsearch, RequestsHttpConnection
+from elasticsearch.helpers import streaming_bulk
 from elasticsearch.exceptions import ConnectionError, RequestError
 from zentral.core.events import event_from_event_d, event_tags, event_types
 from zentral.core.exceptions import ImproperlyConfigured
@@ -21,6 +22,7 @@ except NotImplementedError:
 
 
 class EventStore(BaseEventStore):
+    max_batch_size = 500
     LEGACY_DOC_TYPE = "doc"  # _type used with 5.6 < ES < 7
     MAX_CONNECTION_ATTEMPTS = 20
     MAPPINGS = {
@@ -202,14 +204,18 @@ class EventStore(BaseEventStore):
             return {"type": {"value": event_type}}
 
     def _serialize_event(self, event):
-        event_d = event.serialize()
+        if not isinstance(event, dict):
+            event_d = event.serialize()
+        else:
+            event_d = event
         es_event_d = event_d.pop('_zentral')
         if not self.use_mapping_types:
+            event_type = es_event_d['type']
             es_doc_type = self.LEGACY_DOC_TYPE
         else:
-            es_event_d.pop('type')  # document type in ES
-            es_doc_type = event.event_type
-        es_event_d[event.event_type] = event_d
+            event_type = es_event_d.pop('type')
+            es_doc_type = event_type  # document type in ES
+        es_event_d[event_type] = event_d
         return es_doc_type, es_event_d
 
     def _deserialize_event(self, es_doc_type, es_event_d):
@@ -224,8 +230,6 @@ class EventStore(BaseEventStore):
 
     def store(self, event):
         self.wait_and_configure_if_necessary()
-        if isinstance(event, dict):
-            event = event_from_event_d(event)
         doc_type, body = self._serialize_event(event)
         kwargs = {"body": body}
         if self.version < [7]:
@@ -233,6 +237,33 @@ class EventStore(BaseEventStore):
         self._es.index(index=self.index, **kwargs)
         if self.test:
             self._es.indices.refresh(self.index)
+
+    def bulk_store(self, events):
+        self.wait_and_configure_if_necessary()
+        if self.batch_size < 2:
+            raise RuntimeError("bulk_store is not available when batch_size < 2")
+        if self.version < [7]:
+            raise RuntimeError("bulk_store is not available for elasticsearch < 7")
+
+        ID_SEP = "_"
+
+        def iter_actions():
+            for event in events:
+                _, doc = self._serialize_event(event)
+                doc.update({"_index": self.index, "_id": f'{doc["id"]}{ID_SEP}{doc["index"]}'})
+                yield doc
+
+        for ok, item in streaming_bulk(self._es, iter_actions(),
+                                       chunk_size=self.batch_size,
+                                       raise_on_error=False, raise_on_exception=False,
+                                       max_retries=2
+                                       ):
+            if ok:
+                try:
+                    event_id, event_index = item["index"]["_id"].split(ID_SEP)
+                    yield event_id, int(event_index)
+                except (KeyError, ValueError):
+                    logger.error("could not yield indexed event key")
 
     def _build_kibana_url(self, body):
         if not self.kibana_discover_url:
