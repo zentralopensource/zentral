@@ -11,7 +11,7 @@ from botocore.config import Config
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.conf import settings
-from .consumer import Consumer, ConsumerProducer
+from .consumer import BatchConsumer, Consumer, ConsumerProducer
 from .sns import SNSPublishThread
 from .sqs import SQSSendThread
 
@@ -28,7 +28,7 @@ logger = logging.getLogger('zentral.core.queues.backends.aws_sns_sqs')
 #     → SQS Q store-enriched-events-*-queue
 
 
-class BaseWorker:
+class WorkerMixin:
     name = "UNDEFINED"
     counters = []
 
@@ -56,7 +56,7 @@ class BaseWorker:
         self.log(msg, logging.ERROR, *args)
 
 
-class PreprocessWorker(ConsumerProducer, BaseWorker):
+class PreprocessWorker(WorkerMixin, ConsumerProducer):
     name = "preprocess worker"
     counters = (
         ("preprocessed_events", "routing_key"),
@@ -108,7 +108,7 @@ class PreprocessWorker(ConsumerProducer, BaseWorker):
         self.inc_counter("preprocessed_events", routing_key or "UNKNOWN")
 
 
-class EnrichWorker(ConsumerProducer, BaseWorker):
+class EnrichWorker(WorkerMixin, ConsumerProducer):
     name = "enrich worker"
     counters = (
         ("enriched_events", "event_type"),
@@ -144,7 +144,7 @@ class EnrichWorker(ConsumerProducer, BaseWorker):
         self.inc_counter("enriched_events", event.event_type)
 
 
-class ProcessWorker(Consumer, BaseWorker):
+class ProcessWorker(WorkerMixin, Consumer):
     name = "process worker"
     counters = (
         ("processed_events", "event_type"),
@@ -172,7 +172,7 @@ class ProcessWorker(Consumer, BaseWorker):
         self.inc_counter("processed_events", event_type)
 
 
-class StoreWorker(Consumer, BaseWorker):
+class SimpleStoreWorker(WorkerMixin, Consumer):
     counters = (
         ("stored_events", "event_type"),
     )
@@ -198,6 +198,61 @@ class StoreWorker(Consumer, BaseWorker):
         event_type = event_d['_zentral']['type']
         self.event_store.store(event_d)
         self.inc_counter("stored_events", event_type)
+
+
+class BulkStoreWorker(WorkerMixin, BatchConsumer):
+    counters = (
+        ("stored_events", "event_type"),
+    )
+
+    def __init__(self, event_queues, event_store):
+        super().__init__(
+            event_queues.setup_queue(
+                "store-enriched-events-{}".format(slugify(event_store.name)),
+                "enriched-events"
+            ),
+            event_store.batch_size,
+            event_queues.client_kwargs
+        )
+        self.event_store = event_store
+        self.name = "store worker {}".format(self.event_store.name)
+
+    def run(self, *args, **kwargs):
+        self.log_info("run")
+        super().setup_metrics_exporter(*args, **kwargs)
+        super().run(*args, **kwargs)
+
+    def process_events(self, batch):
+        batch_size = len(batch)
+        self.log_debug("store %d events", batch_size)
+        self.event_info = {}
+
+        def iter_events():
+            while batch:
+                # the routing key is ignored
+                receipt_handle, _, event_d = batch.popleft()
+                # WARN: This is a simple implementation where there is one receipt_handle per event_d
+                event_metadata = event_d['_zentral']
+                event_key = (event_metadata["id"], event_metadata["index"])
+                event_type = event_metadata['type']
+                self.event_info[event_key] = (receipt_handle, event_type)
+                yield event_d
+
+        stored_event_count = 0
+        for stored_event_key in self.event_store.bulk_store(iter_events()):
+            try:
+                receipt_handle, event_type = self.event_info[stored_event_key]
+            except KeyError:
+                logger.error("unknown stored event %s", stored_event_key)
+            else:
+                yield receipt_handle
+                self.inc_counter("stored_events", event_type)
+                stored_event_count += 1
+
+        if stored_event_count < batch_size:
+            self.log_error("only %s/%s event(s) stored", stored_event_count, batch_size)
+        else:
+            self.log_debug("%s/%s events stored", stored_event_count, batch_size)
 
 
 class EventQueues(object):
@@ -307,7 +362,10 @@ class EventQueues(object):
         return ProcessWorker(self, process_event)
 
     def get_store_worker(self, event_store):
-        return StoreWorker(self, event_store)
+        if event_store.batch_size == 1:
+            return SimpleStoreWorker(self, event_store)
+        else:
+            return BulkStoreWorker(self, event_store)
 
     def _setup_signal(self):
         for signum in (signal.SIGTERM, signal.SIGINT):

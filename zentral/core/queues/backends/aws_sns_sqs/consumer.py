@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import deque, OrderedDict
 import logging
 import queue
 import signal
@@ -10,7 +10,10 @@ from .sqs import SQSDeleteThread, SQSReceiveThread
 logger = logging.getLogger("zentral.core.queues.backends.aws_sns_sqs.consumer")
 
 
-class Consumer:
+# BaseConsumer
+
+
+class BaseConsumer:
     def __init__(self, queue_url, client_kwargs=None):
         if client_kwargs is None:
             client_kwargs = {}
@@ -33,7 +36,14 @@ class Consumer:
             logger.error("Signal %s. Initiate graceful stop.", signum)
             self.signal_received_event.set()
 
-    def _graceful_stop(self):
+    def run(self, *args, **kwargs):
+        self.log_info("run")
+        signal.signal(signal.SIGTERM, self._handle_signal)
+        signal.signal(signal.SIGINT, self._handle_signal)
+        for thread in self._threads:
+            thread.start()
+        self.start_run_loop()
+        # graceful stop
         if not self.stop_event.is_set():
             logger.error("Set stop event")
             self.stop_event.set()
@@ -41,24 +51,15 @@ class Consumer:
                 thread.join()
             logger.error("All threads stopped.")
 
-    def process_event(self, routing_key, event_d):
-        pass
+    def start_run_loop(self):
+        raise NotImplementedError
 
-    def _raw_process_event(self, receipt_handle, routing_key, event_d):
-        try:
-            self.process_event(routing_key, event_d)
-        except Exception:
-            logger.exception("receipt handle %s: could not process event", receipt_handle[-7:])
-        else:
-            logger.debug("receipt handle %s: queue for deletion", receipt_handle[-7:])
-            self.delete_message_queue.put((receipt_handle, time.monotonic()))
 
-    def run(self, *args, **kwargs):
-        self.log_info("run")
-        signal.signal(signal.SIGTERM, self._handle_signal)
-        signal.signal(signal.SIGINT, self._handle_signal)
-        for thread in self._threads:
-            thread.start()
+# Consumer
+
+
+class Consumer(BaseConsumer):
+    def start_run_loop(self):
         while True:
             try:
                 receipt_handle, routing_key, event_d = self.process_message_queue.get(block=True, timeout=1)
@@ -68,8 +69,68 @@ class Consumer:
                     break
             else:
                 logger.debug("receipt handle %s: process new event", receipt_handle[-7:])
-                self._raw_process_event(receipt_handle, routing_key, event_d)
-        self._graceful_stop()
+                try:
+                    self.process_event(routing_key, event_d)
+                except Exception:
+                    logger.exception("receipt_handle %s: could not process event", receipt_handle[-7:])
+                    # TODO evaluate if it is the best strategy
+                    break
+                else:
+                    logger.debug("receipt handle %s: queue for deletion", receipt_handle[-7:])
+                    self.delete_message_queue.put((receipt_handle, time.monotonic()))
+
+    def process_event(self, routing_key, event_d):
+        # to be implemented in the sub-classes
+        raise NotImplementedError
+
+
+# BatchConsumer
+
+
+class BatchConsumer(BaseConsumer):
+    max_event_age_seconds = 5
+
+    def __init__(self, queue_url, batch_size, client_kwargs=None):
+        super().__init__(queue_url, client_kwargs)
+        self.batch_size = batch_size
+        self.batch = deque()
+        self.batch_start_ts = None
+
+    def start_run_loop(self):
+        while True:
+            try:
+                receipt_handle, routing_key, event_d = self.process_message_queue.get(block=True, timeout=1)
+            except queue.Empty:
+                logger.debug("no new event to process")
+                if self.batch:
+                    if self.signal_received_event.is_set():
+                        logger.debug("process events before graceful exit")
+                        self._process_batch()
+                    elif time.monotonic() > self.batch_start_ts + self.max_event_age_seconds:
+                        logger.debug("process events because max event age reached")
+                        self._process_batch()
+                if self.signal_received_event.is_set():
+                    break
+            else:
+                logger.debug("receipt handle %s: queue new event for batch processing", receipt_handle[-7:])
+                self.batch.append((receipt_handle, routing_key, event_d))
+                if self.batch_start_ts is None:
+                    self.batch_start_ts = time.monotonic()
+                if len(self.batch) >= self.batch_size:
+                    self._process_batch()
+
+    def _process_batch(self):
+        for receipt_handle in self.process_events(self.batch):
+            self.delete_message_queue.put((receipt_handle, time.monotonic()))
+        self.batch_start_ts = None
+
+    def process_events(self, batch):
+        # to be implemented in the sub-classes
+        # must be an iterator yielding the receipt handles to acknowledge
+        raise NotImplementedError
+
+
+# ConsumerProducer
 
 
 class ConsumerProducerFinalThread(threading.Thread):
@@ -99,7 +160,7 @@ class ConsumerProducerFinalThread(threading.Thread):
                                  self.name, receipt_handle[-7:])
 
 
-class ConsumerProducer(Consumer):
+class ConsumerProducer(BaseConsumer):
     max_in_flight_receipt_handle_count = 100
 
     def __init__(self, queue_url, client_kwargs=None):
@@ -109,9 +170,6 @@ class ConsumerProducer(Consumer):
         self.in_flight_receipt_handles_lock = threading.RLock()
         self.in_flight_receipt_handles = OrderedDict()
         self._threads.append(ConsumerProducerFinalThread(self))
-
-    def generate_events(self, routing_key, event_d):
-        return []
 
     def increment_receipt_handle_unpublished_event_count(self, receipt_handle):
         logger.debug("receipt handle %s: increment unpublished event count", receipt_handle[-7:])
@@ -153,13 +211,26 @@ class ConsumerProducer(Consumer):
                 self.in_flight_receipt_handles.move_to_end(receipt_handle)
                 return False
 
-    def _raw_process_event(self, receipt_handle, routing_key, event_d):
-        generated_event_count = 0
-        for new_routing_key, new_event_d in self.generate_events(routing_key, event_d):
-            with self.in_flight_receipt_handles_lock:
-                self.increment_receipt_handle_unpublished_event_count(receipt_handle)
-            self.publish_message_queue.put((receipt_handle, new_routing_key, new_event_d, time.monotonic()))
-            generated_event_count += 1
-        if not generated_event_count:
-            logger.debug("receipt handle %s: no events to publish, queue for deletion", receipt_handle[-7:])
-            self.delete_message_queue.put((receipt_handle, time.monotonic()))
+    def start_run_loop(self):
+        while True:
+            try:
+                receipt_handle, routing_key, event_d = self.process_message_queue.get(block=True, timeout=1)
+            except queue.Empty:
+                logger.debug("no new event to process")
+                if self.signal_received_event.is_set():
+                    break
+            else:
+                logger.debug("receipt handle %s: process new event", receipt_handle[-7:])
+                generated_event_count = 0
+                for new_routing_key, new_event_d in self.generate_events(routing_key, event_d):
+                    with self.in_flight_receipt_handles_lock:
+                        self.increment_receipt_handle_unpublished_event_count(receipt_handle)
+                    self.publish_message_queue.put((receipt_handle, new_routing_key, new_event_d, time.monotonic()))
+                    generated_event_count += 1
+                if not generated_event_count:
+                    logger.debug("receipt handle %s: no events to publish, queue for deletion", receipt_handle[-7:])
+                    self.delete_message_queue.put((receipt_handle, time.monotonic()))
+
+    def generate_events(self, routing_key, event_d):
+        # must return an iterable other the generated events
+        raise NotImplementedError
