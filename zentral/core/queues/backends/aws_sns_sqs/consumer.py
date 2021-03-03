@@ -19,11 +19,11 @@ class BaseConsumer:
             client_kwargs = {}
         self.process_message_queue = queue.Queue(maxsize=15)
         self.delete_message_queue = queue.Queue(maxsize=15)
-        self.signal_received_event = threading.Event()
+        self.stop_receiving_event = threading.Event()
         self.stop_event = threading.Event()
         self._threads = [
-            SQSDeleteThread(queue_url, self.stop_event, self.delete_message_queue, client_kwargs),
-            SQSReceiveThread(queue_url, self.signal_received_event, self.process_message_queue, client_kwargs)
+            SQSReceiveThread(queue_url, self.stop_receiving_event, self.process_message_queue, client_kwargs),
+            SQSDeleteThread(queue_url, self.stop_event, self.delete_message_queue, client_kwargs)
         ]
 
     def _handle_signal(self, signum, frame):
@@ -31,18 +31,25 @@ class BaseConsumer:
             signum = "SIGTERM"
         elif signum == signal.SIGINT:
             signum = "SIGINT"
-        logger.debug("Received signal %s", signum)
-        if not self.signal_received_event.is_set():
-            logger.error("Signal %s. Initiate graceful stop.", signum)
-            self.signal_received_event.set()
+        logger.debug("received signal %s", signum)
+        if not self.stop_receiving_event.is_set():
+            logger.error("signal %s - stop receiving events", signum)
+            self.stop_receiving_event.set()
 
     def run(self, *args, **kwargs):
-        self.log_info("run")
+        exit_status = 0
         signal.signal(signal.SIGTERM, self._handle_signal)
         signal.signal(signal.SIGINT, self._handle_signal)
         for thread in self._threads:
             thread.start()
-        self.start_run_loop()
+        try:
+            self.start_run_loop()
+        except Exception:
+            exit_status = 1
+            logger.exception("%s: run loop exception", self.name)
+            if not self.stop_receiving_event.is_set():
+                logger.error("%s: stop receiving", self.name)
+                self.stop_receiving_event.set()
         # graceful stop
         if not self.stop_event.is_set():
             logger.error("Set stop event")
@@ -50,6 +57,7 @@ class BaseConsumer:
             for thread in self._threads:
                 thread.join()
             logger.error("All threads stopped.")
+        return exit_status
 
     def start_run_loop(self):
         raise NotImplementedError
@@ -65,19 +73,13 @@ class Consumer(BaseConsumer):
                 receipt_handle, routing_key, event_d = self.process_message_queue.get(block=True, timeout=1)
             except queue.Empty:
                 logger.debug("no new event to process")
-                if self.signal_received_event.is_set():
+                if self.stop_receiving_event.is_set():
                     break
             else:
                 logger.debug("receipt handle %s: process new event", receipt_handle[-7:])
-                try:
-                    self.process_event(routing_key, event_d)
-                except Exception:
-                    logger.exception("receipt_handle %s: could not process event", receipt_handle[-7:])
-                    # TODO evaluate if it is the best strategy
-                    break
-                else:
-                    logger.debug("receipt handle %s: queue for deletion", receipt_handle[-7:])
-                    self.delete_message_queue.put((receipt_handle, time.monotonic()))
+                self.process_event(routing_key, event_d)
+                logger.debug("receipt handle %s: queue for deletion", receipt_handle[-7:])
+                self.delete_message_queue.put((receipt_handle, time.monotonic()))
 
     def process_event(self, routing_key, event_d):
         # to be implemented in the sub-classes
@@ -103,13 +105,13 @@ class BatchConsumer(BaseConsumer):
             except queue.Empty:
                 logger.debug("no new event to process")
                 if self.batch:
-                    if self.signal_received_event.is_set():
+                    if self.stop_receiving_event.is_set():
                         logger.debug("process events before graceful exit")
                         self._process_batch()
                     elif time.monotonic() > self.batch_start_ts + self.max_event_age_seconds:
                         logger.debug("process events because max event age reached")
                         self._process_batch()
-                if self.signal_received_event.is_set():
+                if self.stop_receiving_event.is_set():
                     break
             else:
                 logger.debug("receipt handle %s: queue new event for batch processing", receipt_handle[-7:])
@@ -217,7 +219,7 @@ class ConsumerProducer(BaseConsumer):
                 receipt_handle, routing_key, event_d = self.process_message_queue.get(block=True, timeout=1)
             except queue.Empty:
                 logger.debug("no new event to process")
-                if self.signal_received_event.is_set():
+                if self.stop_receiving_event.is_set():
                     break
             else:
                 logger.debug("receipt handle %s: process new event", receipt_handle[-7:])

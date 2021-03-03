@@ -61,7 +61,9 @@ class Command(BaseCommand):
                 options['statsd_prefix']
             )
 
-        found_worker.run(metrics_exporter=metrics_exporter)
+        exit_status = found_worker.run(metrics_exporter=metrics_exporter)
+        if isinstance(exit_status, int):
+            sys.exit(exit_status)
 
     @staticmethod
     def _output_worker_list(all_workers, options):
@@ -76,11 +78,11 @@ class Command(BaseCommand):
         requested_worker_name = options.get('worker', None)
         if not list_workers and not requested_worker_name:
             logger.error("'runworker' missing argument: --list-workers or a worker name")
-            sys.exit(1)
+            sys.exit(100)
         all_workers, found_worker = self._get_workers(list_workers, requested_worker_name)
         if not list_workers and found_worker is None:
             logger.error("Worker '%s' not found", requested_worker_name)
-            sys.exit(1)
+            sys.exit(101)
         elif found_worker:
             self._start_worker(found_worker, options)
         else:
