@@ -570,6 +570,12 @@ class MachineEventsView(LoginRequiredMixin, TemplateView):
             reverse("inventory:fetch_machine_events", args=(self.machine.get_urlsafe_serial_number(),)),
             qd.urlencode()
         )
+        if frontend_store.machine_events_url:
+            context["event_store_link"] = reverse(
+                "inventory:machine_events_store_redirect",
+                args=(self.machine.get_urlsafe_serial_number(),)
+            )
+            context["event_store_name"] = frontend_store.name
         return context
 
 
@@ -602,6 +608,22 @@ class FetchMachineEventsView(LoginRequiredMixin, TemplateView):
                 qd.urlencode()
             )
         return context
+
+
+class MachineEventsStoreRedirectView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs['urlsafe_serial_number'])
+        try:
+            fetch_kwargs = _clean_machine_events_fetch_kwargs(request, self.machine.serial_number)
+        except ValueError:
+            pass
+        else:
+            url = frontend_store.get_machine_events_url(**fetch_kwargs)
+            if url:
+                return HttpResponseRedirect(url)
+        return HttpResponseRedirect(
+            reverse('inventory:machine_events', args=(self.machine.get_urlsafe_serial_number(),))
+        )
 
 
 class MachineMacOSAppInstancesView(LoginRequiredMixin, TemplateView):

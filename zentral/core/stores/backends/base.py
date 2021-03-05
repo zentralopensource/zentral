@@ -1,5 +1,6 @@
 class BaseEventStore(object):
     max_batch_size = 1
+    machine_events_url = False
     last_machine_heartbeats = False
 
     def __init__(self, config_d):
@@ -28,6 +29,9 @@ class BaseEventStore(object):
 
     def get_last_machine_heartbeats(self, serial_number, from_dt):
         return {}
+
+    def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
+        return None
 
     # probe events
 

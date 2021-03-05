@@ -1,9 +1,11 @@
-import zlib
+from datetime import datetime
 import json
 import logging
 import re
 import requests
 import time
+import zlib
+from urllib.parse import urlencode
 from zentral.core.events import event_from_event_d
 from zentral.core.stores.backends.base import BaseEventStore
 
@@ -12,15 +14,17 @@ logger = logging.getLogger('zentral.core.stores.backends.datadog')
 
 
 class EventStore(BaseEventStore):
+    machine_events_url = True
     tag_component_cleanup_re = re.compile(r'[^\w\-/\.]+')
 
     def __init__(self, config_d):
         super(EventStore, self).__init__(config_d)
         # URLs
         site = config_d.get("site", "datadoghq.com")
-        self.input_url = f"https://http-intake.logs.{site}/v1/input"
-        self.search_url = f"https://api.{site}/api/v2/logs/events/search"
         self.aggregate_url = f"https://api.{site}/api/v2/logs/analytics/aggregate"
+        self.input_url = f"https://http-intake.logs.{site}/v1/input"
+        self.log_url = f"https://app.{site}/logs"
+        self.search_url = f"https://api.{site}/api/v2/logs/events/search"
 
         # Service / Source
         self.service = config_d.get("service", "Zentral")
@@ -134,17 +138,20 @@ class EventStore(BaseEventStore):
         r.raise_for_status()
 
     @staticmethod
-    def _prepare_datetime(dt):
-        return str(int(time.mktime(dt.timetuple())))
+    def _prepare_datetime(dt, tick=1):
+        return str(int(time.mktime(dt.timetuple())) * tick)
 
     # machine events
 
-    def _get_machine_events_filter(self, serial_number, from_dt, to_dt=None, event_type=None):
+    def _get_machine_events_query(self, serial_number, event_type=None):
         query_chunks = [f"host:{serial_number}"]
         if event_type:
             query_chunks.append(f"@logger.name:{event_type}")
+        return " AND ".join(query_chunks)
+
+    def _get_machine_events_filter(self, serial_number, from_dt, to_dt=None, event_type=None):
         return {
-            "query": " AND ".join(query_chunks),
+            "query": self._get_machine_events_query(serial_number, event_type),
             "from": self._prepare_datetime(from_dt),
             "to": self._prepare_datetime(to_dt) if to_dt else "now"
         }
@@ -207,3 +214,10 @@ class EventStore(BaseEventStore):
         else:
             logger.error("Could not get machine event types with usages. Status: %s", r.status_code)
         return {}
+
+    def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
+        kwargs = {"query": self._get_machine_events_query(serial_number, event_type),
+                  "live": "true",
+                  "from_ts": self._prepare_datetime(from_dt, tick=1000),
+                  "to_ts": self._prepare_datetime(to_dt or datetime.utcnow(), tick=1000)}
+        return "{}?{}".format(self.log_url, urlencode(kwargs))

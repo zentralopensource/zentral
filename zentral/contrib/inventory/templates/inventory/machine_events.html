@@ -37,6 +37,12 @@
     <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
     Update
   </button>
+  {% if event_store_link %}
+  <button type="submit" formaction="{{ event_store_link }}" class="btn btn-default">
+    <span class="glyphicon glyphicon-link" aria-hidden="true"></span>
+    {{ event_store_name }}
+  </button>
+  {% endif %}
 </form>
 </div>
 
