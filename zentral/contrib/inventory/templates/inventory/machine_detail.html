@@ -354,8 +354,9 @@
     </table>
     {% endif %}
     {% endwith %}
+    {% if fetch_heartbeats %}
     <div id="heartbeats" data-url="{% url 'inventory:machine_heartbeats' machine.get_urlsafe_serial_number %}">Loading heartbeats…</div>
-
+    {% endif %}
   </div>
 </div><!-- end row -->
 {% endblock %}

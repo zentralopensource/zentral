@@ -1,4 +1,5 @@
 <h3>{{ heartbeats|length }} Heartbeat{{ heartbeats|length|pluralize }}</h2>
+{% if heartbeats %}
 <table class="table table-condensed">
   <thead>
     <th>Event</th>
@@ -21,3 +22,6 @@
     {% endfor %}
   </tbody>
 </table>
+{% else %}
+<p class="text-danger">No heartbeats found in the last {{ time_range_days }} day{{ time_range_days|pluralize }}.</p>
+{% endif %}

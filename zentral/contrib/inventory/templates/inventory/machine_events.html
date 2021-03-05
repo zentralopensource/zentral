@@ -2,41 +2,43 @@
 {% load base_extras incidents_extras inventory_extras %}
 
 {% block content %}
-<ol class="breadcrumb">
+<ol class="breadcrumb" style="margin-bottom:10px">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
   <li><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
   <li class="active">Events</li>
 </ol>
 
-<h2>
+<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
+<h3 style="margin:0 0 20px 0">
   {% machine_type_icon machine %}
   {% machine_platform_icon machine %}
   {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / Events
-</h2>
+</h3>
 
-<form class="form-inline" method="GET">
+<form class="form-inline" method="GET" style="margin:10px 0 0 0">
   <div class="form-group">
     <label for="eventType">Event type</label>
-    <select class="form-control" id="eventType" name="event_type">
-      {% for value, selected, label in event_types %}
+    <select class="form-control" id="eventType" name="et">
+      {% for value, selected, label in event_type_options %}
       <option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
   </div>
-  <button type="submit" class="btn btn-default">OK</button>
+  <div class="form-group">
+    <label for="timeRange">Range</label>
+    <select class="form-control" id="timeRange" name="tr">
+      {% for value, selected, label in time_range_options %}
+      <option value="{{ value }}"{% if selected %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-default">
+    <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
+    Update
+  </button>
 </form>
-
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Older <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Newer</a></li>
-    {% endif %}
-  </ul>
-</nav>
+</div>
 
 <div class="table-responsive">
   <table class="table">
@@ -44,48 +46,41 @@
       <th>Metadata</th>
       <th>Data</th>
     </thead>
-    <tbody>
-      {% for event, link in object_list %}
-      {% with event.metadata.observer.get_object as observer_obj %}
-      {% with event.metadata.request as request %}
-      <tr>
-        <td style="white-space:nowrap">
-          {% if link %}
-          <a href="{{ link }}">{{ event.get_event_type_display }}</a><br>
-          {% else %}
-          {{ event.get_event_type_display }}<br>
-          {% endif %}
-          {{ event.metadata.created_at }}
-          {% if observer_obj %}
-          <br><small>{{ observer_obj }}</small>
-          {% endif %}
-          {% if request %}
-          <br><small>{{ request }}</small>
-          {% if request.geo %}
-          <br><small>{{ request.geo.short_repr }}</small>
-          {% endif %}
-          {% endif %}
-          {% for incident in event.metadata.incidents %}
-          <br>{% incident_severity incident.severity %}&nbsp;<a href="{% url 'incidents:incident' incident.pk %}{% if incident.machine_incident.pk %}#{{ incident.machine_incident.pk }}{% endif %}">{{ incident.name }}</a>
-          {% endfor %}
-        </td>
-        <td>{{ event.payload|pythonprettyprint }}</td>
-      </tr>
-      {% endwith %}
-      {% endwith %}
-      {% endfor %}
+    <tbody id="events-container" data-url="{{ fetch_url }}">
     </tbody>
   </table>
 </div>
+{% endblock %}
 
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Older <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Newer</a></li>
-    {% endif %}
-  </ul>
-</nav>
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function removeLoadMoreEvents() {
+    $("#loadMoreEvents").parent().parent().remove();
+  }
+
+  function setupLoadMoreEvents() {
+    $("#loadMoreEvents").click(function (event) {
+      event.preventDefault();
+      var fetchURL = $(this).attr("href");
+      loadNextEvents(fetchURL);
+    });
+  }
+
+  function loadNextEvents(fetchURL) {
+    $.ajax({
+      dataType: "html",
+      url: fetchURL,
+      success: function (data) {
+        removeLoadMoreEvents();
+        $("#events-container").append(data);
+        setupLoadMoreEvents();
+      }
+    });
+  }
+
+  $(document).ready(function () {
+    var fetchURL = $("#events-container").data("url");
+    loadNextEvents(fetchURL);
+  });
+</script>
 {% endblock %}

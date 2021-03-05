@@ -76,7 +76,10 @@ class EventStore(BaseEventStore):
         return dict(items)
 
     def _prepare_event(self, event):
-        event_d = event.serialize()
+        if not isinstance(event, dict):
+            event_d = event.serialize()
+        else:
+            event_d = event
 
         metadata = event_d.pop("_zentral")
 

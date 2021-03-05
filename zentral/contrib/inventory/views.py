@@ -3,6 +3,7 @@ from importlib import import_module
 import logging
 from math import ceil
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core import signing
 from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse, reverse_lazy
 from django.http import Http404, HttpResponseRedirect
@@ -10,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.conf import settings
+from zentral.core.events import event_types
 from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores import frontend_store
 from zentral.utils.prometheus import BasePrometheusMetricsView
@@ -399,13 +401,17 @@ class MBUMachinesView(MachineListView):
 
 class MachineHeartbeatsView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/_machine_heartbeats.html"
+    time_range_days = 15  # TODO hard coded
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["machine"] = machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
         prepared_heartbeats = []
         try:
-            last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(machine.serial_number)
+            last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(
+                machine.serial_number,
+                from_dt=datetime.utcnow() - timedelta(days=self.time_range_days)
+            )
         except Exception:
             logger.exception("Could not get machine heartbeats")
         else:
@@ -429,6 +435,7 @@ class MachineHeartbeatsView(LoginRequiredMixin, TemplateView):
                 )
             prepared_heartbeats.sort()
         ctx["heartbeats"] = prepared_heartbeats
+        ctx["time_range_days"] = self.time_range_days
         return ctx
 
 
@@ -449,6 +456,7 @@ class MachineView(LoginRequiredMixin, TemplateView):
         if machine_snapshots_count:
             context['max_source_tab_with'] = 100 // machine_snapshots_count
         context['serial_number'] = machine.serial_number
+        context['fetch_heartbeats'] = frontend_store.last_machine_heartbeats
         return context
 
 
@@ -470,77 +478,130 @@ class ArchiveMachineView(LoginRequiredMixin, TemplateView):
         return redirect('inventory:index')
 
 
-class MachineEventSet(object):
-    def __init__(self, machine_serial_number, event_type=None):
-        self.machine_serial_number = machine_serial_number
-        self.event_type = event_type
-        self.store = frontend_store
-        self._count = None
-
-    def count(self):
-        if self._count is None:
-            self._count = self.store.machine_events_count(self.machine_serial_number, self.event_type)
-        return self._count
-
-    def __len__(self):
-        return self.count()
-
-    def __getitem__(self, k):
-        if isinstance(k, slice):
-            start = int(k.start or 0)
-            stop = int(k.stop or start + 1)
+def _clean_machine_events_fetch_kwargs(request, serial_number, default_time_range=None):
+    kwargs = {"serial_number": serial_number}
+    event_type = request.GET.get("et")
+    if event_type:
+        if event_type not in event_types:
+            raise ValueError("Unknown event type")
         else:
-            start = k
-            stop = k + 1
-        for event in self.store.machine_events_fetch(self.machine_serial_number, start, stop - start, self.event_type):
-            if not self.event_type:
-                link = "?event_type={}".format(event.event_type)
-            else:
-                link = None
-            yield event, link
+            kwargs["event_type"] = event_type
+    time_range = request.GET.get("tr")
+    if not time_range:
+        if default_time_range:
+            time_range = default_time_range
+        else:
+            raise ValueError("Missing time range")
+    kwargs["to_dt"] = None
+    if time_range == "now-24h":
+        kwargs["from_dt"] = datetime.utcnow() - timedelta(hours=24)
+    elif time_range == "now-7d":
+        kwargs["from_dt"] = datetime.utcnow() - timedelta(days=7)
+    elif time_range == "now-14d":
+        kwargs["from_dt"] = datetime.utcnow() - timedelta(days=14)
+    elif time_range == "now-30d":
+        kwargs["from_dt"] = datetime.utcnow() - timedelta(days=30)
+    else:
+        raise ValueError("Uknown time range")
+    raw_cursor = request.GET.get("rc")
+    if raw_cursor:
+        try:
+            cursor = signing.loads(raw_cursor)
+        except signing.BadSignature:
+            raise ValueError("Bad cursor")
+        else:
+            kwargs["cursor"] = cursor
+    return kwargs
 
 
-class MachineEventsView(LoginRequiredMixin, ListView):
+class MachineEventsView(LoginRequiredMixin, TemplateView):
     template_name = "inventory/machine_events.html"
-    paginate_by = 10
+    default_time_range = "now-7d"
+
+    def get(self, request, *args, **kwargs):
+        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs['urlsafe_serial_number'])
+        try:
+            self.fetch_kwargs = _clean_machine_events_fetch_kwargs(
+                request, self.machine.serial_number,
+                default_time_range=self.default_time_range
+            )
+        except ValueError:
+            return HttpResponseRedirect(
+                reverse('inventory:machine_events', args=(self.machine.get_urlsafe_serial_number(),))
+            )
+        self.fetch_kwargs.pop("cursor", None)
+        self.request_event_type = self.fetch_kwargs.pop("event_type", None)
+        return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        context = super(MachineEventsView, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context["machine"] = self.machine
-        context["serial_number"] = self.serial_number
-        # pagination
-        page = context['page_obj']
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            context['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            context['previous_url'] = "?{}".format(qd.urlencode())
-        event_types = []
-        total_events = 0
+        context["serial_number"] = self.machine.serial_number
+        selected_time_range = self.request.GET.get("tr", self.default_time_range)
+        context["time_range_options"] = [
+                (v, selected_time_range == v, l)
+                for v, l in (("now-24h", "Last 24h"),
+                             ("now-7d", "Last 7 days"),
+                             ("now-14d", "Last 14 days"),
+                             ("now-30d", "Last 30 days"))
+        ]
 
-        # event types selection
-        request_event_type = self.request.GET.get('event_type')
-        for event_type, count in frontend_store.machine_events_types_with_usage(
-                self.serial_number).items():
-            total_events += count
-            event_types.append((event_type,
-                                request_event_type == event_type,
-                                "{} ({})".format(event_type.replace('_', ' ').title(), count)))
-        event_types.sort()
-        event_types.insert(0, ('',
-                               request_event_type in [None, ''],
-                               'All ({})'.format(total_events)))
-        context['event_types'] = event_types
+        total_event_count = 0
+        event_type_options = []
+        for event_type, count in frontend_store.get_aggregated_machine_event_counts(**self.fetch_kwargs).items():
+            total_event_count += count
+            event_type_options.append(
+                (event_type,
+                 self.request_event_type == event_type,
+                 "{} ({})".format(event_type.replace('_', ' ').title(), count))
+            )
+        event_type_options.sort()
+        event_type_options.insert(
+            0,
+            ('',
+             self.request_event_type in [None, ''],
+             'All ({})'.format(total_event_count))
+        )
+        context['event_type_options'] = event_type_options
+        qd = self.request.GET.copy()
+        if "tr" not in qd:
+            qd["tr"] = self.default_time_range
+        context['fetch_url'] = "{}?{}".format(
+            reverse("inventory:fetch_machine_events", args=(self.machine.get_urlsafe_serial_number(),)),
+            qd.urlencode()
+        )
         return context
 
-    def get_queryset(self):
-        self.machine = MetaMachine.from_urlsafe_serial_number(self.kwargs["urlsafe_serial_number"])
-        self.serial_number = self.machine.serial_number
-        et = self.request.GET.get('event_type')
-        return MachineEventSet(self.serial_number, et)
+
+class FetchMachineEventsView(LoginRequiredMixin, TemplateView):
+    template_name = "inventory/_machine_events.html"
+    paginate_by = 20
+
+    def get(self, request, *args, **kwargs):
+        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs['urlsafe_serial_number'])
+        try:
+            self.fetch_kwargs = _clean_machine_events_fetch_kwargs(request, self.machine.serial_number)
+        except ValueError:
+            return HttpResponseRedirect(
+                reverse('inventory:machine_events', args=(self.machine.get_urlsafe_serial_number(),))
+            )
+        self.fetch_kwargs["limit"] = self.paginate_by
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["machine"] = self.machine
+        context["serial_number"] = self.machine.serial_number
+        events, next_cursor = frontend_store.fetch_machine_events(**self.fetch_kwargs)
+        context["events"] = events
+        if next_cursor:
+            qd = self.request.GET.copy()
+            qd.update({"rc": signing.dumps(next_cursor)})
+            context["fetch_url"] = "{}?{}".format(
+                reverse('inventory:fetch_machine_events', args=(self.machine.get_urlsafe_serial_number(),)),
+                qd.urlencode()
+            )
+        return context
 
 
 class MachineMacOSAppInstancesView(LoginRequiredMixin, TemplateView):

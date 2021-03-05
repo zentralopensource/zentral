@@ -23,6 +23,8 @@ except NotImplementedError:
 
 class EventStore(BaseEventStore):
     max_batch_size = 500
+    last_machine_heartbeats = True
+
     LEGACY_DOC_TYPE = "doc"  # _type used with 5.6 < ES < 7
     MAX_CONNECTION_ATTEMPTS = 20
     MAPPINGS = {
@@ -224,7 +226,7 @@ class EventStore(BaseEventStore):
         else:
             event_type = es_doc_type
             es_event_d["type"] = event_type
-        event_d = es_event_d.pop(event_type)
+        event_d = es_event_d.pop(event_type, {})
         event_d['_zentral'] = es_event_d
         return event_from_event_d(event_d)
 
@@ -285,26 +287,24 @@ class EventStore(BaseEventStore):
 
     # machine events
 
-    def _get_machine_events_body(self, machine_serial_number, event_type=None, tag=None):
+    def _get_machine_events_body(self, serial_number, from_dt, to_dt=None, event_type=None, tag=None):
         self.wait_and_configure_if_necessary()
-        body = {
-            'query': {
-                'bool': {
-                    'filter': [
-                        {'term': {'machine_serial_number': machine_serial_number}}
-                    ]
-                }
-            }
-        }
+        range_kwargs = {"gte": from_dt}
+        if to_dt:
+            range_kwargs = {"lte": to_dt}
+        filters = [
+            {'term': {'machine_serial_number': serial_number}},
+            {'range': {'created_at': range_kwargs}}
+        ]
         if event_type:
-            body['query']['bool']['filter'].append(self._get_type_filter(event_type))
+            filters.append(self._get_type_filter(event_type))
         if tag:
-            body['query']['bool']['filter'].append({'term': {'tags': tag}})
-        return body
+            filters.append({'term': {'tags': tag}})
+        return {'query': {'bool': {'filter': filters}}}
 
-    def machine_events_count(self, machine_serial_number, event_type=None):
+    def get_total_machine_event_count(self, serial_number, from_dt, to_dt=None, event_type=None):
         # TODO: count could work from first fetch with elasticsearch.
-        body = self._get_machine_events_body(machine_serial_number, event_type)
+        body = self._get_machine_events_body(serial_number, from_dt, to_dt, event_type)
         body['size'] = 0
         body['track_total_hits'] = True
         r = self._es.search(index=self.read_index, body=body)
@@ -314,20 +314,30 @@ class EventStore(BaseEventStore):
         else:
             return total
 
-    def machine_events_fetch(self, machine_serial_number, offset=0, limit=0, event_type=None):
+    def fetch_machine_events(self, serial_number, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
         # TODO: count could work from first fetch with elasticsearch.
-        body = self._get_machine_events_body(machine_serial_number, event_type)
-        if offset:
-            body['from'] = offset
+        body = self._get_machine_events_body(serial_number, from_dt, to_dt, event_type)
+        body['sort'] = [
+            {'created_at': 'desc'},
+            {'id': 'asc'},  # tie breakers
+            {'index': 'asc'}  # tie breakers
+        ]
         if limit:
             body['size'] = limit
-        body['sort'] = [{'created_at': 'desc'}]
+        if cursor:
+            body['search_after'] = cursor
         r = self._es.search(index=self.read_index, body=body)
+        events = []
+        next_cursor = None
         for hit in r['hits']['hits']:
-            yield self._deserialize_event(hit['_type'], hit['_source'])
+            events.append(self._deserialize_event(hit['_type'], hit['_source']))
+            next_cursor = hit.pop("sort", None)
+        if len(events) < limit:
+            next_cursor = None
+        return events, next_cursor
 
-    def machine_events_types_with_usage(self, machine_serial_number):
-        body = self._get_machine_events_body(machine_serial_number)
+    def get_aggregated_machine_event_counts(self, serial_number, from_dt, to_dt=None):
+        body = self._get_machine_events_body(serial_number, from_dt, to_dt)
         body.update({
             'size': 0,
             'aggs': {
@@ -345,8 +355,8 @@ class EventStore(BaseEventStore):
             types_d[bucket['key']] = bucket['doc_count']
         return types_d
 
-    def get_last_machine_heartbeats(self, machine_serial_number):
-        body = self._get_machine_events_body(machine_serial_number, tag="heartbeat")
+    def get_last_machine_heartbeats(self, serial_number, from_dt):
+        body = self._get_machine_events_body(serial_number, from_dt, tag="heartbeat")
         body.update({
             'size': 0,
             'aggs': {

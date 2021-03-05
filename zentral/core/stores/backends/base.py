@@ -1,5 +1,6 @@
 class BaseEventStore(object):
     max_batch_size = 1
+    last_machine_heartbeats = False
 
     def __init__(self, config_d):
         self.name = config_d['store_name']
@@ -16,13 +17,16 @@ class BaseEventStore(object):
 
     # machine events
 
-    def machine_events_count(self, machine_serial_number, event_type=None):
+    def get_total_machine_event_count(self, serial_number, from_dt, to_dt=None, event_type=None):
         return 0
 
-    def machine_events_fetch(self, machine_serial_number, offset=0, limit=0, event_type=None):
-        return []
+    def fetch_machine_events(self, serial_number, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        return [], None
 
-    def machine_events_types_with_usage(self, machine_serial_number):
+    def get_aggregated_machine_event_counts(self, serial_number, from_dt, to_dt=None):
+        return {}
+
+    def get_last_machine_heartbeats(self, serial_number, from_dt):
         return {}
 
     # probe events

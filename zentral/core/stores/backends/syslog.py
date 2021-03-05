@@ -6,8 +6,11 @@ import socket
 import time
 from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.stores.backends.base import BaseEventStore
+from zentral.utils.json import remove_null_character
+
 
 logger = logging.getLogger('zentral.core.stores.backends.syslog')
+
 
 try:
     random = random.SystemRandom()
@@ -98,7 +101,7 @@ class EventStore(BaseEventStore):
         self.wait_and_configure_if_necessary()
         if not isinstance(event, dict):
             event = event.serialize()
-        msg = json.dumps(event)
+        msg = json.dumps(remove_null_character(event))
         if self.prepend_ecc:
             msg = "@ecc: " + msg
         msg = self.priority + msg.encode("utf-8")

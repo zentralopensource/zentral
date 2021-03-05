@@ -1,11 +1,13 @@
 import logging
 import psycopg2
-from psycopg2.extras import Json
 from zentral.core.events import event_cls_from_type, event_from_event_d
 from zentral.core.events.base import EventMetadata, EventRequest
 from zentral.core.stores.backends.base import BaseEventStore
+from zentral.utils.json import remove_null_character
+
 
 logger = logging.getLogger('zentral.core.stores.backends.postgres')
+
 
 psycopg2.extras.register_uuid()
 
@@ -58,23 +60,25 @@ class EventStore(BaseEventStore):
         self.configured = True
 
     def _serialize_event(self, event):
-        metadata = event.metadata
+        if not isinstance(event, dict):
+            event = event.serialize()
+        metadata = event.pop("_zentral")
         doc = {'machine_serial_number': metadata.machine_serial_number,
-               'event_type': event.event_type,
-               'uuid': metadata.uuid,
-               'index': metadata.index,
-               'created_at': metadata.created_at}
-        if metadata.request is not None:
-            doc['user_agent'] = metadata.request.user_agent
-            doc['ip'] = metadata.request.ip
-            user = metadata.request.user
+               'event_type': metadata["type"],
+               'uuid': metadata["id"],
+               'index': metadata["index"],
+               'user_agent': None,
+               'ip': None,
+               'user': None,
+               'payload': remove_null_character(event),
+               'created_at': metadata["created_at"]}
+        request = metadata.get("request")
+        if request:
+            doc['user_agent'] = request["user_agent"]
+            doc['ip'] = request["ip"]
+            user = request.get("user")
             if user:
-                doc['user'] = Json(user.serialize())
-        else:
-            doc['user_agent'] = None
-            doc['ip'] = None
-            doc['user'] = None
-        doc['payload'] = Json(event.payload)
+                doc['user'] = remove_null_character(user)
         return doc
 
     def _deserialize_event(self, doc):
