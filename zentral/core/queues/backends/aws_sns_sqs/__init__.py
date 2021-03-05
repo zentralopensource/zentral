@@ -139,7 +139,7 @@ class EnrichWorker(WorkerMixin, ConsumerProducer):
     def generate_events(self, routing_key, event_d):
         self.log_debug("enrich event")
         for event in self._enrich_event(event_d):
-            yield None, event.serialize(machine_metadata=False)
+            yield None, event.serialize(machine_metadata=True)
             self.inc_counter("produced_events", event.event_type)
         self.inc_counter("enriched_events", event.event_type)
 

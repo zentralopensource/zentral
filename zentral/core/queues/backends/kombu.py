@@ -137,7 +137,7 @@ class EnrichWorker(ConsumerProducerMixin, BaseWorker):
         self.log_debug("enrich event")
         try:
             for event in self.enrich_event(body):
-                self.producer.publish(event.serialize(machine_metadata=False),
+                self.producer.publish(event.serialize(machine_metadata=True),
                                       serializer='json',
                                       exchange=enriched_events_exchange,
                                       declare=[enriched_events_exchange])
