@@ -125,6 +125,8 @@ class EventStore(BaseEventStore):
             kibana_base_url = config_d.get('kibana_base_url')
             if kibana_base_url:
                 self.kibana_discover_url = urljoin(kibana_base_url, "app/discover#/")
+        if self.kibana_discover_url:
+            self.machine_events_url = True
         self.kibana_index_pattern_uuid = config_d.get('kibana_index_pattern_uuid')
         self.index_settings = {
             "index.mapping.total_fields.limit": config_d.get("index.mapping.total_fields.limit", 2000),
@@ -267,7 +269,7 @@ class EventStore(BaseEventStore):
                 except (KeyError, ValueError):
                     logger.error("could not yield indexed event key")
 
-    def _build_kibana_url(self, body):
+    def _build_kibana_url(self, body, from_dt=None, to_dt=None):
         if not self.kibana_discover_url:
             return
         kibana_params = {
@@ -278,7 +280,12 @@ class EventStore(BaseEventStore):
         }
         if self.kibana_index_pattern_uuid:
             kibana_params["index"] = self.kibana_index_pattern_uuid
-        query = {"_g": rison_dumps({"time": {"from": "now-6h", "to": "now"}}),
+        time_d = {"from": "now-6h", "to": "now"}
+        if from_dt:
+            time_d["from"] = from_dt.isoformat()
+        if to_dt:
+            time_d["to"] = to_dt.isoformat()
+        query = {"_g": rison_dumps({"time": time_d}),
                  "_a": rison_dumps(kibana_params)}
         return "{base_url}?{query}".format(
                    base_url=self.kibana_discover_url,
@@ -287,15 +294,18 @@ class EventStore(BaseEventStore):
 
     # machine events
 
-    def _get_machine_events_body(self, serial_number, from_dt, to_dt=None, event_type=None, tag=None):
+    def _get_machine_events_body(self, serial_number, from_dt=None, to_dt=None, event_type=None, tag=None):
         self.wait_and_configure_if_necessary()
-        range_kwargs = {"gte": from_dt}
-        if to_dt:
-            range_kwargs = {"lte": to_dt}
         filters = [
             {'term': {'machine_serial_number': serial_number}},
-            {'range': {'created_at': range_kwargs}}
         ]
+        range_kwargs = {}
+        if from_dt:
+            range_kwargs["gte"] = from_dt
+        if to_dt:
+            range_kwargs["lte"] = to_dt
+        if range_kwargs:
+            filters.append({'range': {'created_at': range_kwargs}})
         if event_type:
             filters.append(self._get_type_filter(event_type))
         if tag:
@@ -425,6 +435,12 @@ class EventStore(BaseEventStore):
                     ua_list.append((ua, parser.parse(sub_bucket["max_created_at"]["value_as_string"])))
                 heartbeats.append((event_type_class, None, ua_list))
         return heartbeats
+
+    def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
+        return self._build_kibana_url(
+            self._get_machine_events_body(serial_number, event_type=event_type),
+            from_dt, to_dt
+        )
 
     # probe events
 
