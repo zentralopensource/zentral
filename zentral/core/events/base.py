@@ -366,9 +366,6 @@ class BaseEvent(object):
     def post(self):
         queues.post_event(self)
 
-    def extra_probe_checks(self, probe):
-        return True
-
     # notification methods
 
     @cached_property
