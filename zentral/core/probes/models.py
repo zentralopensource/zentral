@@ -72,9 +72,16 @@ class ProbeSourceManager(models.Manager):
     def current_event_types(self):
         qs = (ProbeSource.objects.annotate(event_type=Func(F("event_types"), function="unnest"))
                                  .values("event_type").distinct().order_by())
-        return sorted(((rd["event_type"], event_types[rd["event_type"]].get_event_type_display())
-                       for rd in qs),
-                      key=lambda t: t[1])
+        cet = []
+        for rd in qs:
+            event_type = rd["event_type"]
+            if event_type in event_types:
+                event_type_display = event_types[rd["event_type"]].get_event_type_display()
+            else:
+                event_type_display = event_type.replace("_", " ")
+            cet.append((event_type, event_type_display))
+        cet.sort(key=lambda t: t[1])
+        return cet
 
     def clone(self, probe_source, name):
         probe_source.id = None
