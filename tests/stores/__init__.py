@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from zentral.core.events.base import EventMetadata, EventRequest, EventRequestUser, BaseEvent, register_event_type
 
 
@@ -32,39 +33,67 @@ def make_event(idx=0, first_type=True, with_request=True):
                      {'idx': idx})
 
 
+def get_from_dt():
+    return datetime.utcnow() - timedelta(days=1)
+
+
 class BaseTestEventStore(object):
     event_store = None
 
     def test_table_creation(self):
-        self.assertEqual(self.event_store.machine_events_count("not_so_random_machine_serial_number"), 0)
+        self.assertEqual(
+            self.event_store.get_total_machine_event_count(
+                "not_so_random_machine_serial_number",
+                from_dt=get_from_dt()
+            ), 0
+        )
 
     def test_store_event_with_request(self):
         event = make_event()
         self.event_store.store(event)
-        l = list(self.event_store.machine_events_fetch(event.metadata.machine_serial_number))
+        l, _ = self.event_store.fetch_machine_events(
+            event.metadata.machine_serial_number,
+            from_dt=get_from_dt()
+        )
         e = l[0]
         self.assertEqual(e.serialize(), event.serialize())
 
     def test_store_event_without_request(self):
         event = make_event(with_request=False)
         self.event_store.store(event)
-        l = list(self.event_store.machine_events_fetch(event.metadata.machine_serial_number))
+        l, _ = self.event_store.fetch_machine_events(
+            event.metadata.machine_serial_number,
+            from_dt=get_from_dt()
+        )
         e = l[0]
         self.assertEqual(e.serialize(), event.serialize())
 
-    def test_pagination(self):
+    def test_fetch_machine_events_cursor(self):
         for i in range(100):
             event = make_event(idx=i)
             self.event_store.store(event)
-        l = list(self.event_store.machine_events_fetch(event.metadata.machine_serial_number, offset=10, limit=2))
+        l, cursor = self.event_store.fetch_machine_events(
+            event.metadata.machine_serial_number,
+            from_dt=get_from_dt(), limit=2
+        )
         self.assertEqual(len(l), 2)
-        self.assertEqual(l[0].payload['idx'], 89)
-        self.assertEqual(l[1].payload['idx'], 88)
+        self.assertEqual(l[0].payload['idx'], 99)
+        self.assertEqual(l[1].payload['idx'], 98)
+        l2, _ = self.event_store.fetch_machine_events(
+            event.metadata.machine_serial_number,
+            from_dt=get_from_dt(), limit=2, cursor=cursor
+        )
+        self.assertEqual(len(l2), 2)
+        self.assertEqual(l2[0].payload['idx'], 97)
+        self.assertEqual(l2[1].payload['idx'], 96)
 
-    def test_event_types_usage(self):
+    def test_aggregated_machine_event_counts(self):
         for i in range(100):
             event = make_event(idx=i, first_type=i < 50)
             self.event_store.store(event)
-        types_d = self.event_store.machine_events_types_with_usage(event.metadata.machine_serial_number)
+        types_d = self.event_store.get_aggregated_machine_event_counts(
+            event.metadata.machine_serial_number,
+            from_dt=get_from_dt()
+        )
         self.assertEqual(types_d['event_type_1'], 50)
         self.assertEqual(types_d['event_type_2'], 50)

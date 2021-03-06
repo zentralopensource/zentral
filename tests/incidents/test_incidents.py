@@ -8,6 +8,7 @@ from zentral.core.incidents.models import (Incident, MachineIncident,
                                            STATUS_CLOSED, STATUS_IN_PROGRESS, STATUS_OPEN)
 from zentral.core.incidents.utils import update_or_create_open_incident, update_or_create_open_machine_incident
 from zentral.contrib.inventory.models import MetaMachine
+from zentral.core.probes.conf import all_probes
 from zentral.core.probes.models import ProbeSource
 from tests.inventory.utils import MockMetaMachine
 
@@ -28,6 +29,7 @@ class IncidentTestCase(TestCase):
                   }}
         )
         cls.probe = cls.probe_source.load()
+        all_probes.clear()
 
     def test_create_open_incident(self):
         event_metadata = EventMetadata(event_type="test")
