@@ -11,6 +11,7 @@ from django.utils.functional import cached_property
 from django.utils.text import slugify
 from geoip2.models import City
 from zentral.contrib.inventory.models import MetaMachine
+from zentral.core.probes.conf import all_probes_dict
 from zentral.core.queues import queues
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .template_loader import TemplateLoader
@@ -210,6 +211,7 @@ class EventMetadata(object):
         self.observer = kwargs.pop('observer', None)
         self.request = kwargs.pop('request', None)
         self.tags = kwargs.pop('tags', [])
+        self.probes = kwargs.pop('probes', [])
         self.incidents = kwargs.pop('incidents', [])
 
     @classmethod
@@ -225,7 +227,7 @@ class EventMetadata(object):
             kwargs['request'] = EventRequest.deserialize(request_d)
         return cls(**kwargs)
 
-    def serialize_machine(self):
+    def _serialize_machine(self):
         machine_d_cache_key = "machine_d_{}".format(self.machine.get_urlsafe_serial_number())
         machine_d = cache.get(machine_d_cache_key)
         if not machine_d:
@@ -276,19 +278,32 @@ class EventMetadata(object):
             d['request'] = self.request.serialize()
         if self.tags:
             d['tags'] = self.tags
+        if self.probes:
+            d['probes'] = self.probes
         if self.incidents:
             d['incidents'] = self.incidents
         if self.machine_serial_number:
             d['machine_serial_number'] = self.machine_serial_number
         if not machine_metadata or not self.machine:
             return d
-        machine_d = self.serialize_machine()
+        machine_d = self._serialize_machine()
         if machine_d:
             d['machine'] = machine_d
         return d
 
+    def add_probe(self, probe):
+        self.probes.append(probe.serialize_for_event_metadata())
+
     def add_incident(self, incident):
         self.incidents.append(incident.serialize_for_event_metadata())
+
+    def iter_loaded_probes(self):
+        for serialized_probe in self.probes:
+            probe_pk = serialized_probe["pk"]
+            try:
+                yield all_probes_dict[probe_pk]
+            except KeyError:
+                logger.error("Event %s/%s: unknown probe %s", self.uuid, self.index, probe_pk)
 
 
 class BaseEvent(object):

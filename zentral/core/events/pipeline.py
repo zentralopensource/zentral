@@ -36,6 +36,7 @@ def enrich_event(event):
         if city:
             event.metadata.request.set_geo_from_city(city)
     for probe in all_probes.event_filtered(event):
+        event.metadata.add_probe(probe)
         incident_severity = probe.get_matching_event_incident_severity(event)
         if incident_severity is None:
             continue
@@ -64,7 +65,7 @@ def enrich_event(event):
 def process_event(event):
     if isinstance(event, dict):
         event = event_from_event_d(event)
-    for probe in all_probes.event_filtered(event):
+    for probe in event.metadata.iter_loaded_probes():
         for action, action_config_d in probe.actions:
             try:
                 action.trigger(event, probe, action_config_d)

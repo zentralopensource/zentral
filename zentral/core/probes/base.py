@@ -250,6 +250,11 @@ class BaseProbe(object):
         self.can_edit_metadata_filters = self.forced_event_type is None
         self.load(source.body)
 
+    def __eq__(self, other):
+        if isinstance(other, BaseProbe):
+            return self.source == other.source
+        return False
+
     # methods to load the ProbeSource.body
 
     def load(self, data):
@@ -419,6 +424,11 @@ class BaseProbe(object):
         else:
             return dict(SEVERITY_CHOICES).get(self.incident_severity,
                                               "Unknown severity {}".format(self.incident_severity))
+
+    # serialize
+
+    def serialize_for_event_metadata(self):
+        return {"pk": self.pk, "name": self.name}
 
     # export method for probe sharing
 
