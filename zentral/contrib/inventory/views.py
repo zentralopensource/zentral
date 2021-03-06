@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from importlib import import_module
 import logging
 from math import ceil
+from urllib.parse import urlencode
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core import signing
 from django.core.exceptions import ObjectDoesNotExist
@@ -13,7 +14,7 @@ from django.views.generic import CreateView, DeleteView, FormView, ListView, Tem
 from zentral.conf import settings
 from zentral.core.events import event_types
 from zentral.core.incidents.models import MachineIncident
-from zentral.core.stores import frontend_store
+from zentral.core.stores import frontend_store, stores
 from zentral.utils.prometheus import BasePrometheusMetricsView
 from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm,
@@ -456,7 +457,19 @@ class MachineView(LoginRequiredMixin, TemplateView):
         if machine_snapshots_count:
             context['max_source_tab_with'] = 100 // machine_snapshots_count
         context['serial_number'] = machine.serial_number
+        context['show_events_link'] = frontend_store.machine_events
         context['fetch_heartbeats'] = frontend_store.last_machine_heartbeats
+        store_links = []
+        for store in stores:
+            if store.machine_events_url:
+                url = "{}?{}".format(
+                    reverse("inventory:machine_events_store_redirect",
+                            args=(machine.get_urlsafe_serial_number(),)),
+                    urlencode({"es": store.name,
+                               "tr": MachineEventsView.default_time_range})
+                )
+                store_links.append((url, store.name))
+        context["store_links"] = store_links
         return context
 
 
@@ -618,9 +631,13 @@ class MachineEventsStoreRedirectView(LoginRequiredMixin, View):
         except ValueError:
             pass
         else:
-            url = frontend_store.get_machine_events_url(**fetch_kwargs)
-            if url:
-                return HttpResponseRedirect(url)
+            event_store_name = request.GET.get("es")
+            for store in stores:
+                if store.name == event_store_name:
+                    url = store.get_machine_events_url(**fetch_kwargs)
+                    if url:
+                        return HttpResponseRedirect(url)
+                    break
         return HttpResponseRedirect(
             reverse('inventory:machine_events', args=(self.machine.get_urlsafe_serial_number(),))
         )

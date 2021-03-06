@@ -14,6 +14,7 @@ logger = logging.getLogger('zentral.core.stores.backends.datadog')
 
 
 class EventStore(BaseEventStore):
+    machine_events = True
     machine_events_url = True
     tag_component_cleanup_re = re.compile(r'[^\w\-/\.]+')
 

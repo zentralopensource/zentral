@@ -1,5 +1,6 @@
 class BaseEventStore(object):
     max_batch_size = 1
+    machine_events = False
     machine_events_url = False
     last_machine_heartbeats = False
 

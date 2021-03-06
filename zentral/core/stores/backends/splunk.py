@@ -2,7 +2,8 @@ from datetime import datetime
 import logging
 import random
 import time
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin
+from django.utils.functional import cached_property
 import requests
 from zentral.core.stores.backends.base import BaseEventStore
 
@@ -16,16 +17,26 @@ class EventStore(BaseEventStore):
     def __init__(self, config_d):
         super().__init__(config_d)
         self.collector_url = urljoin(config_d["hec_url"], "/services/collector/event")
-        self.session = requests.Session()
-        self.session.verify = config_d.get('verify_tls', True)
-        self.session.headers.update({
-            'Authorization': "Splunk {}".format(config_d["api_token"])
-        })
-        self.splunk_metadata = {k: v for k, v in ((attr, config_d.get(attr)) for attr in ("source", "index")) if v}
+        self.hec_token = config_d["hec_token"]
+        self.search_app_url = config_d.get("search_app_url")
+        if self.search_app_url:
+            self.machine_events_url = True
+        self.verify_tls = config_d.get('verify_tls', True)
+        self.index = config_d.get("index")
+        self.source = config_d.get("source")
+        self._collector_session = None
+
+    @cached_property
+    def collector_session(self):
+        session = requests.Session()
+        session.verify = self.verify_tls
+        session.headers.update({'Authorization': "Splunk {}".format(self.hec_token)})
+        return session
 
     @staticmethod
     def _convert_datetime(dt):
-        dt = datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S.%f")
+        if isinstance(dt, str):
+            dt = datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S.%f")
         ts = time.mktime(dt.timetuple()) + dt.microsecond / 1e6
         return "{:.3f}".format(ts)
 
@@ -44,13 +55,16 @@ class EventStore(BaseEventStore):
             "time": self._convert_datetime(created_at),
             "event": payload_event,
         }
-        payload.update(self.splunk_metadata)
+        if self.index:
+            payload["index"] = self.index
+        if self.source:
+            payload["source"] = self.source
         return payload
 
     def store(self, event):
         payload = self._serialize_event(event)
         for i in range(self.max_retries):
-            r = self.session.post(self.collector_url, json=payload)
+            r = self.collector_session.post(self.collector_url, json=payload)
             if r.ok:
                 return
             if r.status_code > 500:
@@ -61,3 +75,21 @@ class EventStore(BaseEventStore):
                     time.sleep(seconds)
                     continue
             r.raise_for_status()
+
+    # machine events
+
+    def _get_machine_events_query(self, serial_number, event_type=None):
+        query_chunks = [("host", serial_number)]
+        if self.index:
+            query_chunks.append(("index", self.index))
+        if event_type:
+            query_chunks.append(("event_type", event_type))
+        return " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in query_chunks)
+
+    def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
+        kwargs = {
+            "q": "search {}".format(self._get_machine_events_query(serial_number, event_type)),
+            "earliest": self._convert_datetime(from_dt),
+            "latest": self._convert_datetime(to_dt) if to_dt else "now"
+        }
+        return "{}?{}".format(self.search_app_url, urlencode(kwargs))

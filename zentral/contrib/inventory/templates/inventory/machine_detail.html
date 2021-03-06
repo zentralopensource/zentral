@@ -24,9 +24,16 @@
     </p>
 
     <div class="btn-group" role="group" style="margin:0 0 10px 0">
+      {% if show_events_link %}
       <a class="btn btn-default" href="{% url 'inventory:machine_events' machine.get_urlsafe_serial_number %}">
         <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
       </a>
+      {% endif %}
+      {% for link, anchor_text in store_links  %}
+      <a class="btn btn-default" href="{{ link }}">
+        <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
+      </a>
+      {% endfor %}
       <a class="btn btn-default" href="{% url 'inventory:machine_incidents' machine.get_urlsafe_serial_number %}">
         <span class="glyphicon glyphicon-warning-sign" aria-hidden="true"></span> Incidents
       </a>

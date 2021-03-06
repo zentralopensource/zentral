@@ -23,6 +23,7 @@ except NotImplementedError:
 
 class EventStore(BaseEventStore):
     max_batch_size = 500
+    machine_events = True
     last_machine_heartbeats = True
 
     LEGACY_DOC_TYPE = "doc"  # _type used with 5.6 < ES < 7
