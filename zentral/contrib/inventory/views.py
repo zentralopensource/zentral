@@ -583,12 +583,13 @@ class MachineEventsView(LoginRequiredMixin, TemplateView):
             reverse("inventory:fetch_machine_events", args=(self.machine.get_urlsafe_serial_number(),)),
             qd.urlencode()
         )
-        if frontend_store.machine_events_url:
-            context["event_store_link"] = reverse(
-                "inventory:machine_events_store_redirect",
-                args=(self.machine.get_urlsafe_serial_number(),)
-            )
-            context["event_store_name"] = frontend_store.name
+        store_links = []
+        store_redirect_url = reverse("inventory:machine_events_store_redirect",
+                                     args=(self.machine.get_urlsafe_serial_number(),))
+        for store in stores:
+            if store.machine_events_url:
+                store_links.append((store_redirect_url, store.name))
+        context["store_links"] = store_links
         return context
 
 
