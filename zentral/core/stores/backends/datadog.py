@@ -145,10 +145,17 @@ class EventStore(BaseEventStore):
     # machine events
 
     def _get_machine_events_query(self, serial_number, event_type=None):
-        query_chunks = [f"host:{serial_number}"]
+        query_chunks = [
+            ("source", self.source),
+            ("service", self.service),
+            ("host", serial_number)
+        ]
         if event_type:
-            query_chunks.append(f"@logger.name:{event_type}")
-        return " AND ".join(query_chunks)
+            query_chunks.append(("@logger.name", event_type))
+        return " AND ".join(
+            '{}:"{}"'.format(k, v.replace('"', '\\"'))
+            for k, v in query_chunks
+        )
 
     def _get_machine_events_filter(self, serial_number, from_dt, to_dt=None, event_type=None):
         return {
