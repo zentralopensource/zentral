@@ -1,4 +1,3 @@
-from itertools import product
 import logging
 import random
 import time
@@ -7,9 +6,8 @@ from dateutil import parser
 from elasticsearch import Elasticsearch, RequestsHttpConnection
 from elasticsearch.helpers import streaming_bulk
 from elasticsearch.exceptions import ConnectionError, RequestError
-from zentral.core.events import event_from_event_d, event_tags, event_types
+from zentral.core.events import event_from_event_d, event_types
 from zentral.core.exceptions import ImproperlyConfigured
-from zentral.core.probes.base import PayloadFilter
 from zentral.core.stores.backends.base import BaseEventStore
 from zentral.utils.rison import dumps as rison_dumps
 
@@ -25,6 +23,8 @@ class EventStore(BaseEventStore):
     max_batch_size = 500
     machine_events = True
     last_machine_heartbeats = True
+    probe_events = True
+    probe_events_aggregations = True
 
     LEGACY_DOC_TYPE = "doc"  # _type used with 5.6 < ES < 7
     MAX_CONNECTION_ATTEMPTS = 20
@@ -128,6 +128,7 @@ class EventStore(BaseEventStore):
                 self.kibana_discover_url = urljoin(kibana_base_url, "app/discover#/")
         if self.kibana_discover_url:
             self.machine_events_url = True
+            self.probe_events_url = True
         self.kibana_index_pattern_uuid = config_d.get('kibana_index_pattern_uuid')
         self.index_settings = {
             "index.mapping.total_fields.limit": config_d.get("index.mapping.total_fields.limit", 2000),
@@ -293,6 +294,46 @@ class EventStore(BaseEventStore):
                    query=urlencode(query, safe='/:,')
                )
 
+    # base event methods
+
+    def _fetch_events(self, body, limit=10, cursor=None):
+        body['sort'] = [
+            {'created_at': 'desc'},
+            {'id': 'asc'},  # tie breakers
+            {'index': 'asc'}  # tie breakers
+        ]
+        if limit:
+            body['size'] = limit
+        if cursor:
+            body['search_after'] = cursor
+        r = self._es.search(index=self.read_index, body=body)
+        events = []
+        next_cursor = None
+        for hit in r['hits']['hits']:
+            events.append(self._deserialize_event(hit['_type'], hit['_source']))
+            next_cursor = hit.pop("sort", None)
+        if len(events) < limit:
+            next_cursor = None
+        return events, next_cursor
+
+    def _get_aggregated_event_counts(self, body):
+        body.update({
+            'size': 0,
+            'aggs': {
+                'event_types': {
+                    'terms': {
+                        'field': self._get_type_field(),
+                        'size': len(event_types)
+                    }
+                }
+            }
+        })
+        r = self._es.search(index=self.read_index, body=body)
+        types_d = {}
+        for bucket in r['aggregations']['event_types']['buckets']:
+            types_d[bucket['key']] = bucket['doc_count']
+        return types_d
+
     # machine events
 
     def _get_machine_events_body(self, serial_number, from_dt=None, to_dt=None, event_type=None, tag=None):
@@ -313,58 +354,13 @@ class EventStore(BaseEventStore):
             filters.append({'term': {'tags': tag}})
         return {'query': {'bool': {'filter': filters}}}
 
-    def get_total_machine_event_count(self, serial_number, from_dt, to_dt=None, event_type=None):
-        # TODO: count could work from first fetch with elasticsearch.
-        body = self._get_machine_events_body(serial_number, from_dt, to_dt, event_type)
-        body['size'] = 0
-        body['track_total_hits'] = True
-        r = self._es.search(index=self.read_index, body=body)
-        total = r['hits']['total']
-        if isinstance(total, dict):  # ES >= 7
-            return total["value"]
-        else:
-            return total
-
     def fetch_machine_events(self, serial_number, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
-        # TODO: count could work from first fetch with elasticsearch.
         body = self._get_machine_events_body(serial_number, from_dt, to_dt, event_type)
-        body['sort'] = [
-            {'created_at': 'desc'},
-            {'id': 'asc'},  # tie breakers
-            {'index': 'asc'}  # tie breakers
-        ]
-        if limit:
-            body['size'] = limit
-        if cursor:
-            body['search_after'] = cursor
-        r = self._es.search(index=self.read_index, body=body)
-        events = []
-        next_cursor = None
-        for hit in r['hits']['hits']:
-            events.append(self._deserialize_event(hit['_type'], hit['_source']))
-            next_cursor = hit.pop("sort", None)
-        if len(events) < limit:
-            next_cursor = None
-        return events, next_cursor
+        return self._fetch_events(body, limit, cursor)
 
     def get_aggregated_machine_event_counts(self, serial_number, from_dt, to_dt=None):
         body = self._get_machine_events_body(serial_number, from_dt, to_dt)
-        body.update({
-            'size': 0,
-            'aggs': {
-                'event_types': {
-                    'terms': {
-                        'field': self._get_type_field(),
-                        'size': len(event_types)
-                    }
-                }
-            }
-        })
-        r = self._es.search(index=self.read_index, body=body)
-        types_d = {}
-        for bucket in r['aggregations']['event_types']['buckets']:
-            types_d[bucket['key']] = bucket['doc_count']
-        return types_d
+        return self._get_aggregated_event_counts(body)
 
     def get_last_machine_heartbeats(self, serial_number, from_dt):
         body = self._get_machine_events_body(serial_number, from_dt, tag="heartbeat")
@@ -445,164 +441,32 @@ class EventStore(BaseEventStore):
 
     # probe events
 
-    def _get_probe_events_body(self, probe, **search_dict):
+    def _get_probe_events_body(self, probe, from_dt=None, to_dt=None, event_type=None):
         self.wait_and_configure_if_necessary()
-        # TODO: doc, better args, ...
-        query_filter = []
+        filters = [
+            {'term': {'probes.pk': probe.pk}},
+        ]
+        range_kwargs = {}
+        if from_dt:
+            range_kwargs["gte"] = from_dt
+        if to_dt:
+            range_kwargs["lte"] = to_dt
+        if range_kwargs:
+            filters.append({'range': {'created_at': range_kwargs}})
+        if event_type:
+            filters.append(self._get_type_filter(event_type))
+        return {'query': {'bool': {'filter': filters}}}
 
-        # inventory and metadata filters
-        seen_event_types = set([])
-        for section, attributes in (("inventory", (("terms",
-                                                    "machine.meta_business_units.id",
-                                                    "meta_business_unit_ids"),
-                                                   ("terms", "machine.tags.id", "tag_ids"),
-                                                   ("terms", "machine.platform", "platforms"),
-                                                   ("terms", "machine.type", "types"))),
-                                    ("metadata", (("type", "value", "event_types"),
-                                                  ("terms", "tags", "event_tags")))):
-            section_should = []
-            for section_filter in getattr(probe, "{}_filters".format(section)):
-                section_filter_must = []
-                for query_type, query_attribute, filter_attribute in attributes:
-                    values = getattr(section_filter, filter_attribute, None)
-                    if values:
-                        if section == "metadata":
-                            if filter_attribute == "event_types":
-                                seen_event_types.update(values)
-                            elif filter_attribute == "event_tags":
-                                seen_event_types.update(event_cls.event_type
-                                                        for v in values
-                                                        for event_cls in event_tags.get(v, []))
-                        if query_type == "terms":
-                            section_filter_must.append({"terms": {query_attribute: list(values)}})
-                        elif query_type == "type":
-                            if len(values) > 1:
-                                section_filter_must.append(
-                                    {'bool': {'should': [self._get_type_filter(t) for t in values]}}
-                                )
-                            else:
-                                section_filter_must.append(self._get_type_filter(list(values)[0]))
-                        else:
-                            raise ValueError("Unknown query type")
-                if section_filter_must:
-                    if len(section_filter_must) > 1:
-                        section_should.append({'bool': {'must': section_filter_must}})
-                    else:
-                        section_should.append(section_filter_must[0])
-            if section_should:
-                if len(section_should) > 1:
-                    query_filter.append({'bool': {'should': section_should}})
-                else:
-                    query_filter.append(section_should[0])
+    def fetch_probe_events(self, probe, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        body = self._get_probe_events_body(probe, from_dt, to_dt, event_type)
+        return self._fetch_events(body, limit, cursor)
 
-        # payload filters
-        # PB attributes prefixed by event type in ES
-        # we must try all possible prefixes
-        if seen_event_types:
-            # We are lucky, we only have to test some prefixes
-            # because there is at least one metadata filter with an event type or a tag.
-            payload_event_types_for_filters = seen_event_types
-        else:
-            # Bad luck, no metadata filter. We must try all event types.
-            payload_event_types_for_filters = event_types.keys()
+    def get_aggregated_probe_event_counts(self, probe, from_dt, to_dt=None):
+        body = self._get_probe_events_body(probe, from_dt, to_dt)
+        return self._get_aggregated_event_counts(body)
 
-        payload_should = []
-        for payload_filter in probe.payload_filters:
-            payload_filter_must = []
-            for attribute, operator, values in payload_filter.items:
-                # the values may be casted to booleans if the field is stored as a boolean field in elasticsearch
-                # only json like boolean strings will be automatically interpreted as booleans
-                processed_values = [v.lower() if v in ("False", "True") else v for v in values]
-                attribute_queries = [{"term": {"{}.{}".format(event_type, attribute): value}}
-                                     for event_type, value in product(payload_event_types_for_filters,
-                                                                      processed_values)]
-                if len(attribute_queries) > 1:
-                    # OR for the different values
-                    if operator == PayloadFilter.IN:
-                        bool_attr = "should"
-                    elif operator == PayloadFilter.NOT_IN:
-                        bool_attr = "must_not"
-                    payload_filter_must.append({'bool': {bool_attr: attribute_queries}})
-                else:
-                    attribute_query = attribute_queries[0]
-                    if operator == PayloadFilter.NOT_IN:
-                        attribute_query = {'bool': {'must_not': attribute_query}}
-                    payload_filter_must.append(attribute_query)
-            if payload_filter_must:
-                # AND for the attributes of the same payload filter
-                if len(payload_filter_must) > 1:
-                    payload_should.append({'bool': {'must': payload_filter_must}})
-                else:
-                    payload_should.append(payload_filter_must[0])
-        if payload_should:
-            if len(payload_should) > 1:
-                query_filter.append({'bool': {'should': payload_should}})
-            else:
-                query_filter.append(payload_should[0])
-
-        # search dict
-
-        if search_dict:
-            event_type = search_dict.pop('event_type')
-            for attribute, values in search_dict.items():
-                attribute = "{et}.{attr}".format(et=event_type, attr=attribute)
-
-                if values is None:
-                    continue
-
-                if not isinstance(values, list):
-                    values = [values]
-                elif not values:
-                    continue
-
-                if attribute.endswith('__startswith'):
-                    attribute = attribute.replace('__startswith', '')
-                    if len(values) > 1:
-                        sub_query_filter = {'bool': {'should': [{'prefix': {attribute: v}} for v in values]}}
-                    else:
-                        sub_query_filter = {'prefix': {attribute: values[0]}}
-                elif attribute.endswith('__regexp'):
-                    attribute = attribute.replace('__regexp', '')
-                    if len(values) > 1:
-                        sub_query_filter = {'bool': {'should': [{'regexp': {attribute: v}} for v in values]}}
-                    else:
-                        sub_query_filter = {'regexp': {attribute: values[0]}}
-                else:
-                    if len(values) > 1:
-                        sub_query_filter = {'terms': {attribute: values}}
-                    else:
-                        sub_query_filter = {'term': {attribute: values[0]}}
-
-                query_filter.append(sub_query_filter)
-
-        return {'query': {'bool': {'filter': query_filter}}}
-
-    def probe_events_fetch(self, probe, offset=0, limit=0, **search_dict):
-        # TODO: count could work from first fetch with elasticsearch.
-        body = self._get_probe_events_body(probe, **search_dict)
-        if offset:
-            body['from'] = offset
-        if limit:
-            body['size'] = limit
-        body['sort'] = [{'created_at': 'desc'}]
-        r = self._es.search(index=self.read_index, body=body)
-        for hit in r['hits']['hits']:
-            yield self._deserialize_event(hit['_type'], hit['_source'])
-
-    def probe_events_count(self, probe, **search_dict):
-        # TODO: count could work from first fetch with elasticsearch.
-        body = self._get_probe_events_body(probe, **search_dict)
-        body['size'] = 0
-        body['track_total_hits'] = True
-        r = self._es.search(index=self.read_index, body=body)
-        total = r['hits']['total']
-        if isinstance(total, dict):  # ES >= 7
-            return total["value"]
-        else:
-            return total
-
-    def probe_events_aggregations(self, probe, **search_dict):
-        body = self._get_probe_events_body(probe, **search_dict)
+    def get_probe_events_aggregations(self, probe, from_dt, to_dt=None):
+        body = self._get_probe_events_body(probe, from_dt, to_dt)
         body['size'] = 0
         aggs = {}
         aggregations = probe.get_aggregations()
@@ -702,8 +566,11 @@ class EventStore(BaseEventStore):
                 results[field]["interval"] = interval
         return results
 
-    def get_vis_url(self, probe, **search_dict):
-        return self._build_kibana_url(self._get_probe_events_body(probe, **search_dict))
+    def get_probe_events_url(self, probe, from_dt, to_dt=None, event_type=None):
+        return self._build_kibana_url(
+            self._get_probe_events_body(probe, event_type=event_type),
+            from_dt, to_dt
+        )
 
     # incident events
 

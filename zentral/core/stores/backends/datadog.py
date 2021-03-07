@@ -164,22 +164,6 @@ class EventStore(BaseEventStore):
             "to": self._prepare_datetime(to_dt) if to_dt else "now"
         }
 
-    def get_total_machine_event_count(self, serial_number, from_dt, to_dt=None, event_type=None):
-        body = {
-            "compute": [{"aggregation": "count"}],
-            "filter": self._get_machine_events_filter(serial_number, from_dt, to_dt, event_type)
-        }
-        r = self._session.post(self.aggregate_url, json=body)
-        if r.ok:
-            response = r.json()
-            try:
-                return int(response["data"]["buckets"][0]["computes"]["c0"])
-            except (KeyError, IndexError, TypeError, ValueError):
-                logger.error("Could not extract machine event count from response")
-        else:
-            logger.error("Could not get machine event count. Status: %s", r.status_code)
-        return 0
-
     def fetch_machine_events(self, serial_number, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
         body = {
             "filter": self._get_machine_events_filter(serial_number, from_dt, to_dt, event_type),

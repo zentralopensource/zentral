@@ -1,0 +1,52 @@
+{% load base_extras incidents_extras inventory_extras %}
+
+{% for event in events %}
+{% with event.metadata.machine as machine %}
+{% with event.metadata.observer.get_object as observer_obj %}
+{% with event.metadata.request as request %}
+<tr>
+  <td>
+    {% if machine.serial_number %}
+    <p>
+      {% machine_type_icon  machine %}
+      {% machine_platform_icon machine %}
+      <a href="{{ machine.get_absolute_url }}">{{ machine.serial_number }}</a>
+    </p>
+    {% endif %}
+    {% if machine.computer_name %}
+    <p>
+      {{ machine.computer_name }}
+    </p>
+    {% endif %}
+    <p style="white-space:nowrap">
+      {{ event.get_event_type_display }}<br>
+      {{ event.metadata.created_at }}
+      {% if observer_obj %}
+      <br><small>{{ observer_obj }}</small>
+      {% endif %}
+      {% if request %}
+      <br><small>{{ request }}</small>
+      {% if request.geo %}
+      <br><small>{{ request.geo.short_repr }}</small>
+      {% endif %}
+      {% endif %}
+      {% for incident in event.metadata.incidents %}
+      <br>{% incident_severity incident.severity %}&nbsp;<a href="{% url 'incidents:incident' incident.pk %}{% if incident.machine_incident.pk %}#{{ incident.machine_incident.pk }}{% endif %}">{{ incident.name }}</a>
+      {% endfor %}
+    </p>
+  </td>
+  <td>{{ event.payload|pythonprettyprint }}</td>
+</tr>
+{% endwith %}
+{% endwith %}
+{% endwith %}
+{% endfor %}
+{% if fetch_url %}
+<tr>
+  <td colspan="2" style="text-align:right">
+    <a class="btn btn-default" id="loadMoreEvents" href="{{ fetch_url }}">
+      Load more events
+    </a>
+  </td>
+</tr>
+{% endif %}

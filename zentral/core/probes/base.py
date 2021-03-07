@@ -395,20 +395,6 @@ class BaseProbe(object):
     def get_extra_event_search_dict(self):
         return {}
 
-    def get_store_links(self, **search_dict):
-        if not search_dict:
-            search_dict = self.get_extra_event_search_dict()
-        links = []
-        # TODO: circular dependency because the elasticsearch store needs the PayloadFilter class
-        # to build the probe events queries.
-        from zentral.core.stores import stores
-        for store in stores:
-            url = store.get_vis_url(self, **search_dict)
-            if url:
-                links.append((store.name, url))
-        links.sort()
-        return links
-
     def not_configured_actions(self):
         """return a list of available actions not configured in the probe."""
         configured_actions = {action.name for action, _ in self.actions}

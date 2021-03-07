@@ -3,6 +3,9 @@ class BaseEventStore(object):
     machine_events = False
     machine_events_url = False
     last_machine_heartbeats = False
+    probe_events = False
+    probe_events_url = False
+    probe_events_aggregations = False
 
     def __init__(self, config_d):
         self.name = config_d['store_name']
@@ -19,9 +22,6 @@ class BaseEventStore(object):
 
     # machine events
 
-    def get_total_machine_event_count(self, serial_number, from_dt, to_dt=None, event_type=None):
-        return 0
-
     def fetch_machine_events(self, serial_number, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
         return [], None
 
@@ -36,16 +36,16 @@ class BaseEventStore(object):
 
     # probe events
 
-    def probe_events_fetch(self, probe, offset=0, limit=0, **search_dict):
-        return []
+    def fetch_probe_events(self, probe, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        return [], None
 
-    def probe_events_count(self, probe, **search_dict):
-        return 0
-
-    def probe_events_aggregations(self, probe, **search_dict):
+    def get_aggregated_probe_event_counts(self, probe, from_dt, to_dt=None):
         return {}
 
-    def get_vis_url(self, probe, **search_dict):
+    def get_probe_events_aggregations(self, probe, from_dt, to_dt=None):
+        return {}
+
+    def get_probe_events_url(self, probe, from_dt, to_dt=None, event_type=None):
         return None
 
     # incident events

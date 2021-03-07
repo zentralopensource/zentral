@@ -42,10 +42,10 @@ class BaseTestEventStore(object):
 
     def test_table_creation(self):
         self.assertEqual(
-            self.event_store.get_total_machine_event_count(
+            self.event_store.get_aggregated_machine_event_counts(
                 "not_so_random_machine_serial_number",
                 from_dt=get_from_dt()
-            ), 0
+            ), {}
         )
 
     def test_store_event_with_request(self):
