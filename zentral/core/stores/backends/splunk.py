@@ -21,6 +21,7 @@ class EventStore(BaseEventStore):
         self.search_app_url = config_d.get("search_app_url")
         if self.search_app_url:
             self.machine_events_url = True
+            self.probe_events_url = True
         self.verify_tls = config_d.get('verify_tls', True)
         self.index = config_d.get("index")
         self.source = config_d.get("source")
@@ -76,6 +77,14 @@ class EventStore(BaseEventStore):
                     continue
             r.raise_for_status()
 
+    def _get_search_url(self, query, from_dt, to_dt):
+        kwargs = {
+            "q": f"search {query}",
+            "earliest": self._convert_datetime(from_dt),
+            "latest": self._convert_datetime(to_dt) if to_dt else "now"
+        }
+        return "{}?{}".format(self.search_app_url, urlencode(kwargs))
+
     # machine events
 
     def _get_machine_events_query(self, serial_number, event_type=None):
@@ -87,9 +96,24 @@ class EventStore(BaseEventStore):
         return " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in query_chunks)
 
     def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
-        kwargs = {
-            "q": "search {}".format(self._get_machine_events_query(serial_number, event_type)),
-            "earliest": self._convert_datetime(from_dt),
-            "latest": self._convert_datetime(to_dt) if to_dt else "now"
-        }
-        return "{}?{}".format(self.search_app_url, urlencode(kwargs))
+        return self._get_search_url(
+            self._get_machine_events_query(serial_number, event_type),
+            from_dt, to_dt
+        )
+
+    # probe events
+
+    def _get_probe_events_query(self, probe, event_type=None):
+        filter_chunks = []
+        if self.index:
+            filter_chunks.append(("index", self.index))
+        if event_type:
+            filter_chunks.append(("event_type", event_type))
+        filter_str = " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in filter_chunks)
+        return f'{filter_str} | spath "probes{{}}.pk" | search "probes{{}}.pk"={probe.pk}'
+
+    def get_probe_events_url(self, probe, from_dt, to_dt=None, event_type=None):
+        return self._get_search_url(
+            self._get_probe_events_query(probe, event_type),
+            from_dt, to_dt
+        )
