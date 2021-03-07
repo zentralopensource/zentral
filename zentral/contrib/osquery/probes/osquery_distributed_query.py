@@ -1,7 +1,6 @@
 import logging
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse_lazy
 from rest_framework import serializers
-from zentral.utils.sql import format_sql
 from .base import BaseProbe, BaseProbeSerializer
 
 logger = logging.getLogger("zentral.contrib.osquery.probes.osquery_distributed_query")
@@ -32,14 +31,3 @@ class OsqueryDistributedQueryProbe(BaseProbe):
         except KeyError:
             logger.warning("OsqueryDistributedQueryResultEvent w/o probe.id")
             return False
-
-    def get_extra_links(self):
-        return [("Results table", "th", reverse("osquery:distributed_query_results_table", args=(self.pk,)))]
-
-    def get_extra_event_search_dict(self):
-        # match probe pk
-        return {'event_type': self.forced_event_type,
-                'probe.id': self.pk}
-
-    def get_distributed_query_html(self):
-        return format_sql(self.distributed_query)

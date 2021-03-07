@@ -66,14 +66,6 @@
       <a class="btn btn-danger" href="{% url 'probes:delete' probe.pk %}">
         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
       </a>
-      {% for anchor_text, glyphicon, url in probe.get_extra_links %}
-      <a class="btn btn-default" href="{{ url }}">
-        {% if glyphicon %}
-        <span class="glyphicon glyphicon-{{ glyphicon }}" aria-hidden="true"></span>
-        {% endif %}
-        {{ anchor_text }}
-      </a>
-      {% endfor %}
       {% if show_events_link %}
       <a class="btn btn-default" href="{% url 'probes:probe_events' probe.pk %}">
         <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events

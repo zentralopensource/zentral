@@ -388,17 +388,6 @@ class BaseProbe(object):
     def get_matching_event_incident_severity(self, matching_event):
         return self.incident_severity
 
-    def get_extra_links(self):
-        return []
-
-    # links to the matching events in the event stores
-    def get_extra_event_search_dict(self):
-        return {}
-
-    # TODO: deprecated, to be removed once the Osquery probes are removed
-    def get_store_links(self, *args, **kwargs):
-        return []
-
     def not_configured_actions(self):
         """return a list of available actions not configured in the probe."""
         configured_actions = {action.name for action, _ in self.actions}

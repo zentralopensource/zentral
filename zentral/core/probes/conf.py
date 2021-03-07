@@ -116,21 +116,6 @@ class ProbeList(ProbeView):
         self._children.add(child)
         return child
 
-    def model_filter(self, *models):
-        def _filter(probe):
-            return probe.get_model() in models
-        return self.filter(_filter)
-
-    def class_filter(self, *probe_classes):
-        def _filter(probe):
-            return isinstance(probe, probe_classes)
-        return self.filter(_filter)
-
-    def machine_filtered(self, meta_machine):
-        def _filter(probe):
-            return probe.test_machine(meta_machine)
-        return self.filter(_filter)
-
     def event_filtered(self, event):
         def _filter(probe):
             return probe.test_event(event)

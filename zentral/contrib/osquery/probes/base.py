@@ -90,21 +90,6 @@ class OsqueryQuery(object):
             prefix = ""
         return "{p}{n}".format(p=prefix, n=self.name)
 
-    def get_store_links(self):
-        return self.probe.get_store_links(event_type=self.probe.forced_event_type,
-                                          name=self.result_name)
-
-    def to_configuration(self):
-        s = OsqueryQuerySerializer(instance=self)
-        d = s.data
-        for key, val in list(d.items()):
-            if val is None:
-                del d[key]
-        platform = d.pop("platform", None)
-        if platform:
-            d["platform"] = ",".join(platform)
-        return d
-
 
 class OsqueryQuerySerializer(serializers.Serializer):
     PLATFORM_CHOICES = (('arch', 'Arch'),
@@ -178,11 +163,3 @@ class OsqueryProbe(OsqueryResultProbe):
 
     def iter_scheduled_queries(self):
         yield from self.queries
-
-    def get_discovery_display(self):
-        for discovery in self.discovery:
-            yield format_sql(discovery)
-
-    def get_extra_event_search_dict(self):
-        return {'event_type': self.forced_event_type,
-                'name__regexp': '(pack_[0-9a-f]{{{l}}}_)?{s}_[0-9a-f]{{{l}}}'.format(s=self.slug, l=self.hash_length)}

@@ -47,7 +47,3 @@ class OsqueryFIMProbe(OsqueryResultProbe):
     def iter_scheduled_queries(self):
         for file_path in self.file_paths:
             yield file_path.get_osquery_query()
-
-    def get_extra_event_search_dict(self):
-        return {'event_type': self.forced_event_type,
-                'name__regexp': '{s}_[0-9a-f]{{{l}}}'.format(s=self.slug, l=self.hash_length)}

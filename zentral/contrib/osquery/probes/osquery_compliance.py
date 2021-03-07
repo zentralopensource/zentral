@@ -147,11 +147,6 @@ class FileChecksum(object):
     def get_query_name_prefix(self):
         return "{}_fc_".format(self.probe.slug)
 
-    def get_store_links(self):
-        return self.probe.get_store_links(event_type=self.probe.forced_event_type,
-                                          name__startswith=self.get_query_name_prefix(),
-                                          **{'columns.path': self.path})
-
 
 class FileChecksumSerializer(serializers.Serializer):
     path = serializers.CharField()
@@ -211,9 +206,3 @@ class OsqueryComplianceProbe(OsqueryResultProbe):
         for pf in self.preference_files:
             yield pf.get_osquery_query()
         yield from self._iter_file_checksums_scheduled_queries()
-
-    def get_extra_event_search_dict(self):
-        # query name = probe slug + files or preferences
-        return {'event_type': self.forced_event_type,
-                'name__regexp': '{s}_(pf|fc)_[0-9a-f]{{{l}}}'.format(s=self.slug,
-                                                                     l=self.hash_length)}

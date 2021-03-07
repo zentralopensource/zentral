@@ -1,5 +1,5 @@
 import logging
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse_lazy
 from rest_framework import serializers
 from .base import BaseProbe, BaseProbeSerializer
 
@@ -37,11 +37,3 @@ class OsqueryFileCarveProbe(BaseProbe):
         except KeyError:
             logger.warning("OsqueryFileCarveEvent w/o probe.id")
             return False
-
-    def get_extra_links(self):
-        return [("Sessions", "download", reverse("osquery:file_carve_probe_sessions", args=(self.pk,)))]
-
-    def get_extra_event_search_dict(self):
-        # match probe pk
-        return {'event_type': self.forced_event_type,
-                'probe.id': self.pk}
