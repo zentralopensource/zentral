@@ -5,7 +5,7 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:configurations' %}">Packs</a></li>
+  <li><a href="{% url 'osquery:packs' %}">Packs</a></li>
   <li><a href="{{ pack.get_absolute_url }}">{{ pack }}</a></li>
   {% if object %}
   <li class="active">Update query</li>
