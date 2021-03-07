@@ -54,7 +54,7 @@ class PackView(LoginRequiredMixin, DetailView):
                                      .order_by("query__name", "slug", "pk")
         )
         ctx["pack_query_count"] = ctx["pack_queries"].count()
-        ctx["can_add_pack_query"] = Query.objects.filter(packquery__isnull=True).count() - ctx["pack_query_count"] > 0
+        ctx["can_add_pack_query"] = Query.objects.filter(packquery__isnull=True).count() > 0
         return ctx
 
 

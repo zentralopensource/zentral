@@ -116,6 +116,31 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         self.assertIn(pack, response.context["object_list"])
         self.assertContains(response, pack.name)
 
+    # pack detail
+
+    def test_pack_detail_redirect(self):
+        pack = self._force_pack()
+        self._login_redirect(pack.get_absolute_url())
+
+    def test_pack_detail(self):
+        self.client.force_login(self.user)
+        pack = self._force_pack()
+        response = self.client.get(pack.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/pack_detail.html")
+        self.assertEqual(pack, response.context["object"])
+        self.assertContains(response, pack.name)
+        self.assertNotContains(response, reverse("osquery:add_pack_query", args=(pack.pk,)))
+        query = self._force_query()
+        response = self.client.get(pack.get_absolute_url())
+        self.assertContains(response, reverse("osquery:add_pack_query", args=(pack.pk,)))
+        PackQuery.objects.create(pack=pack, query=query, interval=12983)
+        response = self.client.get(pack.get_absolute_url())
+        self.assertNotContains(response, reverse("osquery:add_pack_query", args=(pack.pk,)))
+        self._force_query()
+        response = self.client.get(pack.get_absolute_url())
+        self.assertContains(response, reverse("osquery:add_pack_query", args=(pack.pk,)))
+
     # add pack query
 
     def test_add_pack_query_redirect(self):
