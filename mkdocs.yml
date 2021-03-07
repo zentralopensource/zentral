@@ -17,6 +17,7 @@ nav:
   - Django: configuration/django.md
 - Apps:
   - Monolith: apps/monolith.md
+  - Osquery: apps/osquery.md
   - Santa: apps/santa.md
 - Deployment:
   - Intro: deployment/index.md

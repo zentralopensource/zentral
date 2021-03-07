@@ -1,0 +1,145 @@
+# Osquery
+
+[Osquery](https://osquery.readthedocs.io/en/latest/) is an operating system instrumentation framework for Windows, OS X (macOS), Linux, and FreeBSD. Zentral can act as a [remote server](https://osquery.readthedocs.io/en/latest/deployment/remote/#remote-server-api) for Osquery, for configuration, query runs, file carvings, and log collection.
+
+## Zentral configuration
+
+To activate the osquery module, you need to add a `zentral.contrib.osquery` section to the `apps` section in `base.json`.
+
+## HTTP API
+
+There are three HTTP API endpoints available.
+
+### Requests
+
+#### Authentication
+
+API requests are authenticated using a token in the `Authorization` HTTP header.
+
+To get a token, you can create a service account. As a superuser, go to Setup > Manage users, and in the "Service accounts" subsection, click on the [Create] button. Pick a name for your service account and [Save]. You will be redirected to a token view. The token is only displayed once. To reveal it, click on the eye icon. Once you have saved it (in a password manager, in a configuration variable, …), you can click on the [OK] button.
+
+You can also add an API token to a normal user, although it is not recommended. To do so, click on the user in the User list, and click on the [+] button next to the API token boolean.
+
+If you have lost or leaked a token, you can delete it by clicking on the user or service account name, and then click on the 🗑 next to the API token boolean.
+
+The format for the `Authorization` header is the following:
+
+```
+Authorization: Token the_token_string
+```
+
+#### Content type
+
+Zentral will parse the body of the request based on the `Content-Type` HTTP header:
+
+* `Content-Type: application/json`
+
+### /api/osquery/packs/`slug`/
+
+* method: `PUT`, `DELETE`
+* Content-Type: application/json
+
+This endpoint is designed to create or update a standard Osquery pack.
+
+#### Examples
+
+pack.json ([More examples](https://github.com/osquery/osquery/blob/master/packs/) are available in the osquery repository.)
+
+```json
+{
+  "name": "First pack",
+  "platform": "darwin",
+  "queries": {
+    "Leverage-A_1": {
+      "query" : "select * from launchd where path like '%UserEvent.System.plist';",
+      "interval" : "3600",
+      "version": "1.4.5",
+      "description" : "(http://www.intego.com/mac-security-blog/new-mac-trojan-discovered-related-to-syria/)",
+      "value" : "Artifact used by this malware"
+    },
+    "Leverage-A_2": {
+      "query" : "select * from file where path = '/Users/Shared/UserEvent.app';",
+      "interval" : "3600",
+      "version": "1.4.5",
+      "description" : "(http://www.intego.com/mac-security-blog/new-mac-trojan-discovered-related-to-syria/)",
+      "value" : "Artifact used by this malware"
+    }
+  }
+}
+```
+
+`PUT` the pack.json file to Zentral:
+
+```
+$ curl -XPUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @pack.json \
+  https://zentral.example.com/api/osquery/packs/first-pack-slug/ \
+  |python -m json.tool
+```
+
+You should get a response close to this one:
+
+```json
+{
+  "pack": {
+    "pk": 1,
+    "slug": "first-pack-slug"
+  },
+  "result": "created",
+  "query_results": {
+    "created": 2,
+    "deleted": 0,
+    "present": 0,
+    "updated": 0
+  }
+}
+```
+
+If you `PUT` the same file again, you will get this answer:
+
+```json
+{
+  "pack": {
+    "pk": 1,
+    "slug": "first-pack-slug"
+  },
+  "result": "present",
+  "query_results": {
+    "created": 0,
+    "deleted": 0,
+    "present": 2,
+    "updated": 0
+  }
+}
+```
+
+If you make a `DELETE` request on the same URL, the pack and all its rules will be deleted:
+
+
+```
+$ curl -XDELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  https://zentral.example.com/api/osquery/packs/first-pack-slug/ \
+  |python -m json.tool
+```
+
+You should get a response close to this one:
+
+```json
+{
+  "pack": {
+    "pk": 1,
+    "slug": "first-pack-slug"
+  },
+  "result": "deleted",
+  "query_results": {
+    "created": 0,
+    "deleted": 2,
+    "present": 0,
+    "updated": 0
+  }
+}
+```

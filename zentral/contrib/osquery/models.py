@@ -37,6 +37,10 @@ class Platform(enum.Enum):
     def choices(cls):
         return tuple((i.value, i.value) for i in cls)
 
+    @classmethod
+    def accepted_platforms(cls):
+        return set(i.value for i in cls)
+
 
 class Query(models.Model):
     name = models.CharField(max_length=256, unique=True)
@@ -62,6 +66,14 @@ class Query(models.Model):
     @cached_property
     def tables(self):
         return sorted(tables_in_query(self.sql))
+
+    def serialize_for_event(self):
+        d = {"sql": self.sql, "version": self.version}
+        if self.description:
+            d["description"] = self.description
+        if self.value:
+            d["value"] = self.value
+        return d
 
 
 class Pack(models.Model):
@@ -119,6 +131,22 @@ class Pack(models.Model):
         if self.minimum_osquery_version:
             d["version"] = self.minimum_osquery_version
         if self.shard and self.shard != 100:
+            d["shard"] = self.shard
+        return d
+
+    def serialize_for_event(self, short=False):
+        d = {"pk": self.pk,
+             "slug": self.slug}
+        if short:
+            return d
+        d["name"] = self.name
+        if self.discovery_queries:
+            d["discovery_queries"] = self.discovery_queries
+        if self.platforms:
+            d["platforms"] = self.platforms
+        if self.minimum_osquery_version:
+            d["minimum_osquery_version"] = self.minimum_osquery_version
+        if self.shard:
             d["shard"] = self.shard
         return d
 
@@ -205,6 +233,23 @@ class PackQuery(models.Model):
             d["shard"] = self.shard
         if not self.can_be_denylisted:
             d["denylist"] = False
+        return d
+
+    def serialize_for_event(self):
+        d = {"pk": self.pk,
+             "slug": self.slug,
+             "pack": self.pack.serialize_for_event(short=True),
+             "query": self.query.serialize_for_event(),
+             "interval": self.interval,
+             "log_removed_actions": self.log_removed_actions,
+             "snapshot_mode": self.snapshot_mode,
+             "can_be_denylisted": self.can_be_denylisted}
+        if self.platforms:
+            d["platforms"] = self.platforms
+        if self.minimum_osquery_version:
+            d["minimum_osquery_version"] = self.minimum_osquery_version
+        if self.shard and self.shard != 100:
+            d["shard"] = self.shard
         return d
 
 

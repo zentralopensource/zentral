@@ -1,6 +1,6 @@
 from datetime import datetime
 import logging
-from zentral.core.events.base import BaseEvent, register_event_type
+from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.core.queues import queues
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
@@ -79,6 +79,23 @@ class OsqueryStatusEvent(OsqueryEvent):
 register_event_type(OsqueryStatusEvent)
 
 
+# Audit trail events
+
+
+class OsqueryPackUpdateEvent(OsqueryEvent):
+    event_type = "osquery_pack_update"
+
+
+register_event_type(OsqueryPackUpdateEvent)
+
+
+class OsqueryPackQueryUpdateEvent(OsqueryEvent):
+    event_type = "osquery_pack_query_update"
+
+
+register_event_type(OsqueryPackQueryUpdateEvent)
+
+
 # Utility functions used by the osquery API views
 
 
@@ -126,3 +143,18 @@ def post_results(msn, user_agent, ip, results):
 
 def post_status_logs(msn, user_agent, ip, logs):
     _post_events_from_osquery_log(msn, user_agent, ip, OsqueryStatusEvent, logs)
+
+
+# Utility function for the audit trail
+
+
+def post_osquery_pack_update_events(request, pack_data, pack_queries_data):
+    event_request = EventRequest.build_from_request(request)
+    pack_update_event_metadata = EventMetadata(OsqueryPackUpdateEvent.event_type, request=event_request)
+    pack_update_event = OsqueryPackUpdateEvent(pack_update_event_metadata, pack_data)
+    pack_update_event.post()
+    for idx, pack_query_data in enumerate(pack_queries_data):
+        pack_query_update_event_metadata = EventMetadata(OsqueryPackQueryUpdateEvent.event_type, request=event_request,
+                                                         uuid=pack_update_event_metadata.uuid, index=idx + 1)
+        pack_query_update_event = OsqueryPackQueryUpdateEvent(pack_query_update_event_metadata, pack_query_data)
+        pack_query_update_event.post()
