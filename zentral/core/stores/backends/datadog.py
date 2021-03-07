@@ -16,6 +16,8 @@ logger = logging.getLogger('zentral.core.stores.backends.datadog')
 class EventStore(BaseEventStore):
     machine_events = True
     machine_events_url = True
+    probe_events = True
+    probe_events_url = True
     tag_component_cleanup_re = re.compile(r'[^\w\-/\.]+')
 
     def __init__(self, config_d):
@@ -57,6 +59,8 @@ class EventStore(BaseEventStore):
         ddtags = []
         for t in ddevent.pop("tags", []):
             ddtags.append(self._prepare_tag("tag", t))
+        for p in ddevent.get("probes", []):
+            ddtags.append(self._prepare_tag("probe", str(p["pk"])))
         ddevent["ddtags"] = ",".join(ddtags)
         ddevent["@timestamp"] = ddevent.pop("created_at")
         ddevent["host"] = (ddevent.get("machine_serial_number")
@@ -97,10 +101,9 @@ class EventStore(BaseEventStore):
         log_attributes = log_d["attributes"]
         metadata = log_attributes["attributes"]
         # tags
-        for tag in log_attributes.get("tags", []):
-            if tag.startswith("ztl-"):
-                tag = tag[4:].split(":", 1)[-1]
-                metadata.setdefault("tags", []).append(tag)
+        for ddtag in log_attributes.get("tags", []):
+            if ddtag.startswith("ztl-tag:"):
+                metadata.setdefault("tags", []).append(ddtag[8:])
         # created_at
         metadata["created_at"] = metadata.pop("@timestamp")
         # extra attributes to cleanup
@@ -142,31 +145,11 @@ class EventStore(BaseEventStore):
     def _prepare_datetime(dt, tick=1):
         return str(int(time.mktime(dt.timetuple())) * tick)
 
-    # machine events
+    # base event methods
 
-    def _get_machine_events_query(self, serial_number, event_type=None):
-        query_chunks = [
-            ("source", self.source),
-            ("service", self.service),
-            ("host", serial_number)
-        ]
-        if event_type:
-            query_chunks.append(("@logger.name", event_type))
-        return " AND ".join(
-            '{}:"{}"'.format(k, v.replace('"', '\\"'))
-            for k, v in query_chunks
-        )
-
-    def _get_machine_events_filter(self, serial_number, from_dt, to_dt=None, event_type=None):
-        return {
-            "query": self._get_machine_events_query(serial_number, event_type),
-            "from": self._prepare_datetime(from_dt),
-            "to": self._prepare_datetime(to_dt) if to_dt else "now"
-        }
-
-    def fetch_machine_events(self, serial_number, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+    def _fetch_events(self, filter_d, limit, cursor):
         body = {
-            "filter": self._get_machine_events_filter(serial_number, from_dt, to_dt, event_type),
+            "filter": filter_d,
             "sort": "-timestamp",
             "page": {"limit": limit}
         }
@@ -190,10 +173,10 @@ class EventStore(BaseEventStore):
                 pass
         return events, next_cursor
 
-    def get_aggregated_machine_event_counts(self, serial_number, from_dt, to_dt=None):
+    def _get_aggregated_event_counts(self, filter_d):
         body = {
             "compute": [{"aggregation": "count"}],
-            "filter": self._get_machine_events_filter(serial_number, from_dt, to_dt),
+            "filter": filter_d,
             "group_by": [{"facet": "@logger.name"}]
         }
         r = self._session.post(self.aggregate_url, json=body)
@@ -207,8 +190,75 @@ class EventStore(BaseEventStore):
             logger.error("Could not get machine event types with usages. Status: %s", r.status_code)
         return {}
 
+    # machine events
+
+    def _get_machine_events_query(self, serial_number, event_type=None):
+        query_chunks = [
+            ("source", self.source),
+            ("service", self.service),
+            ("host", serial_number)
+        ]
+        if event_type:
+            query_chunks.append(("@logger.name", event_type))
+        return " AND ".join(
+            '{}:"{}"'.format(k, v.replace('"', '\\"'))
+            for k, v in query_chunks
+        )
+
+    def _get_machine_events_filter(self, serial_number, from_dt, to_dt=None, event_type=None):
+        return {
+            "query": self._get_machine_events_query(serial_number, event_type),
+            "from": self._prepare_datetime(from_dt),
+            "to": self._prepare_datetime(to_dt) if to_dt else "now"
+        }
+
+    def fetch_machine_events(self, serial_number, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        filter_d = self._get_machine_events_filter(serial_number, from_dt, to_dt, event_type)
+        return self._fetch_events(filter_d, limit, cursor)
+
+    def get_aggregated_machine_event_counts(self, serial_number, from_dt, to_dt=None):
+        filter_d = self._get_machine_events_filter(serial_number, from_dt, to_dt)
+        return self._get_aggregated_event_counts(filter_d)
+
     def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
         kwargs = {"query": self._get_machine_events_query(serial_number, event_type),
+                  "live": "true",
+                  "from_ts": self._prepare_datetime(from_dt, tick=1000),
+                  "to_ts": self._prepare_datetime(to_dt or datetime.utcnow(), tick=1000)}
+        return "{}?{}".format(self.log_url, urlencode(kwargs))
+
+    # probe events
+
+    def _get_probe_events_query(self, probe, event_type=None):
+        query_chunks = [
+            ("source", self.source),
+            ("service", self.service),
+            ("ztl-probe", str(probe.pk))
+        ]
+        if event_type:
+            query_chunks.append(("@logger.name", event_type))
+        return " AND ".join(
+            '{}:"{}"'.format(k, v.replace('"', '\\"'))
+            for k, v in query_chunks
+        )
+
+    def _get_probe_events_filter(self, probe, from_dt, to_dt=None, event_type=None):
+        return {
+            "query": self._get_probe_events_query(probe, event_type),
+            "from": self._prepare_datetime(from_dt),
+            "to": self._prepare_datetime(to_dt) if to_dt else "now"
+        }
+
+    def fetch_probe_events(self, probe, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        filter_d = self._get_probe_events_filter(probe, from_dt, to_dt, event_type)
+        return self._fetch_events(filter_d, limit, cursor)
+
+    def get_aggregated_probe_event_counts(self, probe, from_dt, to_dt=None):
+        filter_d = self._get_probe_events_filter(probe, from_dt, to_dt)
+        return self._get_aggregated_event_counts(filter_d)
+
+    def get_probe_events_url(self, probe, from_dt, to_dt=None, event_type=None):
+        kwargs = {"query": self._get_probe_events_query(probe, event_type),
                   "live": "true",
                   "from_ts": self._prepare_datetime(from_dt, tick=1000),
                   "to_ts": self._prepare_datetime(to_dt or datetime.utcnow(), tick=1000)}
