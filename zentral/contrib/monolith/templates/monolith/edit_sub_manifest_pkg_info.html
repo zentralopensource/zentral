@@ -13,10 +13,16 @@
   {% endif %}
 </ol>
 
-<h2>{% if object %}Edit{% else %}Add{% endif %} PkgInfo</h2>
+<h3>{% if object %}Update{% else %}Add{% endif %} PkgInfo</h3>
 <form method="POST" class="form">{% csrf_token %}
   {{ form|bootstrap }}
+  {% if object %}
+  <div class="form-group">
+    <label class="control-label">Pkg info name</label>
+    <p>{{ object.pkg_info_name }}</p>
+  </div>
+  {% endif %}
   <a href="{{ sub_manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
-  <button type="submit" class="btn btn-default">{% if object %}Update{% else %}Add{% endif %}</button>
+  <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Add{% endif %}</button>
 </form>
 {% endblock %}

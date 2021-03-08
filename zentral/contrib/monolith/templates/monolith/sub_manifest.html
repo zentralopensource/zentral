@@ -122,7 +122,10 @@
     </td>
     {% else %}
     <td class="col-md-2">
-      <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_pkg_info' smo.id %}">
+      <a class="btn btn-default" href="{% url 'monolith:update_sub_manifest_pkg_info' object.id smo.id %}">
+        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+      </a>
+      <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_pkg_info' object.id smo.id %}">
         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
       </a>
     </td>

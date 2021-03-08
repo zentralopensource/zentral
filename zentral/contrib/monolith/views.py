@@ -474,15 +474,15 @@ class SubManifestAddPkgInfoView(LoginRequiredMixin, FormView):
 
     def dispatch(self, request, *args, **kwargs):
         self.sub_manifest = SubManifest.objects.get(pk=kwargs['pk'])
-        return super(SubManifestAddPkgInfoView, self).dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
-        kwargs = super(SubManifestAddPkgInfoView, self).get_form_kwargs()
+        kwargs = super().get_form_kwargs()
         kwargs['sub_manifest'] = self.sub_manifest
         return kwargs
 
     def get_context_data(self, **kwargs):
-        context = super(SubManifestAddPkgInfoView, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context['monolith'] = True
         context['sub_manifest'] = self.sub_manifest
         return context
@@ -496,12 +496,30 @@ class SubManifestAddPkgInfoView(LoginRequiredMixin, FormView):
         return redirect(self.sub_manifest)
 
 
+class UpdateSubManifestPkgInfoView(LoginRequiredMixin, UpdateView):
+    model = SubManifestPkgInfo
+    fields = ("key", "condition", "featured_item")
+    template_name = "monolith/edit_sub_manifest_pkg_info.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['monolith'] = True
+        context['sub_manifest'] = self.object.sub_manifest
+        return context
+
+    def form_valid(self, form):
+        smpi = form.save()
+        for _, manifest in smpi.sub_manifest.manifests_with_tags():
+            manifest.bump_version()
+        return redirect(smpi.sub_manifest)
+
+
 class DeleteSubManifestPkgInfoView(LoginRequiredMixin, DeleteView):
     model = SubManifestPkgInfo
     template_name = "monolith/delete_sub_manifest_pkg_info.html"
 
     def get_context_data(self, **kwargs):
-        context = super(DeleteSubManifestPkgInfoView, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context['monolith'] = True
         return context
 

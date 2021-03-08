@@ -1,3 +1,4 @@
+from django.urls import path
 from django.conf.urls import url
 from django.views.decorators.csrf import csrf_exempt
 from . import views
@@ -42,10 +43,12 @@ urlpatterns = [
     url(r'^sub_manifests/(?P<pk>\d+)/$', views.SubManifestView.as_view(), name='sub_manifest'),
     url(r'^sub_manifests/(?P<pk>\d+)/update/$', views.UpdateSubManifestView.as_view(), name='update_sub_manifest'),
     url(r'^sub_manifests/(?P<pk>\d+)/delete/$', views.DeleteSubManifestView.as_view(), name='delete_sub_manifest'),
-    url(r'^sub_manifests/(?P<pk>\d+)/add_pkg_info/$',
-        views.SubManifestAddPkgInfoView.as_view(), name='sub_manifest_add_pkg_info'),
-    url(r'^sub_manifest_pkg_infos/(?P<pk>\d+)/delete/$',
-        views.DeleteSubManifestPkgInfoView.as_view(), name='delete_sub_manifest_pkg_info'),
+    path('sub_manifests/<int:pk>/pkg_infos/add/',
+         views.SubManifestAddPkgInfoView.as_view(), name='sub_manifest_add_pkg_info'),
+    path('sub_manifests/<int:sm_pk>/pkg_infos/<int:pk>/update/',
+         views.UpdateSubManifestPkgInfoView.as_view(), name='update_sub_manifest_pkg_info'),
+    path('sub_manifests/<int:sm_pk>/pkg_infos/<int:pk>/delete/',
+         views.DeleteSubManifestPkgInfoView.as_view(), name='delete_sub_manifest_pkg_info'),
     url(r'^sub_manifests/(?P<pk>\d+)/add_attachment/$',
         views.SubManifestAddAttachmentView.as_view(), name='sub_manifest_add_attachment'),
     url(r'^sub_manifests/(?P<pk>\d+)/add_script/$',
