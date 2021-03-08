@@ -766,6 +766,7 @@ class ManifestEnrollmentPackage(models.Model):
         self.save()
         self.refresh_from_db()
         build_manifest_enrollment_package(self)
+        self.manifest.bump_version()
 
     def get_description_for_enrollment(self):
         return "Monolith manifest: {}".format(self.manifest)
