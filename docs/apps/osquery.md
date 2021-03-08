@@ -33,17 +33,18 @@ Authorization: Token the_token_string
 Zentral will parse the body of the request based on the `Content-Type` HTTP header:
 
 * `Content-Type: application/json`
+* `Content-Type: application/x-osquery-conf`
+* `Content-Type: application/yaml`
 
 ### /api/osquery/packs/`slug`/
 
 * method: `PUT`, `DELETE`
-* Content-Type: application/json
 
 This endpoint is designed to create or update a standard Osquery pack.
 
 #### Examples
 
-pack.json ([More examples](https://github.com/osquery/osquery/blob/master/packs/) are available in the osquery repository.)
+pack.json
 
 ```json
 {
@@ -140,6 +141,102 @@ You should get a response close to this one:
     "deleted": 2,
     "present": 0,
     "updated": 0
+  }
+}
+```
+
+If the pack is in the osquery format (broken JSON), with line-wrapping characters, or comments, use the `application/x-osquery-conf` content type.
+
+pack.conf  ([Real examples](https://github.com/osquery/osquery/blob/master/packs/) are available in the osquery repository.)
+
+```
+{
+  // Do not use this query in production!!!
+  "platform": "darwin",
+  "queries": {
+    "WireLurker": {
+      "query" : "select * from launchd where \
+        name = 'com.apple.periodic-dd-mm-yy.plist';",
+      "interval" : "3600",
+      "version": "1.4.5",
+      "description" : "(https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)",
+      "value" : "Artifact used by this malware - 🔥"
+      # 🧨
+    }
+  }
+}
+```
+
+```
+$ curl -XPUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/x-osquery-conf' \
+  -d @pack.conf \
+  https://zentral.example.com/api/osquery/packs/second-pack-slug/ \
+  |python -m json.tool
+```
+
+You should get a response close to this one:
+
+```json
+{
+  "pack": {
+    "pk": 2,
+    "slug": "second-pack-slug"
+  },
+  "result": "created",
+  "query_results": {
+    "created": 1,
+    "deleted": 0,
+    "present": 0,
+    "updated": 0
+  }
+}
+```
+
+You can also use a YAML payload, with the `application/yaml` content type.
+
+pack.yml
+
+```yaml
+---
+# Do not use this query in production!!!
+
+platform: "darwin"
+queries:
+  WireLurker:
+    query: >-
+      select * from launchd where
+      name = 'com.apple.periodic-dd-mm-yy.plist';
+    interval: 3600
+    version: 1.4.5
+    description: (https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)
+    value: Artifact used by this malware - 🔥
+```
+
+```
+$ curl -XPUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/yaml' \
+  -d @pack.yml \
+  https://zentral.example.com/api/osquery/packs/second-pack-slug/ \
+  |python -m json.tool
+```
+
+You should get a response close to this one:
+
+```json
+{
+  "pack": {
+    "pk": 2,
+    "slug": "third-pack-slug"
+  },
+  "result": "present",
+  "query_results": {
+    "created": 0,
+    "deleted": 0,
+    "present": 0,
+    "updated": 1
   }
 }
 ```

@@ -149,7 +149,7 @@ class APIViewsTestCase(TestCase):
             {'name': 'A pack with the same name but a different slug already exists'}
         )
 
-    def test_put_create_pack(self):
+    def test_put_pack_json(self):
         slug = get_random_string()
         url = reverse("osquery_api:pack", args=(slug,))
 
@@ -275,6 +275,79 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(query.packquery.slug, "Snapshot1")
         self.assertEqual(query.sql, "select * from users")
         self.assertEqual(query.version, 3)
+
+    def test_put_pack_osquery_conf(self):
+        slug = get_random_string()
+        url = reverse("osquery_api:pack", args=(slug,))
+
+        pack = """
+        {
+          // Do not use this query in production!!!
+          "platform": "darwin",
+          "queries": {
+            "WireLurker": {
+              "query" : "select * from launchd where \
+                name = 'com.apple.periodic-dd-mm-yy.plist';",
+              "interval" : "3600",
+              "version": "1.4.5",
+              "description" : "(https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)",
+              "value" : "Artifact used by this malware - 🔥"
+              # 🧨
+            }
+          }
+        }
+        """
+
+        response = self.put_data(url, pack.encode("utf-8"), "application/x-osquery-conf", include_token=True)
+        self.assertEqual(response.status_code, 200)
+        p = Pack.objects.get(slug=slug)
+        self.assertEqual(
+            response.json(),
+            {'pack': {'pk': p.pk, 'slug': slug},
+             'result': 'created',
+             'query_results': {'created': 1, 'deleted': 0, 'present': 0, 'updated': 0}}
+        )
+        query = p.packquery_set.first().query
+        self.assertEqual(
+            query.sql,
+            "select * from launchd where                 name = 'com.apple.periodic-dd-mm-yy.plist';"
+        )
+        self.assertEqual(query.value, "Artifact used by this malware - 🔥")
+
+    def test_put_pack_yaml(self):
+        slug = get_random_string()
+        url = reverse("osquery_api:pack", args=(slug,))
+
+        pack = (
+          "---\n"
+          "# Do not use this query in production!!!\n\n"
+          'platform: "darwin"\n'
+          'queries:\n'
+          '  WireLurker:\n'
+          '    query: >-\n'
+          '      select * from launchd where\n'
+          "      name = 'com.apple.periodic-dd-mm-yy.plist';\n"
+          "    interval: 3600\n"
+          "    version: 1.4.5\n"
+          "    description: (https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)\n"
+          "    value: Artifact used by this malware - 🔥\n"
+        )
+
+        response = self.put_data(url, pack.encode("utf-8"), "application/yaml", include_token=True)
+        self.assertEqual(response.status_code, 200)
+        p = Pack.objects.get(slug=slug)
+        self.assertEqual(
+            response.json(),
+            {'pack': {'pk': p.pk, 'slug': slug},
+             'result': 'created',
+             'query_results': {'created': 1, 'deleted': 0, 'present': 0, 'updated': 0}}
+        )
+        query = p.packquery_set.first().query
+        self.assertEqual(
+            query.sql,
+            "select * from launchd where name = 'com.apple.periodic-dd-mm-yy.plist';"
+        )
+        self.assertEqual(query.value, "Artifact used by this malware - 🔥")
 
     def test_delete_pack_404(self):
         slug = get_random_string()

@@ -1,11 +1,15 @@
+import codecs
+import json
+from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django_filters import rest_framework as filters
 from rest_framework import generics, serializers, status
-from rest_framework.exceptions import ValidationError
-from rest_framework.parsers import JSONParser
+from rest_framework.exceptions import ParseError, ValidationError
+from rest_framework.parsers import BaseParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_yaml.parsers import YAMLParser
 from .events import post_osquery_pack_update_events
 from .models import Configuration, Enrollment, Pack, PackQuery, Query
 from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryPackSerializer
@@ -60,8 +64,29 @@ class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
 # Standard Osquery packs
 
 
+class OsqueryConfigParser(BaseParser):
+    media_type = 'application/x-osquery-conf'
+
+    def parse(self, stream, media_type=None, parser_context=None):
+        parser_context = parser_context or {}
+        encoding = parser_context.get('encoding', settings.DEFAULT_CHARSET)
+        try:
+            # https://github.com/osquery/osquery/pull/2785
+            # https://github.com/osquery/osquery/issues/1689
+            decoded_stream = codecs.getreader(encoding)(stream).read()
+            sink = ""
+            for line in decoded_stream.replace("\\\n", "").splitlines():
+                line = line.strip()
+                if line.startswith("#") or line.startswith("//"):
+                    continue
+                sink += line + "\n"
+            return json.loads(sink)
+        except ValueError as exc:
+            raise ParseError(f'Osquery config parse error - {exc}')
+
+
 class PackView(APIView):
-    parser_classes = [JSONParser]
+    parser_classes = [JSONParser, OsqueryConfigParser, YAMLParser]
 
     def put(self, request, *args, **kwargs):
         serializer = OsqueryPackSerializer(data=request.data)
