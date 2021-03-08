@@ -23,7 +23,7 @@ get_gce_instance_id () {
 }
 
 get_watchman_id () {
-  python -c 'import json;print json.load(open("/etc/monitoringclient/client_settings.conf", "r"))["WatchmanID"]'
+  python3 -c 'import json;print(json.load(open("/etc/monitoringclient/client_settings.conf", "r"))["WatchmanID"])'
 }
 
 get_host_identifier () {
