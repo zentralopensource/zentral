@@ -75,14 +75,13 @@ def fetch_feed(url):
         raise FeedError("Connection error")
     except requests.exceptions.HTTPError as e:
         raise FeedError("HTTP error {}".format(e.response.status_code))
-    return r.text
+    return r.json()
 
 
 def get_feed_serializer(url):
-    # TODO next line to fix import of osquery packs
     try:
-        feed_data = json.loads(fetch_feed(url).replace("\\\n", " "))
-    except ValueError:
+        feed_data = fetch_feed(url)
+    except json.decoder.JSONDecodeError:
         raise FeedError("Invalid JSON")
     for feed_serializer_cls in get_feed_serializer_classes():
         feed_serializer = feed_serializer_cls(data=feed_data)

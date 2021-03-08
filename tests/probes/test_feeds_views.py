@@ -48,7 +48,7 @@ class FeedViewsTestCase(TestCase):
 
     @patch("zentral.core.probes.feeds.fetch_feed")
     def _create_feed(self, fetch_feed):
-        fetch_feed.return_value = json.dumps(FEED)
+        fetch_feed.return_value = FEED
         feed, _ = update_or_create_feed(FEED_URL)
         sync_feed(feed)
         feed_probe = feed.feedprobe_set.all()[0]
@@ -100,7 +100,7 @@ class FeedViewsTestCase(TestCase):
 
     @patch("zentral.core.probes.feeds.fetch_feed")
     def test_add_feed_post_feed_error(self, fetch_feed):
-        fetch_feed.return_value = "invalid JSON"
+        fetch_feed.side_effect = json.decoder.JSONDecodeError("YALA", "", 0)
         self.client.force_login(self.user)
         feed_url = "http://dewkjhdkwjhkjedhwdkwj.de/zu"
         response = self.client.post(reverse("probes:add_feed"),
@@ -113,7 +113,7 @@ class FeedViewsTestCase(TestCase):
 
     @patch("zentral.core.probes.feeds.fetch_feed")
     def test_add_feed_post_query_pack_ok(self, fetch_feed):
-        fetch_feed.return_value = json.dumps(FEED)
+        fetch_feed.return_value = FEED
         self.client.force_login(self.user)
         response = self.client.post(reverse("probes:add_feed"),
                                     {"url": FEED_URL},
