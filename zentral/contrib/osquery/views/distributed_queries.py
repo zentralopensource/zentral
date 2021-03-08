@@ -20,7 +20,7 @@ class DistributedQueryListView(LoginRequiredMixin, ListView):
         return (
             super().get_queryset()
                    .select_related("query")
-                   .annotate(machine_count=Count("distributedquerymachine"))
+                   .annotate(machine_count=Count("distributedquerymachine", distinct=True))
                    .annotate(result_count=Count("distributedqueryresult"))
                    .annotate(file_carving_session_count=Count("filecarvingsession"))
                    .order_by("-created_at", "-pk")
