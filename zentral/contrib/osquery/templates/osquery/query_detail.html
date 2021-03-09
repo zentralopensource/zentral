@@ -89,8 +89,8 @@
   <tr>
     <td><a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a></td>
     <td>{{ distributed_query.query_version }}</td>
-    <td>{{ distributed_query.valid_from }}</td>
-    <td>{{ distributed_query.valid_util|default:"-" }}</td>
+    <td class="{% if distributed_query.is_active %}text-success{% else %}text-muted{% endif %}">{{ distributed_query.valid_from }}</td>
+    <td class="{% if distributed_query.is_active %}text-success{% else %}text-muted{% endif %}">{{ distributed_query.valid_until|default:"-" }}</td>
     <td>{{ distributed_query.in_flight_count }}</td>
     <td>{{ distributed_query.ok_count }}</td>
     <td>{{ distributed_query.error_count }}</td>
