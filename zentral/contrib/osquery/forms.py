@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from django import forms
 from django.db.models import Count, F, Q
 from django.utils.text import slugify
@@ -63,8 +63,20 @@ class DistributedQueryForm(forms.ModelForm):
         self.query = kwargs.pop("query", None)
         super().__init__(*args, **kwargs)
         self.fields["valid_from"].initial = datetime.utcnow()
+        if not self.instance.pk:
+            self.fields["valid_until"].initial = datetime.utcnow() + timedelta(hours=1)
 
     def clean(self):
+        # valid until
+        valid_until = self.cleaned_data.get("valid_until")
+        if valid_until:
+            valid_from = self.cleaned_data.get("valid_from")
+            if valid_from and valid_until < valid_from:
+                self.add_error("valid_until", "Valid until must be greater than valid from")
+            if not self.instance.pk and valid_until < datetime.utcnow():
+                self.add_error("valid_until", "Valid until is in the past")
+
+        # default values
         if self.query:
             self.instance.query = self.query
             self.instance.sql = self.query.sql

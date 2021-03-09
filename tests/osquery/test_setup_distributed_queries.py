@@ -65,6 +65,34 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertEqual(distributed_query.sql, query.sql)
         self.assertEqual(distributed_query.query_version, query.version)
 
+    def test_create_distributed_query_valid_until_less_than_valid_from(self):
+        query = self._force_query()
+        self.client.force_login(self.user)
+        response = self.client.post(
+            "{}?q={}".format(reverse("osquery:create_distributed_query"), query.pk),
+            {"valid_from": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+             "valid_until": "2021-02-18 20:55:00",
+             "shard": "100"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/distributedquery_form.html")
+        self.assertContains(response, "Valid until must be greater than valid from")
+
+    def test_create_distributed_query_valid_until_past(self):
+        query = self._force_query()
+        self.client.force_login(self.user)
+        response = self.client.post(
+            "{}?q={}".format(reverse("osquery:create_distributed_query"), query.pk),
+            {"valid_from": "2020-07-30 11:50:00",
+             "valid_until": "2021-02-18 20:55:00",
+             "shard": "100"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/distributedquery_form.html")
+        self.assertContains(response, "Valid until is in the past")
+
     # update distributed query
 
     def test_update_distributed_query_redirect(self):
@@ -84,7 +112,8 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse("osquery:update_distributed_query", args=(distributed_query.pk,)),
-            {"valid_from": distributed_query.valid_from.strftime("%Y-%m-%d %H:%M:%S"),
+            {"valid_from": "2020-07-30 11:50:00",
+             "valid_until": "2021-02-18 20:55:00",
              "shard": "99"},
             follow=True
         )
@@ -93,6 +122,21 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertEqual(response.context["object"], distributed_query)
         distributed_query.refresh_from_db()
         self.assertEqual(distributed_query.shard, 99)
+
+    def test_update_distributed_query_valid_until_less_than_valid_from(self):
+        distributed_query = self._force_distributed_query()
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("osquery:update_distributed_query", args=(distributed_query.pk,)),
+            {"valid_from": "2021-02-18 20:55:00",
+             "valid_until": "2020-07-30 11:50:00",
+             "shard": "99"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/distributedquery_form.html")
+        self.assertEqual(response.context["object"], distributed_query)
+        self.assertContains(response, "Valid until must be greater than valid from")
 
     # distributed query list
 
