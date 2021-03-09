@@ -47,6 +47,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "osquery/distributedquery_form.html")
         self.assertContains(response, "Launch query")
         self.assertContains(response, query.name)
+        self.assertNotContains(response, "Halt current")
 
     def test_create_distributed_query_post(self):
         query = self._force_query()
@@ -93,6 +94,55 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "osquery/distributedquery_form.html")
         self.assertContains(response, "Valid until is in the past")
 
+    def test_create_distributed_query_halt_current_get(self):
+        distributed_query = self._force_distributed_query()
+        self.client.force_login(self.user)
+        response = self.client.post("{}?q={}".format(reverse("osquery:create_distributed_query"),
+                                                     distributed_query.query.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/distributedquery_form.html")
+        self.assertContains(response, "Launch query")
+        self.assertContains(response, distributed_query.query.name)
+        self.assertContains(response, "Halt current")
+
+    def test_create_distributed_no_halt_current_post(self):
+        distributed_query = self._force_distributed_query()
+        self.client.force_login(self.user)
+        response = self.client.post(
+            "{}?q={}".format(reverse("osquery:create_distributed_query"), distributed_query.query.pk),
+            {"valid_from": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+             "shard": "100"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/distributedquery_detail.html")
+        self.assertEqual(response.context["query"], distributed_query.query)
+        distributed_query2 = response.context["object"]
+        self.assertEqual(distributed_query.query, distributed_query2.query)
+        distributed_query.refresh_from_db()
+        self.assertEqual(distributed_query.valid_until, None)
+
+    def test_create_distributed_halt_current_post(self):
+        distributed_query = self._force_distributed_query()
+        self.client.force_login(self.user)
+        pre_post_dt = datetime.utcnow()
+        response = self.client.post(
+            "{}?q={}".format(reverse("osquery:create_distributed_query"), distributed_query.query.pk),
+            {"valid_from": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+             "shard": "100",
+             "halt_current_runs": "on"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/distributedquery_detail.html")
+        self.assertEqual(response.context["query"], distributed_query.query)
+        distributed_query2 = response.context["object"]
+        self.assertEqual(distributed_query.query, distributed_query2.query)
+        distributed_query.refresh_from_db()
+        self.assertFalse(distributed_query.is_active())
+        self.assertTrue(distributed_query.valid_until > pre_post_dt)
+        self.assertTrue(distributed_query.valid_until < datetime.utcnow())
+
     # update distributed query
 
     def test_update_distributed_query_redirect(self):
@@ -106,6 +156,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/distributedquery_form.html")
         self.assertEqual(response.context["object"], distributed_query)
+        self.assertNotContains(response, "Halt current")
 
     def test_update_distributed_query_post(self):
         distributed_query = self._force_distributed_query()

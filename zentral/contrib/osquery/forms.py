@@ -55,6 +55,8 @@ class ConfigurationPackForm(forms.ModelForm):
 # Distributed query
 
 class DistributedQueryForm(forms.ModelForm):
+    halt_current_runs = forms.BooleanField(initial=True, required=False)
+
     class Meta:
         model = DistributedQuery
         fields = "__all__"
@@ -65,6 +67,13 @@ class DistributedQueryForm(forms.ModelForm):
         self.fields["valid_from"].initial = datetime.utcnow()
         if not self.instance.pk:
             self.fields["valid_until"].initial = datetime.utcnow() + timedelta(hours=1)
+            current_runs = self.query.distributedquery_set.active().count()
+            if current_runs:
+                self.fields["halt_current_runs"].label = "Halt current run{}".format("" if current_runs == 1 else "s")
+            else:
+                self.fields["halt_current_runs"].widget = forms.HiddenInput()
+        else:
+            self.fields["halt_current_runs"].widget = forms.HiddenInput()
 
     def clean(self):
         # valid until
@@ -81,6 +90,11 @@ class DistributedQueryForm(forms.ModelForm):
             self.instance.query = self.query
             self.instance.sql = self.query.sql
             self.instance.query_version = self.query.version
+
+    def save(self, *args, **kwargs):
+        if not self.instance.pk and self.cleaned_data.get("halt_current_runs"):
+            self.query.distributedquery_set.active().update(valid_until=datetime.utcnow())
+        return super().save(*args, **kwargs)
 
 
 # Enrollment
