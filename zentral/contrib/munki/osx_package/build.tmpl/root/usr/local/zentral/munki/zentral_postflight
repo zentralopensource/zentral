@@ -28,6 +28,30 @@ SYSTEM_PROFILER = "/usr/sbin/system_profiler"
 # OSX apps
 
 
+def get_bundle_info(path):
+    for subdir in ("Contents", "Resources"):
+        info_plist_path = os.path.join(path, subdir, "Info.plist")
+        try:
+            with open(info_plist_path, "rb") as f:
+                return plistlib.load(f)
+        except Exception:
+            pass
+
+
+def get_bundle_info_version(bundle_info):
+    version = bundle_info.get("CFBundleVersion")
+    if version and isinstance(version, str):
+        version = version.split()[0]
+        if version[0] in '0123456789':
+            return version.replace(",", ".")
+
+
+def get_bundle_version(path):
+    bundle_info = get_bundle_info(path)
+    if bundle_info:
+        return get_bundle_info_version(bundle_info)
+
+
 def get_osx_app_instances():
     apps = []
     try:
@@ -37,9 +61,14 @@ def get_osx_app_instances():
         print("Could not read application inventory plist")
     else:
         for app_d in data:
+            bundle_version = None
+            bundle_path = app_d["path"]
+            if bundle_path:
+                bundle_version = get_bundle_version(bundle_path)
             apps.append({'app': {'bundle_id': app_d['bundleid'],
                                  'bundle_name': app_d['CFBundleName'],
-                                 'bundle_version_str': app_d['version']},
+                                 'bundle_version_str': app_d['version'],
+                                 'bundle_version': bundle_version},
                          'bundle_path': app_d['path']})
     return apps
 
