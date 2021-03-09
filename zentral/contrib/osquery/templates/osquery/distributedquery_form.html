@@ -30,3 +30,47 @@
   </p>
 </form>
 {% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function getNowHoursOffset(offset) {
+    var d = new Date();
+    if (offset > 0) {
+        d.setUTCHours(d.getUTCHours() + offset);
+    }
+    return d;
+  }
+
+  function pad(number) {
+    var r = String(number);
+    if ( r.length === 1 ) {
+      r = '0' + r;
+    }
+    return r;
+  }
+
+  function setTime($input, t) {
+    var ts = t.getUTCFullYear()
+      + "-" + pad(t.getUTCMonth() + 1)
+      + "-" + pad(t.getUTCDate())
+      + " " + pad(t.getUTCHours())
+      + ":" + pad(t.getUTCMinutes())
+      + ":" + pad(t.getUTCSeconds());
+    $input.val(ts);
+  }
+
+  function addTimeShortcuts() {
+    $input = $("#id_valid_until");
+    $.each([{label: "now", offset:0}, {label: "now + 1h", offset:1}, {label: "now + 4h", offset:4}, {label: "now + 1d", offset:24}], function( index, labelDef ) {
+      var style = labelDef.offset ? "default" : "danger";
+      $('<a style="display:inline-block;margin:0 5px 5px 0;cursor:pointer;text-decoration:none"><span class="label label-' + style + '">' + labelDef.label + '</span></a>')
+        .click(function(event) {event.preventDefault(); setTime($input, getNowHoursOffset(labelDef.offset))})
+        .insertBefore($input);
+    });
+  }
+
+  $(document).ready(function () {
+    addTimeShortcuts();
+  });
+</script>
+{% endblock %}

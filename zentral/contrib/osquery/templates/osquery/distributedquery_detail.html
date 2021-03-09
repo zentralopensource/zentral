@@ -33,7 +33,7 @@
       {% endif %}
       <tr>
         <td>Validity</td>
-        <td>{{ object.valid_from }} → {% if object.valid_until %}{{ object.valid_until }}{% endif %}</td>
+        <td class="{% if object.is_active %}text-success{% else %}text-muted{% endif %}">{{ object.valid_from }} → {% if object.valid_until %}{{ object.valid_until }}{% endif %}</td>
       </tr>
       <tr>
         <td>Serial number{{ object.serial_numbers|length|pluralize }}</td>
