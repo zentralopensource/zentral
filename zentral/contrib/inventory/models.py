@@ -733,9 +733,10 @@ class MetaBusinessUnitTag(models.Model):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
 
 
-class MetaMachine(object):
+class MetaMachine:
     """Simplified access to the ms."""
     def __init__(self, serial_number, snapshots=None):
+        self._include_groups_in_serialized_info_for_event = True
         self.serial_number = serial_number
 
     @classmethod
@@ -922,58 +923,208 @@ class MetaMachine(object):
             t = cursor.fetchone()
             return t[0] > 0
 
-    def get_probe_filtering_values(self):
-        query = (
-            "select * from ("
-            "select '{NULL}', '{NULL}', NULL,"
-            "array_agg(tag_id) from inventory_machinetag "
-            "where serial_number = %s "
-            "group by serial_number "
-            "union "
-            "select st.platforms, st.types, st.meta_business_unit_id, array_agg(mbut.tag_id) "
-            "from ("
-            "select array_agg(ms.platform) as platforms,"
-            "array_agg(ms.type) as types,"
-            "bu.meta_business_unit_id "
-            "from inventory_businessunit as bu "
-            "join inventory_machinesnapshot as ms on (ms.business_unit_id = bu.id) "
-            "join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id) "
-            "where cms.serial_number = %s "
-            "group by bu.meta_business_unit_id"
-            ") st "
-            "left join inventory_metabusinessunittag as mbut "
-            "on (mbut.meta_business_unit_id = st.meta_business_unit_id) "
-            "group by st.platforms, st.types, st.meta_business_unit_id"
-            ") t;"
-        )
-        args = [self.serial_number, self.serial_number]
-        with connection.cursor() as cursor:
-            platforms = Counter()
-            types = Counter()
-            mbu_ids = set([])
-            tag_ids = set([])
-            cursor.execute(query, args)
-            for t_platforms, t_types, t_mbu_id, t_tag_ids in cursor.fetchall():
-                if t_platforms:
-                    platforms.update(p for p in t_platforms if p)
-                if t_types:
-                    types.update(t for t in t_types if t)
-                if t_mbu_id is not None:
-                    mbu_ids.add(t_mbu_id)
-                if t_tag_ids:
-                    tag_ids.update(t for t in t_tag_ids if t)
-            return (platforms.most_common(1)[0][0] if platforms else None,
-                    types.most_common(1)[0][0] if types else None,
-                    mbu_ids,
-                    tag_ids)
+    # events related methods
 
-    def get_cached_probe_filtering_values(self):
-        filtering_values_cache_key = "probe_filtering_values_{}".format(self.get_urlsafe_serial_number())
-        filtering_values = cache.get(filtering_values_cache_key)
+    @cached_property
+    def _raw_info_for_event(self):
+        """Returns all the machine info necessary for the events in 1 DB query.
+
+        This is used in get_probe_filtering_values and get_serialized_info_for_event. Both of them are used during
+        the event enrichment pipeline step, thus the use of the single cached property as source.
+        """
+        query = (
+            "with ms as ("
+            "  select s.name as src, ms.id, ms.type, ms.platform,"
+            "  ms.business_unit_id, ms.os_version_id, ms.system_info_id"
+            "  from inventory_machinesnapshot as ms"
+            "  join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)"
+            "  join inventory_source as s on (ms.source_id = s.id)"
+            "  where cms.serial_number = %s"
+            "), bu as ("
+            "  select s.name as src, s.module, bu.id, bu.key, bu.meta_business_unit_id, bu.name, bu.reference"
+            "  from inventory_businessunit as bu"
+            "  join ms on (ms.business_unit_id = bu.id)"
+            "  join inventory_source as s on (s.id = bu.source_id)"
+            "), t as ("
+            "  select mt.tag_id as id from inventory_machinetag as mt where mt.serial_number = %s"
+            "  union"
+            "  select mbut.tag_id as id from inventory_metabusinessunittag as mbut"
+            "  join bu on (bu.meta_business_unit_id = mbut.meta_business_unit_id)"
+            ") "
+
+            # hostnames
+            "select ms.src, 'system_info' as key,"
+            "jsonb_build_object('computer_name', si.computer_name, 'hostname', si.hostname) "
+            "from inventory_systeminfo as si "
+            "join ms on ms.system_info_id = si.id "
+            "where si.computer_name is not null or si.hostname is not null "
+
+            "union "
+
+            # business units not API only
+            "select bu.src, 'business_unit' as key,"
+            "jsonb_build_object('reference', bu.reference, 'name', bu.name, 'key', substring(bu.key, 0, 9)) "
+            "from bu "
+            "where bu.module <> 'zentral.contrib.inventory'"
+
+            "union "
+
+            # tags
+            "select null, 'tags' as key,"
+            "jsonb_build_object('id', t.id, 'name', it.name) "
+            "from t join inventory_tag as it on (it.id = t.id) "
+
+            "union "
+
+            # os versions
+            "select ms.src, 'os_version' as key,"
+            "jsonb_build_object("
+            "  'name', osv.name, 'major', osv.major, 'minor', osv.minor, 'patch', osv.patch, 'build', osv.build"
+            ") "
+            "from inventory_osversion as osv join ms on (ms.os_version_id = osv.id) "
+
+            "union "
+
+            # platforms
+            "select null, 'platforms' as key,"
+            "jsonb_agg(distinct ms.platform) from ms where ms.platform is not null "
+
+            "union "
+
+            # types
+            "select null, 'types' as key,"
+            "jsonb_agg(distinct ms.type) from ms where ms.type is not null "
+
+            "union "
+
+            # meta business units
+            "select null, 'meta_business_units' as key,"
+            "jsonb_build_object('id', mbu.id, 'name', mbu.name) "
+            "from inventory_metabusinessunit as mbu "
+            "join bu on (bu.meta_business_unit_id = mbu.id)"
+        )
+        if self._include_groups_in_serialized_info_for_event:
+            query += (
+                "union "
+
+                # groups
+                "select ms.src, 'groups' as key, "
+                "jsonb_build_object('reference', g.reference, 'name', g.name, 'key', substring(g.key, 0, 9)) "
+                "from inventory_machinegroup as g "
+                "join inventory_machinesnapshot_groups as msg on (msg.machinegroup_id = g.id) "
+                "join ms on (ms.id = msg.machinesnapshot_id) "
+            )
+
+        cursor = connection.cursor()
+        cursor.execute(query, [self.serial_number, self.serial_number])
+        return cursor.fetchall()
+
+    def get_probe_filtering_values(self):
+        """Returns the values used by the probe inventory filters."""
+        platform_fv = None
+        type_fv = None
+        mbu_ids = set([])
+        tag_ids = set([])
+        for src, key, agg in self._raw_info_for_event:
+            if not agg:
+                continue
+            if key == "platforms":
+                platform_fv = Counter(agg).most_common(1)[0][0]
+            elif key == "types":
+                type_fv = Counter(agg).most_common(1)[0][0]
+            elif key == "meta_business_units":
+                mbu_ids.add(agg["id"])
+            elif key == "tags":
+                tag_ids.add(agg["id"])
+        return (platform_fv, type_fv, mbu_ids, tag_ids)
+
+    @cached_property
+    def cached_probe_filtering_values(self):
+        """Cached version of get_probe_filtering_values"""
+        cache_key = "mm-probe-fvs_{}".format(self.get_urlsafe_serial_number())
+        filtering_values = cache.get(cache_key)
         if filtering_values is None:
             filtering_values = self.get_probe_filtering_values()
-            cache.set(filtering_values_cache_key, filtering_values, 60)  # TODO: Hard coded timeout value
+            cache.set(cache_key, filtering_values, 60)  # TODO: Hard coded timeout value
         return filtering_values
+
+    def get_legacy_serialized_info_for_event(self):
+        """Serialize the machine information to be included in the events.
+
+        Legacy output. Triggers a lot of DB queries. Kept for reference.
+        """
+        machine_d = {}
+        for ms in self.snapshots:
+            source = ms.source
+            ms_d = {'name': ms.get_machine_str()}
+            if ms.business_unit:
+                if not ms.business_unit.is_api_enrollment_business_unit():
+                    ms_d['business_unit'] = {'reference': ms.business_unit.reference,
+                                             'key': ms.business_unit.get_short_key(),
+                                             'name': ms.business_unit.name}
+            if ms.os_version:
+                ms_d['os_version'] = str(ms.os_version)
+            if self._include_groups_in_serialized_info_for_event:
+                for group in ms.groups.all():
+                    ms_d.setdefault('groups', []).append({'reference': group.reference,
+                                                          'key': group.get_short_key(),
+                                                          'name': group.name})
+            key = slugify(source.name)
+            machine_d[key] = ms_d
+        for tag in self.tags:
+            machine_d.setdefault('tags', []).append({'id': tag.id,
+                                                     'name': tag.name})
+        for meta_business_unit in self.meta_business_units:
+            machine_d.setdefault('meta_business_units', []).append({
+                'name': meta_business_unit.name,
+                'id': meta_business_unit.id
+            })
+        if self.platform:
+            machine_d['platform'] = self.platform
+        if self.type:
+            machine_d['type'] = self.type
+        return machine_d
+
+    def get_serialized_info_for_event(self):
+        """Serialize the machine information to be included in the events.
+
+        Legacy ouput. Only 1 DB query.
+        """
+        machine_d = {}
+        for src, key, agg in self._raw_info_for_event:
+            if not agg:
+                continue
+            if src:
+                d = machine_d.setdefault(slugify(src), {})
+            else:
+                d = machine_d
+            if key == "system_info":
+                d["name"] = agg["computer_name"] or agg["hostname"]
+            elif key == "os_version":
+                build = agg.get("build")
+                os_version_items = (
+                    agg.get("name"),
+                    ".".join(str(v) for v in (agg.get(k) for k in ('major', 'minor', 'patch')) if v is not None),
+                    f"({build})" if build else None
+                )
+                os_version_str = " ".join(s for s in os_version_items if s)
+                if os_version_str:
+                    d[key] = os_version_str
+            elif key in ("types", "platforms"):
+                d[key[:-1]] = Counter(agg).most_common(1)[0][0]
+            else:
+                d.setdefault(key, []).append(agg)
+        return machine_d
+
+    @cached_property
+    def cached_serialized_info_for_event(self):
+        """Cached version of get_serialized_info_for_event"""
+        cache_key = "mm-si_{}".format(self.get_urlsafe_serial_number())
+        serialized_info = cache.get(cache_key)
+        if serialized_info is None:
+            serialized_info = self.get_serialized_info_for_event()
+            cache.set(cache_key, serialized_info, 60)  # TODO: Hard coded timeout value
+        return serialized_info
 
 
 class MACAddressBlockAssignmentOrganization(models.Model):

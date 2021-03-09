@@ -1,7 +1,8 @@
 import copy
 from datetime import datetime, timedelta
 from dateutil import parser
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
 from zentral.contrib.inventory.conf import DESKTOP, MACOS, SERVER, update_ms_tree_type, VM
@@ -17,6 +18,7 @@ from zentral.contrib.inventory.models import (BusinessUnit,
 from zentral.utils.mt_models import MTOError
 
 
+@override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
 class MachineSnapshotTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -259,9 +261,22 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id}),
                          mm.get_probe_filtering_values())
         MetaBusinessUnitTag.objects.create(tag=tag2, meta_business_unit=self.meta_business_unit)
+        # cached
+        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id}),
+                         mm.get_probe_filtering_values())
+        # fresh
+        mm = MetaMachine(self.serial_number)
         self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id, tag2.id}),
                          mm.get_probe_filtering_values())
+        # cached with cache framework
+        mm = MetaMachine(self.serial_number)
+        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id, tag2.id}),
+                         mm.cached_probe_filtering_values)
+        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id, tag2.id}),
+                         cache.get("mm-probe-fvs_{}".format(mm.get_urlsafe_serial_number())))
+
         mm.archive()
+
         mm = MetaMachine(self.serial_number)
         self.assertEqual(mm.snapshots, [])
         self.assertEqual(MachineSnapshot.objects.count(), 3)

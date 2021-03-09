@@ -1,4 +1,5 @@
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import MachineSnapshotCommit
 from zentral.core.events.base import EventMetadata, EventRequest, BaseEvent, register_event_type
 
@@ -24,6 +25,7 @@ def make_event(ip=None, ua=None, with_msn=True):
                       {"godzilla": "yo"})
 
 
+@override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
 class EventSerializationTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -63,6 +65,15 @@ class EventSerializationTestCase(TestCase):
         source_machine = machine["zentral-tests"]
         self.assertEqual(source_machine["groups"][0]["reference"], "grp1")
         self.assertEqual(source_machine["os_version"], "OS X 10.11.1")
+        # cached info
+        cache_key = f"mm-si_{self.ms.serial_number}"
+        machine = cache.get(cache_key)
+        self.assertEqual(machine["meta_business_units"][0]["id"],
+                         self.ms.business_unit.meta_business_unit.pk)
+        source_machine = machine["zentral-tests"]
+        self.assertEqual(source_machine["groups"][0]["reference"], "grp1")
+        self.assertEqual(source_machine["os_version"], "OS X 10.11.1")
+        cache.delete(cache_key)
 
     def test_event_with_msn_without_machine_metadata(self):
         event = make_event(with_msn=True)
@@ -79,12 +90,15 @@ class EventSerializationTestCase(TestCase):
         metadata = d["_zentral"]
         self.assertEqual(metadata["request"], {"ip": "10.1.2.3"})
         event = make_event(ua="YO! ua")
+        cache.delete(f"mm-si_{self.ms.serial_number}")
         d = event.serialize()
         metadata = d["_zentral"]
         self.assertEqual(metadata["request"], {"user_agent": "YO! ua"})
+        cache.delete(f"mm-si_{self.ms.serial_number}")
 
     def test_event_without_request(self):
         event = make_event()
         d = event.serialize()
         metadata = d["_zentral"]
         self.assertNotIn("request", metadata)
+        cache.delete(f"mm-si_{self.ms.serial_number}")
