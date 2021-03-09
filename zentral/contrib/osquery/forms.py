@@ -3,8 +3,20 @@ from django import forms
 from django.db.models import Count, F, Q
 from django.utils.text import slugify
 from .models import (AutomaticTableConstruction, Configuration, ConfigurationPack,
-                     DistributedQuery, Enrollment, FileCategory, Pack, PackQuery, Query)
+                     DistributedQuery, Enrollment, FileCategory, Pack, PackQuery, Platform, Query)
 from .releases import get_osquery_versions
+
+
+# common
+
+class PlatformsWidget(forms.CheckboxSelectMultiple):
+    def __init__(self, attrs=None, choices=()):
+        super().__init__(attrs, choices=Platform.choices())
+
+    def format_value(self, value):
+        if isinstance(value, str) and value:
+            value = [v.strip() for v in value.split(",")]
+        return super().format_value(value)
 
 
 # ATC
@@ -169,6 +181,7 @@ class PackForm(forms.ModelForm):
     class Meta:
         model = Pack
         fields = "__all__"
+        widgets = {"platforms": PlatformsWidget}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -193,6 +206,7 @@ class PackQueryForm(forms.ModelForm):
     class Meta:
         model = PackQuery
         fields = "__all__"
+        widgets = {"platforms": PlatformsWidget}
 
     def __init__(self, *args, **kwargs):
         self.pack = kwargs.pop("pack", None)
