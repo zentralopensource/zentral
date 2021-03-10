@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Groups</li>
+</ol>
+
+<h3>{{ object_list|length }} Group{{ object_list|length|pluralize }}</h3>
+
+{% if perms.auth.add_group %}
+<a href="{% url 'accounts:create_group' %}" class="btn btn-default">
+  <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+  Create
+</a>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th style="width:15%"></th>
+  </thead>
+  <tbody>
+    {% for group in object_list %}
+    <tr>
+      <td>
+        {% if perms.auth.view_group %}
+        <a href="{% url 'accounts:group' group.pk %}">{{ group }}</a>
+        {% endif %}
+      </td>
+      <td>
+        {% if perms.auth.change_group %}
+        <a class="btn btn-default" href="{% url 'accounts:update_group' group.pk %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+        {% if perms.auth.delete_group %}
+        <a class="btn btn-danger" href="{% url 'accounts:delete_group' group.pk %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

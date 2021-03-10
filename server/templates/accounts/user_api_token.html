@@ -3,8 +3,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'users:list' %}">Users</a></li>
-  <li><a href="{% url 'users:user' user.pk %}">{{ user.get_type_display|title }} {{ user }}</a></li>
+  <li><a href="{% url 'accounts:users' %}">Users</a></li>
+  <li><a href="{% url 'accounts:user' user.pk %}">{{ user.get_type_display|title }} {{ user }}</a></li>
   <li class="active">API token</li>
 </ol>
 
@@ -18,7 +18,7 @@
 </p>
 
 <p>
-  <a href="{% url 'users:user' user.pk %}" class="btn btn-default">OK</a>
+  <a href="{% url 'accounts:user' user.pk %}" class="btn btn-default">OK</a>
 </p>
 {% endblock %}
 

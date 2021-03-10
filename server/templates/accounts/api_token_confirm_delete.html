@@ -3,8 +3,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'users:list' %}">Users</a></li>
-  <li><a href="{% url 'users:user' user.pk %}">{{ user.get_type_display|title }} {{ user }}</a></li>
+  <li><a href="{% url 'accounts:users' %}">Users</a></li>
+  <li><a href="{% url 'accounts:user' user.pk %}">{{ user.get_type_display|title }} {{ user }}</a></li>
   <li class="active">Delete API token</li>
 </ol>
 
@@ -13,7 +13,7 @@
 <p>Please confirm you want to delete the {{ user.get_type_display }} API token of {{ user }}.</p>
 <form class="form" method="POST">{% csrf_token %}
   <p>
-    <a href="{% url 'users:user' user.pk %}" class="btn btn-default">Cancel</a>
+    <a href="{% url 'accounts:user' user.pk %}" class="btn btn-default">Cancel</a>
     <button type="submit" class="btn btn-danger">Delete API token</button>
   </p>
 </form>

@@ -61,7 +61,7 @@
               <ul class="dropdown-menu">
                 {% if not user.is_remote %}
                 <li><a href="{% url 'password_change' %}">change password</a></li>
-                <li><a href="{% url 'users:verification_devices' %}">verification devices</a></li>
+                <li><a href="{% url 'accounts:verification_devices' %}">verification devices</a></li>
                 {% endif %}
                 <li><a href="{% url 'logout' %}">sign out</a></li>
               </ul>

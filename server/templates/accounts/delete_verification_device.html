@@ -8,7 +8,7 @@
 <form class="form" method="POST">{% csrf_token %}
   {{ form|bootstrap }}
   <p>
-    <a href="{% url 'users:verification_devices' %}" class="btn btn-default">Cancel</a>
+    <a href="{% url 'accounts:verification_devices' %}" class="btn btn-default">Cancel</a>
     <button type="submit" class="btn btn-danger">Delete</button>
   </p>
 </form>

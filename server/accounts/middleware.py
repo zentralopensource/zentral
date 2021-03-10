@@ -11,7 +11,7 @@ def force_password_change_middleware(get_response):
     password_change_url = reverse("password_change")
     ok_url = set([password_change_url,
                   reverse("logout"),
-                  reverse("users:nginx_auth_request")])  # TODO: VERIFY
+                  reverse("accounts:nginx_auth_request")])  # TODO: VERIFY
 
     def middleware(request):
         user = request.user

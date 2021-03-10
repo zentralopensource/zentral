@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'accounts:groups' %}">Groups</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h3>{{ object }}</h3>
+
+<p>
+  {% if perms.auth.change_group %}
+  <a href="{% url 'accounts:update_group' object.pk %}" class="btn btn-default">Update</a>
+  {% endif %}
+  {% if perms.auth.delete_group %}
+  <a href="{% url 'accounts:delete_group' object.pk %}" class="btn btn-danger">Delete</a>
+  {% endif %}
+</p>
+{% endblock %}

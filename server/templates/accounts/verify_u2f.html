@@ -4,7 +4,7 @@
 {% block content %}
 <div class="row">
   <div class="col-md-4 col-md-offset-4">
-    <form id="u2f_form" action="{% url 'users:verify_u2f' %}" class="panel panel-default" method="POST">{% csrf_token %}
+    <form id="u2f_form" action="{% url 'accounts:verify_u2f' %}" class="panel panel-default" method="POST">{% csrf_token %}
       <input type="hidden" id="token_response" name="token_response">
       <div class="panel-heading">
         <h3 class="panel-title">

@@ -29,12 +29,12 @@ class AccountUsersViewsTestCase(TestCase):
     # auth utils
 
     def login_redirect(self, url_name, *args):
-        url = reverse("users:{}".format(url_name), args=args)
+        url = reverse("accounts:{}".format(url_name), args=args)
         response = self.client.get(url)
         self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
 
     def permission_denied(self, url_name, *args):
-        url = reverse("users:{}".format(url_name), args=args)
+        url = reverse("accounts:{}".format(url_name), args=args)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
 
@@ -52,52 +52,52 @@ class AccountUsersViewsTestCase(TestCase):
     # permissions redirects
 
     def test_user_list_redirect(self):
-        self.login_redirect("list")
+        self.login_redirect("users")
         self.log_user_in()
-        self.permission_denied("list")
+        self.permission_denied("users")
 
     def test_user_invite_redirect(self):
-        self.login_redirect("invite")
+        self.login_redirect("invite_user")
         self.log_user_in()
-        self.permission_denied("invite")
+        self.permission_denied("invite_user")
 
     def test_user_update_redirect(self):
-        self.login_redirect("update", self.user.id)
+        self.login_redirect("update_user", self.user.id)
         self.log_user_in()
-        self.permission_denied("update", self.superuser.id)
+        self.permission_denied("update_user", self.superuser.id)
 
     def test_user_delete_redirect(self):
-        self.login_redirect("delete", self.user.id)
+        self.login_redirect("delete_user", self.user.id)
         self.log_user_in()
-        self.permission_denied("delete", self.user.id)
+        self.permission_denied("delete_user", self.user.id)
 
     # user list
 
     def test_user_list_ok(self):
         self.log_user_in(superuser=True)
-        response = self.client.get(reverse("users:list"))
+        response = self.client.get(reverse("accounts:users"))
         for text in (self.user.username, self.user.email,
                      self.remoteuser.username, self.remoteuser.email,
                      self.superuser.username, self.superuser.email,
                      "3 Users",
-                     reverse("users:delete", args=(self.user.pk,)),
-                     reverse("users:update", args=(self.user.pk,)),
-                     reverse("users:delete", args=(self.remoteuser.pk,)),
-                     reverse("users:update", args=(self.remoteuser.pk,)),
-                     reverse("users:update", args=(self.superuser.pk,))):
+                     reverse("accounts:delete_user", args=(self.user.pk,)),
+                     reverse("accounts:update_user", args=(self.user.pk,)),
+                     reverse("accounts:delete_user", args=(self.remoteuser.pk,)),
+                     reverse("accounts:update_user", args=(self.remoteuser.pk,)),
+                     reverse("accounts:update_user", args=(self.superuser.pk,))):
             self.assertContains(response, text)
-        self.assertNotContains(response, reverse("users:delete", args=(self.superuser.pk,)))
+        self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
 
     # invite
 
     def test_user_invite_get(self):
         self.log_user_in(superuser=True)
-        response = self.client.get(reverse("users:invite"))
+        response = self.client.get(reverse("accounts:invite_user"))
         self.assertContains(response, "Send an email invitation")
 
     def test_user_invite_username_error(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:invite"),
+        response = self.client.post(reverse("accounts:invite_user"),
                                     {"username": self.user.username,
                                      "email": "test@example.com"},
                                     follow=True)
@@ -105,7 +105,7 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_user_invite_email_error(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:invite"),
+        response = self.client.post(reverse("accounts:invite_user"),
                                     {"username": "test",
                                      "email": self.user.email},
                                     follow=True)
@@ -113,7 +113,7 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_user_invite_ok(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:invite"),
+        response = self.client.post(reverse("accounts:invite_user"),
                                     {"username": "test",
                                      "email": "test@example.com"},
                                     follow=True)
@@ -124,7 +124,7 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_user_update_404(self):
         self.log_user_in(superuser=True)
-        response = self.client.get(reverse("users:update", args=(0,)))
+        response = self.client.get(reverse("accounts:update_user", args=(0,)))
         self.assertEqual(response.status_code, 404)
 
     def test_user_update_get(self):
@@ -132,7 +132,7 @@ class AccountUsersViewsTestCase(TestCase):
         for user, ue_disabled, su_disabled in ((self.user, False, False),
                                                (self.remoteuser, True, False),
                                                (self.superuser, False, True)):
-            response = self.client.get(reverse("users:update", args=(user.id,)))
+            response = self.client.get(reverse("accounts:update_user", args=(user.id,)))
             self.assertContains(response, "Update user {}".format(user))
             form = response.context["form"]
             self.assertEqual(form.fields["is_superuser"].disabled, su_disabled)
@@ -141,7 +141,7 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_user_update_username_error(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:update", args=(self.user.id,)),
+        response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
                                     {"username": self.superuser.username,
                                      "email": self.user.email,
                                      "is_superuser": self.user.is_superuser})
@@ -149,7 +149,7 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_user_update_email_error(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:update", args=(self.user.id,)),
+        response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
                                     {"username": self.user.username,
                                      "email": self.superuser.email,
                                      "is_superuser": self.user.is_superuser})
@@ -157,7 +157,7 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_user_update_ok(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:update", args=(self.user.id,)),
+        response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
                                     {"username": "toto",
                                      "email": "tata@example.com",
                                      "is_superuser": self.user.is_superuser},
@@ -170,18 +170,18 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_user_delete_404(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:delete", args=(0,)))
+        response = self.client.post(reverse("accounts:delete_user", args=(0,)))
         self.assertEqual(response.status_code, 404)
 
     def test_superuser_delete_redirect(self):
         self.log_user_in(superuser=True)
-        response = self.client.post(reverse("users:delete", args=(self.superuser.id,)))
-        self.assertRedirects(response, reverse("users:list"))
+        response = self.client.post(reverse("accounts:delete_user", args=(self.superuser.id,)))
+        self.assertRedirects(response, reverse("accounts:users"))
 
     def test_user_delete_ok(self):
         self.log_user_in(superuser=True)
         user_str = str(self.user)
-        response = self.client.post(reverse("users:delete", args=(self.user.id,)),
+        response = self.client.post(reverse("accounts:delete_user", args=(self.user.id,)),
                                     follow=True)
         self.assertContains(response, "User {} deleted".format(user_str))
         self.assertContains(response, "2 User")

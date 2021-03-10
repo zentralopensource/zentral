@@ -3,7 +3,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'users:list' %}">Users</a></li>
+  <li><a href="{% url 'accounts:users' %}">Users</a></li>
   <li class="active">{{ user.get_type_display|title }} {{ user }}</li>
 </ol>
 
@@ -28,11 +28,11 @@
   <dd>
     {% if user.auth_token %}
     Yes
-    <a href="{% url 'users:delete_user_api_token' user.pk %}" class="btn btn-xs btn-danger">
+    <a href="{% url 'accounts:delete_user_api_token' user.pk %}" class="btn btn-xs btn-danger">
       <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     </a>
     {% else %}
-    <form method="post" action="{% url 'users:create_user_api_token' user.pk %}">{% csrf_token %}
+    <form method="post" action="{% url 'accounts:create_user_api_token' user.pk %}">{% csrf_token %}
     No
     <button class="btn btn-xs btn-default" type="submit">
       <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
@@ -45,10 +45,10 @@
 
 <p>
   {% if user.editable %}
-  <a href="{% url 'users:update' user.pk %}" class="btn btn-default">Update</a>
+  <a href="{% url 'accounts:update_user' user.pk %}" class="btn btn-default">Update</a>
   {% endif %}
   {% if user.deletable %}
-  <a href="{% url 'users:delete' user.pk %}" class="btn btn-danger">Delete</a>
+  <a href="{% url 'accounts:delete_user' user.pk %}" class="btn btn-danger">Delete</a>
   {% endif %}
 </p>
 {% endblock %}

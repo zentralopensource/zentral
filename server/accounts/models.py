@@ -134,13 +134,13 @@ class UserTOTP(UserVerificationDevice):
     TYPE = "TOTP"
     PRIORITY = 10
     secret = models.CharField(max_length=256)
-    delete_url_name = "users:delete_totp"
+    delete_url_name = "accounts:delete_totp"
 
     class Meta:
         unique_together = (("user", "name"),)
 
     def get_verification_url(self):
-        return reverse("users:verify_totp")
+        return reverse("accounts:verify_totp")
 
     def verify(self, code):
         return pyotp.TOTP(self.secret).verify(code)
@@ -152,14 +152,14 @@ class UserTOTP(UserVerificationDevice):
 class UserU2F(UserVerificationDevice):
     TYPE = "U2F"
     PRIORITY = 100
-    delete_url_name = "users:delete_u2f_device"
+    delete_url_name = "accounts:delete_u2f_device"
     device = JSONField()
 
     class Meta:
         unique_together = (("user", "device"), ("user", "name"))
 
     def get_verification_url(self):
-        return reverse("users:verify_u2f")
+        return reverse("accounts:verify_u2f")
 
     def test_user_agent(self, user_agent):
         if user_agent:

@@ -9,7 +9,7 @@ class AccountUsersViewsTestCase(TestCase):
     def setUpTestData(cls):
         cls.pwd = "yo"
         cls.user = User.objects.create_user("yo", "yo@zentral.io", cls.pwd)
-        cls.url = reverse("users:nginx_auth_request")
+        cls.url = reverse("accounts:nginx_auth_request")
 
     # auth utils
 

@@ -8,7 +8,7 @@
 
 <h3>{{ user_count }} User{{ user_count|pluralize }}</h3>
 
-<a href="{% url 'users:invite' %}" class="btn btn-default">
+<a href="{% url 'accounts:invite_user' %}" class="btn btn-default">
   <span class="glyphicon glyphicon-envelope" aria-hidden="true"></span>
   Send an email invitation
 </a>
@@ -29,18 +29,18 @@
         {% else %}
         <span class="glyphicon glyphicon-user" aria-hidden="true"></span>
         {% endif %}
-        <a href="{% url 'users:user' managed_user.pk %}">{{ managed_user.username }}</a>
+        <a href="{% url 'accounts:user' managed_user.pk %}">{{ managed_user.username }}</a>
       </td>
       <td>{{ managed_user.email }}</td>
       <td>{% if managed_user.auth_token %}Yes{% endif %}</td>
       <td>
         {% if managed_user.editable %}
-        <a class="btn btn-default" href="{% url 'users:update' managed_user.id %}">
+        <a class="btn btn-default" href="{% url 'accounts:update_user' managed_user.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
         {% endif %}
         {% if managed_user.deletable %}
-        <a class="btn btn-danger" href="{% url 'users:delete' managed_user.id %}">
+        <a class="btn btn-danger" href="{% url 'accounts:delete_user' managed_user.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
         {% endif %}
@@ -52,7 +52,7 @@
 
 <h3>{{ service_account_count }} Service account{{ service_account_count|pluralize }}</h3>
 
-<a href="{% url 'users:create_service_account' %}" class="btn btn-default">
+<a href="{% url 'accounts:create_service_account' %}" class="btn btn-default">
   Create
 </a>
 
@@ -67,17 +67,17 @@
     {% for service_account in service_accounts %}
     <tr>
       <td>
-        <a href="{% url 'users:user' service_account.pk %}">{{ service_account.username }}</a>
+        <a href="{% url 'accounts:user' service_account.pk %}">{{ service_account.username }}</a>
       </td>
       <td>{% if service_account.auth_token %}Yes{% endif %}</td>
       <td>
         {% if service_account.editable %}
-        <a class="btn btn-default" href="{% url 'users:update' service_account.id %}">
+        <a class="btn btn-default" href="{% url 'accounts:update_user' service_account.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
         {% endif %}
         {% if service_account.deletable %}
-        <a class="btn btn-danger" href="{% url 'users:delete' service_account.id %}">
+        <a class="btn btn-danger" href="{% url 'accounts:delete_user' service_account.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
         {% endif %}

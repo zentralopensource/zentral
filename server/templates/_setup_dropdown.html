@@ -4,8 +4,13 @@
       Setup <span class="caret"></span></a>
     </a>
     <ul class="dropdown-menu">
-      {% if user.is_superuser %}
-      <li><a href="{% url 'users:list' %}">manage users</a></li>
+      {% if perms.auth %}
+      {% if perms.auth.add_user or perms.auth.change_user or perms.auth.delete_user %}
+      <li><a href="{% url 'accounts:users' %}">Users</a></li>
+      {% endif %}
+      {% if perms.auth.add_group or perms.auth.change_group or perms.auth.delete_group %}
+      <li><a href="{% url 'accounts:groups' %}">Groups</a></li>
+      {% endif %}
       <li role="separator" class="divider"></li>
       {% endif %}
       {% for section in section_list %}
