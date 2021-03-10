@@ -1,24 +1,26 @@
 import logging
 from django.conf import settings
 from django.contrib.auth import REDIRECT_FIELD_NAME
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.contrib.auth.models import Group
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import is_safe_url
-from django.views.generic import CreateView, DetailView, ListView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView, View
 from .backends import backend_classes
 from .exceptions import RealmUserError
-from .models import Realm, RealmAuthenticationSession
+from .forms import RealmGroupMappingForm
+from .models import Realm, RealmAuthenticationSession, RealmGroupMapping
 
 
 logger = logging.getLogger("zentral.realms.views")
 
 
-class CanManageRealmsMixin:
-    """Authenticated local user with required permissions."""
+class LocalUserRequiredMixin:
+    """Verify that the current user is not a remote user and has authenticated locally."""
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -26,15 +28,17 @@ class CanManageRealmsMixin:
                                      settings.LOGIN_URL,
                                      REDIRECT_FIELD_NAME)
         if request.user.is_remote:
-            raise PermissionDenied("Remote users cannot access the realms settings")
+            raise PermissionDenied("Remote users cannot access this view.")
         if request.session.get("_realm_authentication_session"):
-            raise PermissionDenied("Log in without using a realm to access the realms settings")
-        if not self.request.user.has_perms(('accounts.add_user', 'accounts.change_user', 'accounts.delete_user')):
-            raise PermissionDenied("You do not have the required permissions to manage the realms.")
+            raise PermissionDenied("Log in without using a realm to access this view.")
         return super().dispatch(request, *args, **kwargs)
 
+        if not self.request.user.has_perms(('accounts.add_user', 'accounts.change_user', 'accounts.delete_user')):
+            raise PermissionDenied("You do not have the required permissions to manage the realms.")
 
-class RealmListView(LoginRequiredMixin, ListView):
+
+class RealmListView(PermissionRequiredMixin, ListView):
+    permission_required = "realms.view_realm"
     model = Realm
 
     def get_context_data(self, **kwargs):
@@ -54,7 +58,8 @@ class RealmListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class CreateRealmView(CanManageRealmsMixin, CreateView):
+class CreateRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = ("realms.create_realm", "auth.create_user", "auth.change_user")
     template_name = "realms/realm_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -66,6 +71,11 @@ class CreateRealmView(CanManageRealmsMixin, CreateView):
     def get_form_class(self):
         return backend_classes.get(self.backend).get_form_class()
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
+
     def form_valid(self, form):
         self.object = form.save(commit=False)
         self.object.backend = self.backend
@@ -73,16 +83,115 @@ class CreateRealmView(CanManageRealmsMixin, CreateView):
         return redirect(self.object)
 
 
-class RealmView(CanManageRealmsMixin, DetailView):
+class RealmView(PermissionRequiredMixin, DetailView):
+    permission_required = "realms.view_realm"
     model = Realm
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        group_mappings = self.object.realmgroupmapping_set.all().order_by("claim", "value", "group__name")
+        ctx["group_mappings"] = group_mappings
+        ctx["group_mapping_count"] = group_mappings.count()
+        ctx["can_create_group_mapping"] = (
+            Group.objects.exists()
+            and self.request.user.has_perms((
+                "realms.add_realmgroupmapping", "realms.view_realm",
+                "auth.view_group", "auth.change_group", "auth.change_user"
+            ))
+        )
+        return ctx
 
-class UpdateRealmView(CanManageRealmsMixin, UpdateView):
+
+class UpdateRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = ("realms.create_realm", "auth.create_user", "auth.change_user")
     model = Realm
     fields = ("name",)
 
     def get_form_class(self):
         return self.object.backend_instance.get_form_class()
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
+
+
+# group mappings
+
+
+class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = (
+        "realms.add_realmgroupmapping", "realms.view_realm",
+        "auth.view_group", "auth.change_group", "auth.change_user"
+    )
+    model = RealmGroupMapping
+    form_class = RealmGroupMappingForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.realm = get_object_or_404(Realm, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["realm"] = self.realm
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["realm"] = self.realm
+        return ctx
+
+    def get_success_url(self):
+        return "{}#{}".format(self.realm.get_absolute_url(), self.object.pk)
+
+
+class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = (
+        "realms.change_realmgroupmapping", "realms.view_realm",
+        "auth.view_group", "auth.change_group", "auth.change_user"
+    )
+    model = RealmGroupMapping
+    pk_url_kwarg = "gm_pk"
+    form_class = RealmGroupMappingForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.realm = get_object_or_404(Realm, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["realm"] = self.realm
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
+
+    def get_success_url(self):
+        return "{}#{}".format(self.realm.get_absolute_url(), self.object.pk)
+
+
+class DeleteRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteView):
+    permission_required = (
+        "realms.delete_realmgroupmapping", "realms.view_realm",
+        "auth.view_group", "auth.change_group", "auth.change_user"
+    )
+    model = RealmGroupMapping
+    pk_url_kwarg = "gm_pk"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        return ctx
+
+    def get_success_url(self):
+        return self.object.realm.get_absolute_url()
+
+
+# SSO Login
 
 
 class LoginView(View):
@@ -110,6 +219,9 @@ class LoginView(View):
         return HttpResponseRedirect(redirect_url)
 
 
+# SSO Test views
+
+
 class TestRealmView(View):
     def post(self, request, *args, **kwargs):
         realm = get_object_or_404(Realm, pk=kwargs["pk"])
@@ -127,7 +239,8 @@ class TestRealmView(View):
                 raise ValueError("Empty realm {} redirect URL".format(realm.pk))
 
 
-class RealmAuthenticationSessionView(CanManageRealmsMixin, DetailView):
+class RealmAuthenticationSessionView(LocalUserRequiredMixin, PermissionRequiredMixin, DetailView):
+    permission_required = ("realms.view_realm", "auth.view_user")
     model = RealmAuthenticationSession
     pk_url_kwarg = "ras_pk"
 
@@ -148,6 +261,9 @@ class RealmAuthenticationSessionView(CanManageRealmsMixin, DetailView):
             ctx["error"] = "Missing email. Cannot be used for Zentral login."
 
         return ctx
+
+
+# SSO error view
 
 
 def ras_finalization_error(request, ras, realm_user=None, exception=None):

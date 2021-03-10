@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+{% with object.realm as realm %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li><a href="{{ realm.get_absolute_url }}">{{ realm }}</a></li>
+  <li class="active">Delete group mapping</li>
+</ol>
+
+<h2>Delete group mapping</h2>
+
+<form method="post" class="form" >{% csrf_token %}
+  <p>Do you really want to delete this group mapping?</p>
+  <p>
+    <a class="btn btn-default" href="{{ realm.get_absolute_url }}#{{ object.pk }}">
+      Cancel
+    </a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endwith %}
+{% endblock %}

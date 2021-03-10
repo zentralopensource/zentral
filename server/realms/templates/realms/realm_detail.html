@@ -90,15 +90,61 @@
 </div>
 
 <form action="{% url 'realms:test' realm.pk %}" method="POST" target="_blank">{% csrf_token %}
+  {% if perms.realm.change_realm %}
   <a class="btn btn-default" href="{% url 'realms:update' object.uuid %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
+  {% endif %}
   <button class="btn btn-default">
     <span class="glyphicon glyphicon-sunglasses" aria-hidden="true"></span>
     Test
   </button>
 </p>
+
+<h3>{{ group_mapping_count }} Group mapping{{ group_mapping_count|pluralize }}</h3>
+
+{% if can_create_group_mapping %}
+<p>
+  <a class="btn btn-default" href="{% url 'realms:create_group_mapping' object.pk %}">Create</a>
+</p>
+{% endif %}
+
+{% if group_mapping_count %}
+<table class="table">
+  <thead>
+    <th>Claim</th>
+    <th>Value</th>
+    <th>Group</th>
+    <th></th>
+    <th></th>
+  </thead>
+  <tbody>
+    {% for group_mapping in group_mappings %}
+    {% with group_mapping.group as group %}
+    <tr id="{{ group_mapping.pk }}">
+      <td>{{ group_mapping.claim }}</td>
+      <td>{{ group_mapping.value }}</td>
+      <td><a href="{% url 'accounts:group' group.pk %}">{{ group }}</a></td>
+      <td>
+        {% if perms.realms.change_realmgroupmapping %}
+        <a class="btn btn-default" href="{% url 'realms:update_group_mapping' object.pk group_mapping.pk %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+        {% if perms.realms.delete_realmgroupmapping %}
+        <a class="btn btn-danger" href="{% url 'realms:delete_group_mapping' object.pk group_mapping.pk %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
 {% endblock %}
 
 {% block extrajs %}

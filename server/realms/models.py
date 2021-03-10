@@ -2,6 +2,7 @@ from datetime import datetime
 import logging
 from importlib import import_module
 import uuid
+from django.contrib.auth.models import Group
 from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.urls import reverse
@@ -148,3 +149,16 @@ class RealmAuthenticationSession(models.Model):
             logger.error("No session expiry found in the realm %s authentication session. "
                          "Use default expiry of %s seconds.", self.realm, session_expiry)
         return session_expiry
+
+
+class RealmGroupMapping(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    realm = models.ForeignKey(Realm, on_delete=models.CASCADE)
+    claim = models.CharField(max_length=255)
+    value = models.CharField(max_length=255)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("realm", "claim", "value", "group"),)
