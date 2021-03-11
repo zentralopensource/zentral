@@ -14,6 +14,7 @@ from .backends import backend_classes
 from .exceptions import RealmUserError
 from .forms import RealmGroupMappingForm
 from .models import Realm, RealmAuthenticationSession, RealmGroupMapping
+from .utils import get_realm_user_mapped_groups
 
 
 logger = logging.getLogger("zentral.realms.views")
@@ -259,6 +260,10 @@ class RealmAuthenticationSessionView(LocalUserRequiredMixin, PermissionRequiredM
         realm_user = ctx["realm_user"] = ras.user
         if not realm_user.email:
             ctx["error"] = "Missing email. Cannot be used for Zentral login."
+
+        # groups
+        ctx["mapped_groups"] = sorted(get_realm_user_mapped_groups(realm_user), key=lambda g: g.name)
+        ctx["mapped_group_count"] = len(ctx["mapped_groups"])
 
         return ctx
 

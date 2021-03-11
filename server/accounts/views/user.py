@@ -40,14 +40,8 @@ class AddTOTPView(LoginRequiredMixin, FormView):
 
     def form_valid(self, form):
         user_totp = form.save()
-        post_verification_device_event(self.request, self.request.user,
-                                       "added", user_totp)
+        post_verification_device_event(self.request, self.request.user, "create", user_totp)
         return super().form_valid(form)
-
-    def form_invalid(self, form):
-        post_verification_device_event(self.request, self.request.user,
-                                       "not_added")
-        return super().form_invalid(form)
 
 
 class DeleteVerificationDeviceView(LoginRequiredMixin, FormView):
@@ -70,15 +64,9 @@ class DeleteVerificationDeviceView(LoginRequiredMixin, FormView):
         return kwargs
 
     def form_valid(self, form):
+        post_verification_device_event(self.request, self.request.user, "delete", self.device)
         self.device.delete()
-        post_verification_device_event(self.request, self.request.user,
-                                       "removed", self.device)
         return super().form_valid(form)
-
-    def form_invalid(self, form):
-        post_verification_device_event(self.request, self.request.user,
-                                       "not_removed", self.device)
-        return super().form_invalid(form)
 
 
 class DeleteTOTPView(DeleteVerificationDeviceView):
@@ -111,9 +99,10 @@ class RegisterU2FDeviceView(LoginRequiredMixin, FormView):
         u2f_challenge = self.request.session["u2f_challenge"]
         device, _ = complete_registration(u2f_challenge, token_response,
                                           [zentral_settings["api"]["tls_hostname"]])
-        UserU2F.objects.create(user=self.request.user,
-                               name=form.cleaned_data["name"],
-                               device=device)
+        user_u2f = UserU2F.objects.create(user=self.request.user,
+                                          name=form.cleaned_data["name"],
+                                          device=device)
+        post_verification_device_event(self.request, self.request.user, "create", user_u2f)
         messages.info(self.request, "U2F device registered")
         return super().form_valid(form)
 

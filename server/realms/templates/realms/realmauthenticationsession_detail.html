@@ -54,4 +54,15 @@
   <dt>Full name</dt>
   <dd>{{ realm_user.full_name|default:"-" }}</dd>
 </dl>
+
+<h3>{{ mapped_group_count }} Mapped group{{ mapped_group_count|pluralize }}</h3>
+
+{% if mapped_group_count %}
+<ul>
+  {% for group in mapped_groups %}
+  <li><a href="{% url 'accounts:group' group.pk %}">{{ group }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
 {% endblock %}

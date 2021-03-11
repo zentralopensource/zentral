@@ -98,11 +98,12 @@ class VerificationMixin(object):
         return kwargs
 
     def form_valid(self, form):
+        self.request.session["mfa_authenticated"] = True
         auth_login(self.request, form.user)  # form.user has the backend (carried by the token from the login view)
         return HttpResponseRedirect(form.redirect_to)
 
     def form_invalid(self, form):
-        post_failed_verification_event(self.request, form.user)
+        post_failed_verification_event(self.request, form)
         return super().form_invalid(form)
 
 

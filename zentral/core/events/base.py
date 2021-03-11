@@ -66,23 +66,56 @@ class EventObserver(object):
 
 
 class EventRequestUser(object):
-    user_attr_list = ["id", "username", "email",
-                      "has_verification_device",
-                      "is_remote", "is_service_account", "is_superuser"]
+    attr_list = ["id", "username", "email",
+                 "is_remote", "is_service_account", "is_superuser",
+                 "session"]
 
     def __init__(self, **kwargs):
-        for attr in self.user_attr_list:
+        for attr in self.attr_list:
             setattr(self, attr, kwargs.get(attr))
 
     @classmethod
-    def build_from_user(cls, user):
+    def build_from_request(cls, request):
+        user = request.user
         if user and user.is_authenticated:
-            kwargs = {attr: getattr(user, attr) for attr in cls.user_attr_list}
+            kwargs = {attr: getattr(user, attr) for attr in cls.attr_list if attr != "session"}
+            # session
+            session = request.session
+            session_d = kwargs.setdefault("session", {})
+            # session expiry
+            seabc = session.get_expire_at_browser_close()
+            session_d["expire_at_browser_close"] = seabc
+            if not seabc:
+                session_d["expiry_age"] = session.get_expiry_age()
+            # realm session?
+            ras_pk = session.get("realm_authentication_session_pk")
+            if ras_pk:
+                session_d["is_remote"] = True
+                session_d["realm_authentication_session_pk"] = ras_pk
+                # realm user pk
+                ru_pk = session.get("realm_user_pk")
+                if ru_pk:
+                    session_d["realm_user_pk"] = ru_pk
+                # realm
+                realm_d = {}
+                for attr in ("pk", "backend", "name"):
+                    val = session.get(f"realm_{attr}")
+                    if val:
+                        realm_d[attr] = val
+                if realm_d:
+                    session_d["realm"] = realm_d
+            else:
+                # mfa?
+                session_d["is_remote"] = False
+                if session.get("mfa_authenticated"):
+                    session_d["mfa_authenticated"] = True
+                else:
+                    session_d["mfa_authenticated"] = False
             return cls(**kwargs)
 
     def serialize(self):
         d = {}
-        for attr in self.user_attr_list:
+        for attr in self.attr_list:
             val = getattr(self, attr)
             if val is not None:
                 d[attr] = val
@@ -146,7 +179,7 @@ class EventRequest(object):
     @classmethod
     def build_from_request(cls, request):
         user_agent, ip = user_agent_and_ip_address_from_request(request)
-        user = EventRequestUser.build_from_user(request.user)
+        user = EventRequestUser.build_from_request(request)
         if user_agent or ip or user:
             return EventRequest(user_agent, ip, user=user)
 

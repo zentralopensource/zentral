@@ -127,7 +127,7 @@ class UserVerificationDevice(models.Model):
 
     def serialize_for_event(self):
         return {"type": self.TYPE,
-                "name": self.name}
+                "pk": self.pk}
 
 
 class UserTOTP(UserVerificationDevice):
