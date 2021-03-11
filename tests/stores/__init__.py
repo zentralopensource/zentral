@@ -4,6 +4,7 @@ from zentral.core.events.base import EventMetadata, EventRequest, EventRequestUs
 
 class TestEvent1(BaseEvent):
     event_type = "event_type_1"
+    namespace = "ns_event_type_1"
 
 
 register_event_type(TestEvent1)
@@ -28,6 +29,7 @@ def make_event(idx=0, first_type=True, with_request=True):
     else:
         request = None
     return event_cls(EventMetadata(event_cls.event_type,
+                                   namespace=event_cls.namespace,
                                    machine_serial_number='012356789',
                                    request=request),
                      {'idx': idx})
