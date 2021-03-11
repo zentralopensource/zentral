@@ -29,7 +29,8 @@ class EventStore(BaseEventStore):
         humio_attributes = event.pop("_zentral")
         event_type = humio_attributes.pop("type")
         humio_tags = {"event_type": event_type}
-        humio_attributes[event_type] = event
+        namespace = humio_attributes.get("namespace", event_type)
+        humio_attributes[namespace] = event
         created_at = humio_attributes.pop("created_at")
         timestamp = "{}Z".format(created_at[:-3])
         data = [{"tags": humio_tags, "events": [{"timestamp": timestamp, "attributes": humio_attributes}]}]

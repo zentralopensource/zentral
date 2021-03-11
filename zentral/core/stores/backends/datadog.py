@@ -52,7 +52,8 @@ class EventStore(BaseEventStore):
             event = event.serialize()
         ddevent = event.pop("_zentral")
         event_type = ddevent.pop("type")
-        ddevent[event_type] = event
+        namespace = ddevent.get("namespace", event_type)
+        ddevent[namespace] = event
         ddevent["service"] = self.service
         ddevent["ddsource"] = self.source
         ddevent["logger"] = {"name": event_type}
@@ -128,7 +129,8 @@ class EventStore(BaseEventStore):
         # the real event content
         event_type = metadata.pop("logger")["name"]
         metadata["type"] = event_type
-        event_d = metadata.pop(event_type)
+        namespace = metadata.get("namespace", event_type)
+        event_d = metadata.pop(namespace)
         event_d["_zentral"] = metadata
         return event_from_event_d(event_d)
 

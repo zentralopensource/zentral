@@ -47,7 +47,8 @@ class EventStore(BaseEventStore):
         payload_event = event.pop("_zentral")
         created_at = payload_event.pop("created_at")
         event_type = payload_event.pop("type")
-        payload_event[event_type] = event
+        namespace = payload_event.get("namespace", event_type)
+        payload_event[namespace] = event
         payload = {
             "host": (payload_event.get("machine_serial_number")
                      or payload_event.get("observer", {}).get("hostname")

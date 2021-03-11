@@ -192,6 +192,7 @@ class EventRequest(object):
 class EventMetadata(object):
     def __init__(self, event_type, **kwargs):
         self.event_type = event_type
+        self.namespace = kwargs.pop('namespace', event_type)
         self.uuid = kwargs.pop('uuid', uuid.uuid4())
         if isinstance(self.uuid, str):
             self.uuid = uuid.UUID(self.uuid)
@@ -231,6 +232,8 @@ class EventMetadata(object):
              'index': self.index,
              'type': self.event_type,
              }
+        if self.namespace:
+            d['namespace'] = self.namespace
         if self.observer:
             d['observer'] = self.observer.serialize()
         if self.request:
@@ -268,6 +271,7 @@ class EventMetadata(object):
 
 class BaseEvent(object):
     event_type = "base"
+    namespace = None
     tags = []
     heartbeat_timeout = None
     payload_aggregations = []
@@ -281,6 +285,7 @@ class BaseEvent(object):
         if observer:
             observer = EventObserver.deserialize(observer)
         metadata = EventMetadata(cls.event_type,
+                                 namespace=cls.namespace or cls.event_type,
                                  machine_serial_number=msn,
                                  observer=observer,
                                  request=request,

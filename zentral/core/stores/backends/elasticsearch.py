@@ -221,7 +221,8 @@ class EventStore(BaseEventStore):
         else:
             event_type = es_event_d.pop('type')
             es_doc_type = event_type  # document type in ES
-        es_event_d[event_type] = event_d
+        namespace = es_event_d.get('namespace', event_type)
+        es_event_d[namespace] = event_d
         return es_doc_type, es_event_d
 
     def _deserialize_event(self, es_doc_type, es_event_d):
@@ -230,7 +231,8 @@ class EventStore(BaseEventStore):
         else:
             event_type = es_doc_type
             es_event_d["type"] = event_type
-        event_d = es_event_d.pop(event_type, {})
+        namespace = es_event_d.get('namespace', event_type)
+        event_d = es_event_d.pop(namespace, {})
         event_d['_zentral'] = es_event_d
         return event_from_event_d(event_d)
 
