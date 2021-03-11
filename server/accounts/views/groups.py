@@ -1,4 +1,6 @@
 import logging
+from django.db.models import Count
+from django.db.models.functions import Lower
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.contrib.auth.models import Group
 from django.urls import reverse, reverse_lazy
@@ -21,6 +23,14 @@ class GroupsView(CanManageGroupsMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
         return ctx
+
+    def get_queryset(self):
+        return (
+            super().get_queryset()
+                   .annotate(user_count=Count("user"),
+                             realm_group_mapping_count=Count("realmgroupmapping"))
+                   .order_by(Lower("name"))
+        )
 
 
 class CreateGroupView(CanManageGroupsMixin, CreateView):

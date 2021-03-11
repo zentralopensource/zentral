@@ -18,6 +18,10 @@
 <table class="table">
   <thead>
     <th>Name</th>
+    <th>Users</th>
+    {% if perms.realms.view_realmgroupmapping %}
+    <th>Realm mappings</th>
+    {% endif %}
     <th style="width:15%"></th>
   </thead>
   <tbody>
@@ -28,6 +32,14 @@
         <a href="{% url 'accounts:group' group.pk %}">{{ group }}</a>
         {% endif %}
       </td>
+      <td>
+        {{ group.user_count }}
+      </td>
+      {% if perms.realms.view_realmgroupmapping %}
+      <td>
+        {{ group.realm_group_mapping_count }}
+      </td>
+      {% endif %}
       <td>
         {% if perms.auth.change_group %}
         <a class="btn btn-default" href="{% url 'accounts:update_group' group.pk %}">
