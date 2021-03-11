@@ -154,6 +154,8 @@ def macos_version_from_build(build):
                 patch = 1
             elif build in ("20D80",):
                 patch = 2
+            elif build in ("20D91",):
+                patch = 3
             else:
                 patch = 0
         else:
