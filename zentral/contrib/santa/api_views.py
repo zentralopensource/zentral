@@ -157,7 +157,6 @@ class RuleSetUpdate(APIView):
                         })
                     else:
                         rules_present += 1
-            rules_deleted = 0
             for rule in (Rule.objects.select_related("target")
                                      .prefetch_related("tags")
                                      .filter(configuration=configuration, ruleset=ruleset)
