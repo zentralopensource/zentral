@@ -12,6 +12,8 @@ PROBES_MODULE_NAME = "probes"
 
 
 class ZentralAppConfig(AppConfig):
+    permission_models = None
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.events_module = None

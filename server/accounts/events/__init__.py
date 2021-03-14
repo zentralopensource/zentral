@@ -1,4 +1,6 @@
+from datetime import datetime
 import logging
+import uuid
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 
@@ -136,3 +138,44 @@ def post_verification_device_event(request, user, action, verification_device=No
     else:
         payload = {"verification_device": verification_device.serialize_for_event()}
     post_event(event_class, request, user, payload)
+
+
+def post_group_membership_updates(request, added_groups, removed_groups, user=None):
+    event_request = EventRequest.build_from_request(request)
+    created_at = datetime.utcnow()
+    event_uuid = uuid.uuid4()
+    event_index = 0
+    base_payload = {}
+    if user:
+        base_payload["user"] = {
+            "pk": user.pk, "username": user.username,
+            "is_service_account": user.is_service_account
+        }
+    if added_groups:
+        event_metadata = EventMetadata(AddUserToGroupEvent.event_type,
+                                       namespace=AddUserToGroupEvent.namespace,
+                                       request=event_request,
+                                       tags=AddUserToGroupEvent.tags,
+                                       uuid=event_uuid,
+                                       created_at=created_at)
+        for added_group in added_groups:
+            event_metadata.index = event_index
+            payload = base_payload.copy()
+            payload["group"] = {"pk": added_group.pk, "name": added_group.name}
+            event = AddUserToGroupEvent(event_metadata, payload)
+            event.post()
+            event_index += 1
+    if removed_groups:
+        event_metadata = EventMetadata(RemoveUserFromGroupEvent.event_type,
+                                       namespace=RemoveUserFromGroupEvent.namespace,
+                                       request=event_request,
+                                       tags=RemoveUserFromGroupEvent.tags,
+                                       uuid=event_uuid,
+                                       created_at=created_at)
+        for removed_group in removed_groups:
+            event_metadata.index = event_index
+            payload = base_payload.copy()
+            payload["group"] = {"pk": removed_group.pk, "name": removed_group.name}
+            event = RemoveUserFromGroupEvent(event_metadata, payload)
+            event.post()
+            event_index += 1

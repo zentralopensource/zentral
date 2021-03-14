@@ -2,7 +2,6 @@ import logging
 from django.conf import settings
 from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.contrib.auth.mixins import PermissionRequiredMixin
-from django.contrib.auth.models import Group
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
@@ -30,12 +29,9 @@ class LocalUserRequiredMixin:
                                      REDIRECT_FIELD_NAME)
         if request.user.is_remote:
             raise PermissionDenied("Remote users cannot access this view.")
-        if request.session.get("_realm_authentication_session"):
+        if request.realm_authentication_session.is_remote:
             raise PermissionDenied("Log in without using a realm to access this view.")
         return super().dispatch(request, *args, **kwargs)
-
-        if not self.request.user.has_perms(('accounts.add_user', 'accounts.change_user', 'accounts.delete_user')):
-            raise PermissionDenied("You do not have the required permissions to manage the realms.")
 
 
 class RealmListView(PermissionRequiredMixin, ListView):
@@ -44,23 +40,20 @@ class RealmListView(PermissionRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["realms_count"] = ctx["object_list"].count()
-        ctx["create_links"] = [
-            {"url": reverse("realms:create", args=(slug,)),
-             "anchor_text": backend_class.name}
-            for slug, backend_class in backend_classes.items()
-        ]
-        ctx["can_manage_realms"] = (
-            not self.request.user.is_remote
-            and not self.request.session.get("_realm_authentication_session")
-            and self.request.user.has_perms(('accounts.add_user', 'accounts.change_user', 'accounts.delete_user'))
-        )
+        create_links = []
+        if not self.request.realm_authentication_session.is_remote and self.request.user.has_perm("realms.add_realm"):
+            create_links.extend(
+                {"url": reverse("realms:create", args=(slug,)),
+                 "anchor_text": backend_class.name}
+                for slug, backend_class in backend_classes.items()
+            )
+        ctx["create_links"] = create_links
         return ctx
 
 
 class CreateRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateView):
-    permission_required = ("realms.create_realm", "auth.create_user", "auth.change_user")
+    permission_required = "realms.add_realm"
     template_name = "realms/realm_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -71,11 +64,6 @@ class CreateRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateVie
 
     def get_form_class(self):
         return backend_classes.get(self.backend).get_form_class()
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
 
     def form_valid(self, form):
         self.object = form.save(commit=False)
@@ -90,42 +78,26 @@ class RealmView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         group_mappings = self.object.realmgroupmapping_set.all().order_by("claim", "value", "group__name")
         ctx["group_mappings"] = group_mappings
         ctx["group_mapping_count"] = group_mappings.count()
-        ctx["can_create_group_mapping"] = (
-            Group.objects.exists()
-            and self.request.user.has_perms((
-                "realms.add_realmgroupmapping", "realms.view_realm",
-                "auth.view_group", "auth.change_group", "auth.change_user"
-            ))
-        )
         return ctx
 
 
 class UpdateRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateView):
-    permission_required = ("realms.create_realm", "auth.create_user", "auth.change_user")
+    permission_required = "realms.change_realm"
     model = Realm
     fields = ("name",)
 
     def get_form_class(self):
         return self.object.backend_instance.get_form_class()
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
-
 
 # group mappings
 
 
 class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateView):
-    permission_required = (
-        "realms.add_realmgroupmapping", "realms.view_realm",
-        "auth.view_group", "auth.change_group", "auth.change_user"
-    )
+    permission_required = "realms.add_realmgroupmapping"
     model = RealmGroupMapping
     form_class = RealmGroupMappingForm
 
@@ -149,10 +121,7 @@ class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixi
 
 
 class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateView):
-    permission_required = (
-        "realms.change_realmgroupmapping", "realms.view_realm",
-        "auth.view_group", "auth.change_group", "auth.change_user"
-    )
+    permission_required = "realm.change_realmgroupmapping"
     model = RealmGroupMapping
     pk_url_kwarg = "gm_pk"
     form_class = RealmGroupMappingForm
@@ -176,10 +145,7 @@ class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixi
 
 
 class DeleteRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteView):
-    permission_required = (
-        "realms.delete_realmgroupmapping", "realms.view_realm",
-        "auth.view_group", "auth.change_group", "auth.change_user"
-    )
+    permission_required = "realm.delete_realmgroupmapping"
     model = RealmGroupMapping
     pk_url_kwarg = "gm_pk"
 
@@ -223,7 +189,9 @@ class LoginView(View):
 # SSO Test views
 
 
-class TestRealmView(View):
+class TestRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "realms.view_realm"
+
     def post(self, request, *args, **kwargs):
         realm = get_object_or_404(Realm, pk=kwargs["pk"])
         callback = "realms.utils.test_callback"
@@ -241,7 +209,7 @@ class TestRealmView(View):
 
 
 class RealmAuthenticationSessionView(LocalUserRequiredMixin, PermissionRequiredMixin, DetailView):
-    permission_required = ("realms.view_realm", "auth.view_user")
+    permission_required = "realms.view_realm"
     model = RealmAuthenticationSession
     pk_url_kwarg = "ras_pk"
 

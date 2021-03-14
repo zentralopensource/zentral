@@ -55,6 +55,7 @@
   <dd>{{ realm_user.full_name|default:"-" }}</dd>
 </dl>
 
+{% if perms.auth.view_group %}
 <h3>{{ mapped_group_count }} Mapped group{{ mapped_group_count|pluralize }}</h3>
 
 {% if mapped_group_count %}
@@ -63,6 +64,7 @@
   <li><a href="{% url 'accounts:group' group.pk %}">{{ group }}</a></li>
   {% endfor %}
 </ul>
+{% endif %}
 {% endif %}
 
 {% endblock %}

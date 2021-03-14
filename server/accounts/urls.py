@@ -22,7 +22,7 @@ urlpatterns = [
          name="delete_user"),
     path('users/<int:pk>/api_token/create/', views.CreateUserAPITokenView.as_view(),
          name="create_user_api_token"),
-    path('users/<int:pk>/api_token/view/', views.UserAPITokenView.as_view(),
+    path('users/<signed_pk>/view_api_token/', views.UserAPITokenView.as_view(),
          name="user_api_token"),
     path('users/<int:pk>/api_token/delete/', views.DeleteUserAPITokenView.as_view(),
          name="delete_user_api_token"),
@@ -35,18 +35,27 @@ urlpatterns = [
     path('groups/<int:pk>/delete/', views.DeleteGroupView.as_view(), name="delete_group"),
 
     # user views
-    path('verification_devices/', views.UserVerificationDevicesView.as_view(),
+    path('settings/profile/', views.ProfileView.as_view(), name="profile"),
+    path('settings/verification_devices/', views.UserVerificationDevicesView.as_view(),
          name="verification_devices"),
-    path('add_totp/', views.AddTOTPView.as_view(),
+    path('settings/verification_devices/add_totp/', views.AddTOTPView.as_view(),
          name="add_totp"),
-    path('totp/<int:pk>/delete/', views.DeleteTOTPView.as_view(),
+    path('settings/verification_devices/totp/<int:pk>/delete/', views.DeleteTOTPView.as_view(),
          name="delete_totp"),
     path('verify_totp/', views.VerifyTOTPView.as_view(),
          name='verify_totp'),
-    path('u2f_devices/register/', views.RegisterU2FDeviceView.as_view(),
+    path('settings/verification_devices/register_u2f_device/', views.RegisterU2FDeviceView.as_view(),
          name="register_u2f_device"),
-    path('u2f_devices/<int:pk>/delete/', views.DeleteU2FDeviceView.as_view(),
+    path('settings/verification_devices/u2f/<int:pk>/delete/', views.DeleteU2FDeviceView.as_view(),
          name="delete_u2f_device"),
     path(r'verify_u2f/', views.VerifyU2FView.as_view(),
          name='verify_u2f'),
 ]
+
+setup_menu_cfg = {
+    'weight': 1,
+    'items': (
+        ('users', 'Users', False, ('accounts.view_user',)),
+        ('groups', 'Groups', False, ('auth.view_group',)),
+    )
+}

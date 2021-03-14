@@ -9,12 +9,100 @@
 
 <h3>{{ object }}</h3>
 
+<h4>{{ permission_count }} Permission{{ permission_count|pluralize }}</h4>
+
+{% if permission_count %}
+<table class="table">
+  <thead>
+    <th>App</th>
+    <th>Model</th>
+    <th>Actions</th>
+  </thead>
+  <tbody>
+    {% for content_type, codenames in permissions %}
+    <tr>
+      <td>{{ content_type.app_label }}</td>
+      <td>{{ content_type.model }}</td>
+      <td>{{ codenames|join:", " }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
 <p>
-  {% if perms.auth.change_group %}
+  {% if perms.auth.change_group and perms.accounts.change_user %}
   <a href="{% url 'accounts:update_group' object.pk %}" class="btn btn-default">Update</a>
   {% endif %}
-  {% if perms.auth.delete_group %}
+  {% if perms.auth.delete_group and perms.accounts.change_user %}
   <a href="{% url 'accounts:delete_group' object.pk %}" class="btn btn-danger">Delete</a>
   {% endif %}
 </p>
+
+{% if perms.accounts.view_user %}
+<h4>{{ user_count }} User{{ user_count|pluralize }}</h4>
+{% if user_count %}
+<table class="table">
+  <thead>
+    <th>Username</th>
+    <th>Email</th>
+    <th>Remote?</th>
+  </thead>
+  <tbody>
+    {% for user in users %}
+    <tr>
+      <td><a href="{% url 'accounts:user' user.pk %}">{{ user.username }}</a></td>
+      <td>{{ user.email }}</td>
+      <td>{% if user.is_remote %}Yes{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+
+{% if perms.accounts.view_user %}
+<h4>{{ service_account_count }} Service account{{ service_account_count|pluralize }}</h4>
+{% if service_account_count %}
+<table class="table">
+  <thead>
+    <th>Name</th>
+  </thead>
+  <tbody>
+    {% for service_account in service_accounts %}
+    <tr>
+      <td><a href="{% url 'accounts:user' service_account.pk %}">{{ service_account }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+
+{% if perms.realms.view_realmgroupmapping %}
+<h4>{{ realm_group_mapping_count }} Realm mapping{{ realm_group_mapping_count|pluralize }}</h4>
+{% if realm_group_mapping_count %}
+<table class="table">
+  <thead>
+    {% if perms.realms.view_realm %}
+    <th>Realm</th>
+    {% endif %}
+    <th>Claim</th>
+    <th>Value</th>
+  </thead>
+  <tbody>
+    {% for realm_group_mapping in realm_group_mappings %}
+    <tr>
+      {% if perms.realms.view_realm %}
+      <td><a href="{{ realm_group_mapping.realm.get_absolute_url }}">{{ realm_group_mapping.realm }}</a></td>
+      {% endif %}
+      <td>{{ realm_group_mapping.claim }}</td>
+      <td>{{ realm_group_mapping.value }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+
 {% endblock %}

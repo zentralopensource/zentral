@@ -89,8 +89,9 @@
   </div>
 </div>
 
+{% if not request.realm_authentication_session.is_remote %}
 <form action="{% url 'realms:test' realm.pk %}" method="POST" target="_blank">{% csrf_token %}
-  {% if perms.realm.change_realm %}
+  {% if perms.realms.change_realm %}
   <a class="btn btn-default" href="{% url 'realms:update' object.uuid %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
@@ -101,10 +102,12 @@
     Test
   </button>
 </p>
+{% endif %}
 
+{% if perms.realms.view_realmgroupmapping %}
 <h3>{{ group_mapping_count }} Group mapping{{ group_mapping_count|pluralize }}</h3>
 
-{% if can_create_group_mapping %}
+{% if not request.realm_authentication_session.is_remote and perms.realms.add_realmgroupmapping %}
 <p>
   <a class="btn btn-default" href="{% url 'realms:create_group_mapping' object.pk %}">Create</a>
 </p>
@@ -127,12 +130,12 @@
       <td>{{ group_mapping.value }}</td>
       <td><a href="{% url 'accounts:group' group.pk %}">{{ group }}</a></td>
       <td>
-        {% if perms.realms.change_realmgroupmapping %}
+        {% if not request.realm_authentication_session.is_remote and perms.realms.change_realmgroupmapping %}
         <a class="btn btn-default" href="{% url 'realms:update_group_mapping' object.pk group_mapping.pk %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
         {% endif %}
-        {% if perms.realms.delete_realmgroupmapping %}
+        {% if not request.realm_authentication_session.is_remote and perms.realms.delete_realmgroupmapping %}
         <a class="btn btn-danger" href="{% url 'realms:delete_group_mapping' object.pk group_mapping.pk %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
@@ -143,6 +146,7 @@
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 {% endif %}
 
 {% endblock %}

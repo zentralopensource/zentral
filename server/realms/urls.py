@@ -37,7 +37,8 @@ urlpatterns += openidc_urlpatterns
 
 
 setup_menu_cfg = {
+    'title': 'Accounts',
     'items': (
-        ('list', 'List'),
+        ('list', 'Realms', False, ('realms.view_realm',)),
     )
 }

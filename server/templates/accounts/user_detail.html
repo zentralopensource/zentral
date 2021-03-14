@@ -4,51 +4,101 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'accounts:users' %}">Users</a></li>
-  <li class="active">{{ user.get_type_display|title }} {{ user }}</li>
+  <li class="active">{{ object.get_type_display|title }} {{ object }}</li>
 </ol>
 
-<h3>{{ user.get_type_display|title }} {{ user }}</h3>
+<h3>{{ object.get_type_display|title }} {{ object }}</h3>
 
-<dl class="dl-horizontal">
-  {% if user.is_service_account %}
-  <dt>name</dt>
-  <dd>{{ user.username }}</dd>
-  {% else %}
-  <dt>username</dt>
-  <dd>{{ user.username }}</dd>
-  <dt>email</dt>
-  <dd>{{ user.email }}</dd>
-  <dt>superuser?</dt>
-  <dd>{{ user.is_superuser|yesno }}</dd>
-  <dt>remote?</dt>
-  <dd>{{ user.is_remote|yesno }}</dd>
-  {% endif %}
-  {% if not user.is_remote %}
-  <dt>API Token?</dt>
-  <dd>
-    {% if user.auth_token %}
-    Yes
-    <a href="{% url 'accounts:delete_user_api_token' user.pk %}" class="btn btn-xs btn-danger">
-      <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-    </a>
+<table class="table">
+  <tbody>
+    {% if object.is_service_account %}
+    <tr>
+      <th style="width:15%">name</th>
+      <td>{{ object.username }}</td>
+    </tr>
     {% else %}
-    <form method="post" action="{% url 'accounts:create_user_api_token' user.pk %}">{% csrf_token %}
-    No
-    <button class="btn btn-xs btn-default" type="submit">
-      <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-    </button>
-    </form>
+    <tr>
+      <th style="width:15%">username</th>
+      <td>{{ object.username }}</td>
+    </tr>
+    <tr>
+      <th>email</th>
+      <td>{{ object.email }}</td>
+    </tr>
+    <tr>
+      <th>superuser?</th>
+      <td>{{ object.is_superuser|yesno }}</td>
+    </tr>
+    <tr>
+      <th>remote?</th>
+      <td>{{ object.is_remote|yesno }}</td>
+    </tr>
+    {% if not object.is_remote %}
+    <tr>
+      <th>verification device{{ verification_devices|length|pluralize }}</th>
+      <td>
+        {% if verification_devices %}
+        <dl>
+          {% for verification_device in verification_devices %}
+          <dt>{{ verification_device.get_type_for_display }}</dt>
+          <dd>{{ verification_device.name }}</dd>
+          {% endfor %}
+        </dl>
+        {% else %}
+        -
+        {% endif %}
+      </td>
     {% endif %}
-  </dd>
-  {% endif %}
-</dl>
+    {% endif %}
+    {% if object == request.user or perms.authtoken.view_token %}
+    <tr>
+      <th>API Token?</th>
+      <td>
+        {% if object.auth_token %}
+        yes
+        {% if can_delete_token %}
+        <a href="{% url 'accounts:delete_user_api_token' object.pk %}" class="btn btn-sm btn-danger">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+        {% else %}
+        <form method="post" action="{% url 'accounts:create_user_api_token' object.pk %}">{% csrf_token %}
+          no
+          {% if can_add_token %}
+          <button class="btn btn-sm btn-default" type="submit">
+            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+          </button>
+          {% endif %}
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endif %}
+    {% if perms.auth.view_group %}
+    <tr>
+      <th>group{{ group_count|pluralize }}</th>
+      <td>
+        {% if group_count %}
+        <ul class="list-inline">
+          {% for group in groups %}
+          <li><a href="{% url 'accounts:group' group.pk %}">{{ group }}</a></li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
 
 <p>
-  {% if user.editable %}
-  <a href="{% url 'accounts:update_user' user.pk %}" class="btn btn-default">Update</a>
+  {% if perms.accounts.change_user and object.editable %}
+  <a href="{% url 'accounts:update_user' object.pk %}" class="btn btn-default">Update</a>
   {% endif %}
-  {% if user.deletable %}
-  <a href="{% url 'accounts:delete_user' user.pk %}" class="btn btn-danger">Delete</a>
+  {% if perms.accounts.delete_user and object.deletable %}
+  <a href="{% url 'accounts:delete_user' object.pk %}" class="btn btn-danger">Delete</a>
   {% endif %}
 </p>
 {% endblock %}

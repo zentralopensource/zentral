@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
-from django.views.generic import DetailView, FormView
+from django.views.generic import DetailView, FormView, TemplateView
 from u2flib_server.u2f import begin_registration, complete_registration
 from accounts.events import post_verification_device_event
 from accounts.forms import AddTOTPForm, CheckPasswordForm, RegisterU2FDeviceForm
@@ -13,6 +13,10 @@ from zentral.conf import settings as zentral_settings
 
 
 logger = logging.getLogger("zentral.accounts.views.user")
+
+
+class ProfileView(LoginRequiredMixin, TemplateView):
+    template_name = "accounts/profile.html"
 
 
 class UserVerificationDevicesView(LoginRequiredMixin, DetailView):

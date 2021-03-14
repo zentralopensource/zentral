@@ -3,39 +3,69 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
+  {% if object == request.user %}
+  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  {% else %}
   <li><a href="{% url 'accounts:users' %}">Users</a></li>
-  <li><a href="{% url 'accounts:user' user.pk %}">{{ user.get_type_display|title }} {{ user }}</a></li>
+  <li><a href="{% url 'accounts:user' object.pk %}">{{ object.get_type_display|title }} {{ object }}</a></li>
+  {% endif %}
   <li class="active">API token</li>
 </ol>
 
-<h3>{{ user.get_type_display|title }} {{ user }} API token</h3>
+<h3>{% if object == request.user %}My{% else %}{{ object.get_type_display|title }} {{ object }}{% endif %} API token</h3>
 
 <p>
-  <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
-  <code hidden>
-    {{ user.auth_token.key }}
-  </code>
-</p>
-
-<p>
-  <a href="{% url 'accounts:user' user.pk %}" class="btn btn-default">OK</a>
+  <a href="#" class="secret-toggle btn btn-default btn-sm" data-secret-id="auth-token">
+    <span class="glyphicon glyphicon-eye-open" aria-hidden="true"></span>
+  </a>
+  <input style="font-family:monospace" hidden id="auth-token" value="{{ object.auth_token.key }}" size="{{ object.auth_token.key|length }}">
+  <button class="copy-secret btn btn-primary btn-sm" data-secret-id="auth-token">
+    <span class="glyphicon glyphicon-copy" aria-hidden="true"></span>
+  </button>
+  {% if object == request.user %}
+  <a href="{% url 'accounts:profile' %}" class="btn btn-default btn-sm">Close</a>
+  {% else %}
+  <a href="{% url 'accounts:user' object.pk %}" class="btn btn-default btn-sm">Close</a>
+  {% endif %}
 </p>
 {% endblock %}
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  var openEyes = document.querySelectorAll(".glyphicon-eye-open");
-  openEyes.forEach(function(openEye) {
-    openEye.addEventListener("click", function(event) {
-      var valueSpan = openEye.nextElementSibling;
-      if (valueSpan.hidden) {
-        valueSpan.hidden = false;
-        openEye.classList.remove("glyphicon-eye-open");
-        openEye.classList.add("glyphicon-eye-close");
+  var secretToggles = document.querySelectorAll(".secret-toggle");
+  secretToggles.forEach(function(secretToggle) {
+    secretToggle.addEventListener("click", function(event) {
+      event.preventDefault();
+      var secretId = secretToggle.dataset.secretId;
+      var secretElm = document.getElementById(secretId);
+      var eyeSpan = secretToggle.firstElementChild;
+      if (secretElm.hidden) {
+        secretElm.hidden = false;
+        eyeSpan.classList.remove("glyphicon-eye-open");
+        eyeSpan.classList.add("glyphicon-eye-close");
       } else {
-        valueSpan.hidden = true;
-        openEye.classList.remove("glyphicon-eye-close");
-        openEye.classList.add("glyphicon-eye-open");
+        secretElm.hidden = true;
+        eyeSpan.classList.remove("glyphicon-eye-close");
+        eyeSpan.classList.add("glyphicon-eye-open");
+      }
+    });
+  });
+
+  var copySecretButtons = document.querySelectorAll(".copy-secret");
+  copySecretButtons.forEach(function(copySecretButton) {
+    copySecretButton.addEventListener("click", function(event) {
+      event.preventDefault();
+      var secretId = copySecretButton.dataset.secretId;
+      var secretElm = document.getElementById(secretId);
+      var secretElmWasHidden = secretElm.hidden;
+      // sorry
+      if (secretElmWasHidden) {
+        secretElm.hidden = false;
+      }
+      secretElm.select();
+      document.execCommand("copy");
+      if (secretElmWasHidden) {
+        secretElm.hidden = true;
       }
     });
   });

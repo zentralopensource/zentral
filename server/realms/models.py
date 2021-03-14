@@ -89,6 +89,32 @@ class RealmUser(models.Model):
         return self.username.split("@")[0].replace(".", "")
 
 
+class LocalAuthenticationSession:
+    uuid = None
+    realm = None
+    user = None
+    save_password_hash = False
+    backend_state = None
+    callback = ""
+    callback_kwargs = {}
+
+    @property
+    def is_remote(self):
+        """
+        Always return False. This is a way of comparing RealmAuthenticationSession to local ones.
+        """
+        return False
+
+    def get_callback_function(self):
+        raise NotImplementedError
+
+    def finalize(self, request, realm_user, expires_at=None):
+        raise NotImplementedError
+
+    def computed_expiry(self, default_session_expiry=300, from_dt=None):
+        raise NotImplementedError
+
+
 class RealmAuthenticationSession(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
@@ -104,6 +130,13 @@ class RealmAuthenticationSession(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def is_remote(self):
+        """
+        Always return True. This is a way of comparing RealmAuthenticationSession to local ones.
+        """
+        return True
 
     def get_callback_function(self):
         module_name, function_name = self.callback.rsplit(".", 1)

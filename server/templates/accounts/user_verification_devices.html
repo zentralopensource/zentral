@@ -2,7 +2,13 @@
 {% load bootstrap %}
 
 {% block content %}
-<h3>Verification device{{ verification_devices|length|pluralize }}</h3>
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  <li class="active">Verification devices</li>
+</ol>
+
+<h3>{{ verification_devices|length }} Verification device{{ verification_devices|length|pluralize }}</h3>
 
 <div class="dropdown">
   <button class="btn btn-default dropdown-toggle" type="button" id="addVD"

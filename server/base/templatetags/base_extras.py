@@ -5,6 +5,7 @@ import pprint
 from django import template
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.functional import SimpleLazyObject
 from django.utils.html import linebreaks, urlize
 from django.utils.safestring import mark_safe
 from pygments import lexers, highlight
@@ -15,73 +16,117 @@ register = template.Library()
 
 logger = logging.getLogger('zentral.server.base.templatetags.base_extras')
 
-DROPDOWN_LIST = []
 
-
-@register.inclusion_tag('_main_menu_app_dropdowns.html', takes_context=True)
-def main_menu_app_dropdowns(context):
-    if not DROPDOWN_LIST:
-        for app_name in settings.INSTALLED_APPS:
-            app_shortname = app_name.rsplit('.', 1)[-1]
-            try:
-                url_module = import_module('{}.urls'.format(app_name))
-            except ImportError:
-                # TODO: ModuleNotFoundError for python >= 3.6
-                continue
-            main_menu_cfg = getattr(url_module, 'main_menu_cfg', None)
-            if not main_menu_cfg:
-                logger.info('App %s w/o main menu config', app_name)
-                continue
-            link_list = []
-            dropdown_cfg = {'app_shortname': app_shortname,
-                            'title': main_menu_cfg.get('title', None) or app_shortname.title(),
-                            'weight': main_menu_cfg.get('weight', 1000)}
-            for url_name, anchor_text in main_menu_cfg['items']:
-                link_list.append((reverse('{}:{}'.format(app_shortname, url_name)),
-                                  anchor_text))
-            for extra_context_links in main_menu_cfg.get('extra_context_links', []):
-                for section, section_links in context.get(extra_context_links, {}).items():
-                    link_list.append((None, section))
-                    for link_d in section_links:
-                        link_list.append((link_d['url'], link_d['anchor_text']))
-            if link_list:
-                dropdown_cfg['link_list'] = link_list
-                dropdown_cfg['main_link'] = link_list[0][0]
-                DROPDOWN_LIST.append(dropdown_cfg)
-        DROPDOWN_LIST.sort(key=lambda d: (d['weight'], d['title']))
-    for dropdown_cfg in DROPDOWN_LIST:
-        dropdown_cfg['is_active'] = context.get(dropdown_cfg['app_shortname'], False) is True
-    context['dropdown_list'] = DROPDOWN_LIST
-    return context
-
-
-SETUP_DROPDOWN = []
-
-
-@register.inclusion_tag('_setup_dropdown.html', takes_context=True)
-def setup_dropdown(context):
-    if not SETUP_DROPDOWN:
+class MenuConfig:
+    def __init__(self, config_attr):
+        self.sections = []
+        prepared_sections = {}
         for app_name in settings.INSTALLED_APPS:
             app_shortname = app_name.rsplit('.', 1)[-1]
             try:
                 url_module = import_module('{}.urls'.format(app_name))
             except ModuleNotFoundError:
                 continue
-            setup_menu_cfg = getattr(url_module, 'setup_menu_cfg', None)
-            if not setup_menu_cfg:
-                logger.info('App %s w/o setup menu config', app_name)
+            menu_cfg = getattr(url_module, config_attr, None)
+            if not menu_cfg:
+                logger.debug('App %s w/o %s', app_name, config_attr)
                 continue
-            section_cfg = {'app_shortname': app_shortname,
-                           'title': setup_menu_cfg.get('title', None) or app_shortname.title(),
-                           'link_list': [],
-                           'weight': setup_menu_cfg.get('weight', 1000)}
-            for url_name, anchor_text in setup_menu_cfg['items']:
-                section_cfg['link_list'].append((reverse('{}:{}'.format(app_shortname, url_name)),
-                                                 anchor_text))
-            SETUP_DROPDOWN.append(section_cfg)
-        SETUP_DROPDOWN.sort(key=lambda d: (d['weight'], d['title']))
-    context["active"] = context.get("setup", False)
-    context["section_list"] = SETUP_DROPDOWN
+            title = menu_cfg.get('title', app_shortname.title())
+            section_cfg = prepared_sections.setdefault(
+                title,
+                {'title': title,
+                 'link_list': [],
+                 # TODO Legacy. Only used for the creation links for the probes, set with a context processor
+                 'extra_links_context_keys': menu_cfg.get("extra_context_links", []),
+                 'weight': menu_cfg.get('weight', 1000)}
+            )
+            for item in menu_cfg['items']:
+                try:
+                    url_name, anchor_text = item
+                except ValueError:
+                    try:
+                        url_name, anchor_text, local_user, permissions = item
+                    except ValueError:
+                        logger.error("Error in setup menu config for app %s", app_name)
+                        continue
+                else:
+                    local_user = False
+                    permissions = None
+                section_cfg['link_list'].append((reverse(f"{app_shortname}:{url_name}"), anchor_text,
+                                                 local_user, permissions))
+        if prepared_sections:
+            self.sections = sorted(prepared_sections.values(), key=lambda s: (s['weight'], s['title']))
+
+    @staticmethod
+    def _iter_section_links(context, section):
+        yield from section["link_list"]
+        # TODO Legacy. Only used for the creation links for the probes, set with a context processor
+        extra_links_context_keys = section['extra_links_context_keys']
+        if extra_links_context_keys:
+            if "_cached_extra_context_links" not in section:
+                cached_extra_context_links = section.setdefault("_cached_extra_context_links", [])
+                for context_key in section.get('extra_links_context_keys', []):
+                    for subsection, subsection_links in context.get(context_key, {}).items():
+                        cached_extra_context_links.append((None, subsection.title(), False, None))
+                        for link_d in subsection_links:
+                            cached_extra_context_links.append((
+                                str(link_d["url"]), link_d["anchor_text"],
+                                link_d.get("local_user", False),
+                                link_d.get("permissions")
+                            ))
+                section["_cached_extra_context_links"] = cached_extra_context_links
+            yield from section["_cached_extra_context_links"]
+
+    def get_filtered_sections(self, context):
+        request = context.get("request")
+        if not request:
+            return []
+        active = False
+        user = request.user
+        ras = request.realm_authentication_session
+        filtered_sections = []
+        for section in self.sections:
+            filtered_section = section.copy()
+            filtered_section['link_list'] = []
+            active_link_length = 0
+            active_link = None
+            for url, anchor_text, local_user, permissions in self._iter_section_links(context, section):
+                if (
+                    (local_user is False
+                     or (not user.is_remote and not ras.is_remote))
+                    and (not permissions or user.has_perms(permissions))
+                ):
+                    link_t = [url, anchor_text, False]
+                    if url and request.path.startswith(url):
+                        link_length = len(url)
+                        if link_length > active_link_length:
+                            active_link_length = link_length
+                            active_link = link_t
+                    filtered_section['link_list'].append(link_t)
+            if filtered_section['link_list']:
+                if active_link:
+                    filtered_section["is_active"] = True
+                    active_link[2] = True
+                    active = True
+                filtered_sections.append(filtered_section)
+        return active, filtered_sections
+
+
+setup_menu_config = SimpleLazyObject(lambda: MenuConfig("setup_menu_cfg"))
+
+
+@register.inclusion_tag('_setup_dropdown.html', takes_context=True)
+def setup_dropdown(context):
+    context["active"], context["section_list"] = setup_menu_config.get_filtered_sections(context)
+    return context
+
+
+main_menu_config = SimpleLazyObject(lambda: MenuConfig("main_menu_cfg"))
+
+
+@register.inclusion_tag('_main_menu_app_dropdowns.html', takes_context=True)
+def main_menu_app_dropdowns(context):
+    _, context["dropdown_list"] = main_menu_config.get_filtered_sections(context)
     return context
 
 

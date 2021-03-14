@@ -1,15 +1,15 @@
 {% for dropdown in dropdown_list %}
 <li class="dropdown{% if dropdown.is_active %} active{% endif %}">
-  <a href="{{ dropdown.main_link }}" class="dropdown-toggle" data-toggle="dropdown" role="button">
+  <a href="{{ dropdown.link_list|first|first }}" class="dropdown-toggle" data-toggle="dropdown" role="button">
     {{ dropdown.title }} <span class="caret"></span>
   </a>
   <ul class="dropdown-menu">
-    {% for link, anchor_text in dropdown.link_list %}
+    {% for link, anchor_text, active in dropdown.link_list %}
     {% if not link %}
     <li role="separator" class="divider"></li>
     <li class="dropdown-header">{{ anchor_text }}</li>
     {% else %}
-    <li><a href="{{ link }}">{{ anchor_text }}</a></li>
+    <li{% if active %} class="active"{% endif %}><a href="{{ link }}">{{ anchor_text }}</a></li>
     {% endif %}
     {% endfor %}
   </ul>

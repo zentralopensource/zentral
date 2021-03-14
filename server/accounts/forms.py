@@ -1,7 +1,11 @@
+import functools
+import operator
 from urllib.parse import urlparse
 from django import forms
+from django.apps import apps
 from django.conf import settings as django_settings
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, UsernameField
+from django.contrib.auth.models import Group
 from django.core import signing, validators
 from django.db.models import Q
 from django.utils.crypto import get_random_string
@@ -15,10 +19,39 @@ from zentral.conf import settings as zentral_settings
 class ZentralAuthenticationForm(AuthenticationForm):
     username = UsernameField(
         max_length=254,
-        widget=forms.TextInput(attrs={'autofocus': '',
+        widget=forms.TextInput(attrs={'autofocus': True,
                                       'autocorrect': 'off',
                                       'autocapitalize': 'none'}),
     )
+
+
+class GroupForm(forms.ModelForm):
+    default_permission_content_types = (
+        ("auth", "group"),
+        ("authtoken", "token"),
+    )
+
+    class Meta:
+        model = Group
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        content_type_filters = [
+            Q(content_type__app_label=a, content_type__model=m) for a, m in self.default_permission_content_types
+        ]
+        for app_name, app_config in apps.app_configs.items():
+            permission_models = getattr(app_config, "permission_models", None)
+            if permission_models:
+                for model in permission_models:
+                    content_type_filters.append(Q(content_type__app_label=app_name, content_type__model=model))
+        content_types_filter = functools.reduce(
+            operator.or_,
+            content_type_filters
+        )
+        self.fields["permissions"].queryset = (
+            self.fields["permissions"].queryset.filter(content_types_filter)
+        )
 
 
 class InviteUserForm(forms.ModelForm):
@@ -26,6 +59,7 @@ class InviteUserForm(forms.ModelForm):
         model = User
         fields = ("username", "email")
         field_classes = {'username': UsernameField}
+        widgets = {'username': forms.TextInput({"autofocus": True})}
 
     def save(self, request):
         user = super(InviteUserForm, self).save(commit=False)
@@ -48,58 +82,52 @@ class ServiceAccountNameValidator(validators.RegexValidator):
     flags = 0
 
 
-class ServiceAccountForm(forms.Form):
+class ServiceAccountForm(forms.ModelForm):
     name_validator = ServiceAccountNameValidator()
-    name = forms.CharField(
+    username = forms.CharField(
+        label="Name",
         max_length=150,
         required=True,
         help_text="Required. 150 characters or fewer. Letters, digits and ./+/-/_ only.",
         validators=[name_validator],
+        widget=forms.TextInput({"autofocus": True})
     )
 
-    def __init__(self, *args, **kwargs):
-        self.user = kwargs.pop("instance", None)
-        super().__init__(*args, **kwargs)
+    class Meta:
+        model = User
+        fields = ("username", "groups")
 
     def clean(self):
-        username = self.cleaned_data.get("name")
+        username = self.cleaned_data.get("username")
         if username:
             email = "{}@{}".format(username, zentral_settings["api"]["fqdn"])
             user_qs = User.objects.filter(Q(username=username) | Q(email=email))
-            if self.user:
-                user_qs = user_qs.exclude(pk=self.user.pk)
+            if self.instance.pk:
+                user_qs = user_qs.exclude(pk=self.instance.pk)
             if user_qs.count():
                 if user_qs.filter(is_service_account=True).count():
-                    self.add_error("name", "A service account with this name already exists.")
+                    self.add_error("username", "A service account with this name already exists.")
                 elif user_qs.filter(is_service_account=False).count():
-                    self.add_error("name", "A user with this name already exists.")
-            return {"username": username, "email": email}
-
-    def save(self, request=None):
-        username = self.cleaned_data.get("username")
-        email = self.cleaned_data.get("email")
-        if not self.user:
-            return User.objects.create_service_account(username, email)
-        else:
-            self.user.username = username
-            self.user.email = email
-            self.user.save()
-            return self.user
+                    self.add_error("username", "A user with this name already exists.")
+            self.instance.email = email
+        self.instance.is_service_account = True
 
 
 class UpdateUserForm(forms.ModelForm):
     class Meta:
         model = User
-        fields = ("username", "email", "is_superuser")
+        fields = ("username", "email", "is_superuser", "groups")
         field_classes = {'username': UsernameField}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not self.instance.username_and_email_editable():
-            self.fields["username"].disabled = True
-            self.fields["email"].disabled = True
+            del self.fields["username"]
+            del self.fields["email"]
         if not self.instance.is_superuser_editable():
-            self.fields["is_superuser"].disabled = True
+            del self.fields["is_superuser"]
+        if self.instance.is_remote:
+            del self.fields["groups"]
 
 
 class AddTOTPForm(forms.Form):

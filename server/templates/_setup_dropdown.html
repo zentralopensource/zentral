@@ -4,19 +4,10 @@
       Setup <span class="caret"></span></a>
     </a>
     <ul class="dropdown-menu">
-      {% if perms.auth %}
-      {% if perms.auth.add_user or perms.auth.change_user or perms.auth.delete_user %}
-      <li><a href="{% url 'accounts:users' %}">Users</a></li>
-      {% endif %}
-      {% if perms.auth.add_group or perms.auth.change_group or perms.auth.delete_group %}
-      <li><a href="{% url 'accounts:groups' %}">Groups</a></li>
-      {% endif %}
-      <li role="separator" class="divider"></li>
-      {% endif %}
       {% for section in section_list %}
       <li class="dropdown-header">{{ section.title }}</li>
-      {% for link, anchor_text in section.link_list %}
-      <li><a href="{{ link }}">{{ anchor_text }}</a></li>
+      {% for link, anchor_text, active in section.link_list %}
+      <li{% if active %} class="active"{% endif %}><a href="{{ link }}">{{ anchor_text }}</a></li>
       {% endfor %}
       {% if not forloop.last %}
       <li role="separator" class="divider"></li>

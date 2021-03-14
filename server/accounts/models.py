@@ -7,20 +7,10 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 import pyotp
-from rest_framework.authtoken.models import Token
 
 
 class UserManager(DjangoUserManager):
-    def create_service_account(self, username, email):
-        user = User(
-            username=username,
-            email=email,
-            is_service_account=True
-        )
-        user.set_unusable_password()
-        user.save()
-        Token.objects.get_or_create(user=user)
-        return user
+    pass
 
 
 class User(AbstractUser):
@@ -43,26 +33,36 @@ class User(AbstractUser):
     def get_type_display(self):
         return "user" if not self.is_service_account else "service account"
 
+    def get_absolute_url(self):
+        return reverse("accounts:user", args=(self.pk,))
+
     def set_password(self, *args, **kwargs):
-        assert(self.is_service_account is False)
-        super().set_password(*args, **kwargs)
-        self.password_updated_at = timezone.now()
+        if not self.is_remote and not self.is_service_account:
+            super().set_password(*args, **kwargs)
+            self.password_updated_at = timezone.now()
+        else:
+            self.set_unusable_password()
 
     def save(self, *args, **kwargs):
-        if self.pk:
-            old_user = self._meta.model.objects.get(pk=self.pk)
-            if old_user.password != self.password:
-                if old_user.has_usable_password():
-                    UserPasswordHistory.objects.create(
-                        user=self,
-                        password=old_user.password,
-                        created_at=old_user.password_updated_at or old_user.date_joined
-                    )
-                self.password_updated_at = timezone.now()
-        elif self.password:
-            self.password_updated_at = timezone.now()
         if self.is_service_account:
+            # service accounts cannot be superusers
             self.is_superuser = False
+        if self.is_service_account or self.is_remote:
+            # service accounts or remote users cannot have a valid password
+            self.set_unusable_password()
+        else:
+            if self.pk:
+                old_user = self._meta.model.objects.get(pk=self.pk)
+                if old_user.password != self.password:
+                    if old_user.has_usable_password():
+                        UserPasswordHistory.objects.create(
+                            user=self,
+                            password=old_user.password,
+                            created_at=old_user.password_updated_at or old_user.date_joined
+                        )
+                    self.password_updated_at = timezone.now()
+            elif self.password:
+                self.password_updated_at = timezone.now()
         super().save(*args, **kwargs)
 
     def username_and_email_editable(self):

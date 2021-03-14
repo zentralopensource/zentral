@@ -2,6 +2,13 @@
 {% load bootstrap staticfiles %}
 
 {% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  <li><a href="{% url 'accounts:verification_devices' %}">Verification devices</a></li>
+  <li class="active">Add TOTP verification device</li>
+</ol>
+
 <h3>Add TOTP verification device</h3>
 
 

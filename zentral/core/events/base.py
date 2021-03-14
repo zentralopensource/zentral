@@ -88,22 +88,18 @@ class EventRequestUser(object):
             if not seabc:
                 session_d["expiry_age"] = session.get_expiry_age()
             # realm session?
-            ras_pk = session.get("realm_authentication_session_pk")
-            if ras_pk:
-                session_d["is_remote"] = True
-                session_d["realm_authentication_session_pk"] = ras_pk
-                # realm user pk
-                ru_pk = session.get("realm_user_pk")
-                if ru_pk:
-                    session_d["realm_user_pk"] = ru_pk
-                # realm
-                realm_d = {}
-                for attr in ("pk", "backend", "name"):
-                    val = session.get(f"realm_{attr}")
-                    if val:
-                        realm_d[attr] = val
-                if realm_d:
-                    session_d["realm"] = realm_d
+            # set via realms middleware, but absent if logout from test client for example
+            ras = getattr(request, "realm_authentication_session", None)
+            if ras and ras.is_remote:
+                session_d.update({
+                    "is_remote": True,
+                    "realm_authentication_session_pk": ras.pk,
+                    "realm_user_pk": ras.user.pk,
+                    "realm": {
+                        "pk": ras.realm.pk,
+                        "name": ras.realm.name
+                    }
+                })
             else:
                 # mfa?
                 session_d["is_remote"] = False

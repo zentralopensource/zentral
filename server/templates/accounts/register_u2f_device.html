@@ -2,6 +2,13 @@
 {% load bootstrap staticfiles %}
 
 {% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  <li><a href="{% url 'accounts:verification_devices' %}">Verification devices</a></li>
+  <li class="active">Register U2F device</li>
+</ol>
+
 <h3>Register U2F device</h3>
 
 

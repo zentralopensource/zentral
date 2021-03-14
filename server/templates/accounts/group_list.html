@@ -18,7 +18,10 @@
 <table class="table">
   <thead>
     <th>Name</th>
+    {% if perms.accounts.view_user %}
     <th>Users</th>
+    <th>Service accounts</th>
+    {% endif %}
     {% if perms.realms.view_realmgroupmapping %}
     <th>Realm mappings</th>
     {% endif %}
@@ -28,13 +31,16 @@
     {% for group in object_list %}
     <tr>
       <td>
-        {% if perms.auth.view_group %}
         <a href="{% url 'accounts:group' group.pk %}">{{ group }}</a>
-        {% endif %}
       </td>
+      {% if perms.accounts.view_user %}
       <td>
         {{ group.user_count }}
       </td>
+      <td>
+        {{ group.service_account_count }}
+      </td>
+      {% endif %}
       {% if perms.realms.view_realmgroupmapping %}
       <td>
         {{ group.realm_group_mapping_count }}

@@ -3,19 +3,26 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
+  {% if token_user == request.user %}
+  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  {% else %}
   <li><a href="{% url 'accounts:users' %}">Users</a></li>
-  <li><a href="{% url 'accounts:user' user.pk %}">{{ user.get_type_display|title }} {{ user }}</a></li>
+  <li><a href="{% url 'accounts:user' token_user.pk %}">{{ token_user.get_type_display|title }} {{ token_user }}</a></li>
+  {% endif %}
   <li class="active">Delete API token</li>
 </ol>
 
-<h3>Delete {{ user.get_type_display }} {{ user }} API token</h3>
+<h3>Delete {% if token_user == request.user %}my{% else %}{{ token_user.get_type_display }} {{ token_user }}{% endif %} API token</h3>
 
-<p>Please confirm you want to delete the {{ user.get_type_display }} API token of {{ user }}.</p>
+<p>Please confirm you want to delete {% if token_user == request.user %}your API token{% else %}the {{ token_user.get_type_display }} API token of {{ token_user }}{% endif %}.</p>
 <form class="form" method="POST">{% csrf_token %}
   <p>
-    <a href="{% url 'accounts:user' user.pk %}" class="btn btn-default">Cancel</a>
+    {% if token_user == request.user %}
+    <a href="{% url 'accounts:profile' %}" class="btn btn-default">Cancel</a>
+    {% else %}
+    <a href="{% url 'accounts:user' token_user.pk %}" class="btn btn-default">Cancel</a>
+    {% endif %}
     <button type="submit" class="btn btn-danger">Delete API token</button>
   </p>
 </form>
-
 {% endblock %}

@@ -8,16 +8,21 @@
 
 <h3>{{ user_count }} User{{ user_count|pluralize }}</h3>
 
+{% if perms.accounts.add_user %}
 <a href="{% url 'accounts:invite_user' %}" class="btn btn-default">
   <span class="glyphicon glyphicon-envelope" aria-hidden="true"></span>
   Send an email invitation
 </a>
+{% endif %}
 
 <table class="table">
   <thead>
     <th>Username</th>
     <th>Email</th>
+    <th style="width:10%">Remote?</th>
+    {% if perms.authtoken.view_token %}
     <th style="width:10%">API token</th>
+    {% endif %}
     <th style="width:15%"></th>
   </thead>
   <tbody>
@@ -32,14 +37,17 @@
         <a href="{% url 'accounts:user' managed_user.pk %}">{{ managed_user.username }}</a>
       </td>
       <td>{{ managed_user.email }}</td>
-      <td>{% if managed_user.auth_token %}Yes{% endif %}</td>
+      <td>{% if managed_user.is_remote %}yes{% endif %}</td>
+      {% if perms.authtoken.view_token %}
+      <td>{% if managed_user.auth_token %}yes{% endif %}</td>
+      {% endif %}
       <td>
-        {% if managed_user.editable %}
+        {% if perms.accounts.change_user and managed_user.editable %}
         <a class="btn btn-default" href="{% url 'accounts:update_user' managed_user.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
         {% endif %}
-        {% if managed_user.deletable %}
+        {% if perms.accounts.delete_user and managed_user.deletable %}
         <a class="btn btn-danger" href="{% url 'accounts:delete_user' managed_user.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
@@ -52,15 +60,19 @@
 
 <h3>{{ service_account_count }} Service account{{ service_account_count|pluralize }}</h3>
 
+{% if perms.accounts.add_user and perms.authtoken.add_token %}
 <a href="{% url 'accounts:create_service_account' %}" class="btn btn-default">
   Create
 </a>
+{% endif %}
 
 {% if service_account_count %}
 <table class="table">
   <thead>
     <th>Name</th>
+    {% if perms.authtoken.view_token %}
     <th style="width:10%">API token</th>
+    {% endif %}
     <th style="width:15%"></th>
   </thead>
   <tbody>
@@ -69,14 +81,16 @@
       <td>
         <a href="{% url 'accounts:user' service_account.pk %}">{{ service_account.username }}</a>
       </td>
-      <td>{% if service_account.auth_token %}Yes{% endif %}</td>
+      {% if perms.authtoken.view_token %}
+      <td>{% if service_account.auth_token %}yes{% endif %}</td>
+      {% endif %}
       <td>
-        {% if service_account.editable %}
+        {% if perms.accounts.change_user and service_account.editable %}
         <a class="btn btn-default" href="{% url 'accounts:update_user' service_account.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
         {% endif %}
-        {% if service_account.deletable %}
+        {% if perms.accounts.delete_user and service_account.deletable %}
         <a class="btn btn-danger" href="{% url 'accounts:delete_user' service_account.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>

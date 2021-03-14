@@ -10,3 +10,5 @@ div.item-form {margin: 1em 0;}
 
 table.action-probe-config tr:first-child td {border: none}
 table.action-probe-config tr td:first-child {font-weight:700; width:1%; white-space:nowrap; padding-right: 2em}
+
+select#id_permissions {height:50vh}

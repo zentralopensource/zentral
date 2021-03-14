@@ -2,16 +2,20 @@ import json
 from django.urls import reverse
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from accounts.forms import ServiceAccountForm
+from rest_framework.authtoken.models import Token
+from accounts.models import User
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
 
 
 class APIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        service_account_form = ServiceAccountForm({"name": get_random_string()})
-        assert(service_account_form.is_valid())
-        cls.service_account = service_account_form.save()
+        cls.service_account = User.objects.create(
+            username=get_random_string(),
+            email="{}@zentral.io".format(get_random_string()),
+            is_service_account=True
+        )
+        Token.objects.get_or_create(user=cls.service_account)
 
     def put_data(self, url, data, content_type, include_token=True):
         kwargs = {"content_type": content_type}

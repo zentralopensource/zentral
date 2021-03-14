@@ -2,8 +2,9 @@ import json
 from django.urls import reverse
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+from rest_framework.authtoken.models import Token
 import yaml
-from accounts.forms import ServiceAccountForm
+from accounts.models import User
 from zentral.contrib.inventory.models import Certificate, File
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target
 
@@ -13,9 +14,12 @@ class APIViewsTestCase(TestCase):
     def setUpTestData(cls):
         cls.configuration = Configuration.objects.create(name=get_random_string(256))
         cls.configuration2 = Configuration.objects.create(name=get_random_string(256))
-        service_account_form = ServiceAccountForm({"name": get_random_string()})
-        assert(service_account_form.is_valid())
-        cls.service_account = service_account_form.save()
+        cls.service_account = User.objects.create(
+            username=get_random_string(),
+            email="{}@zentral.io".format(get_random_string()),
+            is_service_account=True
+        )
+        Token.objects.get_or_create(user=cls.service_account)
         cls.maxDiff = None
 
     def post_data(self, url, data, content_type, include_token=True):

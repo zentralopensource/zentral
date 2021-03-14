@@ -2,6 +2,13 @@
 {% load bootstrap %}
 
 {% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  <li><a href="{% url 'accounts:verification_devices' %}">Verification devices</a></li>
+  <li class="active">Delete {{ object }}</li>
+</ol>
+
 <h3>Delete {{ object }}</h3>
 
 <p>Please confirm you want to delete the {{ object }} device.</p>
