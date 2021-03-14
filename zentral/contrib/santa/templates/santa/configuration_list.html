@@ -9,15 +9,19 @@
 
 <h2>{{ configurations_count }} Santa configuration{{ configurations_count|pluralize }}</h2>
 
+{% if perms.santa.add_configuration %}
 <p>
   <a href="{% url 'santa:create_configuration' %}" class="btn btn-default">Create</a>
 </p>
+{% endif %}
 
 <table class="table">
   <thead>
     <tr>
       <th>Name</th>
+      {% if perms.santa.change_configuration %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -26,12 +30,14 @@
       <td>
         <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
       </td>
+      {% if perms.santa.change_configuration %}
       <td>
         <a class="btn btn-default" href="{% url 'santa:update_configuration' configuration.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
           Update
         </a>
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>

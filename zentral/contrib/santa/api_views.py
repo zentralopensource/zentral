@@ -1,10 +1,12 @@
 from django.db import transaction
 from django.db.models import F
 from rest_framework.parsers import JSONParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from zentral.contrib.inventory.models import File, Tag
+from zentral.utils.drf import DjangoPermissionRequired
 from .events import post_santa_ruleset_update_events
 from .models import Rule, RuleSet, Target, translate_rule_policy
 from .serializers import RuleSetUpdateSerializer, build_file_tree_from_santa_fileinfo
@@ -12,6 +14,8 @@ from .serializers import RuleSetUpdateSerializer, build_file_tree_from_santa_fil
 
 class IngestFileInfo(APIView):
     parser_classes = [JSONParser]
+    permission_required = "inventory.add_file"
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         data = request.data
@@ -60,6 +64,9 @@ class IngestFileInfo(APIView):
 
 class RuleSetUpdate(APIView):
     parser_classes = [JSONParser, YAMLParser]
+    permission_required = ("santa.add_ruleset", "santa.change_ruleset",
+                           "santa.add_rule", "santa.change_rule", "santa.delete_rule")
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         serializer = RuleSetUpdateSerializer(data=request.data)

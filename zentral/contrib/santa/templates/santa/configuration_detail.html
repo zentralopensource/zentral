@@ -157,18 +157,23 @@
   </div>
 </div>
 
+{% if perms.santa.change_configuration %}
 <p>
   <a class="btn btn-default" href="{% url 'santa:update_configuration' object.id %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
 </p>
+{% endif %}
 
+{% if perms.santa.view_enrollment %}
 <h3>{{ enrollments_count }} Enrollment{{ enrollments_count|pluralize }}</h3>
 
+{% if perms.santa.add_enrollment %}
 <p>
   <a class="btn btn-default" href="{% url 'santa:create_enrollment' object.id %}">Create</a>
 </p>
+{% endif %}
 
 {% if enrollments %}
 <table class="table">
@@ -234,11 +239,14 @@
   </tbody>
 </table>
 {% endif %}
+{% endif %}
 
+{% if perms.santa.view_rule %}
 <h3>{{ rules_count }} Rule{{ rules_count|pluralize }}</h3>
 
 <p>
   <a class="btn btn-default" href="{% url 'santa:configuration_rules' object.id %}">Manage rules</a>
 </p>
+{% endif %}
 
 {% endblock %}

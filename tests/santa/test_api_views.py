@@ -1,6 +1,10 @@
+from functools import reduce
 import json
-from django.urls import reverse
+import operator
+from django.contrib.auth.models import Group, Permission
+from django.db.models import Q
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 from rest_framework.authtoken.models import Token
 import yaml
@@ -19,8 +23,23 @@ class APIViewsTestCase(TestCase):
             email="{}@zentral.io".format(get_random_string()),
             is_service_account=True
         )
+        cls.group = Group.objects.create(name=get_random_string())
+        cls.service_account.groups.set([cls.group])
         Token.objects.get_or_create(user=cls.service_account)
         cls.maxDiff = None
+
+    def set_permissions(self, *permissions):
+        if permissions:
+            permission_filter = reduce(operator.or_, (
+                Q(content_type__app_label=app_label, codename=codename)
+                for app_label, codename in (
+                    permission.split(".")
+                    for permission in permissions
+                )
+            ))
+            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
+        else:
+            self.group.permissions.clear()
 
     def post_data(self, url, data, content_type, include_token=True):
         kwargs = {"content_type": content_type}
@@ -43,12 +62,23 @@ class APIViewsTestCase(TestCase):
         response = self.post_json_data(url, [], include_token=False)
         self.assertEqual(response.status_code, 401)
 
+    def test_ingest_fileinfo_permission_denied(self):
+        url = reverse("santa_api:ingest_file_info")
+        response = self.post_json_data(url, [], include_token=True)
+        self.assertEqual(response.status_code, 403)
+
     def test_ruleset_update_unauthorized(self):
         url = reverse("santa_api:ruleset_update")
         response = self.post_json_data(url, {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
+    def test_ruleset_update_permission_denied(self):
+        url = reverse("santa_api:ruleset_update")
+        response = self.post_json_data(url, {}, include_token=True)
+        self.assertEqual(response.status_code, 403)
+
     def test_ingest_fileinfo(self):
+        self.set_permissions("inventory.add_file")
         url = reverse("santa_api:ingest_file_info")
         data = [
             {'Bundle Name': '1Password 7',
@@ -114,6 +144,8 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(cert_qs.count(), 1)
 
     def test_ruleset_update_rule(self):
+        self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
+                             "santa.add_rule", "santa.change_rule", "santa.delete_rule")
         url = reverse("santa_api:ruleset_update")
 
         # JSON rule for all configurations

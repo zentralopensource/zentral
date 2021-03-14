@@ -64,6 +64,6 @@ urlpatterns = [
 
 setup_menu_cfg = {
     'items': (
-        ('configuration_list', 'Configurations'),
+        ('configuration_list', 'Configurations', False, ('santa.view_configuration',)),
     )
 }

@@ -2,7 +2,7 @@ import json
 import logging
 from uuid import UUID
 import zlib
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.db import transaction
@@ -66,7 +66,8 @@ class InventoryMachineSubview:
 # configuration / enrollment
 
 
-class ConfigurationListView(LoginRequiredMixin, ListView):
+class ConfigurationListView(PermissionRequiredMixin, ListView):
+    permission_required = "santa.view_configuration"
     model = Configuration
 
     def get_context_data(self, **kwargs):
@@ -76,7 +77,8 @@ class ConfigurationListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class CreateConfigurationView(LoginRequiredMixin, CreateView):
+class CreateConfigurationView(PermissionRequiredMixin, CreateView):
+    permission_required = "santa.add_configuration"
     model = Configuration
     form_class = ConfigurationForm
 
@@ -86,7 +88,8 @@ class CreateConfigurationView(LoginRequiredMixin, CreateView):
         return ctx
 
 
-class ConfigurationView(LoginRequiredMixin, DetailView):
+class ConfigurationView(PermissionRequiredMixin, DetailView):
+    permission_required = "santa.view_configuration"
     model = Configuration
 
     def get_context_data(self, **kwargs):
@@ -99,7 +102,8 @@ class ConfigurationView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
+class UpdateConfigurationView(PermissionRequiredMixin, UpdateView):
+    permission_required = "santa.change_configuration"
     model = Configuration
     form_class = ConfigurationForm
 
@@ -109,7 +113,8 @@ class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
         return ctx
 
 
-class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
+class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "santa.add_enrollment"
     template_name = "santa/enrollment_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -156,7 +161,8 @@ class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
             return self.forms_invalid(secret_form, enrollment_form)
 
 
-class EnrollmentConfigurationView(LoginRequiredMixin, View):
+class EnrollmentConfigurationView(PermissionRequiredMixin, View):
+    permission_required = "santa.view_enrollment"
     response_type = None
 
     def get(self, request, *args, **kwargs):
@@ -177,7 +183,8 @@ class EnrollmentConfigurationView(LoginRequiredMixin, View):
 # rules
 
 
-class ConfigurationRulesView(LoginRequiredMixin, ListView):
+class ConfigurationRulesView(PermissionRequiredMixin, ListView):
+    permission_required = "santa.view_rule"
     paginate_by = 10
     template_name = "santa/configuration_rules.html"
 
@@ -210,7 +217,8 @@ class ConfigurationRulesView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class CreateConfigurationRuleView(LoginRequiredMixin, FormView):
+class CreateConfigurationRuleView(PermissionRequiredMixin, FormView):
+    permission_required = "santa.add_rule"
     form_class = RuleForm
     template_name = "santa/rule_form.html"
 
@@ -276,7 +284,8 @@ class CreateConfigurationRuleView(LoginRequiredMixin, FormView):
         return redirect(rule)
 
 
-class UpdateConfigurationRuleView(LoginRequiredMixin, UpdateView):
+class UpdateConfigurationRuleView(PermissionRequiredMixin, UpdateView):
+    permission_required = "santa.change_rule"
     form_class = UpdateRuleForm
 
     def get_object(self):
@@ -304,7 +313,9 @@ class UpdateConfigurationRuleView(LoginRequiredMixin, UpdateView):
         return redirect(rule)
 
 
-class DeleteConfigurationRuleView(LoginRequiredMixin, DeleteView):
+class DeleteConfigurationRuleView(PermissionRequiredMixin, DeleteView):
+    permission_required = "santa.delete_rule"
+
     def get_object(self):
         return get_object_or_404(
             Rule.objects.select_related("configuration", "target"),
@@ -330,7 +341,8 @@ class DeleteConfigurationRuleView(LoginRequiredMixin, DeleteView):
         return reverse("santa:configuration_rules", args=(self.kwargs["configuration_pk"],))
 
 
-class PickRuleBinaryView(LoginRequiredMixin, TemplateView):
+class PickRuleBinaryView(PermissionRequiredMixin, TemplateView):
+    permission_required = "santa.add_rule"
     template_name = "santa/pick_rule_binary.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -356,7 +368,8 @@ class PickRuleBinaryView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class PickRuleBundleView(LoginRequiredMixin, TemplateView):
+class PickRuleBundleView(PermissionRequiredMixin, TemplateView):
+    permission_required = "santa.add_rule"
     template_name = "santa/pick_rule_bundle.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -382,7 +395,8 @@ class PickRuleBundleView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class PickRuleCertificateView(LoginRequiredMixin, TemplateView):
+class PickRuleCertificateView(PermissionRequiredMixin, TemplateView):
+    permission_required = "santa.add_rule"
     template_name = "santa/pick_rule_certificate.html"
 
     def dispatch(self, request, *args, **kwargs):

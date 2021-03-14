@@ -25,6 +25,7 @@
 
 <h3>{{ page_obj.paginator.count }} Rule{{ page_obj.paginator.count|pluralize }}</h3>
 
+{% if perms.santa.add_rule %}
 <div class="dropdown" style="margin: 0 0 10px 0">
   <button class="btn btn-default dropdown-toggle" type="button" id="createRule"
           data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
@@ -38,6 +39,7 @@
     <li><a href="{% url 'santa:pick_rule_certificate' configuration.id %}">Certificate rule</a></li>
   </ul>
 </div>
+{% endif %}
 
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
     <div class="form-group">
@@ -181,7 +183,7 @@
     </tr>
     {% endif %}
     {% endwith %}
-    {% if rule.ruleset %}
+    {% if perms.santa.view_ruleset and rule.ruleset %}
     <tr>
       <td>Ruleset</td>
       <td>{{ rule.ruleset }}</td>
@@ -189,16 +191,22 @@
     {% endif %}
   </table>
   {% if not rule.ruleset %}
+  {% if perms.santa.change_rule or perms.santa.delete_rule %}
   <div class="panel-footer">
     <div class="btn-group" role="group">
+      {% if perms.santa.change_rule %}
       <a class="btn btn-sm btn-default" href="{% url 'santa:update_configuration_rule' configuration.pk rule.pk %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
       </a>
+      {% endif %}
+      {% if perms.santa.delete_rule %}
       <a class="btn btn-sm btn-danger" href="{% url 'santa:delete_configuration_rule' configuration.pk rule.pk %}">
         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
       </a>
+      {% endif %}
     </div>
   </div>
+  {% endif %}
   {% endif %}
 </div>
 {% endwith %}
