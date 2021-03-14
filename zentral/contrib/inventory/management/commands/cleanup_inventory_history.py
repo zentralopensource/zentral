@@ -63,12 +63,12 @@ ORPHANS = (
     ("inventory_certificate", "id",
      (("signed_by_id", "inventory_osxappinstance"),
       ("signed_by_id", "inventory_certificate"),
-      ("signed_by_id", "santa_collectedapplication"),
+      ("signed_by_id", "inventory_file"),
       ("certificate_id", "inventory_machinesnapshot_certificates"))),
     # OSXApp
     ("inventory_osxapp", "id",
      (("app_id", "inventory_osxappinstance"),
-      ("bundle_id", "santa_collectedapplication"))),
+      ("bundle_id", "inventory_file")))
 )
 
 
