@@ -91,18 +91,24 @@ class MenuConfig:
             active_link_length = 0
             active_link = None
             for url, anchor_text, local_user, permissions in self._iter_section_links(context, section):
-                if (
-                    (local_user is False
-                     or (not user.is_remote and not ras.is_remote))
-                    and (not permissions or user.has_perms(permissions))
-                ):
-                    link_t = [url, anchor_text, False]
-                    if url and request.path.startswith(url):
-                        link_length = len(url)
-                        if link_length > active_link_length:
-                            active_link_length = link_length
-                            active_link = link_t
-                    filtered_section['link_list'].append(link_t)
+                # verify local user
+                if local_user is True and (user.is_remote or ras.is_remote):
+                    continue
+                # verify permissions
+                if permissions:
+                    # model permissions
+                    if not user.has_perms(p for p in permissions if "." in p):
+                        continue
+                    # module permissions
+                    if not all(user.has_module_perms(p) for p in permissions if "." not in p):
+                        continue
+                link_t = [url, anchor_text, False]
+                if url and request.path.startswith(url):
+                    link_length = len(url)
+                    if link_length > active_link_length:
+                        active_link_length = link_length
+                        active_link = link_t
+                filtered_section['link_list'].append(link_t)
             if filtered_section['link_list']:
                 if active_link:
                     filtered_section["is_active"] = True
