@@ -40,24 +40,31 @@
   <a href="{{ object.api_doc_url }}" target="_blank" class="btn btn-default" data-toggle="tooltip" data-placement="bottom" title="API resource documentation">
     <span class="glyphicon glyphicon-link" aria-hidden="true"></span> API docs
   </a>
+  {% if perms.jamf.change_jamfinstance %}
   <a href="{% url 'jamf:setup_jamf_instance' object.pk %}" class="btn btn-default" data-toggle="tooltip" data-placement="bottom" title="Setup jamf instance">
     <span class="glyphicon glyphicon-transfer" aria-hidden="true"></span> Setup webhooks
   </a>
   <a href="{% url 'jamf:update_jamf_instance' object.pk %}" class="btn btn-default">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Update
   </a>
+  {% endif %}
+  {% if perms.jamf.delete_jamfinstance %}
   <a href="{% url 'jamf:delete_jamf_instance' object.pk %}" class="btn btn-danger">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span> Delete
   </a>
+  {% endif %}
 </div>
 
+{% if perms.jamf.view_tagconfig %}
 <h3>{{ tag_config_count }} Tag config{{ tag_config_count|pluralize }}</h3>
 
+{% if perms.jamf.add_tagconfig %}
 <p>
   <a href="{% url 'jamf:create_tag_config' object.pk %}" class="btn btn-default">
     Create
   </a>
 </p>
+{% endif %}
 
 {% if tag_configs %}
 <table class="table">
@@ -67,7 +74,9 @@
       <th>Taxonomy</th>
       <th>Regex</th>
       <th>Replacement</th>
+      {% if perms.jamf.change_tagconfig or perms.jamf.delete_tagconfig %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -77,20 +86,25 @@
       <td>{{ tag_config.taxonomy }}</td>
       <td>{{ tag_config.regex }}</td>
       <td>{{ tag_config.replacement }}</td>
+      {% if perms.jamf.change_tagconfig or perms.jamf.delete_tagconfig %}
       <td>
+        {% if perms.jamf.change_tagconfig %}
         <a href="{% url 'jamf:update_tag_config' object.pk tag_config.pk %}" class="btn btn-default">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
+        {% endif %}
+        {% if perms.jamf.delete_tagconfig %}
         <a href="{% url 'jamf:delete_tag_config' object.pk tag_config.pk %}" class="btn btn-danger">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
+        {% endif %}
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>
-{% endif %}
 </table>
-
-
+{% endif %}
+{% endif %}
 
 {% endblock %}

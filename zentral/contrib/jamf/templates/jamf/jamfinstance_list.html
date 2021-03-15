@@ -9,9 +9,11 @@
 
 <h2>{{ title }}</h2>
 
+{% if perms.jamf.add_jamfinstance %}
 <p>
   <a href="{% url 'jamf:create_jamf_instance' %}" class="btn btn-default">Create</a>
 </p>
+{% endif %}
 
 <table class="table">
   <thead>
@@ -19,7 +21,9 @@
       <th>Host</th>
       <th>API User</th>
       <th>Business unit</th>
+      {% if perms.jamf.change_jamfinstance %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -34,11 +38,13 @@
         -
         {% endif %}
       </td>
+      {% if perms.jamf.change_jamfinstance %}
       <td>
         <a href="{% url 'jamf:update_jamf_instance' jamf_instance.pk %}" class="btn btn-default">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>Update
         </a>
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>

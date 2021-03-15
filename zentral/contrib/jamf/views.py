@@ -1,6 +1,6 @@
 import logging
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import DetailView, View, ListView
@@ -18,7 +18,8 @@ logger = logging.getLogger('zentral.contrib.jamf.views')
 # setup > jamf instances
 
 
-class JamfInstancesView(LoginRequiredMixin, ListView):
+class JamfInstancesView(PermissionRequiredMixin, ListView):
+    permission_required = "jamf.view_jamfinstance"
     model = JamfInstance
 
     def get_context_data(self, **kwargs):
@@ -33,7 +34,8 @@ class JamfInstancesView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class CreateJamfInstanceView(LoginRequiredMixin, CreateView):
+class CreateJamfInstanceView(PermissionRequiredMixin, CreateView):
+    permission_required = "jamf.add_jamfinstance"
     model = JamfInstance
     form_class = JamfInstanceForm
 
@@ -44,7 +46,8 @@ class CreateJamfInstanceView(LoginRequiredMixin, CreateView):
         return ctx
 
 
-class JamfInstanceView(LoginRequiredMixin, DetailView):
+class JamfInstanceView(PermissionRequiredMixin, DetailView):
+    permission_required = "jamf.view_jamfinstance"
     model = JamfInstance
 
     def get_context_data(self, **kwargs):
@@ -56,7 +59,9 @@ class JamfInstanceView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class SetupJamfInstanceView(LoginRequiredMixin, View):
+class SetupJamfInstanceView(PermissionRequiredMixin, View):
+    permission_required = "jamf.change_jamfinstance"
+
     def get(self, request, *args, **kwargs):
         jamf_instance = get_object_or_404(JamfInstance, pk=kwargs["pk"])
         api_client = APIClient(**jamf_instance.serialize())
@@ -74,7 +79,8 @@ class SetupJamfInstanceView(LoginRequiredMixin, View):
         return redirect(jamf_instance)
 
 
-class UpdateJamfInstanceView(LoginRequiredMixin, UpdateView):
+class UpdateJamfInstanceView(PermissionRequiredMixin, UpdateView):
+    permission_required = "jamf.change_jamfinstance"
     model = JamfInstance
     form_class = JamfInstanceForm
 
@@ -85,7 +91,8 @@ class UpdateJamfInstanceView(LoginRequiredMixin, UpdateView):
         return ctx
 
 
-class DeleteJamfInstanceView(LoginRequiredMixin, DeleteView):
+class DeleteJamfInstanceView(PermissionRequiredMixin, DeleteView):
+    permission_required = "jamf.delete_jamfinstance"
     model = JamfInstance
     success_url = reverse_lazy("jamf:jamf_instances")
 
@@ -112,7 +119,8 @@ class DeleteJamfInstanceView(LoginRequiredMixin, DeleteView):
         return response
 
 
-class CreateTagConfigView(LoginRequiredMixin, CreateView):
+class CreateTagConfigView(PermissionRequiredMixin, CreateView):
+    permission_required = "jamf.add_tagconfig"
     model = TagConfig
     form_class = TagConfigForm
 
@@ -134,7 +142,8 @@ class CreateTagConfigView(LoginRequiredMixin, CreateView):
         return redirect(tc)
 
 
-class UpdateTagConfigView(LoginRequiredMixin, UpdateView):
+class UpdateTagConfigView(PermissionRequiredMixin, UpdateView):
+    permission_required = "jamf.change_tagconfig"
     model = TagConfig
     form_class = TagConfigForm
 
@@ -156,7 +165,8 @@ class UpdateTagConfigView(LoginRequiredMixin, UpdateView):
         return redirect(tc)
 
 
-class DeleteTagConfigView(LoginRequiredMixin, DeleteView):
+class DeleteTagConfigView(PermissionRequiredMixin, DeleteView):
+    permission_required = "jamf.delete_tagconfig"
     model = TagConfig
 
     def dispatch(self, request, *args, **kwargs):
