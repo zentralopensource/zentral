@@ -49,11 +49,11 @@ def _load_source_machine_subviews():
     source_machine_subviews["_loaded"] = True
 
 
-def _get_source_machine_subview(source, serial_number):
+def _get_source_machine_subview(source, serial_number, user):
     if not source_machine_subviews["_loaded"]:
         _load_source_machine_subviews()
     source_key = (source.module, source.name)
-    return [subview(serial_number) for subview in source_machine_subviews.get(source_key, [])]
+    return [subview(serial_number, user) for subview in source_machine_subviews.get(source_key, [])]
 
 
 class MachineListView(LoginRequiredMixin, FormView):
@@ -451,7 +451,7 @@ class MachineView(LoginRequiredMixin, TemplateView):
         for source_display, source, ms in sorted(((ms.source.get_display_name(), ms.source, ms)
                                                   for ms in machine.snapshots),
                                                  key=lambda t: t[0].lower()):
-            source_subview = _get_source_machine_subview(source, machine.serial_number)
+            source_subview = _get_source_machine_subview(source, machine.serial_number, self.request.user)
             context['machine_snapshots'].append((source_display, ms, source_subview))
         machine_snapshots_count = len(context['machine_snapshots'])
         if machine_snapshots_count:

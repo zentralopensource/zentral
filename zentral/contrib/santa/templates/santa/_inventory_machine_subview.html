@@ -4,7 +4,7 @@
 <p class="text-danger">{{ err_message }}</p>
 {% endif %}
 <dl class="dl-horizontal">
-  {% if perms.santa.view_configuration and configuration %}
+  {% if configuration %}
   <dt>Configuration</dt>
   <dd><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration }}</a></dd>
   {% endif %}

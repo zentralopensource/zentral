@@ -59,7 +59,8 @@ class InventoryMachineSubview:
     err_message = None
     enrolled_machine = None
 
-    def __init__(self, serial_number):
+    def __init__(self, serial_number, user):
+        self.user = user
         qs = (EnrolledMachine.objects.select_related("enrollment__manifest")
                                      .filter(serial_number=serial_number).order_by("-created_at"))
         count = qs.count()
@@ -70,12 +71,11 @@ class InventoryMachineSubview:
 
     def render(self):
         em = self.enrolled_machine
-        return render_to_string(
-            self.template_name,
-            {"enrolled_machine": em,
-             "manifest": em.enrollment.manifest if em else None,
-             "err_message": self.err_message}
-        )
+        ctx = {"enrolled_machine": em,
+               "err_message": self.err_message}
+        if em and self.user.has_perm("monolith.view_manifest"):
+            ctx["manifest"] = em.enrollment.manifest
+        return render_to_string(self.template_name, ctx)
 
 
 # repository sync configuration
