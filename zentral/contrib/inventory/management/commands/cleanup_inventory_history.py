@@ -3,6 +3,7 @@ import logging
 from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 from django.utils import timezone
+from zentral.conf import settings
 
 logger = logging.getLogger("zentral.contrib.inventory.management.commands.cleanup_inventory_history")
 
@@ -76,8 +77,23 @@ class Command(BaseCommand):
     help = "Cleanup inventory history"
 
     def add_arguments(self, parser):
+        default_snapshot_retention_days = 30  # 30 days if absent
+        try:
+            default_snapshot_retention_days = int(
+                settings['apps']['zentral.contrib.inventory']['snapshot_retention_days']
+            )
+        except KeyError:
+            pass
+        except (TypeError, ValueError):
+            logger.error("Wrong value set snapshot_retention_days, default of %s used",
+                         default_snapshot_retention_days)
+        default_snapshot_retention_days = max(1, default_snapshot_retention_days)  # minimum 1 day
         parser.add_argument("-q", "--quiet", action="store_true", help="no output if no errors")
-        parser.add_argument('--days', type=int, default=30, help='number of days to keep, default 30')
+        parser.add_argument(
+            '--days', type=int,
+            default=default_snapshot_retention_days,
+            help=f'number of days to keep, default {default_snapshot_retention_days}'
+        )
 
     def set_options(self, **options):
         self.quiet = options.get("quiet", False)
@@ -90,6 +106,8 @@ class Command(BaseCommand):
                 self.cleanup_inventory_history(cursor)
 
     def cleanup_inventory_history(self, cursor):
+        if not self.quiet:
+            print("min date", self.min_date.isoformat())
         # delete older machine snapshot commits
         cursor.execute(DELETE_MACHINE_SNAPSHOT_COMMIT_QUERY, [self.min_date])
         if not self.quiet:
