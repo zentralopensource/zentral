@@ -1,10 +1,10 @@
 import json
+import uuid
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit
 from zentral.contrib.munki.models import EnrolledMachine, Enrollment
-from zentral.utils.api_views import make_secret
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -16,89 +16,117 @@ class MunkiAPIViewsTestCase(TestCase):
         cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit)
         cls.enrollment = Enrollment.objects.create(secret=cls.enrollment_secret)
 
-    def make_api_secret(self):
-        machine_serial_number = get_random_string(32)
-        api_secret = "{}$SERIAL${}".format(make_secret("zentral.contrib.munki", self.business_unit),
-                                           machine_serial_number)
-        return machine_serial_number, api_secret
+    # utility methods
 
-    def make_enrolled_machine(self):
+    def _make_enrolled_machine(self):
         return EnrolledMachine.objects.create(enrollment=self.enrollment,
                                               serial_number=get_random_string(32),
                                               token=get_random_string(64))
 
-    def post_as_json(self, url, data, **extra):
+    def _post_as_json(self, url, data, **extra):
         return self.client.post(url,
                                 json.dumps(data),
                                 content_type="application/json",
                                 **extra)
 
+    # enroll
+
+    def test_enroll_bad_request_empty(self):
+        response = self._post_as_json(reverse("munki:enroll"), {})
+        self.assertEqual(response.status_code, 400)
+
+    def test_enroll_bad_request_bad_secret(self):
+        serial_number = get_random_string(32)
+        response = self._post_as_json(reverse("munki:enroll"),
+                                      {"secret": "yolo",
+                                       "uuid": str(uuid.uuid4()),
+                                       "serial_number": serial_number})
+        self.assertEqual(response.status_code, 400)
+
+    def test_enroll_ok(self):
+        serial_number = get_random_string(32)
+        response = self._post_as_json(reverse("munki:enroll"),
+                                      {"secret": self.enrollment.secret.secret,
+                                       "uuid": str(uuid.uuid4()),
+                                       "serial_number": serial_number})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], "application/json")
+        json_response = response.json()
+        self.assertCountEqual(["token"], json_response.keys())
+        token = json_response["token"]
+        enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, serial_number=serial_number)
+        self.assertEqual(token, enrolled_machine.token)
+
+    # job details
+
     def test_job_details_missing_auth_header_err(self):
-        response = self.post_as_json(reverse("munki:job_details"), {})
+        response = self._post_as_json(reverse("munki:job_details"), {})
         self.assertContains(response, "Missing or empty Authorization header", status_code=403)
 
     def test_job_details_wrong_auth_token_err(self):
-        response = self.post_as_json(reverse("munki:job_details"), {},
-                                     HTTP_AUTHORIZATION=get_random_string(23))
+        response = self._post_as_json(reverse("munki:job_details"), {},
+                                      HTTP_AUTHORIZATION=get_random_string(23))
         self.assertContains(response, "Wrong authorization token", status_code=403)
 
     def test_job_details_enrolled_machine_does_not_exist_err(self):
-        response = self.post_as_json(reverse("munki:job_details"), {},
-                                     HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(get_random_string(34)))
+        response = self._post_as_json(reverse("munki:job_details"), {},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(get_random_string(34)))
         self.assertContains(response, "Enrolled machine does not exist", status_code=403)
 
     def test_job_details_missing_serial_number_err(self):
-        enrolled_machine = self.make_enrolled_machine()
-        response = self.post_as_json(reverse("munki:job_details"), {},
-                                     HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        enrolled_machine = self._make_enrolled_machine()
+        response = self._post_as_json(reverse("munki:job_details"), {},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertContains(response,
                             f"No reported machine serial number. Request SN {enrolled_machine.serial_number}.",
                             status_code=403)
 
     def test_job_details_machine_conflict_err(self):
-        enrolled_machine = self.make_enrolled_machine()
+        enrolled_machine = self._make_enrolled_machine()
         data_sn = get_random_string(9)
-        response = self.post_as_json(reverse("munki:job_details"),
-                                     {"machine_serial_number": data_sn},
-                                     HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": data_sn},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertContains(response,
                             (f"Zentral postflight reported SN {data_sn} "
                              f"different from enrollment SN {enrolled_machine.serial_number}"),
                             status_code=403)
 
     def test_job_details(self):
-        enrolled_machine = self.make_enrolled_machine()
-        response = self.post_as_json(reverse("munki:job_details"),
-                                     {"machine_serial_number": enrolled_machine.serial_number},
-                                     HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        enrolled_machine = self._make_enrolled_machine()
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
         self.assertCountEqual(["principal_user_detection"], response.json().keys())
 
     def test_job_details_conflict(self):
-        enrolled_machine = self.make_enrolled_machine()
-        response = self.post_as_json(reverse("munki:job_details"),
-                                     {"machine_serial_number": get_random_string(3)},
-                                     HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        enrolled_machine = self._make_enrolled_machine()
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": get_random_string(3)},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertContains(response, "different from enrollment SN", status_code=403)
 
+    # post job
+
     def test_post_job(self):
-        enrolled_machine = self.make_enrolled_machine()
+        enrolled_machine = self._make_enrolled_machine()
         computer_name = get_random_string(45)
         report_sha1sum = 40 * "0"
-        response = self.post_as_json(reverse("munki:post_job"),
-                                     {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
-                                                           "system_info": {"computer_name": computer_name}},
-                                      "reports": [{"start_time": "2018-01-01 00:00:00 +0000",
-                                                   "end_time": "2018-01-01 00:01:00 +0000",
-                                                   "basename": "report2018",
-                                                   "run_type": "auto",
-                                                   "sha1sum": report_sha1sum,
-                                                   "events": []}]},
-                                     HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        response = self._post_as_json(reverse("munki:post_job"),
+                                      {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
+                                                            "system_info": {"computer_name": computer_name}},
+                                       "reports": [{"start_time": "2018-01-01 00:00:00 +0000",
+                                                    "end_time": "2018-01-01 00:01:00 +0000",
+                                                    "basename": "report2018",
+                                                    "run_type": "auto",
+                                                    "sha1sum": report_sha1sum,
+                                                    "events": []}]},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
-        response = self.post_as_json(reverse("munki:job_details"),
-                                     {"machine_serial_number": enrolled_machine.serial_number},
-                                     HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
         self.assertCountEqual(["principal_user_detection", "last_seen_sha1sum"], response_json.keys())

@@ -15,10 +15,6 @@ urlpatterns = [
         views.EnrollmentPackageView.as_view(),
         name='enrollment_package'),
 
-    # enrollment endpoint called by enrollment script
-    url(r'^enroll/$', csrf_exempt(views.EnrollView.as_view()),
-        name='enroll'),
-
     # install probe
     url(r'^install_probes/create/$',
         views.CreateInstallProbeView.as_view(), name='create_install_probe'),
@@ -26,6 +22,7 @@ urlpatterns = [
         views.UpdateInstallProbeView.as_view(), name='update_install_probe'),
 
     # API
+    url(r'^enroll/$', csrf_exempt(views.EnrollView.as_view()), name='enroll'),
     url(r'^job_details/$', csrf_exempt(views.JobDetailsView.as_view()), name="job_details"),
     url(r'^post_job/$', csrf_exempt(views.PostJobView.as_view()), name="post_job")
 ]
@@ -33,6 +30,6 @@ urlpatterns = [
 
 setup_menu_cfg = {
     'items': (
-        ('enrollment_list', 'Enrollments'),
+        ('enrollment_list', 'Enrollments', False, ('munki.view_enrollment',)),
     )
 }

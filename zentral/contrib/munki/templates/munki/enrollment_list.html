@@ -7,13 +7,15 @@
   <li class="active">{{ enrollments_count }} Munki enrollments</li>
 </ol>
 
-<h2>{{ enrollments_count }} Munki enrollment{{ enrollments_count|pluralize }}</h2>
+<h2>{{ enrollment_count }} Munki enrollment{{ enrollment_count|pluralize }}</h2>
 
+{% if perms.munki.add_enrollment %}
 <p>
   <a class="btn btn-default" href="{% url 'munki:create_enrollment' %}">Create</a>
 </p>
+{% endif %}
 
-{% if object_list %}
+{% if enrollment_count %}
 <table class="table">
   <thead>
     <th>Business unit</th>
@@ -25,11 +27,15 @@
     <th></th>
   </thead>
   <tbody>
-    {% for enrollment in object_list %}
+    {% for enrollment, distributor, distributor_link in enrollments %}
     {% with enrollment.secret as secret %}
-    {% with enrollment.distributor as distributor %}
     <tr>
-      <td><a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a></td>
+      <td>
+        {% if perms.inventory.view_metabusinessunit %}
+        <a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a></td>
+        {% else %}
+        {{ secret.meta_business_unit|default:"-" }}
+        {% endif %}
       <td>
         {% for tag in secret.tags.all %}
         {% inventory_tag tag %}
@@ -45,7 +51,11 @@
       <td>{{ enrollment.version }}</td>
       <td>
         {% if distributor %}
+        {% if distributor_link %}
         <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
+        {% else %}
+        {{ distributor.get_description_for_enrollment }}
+        {% endif %}
         {% else %}
         -
         {% endif %}
@@ -64,7 +74,6 @@
         {% endif %}
       </td>
     </tr>
-    {% endwith %}
     {% endwith %}
     {% endfor %}
   </tbody>

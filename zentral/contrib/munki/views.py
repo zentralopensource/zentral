@@ -1,7 +1,7 @@
 import json
 import logging
 from dateutil import parser
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
@@ -30,17 +30,31 @@ logger = logging.getLogger('zentral.contrib.munki.views')
 # enrollment
 
 
-class EnrollmentListView(LoginRequiredMixin, ListView):
+class EnrollmentListView(PermissionRequiredMixin, ListView):
+    permission_required = "munki.view_enrollment"
     model = Enrollment
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        ctx["enrollments_count"] = ctx["object_list"].count()
+        enrollments = []
+        enrollment_count = 0
+        for enrollment in ctx["object_list"]:
+            enrollment_count += 1
+            distributor = None
+            distributor_link = False
+            dct = enrollment.distributor_content_type
+            if dct:
+                distributor = enrollment.distributor
+                if self.request.user.has_perm(f"{dct.app_label}.view_{dct.model}"):
+                    distributor_link = True
+            enrollments.append((enrollment, distributor, distributor_link))
+        ctx["enrollments"] = enrollments
+        ctx["enrollment_count"] = enrollment_count
         return ctx
 
 
-class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
+class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "munki.add_enrollment"
     template_name = "munki/enrollment_form.html"
 
     def get_forms(self):
@@ -54,7 +68,6 @@ class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         if "secret_form" not in kwargs or "enrollment_form" not in kwargs:
             ctx["secret_form"], ctx["enrollment_form"] = self.get_forms()
         return ctx
@@ -79,50 +92,20 @@ class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
             return self.forms_invalid(secret_form, enrollment_form)
 
 
-class EnrollmentPackageView(LoginRequiredMixin, View):
+class EnrollmentPackageView(PermissionRequiredMixin, View):
+    permission_required = "munki.view_enrollment"
+
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"])
         builder = MunkiZentralEnrollPkgBuilder(enrollment)
         return builder.build_and_make_response()
 
 
-class EnrollView(View):
-    def post(self, request, *args, **kwargs):
-        user_agent, ip = user_agent_and_ip_address_from_request(request)
-        try:
-            request_json = json.loads(request.body.decode("utf-8"))
-            secret = request_json["secret"]
-            serial_number = request_json["serial_number"]
-            uuid = request_json["uuid"]
-            es_request = verify_enrollment_secret(
-                "munki_enrollment", secret,
-                user_agent, ip,
-                serial_number, uuid
-            )
-        except (KeyError, ValueError, EnrollmentSecretVerificationFailed):
-            raise SuspiciousOperation
-        else:
-            # get or create enrolled machine
-            enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.get_or_create(
-                enrollment=es_request.enrollment_secret.munki_enrollment,
-                serial_number=serial_number,
-                defaults={"token": get_random_string(64)}
-            )
-
-            # apply enrollment secret tags
-            for tag in es_request.enrollment_secret.tags.all():
-                MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
-
-            # post event
-            post_munki_enrollment_event(serial_number, user_agent, ip,
-                                        {'action': "enrollment" if enrolled_machine_created else "re-enrollment"})
-            return JsonResponse({"token": enrolled_machine.token})
-
-
 # install probe
 
 
-class CreateInstallProbeView(LoginRequiredMixin, FormView):
+class CreateInstallProbeView(PermissionRequiredMixin, FormView):
+    permission_required = "probes.add_probesource"
     form_class = CreateInstallProbeForm
     template_name = "core/probes/form.html"
 
@@ -137,7 +120,8 @@ class CreateInstallProbeView(LoginRequiredMixin, FormView):
         return HttpResponseRedirect(probe_source.get_absolute_url())
 
 
-class UpdateInstallProbeView(LoginRequiredMixin, FormView):
+class UpdateInstallProbeView(PermissionRequiredMixin, FormView):
+    permission_required = "probes.change_probesource"
     form_class = UpdateInstallProbeForm
     template_name = "core/probes/form.html"
 
@@ -173,6 +157,39 @@ class UpdateInstallProbeView(LoginRequiredMixin, FormView):
 
 
 # API
+
+
+class EnrollView(View):
+    def post(self, request, *args, **kwargs):
+        user_agent, ip = user_agent_and_ip_address_from_request(request)
+        try:
+            request_json = json.loads(request.body.decode("utf-8"))
+            secret = request_json["secret"]
+            serial_number = request_json["serial_number"]
+            uuid = request_json["uuid"]
+            es_request = verify_enrollment_secret(
+                "munki_enrollment", secret,
+                user_agent, ip,
+                serial_number, uuid
+            )
+        except (KeyError, ValueError, EnrollmentSecretVerificationFailed):
+            raise SuspiciousOperation
+        else:
+            # get or create enrolled machine
+            enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.get_or_create(
+                enrollment=es_request.enrollment_secret.munki_enrollment,
+                serial_number=serial_number,
+                defaults={"token": get_random_string(64)}
+            )
+
+            # apply enrollment secret tags
+            for tag in es_request.enrollment_secret.tags.all():
+                MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
+
+            # post event
+            post_munki_enrollment_event(serial_number, user_agent, ip,
+                                        {'action': "enrollment" if enrolled_machine_created else "re-enrollment"})
+            return JsonResponse({"token": enrolled_machine.token})
 
 
 class BaseView(JSONPostAPIView):
