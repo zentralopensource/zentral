@@ -112,7 +112,6 @@ class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixi
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["realm"] = self.realm
         return ctx
 
@@ -137,7 +136,7 @@ class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixi
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
+        ctx["realm"] = self.realm
         return ctx
 
     def get_success_url(self):
@@ -148,11 +147,6 @@ class DeleteRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixi
     permission_required = "realm.delete_realmgroupmapping"
     model = RealmGroupMapping
     pk_url_kwarg = "gm_pk"
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
 
     def get_success_url(self):
         return self.object.realm.get_absolute_url()
