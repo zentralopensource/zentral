@@ -29,6 +29,7 @@ class GroupForm(forms.ModelForm):
     default_permission_content_types = (
         ("auth", "group"),
         ("authtoken", "token"),
+        ("probes", "probesource"),
     )
 
     class Meta:

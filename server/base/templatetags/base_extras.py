@@ -109,6 +109,13 @@ class MenuConfig:
                         active_link_length = link_length
                         active_link = link_t
                 filtered_section['link_list'].append(link_t)
+            # TODO Legacy, only used to remove the title for the creation links for the probes,
+            # if the permissions for the links are not present.
+            while filtered_section['link_list']:
+                if filtered_section['link_list'][-1][0] is None:
+                    del filtered_section['link_list'][-1]
+                else:
+                    break
             if filtered_section['link_list']:
                 if active_link:
                     filtered_section["is_active"] = True

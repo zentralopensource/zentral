@@ -9,7 +9,8 @@ def extra_links(request):
 
 def probe_creation_links(request):
     creation_links = sorted(({"anchor_text": "{} probe".format(pc.model_display),
-                              "url": pc.create_url}
+                              "url": pc.create_url,
+                              "permissions": ("probes.add_probesource",)}
                              for pc in probe_classes.values()),
                             key=lambda l: l["anchor_text"])
     return {'probe_extra_links': {'create': creation_links}}
