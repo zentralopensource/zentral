@@ -11,15 +11,19 @@
 
 <h2>{{ file_category_count }} File categor{{ file_category_count|pluralize:"y,ies" }}</h2>
 
+{% if perms.osquery.add_filecategory %}
 <p>
   <a href="{% url 'osquery:create_file_category' %}" class="btn btn-default">Create</a>
 </p>
+{% endif %}
 
 <table class="table">
   <thead>
     <tr>
       <th>Name</th>
+      {% if perms.osquery.change_filecategory %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -28,12 +32,14 @@
       <td>
         <a href="{{ file_category.get_absolute_url }}">{{ file_category }}</a>
       </td>
+      {% if perms.osquery.change_filecategory %}
       <td>
         <a class="btn btn-default" href="{% url 'osquery:update_file_category' file_category.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
           Update
         </a>
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>

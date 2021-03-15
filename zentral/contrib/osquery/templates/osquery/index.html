@@ -26,12 +26,24 @@
             height="120"></canvas>
   </div>
   <div class="col-md-12">
+    {% if perms.osquery.view_pack %}
     <p><a href="{% url 'osquery:packs' %}">Packs</a></p>
+    {% endif %}
+    {% if perms.osquery.view_query %}
     <p><a href="{% url 'osquery:queries' %}">Queries</a></p>
+    {% endif %}
+    {% if perms.osquery.view_distributedquery %}
     <p><a href="{% url 'osquery:distributed_queries' %}">Runs</a></p>
+    {% endif %}
+    {% if perms.osquery.view_configuration %}
     <p><a href="{% url 'osquery:configurations' %}">Configurations</a></p>
+    {% endif %}
+    {% if perms.osquery.view_automatictableconstruction %}
     <p><a href="{% url 'osquery:atcs' %}">Automatic table constructions</a></p>
+    {% endif %}
+    {% if perms.osquery.view_filecategory %}
     <p><a href="{% url 'osquery:file_categories' %}">File categories</a></p>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

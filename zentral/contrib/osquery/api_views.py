@@ -1,12 +1,14 @@
 import codecs
 import json
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import F
 from django_filters import rest_framework as filters
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import ParseError, ValidationError
 from rest_framework.parsers import BaseParser, JSONParser
+from rest_framework.permissions import DjangoModelPermissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
@@ -20,6 +22,7 @@ class ConfigurationList(generics.ListCreateAPIView):
     List all Configurations, search Configuration by name, or create a new Configuration.
     """
     queryset = Configuration.objects.all()
+    permissions = [DjangoModelPermissions]
     serializer_class = ConfigurationSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
@@ -30,6 +33,7 @@ class ConfigurationDetail(generics.RetrieveUpdateDestroyAPIView):
     Retrieve, update or delete a Configuration instance.
     """
     queryset = Configuration.objects.all()
+    permissions = [DjangoModelPermissions]
     serializer_class = ConfigurationSerializer
 
     def perform_destroy(self, instance):
@@ -44,6 +48,7 @@ class EnrollmentList(generics.ListCreateAPIView):
     List all Enrollments or create a new Enrollment
     """
     queryset = Enrollment.objects.all()
+    permissions = [DjangoModelPermissions]
     serializer_class = EnrollmentSerializer
 
 
@@ -52,6 +57,7 @@ class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
     Retrieve, update or delete an Enrollment instance.
     """
     queryset = Enrollment.objects.all()
+    permissions = [DjangoModelPermissions]
     serializer_class = EnrollmentSerializer
 
     def perform_destroy(self, instance):
@@ -89,6 +95,11 @@ class PackView(APIView):
     parser_classes = [JSONParser, OsqueryConfigParser, YAMLParser]
 
     def put(self, request, *args, **kwargs):
+        if not request.user.has_perms(
+            ("osquery.add_pack", "osquery.change_pack",
+             "osquery.add_packquery", "osquery.add_query", "osquery.change_packquery", "osquery.delete_packquery")
+        ):
+            raise PermissionDenied("Not allowed")
         serializer = OsqueryPackSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -235,6 +246,8 @@ class PackView(APIView):
         return Response(pack_update_event)
 
     def delete(self, request, *args, **kwargs):
+        if not request.user.has_perms(("osquery.delete_pack", "osquery.delete_packquery")):
+            raise PermissionDenied("Not allowed")
         try:
             pack = Pack.objects.select_for_update().get(slug=kwargs["slug"])
         except Pack.DoesNotExist:

@@ -37,7 +37,7 @@
       </tr>
       <tr>
         <td>Platform{{ object.platforms|length|pluralize }}</td>
-        <td>{% if object.platforms %}{{ object.platforms|join:", " }}{% else %}-{% endif %}</td>
+        <td>{{ object.platforms|join:", "|default:"-" }}</td>
       </tr>
       <tr>
         <td>Min. osquery ver.</td>
@@ -61,16 +61,21 @@
 </div>
 
 <p>
+  {% if perms.osquery.change_pack %}
   <a class="btn btn-default" href="{% url 'osquery:update_pack' object.id %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
+  {% endif %}
+  {% if perms.osquery.delete_pack %}
   <a class="btn btn-danger" href="{% url 'osquery:delete_pack' object.id %}">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     Delete
   </a>
+  {% endif %}
 </p>
 
+{% if perms.osquery.view_configuration %}
 <h3>Used in {{ configuration_pack_count }} configuration{{ configuration_pack_count|pluralize }}</h3>
 
 {% if configuration_pack_count %}
@@ -99,7 +104,9 @@
   </div>
 </div>
 {% endif %}
+{% endif %}
 
+{% if perms.osquery.view_packquery %}
 <h3 id="queries">{{ pack_query_count }} scheduled quer{{ pack_query_count|pluralize:"y,ies" }}</h3>
 {% if can_add_pack_query %}
 <p>
@@ -159,18 +166,25 @@
       <td>{{ pack_query.can_be_denylisted|yesno }}</td>
     </tr>
   </table>
+  {% if perms.osquery.change_packquery or perms.osquery.delete_packquery %}
   <div class="panel-footer">
     <div class="btn-group" role="group">
+      {% if perms.osquery.change_packquery %}
       <a class="btn btn-sm btn-default" href="{% url 'osquery:update_pack_query' object.pk pack_query.pk %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
       </a>
+      {% endif %}
+      {% if perms.osquery.delete_packquery %}
       <a class="btn btn-sm btn-danger" href="{% url 'osquery:delete_pack_query' object.pk pack_query.pk %}">
         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
       </a>
+      {% endif %}
     </div>
   </div>
+  {% endif %}
 </div>
 {% endwith %}
 {% endfor %}
+{% endif %}
 
 {% endblock %}

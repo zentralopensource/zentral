@@ -11,15 +11,19 @@
 
 <h2>{{ atc_count }} Automatic table construction{{ atc_count|pluralize }}</h2>
 
+{% if perms.osquery.add_automatictableconstruction %}
 <p>
   <a href="{% url 'osquery:create_atc' %}" class="btn btn-default">Create</a>
 </p>
+{% endif %}
 
 <table class="table">
   <thead>
     <tr>
       <th>Name</th>
+      {% if perms.osquery.change_automatictableconstrucion %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -28,12 +32,14 @@
       <td>
         <a href="{{ atc.get_absolute_url }}">{{ atc }}</a>
       </td>
+      {% if perms.osquery.change_automatictableconstrucion %}
       <td>
         <a class="btn btn-default" href="{% url 'osquery:update_atc' atc.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
           Update
         </a>
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>

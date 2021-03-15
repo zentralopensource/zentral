@@ -1,5 +1,5 @@
 import logging
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.files.storage import default_storage
 from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
@@ -12,7 +12,9 @@ from zentral.utils.storage import file_storage_has_signed_urls
 logger = logging.getLogger('zentral.contrib.osquery.views.file_carving_sessions')
 
 
-class DownloadFileCarvingSessionArchiveView(LoginRequiredMixin, View):
+class DownloadFileCarvingSessionArchiveView(PermissionRequiredMixin, View):
+    permission_required = "osquery.view_filecarvingsession"
+
     @cached_property
     def _redirect_to_files(self):
         return file_storage_has_signed_urls()

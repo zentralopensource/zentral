@@ -1,6 +1,6 @@
 from itertools import chain
 import logging
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
@@ -13,7 +13,8 @@ from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMa
 logger = logging.getLogger('zentral.contrib.osquery.views.distributed_queries')
 
 
-class DistributedQueryListView(LoginRequiredMixin, ListView):
+class DistributedQueryListView(PermissionRequiredMixin, ListView):
+    permission_required = "osquery.view_distributedquery"
     model = DistributedQuery
 
     def get_queryset(self):
@@ -28,12 +29,12 @@ class DistributedQueryListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["distributed_query_count"] = ctx["object_list"].count()
         return ctx
 
 
-class CreateDistributedQueryView(LoginRequiredMixin, CreateView):
+class CreateDistributedQueryView(PermissionRequiredMixin, CreateView):
+    permission_required = "osquery.add_distributedquery"
     model = DistributedQuery
     form_class = DistributedQueryForm
 
@@ -48,12 +49,12 @@ class CreateDistributedQueryView(LoginRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["query"] = self.query
         return ctx
 
 
-class DistributedQueryView(LoginRequiredMixin, DetailView):
+class DistributedQueryView(PermissionRequiredMixin, DetailView):
+    permission_required = "osquery.view_distributedquery"
     model = DistributedQuery
 
     def get_queryset(self):
@@ -61,7 +62,6 @@ class DistributedQueryView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["query"] = self.object.query
         ctx["dqm_count"] = self.object.distributedquerymachine_set.count()
         ctx["result_count"] = self.object.distributedqueryresult_set.count()
@@ -69,31 +69,32 @@ class DistributedQueryView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateDistributedQueryView(LoginRequiredMixin, UpdateView):
+class UpdateDistributedQueryView(PermissionRequiredMixin, UpdateView):
+    permission_required = "osquery.change_distributedquery"
     model = DistributedQuery
     form_class = DistributedQueryForm
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["query"] = self.object.query
         return ctx
 
 
-class DeleteDistributedQueryView(LoginRequiredMixin, DeleteView):
+class DeleteDistributedQueryView(PermissionRequiredMixin, DeleteView):
+    permission_required = "osquery.delete_distributedquery"
     model = DistributedQuery
     success_url = reverse_lazy("osquery:distributed_queries")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["machine_count"] = self.object.distributedquerymachine_set.count()
         ctx["result_count"] = self.object.distributedqueryresult_set.count()
         ctx["file_carving_session_count"] = self.object.filecarvingsession_set.count()
         return ctx
 
 
-class DistributedQueryMachineListView(LoginRequiredMixin, ListView):
+class DistributedQueryMachineListView(PermissionRequiredMixin, ListView):
+    permission_required = "osquery.view_distributedquery"
     model = DistributedQueryMachine
     paginate_by = 50
 
@@ -109,7 +110,6 @@ class DistributedQueryMachineListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["distributed_query"] = self.distributed_query
         page = ctx["page_obj"]
         if page.has_next():
@@ -127,7 +127,8 @@ class DistributedQueryMachineListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class DistributedQueryResultListView(LoginRequiredMixin, ListView):
+class DistributedQueryResultListView(PermissionRequiredMixin, ListView):
+    permission_required = "osquery.view_distributedquery"
     model = DistributedQueryResult
     paginate_by = 50
 
@@ -143,7 +144,6 @@ class DistributedQueryResultListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["distributed_query"] = self.distributed_query
         page = ctx["page_obj"]
         ctx["columns"] = sorted(set(chain.from_iterable(r.row.keys() for r in page)))
@@ -163,7 +163,8 @@ class DistributedQueryResultListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class DistributedQueryFileCarvingSessionListView(LoginRequiredMixin, ListView):
+class DistributedQueryFileCarvingSessionListView(PermissionRequiredMixin, ListView):
+    permission_required = ("osquery.view_distributedquery", "osquery.view_filecarvingsession")
     model = FileCarvingSession
     template_name = "osquery/dq_filecarvingsession_list.html"
     paginate_by = 50
@@ -181,7 +182,6 @@ class DistributedQueryFileCarvingSessionListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["distributed_query"] = self.distributed_query
         page = ctx["page_obj"]
         if page.has_next():

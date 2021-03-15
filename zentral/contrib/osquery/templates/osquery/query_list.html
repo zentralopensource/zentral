@@ -24,9 +24,11 @@
 
 <h3>{{ page_obj.paginator.count }} Quer{{ page_obj.paginator.count|pluralize:"y,ies" }}</h3>
 
+{% if perms.osquery.add_query %}
 <p>
   <a href="{% url 'osquery:create_query' %}" class="btn btn-default">Create</a>
 </p>
+{% endif %}
 
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
     <div class="form-group">
@@ -56,8 +58,12 @@
   <thead>
     <tr>
       <th>Name / Tables</th>
+      {% if perms.osquery.view_pack %}
       <th>Pack</th>
+      {% endif %}
+      {% if perms.osquery.view_distributedquery %}
       <th>Runs</th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -68,12 +74,16 @@
         <a href="{{ query.get_absolute_url }}">{{ query }}</a>
         {% if tables %}<p style="margin:5px 0 0 0">{% for table in query.tables %}<code>{{ table }}</code> {% endfor %}</p>{% endif %}
       </td>
+      {% if perms.osquery.view_pack %}
       <td>
         {% if query.packquery %}<a href="{{ query.packquery.get_absolute_url }}">{{ query.packquery.pack }}</a>{% else %}-{% endif %}
       </td>
+      {% endif %}
+      {% if perms.osquery.view_distributedquery %}
       <td>
         {% if query.distributed_query_count %}{{ query.distributed_query_count }}{% else %}-{% endif %}
       </td>
+      {% endif %}
     </tr>
     {% endwith %}
     {% endfor %}

@@ -97,12 +97,12 @@ urlpatterns = [
 
 setup_menu_cfg = {
     'items': (
-        ('index', 'Overview'),
-        ('packs', 'Packs'),
-        ('queries', 'Queries'),
-        ('distributed_queries', 'Runs'),
-        ('configurations', 'Configurations'),
-        ('atcs', 'ATCs'),
-        ('file_categories', 'File categories'),
+        ('index', 'Overview', False, ('osquery',)),
+        ('packs', 'Packs', False, ('osquery.view_pack',)),
+        ('queries', 'Queries', False, ('osquery.view_query',)),
+        ('distributed_queries', 'Runs', False, ('osquery.view_distributedquery',)),
+        ('configurations', 'Configurations', False, ('osquery.view_configuration',)),
+        ('atcs', 'ATCs', False, ('osquery.view_automatictableconstruction',)),
+        ('file_categories', 'File categories', False, ('osquery.view_filecategory',)),
     )
 }

@@ -82,12 +82,14 @@
   </div>
 </div>
 
+{% if perms.osquery.change_configuration %}
 <p>
   <a class="btn btn-default" href="{% url 'osquery:update_configuration' object.id %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
 </p>
+{% endif %}
 
 <h3 id="packs">{{ configuration_pack_count }} Pack{{ configuration_pack_count|pluralize }}</h3>
 {% if can_add_configuration_pack %}
@@ -102,7 +104,9 @@
     <th>Name</th>
     <th>Query count</th>
     <th>Tags</th>
+    {% if perms.osquery.change_configuration %}
     <th></th>
+    {% endif %}
   </thead>
   <tbody>
     {% for configuration_pack in configuration_packs %}
@@ -117,6 +121,7 @@
         -
         {% endfor %}
       </td>
+      {% if perms.osquery.change_configuration %}
       <td>
         <a class="btn btn-sm btn-default" href="{% url 'osquery:update_configuration_pack' configuration.pk configuration_pack.pk %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
@@ -125,6 +130,7 @@
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
       </td>
+      {% endif %}
     </tr>
     {% endwith %}
     {% endfor %}
@@ -132,10 +138,14 @@
 </table>
 {% endif %}
 
+{% if perms.osquery.view_enrollment %}
 <h3>{{ enrollments_count }} Enrollment{{ enrollments_count|pluralize }}</h3>
+
+{% if perms.osquery.add_enrollment %}
 <p>
   <a class="btn btn-default" href="{% url 'osquery:create_enrollment' object.id %}">Create</a>
 </p>
+{% endif %}
 
 {% if enrollments %}
 <table class="table">
@@ -209,6 +219,7 @@
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 {% endif %}
 
 {% endblock %}

@@ -11,15 +11,19 @@
 
 <h2>{{ configuration_count }} Configuration{{ configuration_count|pluralize }}</h2>
 
+{% if perms.osquery.add_configuration %}
 <p>
   <a href="{% url 'osquery:create_configuration' %}" class="btn btn-default">Create</a>
 </p>
+{% endif %}
 
 <table class="table">
   <thead>
     <tr>
       <th>Name</th>
+      {% if perms.osquery.change_configuration %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -28,12 +32,14 @@
       <td>
         <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
       </td>
+      {% if perms.osquery.change_configuration %}
       <td>
         <a class="btn btn-default" href="{% url 'osquery:update_configuration' configuration.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
           Update
         </a>
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>

@@ -15,11 +15,15 @@
   <thead>
     <tr>
       <th>Name</th>
+      {% if perms.osquery.view_query %}
       <th>Query</th>
+      {% endif %}
       <th>Tables</th>
       <th>Machines</th>
       <th>Results</th>
+      {% if perms.osquery.view_filecarvingsession %}
       <th>File carving sessions</th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -29,9 +33,11 @@
       <td>
         <a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a>
       </td>
+      {% if perms.osquery.view_query %}
       <td>
         {% if query %}<a href="{{ query.get_absolute_url }}">{{ query }}</a>{% else %}-{% endif %}
       </td>
+      {% endif %}
       <td>
         {% for table in distributed_query.tables %}<code>{{ table }}</code> {% endfor %}
       </td>
@@ -41,9 +47,11 @@
       <td>
         {% if distributed_query.result_count %}{{ distributed_query.result_count }}{% else %}-{% endif %}
       </td>
+      {% if perms.osquery.view_filecarvingsession %}
       <td>
         {% if distributed_query.file_carving_session_count %}{{ distributed_query.file_carving_session_count }}{% else %}-{% endif %}
       </td>
+      {% endif %}
     </tr>
     {% endwith %}
     {% endfor %}

@@ -35,10 +35,12 @@
         <td>Value</td>
         <td>{{ object.value|default:"-"|linebreaksbr }}</td>
       </tr>
+      {% if perms.osquery.view_pack %}
       <tr>
         <td>Pack</td>
         <td>{% if pack_query %}<a href="{{ pack_query.get_absolute_url }}">{{ pack_query.pack }}</a>{% else %}-{% endif %}</td>
       </tr>
+      {% endif %}
       </tbody>
     </table>
 
@@ -55,23 +57,30 @@
 </div>
 
 <p>
+  {% if perms.osquery.change_query %}
   <a class="btn btn-default" href="{% url 'osquery:update_query' object.id %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
+  {% endif %}
+  {% if perms.osquery.delete_query %}
   <a class="btn btn-danger" href="{% url 'osquery:delete_query' object.id %}">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     Delete
   </a>
+  {% endif %}
 </p>
 
+{% if perms.osquery.view_distributedquery %}
 <h3 id="runs">{{ distributed_query_count }} Run{{ distributed_query_count|pluralize }}</h3>
 
+{% if perms.osquery.add_distributedquery %}
 <p>
   <a class="btn btn-default" href="{% url 'osquery:create_distributed_query' %}?q={{ object.pk }}">
     🚀 Launch
   </a>
 </p>
+{% endif %}
 
 {% if distributed_query_count %}
 <table class="table">
@@ -98,6 +107,7 @@
   {% endfor %}
   </tbody>
 </table>
+{% endif %}
 {% endif %}
 
 {% endblock %}

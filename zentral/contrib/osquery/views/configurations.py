@@ -1,5 +1,5 @@
 import logging
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -10,32 +10,28 @@ from zentral.contrib.osquery.models import Configuration, ConfigurationPack, Pac
 logger = logging.getLogger('zentral.contrib.osquery.views.configurations')
 
 
-class ConfigurationListView(LoginRequiredMixin, ListView):
+class ConfigurationListView(PermissionRequiredMixin, ListView):
+    permission_required = "osquery.view_configuration"
     model = Configuration
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["configuration_count"] = ctx["object_list"].count()
         return ctx
 
 
-class CreateConfigurationView(LoginRequiredMixin, CreateView):
+class CreateConfigurationView(PermissionRequiredMixin, CreateView):
+    permission_required = "osquery.add_configuration"
     model = Configuration
     form_class = ConfigurationForm
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
 
-
-class ConfigurationView(LoginRequiredMixin, DetailView):
+class ConfigurationView(PermissionRequiredMixin, DetailView):
+    permission_required = "osquery.view_configuration"
     model = Configuration
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["atcs"] = self.object.automatic_table_constructions.all().order_by("name", "pk")
         ctx["atc_count"] = ctx["atcs"].count()
         ctx["file_categories"] = self.object.file_categories.all().order_by("name", "pk")
@@ -51,21 +47,21 @@ class ConfigurationView(LoginRequiredMixin, DetailView):
                        .order_by("pack__name", "pk")
         )
         ctx["configuration_pack_count"] = ctx["configuration_packs"].count()
-        ctx["can_add_configuration_pack"] = Pack.objects.count() - ctx["configuration_pack_count"] > 0
+        ctx["can_add_configuration_pack"] = (
+            self.request.user.has_perm("osquery.change_configuration")
+            and (Pack.objects.count() - ctx["configuration_pack_count"]) > 0
+        )
         return ctx
 
 
-class UpdateConfigurationView(LoginRequiredMixin, UpdateView):
+class UpdateConfigurationView(PermissionRequiredMixin, UpdateView):
+    permission_required = "osquery.change_configuration"
     model = Configuration
     form_class = ConfigurationForm
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
 
-
-class AddConfigurationPackView(LoginRequiredMixin, CreateView):
+class AddConfigurationPackView(PermissionRequiredMixin, CreateView):
+    permission_required = "osquery.change_configuration"
     model = ConfigurationPack
     form_class = ConfigurationPackForm
 
@@ -80,12 +76,12 @@ class AddConfigurationPackView(LoginRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["configuration"] = self.configuration
         return ctx
 
 
-class UpdateConfigurationPackView(LoginRequiredMixin, UpdateView):
+class UpdateConfigurationPackView(PermissionRequiredMixin, UpdateView):
+    permission_required = "osquery.change_configuration"
     model = ConfigurationPack
     form_class = ConfigurationPackForm
 
@@ -97,12 +93,12 @@ class UpdateConfigurationPackView(LoginRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["configuration"] = self.object.configuration
         return ctx
 
 
-class RemoveConfigurationPackView(LoginRequiredMixin, DeleteView):
+class RemoveConfigurationPackView(PermissionRequiredMixin, DeleteView):
+    permission_required = "osquery.change_configuration"
     model = ConfigurationPack
 
     def get_object(self):
@@ -111,11 +107,6 @@ class RemoveConfigurationPackView(LoginRequiredMixin, DeleteView):
                                         .get(pk=self.kwargs["cp_pk"], configuration__pk=self.kwargs["pk"]))
         self.configuration = configuration_pack.configuration
         return configuration_pack
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
 
     def get_success_url(self):
         return "{}#packs".format(self.configuration.get_absolute_url())

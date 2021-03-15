@@ -25,6 +25,7 @@ class ATCForm(forms.ModelForm):
     class Meta:
         model = AutomaticTableConstruction
         fields = "__all__"
+        widgets = {"platforms": PlatformsWidget}
 
 
 # Configuration

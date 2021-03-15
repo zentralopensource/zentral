@@ -15,7 +15,8 @@ class InventoryMachineSubview:
     err_message = None
     enrolled_machine = None
 
-    def __init__(self, serial_number):
+    def __init__(self, serial_number, user):
+        self.user = user
         qs = (EnrolledMachine.objects.select_related("enrollment__configuration")
                                      .filter(serial_number=serial_number).order_by("-updated_at"))
         count = qs.count()
@@ -27,10 +28,10 @@ class InventoryMachineSubview:
     def render(self):
         ctx = {"err_message": self.err_message}
         if self.enrolled_machine:
-            em = self.enrolled_machine
             ctx.update({
-                "enrolled_machine": em,
-                "configuration": em.enrollment.configuration,
+                "enrolled_machine": self.enrolled_machine,
                 "err_message": self.err_message,
             })
+            if self.user.has_perm("osquery.view_configuration"):
+                ctx["configuration"] = self.enrolled_machine.enrollment.configuration
         return render_to_string(self.template_name, ctx)

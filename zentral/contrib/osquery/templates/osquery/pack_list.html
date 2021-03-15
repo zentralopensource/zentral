@@ -11,15 +11,19 @@
 
 <h2>{{ pack_count }} Pack{{ pack_count|pluralize }}</h2>
 
+{% if perms.osquery.add_pack %}
 <p>
   <a href="{% url 'osquery:create_pack' %}" class="btn btn-default">Create</a>
 </p>
+{% endif %}
 
 <table class="table">
   <thead>
     <tr>
       <th>Name</th>
+      {% if perms.osquery.change_pack %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -28,12 +32,14 @@
       <td>
         <a href="{{ pack.get_absolute_url }}">{{ pack }}</a>
       </td>
+      {% if perms.osquery.change_pack %}
       <td>
         <a class="btn btn-default" href="{% url 'osquery:update_pack' pack.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
           Update
         </a>
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>

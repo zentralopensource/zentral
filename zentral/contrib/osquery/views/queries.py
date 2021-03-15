@@ -1,5 +1,5 @@
 import logging
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db import models
 from django.db.models import Case, Q, Sum, Value, When
 from django.urls import reverse_lazy
@@ -11,7 +11,8 @@ from zentral.contrib.osquery.models import PackQuery, Query
 logger = logging.getLogger('zentral.contrib.osquery.views.queries')
 
 
-class QueryListView(LoginRequiredMixin, ListView):
+class QueryListView(PermissionRequiredMixin, ListView):
+    permission_required = "osquery.view_query"
     paginate_by = 50
     model = Query
 
@@ -25,7 +26,6 @@ class QueryListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["form"] = self.form
         page = ctx["page_obj"]
         if page.has_next():
@@ -43,22 +43,18 @@ class QueryListView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class CreateQueryView(LoginRequiredMixin, CreateView):
+class CreateQueryView(PermissionRequiredMixin, CreateView):
+    permission_required = "osquery.add_query"
     model = Query
     form_class = QueryForm
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
 
-
-class QueryView(LoginRequiredMixin, DetailView):
+class QueryView(PermissionRequiredMixin, DetailView):
+    permission_required = "osquery.view_query"
     model = Query
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         try:
             ctx["pack_query"] = self.object.packquery
         except PackQuery.DoesNotExist:
@@ -84,21 +80,13 @@ class QueryView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateQueryView(LoginRequiredMixin, UpdateView):
+class UpdateQueryView(PermissionRequiredMixin, UpdateView):
+    permission_required = "osquery.change_query"
     model = Query
     form_class = QueryForm
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
 
-
-class DeleteQueryView(LoginRequiredMixin, DeleteView):
+class DeleteQueryView(PermissionRequiredMixin, DeleteView):
+    permission_required = "osquery.delete_query"
     model = Query
     success_url = reverse_lazy("osquery:queries")
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx

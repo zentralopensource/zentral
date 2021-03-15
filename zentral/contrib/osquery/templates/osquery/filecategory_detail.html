@@ -72,16 +72,21 @@
 </div>
 
 <p>
+  {% if perms.osquery.change_filecategory %}
   <a class="btn btn-default" href="{% url 'osquery:update_file_category' object.id %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
+  {% endif %}
+  {% if perms.osquery.delete_filecategory %}
   <a class="btn btn-danger" href="{% url 'osquery:delete_file_category' object.id %}">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     Delete
   </a>
+  {% endif %}
 </p>
 
+{% if perms.osquery.view_configuration %}
 <h3>Used in {{ configuration_count }} configuration{{ configuration_count|pluralize }}</h3>
 
 {% if configurations %}
@@ -103,6 +108,7 @@
     </table>
   </div>
 </div>
+{% endif %}
 {% endif %}
 
 {% endblock %}

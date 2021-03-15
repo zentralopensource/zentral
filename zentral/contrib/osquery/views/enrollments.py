@@ -1,5 +1,5 @@
 import logging
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import TemplateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
@@ -13,7 +13,8 @@ from zentral.contrib.osquery.powershell_script.builder import OsqueryZentralEnro
 logger = logging.getLogger('zentral.contrib.osquery.views.enrollments')
 
 
-class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
+class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "osquery.add_enrollment"
     template_name = "osquery/enrollment_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -32,7 +33,6 @@ class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["configuration"] = self.configuration
         if "secret_form" not in kwargs or "enrollment_form" not in kwargs:
             ctx["secret_form"], ctx["enrollment_form"] = self.get_forms()
@@ -60,21 +60,27 @@ class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
             return self.forms_invalid(secret_form, enrollment_form)
 
 
-class EnrollmentPackageView(LoginRequiredMixin, View):
+class EnrollmentPackageView(PermissionRequiredMixin, View):
+    permission_required = "osquery.view_enrollment"
+
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
         builder = OsqueryZentralEnrollPkgBuilder(enrollment)
         return builder.build_and_make_response()
 
 
-class EnrollmentScriptView(LoginRequiredMixin, View):
+class EnrollmentScriptView(PermissionRequiredMixin, View):
+    permission_required = "osquery.view_enrollment"
+
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
         builder = OsqueryZentralEnrollScriptBuilder(enrollment)
         return builder.build_and_make_response()
 
 
-class EnrollmentPowershellScriptView(LoginRequiredMixin, View):
+class EnrollmentPowershellScriptView(PermissionRequiredMixin, View):
+    permission_required = "osquery.view_enrollment"
+
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
         builder = OsqueryZentralEnrollPowershellScriptBuilder(enrollment)

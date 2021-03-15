@@ -43,6 +43,10 @@
         <td>Column{{ object.columns|length|pluralize }}</td>
         <td><pre>{{ object.columns|join:"&#10;" }}</pre></td>
       </tr>
+      <tr>
+        <td>Platform{{ object.platforms|length|pluralize }}</td>
+        <td>{{ object.platforms|join:", "|default:"-" }}</td>
+      </tr>
       </tbody>
     </table>
 
@@ -56,16 +60,21 @@
 </div>
 
 <p>
+  {% if perms.osquery.change_automatictableconstruction %}
   <a class="btn btn-default" href="{% url 'osquery:update_atc' object.id %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
+  {% endif %}
+  {% if perms.osquery.delete_automatictableconstruction %}
   <a class="btn btn-danger" href="{% url 'osquery:delete_atc' object.id %}">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     Delete
   </a>
+  {% endif %}
 </p>
 
+{% if perms.osquery.view_configuration %}
 <h3>Used in {{ configuration_count }} configuration{{ configuration_count|pluralize }}</h3>
 
 {% if configurations %}
@@ -87,6 +96,7 @@
     </table>
   </div>
 </div>
+{% endif %}
 {% endif %}
 
 {% endblock %}

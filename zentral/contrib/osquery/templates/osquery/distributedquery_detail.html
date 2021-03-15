@@ -23,7 +23,7 @@
         <td>SQL</td>
         <td>{{ object.get_sql_html|safe }}</td>
       </tr>
-      {% if object.query %}
+      {% if perms.osquery.view_query and object.query %}
       <tr>
         <td>Query</td>
         <td>
@@ -61,14 +61,18 @@
 </div>
 
 <p>
+  {% if perms.osquery.change_distributedquery %}
   <a class="btn btn-default" href="{% url 'osquery:update_distributed_query' object.id %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
+  {% endif %}
+  {% if perms.osquery.delete_distributedquery %}
   <a class="btn btn-danger" href="{% url 'osquery:delete_distributed_query' object.id %}">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     Delete
   </a>
+  {% endif %}
 </p>
 
 <h3 id="machines">{{ dqm_count }} Machine{{ dqm_count|pluralize }}</h3>
@@ -83,10 +87,12 @@
 <a class="btn btn-default" href="{% url 'osquery:distributed_query_results' object.pk %}">See the result{{ result_count|pluralize }}</a>
 {% endif %}
 
+{% if perms.osquery.view_filecarvingsession %}
 <h3 id="results">{{ file_carving_session_count }} File carving session{{ file_carving_session_count|pluralize }}</h3>
 
 {% if file_carving_session_count %}
 <a class="btn btn-default" href="{% url 'osquery:distributed_query_file_carving_sessions' object.pk %}">See file carving session{{ file_carving_session_count|pluralize }}</a>
+{% endif %}
 {% endif %}
 
 {% endblock %}

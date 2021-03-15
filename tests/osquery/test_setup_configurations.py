@@ -1,5 +1,9 @@
-from django.urls import reverse
+from functools import reduce
+import operator
+from django.contrib.auth.models import Group, Permission
+from django.db.models import Q
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import Tag
@@ -11,12 +15,28 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
+        cls.group = Group.objects.create(name=get_random_string())
+        cls.user.groups.set([cls.group])
 
     # utiliy methods
 
     def _login_redirect(self, url):
         response = self.client.get(url)
         self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+
+    def _login(self, *permissions):
+        if permissions:
+            permission_filter = reduce(operator.or_, (
+                Q(content_type__app_label=app_label, codename=codename)
+                for app_label, codename in (
+                    permission.split(".")
+                    for permission in permissions
+                )
+            ))
+            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
+        else:
+            self.group.permissions.clear()
+        self.client.force_login(self.user)
 
     def _force_configuration(self):
         return Configuration.objects.create(name=get_random_string())
@@ -37,15 +57,20 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
     def test_create_configuration_redirect(self):
         self._login_redirect(reverse("osquery:create_configuration"))
 
+    def test_create_configuration_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("osquery:create_configuration"))
+        self.assertEqual(response.status_code, 403)
+
     def test_create_configuration_get(self):
-        self.client.force_login(self.user)
+        self._login("osquery.add_configuration")
         response = self.client.get(reverse("osquery:create_configuration"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/configuration_form.html")
         self.assertContains(response, "Create Osquery configuration")
 
     def test_create_configuration_post(self):
-        self.client.force_login(self.user)
+        self._login("osquery.add_configuration", "osquery.view_configuration")
         configuration_name = get_random_string(64)
         response = self.client.post(reverse("osquery:create_configuration"),
                                     {"name": configuration_name, "inventory_interval": 86321},
@@ -64,17 +89,23 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
         configuration = self._force_configuration()
         self._login_redirect(reverse("osquery:update_configuration", args=(configuration.pk,)))
 
-    def test_update_configuration_get(self):
-        self.client.force_login(self.user)
+    def test_update_configuration_permission_denied(self):
         configuration = self._force_configuration()
+        self._login()
+        response = self.client.get(reverse("osquery:update_configuration", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_configuration_get(self):
+        configuration = self._force_configuration()
+        self._login("osquery.change_configuration")
         response = self.client.get(reverse("osquery:update_configuration", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/configuration_form.html")
         self.assertContains(response, "Update Osquery configuration")
 
     def test_update_configuration_post(self):
-        self.client.force_login(self.user)
         configuration = self._force_configuration()
+        self._login("osquery.change_configuration", "osquery.view_configuration")
         new_name = get_random_string(64)
         response = self.client.post(reverse("osquery:update_configuration", args=(configuration.pk,)),
                                     {"name": new_name, "inventory_interval": 863},
@@ -92,9 +123,14 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
     def test_configuration_list_redirect(self):
         self._login_redirect(reverse("osquery:configurations"))
 
+    def test_configuration_list_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("osquery:configurations"))
+        self.assertEqual(response.status_code, 403)
+
     def test_configuration_list(self):
-        self.client.force_login(self.user)
         configuration = self._force_configuration()
+        self._login("osquery.view_configuration")
         response = self.client.get(reverse("osquery:configurations"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/configuration_list.html")
@@ -107,9 +143,15 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
         configuration = self._force_configuration()
         self._login_redirect(reverse("osquery:add_configuration_pack", args=(configuration.pk,)))
 
+    def test_add_configuration_pack_permission_denied(self):
+        configuration = self._force_configuration()
+        self._login()
+        response = self.client.get(reverse("osquery:add_configuration_pack", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 403)
+
     def test_add_configuration_pack_get(self):
         configuration = self._force_configuration()
-        self.client.force_login(self.user)
+        self._login("osquery.change_configuration")
         response = self.client.get(reverse("osquery:add_configuration_pack", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/configurationpack_form.html")
@@ -118,7 +160,7 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
     def test_add_configuration_pack_post(self):
         configuration = self._force_configuration()
         pack = self._force_pack()
-        self.client.force_login(self.user)
+        self._login("osquery.change_configuration", "osquery.view_configuration")
         response = self.client.post(
             reverse("osquery:add_configuration_pack", args=(configuration.pk,)),
             {"pack": pack.pk},
@@ -140,9 +182,16 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
         self._login_redirect(reverse("osquery:update_configuration_pack",
                                      args=(configuration_pack.configuration.pk, configuration_pack.pk)))
 
+    def test_update_configuration_pack_permission_denied(self):
+        configuration_pack = self._force_configuration_pack()
+        self._login()
+        response = self.client.get(reverse("osquery:update_configuration_pack",
+                                           args=(configuration_pack.configuration.pk, configuration_pack.pk)))
+        self.assertEqual(response.status_code, 403)
+
     def test_update_configuration_pack_get(self):
         configuration_pack = self._force_configuration_pack()
-        self.client.force_login(self.user)
+        self._login("osquery.change_configuration")
         response = self.client.get(reverse("osquery:update_configuration_pack",
                                            args=(configuration_pack.configuration.pk, configuration_pack.pk)))
         self.assertEqual(response.status_code, 200)
@@ -152,7 +201,7 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
 
     def test_update_configuration_pack_post(self):
         configuration_pack = self._force_configuration_pack()
-        self.client.force_login(self.user)
+        self._login("osquery.change_configuration", "osquery.view_configuration")
         tag = Tag.objects.create(name=get_random_string())
         response = self.client.post(
             reverse("osquery:update_configuration_pack",
@@ -179,9 +228,16 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
         self._login_redirect(reverse("osquery:remove_configuration_pack",
                                      args=(configuration_pack.configuration.pk, configuration_pack.pk)))
 
+    def test_remove_configuration_pack_permission_denied(self):
+        configuration_pack = self._force_configuration_pack()
+        self._login()
+        response = self.client.get(reverse("osquery:remove_configuration_pack",
+                                           args=(configuration_pack.configuration.pk, configuration_pack.pk)))
+        self.assertEqual(response.status_code, 403)
+
     def test_remove_configuration_pack_get(self):
         configuration_pack = self._force_configuration_pack()
-        self.client.force_login(self.user)
+        self._login("osquery.change_configuration")
         response = self.client.get(reverse("osquery:remove_configuration_pack",
                                            args=(configuration_pack.configuration.pk, configuration_pack.pk)))
         self.assertEqual(response.status_code, 200)
@@ -190,7 +246,7 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
 
     def test_remove_configuration_pack_post(self):
         configuration_pack = self._force_configuration_pack()
-        self.client.force_login(self.user)
+        self._login("osquery.change_configuration", "osquery.view_configuration")
         response = self.client.post(reverse("osquery:remove_configuration_pack",
                                             args=(configuration_pack.configuration.pk, configuration_pack.pk)),
                                     follow=True)
