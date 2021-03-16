@@ -3,8 +3,10 @@ from django.utils import timezone
 from django_filters import rest_framework as filters
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import DjangoModelPermissions, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from zentral.utils.drf import DjangoPermissionRequired
 from .forms import MacOSAppSearchForm
 from .models import MetaBusinessUnit, Tag
 from .serializers import MetaBusinessUnitSerializer, TagSerializer
@@ -13,6 +15,9 @@ from .utils import MSQuery
 
 
 class MachinesExport(APIView):
+    permission_required = "inventory.view_machinesnapshot"
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+
     def post(self, request, *args, **kwargs):
         export_format = request.GET.get("export_format", "xlsx")
         if export_format not in ("xlsx", "zip"):
@@ -26,6 +31,9 @@ class MachinesExport(APIView):
 
 
 class MacOSAppsExport(APIView):
+    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+
     def post(self, request, *args, **kwargs):
         export_format = request.data.pop("export_format", "xlsx")
         if export_format not in ("xlsx", "csv"):
@@ -45,6 +53,7 @@ class MetaBusinessUnitList(generics.ListCreateAPIView):
     List all MBUs, search MBU by name, or create a new MBU.
     """
     queryset = MetaBusinessUnit.objects.all()
+    permissions = [DjangoModelPermissions]
     serializer_class = MetaBusinessUnitSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
@@ -55,6 +64,7 @@ class MetaBusinessUnitDetail(generics.RetrieveUpdateDestroyAPIView):
     Retrieve, update or delete a MBU.
     """
     queryset = MetaBusinessUnit.objects.all()
+    permissions = [DjangoModelPermissions]
     serializer_class = MetaBusinessUnitSerializer
 
     def perform_destroy(self, instance):
@@ -69,6 +79,7 @@ class TagList(generics.ListCreateAPIView):
     List all tags, search tag by name, or create a new tag.
     """
     queryset = Tag.objects.all()
+    permissions = [DjangoModelPermissions]
     serializer_class = TagSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
@@ -79,4 +90,5 @@ class TagDetail(generics.RetrieveUpdateDestroyAPIView):
     Retrieve, update or delete a tag.
     """
     queryset = Tag.objects.all()
+    permissions = [DjangoModelPermissions]
     serializer_class = TagSerializer
