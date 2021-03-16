@@ -58,27 +58,21 @@ def post_monolith_munki_request(msn, user_agent, ip, **payload):
     MonolithMunkiRequestEvent.post_machine_request_payloads(msn, user_agent, ip, [payload])
 
 
-def post_monolith_sync_catalogs_request(user_agent, ip):
+def post_monolith_sync_catalogs_request(request):
     event_class = MonolithSyncCatalogsRequestEvent
-    if user_agent or ip:
-        request = EventRequest(user_agent, ip)
-    else:
-        request = None
+    event_request = EventRequest.build_from_request(request)
     metadata = EventMetadata(event_class.event_type,
-                             request=request,
+                             request=event_request,
                              tags=event_class.tags)
     event = event_class(metadata, {})
     event.post()
 
 
-def post_monolith_cache_server_update_request(user_agent, ip, cache_server=None, errors=None):
+def post_monolith_cache_server_update_request(request, cache_server=None, errors=None):
     event_class = MonolithUpdateCacheServerRequestEvent
-    if user_agent or ip:
-        request = EventRequest(user_agent, ip)
-    else:
-        request = None
+    event_request = EventRequest.build_from_request(request)
     metadata = EventMetadata(event_class.event_type,
-                             request=request,
+                             request=event_request,
                              tags=event_class.tags)
     if cache_server:
         payload = cache_server.serialize()

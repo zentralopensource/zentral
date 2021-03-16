@@ -1,13 +1,9 @@
 from django.urls import path
 from django.conf.urls import url
-from django.views.decorators.csrf import csrf_exempt
 from . import views
 
 app_name = "monolith"
 urlpatterns = [
-    # repository sync configuration
-    url(r'^webhook/$', views.WebHookView.as_view(), name='webhook'),
-
     # pkg infos
     url(r'^pkg_infos/$', views.PkgInfosView.as_view(), name='pkg_infos'),
     url(r'^pkg_infos/(?P<pk>\d+)/update_catalog/$',
@@ -110,19 +106,12 @@ urlpatterns = [
         views.DeleteManifestSubManifestView.as_view(), name='delete_manifest_sub_manifest'),
 
     # manifest cache servers
-    url(r'^manifests/(?P<pk>\d+)/configure_cache_server/$',
-        views.ConfigureManifestCacheServerView.as_view(), name='configure_manifest_cache_server'),
     url(r'^manifests/(?P<pk>\d+)/delete_cache_server/(?P<cs_pk>\d+)/$',
         views.DeleteManifestCacheServerView.as_view(), name='delete_manifest_cache_server'),
 
-    # API
-    url(r'^sync_catalogs/$', csrf_exempt(views.SyncCatalogsView.as_view()),
-        name='sync_catalogs'),
-    url(r'^cache_servers/$', csrf_exempt(views.CacheServersView.as_view()),
-        name='cache_servers'),
+    # extra
     url(r'^download_printer_ppd/(?P<token>.*)/$', views.DownloadPrinterPPDView.as_view(),
         name='download_printer_ppd'),
-
 
     # managedsoftwareupdate API
     url(r'^munki_repo/catalogs/(?P<name>.*)$', views.MRCatalogView.as_view()),
@@ -136,12 +125,11 @@ urlpatterns = [
 main_menu_cfg = {
     'weight': 10,
     'items': (
-        ('webhook', 'Webhook'),
-        ('catalogs', 'Catalogs'),
-        ('pkg_infos', 'PkgInfos'),
-        ('ppds', 'Printer PPDs'),
-        ('conditions', 'Conditions'),
-        ('manifests', 'Manifests'),
-        ('sub_manifests', 'Sub manifests'),
+        ('catalogs', 'Catalogs', False, ("monolith.view_catalog",)),
+        ('pkg_infos', 'PkgInfos', False, ("monolith.view_pkginfo",)),
+        ('ppds', 'Printer PPDs', False, ("monolith.view_printerppd",)),
+        ('conditions', 'Conditions', False, ("monolith.view_condition",)),
+        ('manifests', 'Manifests', False, ("monolith.view_manifest",)),
+        ('sub_manifests', 'Sub manifests', False, ("monolith.view_submanifest",)),
     )
 }

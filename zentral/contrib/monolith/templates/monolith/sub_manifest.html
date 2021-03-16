@@ -11,8 +11,10 @@
 <h2>Sub manifest - {{ object }}</i></h2>
 
 <p>
+  {% if perms.monolith.change_submanifest %}
   <a href="{% url 'monolith:update_sub_manifest' object.id %}" class="btn btn-default">Update</a>
-  {% if object.can_be_deleted %}
+  {% endif %}
+  {% if object.can_be_deleted and perms.monolith.delete_submanifest %}
   <a href="{% url 'monolith:delete_sub_manifest' object.id %}" class="btn btn-danger">Delete</a>
   {% endif %}
 </p>
@@ -22,7 +24,11 @@
   <dd>
     {% if object.meta_business_unit %}
     <span class="text-danger">restricted to </span>
+    {% if perms.inventory.view_metabusinessunit %}
     <a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a>
+    {% else %}
+    {{ object.meta_business_unit %}
+    {% endif %}
     {% else %}
     <span class="text-success">not restricted</span>
     {% endif %}
@@ -46,6 +52,7 @@
   {% endif %}
 </h3>
 
+{% if perms.monolith.add_submanifestpkginfo or perms.monolith.add_submanifestattachment %}
 <div class="dropdown">
   <button class="btn btn-default dropdown-toggle" type="button" id="addAttachment"
           data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
@@ -53,11 +60,16 @@
     <span class="caret"></span>
   </button>
   <ul class="dropdown-menu" aria-labelledby="addAttachment">
+    {% if perms.monolith.add_submanifestpkginfo %}
     <li><a href="{% url 'monolith:sub_manifest_add_pkg_info' object.id %}">Repository Package</a>
+    {% endif %}
+    {% if perms.monolith.add_submanifestattachment %}
     <li><a href="{% url 'monolith:sub_manifest_add_attachment' object.id %}">Configuration Profile or Package</a>
     <li><a href="{% url 'monolith:sub_manifest_add_script' object.id %}">Script</a>
+    {% endif %}
   </ul>
 </div>
+{% endif %}
 
 {% for key_display, key_list in keys %}
 <h4>{{ key_display }}</h4>
@@ -73,10 +85,18 @@
   <tr{% if smo.type and smo.trashed_at %} class="warning"{% endif %}>
     <td class="col-md-4">
       {% if smo.pkg_info_name %}
+      {% if perms.monolith.view_pkginfoname %}
       <a name="smp_{{ smo.pk }}" href="{% url 'monolith:pkg_info_name' smo.pkg_info_name.id %}">{{ name }}</a>
       {% else %}
+      {{ name }}
+      {% endif %}
+      {% else %}
       {% if smo.can_be_downloaded %}
+      {% if perms.monolith.view_submanifestattachment %}
       <a name="sma_{{ smo.pk }}" href="{% url 'monolith:download_sub_manifest_attachment' smo.id %}" >{{ name }}</a>
+      {% else %}
+      {{ name }}
+      {% endif %}
       {% else %}
       <a name="sma_{{ smo.pk }}"></a>{{ name }}
       {% endif %}
@@ -93,9 +113,13 @@
     {% endif %}
     <td class="col-md-3">
       {% if smo.condition %}
+      {% if perms.monolith.view_condition %}
       <a href="{{ smo.condition.get_absolute_url }}"
          data-toggle="tooltip" data-placement="top"
          title="{{ smo.condition.predicate }}">{{ smo.condition }}</a>
+      {% else %}
+      {{ smo.condition }}
+      {% endif %}
       {% else %}
       -
       {% endif %}
@@ -106,28 +130,38 @@
     {% if smo.type %}
     <td class="col-md-2">
       {% if smo.trashed_at %}
-      <a class="btn btn-danger" href="{% url 'monolith:purge_sub_manifest_attachment' smo.id %}">
-        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-      </a>
-      {% else %}
-      {% if smo.type == 'script' %}
-      <a class="btn btn-default" href="{% url 'monolith:sub_manifest_update_script' object.id smo.id %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-      </a>
-      {% endif %}
-      <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_attachment' smo.id %}">
+        {% if perms.monolith.delete_submanifestattachment %}
+        <a class="btn btn-danger" href="{% url 'monolith:purge_sub_manifest_attachment' smo.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-      </a>
+        </a>
+        {% endif %}
+      {% else %}
+        {% if smo.type == 'script' %}
+          {% if perms.monolith.change_submanifestattachment %}
+          <a class="btn btn-default" href="{% url 'monolith:sub_manifest_update_script' object.id smo.id %}">
+            <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+          </a>
+          {% endif %}
+        {% endif %}
+        {% if perms.monolith.delete_submanifestattachment %}
+        <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_attachment' smo.id %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
       {% endif %}
     </td>
     {% else %}
     <td class="col-md-2">
+      {% if perms.monolith.change_submanifestpkginfo %}
       <a class="btn btn-default" href="{% url 'monolith:update_sub_manifest_pkg_info' object.id smo.id %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
       </a>
+      {% endif %}
+      {% if perms.monolith.delete_submanifestpkginfo %}
       <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_pkg_info' object.id smo.id %}">
         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
       </a>
+      {% endif %}
     </td>
     {% endif %}
   </tr>
@@ -135,6 +169,7 @@
 </table>
 {% endfor %}
 
+{% if perms.monolith.view_manifest %}
 <h3>Included in {{ manifests|length }} manifest{{ manifests|length|pluralize }}</h3>
 <table class="table">
   {% for tags, manifest in manifests %}
@@ -146,5 +181,6 @@
   </tr>
   {% endfor %}
 </table>
+{% endif %}
 
 {% endblock %}

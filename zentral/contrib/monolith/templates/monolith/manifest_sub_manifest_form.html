@@ -12,7 +12,7 @@
 <h2>{{ title }}</h2>
 <form method="POST" class="form">{% csrf_token %}
   {{ form|bootstrap }}
-  <a href="{{ manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
+  <a href="{{ manifest.get_absolute_url }}#submanifests" class="btn btn-default">Cancel</a>
   <button type="submit" class="btn btn-primary">Add</button>
 </form>
 {% endblock %}

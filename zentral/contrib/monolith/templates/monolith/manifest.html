@@ -10,14 +10,20 @@
 
 <h2>Manifest - {{ object }}</h2>
 
+{% if perms.monolith.change_manifest %}
 <p>
   <a href="{% url 'monolith:update_manifest' object.id %}" class="btn btn-default">Rename</a>
 </p>
+{% endif %}
 
 <dl class="dl-horizontal">
   <dt>Business unit</dt>
   <dd>
+    {% if perms.inventory.view_metabusinessunit %}
     <a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a></dd>
+    {% else %}
+    {{ object.meta_business_unit }}
+    {% endif %}
   </dd>
   <dt>Version</dt>
   <dd>{{ object.version }}</dd>
@@ -29,11 +35,14 @@
   <dd class="small" style="opacity:0.5">{{ object.updated_at }}</dd>
 </dl>
 
+{% if perms.monolith.view_enrollment %}
 <h3>{{ enrollments|length }} Enrollment{{ enrollments|length|pluralize }}</h3>
 
+{% if perms.monolith.add_enrollment %}
 <p>
   <a href="{% url 'monolith:add_manifest_enrollment' object.id %}" class="btn btn-default">Add</a>
 </p>
+{% endif %}
 
 {% if enrollments %}
 <table class="table">
@@ -91,10 +100,14 @@
   </tbody>
 </table>
 {% endif %}
+{% endif %}
 
-<h3>{{ manifest_catalogs|length }} Catalog{{ manifest_catalogs|length|pluralize }}</h3>
+{% if perms.monolith.view_manifestcatalog %}
+<h3 id="catalogs">{{ manifest_catalogs|length }} Catalog{{ manifest_catalogs|length|pluralize }}</h3>
 
+{% if perms.monolith.add_manifestcatalog %}
 <p><a class="btn btn-default" href="{% url 'monolith:add_manifest_catalog' object.id %}">Add</a></p>
+{% endif %}
 
 <table class="table">
   <thead>
@@ -102,7 +115,9 @@
       <th>name</th>
       <th>priority</th>
       <th>tags</th>
+      {% if perms.monolith.change_manifestcatalog or perms.monolith.delete_manifestcatalog %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -117,21 +132,31 @@
         -
         {% endfor %}
       </td>
+
+      {% if perms.monolith.change_manifestcatalog or perms.monolith.delete_manifestcatalog %}
       <td width="15%">
+        {% if perms.monolith.change_manifestcatalog %}
         <a class="btn btn-default" href="{% url 'monolith:edit_manifest_catalog' object.id manifest_catalog.catalog.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
+        {% endif %}
+        {% if perms.monolith.delete_manifestcatalog %}
         <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_catalog' object.id manifest_catalog.catalog.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
+        {% endif %}
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 
-<h3>{{ manifest_enrollment_packages|length }} Enrollment package{{ manifest_enrollment_packages|length|pluralize }}</h3>
+{% if perms.monolith.view_manifestenrollmentpackage %}
+<h3 id="enrollment-packages">{{ manifest_enrollment_packages|length }} Enrollment package{{ manifest_enrollment_packages|length|pluralize }}</h3>
 
+{% if perms.monolith.add_manifestenrollmentpackage %}
 <div class="dropdown">
   <button class="btn btn-default dropdown-toggle" type="button" id="addEnrollmentPackage"
           data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
@@ -144,6 +169,7 @@
     {% endfor %}
   </ul>
 </div>
+{% endif %}
 
 <table class="table">
   <thead>
@@ -152,7 +178,9 @@
       <th>version</th>
       <th>description</th>
       <th>tags</th>
+      {% if perms.monolith.change_manifestenrollmentpackage or perms.monolith.delete_manifestenrollmentpackage %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -178,24 +206,33 @@
         -
         {% endfor %}
       </td>
+      {% if perms.monolith.change_manifestenrollmentpackage or perms.monolith.delete_manifestenrollmentpackage %}
       <td width="15%">
+        {% if perms.monolith.change_manifestenrollmentpackage %}
         <a class="btn btn-default" href="{% url 'monolith:update_manifest_enrollment_package' object.id manifest_enrollment_package.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
+        {% endif %}
+        {% if perms.monolith.delete_manifestenrollmentpackage %}
         <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_enrollment_package' object.id manifest_enrollment_package.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
+        {% endif %}
       </td>
+      {% endif %}
     </tr>
     {% endwith %}
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 
-<a name="printers"></a>
-<h3>{{ manifest_printers|length }} Printer{{ manifest_printers|length|pluralize }}</h3>
+{% if perms.monolith.view_printer %}
+<h3 id="printers">{{ manifest_printers|length }} Printer{{ manifest_printers|length|pluralize }}</h3>
 
+{% if perms.monolith.add_printer %}
 <p><a class="btn btn-default" href="{% url 'monolith:add_manifest_printer' object.id %}">Add</a></p>
+{% endif %}
 
 <table class="table">
   <thead>
@@ -204,7 +241,9 @@
       <th>model</th>
       <th>version</th>
       <th>tags</th>
+      {% if perms.monolith.change_printer or perms.monolith.delete_printer %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -224,21 +263,32 @@
         {% inventory_tag tag %}
         {% endfor %}
       </td>
+      {% if perms.monolith.change_printer or perms.monolith.delete_printer %}
       <td width="15%">
+        {% if perms.monolith.change_printer %}
         <a class="btn btn-default" href="{% url 'monolith:update_manifest_printer' object.id manifest_printer.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
+        {% endif %}
+        {% if perms.monolith.delete_printer %}
         <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_printer' object.id manifest_printer.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
+        {% endif %}
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 
-<h3>{{ manifest_sub_manifests|length }} Sub manifest{{ manifest_sub_manifests|length|pluralize }}</h3>
+{% if perms.monolith.view_manifestsubmanifest %}
+<h3 id="submanifests">{{ manifest_sub_manifests|length }} Sub manifest{{ manifest_sub_manifests|length|pluralize }}</h3>
+
+{% if perms.monolith.add_manifestsubmanifest %}
 <p><a class="btn btn-default" href="{% url 'monolith:add_manifest_sub_manifest' object.id %}">Add</a></p>
+{% endif %}
 
 <table class="table">
   <thead>
@@ -254,9 +304,13 @@
     {% with manifest_sub_manifest.sub_manifest as sub_manifest %}
     <tr>
       <td>
+        {% if perms.monolith.view_submanifest %}
         <a name="sm_{{ sub_manifest.id }}" href="{% url 'monolith:sub_manifest' sub_manifest.id %}">
           {{ sub_manifest }}
         </a>
+        {% else %}
+        {{ sub_manifest }}
+        {% endif %}
       </td>
       <td>{{ sub_manifest.description|default:"-"|linebreaks }}</td>
       <td>
@@ -264,24 +318,33 @@
         {% inventory_tag tag %}
         {% endfor %}
       </td>
+      {% if perms.monolith.change_manifestsubmanifest or perms.monolith.delete_manifestsubmanifest %}
       <td width="15%">
+        {% if perms.monolith.change_manifestsubmanifest %}
         <a class="btn btn-default" href="{% url 'monolith:edit_manifest_sub_manifest' object.id sub_manifest.id %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
+        {% endif %}
+        {% if perms.monolith.delete_manifestsubmanifest %}
         <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_sub_manifest' object.id sub_manifest.id %}">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
+        {% endif %}
       </td>
+      {% endif %}
     </tr>
     {% endwith %}
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 
-<a name="cache-servers"></a>
-<h3>{{ manifest_cache_servers|length }} Cache server{{ manifest_cache_servers|length|pluralize }}</h3>
+{% if perms.monolith.view_cacheserver %}
+<h3 id="cache-servers">{{ manifest_cache_servers|length }} Cache server{{ manifest_cache_servers|length|pluralize }}</h3>
 
+{% if perms.monolith.add_cacheserver %}
 <p><a class="btn btn-default" href="{% url 'monolith:configure_manifest_cache_server' object.id %}">Configure</a></p>
+{% endif %}
 
 <table class="table">
   <thead>
@@ -291,7 +354,9 @@
       <th>base url</th>
       <th>created at</th>
       <th>updated at</th>
+      {% if perms.monolith.delete_cacheserver %}
       <th></th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
@@ -302,6 +367,7 @@
       <td>{{ manifest_cache_server.base_url }}</td>
       <td>{{ manifest_cache_server.created_at }}</td>
       <td>{{ manifest_cache_server.updated_at }}</td>
+      {% if perms.monolith.delete_cacheserver %}
       <td width="15%">
         <form method="POST" action="{% url 'monolith:delete_manifest_cache_server' object.id manifest_cache_server.id %}">{% csrf_token %}
           <button class="btn btn-danger">
@@ -309,9 +375,11 @@
           </button>
         </form>
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 
 {% endblock %}

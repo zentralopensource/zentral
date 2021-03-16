@@ -5,16 +5,25 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'monolith:catalogs' %}">Monolith catalogs</a></li>
-  <li class="active">
-    {{ title }}
-  </li>
+  {% if object %}
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li>Update</li>
+  {% else %}
+  <li class="active">Create</li>
+  {% endif %}
 </ol>
 
 <h2>{{ title }}</h2>
 
 <form method="POST">{% csrf_token %}
   {{ form|bootstrap }}
-  <a class="btn btn-default" href="{% url 'monolith:catalogs' %}">Cancel</a>
-  <button class="btn btn-primary" type="submit">Save</button>
+  <p>
+    {% if object %}
+    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    {% else %}
+    <a class="btn btn-default" href="{% url 'monolith:catalogs' %}">Cancel</a>
+    {% endif %}
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
 </form>
 {% endblock %}

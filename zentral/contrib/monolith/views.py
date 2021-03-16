@@ -1,15 +1,15 @@
 from itertools import chain
 import logging
 import random
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.cache import cache
-from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.core.exceptions import PermissionDenied
 from django.core.files.storage import default_storage
 from django.urls import reverse_lazy
 from django.http import (FileResponse,
                          Http404,
                          HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect)
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.functional import cached_property
@@ -19,19 +19,14 @@ from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFai
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import verify_enrollment_secret
-from zentral.utils.api_views import make_secret, SignedRequestHeaderJSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.storage import file_storage_has_signed_urls
 from .conf import monolith_conf
-from .events import (post_monolith_cache_server_update_request,
-                     post_monolith_enrollment_event,
-                     post_monolith_munki_request, post_monolith_repository_updates,
-                     post_monolith_sync_catalogs_request)
+from .events import (post_monolith_enrollment_event,
+                     post_monolith_munki_request, post_monolith_repository_updates)
 from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
-                    CacheServersPostForm,
-                    ConfigureCacheServerForm,
                     EnrollmentForm,
                     ManifestForm, ManifestPrinterForm, ManifestSearchForm,
                     PkgInfoSearchForm,
@@ -78,24 +73,11 @@ class InventoryMachineSubview:
         return render_to_string(self.template_name, ctx)
 
 
-# repository sync configuration
-
-
-class WebHookView(LoginRequiredMixin, TemplateView):
-    template_name = "monolith/webhook.html"
-
-    def get_context_data(self, **kwargs):
-        context = super(WebHookView, self).get_context_data(**kwargs)
-        context['monolith'] = True
-        context['api_host'] = self.request.get_host()
-        context['api_secret'] = make_secret('zentral.contrib.monolith')
-        return context
-
-
 # pkg infos
 
 
-class PkgInfosView(LoginRequiredMixin, TemplateView):
+class PkgInfosView(PermissionRequiredMixin, TemplateView):
+    permission_required = "monolith.view_pkginfo"
     template_name = "monolith/pkg_info_list.html"
 
     def get_context_data(self, **kwargs):
@@ -113,7 +95,8 @@ class PkgInfosView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class UpdatePkgInfoCatalogView(LoginRequiredMixin, UpdateView):
+class UpdatePkgInfoCatalogView(PermissionRequiredMixin, UpdateView):
+    permission_required = "monolith.change_pkginfo"
     model = PkgInfo
     fields = ['catalogs']
 
@@ -139,7 +122,8 @@ class UpdatePkgInfoCatalogView(LoginRequiredMixin, UpdateView):
         return response
 
 
-class PkgInfoNameView(LoginRequiredMixin, DetailView):
+class PkgInfoNameView(PermissionRequiredMixin, DetailView):
+    permission_required = "monolith.view_pkginfoname"
     model = PkgInfoName
     template_name = "monolith/pkg_info_name.html"
 
@@ -163,11 +147,13 @@ class PkgInfoNameView(LoginRequiredMixin, DetailView):
 # PPDs
 
 
-class PPDsView(LoginRequiredMixin, ListView):
+class PPDsView(PermissionRequiredMixin, ListView):
+    permission_required = "monolith.view_printerppd"
     model = PrinterPPD
 
 
-class UploadPPDView(LoginRequiredMixin, CreateView):
+class UploadPPDView(PermissionRequiredMixin, CreateView):
+    permission_required = "monolith.add_printerppd"
     model = PrinterPPD
     form_class = UploadPPDForm
 
@@ -177,7 +163,8 @@ class UploadPPDView(LoginRequiredMixin, CreateView):
         return ctx
 
 
-class PPDView(LoginRequiredMixin, DetailView):
+class PPDView(PermissionRequiredMixin, DetailView):
+    permission_required = "monolith.view_printerppd"
     model = PrinterPPD
 
     def get_context_data(self, **kwargs):
@@ -189,20 +176,22 @@ class PPDView(LoginRequiredMixin, DetailView):
 # catalogs
 
 
-class CatalogsView(LoginRequiredMixin, ListView):
+class CatalogsView(PermissionRequiredMixin, ListView):
+    permission_required = "monolith.view_catalog"
     model = Catalog
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
         if monolith_conf.repository.manual_catalog_management:
-            ctx["edit_catalog_view"] = "monolith:update_catalog"
+            ctx["can_create_catalog"] = self.request.user.has_perm("monolith.add_catalog")
         else:
-            ctx["edit_catalog_view"] = "monolith:update_catalog_priority"
+            ctx["can_create_catalog"] = False
         return ctx
 
 
-class CatalogView(LoginRequiredMixin, DetailView):
+class CatalogView(PermissionRequiredMixin, DetailView):
+    permission_required = "monolith.view_catalog"
     model = Catalog
 
     def get_context_data(self, **kwargs):
@@ -226,17 +215,18 @@ class CatalogView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class ManualCatalogManagementRequiredMixin(LoginRequiredMixin):
+class ManualCatalogManagementRequiredMixin(PermissionRequiredMixin):
     def dispatch(self, request, *args, **kwargs):
         self.manual_catalog_management = monolith_conf.repository.manual_catalog_management
         if not self.manual_catalog_management:
-            return HttpResponseForbidden("Automatic catalog management. "
-                                         "See configuration. "
-                                         "You can't create catalogs.")
+            raise PermissionDenied("Automatic catalog management. "
+                                   "See configuration. "
+                                   "You can't create catalogs.")
         return super().dispatch(request, *args, **kwargs)
 
 
 class CreateCatalogView(ManualCatalogManagementRequiredMixin, CreateView):
+    permission_required = "monolith.add_catalog"
     model = Catalog
     fields = ['name', 'priority']
 
@@ -281,6 +271,7 @@ class UpdateCatalogMixin(object):
 
 
 class UpdateCatalogView(ManualCatalogManagementRequiredMixin, UpdateCatalogMixin, UpdateView):
+    permission_required = "monolith.change_catalog"
     model = Catalog
     fields = ['name', 'priority']
 
@@ -290,7 +281,8 @@ class UpdateCatalogView(ManualCatalogManagementRequiredMixin, UpdateCatalogMixin
         return ctx
 
 
-class UpdateCatalogPriorityView(LoginRequiredMixin, UpdateCatalogMixin, UpdateView):
+class UpdateCatalogPriorityView(PermissionRequiredMixin, UpdateCatalogMixin, UpdateView):
+    permission_required = "monolith.change_catalog"
     model = Catalog
     fields = ['priority']
 
@@ -300,7 +292,8 @@ class UpdateCatalogPriorityView(LoginRequiredMixin, UpdateCatalogMixin, UpdateVi
         return ctx
 
 
-class DeleteCatalogView(LoginRequiredMixin, DeleteView):
+class DeleteCatalogView(PermissionRequiredMixin, DeleteView):
+    permission_required = "monolith.delete_catalog"
     model = Catalog
     success_url = reverse_lazy("monolith:catalogs")
 
@@ -323,7 +316,8 @@ class DeleteCatalogView(LoginRequiredMixin, DeleteView):
 # conditions
 
 
-class ConditionsView(LoginRequiredMixin, ListView):
+class ConditionsView(PermissionRequiredMixin, ListView):
+    permission_required = "monolith.view_condition"
     model = Condition
 
     def get_context_data(self, **kwargs):
@@ -332,7 +326,8 @@ class ConditionsView(LoginRequiredMixin, ListView):
         return context
 
 
-class CreateConditionView(LoginRequiredMixin, CreateView):
+class CreateConditionView(PermissionRequiredMixin, CreateView):
+    permission_required = "monolith.add_condition"
     model = Condition
     fields = ["name", "predicate"]
 
@@ -343,7 +338,8 @@ class CreateConditionView(LoginRequiredMixin, CreateView):
         return context
 
 
-class ConditionView(LoginRequiredMixin, DetailView):
+class ConditionView(PermissionRequiredMixin, DetailView):
+    permission_required = "monolith.view_condition"
     model = Condition
 
     def get_context_data(self, **kwargs):
@@ -364,7 +360,8 @@ class ConditionView(LoginRequiredMixin, DetailView):
         return context
 
 
-class UpdateConditionView(LoginRequiredMixin, UpdateView):
+class UpdateConditionView(PermissionRequiredMixin, UpdateView):
+    permission_required = "monolith.change_condition"
     model = Condition
     fields = ["name", "predicate"]
 
@@ -376,7 +373,8 @@ class UpdateConditionView(LoginRequiredMixin, UpdateView):
         return context
 
 
-class DeleteConditionView(LoginRequiredMixin, DeleteView):
+class DeleteConditionView(PermissionRequiredMixin, DeleteView):
+    permission_required = "monolith.delete_condition"
     model = Condition
     success_url = reverse_lazy("monolith:conditions")
     # TODO: can_be_deleted?
@@ -390,7 +388,8 @@ class DeleteConditionView(LoginRequiredMixin, DeleteView):
 # sub manifests
 
 
-class SubManifestsView(LoginRequiredMixin, ListView):
+class SubManifestsView(PermissionRequiredMixin, ListView):
+    permission_required = "monolith.view_submanifest"
     model = SubManifest
     template_name = "monolith/sub_manifest_list.html"
     paginate_by = 10
@@ -420,7 +419,8 @@ class SubManifestsView(LoginRequiredMixin, ListView):
         return context
 
 
-class CreateSubManifestView(LoginRequiredMixin, CreateView):
+class CreateSubManifestView(PermissionRequiredMixin, CreateView):
+    permission_required = "monolith.add_submanifest"
     model = SubManifest
     form_class = SubManifestForm
     template_name = "monolith/edit_sub_manifest.html"
@@ -431,7 +431,8 @@ class CreateSubManifestView(LoginRequiredMixin, CreateView):
         return context
 
 
-class SubManifestView(LoginRequiredMixin, DetailView):
+class SubManifestView(PermissionRequiredMixin, DetailView):
+    permission_required = "monolith.view_submanifest"
     model = SubManifest
     template_name = "monolith/sub_manifest.html"
 
@@ -452,7 +453,8 @@ class SubManifestView(LoginRequiredMixin, DetailView):
         return context
 
 
-class UpdateSubManifestView(LoginRequiredMixin, UpdateView):
+class UpdateSubManifestView(PermissionRequiredMixin, UpdateView):
+    permission_required = "monolith.change_submanifest"
     model = SubManifest
     form_class = SubManifestForm
     template_name = 'monolith/edit_sub_manifest.html'
@@ -463,12 +465,14 @@ class UpdateSubManifestView(LoginRequiredMixin, UpdateView):
         return context
 
 
-class DeleteSubManifestView(LoginRequiredMixin, DeleteView):
+class DeleteSubManifestView(PermissionRequiredMixin, DeleteView):
+    permission_required = "monolith.delete_submanifest"
     model = SubManifest
     success_url = reverse_lazy("monolith:sub_manifests")
 
 
-class SubManifestAddPkgInfoView(LoginRequiredMixin, FormView):
+class SubManifestAddPkgInfoView(PermissionRequiredMixin, FormView):
+    permission_required = "monolith.add_submanifestpkginfo"
     form_class = SubManifestPkgInfoForm
     template_name = 'monolith/edit_sub_manifest_pkg_info.html'
 
@@ -496,7 +500,8 @@ class SubManifestAddPkgInfoView(LoginRequiredMixin, FormView):
         return redirect(self.sub_manifest)
 
 
-class UpdateSubManifestPkgInfoView(LoginRequiredMixin, UpdateView):
+class UpdateSubManifestPkgInfoView(PermissionRequiredMixin, UpdateView):
+    permission_required = "monolith.change_submanifestpkginfo"
     model = SubManifestPkgInfo
     fields = ("key", "condition", "featured_item")
     template_name = "monolith/edit_sub_manifest_pkg_info.html"
@@ -514,7 +519,8 @@ class UpdateSubManifestPkgInfoView(LoginRequiredMixin, UpdateView):
         return redirect(smpi.sub_manifest)
 
 
-class DeleteSubManifestPkgInfoView(LoginRequiredMixin, DeleteView):
+class DeleteSubManifestPkgInfoView(PermissionRequiredMixin, DeleteView):
+    permission_required = "monolith.delete_submanifestpkginfo"
     model = SubManifestPkgInfo
     template_name = "monolith/delete_sub_manifest_pkg_info.html"
 
@@ -532,7 +538,8 @@ class DeleteSubManifestPkgInfoView(LoginRequiredMixin, DeleteView):
         return redirect(sub_manifest)
 
 
-class SubManifestAddAttachmentView(LoginRequiredMixin, FormView):
+class SubManifestAddAttachmentView(PermissionRequiredMixin, FormView):
+    permission_required = "monolith.add_submanifestattachment"
     form_class = SubManifestAttachmentForm
     template_name = 'monolith/edit_sub_manifest_attachment.html'
 
@@ -560,7 +567,8 @@ class SubManifestAddAttachmentView(LoginRequiredMixin, FormView):
         return redirect(smpi)
 
 
-class SubManifestAddScriptView(LoginRequiredMixin, FormView):
+class SubManifestAddScriptView(PermissionRequiredMixin, FormView):
+    permission_required = "monolith.add_submanifestattachment"
     form_class = SubManifestScriptForm
     template_name = 'monolith/edit_sub_manifest_script.html'
 
@@ -588,7 +596,8 @@ class SubManifestAddScriptView(LoginRequiredMixin, FormView):
         return redirect(smpi)
 
 
-class SubManifestUpdateScriptView(LoginRequiredMixin, FormView):
+class SubManifestUpdateScriptView(PermissionRequiredMixin, FormView):
+    permission_required = "monolith.change_submanifestattachment"
     form_class = SubManifestScriptForm
     template_name = 'monolith/edit_sub_manifest_script.html'
 
@@ -624,7 +633,8 @@ class SubManifestUpdateScriptView(LoginRequiredMixin, FormView):
         return redirect(smpi)
 
 
-class DeleteSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
+class DeleteSubManifestAttachmentView(PermissionRequiredMixin, DeleteView):
+    permission_required = "monolith.delete_submanifestattachment"
     model = SubManifestAttachment
     template_name = "monolith/delete_sub_manifest_attachment.html"
 
@@ -642,7 +652,8 @@ class DeleteSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
         return redirect(self.object)
 
 
-class PurgeSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
+class PurgeSubManifestAttachmentView(PermissionRequiredMixin, DeleteView):
+    permission_required = "monolith.delete_submanifestattachment"
     model = SubManifestAttachment
     template_name = "monolith/purge_sub_manifest_attachment.html"
 
@@ -660,7 +671,9 @@ class PurgeSubManifestAttachmentView(LoginRequiredMixin, DeleteView):
         return redirect(sub_manifest)
 
 
-class DownloadSubManifestAttachmentView(LoginRequiredMixin, View):
+class DownloadSubManifestAttachmentView(PermissionRequiredMixin, View):
+    permission_required = "monolith.view_submanifestattachment"
+
     def get(self, request, *args, **kwargs):
         sma = get_object_or_404(SubManifestAttachment, pk=kwargs["pk"])
         if not sma.can_be_downloaded():
@@ -678,7 +691,8 @@ class DownloadSubManifestAttachmentView(LoginRequiredMixin, View):
 # manifests
 
 
-class ManifestsView(LoginRequiredMixin, ListView):
+class ManifestsView(PermissionRequiredMixin, ListView):
+    permission_required = "monolith.view_manifest"
     model = Manifest
     template_name = "monolith/manifest_list.html"
     paginate_by = 10
@@ -710,7 +724,8 @@ class ManifestsView(LoginRequiredMixin, ListView):
         return context
 
 
-class CreateManifestView(LoginRequiredMixin, CreateView):
+class CreateManifestView(PermissionRequiredMixin, CreateView):
+    permission_required = "monolith.add_manifest"
     model = Manifest
     form_class = ManifestForm
 
@@ -720,14 +735,14 @@ class CreateManifestView(LoginRequiredMixin, CreateView):
         return context
 
 
-class ManifestView(LoginRequiredMixin, DetailView):
+class ManifestView(PermissionRequiredMixin, DetailView):
+    permission_required = "monolith.view_manifest"
     model = Manifest
     template_name = "monolith/manifest.html"
 
     def get_context_data(self, **kwargs):
         context = super(ManifestView, self).get_context_data(**kwargs)
         manifest = context["object"]
-        context['monolith'] = True
         context['enrollments'] = list(manifest.enrollment_set.all())
         context['manifest_enrollment_packages'] = list(manifest.manifestenrollmentpackage_set.all())
         context['manifest_enrollment_packages'].sort(key=lambda mep: (mep.get_name(), mep.id))
@@ -751,17 +766,14 @@ class ManifestView(LoginRequiredMixin, DetailView):
         return context
 
 
-class UpdateManifestView(LoginRequiredMixin, UpdateView):
+class UpdateManifestView(PermissionRequiredMixin, UpdateView):
+    permission_required = "monolith.change_manifest"
     model = Manifest
     form_class = ManifestForm
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['monolith'] = True
-        return context
 
-
-class AddManifestEnrollmentView(LoginRequiredMixin, TemplateView):
+class AddManifestEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "monolith.add_enrollment"
     template_name = "monolith/enrollment_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -810,7 +822,8 @@ class AddManifestEnrollmentView(LoginRequiredMixin, TemplateView):
             return self.forms_invalid(secret_form, enrollment_form)
 
 
-class ManifestEnrollmentConfigurationProfileView(LoginRequiredMixin, View):
+class ManifestEnrollmentConfigurationProfileView(PermissionRequiredMixin, View):
+    permission_required = "monolith.view_enrollment"
     format = None
 
     def get(self, request, *args, **kwargs):
@@ -829,7 +842,7 @@ class ManifestEnrollmentConfigurationProfileView(LoginRequiredMixin, View):
 # manifest catalogs
 
 
-class BaseManifestM2MView(LoginRequiredMixin, FormView):
+class BaseManifestM2MView(FormView):
     m2m_model = None
 
     def dispatch(self, request, *args, **kwargs):
@@ -861,7 +874,8 @@ class BaseManifestM2MView(LoginRequiredMixin, FormView):
         return HttpResponseRedirect(self.get_success_url())
 
 
-class AddManifestCatalogView(BaseManifestM2MView):
+class AddManifestCatalogView(PermissionRequiredMixin, BaseManifestM2MView):
+    permission_required = "monolith.add_manifestcatalog"
     form_class = AddManifestCatalogForm
     template_name = "monolith/manifest_catalog_form.html"
 
@@ -871,7 +885,8 @@ class AddManifestCatalogView(BaseManifestM2MView):
         return ctx
 
 
-class EditManifestCatalogView(BaseManifestM2MView):
+class EditManifestCatalogView(PermissionRequiredMixin, BaseManifestM2MView):
+    permission_required = "monolith.change_manifestcatalog"
     form_class = EditManifestCatalogForm
     template_name = "monolith/manifest_catalog_form.html"
     m2m_model = Catalog
@@ -887,7 +902,9 @@ class EditManifestCatalogView(BaseManifestM2MView):
         return ctx
 
 
-class DeleteManifestCatalogView(BaseManifestM2MView):
+class DeleteManifestCatalogView(PermissionRequiredMixin, BaseManifestM2MView):
+    permission_required = "monolith.delete_manifestcatalog"
+    form_class = EditManifestCatalogForm
     form_class = DeleteManifestCatalogForm
     template_name = "monolith/delete_manifest_catalog.html"
     m2m_model = Catalog
@@ -899,7 +916,7 @@ class DeleteManifestCatalogView(BaseManifestM2MView):
 # manifest enrollment packages
 
 
-class BaseEditManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
+class BaseEditManifestEnrollmentPackageView(TemplateView):
     template_name = "monolith/manifest_enrollment_package_forms.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -960,7 +977,9 @@ class BaseEditManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
             return self.forms_invalid(builder_form, mep_form)
 
 
-class AddManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView):
+class AddManifestEnrollmentPackageView(PermissionRequiredMixin, BaseEditManifestEnrollmentPackageView):
+    permission_required = "monolith.add_manifestenrollmentpackage"
+
     def forms_valid(self, builder_form, mep_form):
         # enrollment secret
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.manifest.meta_business_unit)
@@ -983,7 +1002,9 @@ class AddManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView):
         return redirect(self.manifest)
 
 
-class UpdateManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView):
+class UpdateManifestEnrollmentPackageView(PermissionRequiredMixin, BaseEditManifestEnrollmentPackageView):
+    permission_required = "monolith.change_manifestenrollmentpackage"
+
     def forms_valid(self, builder_form, mep_form):
         self.manifest_enrollment_package.tags.set(mep_form.cleaned_data["tags"])
         self.manifest_enrollment_package.save()
@@ -991,7 +1012,8 @@ class UpdateManifestEnrollmentPackageView(BaseEditManifestEnrollmentPackageView)
         return redirect(self.manifest)
 
 
-class DeleteManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
+class DeleteManifestEnrollmentPackageView(PermissionRequiredMixin, TemplateView):
+    permission_required = "monolith.delete_manifestenrollmentpackage"
     template_name = "monolith/delete_manifest_enrollment_package.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -1017,7 +1039,8 @@ class DeleteManifestEnrollmentPackageView(LoginRequiredMixin, TemplateView):
 # manifest printers
 
 
-class AddManifestPrinterView(LoginRequiredMixin, CreateView):
+class AddManifestPrinterView(PermissionRequiredMixin, CreateView):
+    permission_required = "monolith.add_printer"
     model = Printer
     form_class = ManifestPrinterForm
     template_name = "monolith/manifest_printer_form.html"
@@ -1045,7 +1068,8 @@ class AddManifestPrinterView(LoginRequiredMixin, CreateView):
         return HttpResponseRedirect("{}#printers".format(self.manifest.get_absolute_url()))
 
 
-class UpdateManifestPrinterView(LoginRequiredMixin, UpdateView):
+class UpdateManifestPrinterView(PermissionRequiredMixin, UpdateView):
+    permission_required = "monolith.change_printer"
     model = Printer
     form_class = ManifestPrinterForm
     template_name = "monolith/manifest_printer_form.html"
@@ -1073,7 +1097,8 @@ class UpdateManifestPrinterView(LoginRequiredMixin, UpdateView):
         return "{}#printers".format(self.manifest.get_absolute_url())
 
 
-class DeleteManifestPrinterView(LoginRequiredMixin, DeleteView):
+class DeleteManifestPrinterView(PermissionRequiredMixin, DeleteView):
+    permission_required = "monolith.delete_printer"
     model = Printer
     template_name = "monolith/delete_manifest_printer.html"
 
@@ -1096,7 +1121,8 @@ class DeleteManifestPrinterView(LoginRequiredMixin, DeleteView):
 # manifest sub manifests
 
 
-class AddManifestSubManifestView(BaseManifestM2MView):
+class AddManifestSubManifestView(PermissionRequiredMixin, BaseManifestM2MView):
+    permission_required = "monolith.add_manifestsubmanifest"
     form_class = AddManifestSubManifestForm
     template_name = "monolith/manifest_sub_manifest_form.html"
 
@@ -1106,7 +1132,8 @@ class AddManifestSubManifestView(BaseManifestM2MView):
         return ctx
 
 
-class EditManifestSubManifestView(BaseManifestM2MView):
+class EditManifestSubManifestView(PermissionRequiredMixin, BaseManifestM2MView):
+    permission_required = "monolith.change_manifestsubmanifest"
     form_class = EditManifestSubManifestForm
     template_name = "monolith/manifest_sub_manifest_form.html"
     m2m_model = SubManifest
@@ -1122,7 +1149,8 @@ class EditManifestSubManifestView(BaseManifestM2MView):
         return ctx
 
 
-class DeleteManifestSubManifestView(BaseManifestM2MView):
+class DeleteManifestSubManifestView(PermissionRequiredMixin, BaseManifestM2MView):
+    permission_required = "monolith.delete_manifestsubmanifest"
     form_class = DeleteManifestSubManifestForm
     template_name = "monolith/delete_manifest_sub_manifest.html"
     m2m_model = SubManifest
@@ -1131,30 +1159,9 @@ class DeleteManifestSubManifestView(BaseManifestM2MView):
         return {'sub_manifest': self.m2m_object}
 
 
-class ConfigureManifestCacheServerView(LoginRequiredMixin, FormView):
-    form_class = ConfigureCacheServerForm
-    template_name = "monolith/configure_manifest_cache_server.html"
+class DeleteManifestCacheServerView(PermissionRequiredMixin, View):
+    permission_required = "monolith.delete_cacheserver"
 
-    def dispatch(self, request, *args, **kwargs):
-        self.manifest = get_object_or_404(Manifest, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["monolith"] = True
-        ctx["manifest"] = self.manifest
-        return ctx
-
-    def get_initial(self):
-        return {"manifest": self.manifest}
-
-    def form_valid(self, form):
-        ctx = self.get_context_data()
-        ctx["curl_command"] = form.build_curl_command()
-        return render(self.request, 'monolith/manifest_cache_server_setup.html', ctx)
-
-
-class DeleteManifestCacheServerView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         cache_server = get_object_or_404(CacheServer, pk=kwargs["cs_pk"], manifest__pk=kwargs["pk"])
         manifest = cache_server.manifest
@@ -1162,31 +1169,7 @@ class DeleteManifestCacheServerView(LoginRequiredMixin, View):
         return HttpResponseRedirect("{}#cache-servers".format(manifest.get_absolute_url()))
 
 
-# API
-
-
-class SyncCatalogsView(SignedRequestHeaderJSONPostAPIView):
-    verify_module = "zentral.contrib.monolith"
-
-    def do_post(self, data):
-        post_monolith_sync_catalogs_request(self.user_agent, self.ip)
-        monolith_conf.repository.sync_catalogs()
-        return {'status': 0}
-
-
-class CacheServersView(SignedRequestHeaderJSONPostAPIView):
-    verify_module = "zentral.contrib.monolith"
-
-    def do_post(self, data):
-        form = CacheServersPostForm(data)
-        if form.is_valid():
-            cache_server = form.save(self.ip)
-            post_monolith_cache_server_update_request(self.user_agent, self.ip, cache_server=cache_server)
-            return {'status': 0}
-        else:
-            post_monolith_cache_server_update_request(self.user_agent, self.ip, errors=form.errors)
-            # TODO: JSON response with error code and form.errors.as_json()
-            raise SuspiciousOperation("Posted json data invalid")
+# extra
 
 
 class DownloadPrinterPPDView(View):

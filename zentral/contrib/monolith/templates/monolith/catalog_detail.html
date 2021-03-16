@@ -11,12 +11,12 @@
 <h2>Catalog {{ object.name }}</h2>
 
 <p>
-    {% if not object.archived_at %}
+    {% if not object.archived_at and perms.monolith.change_catalog %}
     <a class="btn btn-default" href="{% url edit_catalog_view object.pk %}">
       <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     </a>
     {% endif %}
-    {% if object.can_be_deleted %}
+    {% if object.can_be_deleted and perms.monolith.delete_catalog %}
     <a class="btn btn-danger" href="{% url 'monolith:delete_catalog' object.pk %}">
       <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     </a>
@@ -32,7 +32,8 @@
   <dd>{{ object.archived_at|default:"-" }}</dd>
 <dl>
 
-<h3>{{ manifests|length }} manifest{{ sub_manifests|length|pluralize }}</h3>
+{% if perms.monolith.view_manifestcatalog %}
+<h3>{{ manifests|length }} manifest{{ manifests|length|pluralize }}</h3>
 
 {% if manifests %}
 <table class="table">
@@ -45,7 +46,13 @@
   <tbody>
     {% for manifest, tags in manifests %}
     <tr>
-      <td><a href="{% url 'monolith:manifest' manifest.id %}">{{ manifest }}</a></td>
+      <td>
+        {% if perms.monolith.view_manifest %}
+        <a href="{% url 'monolith:manifest' manifest.id %}">{{ manifest }}</a>
+        {% else %}
+        {{ manifest }}
+        {% endif %}
+      </td>
       <td>
         {% for tag in tags %}
         {% inventory_tag tag %}
@@ -58,11 +65,15 @@
   </tbody>
 </table>
 {% endif %}
+{% endif %}
 
+
+{% if perms.monolith.view_pkginfo %}
 <h3>{{ pkg_infos|length }} package{{ pkg_infos|length|pluralize }}</h3>
 
 {% if pkg_infos %}
 <p><a href="{{ object.get_pkg_info_url }}">Browse all packages</a>
+{% endif %}
 {% endif %}
 
 {% endblock %}

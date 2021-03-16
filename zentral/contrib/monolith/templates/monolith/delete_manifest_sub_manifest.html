@@ -12,7 +12,7 @@
 <p>Do you really want to remove {{ m2m_object }} from the manifest {{ manifest }} ?</p>
 <form method="POST">{% csrf_token %}
   {{ form.sub_manifest }}
-  <a class="btn btn-default" href="{{ manifest.get_absolute_url }}">No</a>
+  <a class="btn btn-default" href="{{ manifest.get_absolute_url }}#submanifests">No</a>
   <button class="btn btn-danger" type="submit">Yes</a>
 </form>
 {% endblock %}

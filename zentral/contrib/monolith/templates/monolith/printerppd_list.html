@@ -8,7 +8,9 @@
 
 <h2>{{ object_list|length }} PPD{{ object_list|length|pluralize }}</h2>
 
+{% if perms.monolith.add_printerppd %}
 <p><a class="btn btn-default" href="{% url 'monolith:upload_ppd' %}">Upload</a></p>
+{% endif %}
 
 <table class="table">
   <thead>

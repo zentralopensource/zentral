@@ -10,6 +10,7 @@
 
 <h2>Package {{ object.name }}</h2>
 
+{% if perms.monolith.view_submanifest %}
 <h3>{{ sub_manifests|length }} sub manifest{{ sub_manifests|length|pluralize }}</h3>
 
 {% if sub_manifests %}
@@ -30,7 +31,9 @@
   </tbody>
 </table>
 {% endif %}
+{% endif %}
 
+{% if perms.monolith.view_pkginfo %}
 <h3>{{ pkg_infos|length }} version{{ pkg_infos|length|pluralize }}</h3>
 
 {% if pkg_infos %}
@@ -54,11 +57,17 @@
       <td>
         <ul>
           {% for catalog in pkg_info.catalogs.all %}
-          <li><a href="{% url 'monolith:catalog' catalog.id %}">{{ catalog }}</a></li>
+          <li>
+            {% if perms.monolith.view_catalog %}
+            <a href="{% url 'monolith:catalog' catalog.id %}">{{ catalog }}</a>
+            {% else %}
+            {{ catalog }}
+            {% endif %}
+          </li>
           {% endfor %}
         </ul>
       </td>
-      {% if manual_catalog_management %}
+      {% if manual_catalog_management and perms.monolith.change_pkginfo %}
       <td>
         <a class="btn btn-default" href="{% url 'monolith:update_pkg_info_catalog' pkg_info.id %}">
           Update catalog
@@ -69,6 +78,7 @@
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 {% endif %}
 
 {% endblock %}

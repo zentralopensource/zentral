@@ -11,10 +11,12 @@
 <h2>Condition <i>{{ object.name }}</i></h2>
 
 <p>
+    {% if perms.monolith.change_condition %}
     <a class="btn btn-default" href="{% url 'monolith:update_condition' object.pk %}">
       <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     </a>
-    {% if object.can_be_deleted %}
+    {% endif %}
+    {% if object.can_be_deleted and perms.monolith.delete_condition %}
     <a class="btn btn-danger" href="{% url 'monolith:delete_condition' object.pk %}">
       <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     </a>
@@ -34,6 +36,7 @@
   <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
 </dl>
 
+{% if perms.monolith.view_pkginfo %}
 <h3>{{ pkg_infos|length }} package{{ pkg_infos|length|pluralize }}</h3>
 
 {% if pkg_infos %}
@@ -49,7 +52,13 @@
   <tbody>
     {% for sub_manifest, name, link, type, key in pkg_infos %}
     <tr>
-      <td><a href="{{ link }}">{{ sub_manifest }}</a></td>
+      <td>
+        {% if perms.monolith.view_submanifest %}
+        <a href="{{ link }}">{{ sub_manifest }}</a>
+        {% else %}
+        {{ sub_manifest }}
+        {% endif %}
+      </td>
       <td>{{ name }}</td>
       <td>{{ type }}</td>
       <td>{{ key }}</td>
@@ -57,5 +66,6 @@
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 {% endif %}
 {% endblock %}
