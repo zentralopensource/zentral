@@ -7,12 +7,18 @@
       <dl class="dl-horizontal">
           <dt>Bundle path</dt>
           <dd>{{ object.bundle_path }}</dd>
+          {% if object.path %}
           <dt>Path</dt>
           <dd>{{ object.path|default:"-" }}</dd>
+          {% endif %}
+          {% if object.sha_1 %}
           <dt>Sha1</dt>
           <dd>{{ object.sha_1|default:"-" }}</dd>
+          {% endif %}
+          {% if object.sha_256 %}
           <dt>Sha256</dt>
           <dd>{% sha_256_link object.sha_256 %}</dd>
+          {% endif %}
       </dl>
       {% for cert in object.certificate_chain %}
       <p>signed by</p>

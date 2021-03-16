@@ -4,8 +4,17 @@ from Foundation import (CFPreferencesAppSynchronize,
                         CFPreferencesSetValue,
                         kCFPreferencesAnyHost,
                         kCFPreferencesCurrentUser)
+import json
 import plistlib
+import ssl
 import subprocess
+import urllib.request
+import zlib
+
+USER_AGENT = "Zentral/munkipreflight 0.8"
+ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
+ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
+ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
 
 BUNDLE_ID = 'ManagedInstalls'
 ADDITIONAL_HTTP_HEADERS_KEY = 'AdditionalHttpHeaders'
@@ -19,7 +28,7 @@ def get_serial_number_and_uuid():
     return ioreg_result["IOPlatformSerialNumber"], ioreg_result["IOPlatformUUID"]
 
 
-def update_additional_http_headers():
+def update_additional_http_headers(serial_number, uuid):
     # get current headers
     cfg_headers = CFPreferencesCopyAppValue(ADDITIONAL_HTTP_HEADERS_KEY,
                                             BUNDLE_ID)
@@ -27,7 +36,6 @@ def update_additional_http_headers():
         headers = dict(h.split(": ", 1) for h in cfg_headers)
     else:
         headers = {}
-    serial_number, uuid = get_serial_number_and_uuid()
     headers[SN_HEADER] = serial_number
     headers[UUID_HEADER] = uuid
     # save the updated headers
@@ -41,5 +49,59 @@ def update_additional_http_headers():
     CFPreferencesAppSynchronize(BUNDLE_ID)
 
 
+# Zentral Munki API calls
+
+
+def make_api_request(url, data=None):
+    req = urllib.request.Request(url)
+    req.add_header('User-Agent', USER_AGENT)
+    req.add_header('Authorization', 'MunkiEnrolledMachine {}'.format(ZENTRAL_API_AUTH_TOKEN))
+    if data:
+        data = json.dumps(data)
+        req.add_header('Content-Type', 'application/json')
+        data = zlib.compress(data.encode("ascii"), 9)
+        req.add_header('Content-Encoding', 'deflate')
+    ctx = ssl.create_default_context(cafile=ZENTRAL_API_SERVER_CERTIFICATE or "/private/etc/ssl/cert.pem")
+    response = urllib.request.urlopen(req, data=data, context=ctx)
+    return json.load(response)
+
+
+def fetch_job_details(machine_serial_number):
+    url = "{}/job_details/".format(ZENTRAL_API_ENDPOINT.strip('/'))
+    return make_api_request(url, {'machine_serial_number': machine_serial_number})
+
+
+def save_job_details(job_details):
+    job_details_path = "/usr/local/zentral/munki/job_details.plist"
+    try:
+        with open(job_details_path, "wb") as f:
+            plistlib.dump(job_details, f)
+    except Exception:
+        print("Could not write job details to", job_details_path)
+
+
+def update_conditional_items(job_details):
+    ci_path = "/Library/Managed Installs/ConditionalItems.plist"
+    items = {}
+    try:
+        with open(ci_path, "rb") as f:
+            items = plistlib.load(f)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        print("Could not read", ci_path)
+        return
+    items["zentral_tags"] = job_details.get("tags", [])
+    try:
+        with open(ci_path, "wb") as f:
+            plistlib.dump(items, f)
+    except Exception:
+        print("Could not update", ci_path)
+
+
 if __name__ == "__main__":
-    update_additional_http_headers()
+    serial_number, uuid = get_serial_number_and_uuid()
+    update_additional_http_headers(serial_number, uuid)
+    job_details = fetch_job_details(serial_number)
+    save_job_details(job_details)
+    update_conditional_items(job_details)

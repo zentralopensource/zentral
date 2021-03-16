@@ -316,13 +316,14 @@ class OSXAppManager(MTObjectManager):
 class OSXApp(AbstractMTObject):
     bundle_id = models.TextField(db_index=True, blank=True, null=True)
     bundle_name = models.TextField(db_index=True, blank=True, null=True)
+    bundle_display_name = models.TextField(blank=True, null=True)
     bundle_version = models.TextField(blank=True, null=True)
     bundle_version_str = models.TextField(blank=True, null=True)
 
     objects = OSXAppManager()
 
     def __str__(self):
-        return " ".join(s for s in (self.bundle_name, self.bundle_version_str) if s)
+        return " ".join(s for s in (self.bundle_display_name or self.bundle_name, self.bundle_version_str) if s)
 
     def sources(self):
         return (Source.objects.distinct()
@@ -335,6 +336,12 @@ class OSXApp(AbstractMTObject):
     def current_instances(self):
         return (self.osxappinstance_set.filter(machinesnapshot__currentmachinesnapshot__isnull=False)
                                        .annotate(machinesnapshot_num=Count('machinesnapshot')))
+
+    def all_names(self):
+        if self.bundle_display_name:
+            yield self.bundle_display_name
+        if self.bundle_name and self.bundle_name != self.bundle_display_name:
+            yield self.bundle_name
 
     def all_versions(self):
         if self.bundle_version_str:
@@ -868,10 +875,6 @@ class MetaMachine:
         tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
         return tags
 
-    @cached_property
-    def tag_id_set(self):
-        return set(t.id for t in self.tags)
-
     def available_tags(self):
         # tags w/o mbu or w mbu where this machine is and that this machine does not have yet
         tags = set([])
@@ -880,6 +883,23 @@ class MetaMachine:
         tags = list(tags.difference(self.tags))
         tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
         return tags
+
+    def tag_names(self):
+        # Optimized for only one SQL query
+        query = (
+            "select name from inventory_tag where id in ("
+            "  select tag_id from inventory_machinetag where serial_number = %s"
+            "  union"
+            "  select tag_id from inventory_metabusinessunittag as mbut"
+            "  join inventory_businessunit as bu on (bu.meta_business_unit_id = mbut.meta_business_unit_id)"
+            "  join inventory_machinesnapshot as ms on (ms.business_unit_id = bu.id)"
+            "  join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)"
+            "  where cms.serial_number = %s"
+            ")"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [self.serial_number, self.serial_number])
+        return sorted((t[0] for t in cursor.fetchall()), key=lambda n: n.lower())
 
     def update_taxonomy_tags(self, taxonomy, tag_names):
         tag_names = set(tag_names)

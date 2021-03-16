@@ -3,7 +3,8 @@ import uuid
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit
+from zentral.conf import settings
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
 from zentral.contrib.munki.models import EnrolledMachine, Enrollment
 
 
@@ -18,10 +19,14 @@ class MunkiAPIViewsTestCase(TestCase):
 
     # utility methods
 
-    def _make_enrolled_machine(self):
-        return EnrolledMachine.objects.create(enrollment=self.enrollment,
-                                              serial_number=get_random_string(32),
-                                              token=get_random_string(64))
+    def _make_enrolled_machine(self, tag_name=None):
+        em = EnrolledMachine.objects.create(enrollment=self.enrollment,
+                                            serial_number=get_random_string(32),
+                                            token=get_random_string(64))
+        if tag_name:
+            tag = Tag.objects.create(name=tag_name)
+            MachineTag.objects.create(serial_number=em.serial_number, tag=tag)
+        return em
 
     def _post_as_json(self, url, data, **extra):
         return self.client.post(url,
@@ -98,7 +103,9 @@ class MunkiAPIViewsTestCase(TestCase):
                                       {"machine_serial_number": enrolled_machine.serial_number},
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
-        self.assertCountEqual(["principal_user_detection"], response.json().keys())
+        expected_response = settings['apps']['zentral.contrib.munki'].serialize()
+        expected_response["tags"] = []
+        self.assertEqual(expected_response, response.json())
 
     def test_job_details_conflict(self):
         enrolled_machine = self._make_enrolled_machine()
@@ -110,7 +117,8 @@ class MunkiAPIViewsTestCase(TestCase):
     # post job
 
     def test_post_job(self):
-        enrolled_machine = self._make_enrolled_machine()
+        tag_name = get_random_string()
+        enrolled_machine = self._make_enrolled_machine(tag_name=tag_name)
         computer_name = get_random_string(45)
         report_sha1sum = 40 * "0"
         response = self._post_as_json(reverse("munki:post_job"),
@@ -129,8 +137,10 @@ class MunkiAPIViewsTestCase(TestCase):
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
-        self.assertCountEqual(["principal_user_detection", "last_seen_sha1sum"], response_json.keys())
-        self.assertEqual(response_json["last_seen_sha1sum"], report_sha1sum)
+        expected_response = settings['apps']['zentral.contrib.munki'].serialize()
+        expected_response["tags"] = [tag_name]
+        expected_response["last_seen_sha1sum"] = report_sha1sum
+        self.assertEqual(expected_response, response_json)
         ms = MachineSnapshot.objects.current().get(serial_number=enrolled_machine.serial_number)
         ms2 = MachineSnapshot.objects.current().get(reference=enrolled_machine.serial_number)
         self.assertEqual(ms, ms2)

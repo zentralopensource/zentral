@@ -8,7 +8,7 @@ import subprocess
 import urllib.request
 
 
-USER_AGENT = "Zentral/munkipostinstall 0.2"
+USER_AGENT = "Zentral/munkipostinstall 0.8"
 ENROLLMENT_URL = "%ENROLLMENT_URL%"
 ENROLLMENT_SECRET = "%ENROLLMENT_SECRET%"
 TLS_SERVER_CERTS = "%TLS_SERVER_CERTS%"
@@ -18,7 +18,6 @@ CLEAN_INSTALL = "%CLEAN_INSTALL%"
 
 MUNKI_DIR = "/usr/local/munki"
 ZENTRAL_MUNKI_DIR = "/usr/local/zentral/munki/"
-ZENTRAL_MUNKI_POSTFLIGHT_FILE = os.path.join(ZENTRAL_MUNKI_DIR, "zentral_postflight")
 
 
 def is_clean_install():
@@ -44,12 +43,14 @@ def enroll():
     return json.load(resp)["token"]
 
 
-def set_postflight_script_token(token):
-    with open(ZENTRAL_MUNKI_POSTFLIGHT_FILE, "r") as f:
-        script = f.read()
-    script = script.replace("%TOKEN%", token)
-    with open(ZENTRAL_MUNKI_POSTFLIGHT_FILE, "w") as f:
-        f.write(script)
+def set_scripts_token(token):
+    for phase in ("preflight", "postflight"):
+        script_path = os.path.join(ZENTRAL_MUNKI_DIR, f"zentral_{phase}")
+        with open(script_path, "r") as f:
+            script = f.read()
+        script = script.replace("%TOKEN%", token)
+        with open(script_path, "w") as f:
+            f.write(script)
 
 
 def prepare_munki_preflight_postflight():
@@ -105,6 +106,6 @@ def write_zentral_base_url():
 
 if __name__ == "__main__":
     token = enroll()
-    set_postflight_script_token(token)
+    set_scripts_token(token)
     prepare_munki_preflight_postflight()
     write_zentral_base_url()

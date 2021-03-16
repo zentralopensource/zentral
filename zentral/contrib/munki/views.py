@@ -12,7 +12,7 @@ from django.views.generic import FormView, ListView, TemplateView, View
 from zentral.conf import settings
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
-from zentral.contrib.inventory.models import MachineTag
+from zentral.contrib.inventory.models import MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events, verify_enrollment_secret
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
@@ -245,6 +245,8 @@ class JobDetailsView(BaseView):
             enrollment={"pk": self.enrollment.pk}
         )
         response_d = settings['apps']['zentral.contrib.munki'].serialize()
+        # TODO better cache for the machine tags
+        response_d["tags"] = MetaMachine(self.machine_serial_number).tag_names()
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
         except MunkiState.DoesNotExist:

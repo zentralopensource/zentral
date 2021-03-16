@@ -15,13 +15,14 @@ class MunkiZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
 
     def extra_build_steps(self):
         tls_hostname = self.get_tls_hostname()
-        # munki zentral postflight script
-        postflight_script = self.get_root_path("usr/local/zentral/munki/zentral_postflight")
+        # munki zentral preflight and postflight script
         replacements = [
             ("%TLS_HOSTNAME%", tls_hostname),
             ("%TLS_SERVER_CERTS%", self.include_tls_server_certs() or ""),
         ]
-        self.replace_in_file(postflight_script, replacements)
+        for phase in ("preflight", "postflight"):
+            script_path = self.get_root_path(f"usr/local/zentral/munki/zentral_{phase}")
+            self.replace_in_file(script_path, replacements)
 
         # postinstall script
         postinstall_script = self.get_build_path("scripts", "postinstall")

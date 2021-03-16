@@ -40,9 +40,9 @@
       <tr>
         <td>
           {% if perms.inventory.view_osxapp and perms.inventory.view_osxappinstance %}
-          <a href="{% url 'inventory:macos_app' app.id %}">{{ app.bundle_name|default:"-" }}</a>
+          <a href="{% url 'inventory:macos_app' app.id %}">{{ app.all_names|join:" / "|default:"-" }}</a>
           {% else %}
-          {{ app.bundle_name|default:"-" }}
+          {{ app.all_names|join:" / "|default:"-" }}
           {% endif %}
           {% if app.bundle_id %}<br><code>{{ app.bundle_id }}</code>{% endif %}
         </td>

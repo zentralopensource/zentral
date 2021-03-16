@@ -17,7 +17,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.7"
+USER_AGENT = "Zentral/munkipostflight 0.8"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -28,7 +28,25 @@ SYSTEM_PROFILER = "/usr/sbin/system_profiler"
 # OSX apps
 
 
-def get_osx_app_instances():
+def get_bundle_info(path):
+    for subdir in ("Contents", "Resources"):
+        info_plist_path = os.path.join(path, subdir, "Info.plist")
+        try:
+            with open(info_plist_path, "rb") as f:
+                return plistlib.load(f)
+        except Exception:
+            pass
+
+
+def get_bundle_info_version(bundle_info):
+    version = bundle_info.get("CFBundleVersion")
+    if version and isinstance(version, str):
+        version = version.split()[0]
+        if version[0] in '0123456789':
+            return version.replace(",", ".")
+
+
+def get_osx_app_instances(full_info=False):
     apps = []
     try:
         with open(APPLICATION_INVENTORY, "rb") as f:
@@ -37,9 +55,19 @@ def get_osx_app_instances():
         print("Could not read application inventory plist")
     else:
         for app_d in data:
-            apps.append({'app': {'bundle_id': app_d['bundleid'],
-                                 'bundle_name': app_d['CFBundleName'],
-                                 'bundle_version_str': app_d['version']},
+            ztl_app_d = {'bundle_id': app_d['bundleid'],
+                         'bundle_name': app_d['CFBundleName'],
+                         'bundle_version_str': app_d['version']}
+            if full_info and app_d["path"]:
+                bundle_info = get_bundle_info(app_d["path"])
+                if bundle_info:
+                    version = get_bundle_info_version(bundle_info)
+                    if version:
+                        ztl_app_d["bundle_version"] = version
+                    bundle_display_name = bundle_info.get("CFBundleDisplayName")
+                    if bundle_display_name:
+                        ztl_app_d["bundle_display_name"] = bundle_display_name
+            apps.append({'app': ztl_app_d,
                          'bundle_path': app_d['path']})
     return apps
 
@@ -449,7 +477,7 @@ def make_api_request(url, data=None):
     return json.load(response)
 
 
-def get_job_details(machine_serial_number):
+def fetch_job_details(machine_serial_number):
     url = "{}/job_details/".format(ZENTRAL_API_ENDPOINT.strip('/'))
     return make_api_request(url, {'machine_serial_number': machine_serial_number})
 
@@ -463,8 +491,23 @@ def get_machine_snapshot():
     spr = SystemProfilerReport()
     machine_snapshot = spr.get_machine_snapshot()
     machine_snapshot['pem_certificates'] = list(iter_filtered_certs())
-    machine_snapshot['osx_app_instances'] = get_osx_app_instances()
     return machine_snapshot
+
+
+def add_machine_snapshot_apps(machine_snapshot, msn, job_details):
+    try:
+        apps_full_info_shard = int(job_details["apps_full_info_shard"])
+    except (KeyError, ValueError, TypeError):
+        apps_full_info_shard = 0
+    else:
+        apps_full_info_shard = max(0, min(100, apps_full_info_shard))
+    if apps_full_info_shard == 0:
+        full_info = False
+    elif apps_full_info_shard == 100:
+        full_info = True
+    else:
+        full_info = int(hashlib.md5(msn.encode("utf-8")).hexdigest(), 16) % 100 < apps_full_info_shard
+    machine_snapshot['osx_app_instances'] = get_osx_app_instances(full_info)
 
 
 def get_principal_user(principal_user_detection):
@@ -486,17 +529,41 @@ def get_principal_user(principal_user_detection):
             break
 
 
+def get_job_details(msn):
+    job_details_path = "/usr/local/zentral/munki/job_details.plist"
+    job_details = None
+    try:
+        with open(job_details_path, "rb") as f:
+            job_details = plistlib.load(f)
+    except FileNotFoundError:
+        print("Could not find", job_details_path)
+    except Exception as e:
+        print("Error reading", job_details_path, e)
+    if job_details is not None:
+        # cleanup
+        try:
+            os.unlink(job_details_path)
+        except Exception as e:
+            print("Could not delete", job_details_path, e)
+        return job_details
+    else:
+        # Fallback. Useful during the migration
+        return fetch_job_details(msn)
+
+
 # Main
 
 
 if __name__ == '__main__':
+    # basic machine snapshot
     machine_snapshot = get_machine_snapshot()
 
-    # get job info
-    msn = machine_snapshot['serial_number']
+    # get job details
+    msn = machine_snapshot["serial_number"]
     job_details = get_job_details(msn)
 
-    # machine snapshot
+    # enrich machine snapshot
+    add_machine_snapshot_apps(machine_snapshot, msn, job_details)
     principal_user_detection = job_details.get('principal_user_detection')
     principal_user = get_principal_user(principal_user_detection)
     if principal_user:
