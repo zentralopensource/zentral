@@ -27,21 +27,32 @@
 </ul>
 
 {% for ms in machine.snapshots_with_osx_app_instances %}
-<div class="table-reponsive appstab" id="apps-{{ ms.id }}"{% if not forloop.first %} style="display:none;"{% endif %}>
+<div class="table-reponsive appstab" id="apps-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
   <table class="table table-condensed">
     <thead>
-      <th>Bundle ID</th>
-      <th>Bundle Name</th>
-      <th>Bundle Version Str</th>
-      <th>Bundle Path</th>
+      <th>Bundle</th>
+      <th>Version</th>
+      <th>Path</th>
     </thead>
     <tbody>
       {% for osx_app_instance in ms.ordered_osx_app_instances %}
       {% with osx_app_instance.app as app %}
       <tr>
-        <td>{{ app.bundle_id|default:"" }}</td>
-        <td><a href="{% url 'inventory:macos_app' app.id %}">{{ app.bundle_name }}</a></td>
-        <td>{{ app.bundle_version_str|default:"" }}</td>
+        <td>
+          {% if perms.inventory.view_osxapp and perms.inventory.view_osxappinstance %}
+          <a href="{% url 'inventory:macos_app' app.id %}">{{ app.bundle_name|default:"-" }}</a>
+          {% else %}
+          {{ app.bundle_name|default:"-" }}
+          {% endif %}
+          {% if app.bundle_id %}<br><code>{{ app.bundle_id }}</code>{% endif %}
+        </td>
+        <td>
+          {% for v in app.all_versions %}
+          {% if not forloop.first %}<br>{% endif %}{{ v }}
+          {% empty %}
+          -
+          {% endfor %}
+        </td>
         <td>{{ osx_app_instance.bundle_path|default:"" }}</td>
       </tr>
       {% endwith %}
@@ -62,7 +73,6 @@
     </dd>
     {% endif %}
   </dl>
-
 </div><!-- snapshot apps tab end -->
 {% endfor %}
 {% endif %}

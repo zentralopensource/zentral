@@ -25,7 +25,7 @@ urlpatterns = [
     url(r'^machine/(?P<urlsafe_serial_number>\S+)/events/$',
         views.MachineEventsView.as_view(),
         name='machine_events'),
-    url(r'^machine/(?P<urlsafe_serial_number>\S+)/fetch_events/$',
+    url(r'^machine/(?P<urlsafe_serial_number>\S+)/events/fetch/$',
         views.FetchMachineEventsView.as_view(),
         name='fetch_machine_events'),
     url(r'^machine/(?P<urlsafe_serial_number>\S+)/events/store_redirect/$',
@@ -70,10 +70,10 @@ urlpatterns = [
 main_menu_cfg = {
     'weight': 0,
     'items': (
-        ('index', 'Machines'),
-        ('groups', 'Groups'),
-        ('mbu', 'Business units'),
-        ('macos_apps', 'macOS applications'),
-        ('tags', 'Tags'),
+        ('index', 'Machines', False, ("inventory.view_machinesnapshot",)),
+        ('groups', 'Groups', False, ("inventory.view_machinegroup",)),
+        ('mbu', 'Business units', False, ("inventory.view_metabusinessunit",)),
+        ('macos_apps', 'macOS applications', False, ("inventory.view_osxapp", "inventory.view_osxappinstance")),
+        ('tags', 'Tags', False, ("inventory.view_tag",)),
     )
 }

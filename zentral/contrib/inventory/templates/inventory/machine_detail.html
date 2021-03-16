@@ -34,9 +34,11 @@
         <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
       </a>
       {% endfor %}
+      {% if perms.incidents.view_incident and perms.incidents.view_machineincident %}
       <a class="btn btn-default" href="{% url 'inventory:machine_incidents' machine.get_urlsafe_serial_number %}">
         <span class="glyphicon glyphicon-warning-sign" aria-hidden="true"></span> Incidents
       </a>
+      {% endif %}
       {% if machine.snapshots_with_osx_app_instances %}
       <a class="btn btn-default" href="{% url 'inventory:machine_macos_app_instances' machine.get_urlsafe_serial_number %}">
         <i class="fab fa-apple" aria-hidden="true"></i> apps
@@ -47,12 +49,16 @@
           Action <span class="caret"></span>
         </button>
         <ul class="dropdown-menu">
+          {% if perms.inventory.view_machinetag and perms.inventory.add_machinetag and perms.inventory.change_machinetag and perms.inventory.delete_machinetag and perms.inventory.add_tag %}
           <li>
             <a href="{% url 'inventory:machine_tags' machine.get_urlsafe_serial_number %}">Manage tags</a>
           </li>
+          {% endif %}
+          {% if perms.inventory.change_machinesnapshot %}
           <li>
             <a href="{% url 'inventory:archive_machine' machine.get_urlsafe_serial_number %}"><span class="text-danger">Archive</span></a>
           </li>
+          {% endif %}
         </ul>
       </div>
     </div>
@@ -168,7 +174,7 @@
       {% endif %}
       {% endwith %}
 
-      {% if ms.links.count %}
+      {% if perms.inventory.view_link and ms.links.count %}
       <h3>Links</h3>
       <p>
         {% for link in ms.links.all %}
@@ -182,12 +188,21 @@
       <table class="table table-condensed">
         <thead>
           <th>Name</th>
+          {% if perms.inventory.view_link %}
           <th>Links</th>
+          {% endif %}
         </thead>
         <tbody>
           {% for group, links in ms.groups_with_links %}
           <tr>
-            <td><a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a></td>
+            <td>
+              {% if perms.inventory.view_machinegroup %}
+              <a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a>
+              {% else %}
+              {{ group.name }}
+              {% endif %}
+            </td>
+            {% if perms.inventory.view_link %}
             <td>
               {% for link_url, anchor_text in links %}
               <a href="{{ link_url }}" class="btn btn-default">
@@ -195,6 +210,7 @@
               </a>
               {% endfor %}
             </td>
+            {% endif %}
           </tr>
           {% endfor %}
         </tbody>

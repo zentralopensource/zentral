@@ -14,7 +14,11 @@
 </ol>
 
 <h2>{{ page_obj.paginator.count }} Business unit{{ page_obj.paginator.count|pluralize }}</h2>
+
+{% if perms.inventory.add_metabusinessunit %}
 <a href="{% url 'inventory:create_mbu' %}" class="btn btn-default">Create</a>
+{% endif %}
+
 <form method="GET" class="form form-inline" style="margin:1em 0 2em 0">
   <div class="form-group">
     <label for="id_name">{{ search_form.name.label|title }}</label>
@@ -45,13 +49,21 @@
 {% endif %}
 
 <form method="GET" action="{% url 'inventory:review_mbu_merge' %}">
+  {% if perms.inventory.change_metabusinessunit %}
   <p id="merge-btn-container" style="display:none"><button type="submit" class="btn btn-warning">Merge business units</button></p>
+  {% endif %}
   <table class="table">
     {% for mbu in object_list %}
     <tr>
       <td colspan="3">
+        {% if perms.inventory.change_metabusinessunit %}
         <input type="checkbox" name="mbu_id" value="{{ mbu.id }}">
+        {% endif %}
+        {% if perms.inventory.view_machinesnapshot %}
         <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu.name }}</a>
+        {% else %}
+        {{ mbu.name }}
+        {% endif %}
         {% for tag in mbu.tags %}
         {% inventory_tag tag %}
         {% endfor %}

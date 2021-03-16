@@ -336,6 +336,12 @@ class OSXApp(AbstractMTObject):
         return (self.osxappinstance_set.filter(machinesnapshot__currentmachinesnapshot__isnull=False)
                                        .annotate(machinesnapshot_num=Count('machinesnapshot')))
 
+    def all_versions(self):
+        if self.bundle_version_str:
+            yield self.bundle_version_str
+        if self.bundle_version and self.bundle_version != self.bundle_version_str:
+            yield self.bundle_version
+
 
 class Certificate(AbstractMTObject):
     common_name = models.TextField(blank=True, null=True)

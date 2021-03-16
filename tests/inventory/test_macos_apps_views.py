@@ -1,5 +1,10 @@
 from datetime import datetime
+from functools import reduce
+import operator
+from django.contrib.auth.models import Group, Permission
+from django.db.models import Q
 from django.urls import reverse
+from django.utils.crypto import get_random_string
 from django.utils.http import urlencode
 from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import MachineSnapshotCommit
@@ -11,8 +16,9 @@ class MacOSAppsViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.pwd = "godzillapwd"
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", cls.pwd)
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
+        cls.group = Group.objects.create(name=get_random_string())
+        cls.user.groups.set([cls.group])
         # machine snapshot
         cls.computer_name = "yolozulu"
         source = {"module": "tests.zentral.io", "name": "Zentral Tests"}
@@ -70,16 +76,43 @@ class MacOSAppsViewsTestCase(TestCase):
         cls.osx_app_instance = cls.ms.osx_app_instances.all()[0]
         cls.osx_app = cls.osx_app_instance.app
 
-    def log_user_in(self):
-        self.client.post(reverse('login'), {'username': self.user.username, 'password': self.pwd})
+    # utility methods
+
+    def _login_redirect(self, url):
+        response = self.client.get(url)
+        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+
+    def _login(self, *permissions):
+        if permissions:
+            permission_filter = reduce(operator.or_, (
+                Q(content_type__app_label=app_label, codename=codename)
+                for app_label, codename in (
+                    permission.split(".")
+                    for permission in permissions
+                )
+            ))
+            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
+        else:
+            self.group.permissions.clear()
+        self.client.force_login(self.user)
+
+    # macos pass
+
+    def test_macos_apps_redirect(self):
+        self._login_redirect(reverse("inventory:macos_apps"))
+
+    def test_macos_apps_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("inventory:macos_apps"))
+        self.assertEqual(response.status_code, 403)
 
     def test_macos_apps(self):
-        self.log_user_in()
+        self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get(reverse("inventory:macos_apps"))
-        self.assertContains(response, "Search macOS applications")
+        self.assertContains(response, "Search macOS applications", status_code=200)
 
     def test_macos_apps_bundle_name(self):
-        self.log_user_in()
+        self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
             urlencode({"bundle_name": "baller"})
@@ -92,7 +125,7 @@ class MacOSAppsViewsTestCase(TestCase):
         self.assertContains(response, "0 results")
 
     def test_macos_apps_bundle_name_and_source_search(self):
-        self.log_user_in()
+        self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
             urlencode({"bundle_name": "baller",
@@ -101,14 +134,14 @@ class MacOSAppsViewsTestCase(TestCase):
         self.assertContains(response, "1 result")
 
     def test_macos_app(self):
-        self.log_user_in()
+        self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get(reverse("inventory:macos_app", args=(self.osx_app.id,)))
         self.assertContains(response, "Baller.app 1.2.3")
         self.assertContains(response, "1 application instance")
         self.assertContains(response, self.osx_app_instance.signed_by.sha_256)
 
     def test_macos_app_instance_machines(self):
-        self.log_user_in()
+        self._login("inventory.view_osxapp", "inventory.view_osxappinstance", "inventory.view_machinesnapshot")
         response = self.client.get(reverse("inventory:macos_app_instance_machines",
                                            args=(self.osx_app.id, self.osx_app_instance.id)),
                                    follow=True)

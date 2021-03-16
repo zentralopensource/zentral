@@ -3,7 +3,7 @@ from importlib import import_module
 import logging
 from math import ceil
 from urllib.parse import urlencode
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core import signing
 from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse, reverse_lazy
@@ -56,7 +56,7 @@ def _get_source_machine_subview(source, serial_number, user):
     return [subview(serial_number, user) for subview in source_machine_subviews.get(source_key, [])]
 
 
-class MachineListView(LoginRequiredMixin, FormView):
+class MachineListView(PermissionRequiredMixin, FormView):
     template_name = "inventory/machine_list.html"
     form_class = BundleFilterForm
 
@@ -142,11 +142,14 @@ class MachineListView(LoginRequiredMixin, FormView):
 
 
 class IndexView(MachineListView):
+    permission_required = "inventory.view_machinesnapshot"
+
     def get_breadcrumbs(self, **kwargs):
         return [(None, "Inventory machines")]
 
 
-class GroupsView(LoginRequiredMixin, TemplateView):
+class GroupsView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.view_machinegroup"
     template_name = "inventory/group_list.html"
 
     def get(self, request, *args, **kwargs):
@@ -177,6 +180,8 @@ class GroupsView(LoginRequiredMixin, TemplateView):
 
 
 class GroupMachinesView(MachineListView):
+    permission_required = ("inventory.view_machinegroup", "inventory.view_machinesnapshot")
+
     def get_object(self, **kwargs):
         return MachineGroup.objects.select_related('source').get(pk=kwargs['group_id'])
 
@@ -194,6 +199,7 @@ class GroupMachinesView(MachineListView):
 
 
 class OSXAppInstanceMachinesView(MachineListView):
+    permission_required = ("inventory.view_osxappinstance", "inventory.view_machinesnapshot")
     template_name = "inventory/macos_app_instance_machines.html"
 
     def get_object(self, **kwargs):
@@ -214,7 +220,8 @@ class OSXAppInstanceMachinesView(MachineListView):
                 (None, "Machines")]
 
 
-class MBUView(LoginRequiredMixin, ListView):
+class MBUView(PermissionRequiredMixin, ListView):
+    permission_required = "inventory.view_metabusinessunit"
     template_name = "inventory/mbu_list.html"
     paginate_by = 25
 
@@ -265,7 +272,8 @@ class MBUView(LoginRequiredMixin, ListView):
         return context
 
 
-class ReviewMBUMergeView(LoginRequiredMixin, TemplateView):
+class ReviewMBUMergeView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.change_metabusinessunit"
     template_name = "inventory/review_mbu_merge.html"
 
     def get_context_data(self, **kwargs):
@@ -275,7 +283,8 @@ class ReviewMBUMergeView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MergeMBUView(LoginRequiredMixin, FormView):
+class MergeMBUView(PermissionRequiredMixin, FormView):
+    permission_required = "inventory.change_metabusinessunit"
     template_name = "inventory/merge_mbu.html"
     form_class = MergeMBUForm
 
@@ -287,19 +296,22 @@ class MergeMBUView(LoginRequiredMixin, FormView):
         return reverse('inventory:mbu_machines', args=(self.dest_mbu.id,))
 
 
-class CreateMBUView(LoginRequiredMixin, CreateView):
+class CreateMBUView(PermissionRequiredMixin, CreateView):
+    permission_required = "inventory.add_metabusinessunit"
     template_name = "inventory/edit_mbu.html"
     model = MetaBusinessUnit
     form_class = MetaBusinessUnitForm
 
 
-class UpdateMBUView(LoginRequiredMixin, UpdateView):
+class UpdateMBUView(PermissionRequiredMixin, UpdateView):
+    permission_required = "inventory.change_metabusinessunit"
     template_name = "inventory/edit_mbu.html"
     model = MetaBusinessUnit
     form_class = MetaBusinessUnitForm
 
 
-class DeleteMBUView(LoginRequiredMixin, DeleteView):
+class DeleteMBUView(PermissionRequiredMixin, DeleteView):
+    permission_required = "inventory.delete_metabusinessunit"
     model = MetaBusinessUnit
 
     def delete(self, request, *args, **kwargs):
@@ -311,7 +323,14 @@ class DeleteMBUView(LoginRequiredMixin, DeleteView):
         return HttpResponseRedirect(reverse('inventory:mbu'))
 
 
-class MBUTagsView(LoginRequiredMixin, FormView):
+class MBUTagsView(PermissionRequiredMixin, FormView):
+    permission_required = (
+        "inventory.view_metabusinessunittag",
+        "inventory.add_metabusinessunittag",
+        "inventory.change_metabusinessunittag",
+        "inventory.delete_metabusinessunittag",
+        "inventory.add_tag",
+    )
     template_name = "inventory/mbu_tags.html"
     form_class = AddMBUTagForm
 
@@ -340,14 +359,17 @@ class MBUTagsView(LoginRequiredMixin, FormView):
         return reverse('inventory:mbu_tags', args=(self.mbu.id,))
 
 
-class RemoveMBUTagView(LoginRequiredMixin, View):
+class RemoveMBUTagView(PermissionRequiredMixin, View):
+    permission_required = "inventory.delete_metabusinessunittag"
+
     def post(self, request, *args, **kwargs):
         MetaBusinessUnitTag.objects.filter(tag__id=kwargs['tag_id'],
                                            meta_business_unit__id=kwargs['pk']).delete()
         return HttpResponseRedirect(reverse('inventory:mbu_tags', args=(kwargs['pk'],)))
 
 
-class DetachBUView(LoginRequiredMixin, TemplateView):
+class DetachBUView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.change_businessunit"
     template_name = "inventory/detach_bu.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -368,7 +390,8 @@ class DetachBUView(LoginRequiredMixin, TemplateView):
         return HttpResponseRedirect(mbu.get_absolute_url())
 
 
-class MBUAPIEnrollmentView(LoginRequiredMixin, UpdateView):
+class MBUAPIEnrollmentView(PermissionRequiredMixin, UpdateView):
+    permission_required = "inventory.change_metabusinessunit"
     template_name = "inventory/mbu_api_enrollment.html"
     form_class = MBUAPIEnrollmentForm
     queryset = MetaBusinessUnit.objects.all()
@@ -382,6 +405,7 @@ class MBUAPIEnrollmentView(LoginRequiredMixin, UpdateView):
 
 
 class MBUMachinesView(MachineListView):
+    permission_required = ("inventory.view_metabusinessunit", "inventory.view_machinesnapshot")
     template_name = "inventory/mbu_machines.html"
 
     def get_object(self, **kwargs):
@@ -400,7 +424,8 @@ class MBUMachinesView(MachineListView):
                 (None, self.object.name)]
 
 
-class MachineHeartbeatsView(LoginRequiredMixin, TemplateView):
+class MachineHeartbeatsView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.view_machinesnapshot"
     template_name = "inventory/_machine_heartbeats.html"
     time_range_days = 15  # TODO hard coded
 
@@ -440,7 +465,8 @@ class MachineHeartbeatsView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MachineView(LoginRequiredMixin, TemplateView):
+class MachineView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.view_machinesnapshot"
     template_name = "inventory/machine_detail.html"
 
     def get_context_data(self, **kwargs):
@@ -473,7 +499,8 @@ class MachineView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class ArchiveMachineView(LoginRequiredMixin, TemplateView):
+class ArchiveMachineView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.change_machinesnapshot"
     template_name = "inventory/archive_machine.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -527,7 +554,8 @@ def _clean_machine_events_fetch_kwargs(request, serial_number, default_time_rang
     return kwargs
 
 
-class MachineEventsView(LoginRequiredMixin, TemplateView):
+class MachineEventsView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.view_machinesnapshot"
     template_name = "inventory/machine_events.html"
     default_time_range = "now-7d"
 
@@ -593,7 +621,8 @@ class MachineEventsView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class FetchMachineEventsView(LoginRequiredMixin, TemplateView):
+class FetchMachineEventsView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.view_machinesnapshot"
     template_name = "inventory/_machine_events.html"
     paginate_by = 20
 
@@ -624,7 +653,9 @@ class FetchMachineEventsView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class MachineEventsStoreRedirectView(LoginRequiredMixin, View):
+class MachineEventsStoreRedirectView(PermissionRequiredMixin, View):
+    permission_required = "inventory.view_machinesnapshot"
+
     def get(self, request, *args, **kwargs):
         self.machine = MetaMachine.from_urlsafe_serial_number(kwargs['urlsafe_serial_number'])
         try:
@@ -644,7 +675,8 @@ class MachineEventsStoreRedirectView(LoginRequiredMixin, View):
         )
 
 
-class MachineMacOSAppInstancesView(LoginRequiredMixin, TemplateView):
+class MachineMacOSAppInstancesView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.view_machinesnapshot"
     template_name = "inventory/machine_macos_app_instances.html"
 
     def get_context_data(self, **kwargs):
@@ -655,7 +687,12 @@ class MachineMacOSAppInstancesView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class MachineIncidentsView(LoginRequiredMixin, TemplateView):
+class MachineIncidentsView(PermissionRequiredMixin, TemplateView):
+    permission_required = (
+        "inventory.view_machinesnapshot",
+        "incidents.view_incident",
+        "incidents.view_machineincident"
+    )
     template_name = "inventory/machine_incidents.html"
 
     def get_context_data(self, **kwargs):
@@ -668,7 +705,14 @@ class MachineIncidentsView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class MachineTagsView(LoginRequiredMixin, FormView):
+class MachineTagsView(PermissionRequiredMixin, FormView):
+    permission_required = (
+        "inventory.view_machinetag",
+        "inventory.add_machinetag",
+        "inventory.change_machinetag",
+        "inventory.delete_machinetag",
+        "inventory.add_tag",
+    )
     template_name = "inventory/machine_tags.html"
     form_class = AddMachineTagForm
 
@@ -697,7 +741,9 @@ class MachineTagsView(LoginRequiredMixin, FormView):
         return reverse('inventory:machine_tags', args=(self.machine.get_urlsafe_serial_number(),))
 
 
-class RemoveMachineTagView(LoginRequiredMixin, View):
+class RemoveMachineTagView(PermissionRequiredMixin, View):
+    permission_required = "inventory.delete_machinetag"
+
     def post(self, request, *args, **kwargs):
         machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
         MachineTag.objects.filter(tag__id=kwargs['tag_id'],
@@ -720,7 +766,8 @@ TAG_COLOR_PRESETS = {
 }
 
 
-class TagsView(LoginRequiredMixin, TemplateView):
+class TagsView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.view_tag"
     template_name = "inventory/tag_index.html"
 
     def get_context_data(self, **kwargs):
@@ -731,7 +778,8 @@ class TagsView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class CreateTagView(LoginRequiredMixin, CreateView):
+class CreateTagView(PermissionRequiredMixin, CreateView):
+    permission_required = "inventory.add_tag"
     model = Tag
     form_class = CreateTagForm
 
@@ -745,7 +793,8 @@ class CreateTagView(LoginRequiredMixin, CreateView):
         return reverse('inventory:tags')
 
 
-class UpdateTagView(LoginRequiredMixin, UpdateView):
+class UpdateTagView(PermissionRequiredMixin, UpdateView):
+    permission_required = "inventory.change_tag"
     model = Tag
     form_class = UpdateTagForm
 
@@ -759,7 +808,8 @@ class UpdateTagView(LoginRequiredMixin, UpdateView):
         return reverse('inventory:tags')
 
 
-class DeleteTagView(LoginRequiredMixin, DeleteView):
+class DeleteTagView(PermissionRequiredMixin, DeleteView):
+    permission_required = "inventory.delete_tag"
     model = Tag
     success_url = reverse_lazy("inventory:tags")
 
@@ -769,7 +819,8 @@ class DeleteTagView(LoginRequiredMixin, DeleteView):
         return ctx
 
 
-class CreateTaxonomyView(LoginRequiredMixin, CreateView):
+class CreateTaxonomyView(PermissionRequiredMixin, CreateView):
+    permission_required = "inventory.add_taxonomy"
     model = Taxonomy
     fields = ('meta_business_unit', 'name')
 
@@ -782,7 +833,8 @@ class CreateTaxonomyView(LoginRequiredMixin, CreateView):
         return reverse('inventory:tags')
 
 
-class UpdateTaxonomyView(LoginRequiredMixin, UpdateView):
+class UpdateTaxonomyView(PermissionRequiredMixin, UpdateView):
+    permission_required = "inventory.change_taxonomy"
     model = Taxonomy
     fields = ('name',)
 
@@ -795,7 +847,8 @@ class UpdateTaxonomyView(LoginRequiredMixin, UpdateView):
         return reverse('inventory:tags')
 
 
-class DeleteTaxonomyView(LoginRequiredMixin, DeleteView):
+class DeleteTaxonomyView(PermissionRequiredMixin, DeleteView):
+    permission_required = "inventory.delete_taxonomy"
     model = Taxonomy
     success_url = reverse_lazy("inventory:tags")
 
@@ -805,7 +858,8 @@ class DeleteTaxonomyView(LoginRequiredMixin, DeleteView):
         return ctx
 
 
-class MacOSAppsView(LoginRequiredMixin, TemplateView):
+class MacOSAppsView(PermissionRequiredMixin, TemplateView):
+    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
     template_name = "inventory/macos_apps.html"
 
     def get_context_data(self, **kwargs):
@@ -850,7 +904,8 @@ class MacOSAppsView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MacOSAppView(LoginRequiredMixin, TemplateView):
+class MacOSAppView(PermissionRequiredMixin, TemplateView):
+    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
     template_name = "inventory/macos_app.html"
 
     def get_context_data(self, **kwargs):

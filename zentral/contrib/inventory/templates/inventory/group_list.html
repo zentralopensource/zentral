@@ -32,7 +32,11 @@
       <td>{{ group.source.name }}</td>
       <td>{{ group.get_short_key }}</td>
       <td>
+        {% if perms.inventory.view_machinesnapshot %}
         <a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a>
+        {% else %}
+        {{ group.name }}
+        {% endif %}
       </td>
       <td>
         {% for link in group.links.all %}
