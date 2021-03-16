@@ -90,23 +90,23 @@ def save_job_details(job_details):
         print("Could not write job details to", job_details_path, str(e))
 
 
-def update_conditional_items(job_details):
-    ci_path = "/Library/Managed Installs/ConditionalItems.plist"
-    items = {}
+def update_facts(job_details):
+    facts_path = "/usr/local/zentral/munki/facts.plist"
+    facts = {}
     try:
-        with open(ci_path, "rb") as f:
-            items = plistlib.load(f)
+        with open(facts_path, "rb") as f:
+            facts = plistlib.load(f)
     except FileNotFoundError:
         pass
     except Exception as e:
-        print("Could not read", ci_path, str(e))
+        print("Could not read", facts_path, str(e))
         return
-    items["zentral_tags"] = job_details.get("tags", [])
+    facts["zentral_tags"] = job_details.get("tags", [])
     try:
-        with open(ci_path, "wb") as f:
-            plistlib.dump(items, f)
+        with open(facts_path, "wb") as f:
+            plistlib.dump(facts, f)
     except Exception as e:
-        print("Could not update", ci_path, str(e))
+        print("Could not update", facts_path, str(e))
 
 
 if __name__ == "__main__":
@@ -114,4 +114,4 @@ if __name__ == "__main__":
     update_additional_http_headers(serial_number, uuid)
     job_details = fetch_job_details(serial_number)
     save_job_details(job_details)
-    update_conditional_items(job_details)
+    update_facts(job_details)
