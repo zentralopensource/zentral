@@ -101,6 +101,29 @@ def prepare_munki_preflight_postflight():
                 print("Could not run the Zentral", phase, "script")
 
 
+def install_facts():
+    facts_dir = "/usr/local/munki/conditions/facts"
+    if os.path.isdir(facts_dir):
+        script_path = os.path.join(facts_dir, "zentral.py")
+        if is_clean_install() and os.path.isfile(script_path):
+            os.unlink(script_path)
+        if not os.path.isfile(script_path):
+            os.symlink(os.path.join(ZENTRAL_MUNKI_DIR, "zentral_facts.py"), script_path)
+        return True
+    return False
+
+
+def install_standalone_conditional_script():
+    conditional_script_dir = "/usr/local/munki/conditions"
+    if not os.path.exists(conditional_script_dir):
+        os.makedirs(conditional_script_dir)
+    script_path = os.path.join(conditional_script_dir, "zentral.py")
+    if is_clean_install() and os.path.isfile(script_path):
+        os.unlink(script_path)
+    if not os.path.isfile(script_path):
+        os.symlink(os.path.join(ZENTRAL_MUNKI_DIR, "zentral_conditional_items.py"), script_path)
+
+
 # write zentral base url
 def write_zentral_base_url():
     if subprocess.call(["defaults", "write",
@@ -113,4 +136,6 @@ if __name__ == "__main__":
     token = enroll()
     set_scripts_token(token)
     prepare_munki_preflight_postflight()
+    if not install_facts():
+        install_standalone_conditional_script()
     write_zentral_base_url()
