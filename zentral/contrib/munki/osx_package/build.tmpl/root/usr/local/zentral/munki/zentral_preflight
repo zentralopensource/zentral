@@ -5,6 +5,7 @@ from Foundation import (CFPreferencesAppSynchronize,
                         kCFPreferencesAnyHost,
                         kCFPreferencesCurrentUser)
 import json
+import os
 import plistlib
 import ssl
 import subprocess
@@ -74,10 +75,19 @@ def fetch_job_details(machine_serial_number):
 def save_job_details(job_details):
     job_details_path = "/usr/local/zentral/munki/job_details.plist"
     try:
+        os.unlink(job_details_path)
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        print("Could not delete existing job details", job_details_path, str(e))
+        return
+    else:
+        print("Deleted existing job details", job_details_path)
+    try:
         with open(job_details_path, "wb") as f:
             plistlib.dump(job_details, f)
-    except Exception:
-        print("Could not write job details to", job_details_path)
+    except Exception as e:
+        print("Could not write job details to", job_details_path, str(e))
 
 
 def update_conditional_items(job_details):
@@ -88,15 +98,15 @@ def update_conditional_items(job_details):
             items = plistlib.load(f)
     except FileNotFoundError:
         pass
-    except Exception:
-        print("Could not read", ci_path)
+    except Exception as e:
+        print("Could not read", ci_path, str(e))
         return
     items["zentral_tags"] = job_details.get("tags", [])
     try:
         with open(ci_path, "wb") as f:
             plistlib.dump(items, f)
-    except Exception:
-        print("Could not update", ci_path)
+    except Exception as e:
+        print("Could not update", ci_path, str(e))
 
 
 if __name__ == "__main__":
