@@ -3,10 +3,10 @@ from django.utils import timezone
 from django_filters import rest_framework as filters
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import DjangoModelPermissions, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from zentral.utils.drf import DjangoPermissionRequired
+from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .forms import MacOSAppSearchForm
 from .models import MetaBusinessUnit, Tag
 from .serializers import MetaBusinessUnitSerializer, TagSerializer
@@ -53,7 +53,7 @@ class MetaBusinessUnitList(generics.ListCreateAPIView):
     List all MBUs, search MBU by name, or create a new MBU.
     """
     queryset = MetaBusinessUnit.objects.all()
-    permissions = [DjangoModelPermissions]
+    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = MetaBusinessUnitSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
@@ -64,7 +64,7 @@ class MetaBusinessUnitDetail(generics.RetrieveUpdateDestroyAPIView):
     Retrieve, update or delete a MBU.
     """
     queryset = MetaBusinessUnit.objects.all()
-    permissions = [DjangoModelPermissions]
+    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = MetaBusinessUnitSerializer
 
     def perform_destroy(self, instance):
@@ -79,7 +79,7 @@ class TagList(generics.ListCreateAPIView):
     List all tags, search tag by name, or create a new tag.
     """
     queryset = Tag.objects.all()
-    permissions = [DjangoModelPermissions]
+    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = TagSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
@@ -90,5 +90,5 @@ class TagDetail(generics.RetrieveUpdateDestroyAPIView):
     Retrieve, update or delete a tag.
     """
     queryset = Tag.objects.all()
-    permissions = [DjangoModelPermissions]
+    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = TagSerializer
