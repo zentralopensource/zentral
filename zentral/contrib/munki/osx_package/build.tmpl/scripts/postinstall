@@ -13,15 +13,19 @@ ENROLLMENT_URL = "%ENROLLMENT_URL%"
 ENROLLMENT_SECRET = "%ENROLLMENT_SECRET%"
 TLS_SERVER_CERTS = "%TLS_SERVER_CERTS%"
 TLS_HOSTNAME = "%TLS_HOSTNAME%"
-CLEAN_INSTALL = "%CLEAN_INSTALL%"
+HAS_DISTRIBUTOR = "%HAS_DISTRIBUTOR%"
 
 
 MUNKI_DIR = "/usr/local/munki"
 ZENTRAL_MUNKI_DIR = "/usr/local/zentral/munki/"
 
 
+def has_distributor():
+    return HAS_DISTRIBUTOR == "YES"
+
+
 def is_clean_install():
-    return CLEAN_INSTALL == "YES"
+    return has_distributor()
 
 
 def get_serial_number_and_uuid():
@@ -91,9 +95,10 @@ def prepare_munki_preflight_postflight():
         ztl_script_path = os.path.join(ZENTRAL_MUNKI_DIR, "zentral_{}".format(phase))
         os.symlink(ztl_script_path, ztl_script_install_path)
 
-        # run script
-        if subprocess.call([ztl_script_path, "auto"]):
-            print("Could not run the Zentral", phase, "script")
+        if not has_distributor():
+            # run script
+            if subprocess.call([ztl_script_path, "auto"]):
+                print("Could not run the Zentral", phase, "script")
 
 
 # write zentral base url
