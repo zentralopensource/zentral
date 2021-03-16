@@ -69,6 +69,60 @@ class APIViewsTestCase(TestCase):
         data = json.dumps(data)
         return self.put_data(url, data, content_type, include_token)
 
+    # list configurations
+
+    def test_get_configurations_unauthorized(self):
+        response = self.client.get(reverse("osquery_api:configurations"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_configurations_permission_denied(self):
+        response = self.client.get(
+            reverse("osquery_api:configurations"),
+            HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}"
+        )
+        self.assertEqual(response.status_code, 403)
+
+    # get configuration
+
+    def test_get_configuration_unauthorized(self):
+        response = self.client.get(reverse("osquery_api:configuration", args=(1213028133,)))
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_configuration_permission_denied(self):
+        response = self.client.get(
+            reverse("osquery_api:configuration", args=(1213028133,)),
+            HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}"
+        )
+        self.assertEqual(response.status_code, 403)
+
+    # list enrollments
+
+    def test_get_enrollments_unauthorized(self):
+        response = self.client.get(reverse("osquery_api:enrollments"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollments_permission_denied(self):
+        response = self.client.get(
+            reverse("osquery_api:enrollments"),
+            HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}"
+        )
+        self.assertEqual(response.status_code, 403)
+
+    # get enrollement
+
+    def test_get_enrollment_unauthorized(self):
+        response = self.client.get(reverse("osquery_api:enrollment", args=(1213028133,)))
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollment_permission_denied(self):
+        response = self.client.get(
+            reverse("osquery_api:enrollment", args=(1213028133,)),
+            HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}"
+        )
+        self.assertEqual(response.status_code, 403)
+
+    # put pack
+
     def test_put_pack_unauthorized(self):
         url = reverse("osquery_api:pack", args=(get_random_string(),))
         response = self.put_json_data(url, {}, include_token=False)
