@@ -18,6 +18,6 @@ urlpatterns = [
 main_menu_cfg = {
     'weight': 2,
     'items': (
-        ('index', 'all incidents'),
+        ('index', 'all incidents', False, ("incidents.view_incident",)),
     ),
 }

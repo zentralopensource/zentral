@@ -1,5 +1,5 @@
 import logging
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, UpdateView
@@ -12,7 +12,8 @@ from .utils import get_prometheus_incidents_metrics
 logger = logging.getLogger("zentral.core.incidents.views")
 
 
-class IndexView(LoginRequiredMixin, ListView):
+class IndexView(PermissionRequiredMixin, ListView):
+    permission_required = "incidents.view_incident"
     model = Incident
     paginate_by = 50
     template_name = "incidents/index.html"
@@ -55,7 +56,8 @@ class IndexView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class IncidentView(LoginRequiredMixin, DetailView):
+class IncidentView(PermissionRequiredMixin, DetailView):
+    permission_required = "incidents.view_incident"
     model = Incident
 
     def get_context_data(self, **kwargs):
@@ -72,7 +74,8 @@ class IncidentView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateIncidentView(LoginRequiredMixin, UpdateView):
+class UpdateIncidentView(PermissionRequiredMixin, UpdateView):
+    permission_required = "incidents.change_incident"
     form_class = UpdateIncidentForm
     model = Incident
 
@@ -106,7 +109,8 @@ class IncidentEventSet(object):
         return self.store.incident_events_fetch(self.incident, start, stop - start)
 
 
-class IncidentEventsView(LoginRequiredMixin, ListView):
+class IncidentEventsView(PermissionRequiredMixin, ListView):
+    permission_required = "incidents.view_incident"
     template_name = "incidents/incident_events.html"
     paginate_by = 10
 
@@ -151,7 +155,8 @@ class IncidentEventsView(LoginRequiredMixin, ListView):
         return IncidentEventSet(self.incident)
 
 
-class UpdateMachineIncidentView(LoginRequiredMixin, UpdateView):
+class UpdateMachineIncidentView(PermissionRequiredMixin, UpdateView):
+    permission_required = "incidents.change_machineincident"
     form_class = UpdateMachineIncidentForm
     model = MachineIncident
 
