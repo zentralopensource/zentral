@@ -6,7 +6,6 @@ from django import template
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
-from django.utils.html import linebreaks, urlize
 from django.utils.safestring import mark_safe
 from pygments import lexers, highlight
 from pygments.formatters import HtmlFormatter
@@ -141,16 +140,6 @@ main_menu_config = SimpleLazyObject(lambda: MenuConfig("main_menu_cfg"))
 def main_menu_app_dropdowns(context):
     _, context["dropdown_list"] = main_menu_config.get_filtered_sections(context)
     return context
-
-
-@register.filter()
-def prettydescription(value):
-    """combine linebreaks and urlize"""
-    return urlize(
-        mark_safe(linebreaks(value, autoescape=True)),
-        nofollow=True,
-        autoescape=True
-    )
 
 
 @register.filter()

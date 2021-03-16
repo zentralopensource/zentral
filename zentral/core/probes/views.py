@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from django import forms
 from django.core import signing
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
@@ -23,7 +23,8 @@ from .models import Feed, FeedProbe, ProbeSource
 logger = logging.getLogger("zentral.core.probes.views")
 
 
-class IndexView(LoginRequiredMixin, ListView):
+class IndexView(PermissionRequiredMixin, ListView):
+    permission_required = "probes.view_probesource"
     model = ProbeSource
     paginate_by = 50
     template_name = "core/probes/index.html"
@@ -69,7 +70,8 @@ class IndexView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class CreateProbeView(LoginRequiredMixin, FormView):
+class CreateProbeView(PermissionRequiredMixin, FormView):
+    permission_required = "probes.add_probesource"
     form_class = CreateProbeForm
     template_name = "core/probes/form.html"
 
@@ -84,7 +86,8 @@ class CreateProbeView(LoginRequiredMixin, FormView):
         return HttpResponseRedirect(probe_source.get_absolute_url())
 
 
-class ProbeView(LoginRequiredMixin, DetailView):
+class ProbeView(PermissionRequiredMixin, DetailView):
+    permission_required = "probes.view_probesource"
     model = ProbeSource
 
     def get_context_data(self, **kwargs):
@@ -117,7 +120,8 @@ class ProbeView(LoginRequiredMixin, DetailView):
             return ["core/probes/syntax_error.html"]
 
 
-class ProbeDashboardView(LoginRequiredMixin, DetailView):
+class ProbeDashboardView(PermissionRequiredMixin, DetailView):
+    permission_required = "probes.view_probesource"
     model = ProbeSource
     template_name = "core/probes/probe_dashboard.html"
 
@@ -130,7 +134,8 @@ class ProbeDashboardView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class ProbeDashboardDataView(LoginRequiredMixin, View):
+class ProbeDashboardDataView(PermissionRequiredMixin, View):
+    permission_required = "probes.view_probesource"
     INTERVAL_DATE_FORMAT = {
         "hour": "%H:%M",
         "day": "%d/%m",
@@ -230,7 +235,8 @@ def _clean_probe_events_fetch_kwargs(request, probe, default_time_range=None):
     return kwargs
 
 
-class ProbeEventsView(LoginRequiredMixin, TemplateView):
+class ProbeEventsView(PermissionRequiredMixin, TemplateView):
+    permission_required = "probes.view_probesource"
     template_name = "core/probes/probe_events.html"
     default_time_range = "now-7d"
 
@@ -310,7 +316,8 @@ class ProbeEventsView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class FetchProbeEventsView(LoginRequiredMixin, TemplateView):
+class FetchProbeEventsView(PermissionRequiredMixin, TemplateView):
+    permission_required = "probes.view_probesource"
     template_name = "core/probes/_probe_events.html"
     paginate_by = 20
 
@@ -341,7 +348,9 @@ class FetchProbeEventsView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class ProbeEventsStoreRedirectView(LoginRequiredMixin, View):
+class ProbeEventsStoreRedirectView(PermissionRequiredMixin, View):
+    permission_required = "probes.view_probesource"
+
     def get(self, request, *args, **kwargs):
         probe_source = get_object_or_404(ProbeSource, pk=kwargs['pk'])
         probe = probe_source.load()
@@ -360,7 +369,8 @@ class ProbeEventsStoreRedirectView(LoginRequiredMixin, View):
         return HttpResponseRedirect(reverse('probe:machine_events', args=(probe.pk,)))
 
 
-class UpdateProbeView(LoginRequiredMixin, UpdateView):
+class UpdateProbeView(PermissionRequiredMixin, UpdateView):
+    permission_required = "probes.change_probesource"
     model = ProbeSource
     form_class = UpdateProbeForm
     template_name = "core/probes/form.html"
@@ -374,7 +384,8 @@ class UpdateProbeView(LoginRequiredMixin, UpdateView):
         return ctx
 
 
-class DeleteProbeView(LoginRequiredMixin, DeleteView):
+class DeleteProbeView(PermissionRequiredMixin, DeleteView):
+    permission_required = "probes.delete_probesource"
     model = ProbeSource
     template_name = "core/probes/delete.html"
     success_url = reverse_lazy('probes:index')
@@ -385,7 +396,8 @@ class DeleteProbeView(LoginRequiredMixin, DeleteView):
         return ctx
 
 
-class CloneProbeView(LoginRequiredMixin, FormView):
+class CloneProbeView(PermissionRequiredMixin, FormView):
+    permission_required = "probes.add_probesource"
     template_name = "core/probes/clone.html"
     form_class = CloneProbeForm
 
@@ -406,7 +418,8 @@ class CloneProbeView(LoginRequiredMixin, FormView):
         return HttpResponseRedirect(new_probe.get_absolute_url())
 
 
-class ReviewProbeUpdateView(LoginRequiredMixin, TemplateView):
+class ReviewProbeUpdateView(PermissionRequiredMixin, TemplateView):
+    permission_required = "probes.update_probesource"
     template_name = "core/probes/review_update.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -434,7 +447,8 @@ class ReviewProbeUpdateView(LoginRequiredMixin, TemplateView):
 # Actions
 
 
-class EditActionView(LoginRequiredMixin, FormView):
+class EditActionView(PermissionRequiredMixin, FormView):
+    permission_required = "probes.update_probesource"
     template_name = "core/probes/action_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -480,7 +494,8 @@ class EditActionView(LoginRequiredMixin, FormView):
         return self.probe_source.get_actions_absolute_url()
 
 
-class DeleteActionView(LoginRequiredMixin, TemplateView):
+class DeleteActionView(PermissionRequiredMixin, TemplateView):
+    permission_required = "probes.update_probesource"
     template_name = "core/probes/delete_action.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -508,7 +523,8 @@ class DeleteActionView(LoginRequiredMixin, TemplateView):
 # Filters
 
 
-class AddFilterView(LoginRequiredMixin, FormView):
+class AddFilterView(PermissionRequiredMixin, FormView):
+    permission_required = "probes.update_probesource"
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -545,7 +561,8 @@ class AddFilterView(LoginRequiredMixin, FormView):
         return self.probe_source.get_filters_absolute_url()
 
 
-class UpdateFilterView(LoginRequiredMixin, FormView):
+class UpdateFilterView(PermissionRequiredMixin, FormView):
+    permission_required = "probes.update_probesource"
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -590,7 +607,8 @@ class UpdateFilterView(LoginRequiredMixin, FormView):
         return self.probe_source.get_filters_absolute_url()
 
 
-class DeleteFilterView(LoginRequiredMixin, TemplateView):
+class DeleteFilterView(PermissionRequiredMixin, TemplateView):
+    permission_required = "probes.update_probesource"
     template_name = "core/probes/delete_filter.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -619,7 +637,8 @@ class DeleteFilterView(LoginRequiredMixin, TemplateView):
 # Item views, used by other probes
 
 
-class BaseProbeItemView(LoginRequiredMixin, FormView):
+class BaseProbeItemView(PermissionRequiredMixin, FormView):
+    permission_required = "probes.update_probesource"
     probe_item_attribute = None
     success_anchor = None
     permission = None
@@ -713,7 +732,8 @@ class DeleteProbeItemView(EditProbeItemView):
 # feeds
 
 
-class FeedsView(LoginRequiredMixin, ListView):
+class FeedsView(PermissionRequiredMixin, ListView):
+    permission_required = "probes.view_feed"
     template_name = "core/probes/feeds.html"
     model = Feed
     paginate_by = 10
@@ -750,7 +770,8 @@ class FeedsView(LoginRequiredMixin, ListView):
         return ctx
 
 
-class AddFeedView(LoginRequiredMixin, FormView):
+class AddFeedView(PermissionRequiredMixin, FormView):
+    permission_required = "probes.add_feed"
     form_class = AddFeedForm
     template_name = "core/probes/add_feed.html"
 
@@ -765,7 +786,8 @@ class AddFeedView(LoginRequiredMixin, FormView):
         return HttpResponseRedirect(feed.get_absolute_url())
 
 
-class FeedView(LoginRequiredMixin, DetailView):
+class FeedView(PermissionRequiredMixin, DetailView):
+    permission_required = "probes.view_feed"
     template_name = "core/probes/feed.html"
     model = Feed
 
@@ -776,7 +798,9 @@ class FeedView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class SyncFeedView(LoginRequiredMixin, View):
+class SyncFeedView(PermissionRequiredMixin, View):
+    permission_required = "probes.change_feed"
+
     def post(self, request, *args, **kwargs):
         feed = get_object_or_404(Feed, pk=int(kwargs["pk"]))
         try:
@@ -792,7 +816,8 @@ class SyncFeedView(LoginRequiredMixin, View):
         return HttpResponseRedirect(feed.get_absolute_url())
 
 
-class DeleteFeedView(LoginRequiredMixin, DeleteView):
+class DeleteFeedView(PermissionRequiredMixin, DeleteView):
+    permission_required = "probes.delete_feed"
     model = Feed
     template_name = "core/probes/delete_feed.html"
     success_url = reverse_lazy('probes:feeds')
@@ -804,7 +829,8 @@ class DeleteFeedView(LoginRequiredMixin, DeleteView):
         return ctx
 
 
-class FeedProbeView(LoginRequiredMixin, DetailView):
+class FeedProbeView(PermissionRequiredMixin, DetailView):
+    permission_required = "probes.view_feedprobe"
     template_name = "core/probes/feed_probe.html"
     model = FeedProbe
 
@@ -817,7 +843,8 @@ class FeedProbeView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class ImportFeedProbeView(LoginRequiredMixin, FormView):
+class ImportFeedProbeView(PermissionRequiredMixin, FormView):
+    permission_required = ("probes.view_feedprobe", "probes.add_probesource")
     form_class = ImportFeedProbeForm
     template_name = "core/probes/import_feed_probe.html"
 

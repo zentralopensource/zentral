@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load base_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -19,22 +18,28 @@
       <td>{{ feed.url|urlize }}</td>
     </tr>
     {% if feed.description %}
-    <tr><td>description</td><td>{{ feed.description|prettydescription }}</td></tr>
+    <tr><td>description</td><td>{{ feed.description|linebreaks }}</td></tr>
     {% endif %}
     <tr><td>created at</td><td>{{ feed.created_at }}</td></tr>
     <tr><td>updated at</td><td>{{ feed.updated_at }}</td></tr>
     <tr><td>last synced at</td><td>{{ feed.last_synced_at }}</td></tr>
   </table>
+  {% if perms.probes.update_feed or perms.probes.delete_feed %}
   <div class="panel-footer">
     <form action="{% url 'probes:sync_feed' feed.id %}" method="POST" class="btn-group">{% csrf_token %}
+      {% if perms.probes.change_feed %}
       <button type="submit" class="btn btn-default">
         <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
       </button>
+      {% endif %}
+      {% if perms.probes.delete_feed %}
       <a href="{% url 'probes:delete_feed' feed.id %}" class="btn btn-danger">
         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
       </a>
+      {% endif %}
     </form>
   </div>
+  {% endif %}
 </div>
 
 <h3>{{ active_probes|length }} Probe{{ active_probes|length|pluralize }}</h3>
@@ -49,8 +54,14 @@
     {% for feed_probe in active_probes %}
     <tr>
       <td>{{ feed_probe.get_model_display }}</td>
-      <td><a href="{% url 'probes:feed_probe' feed.id feed_probe.id %}">{{ feed_probe }}</a></td>
-      <td>{{ feed_probe.description|prettydescription }}</td>
+      <td>
+        {% if perms.probes.view_probesource %}
+        <a href="{% url 'probes:feed_probe' feed.id feed_probe.id %}">{{ feed_probe }}</a>
+        {% else %}
+        {{ feed_probe }}
+        {% endif %}
+      </td>
+      <td>{{ feed_probe.description|linebreaks }}</td>
     </tr>
     {% endfor %}
   </tbody>

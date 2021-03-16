@@ -15,6 +15,7 @@
 
 <h2>{{ paginator.count }} Probe{{ paginator.count|pluralize }}</h2>
 
+{% if perms.probes.add_probesource %}
 <div class="dropdown">
   <button class="btn btn-default dropdown-toggle" type="button" id="createProbe"
           data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
@@ -27,6 +28,7 @@
     {% endfor %}
   </ul>
 </div>
+{% endif %}
 
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
     <div class="form-group">

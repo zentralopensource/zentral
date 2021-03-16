@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load base_extras incidents_extras inventory_extras probe_extras %}
+{% load incidents_extras inventory_extras probe_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -28,22 +28,32 @@
     <tr>
       <td>description</td>
       <td>
-        {{ probe.description|prettydescription }}
+        {{ probe.description|linebreaks }}
       </td>
     </tr>
     {% endif %}
     {% if object.feed_probe %}
     <tr>
       <td>feed</td>
-      <td><a href="{% url 'probes:feed' object.feed_probe.feed.id %}">{{ object.feed_probe.feed }}</a></td>
+      <td>
+        {% if perms.probes.view_feed %}
+        <a href="{% url 'probes:feed' object.feed_probe.feed.id %}">{{ object.feed_probe.feed }}</a>
+        {% else %}
+        {{ object.feed_probe.feed }}
+        {% endif %}
+      </td>
     </tr>
     <tr>
       <td>feed probe</td>
       <td>
+        {% if perms.probes.view_feedprobe %}
         <a href="{% url 'probes:feed_probe' object.feed_probe.feed.id object.feed_probe.id %}">
           {{ object.feed_probe }}
         </a>
-        {% if object.feed_probe_update_available %}
+        {% else %}
+        {{ object.feed_probe }}
+        {% endif %}
+        {% if perms.probes.change_probesource and object.feed_probe_update_available %}
         <a href="{% url 'probes:review_update' object.id %}" class="btn btn-warning">Update available</a>
         {% endif %}
       </td>
@@ -57,15 +67,21 @@
   </table>
   <div class="panel-footer">
     <div class="btn-group" role="group">
+      {% if perms.probes.change_probesource %}
       <a class="btn btn-default" href="{% url 'probes:update' probe.pk %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
       </a>
+      {% endif %}
+      {% if perms.probes.add_probesource %}
       <a class="btn btn-default" href="{% url 'probes:clone' probe.pk %}">
         <span class="glyphicon glyphicon-duplicate" aria-hidden="true"></span>
       </a>
+      {% endif %}
+      {% if perms.probes.delete_probesource %}
       <a class="btn btn-danger" href="{% url 'probes:delete' probe.pk %}">
         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
       </a>
+      {% endif %}
       {% if show_events_link %}
       <a class="btn btn-default" href="{% url 'probes:probe_events' probe.pk %}">
         <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
@@ -88,6 +104,7 @@
 <a name="filters"></a>
 <h3>Filters</h3>
 
+{% if perms.probes.change_probesource %}
 <div class="dropdown">
   <button class="btn btn-default dropdown-toggle" type="button" id="addFilter"
           data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
@@ -116,6 +133,7 @@
     {% endif %}
   </ul>
 </div>
+{% endif %}
 
 <div class="row">
 {% if probe.inventory_filters %}
@@ -132,7 +150,11 @@
       </td>
       <td>
         {% for mbu in inventory_filter.meta_business_units %}
+        {% if perms.inventory.view_metabusinessunit %}
         <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu }}</a>
+        {% else %}
+        {{ mbu }}
+        {% endif %}
         {% if not forloop.last %}, {% endif %}
         {% endfor %}
       </td>
@@ -167,6 +189,7 @@
     </tr>
     {% endif %}
    </table>
+  {% if perms.probes.change_probesource %}
   <div class="panel-footer">
     <div class="btn-group" role="group">
       <a href="{% url 'probes:update_filter' object.id "inventory" forloop.counter0 %}" class="btn btn-default">
@@ -177,6 +200,7 @@
       </a>
     </div>
   </div>
+  {% endif %}
 </div>
 {% endfor %}
 </div> <!-- inventory filters col -->
@@ -206,6 +230,7 @@
     </tr>
     {% endif %}
   </table>
+  {% if perms.probes.change_probesource %}
   <div class="panel-footer">
     <div class="btn-group" role="group">
       <a href="{% url 'probes:update_filter' object.id "metadata" forloop.counter0 %}" class="btn btn-default">
@@ -216,6 +241,7 @@
       </a>
     </div>
   </div>
+  {% endif %}
 </div>
 {% endfor %}
 </div> <!-- metadata filters col -->
@@ -238,6 +264,7 @@
     </tr>
     {% endfor %}
   </table>
+  {% if perms.probes.change_probesource %}
   <div class="panel-footer">
     <div class="btn-group" role="group">
       <a href="{% url 'probes:update_filter' object.id "payload" forloop.counter0 %}" class="btn btn-default">
@@ -248,6 +275,7 @@
       </a>
     </div>
   </div>
+  {% endif %}
 </div>
 {% endfor %}
 </div> <!-- payload filters col -->
@@ -260,7 +288,7 @@
 <a name="actions"></a>
 <h3>Actions</h3>
 
-{% if add_action_urls %}
+{% if perms.probes.change_probesource and add_action_urls %}
 <div class="dropdown">
   <button class="btn btn-default dropdown-toggle" type="button" id="addAction"
           data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
@@ -280,13 +308,16 @@
   <thead>
     <th>Name</th>
     <th>Configuration</th>
+    {% if perms.probes.change_probesource %}
     <th></th>
+    {% endif %}
   </thead>
   <tbody>
     {% for action, action_probe_config in probe.actions %}
     <tr>
       <td>{{ action.name }}</td>
       <td>{% if action_probe_config %}{% action_probe_config action action_probe_config %}{% endif %}</td>
+      {% if perms.probes.change_probesource %}
       <td>
           <a href="{% url 'probes:edit_action' object.id action.name %}"
              class="btn btn-default{% if not action.can_be_updated %} disabled{% endif %}">
@@ -296,6 +327,7 @@
             <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
           </a>
       </td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>

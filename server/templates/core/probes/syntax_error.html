@@ -17,9 +17,9 @@
 </p>
 
 {% if probe.description %}
-<p>
-  {{ probe.description|prettydescription }}
-</p>
+<div>
+  {{ probe.description|linebreaks }}
+</div>
 {% endif %}
 
 <div class="btn-group" role="group">

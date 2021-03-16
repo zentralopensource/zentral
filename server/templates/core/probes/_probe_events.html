@@ -10,7 +10,11 @@
     <p>
       {% machine_type_icon  machine %}
       {% machine_platform_icon machine %}
+      {% if perms.inventory.view_machinesnapshot %}
       <a href="{{ machine.get_absolute_url }}">{{ machine.serial_number }}</a>
+      {% else %}
+      {{ machine.serial_number }}
+      {% endif %}
     </p>
     {% endif %}
     {% if machine.computer_name %}
