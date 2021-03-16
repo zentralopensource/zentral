@@ -1,3 +1,7 @@
+from functools import reduce
+import operator
+from django.contrib.auth.models import Group, Permission
+from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from rest_framework import status
@@ -17,6 +21,8 @@ class OsqueryAPITests(APITestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
+        cls.group = Group.objects.create(name=get_random_string())
+        cls.user.groups.set([cls.group])
         cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
         cls.token, _ = Token.objects.get_or_create(user=cls.user)
 
@@ -24,9 +30,23 @@ class OsqueryAPITests(APITestCase):
         super().setUp()
         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.token.key)
 
+    def set_permissions(self, *permissions):
+        if permissions:
+            permission_filter = reduce(operator.or_, (
+                Q(content_type__app_label=app_label, codename=codename)
+                for app_label, codename in (
+                    permission.split(".")
+                    for permission in permissions
+                )
+            ))
+            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
+        else:
+            self.group.permissions.clear()
+
     def test_create_configuration(self):
         url = reverse('osquery_api:configurations')
         data = {'name': 'Configuration0'}
+        self.set_permissions("osquery.add_configuration")
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Configuration.objects.filter(name='Configuration0').count(), 1)
@@ -36,6 +56,7 @@ class OsqueryAPITests(APITestCase):
     def test_get_configuration(self):
         configuration1 = Configuration.objects.create(name="Configuration1")
         url = reverse('osquery_api:configuration', args=(configuration1.pk,))
+        self.set_permissions("osquery.view_configuration")
         response = self.client.get(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertDictEqual(
@@ -56,6 +77,7 @@ class OsqueryAPITests(APITestCase):
         configuration3 = Configuration.objects.create(name="Configuration3")
         url = reverse('osquery_api:configuration', args=(configuration2.pk,))
         data = {'name': 'Configuration2.v2'}
+        self.set_permissions("osquery.change_configuration")
         response = self.client.put(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         configuration2.refresh_from_db()
@@ -69,6 +91,7 @@ class OsqueryAPITests(APITestCase):
     def test_list_configuration(self):
         configuration4 = Configuration.objects.create(name="Configuration4")
         url = reverse('osquery_api:configurations')
+        self.set_permissions("osquery.view_configuration")
         response = self.client.get(url, {"name": configuration4.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data,
@@ -85,6 +108,7 @@ class OsqueryAPITests(APITestCase):
 
     def test_delete_configuration(self):
         configuration5 = Configuration.objects.create(name="Configuration5")
+        self.set_permissions("osquery.delete_configuration")
         url = reverse('osquery_api:configuration', args=(configuration5.pk,))
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
@@ -94,6 +118,7 @@ class OsqueryAPITests(APITestCase):
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit)
         Enrollment.objects.create(configuration=configuration6, secret=enrollment_secret)
         url = reverse('osquery_api:configuration', args=(configuration6.pk,))
+        self.set_permissions("osquery.delete_configuration")
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, ["This configuration cannot be deleted"])
@@ -103,6 +128,7 @@ class OsqueryAPITests(APITestCase):
         url = reverse('osquery_api:enrollments')
         data = {'configuration': configuration7.pk,
                 'secret': {"meta_business_unit": self.meta_business_unit.pk}}
+        self.set_permissions("osquery.add_enrollment")
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Enrollment.objects.filter(configuration__name='Configuration7').count(), 1)
@@ -114,6 +140,7 @@ class OsqueryAPITests(APITestCase):
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit)
         enrollment2 = Enrollment.objects.create(configuration=configuration8, secret=enrollment_secret)
         url = reverse('osquery_api:enrollment', args=(enrollment2.pk,))
+        self.set_permissions("osquery.view_enrollment")
         response = self.client.get(url, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
@@ -153,6 +180,7 @@ class OsqueryAPITests(APITestCase):
         data = {"configuration": configuration9.pk,
                 "osquery_release": new_osquery_release,
                 "secret": secret_data}
+        self.set_permissions("osquery.change_enrollment")
         response = self.client.put(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         enrollment3.refresh_from_db()
@@ -171,6 +199,7 @@ class OsqueryAPITests(APITestCase):
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit)
         enrollment4 = Enrollment.objects.create(configuration=configuration10, secret=enrollment_secret)
         url = reverse('osquery_api:enrollment', args=(enrollment4.pk,))
+        self.set_permissions("osquery.delete_enrollment")
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -183,6 +212,7 @@ class OsqueryAPITests(APITestCase):
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit)
         enrollment5 = Enrollment.objects.create(configuration=configuration11, secret=enrollment_secret)
         url = reverse('osquery_api:enrollments')
+        self.set_permissions("osquery.view_enrollment")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn(
