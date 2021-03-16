@@ -342,10 +342,6 @@
 {% if perms.monolith.view_cacheserver %}
 <h3 id="cache-servers">{{ manifest_cache_servers|length }} Cache server{{ manifest_cache_servers|length|pluralize }}</h3>
 
-{% if perms.monolith.add_cacheserver %}
-<p><a class="btn btn-default" href="{% url 'monolith:configure_manifest_cache_server' object.id %}">Configure</a></p>
-{% endif %}
-
 <table class="table">
   <thead>
     <tr>
