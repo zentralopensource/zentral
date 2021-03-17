@@ -27,7 +27,7 @@
     {% if perms.inventory.view_metabusinessunit %}
     <a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a>
     {% else %}
-    {{ object.meta_business_unit %}
+    {{ object.meta_business_unit }}
     {% endif %}
     {% else %}
     <span class="text-success">not restricted</span>
