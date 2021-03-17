@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% load base_extras inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+  <li><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
+  <li class="active">Deb packages</li>
+</ol>
+
+<h2>
+  {% machine_type_icon machine %}
+  {% machine_platform_icon machine %}
+  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / macOS apps
+</h2>
+
+{% if machine.snapshots_with_deb_packages %}
+<ul class="nav nav-tabs">
+  {% for ms in machine.snapshots_with_deb_packages %}
+  <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
+    <a href="#" data-tabclass="mstab" data-tabid="ms-{{ ms.id }}">
+      {{ ms.source.name }}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% for ms in machine.snapshots_with_deb_packages %}
+<div class="table-reponsive mstab" id="ms-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
+  <table class="table table-condensed">
+    <thead>
+      <th>Name</th>
+      <th>Version</th>
+      <th>Source</th>
+      <th>Status</th>
+    </thead>
+    <tbody>
+      {% for deb_package in ms.ordered_deb_packages %}
+      <tr>
+        <td>{{ deb_package.name|default:"-" }}</td>
+        <td>{{ deb_package.version|default:"-" }}</td>
+        <td>{{ deb_package.source|default:"-" }}</td>
+        <td>{{ deb_package.status|default:"-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <dl class="dl-horizontal">
+    <dt class="small" style="opacity:0.5">last change</dt>
+    <dd class="small" style="opacity:0.5">
+      {% if ms.public_ip_address %}{{ ms.public_ip_address }} - {% endif %}
+      {{ ms.mt_created_at|date:'r'|default:'-' }}
+    </dd>
+    {% if ms.last_commit.last_seen %}
+    <dt class="small" style="opacity:0.5">last seen</dt>
+    <dd class="small" style="opacity:0.5">
+      {{ ms.last_commit.last_seen|date:'r' }}
+    </dd>
+    {% endif %}
+  </dl>
+</div><!-- snapshot apps tab end -->
+{% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function switchTabs(link) {
+    var tabclass = link.data('tabclass'),
+        tabid = link.data('tabid');
+    $("." + tabclass).hide();
+    $("#" + tabid).show();
+    link.parent().siblings().removeClass('active');
+    link.parent().addClass('active');
+  }
+
+  $(document).ready(function(){
+    $("li[role=presentation] a").click(function(event){
+      event.preventDefault();
+      switchTabs($(this));
+    });
+  });
+</script>
+{% endblock %}

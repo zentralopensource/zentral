@@ -705,6 +705,18 @@ class MachineProgramInstancesView(PermissionRequiredMixin, TemplateView):
         return context
 
 
+class MachineDebPackagesView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.view_machinesnapshot"
+    template_name = "inventory/machine_deb_packages.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['inventory'] = True
+        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
+        context['serial_number'] = machine.serial_number
+        return context
+
+
 class MachineIncidentsView(PermissionRequiredMixin, TemplateView):
     permission_required = (
         "inventory.view_machinesnapshot",

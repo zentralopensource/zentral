@@ -535,6 +535,9 @@ class MachineSnapshot(AbstractMTObject):
                                                                                'program__version',
                                                                                'install_location')
 
+    def ordered_deb_packages(self):
+        return self.deb_packages.all().order_by('name', 'version', 'pk')
+
     @cached_property
     def last_commit(self):
         try:
@@ -878,6 +881,9 @@ class MetaMachine:
 
     def snapshots_with_program_instances(self):
         return list(ms for ms in self.snapshots if ms.program_instances.count())
+
+    def snapshots_with_deb_packages(self):
+        return list(ms for ms in self.snapshots if ms.deb_packages.count())
 
     # Inventory tags
 
