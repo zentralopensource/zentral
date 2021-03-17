@@ -326,7 +326,9 @@ class APIClient(object):
         osx_app_instances = []
         if (
             self.inventory_apps_shard == 100
-            or serial_number and shard(serial_number, "jamf_apps") < self.inventory_apps_shard
+            or (self.inventory_apps_shard
+                and serial_number
+                and shard(serial_number, "jamf_apps") < self.inventory_apps_shard)
         ):
             has_duplicated_apps = False
             for app_d in computer['software']['applications']:
