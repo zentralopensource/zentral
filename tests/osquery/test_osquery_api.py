@@ -56,6 +56,25 @@ WIN_INVENTORY_QUERY_SNAPSHOT = [
      "table_name": "system.info"}
 ]
 
+LINUX_INVENTORY_QUERY_SNAPSHOT = [
+    {'major': '10',
+     'minor': '0',
+     'name': 'Debian GNU/Linux',
+     'patch': '0',
+     'table_name': 'os_version'},
+    {'computer_name': 'debian',
+     'cpu_brand': 'Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz',
+     'cpu_logical_cores': '1',
+     'cpu_physical_cores': '1',
+     'cpu_subtype': '69',
+     'cpu_type': 'x86_64',
+     'hardware_model': 'VMware7,1',
+     'hardware_serial': 'VMware-56 4d fa 06 fd 4b 1e 89-09 ea 5d d1 32 f8 8e 12',
+     'hostname': 'debian.example.com',
+     'physical_memory': '1010221056',
+     'table_name': 'system_info'}
+]
+
 OSX_APP_INSTANCE = {
     "bundle_id": "com.agilebits.onepassword4-updater",
     "bundle_name": "1Password Updater",
@@ -77,6 +96,19 @@ WIN_PROGRAM_INSTANCE = {
     "uninstall_string": "MsiExec.exe /X{0340040B-67DE-4526-B0F9-C6DF967E9822}",
     "version": "4.6.0",
     "table_name": "programs"
+}
+
+DEB_PACKAGE = {
+    'arch': 'amd64',
+    'maintainer': 'Jonathan Nieder <jrnieder@gmail.com>',
+    'name': 'xz-utils',
+    'priority': 'standard',
+    'revision': '1',
+    'section': 'utils',
+    'size': '442',
+    'status': 'install ok installed',
+    'version': '5.2.4-1',
+    "table_name": "deb_packages"
 }
 
 AZURE_AD_INFO_TUPLES = [
@@ -129,11 +161,18 @@ class OsqueryAPIViewsTestCase(TestCase):
             node_key=get_random_string()
         )
 
-    def post_default_inventory_query_snapshot(self, node_key, platform="macos", with_app=False, with_azure_ad=False):
-        snapshot = list(INVENTORY_QUERY_SNAPSHOT if platform == "macos" else WIN_INVENTORY_QUERY_SNAPSHOT)
+    def post_default_inventory_query_snapshot(self, node_key, platform, with_app=False, with_azure_ad=False):
+        if platform == "macos":
+            qs = INVENTORY_QUERY_SNAPSHOT
+        elif platform == "windows":
+            qs = WIN_INVENTORY_QUERY_SNAPSHOT
+        else:
+            qs = LINUX_INVENTORY_QUERY_SNAPSHOT
+        snapshot = list(qs)
         if with_app:
             snapshot.append(OSX_APP_INSTANCE)
             snapshot.append(WIN_PROGRAM_INSTANCE)
+            snapshot.append(DEB_PACKAGE)
         if with_azure_ad:
             snapshot.extend(AZURE_AD_INFO_TUPLES)
         return self.post_as_json(
@@ -257,7 +296,7 @@ class OsqueryAPIViewsTestCase(TestCase):
 
     def test_osx_app_instance_schedule(self):
         em = self.force_enrolled_machine()
-        self.post_default_inventory_query_snapshot(em.node_key)
+        self.post_default_inventory_query_snapshot(em.node_key, platform="macos")
         response = self.post_as_json("config", {"node_key": em.node_key})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -277,7 +316,7 @@ class OsqueryAPIViewsTestCase(TestCase):
 
     def test_win_program_instance_schedule(self):
         em = self.force_enrolled_machine()
-        self.post_default_inventory_query_snapshot(em.node_key, platform="win")
+        self.post_default_inventory_query_snapshot(em.node_key, platform="windows")
         response = self.post_as_json("config", {"node_key": em.node_key})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -294,6 +333,26 @@ class OsqueryAPIViewsTestCase(TestCase):
         schedule = json_response["schedule"]
         self.assertIn(INVENTORY_QUERY_NAME, schedule)
         self.assertIn(" 'programs' ", schedule[INVENTORY_QUERY_NAME]["query"])
+
+    def test_deb_packages_schedule(self):
+        em = self.force_enrolled_machine()
+        self.post_default_inventory_query_snapshot(em.node_key, platform="linux")
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertIn("schedule", json_response)
+        schedule = json_response["schedule"]
+        self.assertIn(INVENTORY_QUERY_NAME, schedule)
+        self.assertNotIn(" 'apps' ", schedule[INVENTORY_QUERY_NAME]["query"])
+        self.configuration.inventory_apps = True
+        self.configuration.save()
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertIn("schedule", json_response)
+        schedule = json_response["schedule"]
+        self.assertIn(INVENTORY_QUERY_NAME, schedule)
+        self.assertIn(" 'deb_packages' ", schedule[INVENTORY_QUERY_NAME]["query"])
 
     # distributed queries
 
@@ -386,7 +445,7 @@ class OsqueryAPIViewsTestCase(TestCase):
 
     def test_log_default_inventory_query(self):
         em = self.force_enrolled_machine()
-        response = self.post_default_inventory_query_snapshot(em.node_key, with_app=True)
+        response = self.post_default_inventory_query_snapshot(em.node_key, platform="macos", with_app=True)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {})
@@ -397,6 +456,8 @@ class OsqueryAPIViewsTestCase(TestCase):
                          [OSX_APP_INSTANCE["bundle_name"]])
         self.assertEqual(list(ms.program_instances.values_list("program__name", flat=True)),
                          [WIN_PROGRAM_INSTANCE["name"]])
+        self.assertEqual(list(ms.deb_packages.values_list("name", flat=True)),
+                         [DEB_PACKAGE["name"]])
 
     def test_log_status(self):
         em = self.force_enrolled_machine()
