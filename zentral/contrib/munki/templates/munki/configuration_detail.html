@@ -92,7 +92,7 @@
       <td>
         {% if distributor %}
         {% if distributor_link %}
-        <a href="{{ distributor_link }}">{{ distributor.get_description_for_enrollment }}</a>
+        <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
         {% else %}
         {{ distributor.get_description_for_enrollment }}
         {% endif %}
