@@ -5,11 +5,10 @@ from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
-from django.http import HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.utils.crypto import get_random_string
-from django.views.generic import FormView, ListView, TemplateView, View
-from zentral.conf import settings
+from django.views.generic import CreateView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MachineTag, MetaMachine
@@ -19,26 +18,42 @@ from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
-from .forms import CreateInstallProbeForm, EnrollmentForm, UpdateInstallProbeForm
-from .models import EnrolledMachine, Enrollment, MunkiState
+from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, UpdateInstallProbeForm
+from .models import Configuration, EnrolledMachine, Enrollment, MunkiState
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 from .utils import prepare_ms_tree_certificates
 
 logger = logging.getLogger('zentral.contrib.munki.views')
 
 
-# enrollment
+# configuration
 
 
-class EnrollmentListView(PermissionRequiredMixin, ListView):
-    permission_required = "munki.view_enrollment"
-    model = Enrollment
+class ConfigurationListView(PermissionRequiredMixin, ListView):
+    permission_required = "munki.view_configuration"
+    model = Configuration
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["configuration_count"] = ctx["object_list"].count()
+        return ctx
+
+
+class CreateConfigurationView(PermissionRequiredMixin, CreateView):
+    permission_required = "munki.add_configuration"
+    model = Configuration
+    form_class = ConfigurationForm
+
+
+class ConfigurationView(PermissionRequiredMixin, DetailView):
+    permission_required = "munki.view_configuration"
+    model = Configuration
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         enrollments = []
         enrollment_count = 0
-        for enrollment in ctx["object_list"]:
+        for enrollment in self.object.enrollment_set.select_related("secret").all().order_by("pk"):
             enrollment_count += 1
             distributor = None
             distributor_link = False
@@ -53,13 +68,27 @@ class EnrollmentListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
+class UpdateConfigurationView(PermissionRequiredMixin, UpdateView):
+    permission_required = "munki.change_configuration"
+    model = Configuration
+    form_class = ConfigurationForm
+
+
+# enrollment
+
+
 class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
     permission_required = "munki.add_enrollment"
     template_name = "munki/enrollment_form.html"
 
+    def dispatch(self, request, *args, **kwargs):
+        self.configuration = get_object_or_404(Configuration, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
     def get_forms(self):
         secret_form_kwargs = {"prefix": "secret"}
-        enrollment_form_kwargs = {}
+        enrollment_form_kwargs = {"configuration": self.configuration,
+                                  "initial": {"configuration": self.configuration}}
         if self.request.method == "POST":
             secret_form_kwargs["data"] = self.request.POST
             enrollment_form_kwargs["data"] = self.request.POST
@@ -68,6 +97,7 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx["configuration"] = self.configuration
         if "secret_form" not in kwargs or "enrollment_form" not in kwargs:
             ctx["secret_form"], ctx["enrollment_form"] = self.get_forms()
         return ctx
@@ -81,8 +111,9 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
         secret_form.save_m2m()
         enrollment = enrollment_form.save(commit=False)
         enrollment.secret = secret
+        enrollment.configuration = self.configuration
         enrollment.save()
-        return HttpResponseRedirect(enrollment.get_absolute_url())
+        return redirect(enrollment)
 
     def post(self, request, *args, **kwargs):
         secret_form, enrollment_form = self.get_forms()
@@ -96,7 +127,7 @@ class EnrollmentPackageView(PermissionRequiredMixin, View):
     permission_required = "munki.view_enrollment"
 
     def get(self, request, *args, **kwargs):
-        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"])
+        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
         builder = MunkiZentralEnrollPkgBuilder(enrollment)
         return builder.build_and_make_response()
 
@@ -117,7 +148,7 @@ class CreateInstallProbeView(PermissionRequiredMixin, FormView):
 
     def form_valid(self, form):
         probe_source = form.save()
-        return HttpResponseRedirect(probe_source.get_absolute_url())
+        return redirect(probe_source)
 
 
 class UpdateInstallProbeView(PermissionRequiredMixin, FormView):
@@ -207,7 +238,8 @@ class BaseView(JSONPostAPIView):
             self.enrollment, self.machine_serial_number, self.business_unit = cache.get(cache_key)
         except TypeError:
             try:
-                enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__secret__meta_business_unit")
+                enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__configuration",
+                                                                           "enrollment__secret__meta_business_unit")
                                                            .get(token=token))
             except EnrolledMachine.DoesNotExist:
                 raise APIAuthError("Enrolled machine does not exist")
@@ -244,15 +276,28 @@ class JobDetailsView(BaseView):
             request_type="job_details",
             enrollment={"pk": self.enrollment.pk}
         )
-        response_d = settings['apps']['zentral.contrib.munki'].serialize()
+
+        # serialize configuration
+        configuration = self.enrollment.configuration
+        response_d = {"apps_full_info_shard": configuration.inventory_apps_full_info_shard}
+        if configuration.principal_user_detection_sources:
+            principal_user_detection = response_d.setdefault("principal_user_detection", {})
+            principal_user_detection["sources"] = configuration.principal_user_detection_sources
+            if configuration.principal_user_detection_domains:
+                principal_user_detection["domains"] = configuration.principal_user_detection_domains
+
+        # add tags
         # TODO better cache for the machine tags
         response_d["tags"] = MetaMachine(self.machine_serial_number).tag_names()
+
+        # last seen sha1sum
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
         except MunkiState.DoesNotExist:
             pass
         else:
             response_d['last_seen_sha1sum'] = munki_state.sha1sum
+
         return response_d
 
 

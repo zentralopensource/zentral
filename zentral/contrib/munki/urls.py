@@ -1,35 +1,36 @@
-from django.conf.urls import url
+from django.urls import path
 from django.views.decorators.csrf import csrf_exempt
 from . import views
 
 app_name = "munki"
 urlpatterns = [
+    # configuration
+    path('configurations/', views.ConfigurationListView.as_view(), name='configurations'),
+    path('configurations/create/', views.CreateConfigurationView.as_view(), name='create_configuration'),
+    path('configurations/<int:pk>/', views.ConfigurationView.as_view(), name='configuration'),
+    path('configurations/<int:pk>/update/', views.UpdateConfigurationView.as_view(), name='update_configuration'),
+
     # enrollment
-    url(r'^enrollments/$',
-        views.EnrollmentListView.as_view(),
-        name='enrollment_list'),
-    url(r'^enrollments/create/$',
-        views.CreateEnrollmentView.as_view(),
-        name='create_enrollment'),
-    url(r'^enrollments/(?P<pk>\d+)/package/$',
-        views.EnrollmentPackageView.as_view(),
-        name='enrollment_package'),
+    path('configurations/<int:pk>/enrollments/create/',
+         views.CreateEnrollmentView.as_view(), name='create_enrollment'),
+    path('configurations/<int:configuration_pk>/enrollments/<int:pk>/package/',
+         views.EnrollmentPackageView.as_view(), name='enrollment_package'),
 
     # install probe
-    url(r'^install_probes/create/$',
-        views.CreateInstallProbeView.as_view(), name='create_install_probe'),
-    url(r'^install_probes/(?P<probe_id>\d+)/update/$',
-        views.UpdateInstallProbeView.as_view(), name='update_install_probe'),
+    path('install_probes/create/',
+         views.CreateInstallProbeView.as_view(), name='create_install_probe'),
+    path('install_probes/<int:probe_id>/update/',
+         views.UpdateInstallProbeView.as_view(), name='update_install_probe'),
 
     # API
-    url(r'^enroll/$', csrf_exempt(views.EnrollView.as_view()), name='enroll'),
-    url(r'^job_details/$', csrf_exempt(views.JobDetailsView.as_view()), name="job_details"),
-    url(r'^post_job/$', csrf_exempt(views.PostJobView.as_view()), name="post_job")
+    path('enroll/', csrf_exempt(views.EnrollView.as_view()), name='enroll'),
+    path('job_details/', csrf_exempt(views.JobDetailsView.as_view()), name="job_details"),
+    path('post_job/', csrf_exempt(views.PostJobView.as_view()), name="post_job")
 ]
 
 
 setup_menu_cfg = {
     'items': (
-        ('enrollment_list', 'Enrollments', False, ('munki.view_enrollment',)),
+        ('configurations', 'Configurations', False, ('munki.view_configuration',)),
     )
 }

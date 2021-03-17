@@ -3,9 +3,8 @@ import uuid
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
-from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
-from zentral.contrib.munki.models import EnrolledMachine, Enrollment
+from zentral.contrib.munki.models import Configuration, EnrolledMachine, Enrollment
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -14,8 +13,9 @@ class MunkiAPIViewsTestCase(TestCase):
     def setUpTestData(cls):
         cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.business_unit = cls.meta_business_unit.create_enrollment_business_unit()
+        cls.configuration = Configuration.objects.create(name=get_random_string())
         cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit)
-        cls.enrollment = Enrollment.objects.create(secret=cls.enrollment_secret)
+        cls.enrollment = Enrollment.objects.create(configuration=cls.configuration, secret=cls.enrollment_secret)
 
     # utility methods
 
@@ -103,8 +103,10 @@ class MunkiAPIViewsTestCase(TestCase):
                                       {"machine_serial_number": enrolled_machine.serial_number},
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
-        expected_response = settings['apps']['zentral.contrib.munki'].serialize()
-        expected_response["tags"] = []
+        expected_response = {
+            "apps_full_info_shard": self.configuration.inventory_apps_full_info_shard,
+            "tags": []
+        }
         self.assertEqual(expected_response, response.json())
 
     def test_job_details_conflict(self):
@@ -137,8 +139,10 @@ class MunkiAPIViewsTestCase(TestCase):
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
-        expected_response = settings['apps']['zentral.contrib.munki'].serialize()
-        expected_response["tags"] = [tag_name]
+        expected_response = {
+            "apps_full_info_shard": self.configuration.inventory_apps_full_info_shard,
+            "tags": [tag_name]
+        }
         expected_response["last_seen_sha1sum"] = report_sha1sum
         self.assertEqual(expected_response, response_json)
         ms = MachineSnapshot.objects.current().get(serial_number=enrolled_machine.serial_number)

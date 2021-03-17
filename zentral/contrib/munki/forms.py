@@ -1,8 +1,25 @@
 from django import forms
 from zentral.core.probes.forms import BaseCreateProbeForm
 from zentral.utils.forms import CommaSeparatedQuotedStringField
-from .models import Enrollment
+from .models import Configuration, Enrollment, PrincipalUserDetectionSource
 from .probes import MunkiInstallProbe
+
+
+class PrincipalUserDetectionSourceWidget(forms.CheckboxSelectMultiple):
+    def __init__(self, attrs=None, choices=()):
+        super().__init__(attrs, choices=PrincipalUserDetectionSource.choices())
+
+    def format_value(self, value):
+        if isinstance(value, str) and value:
+            value = [v.strip() for v in value.split(",")]
+        return super().format_value(value)
+
+
+class ConfigurationForm(forms.ModelForm):
+    class Meta:
+        model = Configuration
+        fields = "__all__"
+        widgets = {"principal_user_detection_sources": PrincipalUserDetectionSourceWidget}
 
 
 class EnrollmentForm(forms.ModelForm):
@@ -11,9 +28,12 @@ class EnrollmentForm(forms.ModelForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
+        self.configuration = kwargs.pop("configuration", None)
         kwargs.pop("update_for", None)
         kwargs.pop("standalone", None)
         super().__init__(*args, **kwargs)
+        if self.configuration:
+            self.fields["configuration"].widget = forms.HiddenInput()
 
 
 class UpdateInstallProbeForm(forms.Form):

@@ -4,8 +4,9 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'munki:enrollment_list' %}">Munki enrollments</a></li>
-  <li class="active">Create</li>
+  <li><a href="{% url 'munki:configurations' %}">Munki configurations</a></li>
+  <li><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="active">Create enrollment</li>
 </ol>
 
 <h2>Create Munki enrollment</h2>
@@ -18,7 +19,7 @@
   {{ enrollment_form|bootstrap }}
   {% endif %}
   <p>
-    <a class="btn btn-default" href="{% url 'munki:enrollment_list' %}">
+    <a class="btn btn-default" href="{{ configuration.get_absolute_url }}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Munki configurations</li>
+</ol>
+
+<h2>{{ configuration_count }} Munki configuration{{ configuration_count|pluralize }}</h2>
+
+{% if perms.munki.add_configuration %}
+<p>
+  <a class="btn btn-default" href="{% url 'munki:create_configuration' %}">Create</a>
+</p>
+{% endif %}
+
+{% if configuration_count %}
+<table class="table">
+  <thead>
+    <th>Name</th>
+    {% if perms.munki.change_configuration %}
+    <th></th>
+    {% endif %}
+  </thead>
+  <tbody>
+    {% for configuration in object_list %}
+    <tr>
+      <td>
+        <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
+      </td>
+      {% if perms.munki.change_configuration %}
+      <td>
+        <a class="btn btn-default" href="{% url 'munki:update_configuration' configuration.pk %}">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+          Update
+        </a>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'munki:configurations' %}">Munki configurations</a></li>
+  {% if object %}
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="active">Update</li>
+  {% else %}
+  <li class="active">Create</li>
+  {% endif %}
+</ol>
+
+<h2>{% if object %}Update{% else %}Create{% endif %} Munki configuration</h2>
+
+<form method="post" class="form">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    {% if object %}
+    <a class="btn btn-default" href="{{ object.get_absolute_url }}">
+    {% else %}
+    <a class="btn btn-default" href="{% url 'munki:configurations' %}">
+    {% endif %}
+      Cancel
+    </a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
+</form>
+{% endblock %}
