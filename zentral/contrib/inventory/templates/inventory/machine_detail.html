@@ -44,6 +44,11 @@
         <i class="fab fa-apple" aria-hidden="true"></i> apps
       </a>
       {% endif %}
+      {% if machine.snapshots_with_program_instances %}
+      <a class="btn btn-default" href="{% url 'inventory:machine_program_instances' machine.get_urlsafe_serial_number %}">
+        <i class="fab fa-windows" aria-hidden="true"></i> programs
+      </a>
+      {% endif %}
       <div class="btn-group">
         <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
           Action <span class="caret"></span>

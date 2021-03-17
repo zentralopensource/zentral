@@ -526,6 +526,11 @@ class MachineSnapshot(AbstractMTObject):
                                                                            'app__bundle_version_str',
                                                                            'bundle_path')
 
+    def ordered_program_instances(self):
+        return self.program_instances.select_related('program').all().order_by('program__name',
+                                                                               'program__version',
+                                                                               'install_location')
+
     @cached_property
     def last_commit(self):
         try:
@@ -866,6 +871,9 @@ class MetaMachine:
 
     def snapshots_with_osx_app_instances(self):
         return list(ms for ms in self.snapshots if ms.osx_app_instances.count())
+
+    def snapshots_with_program_instances(self):
+        return list(ms for ms in self.snapshots if ms.program_instances.count())
 
     # Inventory tags
 

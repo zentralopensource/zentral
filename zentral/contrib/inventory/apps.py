@@ -6,6 +6,7 @@ class ZentralInventoryAppConfig(ZentralAppConfig):
     verbose_name = "Zentral inventory contrib app"
     permission_models = (
         "bunsinessunit",
+        "debpackage",
         "file",
         "link",
         "machinegroup",
@@ -15,6 +16,8 @@ class ZentralInventoryAppConfig(ZentralAppConfig):
         "metabusinessunittag",
         "osxapp",
         "osxappinstance",
+        "program",
+        "programinstance",
         "tag",
         "taxonomy",
     )
