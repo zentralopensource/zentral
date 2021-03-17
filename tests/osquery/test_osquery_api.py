@@ -36,6 +36,26 @@ INVENTORY_QUERY_SNAPSHOT = [
      'table_name': 'network_interface'}
 ]
 
+WIN_INVENTORY_QUERY_SNAPSHOT = [
+    {"build": "19041",
+     "major": "10",
+     "minor": "0",
+     "name": "Microsoft Windows 10 Enterprise Evaluation",
+     "patch": "",
+     "table_name": "os_version"},
+    {"computer_name": "WinDev2010Eval",
+     "cpu_brand": "Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz",
+     "cpu_logical_cores": "2",
+     "cpu_physical_cores": "2",
+     "cpu_subtype": "-1",
+     "cpu_type": "x86_64",
+     "hardware_model": "VMware Virtual Platform",
+     "hardware_serial": "VMware-56 4d e4 40 34 98 81 58-e5 82 7e b7 a6 74 cc 2d",
+     "hostname": "WinDev2010Eval",
+     "physical_memory": "4294430720",
+     "table_name": "system.info"}
+]
+
 OSX_APP_INSTANCE = {
     "bundle_id": "com.agilebits.onepassword4-updater",
     "bundle_name": "1Password Updater",
@@ -43,6 +63,20 @@ OSX_APP_INSTANCE = {
     "bundle_version": "652003",
     "bundle_version_str": "6.5.2",
     "table_name": "apps"
+}
+
+WIN_PROGRAM_INSTANCE = {
+    "identifying_number": "{0340040B-67DE-4526-B0F9-C6DF967E9822}",
+    "install_date": "20210211",
+    "install_location": "C:\\Program Files\\osquery\\",
+    "install_source": ("C:\\Users\\User\\AppData\\Local\\Packages"
+                       "\\Microsoft.MicrosoftEdge_8wekyb3d8bbwe\\TempState\\Downloads\\"),
+    "language": "1033",
+    "name": "osquery",
+    "publisher": "osquery",
+    "uninstall_string": "MsiExec.exe /X{0340040B-67DE-4526-B0F9-C6DF967E9822}",
+    "version": "4.6.0",
+    "table_name": "programs"
 }
 
 AZURE_AD_INFO_TUPLES = [
@@ -95,10 +129,11 @@ class OsqueryAPIViewsTestCase(TestCase):
             node_key=get_random_string()
         )
 
-    def post_default_inventory_query_snapshot(self, node_key, with_app=False, with_azure_ad=False):
-        snapshot = list(INVENTORY_QUERY_SNAPSHOT)
+    def post_default_inventory_query_snapshot(self, node_key, platform="macos", with_app=False, with_azure_ad=False):
+        snapshot = list(INVENTORY_QUERY_SNAPSHOT if platform == "macos" else WIN_INVENTORY_QUERY_SNAPSHOT)
         if with_app:
             snapshot.append(OSX_APP_INSTANCE)
+            snapshot.append(WIN_PROGRAM_INSTANCE)
         if with_azure_ad:
             snapshot.extend(AZURE_AD_INFO_TUPLES)
         return self.post_as_json(
@@ -240,6 +275,26 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertIn(INVENTORY_QUERY_NAME, schedule)
         self.assertIn(" 'apps' ", schedule[INVENTORY_QUERY_NAME]["query"])
 
+    def test_win_program_instance_schedule(self):
+        em = self.force_enrolled_machine()
+        self.post_default_inventory_query_snapshot(em.node_key, platform="win")
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertIn("schedule", json_response)
+        schedule = json_response["schedule"]
+        self.assertIn(INVENTORY_QUERY_NAME, schedule)
+        self.assertNotIn(" 'apps' ", schedule[INVENTORY_QUERY_NAME]["query"])
+        self.configuration.inventory_apps = True
+        self.configuration.save()
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertIn("schedule", json_response)
+        schedule = json_response["schedule"]
+        self.assertIn(INVENTORY_QUERY_NAME, schedule)
+        self.assertIn(" 'programs' ", schedule[INVENTORY_QUERY_NAME]["query"])
+
     # distributed queries
 
     def test_distributed_read_405(self):
@@ -340,6 +395,8 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(ms.system_info.hardware_model, INVENTORY_QUERY_SNAPSHOT[1]["hardware_model"].strip(" \u0000"))
         self.assertEqual(list(ms.osx_app_instances.values_list("app__bundle_name", flat=True)),
                          [OSX_APP_INSTANCE["bundle_name"]])
+        self.assertEqual(list(ms.program_instances.values_list("program__name", flat=True)),
+                         [WIN_PROGRAM_INSTANCE["name"]])
 
     def test_log_status(self):
         em = self.force_enrolled_machine()

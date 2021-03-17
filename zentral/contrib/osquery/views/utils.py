@@ -78,6 +78,26 @@ def collect_osx_app_instance(osx_app_instances, t):
             logger.warning("Duplicated osx app instance")
 
 
+def collect_program_instance(program_instances, t):
+    program = clean_dict(
+        {k: t.pop(k, None)
+         for k in ("name", "version", "language", "publisher", "identifying_number")}
+    )
+    program_instance = clean_dict(t)
+    install_date = program_instance.pop("install_date", None)
+    if install_date:
+        try:
+            program_instance["install_date"] = datetime.strptime(install_date, "%Y%m%d")
+        except ValueError:
+            logger.warning("Could not parse install date")
+    if program and program_instance:
+        program_instance["program"] = program
+        if program_instance not in program_instances:
+            program_instances.append(program_instance)
+        else:
+            logger.warning("Duplicated program instance")
+
+
 def collect_principal_user(principal_user, t):
     # TODO: verify only one principal user !
     principal_user_source = principal_user.setdefault("source", {"type": PrincipalUserSource.COMPANY_PORTAL})
@@ -157,6 +177,7 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
     deb_packages = []
     network_interfaces = []
     osx_app_instances = []
+    program_instances = []
     principal_user = {}
     certificates = []
     for t in snapshot:
@@ -177,12 +198,16 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
             collect_principal_user(principal_user, t)
         elif table_name == 'certificates':
             collect_certificate(certificates, t)
+        elif table_name == 'programs':
+            collect_program_instance(program_instances, t)
     if deb_packages:
         tree["deb_packages"] = deb_packages
     if network_interfaces:
         tree["network_interfaces"] = network_interfaces
     if osx_app_instances:
         tree["osx_app_instances"] = osx_app_instances
+    if program_instances:
+        tree["program_instances"] = program_instances
     if principal_user:
         tree["principal_user"] = principal_user
     if certificates:

@@ -389,6 +389,22 @@ class DebPackage(AbstractMTObject):
     revision = models.TextField(blank=True, null=True)
 
 
+class Program(AbstractMTObject):
+    name = models.TextField(blank=True, null=True)
+    version = models.TextField(blank=True, null=True)
+    language = models.TextField(blank=True, null=True)
+    publisher = models.TextField(blank=True, null=True)
+    identifying_number = models.TextField(blank=True, null=True)
+
+
+class ProgramInstance(AbstractMTObject):
+    program = models.ForeignKey(Program, on_delete=models.PROTECT)
+    install_location = models.TextField(blank=True, null=True)
+    install_source = models.TextField(blank=True, null=True)
+    uninstall_string = models.TextField(blank=True, null=True)
+    install_date = models.DateTimeField(blank=True, null=True)
+
+
 class TeamViewer(AbstractMTObject):
     teamviewer_id = models.TextField(blank=False, null=False)
     release = models.TextField(blank=True, null=True)
@@ -479,6 +495,7 @@ class MachineSnapshot(AbstractMTObject):
     network_interfaces = models.ManyToManyField(NetworkInterface)
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
     deb_packages = models.ManyToManyField(DebPackage)
+    program_instances = models.ManyToManyField(ProgramInstance)
     teamviewer = models.ForeignKey(TeamViewer, on_delete=models.PROTECT, blank=True, null=True)
     puppet_node = models.ForeignKey(PuppetNode, on_delete=models.PROTECT, blank=True, null=True)
     principal_user = models.ForeignKey(PrincipalUser, on_delete=models.PROTECT, blank=True, null=True)

@@ -41,6 +41,9 @@ OSX_APP_INSTANCE_QUERY = (
 )
 
 
+WIN_PROGRAM_QUERY = "select 'programs' as table_name, * from programs;"
+
+
 MACOS_PRINCIPAL_USER_QUERY = (
     "SELECT 'company_portal' AS table_name,"
     "directory, key, value "
@@ -75,14 +78,17 @@ DECORATORS = {
 
 def _get_inventory_queries_for_machine(machine, include_apps=False):
     yield from INVENTORY_QUERIES
-    if machine.platform == MACOS:
-        if include_apps:
+    if include_apps:
+        if machine.platform == MACOS:
             yield "apps", OSX_APP_INSTANCE_QUERY
+        elif machine.platform == WINDOWS:
+            yield "programs", WIN_PROGRAM_QUERY
+        elif machine.has_deb_packages:
+            yield "deb_packages", DEB_PACKAGE_QUERY
+    if machine.platform == MACOS:
         yield "company_portal", MACOS_PRINCIPAL_USER_QUERY
     if machine.platform in (MACOS, WINDOWS):
         yield "certificates", CERTIFICATES_QUERY
-    if include_apps and machine.has_deb_packages:
-        yield "deb_packages", DEB_PACKAGE_QUERY
 
 
 def get_inventory_query_for_machine(machine, include_apps):
