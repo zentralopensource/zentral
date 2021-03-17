@@ -1,5 +1,4 @@
 import enum
-from hashlib import md5
 import logging
 import os.path
 from django.contrib.postgres.fields import ArrayField, JSONField
@@ -12,6 +11,7 @@ from django.utils.functional import cached_property
 from zentral.conf import settings
 from zentral.contrib.inventory.models import BaseEnrollment, Tag
 from zentral.utils.sql import tables_in_query, format_sql
+from zentral.utils.text import shard
 from .specs import cli_only_flags
 
 
@@ -471,9 +471,7 @@ class DistributedQueryManager(models.Manager):
                 yield dq
             else:
                 # consistant sharding per dq and serial number
-                # md5 used because part of the stdlib
-                test = int(md5((str(dq.pk) + machine.serial_number).encode("utf-8")).hexdigest(), 16) % 100
-                if test <= dq.shard:
+                if shard(machine.serial_number, dq.pk) <= dq.shard:
                     yield dq
 
 
