@@ -101,14 +101,14 @@ class ProbeView(PermissionRequiredMixin, DetailView):
             ]
         store_links = []
         ctx['show_events_link'] = frontend_store.probe_events
-        for store in stores:
-            if store.probe_events_url:
-                url = "{}?{}".format(
-                    reverse("probes:probe_events_store_redirect", args=(self.probe.pk,)),
-                    urlencode({"es": store.name,
-                               "tr": ProbeEventsView.default_time_range})
-                )
-                store_links.append((url, store.name))
+        store_links = []
+        for store in stores.iter_probe_events_url_store_for_user(self.request.user):
+            url = "{}?{}".format(
+                reverse("probes:probe_events_store_redirect", args=(self.probe.pk,)),
+                urlencode({"es": store.name,
+                           "tr": ProbeEventsView.default_time_range})
+            )
+            store_links.append((url, store.name))
         ctx["store_links"] = store_links
         ctx["show_dashboard_link"] = frontend_store.probe_events_aggregations
         return ctx
@@ -301,9 +301,8 @@ class ProbeEventsView(PermissionRequiredMixin, TemplateView):
         # store links
         store_links = []
         store_redirect_url = reverse("probes:probe_events_store_redirect", args=(self.probe.pk,))
-        for store in stores:
-            if store.probe_events_url:
-                store_links.append((store_redirect_url, store.name))
+        for store in stores.iter_probe_events_url_store_for_user(self.request.user):
+            store_links.append((store_redirect_url, store.name))
         ctx["store_links"] = store_links
 
         # breadcrumbs

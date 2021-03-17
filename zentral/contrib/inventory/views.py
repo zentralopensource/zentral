@@ -483,18 +483,18 @@ class MachineView(PermissionRequiredMixin, TemplateView):
         if machine_snapshots_count:
             context['max_source_tab_with'] = 100 // machine_snapshots_count
         context['serial_number'] = machine.serial_number
-        context['show_events_link'] = frontend_store.machine_events
         context['fetch_heartbeats'] = frontend_store.last_machine_heartbeats
+        context['show_events_link'] = frontend_store.machine_events
         store_links = []
-        for store in stores:
-            if store.machine_events_url:
-                url = "{}?{}".format(
-                    reverse("inventory:machine_events_store_redirect",
-                            args=(machine.get_urlsafe_serial_number(),)),
-                    urlencode({"es": store.name,
-                               "tr": MachineEventsView.default_time_range})
-                )
-                store_links.append((url, store.name))
+        for store in stores.iter_machine_events_url_store_for_user(self.request.user):
+            url = "{}?{}".format(
+                reverse("inventory:machine_events_store_redirect",
+                        args=(machine.get_urlsafe_serial_number(),)),
+                urlencode({"es": store.name,
+                           "tr": MachineEventsView.default_time_range})
+            )
+            store_links.append((url, store.name))
+        context["store_links"] = store_links
         context["can_manage_tags"] = self.request.user.has_perms((
             "inventory.view_machinetag",
             "inventory.add_machinetag",
@@ -503,7 +503,6 @@ class MachineView(PermissionRequiredMixin, TemplateView):
             "inventory.add_tag",
         ))
         context["can_archive_machine"] = self.request.user.has_perm("inventory.change_machinesnapshot")
-        context["store_links"] = store_links
         return context
 
 
@@ -622,9 +621,8 @@ class MachineEventsView(PermissionRequiredMixin, TemplateView):
         store_links = []
         store_redirect_url = reverse("inventory:machine_events_store_redirect",
                                      args=(self.machine.get_urlsafe_serial_number(),))
-        for store in stores:
-            if store.machine_events_url:
-                store_links.append((store_redirect_url, store.name))
+        for store in stores.iter_machine_events_url_store_for_user(self.request.user):
+            store_links.append((store_redirect_url, store.name))
         context["store_links"] = store_links
         return context
 
