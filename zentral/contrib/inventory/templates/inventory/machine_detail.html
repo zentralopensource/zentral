@@ -49,23 +49,25 @@
         <i class="fab fa-windows" aria-hidden="true"></i> programs
       </a>
       {% endif %}
+      {% if can_manage_tags or can_archive_machine %}
       <div class="btn-group">
         <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
           Action <span class="caret"></span>
         </button>
         <ul class="dropdown-menu">
-          {% if perms.inventory.view_machinetag and perms.inventory.add_machinetag and perms.inventory.change_machinetag and perms.inventory.delete_machinetag and perms.inventory.add_tag %}
+          {% if can_manage_tags %}
           <li>
             <a href="{% url 'inventory:machine_tags' machine.get_urlsafe_serial_number %}">Manage tags</a>
           </li>
           {% endif %}
-          {% if perms.inventory.change_machinesnapshot %}
+          {% if can_archive_machine %}
           <li>
             <a href="{% url 'inventory:archive_machine' machine.get_urlsafe_serial_number %}"><span class="text-danger">Archive</span></a>
           </li>
           {% endif %}
         </ul>
       </div>
+      {% endif %}
     </div>
   </div>
 </div>

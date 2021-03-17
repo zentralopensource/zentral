@@ -495,6 +495,14 @@ class MachineView(PermissionRequiredMixin, TemplateView):
                                "tr": MachineEventsView.default_time_range})
                 )
                 store_links.append((url, store.name))
+        context["can_manage_tags"] = self.request.user.has_perms((
+            "inventory.view_machinetag",
+            "inventory.add_machinetag",
+            "inventory.change_machinetag",
+            "inventory.delete_machinetag",
+            "inventory.add_tag",
+        ))
+        context["can_archive_machine"] = self.request.user.has_perm("inventory.change_machinesnapshot")
         context["store_links"] = store_links
         return context
 
