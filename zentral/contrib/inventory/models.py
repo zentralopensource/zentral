@@ -387,6 +387,10 @@ class DebPackage(AbstractMTObject):
     size = models.BigIntegerField(blank=True, null=True)
     arch = models.TextField(blank=True, null=True)
     revision = models.TextField(blank=True, null=True)
+    status = models.TextField(blank=True, null=True)
+    maintainer = models.TextField(blank=True, null=True)
+    section = models.TextField(blank=True, null=True)
+    priority = models.TextField(blank=True, null=True)
 
 
 class Program(AbstractMTObject):

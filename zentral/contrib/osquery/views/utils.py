@@ -58,7 +58,11 @@ def collect_network_interface(network_interfaces, t):
 
 
 def collect_deb_package(deb_packages, t):
-    deb_package = clean_dict(t)
+    deb_package = clean_dict({
+        k: t.get(k)
+        for k in ("name", "version", "source", "size", "arch",
+                  "revision", "status", "maintainer", "section", "priority")
+    })
     if deb_package:
         if deb_package not in deb_packages:
             deb_packages.append(deb_package)
