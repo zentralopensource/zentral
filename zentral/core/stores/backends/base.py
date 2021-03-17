@@ -9,6 +9,9 @@ class BaseEventStore(object):
 
     def __init__(self, config_d):
         self.name = config_d['store_name']
+        # list of group names
+        # members of those groups will have access to the events URLs
+        self.events_url_authorized_groups = set(config_d.get("events_url_authorized_groups", []))
         self.frontend = config_d.get('frontend', False)
         self.configured = False
         self.batch_size = min(self.max_batch_size, max(config_d.get("batch_size") or 1, 1))

@@ -1,44 +1,69 @@
 from importlib import import_module
 import logging
+from django.utils.functional import SimpleLazyObject
 from zentral.conf import settings
 
 logger = logging.getLogger('zentral.core.stores')
 
-__all__ = ['stores']
+
+__all__ = ['frontend_store', 'stores']
 
 
-def get_store_class(module_path):
-    class_name = "EventStore"
-    module = import_module(module_path)
-    return getattr(module, class_name)
+class Stores:
+    @staticmethod
+    def _get_store_class(module_path):
+        class_name = "EventStore"
+        module = import_module(module_path)
+        return getattr(module, class_name)
+
+    def __init__(self, settings):
+        self.frontend_store = None
+        self.stores = {}
+        for store_name, store_conf in settings['stores'].items():
+            store_conf = store_conf.copy()
+            store_conf['store_name'] = store_name
+            store_class = self._get_store_class(store_conf.pop('backend'))
+            store = store_class(store_conf)
+            self.stores[store_name] = store
+            if store.frontend:
+                if self.frontend_store:
+                    logger.error('Multiple frontend store')
+                else:
+                    self.frontend_store = store
+            if not self.frontend_store:
+                logger.error('No frontend store')
+                if self.stores:
+                    self.frontend_store = self.stores[0]
+                else:
+                    logger.error('No stores')
+
+    def __iter__(self):
+        yield from self.stores.values()
+
+    def _iter_events_url_store_for_user(self, key, user):
+        user_groups = None
+        for store in self.stores.values():
+            if not getattr(store, f"{key}_events_url", False):
+                # store doesn't implement this functionality
+                continue
+            if not user.is_superuser and store.events_url_authorized_groups:
+                # groups memberships need to be checked
+                if user_groups is None:
+                    user_groups = set(user.groups.values_list("name", flat=True))
+                if not user_groups:
+                    # use is not a member of any group, it cannot be a match
+                    continue
+                if not store.events_url_authorized_groups.intersection(user_groups):
+                    # no common groups
+                    continue
+            yield store
+
+    def iter_machine_events_url_store_for_user(self, user):
+        yield from self._iter_events_url_store_for_user("machine", user)
+
+    def iter_probe_events_url_store_for_user(self, user):
+        yield from self._iter_events_url_store_for_user("probe", user)
 
 
-def get_stores(settings):
-    stores = []
-    for store_name, store_conf in settings['stores'].items():
-        store_conf = store_conf.copy()
-        store_conf['store_name'] = store_name
-        store_class = get_store_class(store_conf.pop('backend'))
-        stores.append(store_class(store_conf))
-    return stores
-
-
-def get_frontend_store(stores):
-    fe_store = None
-    for store in stores:
-        if store.frontend:
-            if fe_store:
-                logger.error('Multiple frontend store')
-            else:
-                fe_store = store
-    if not fe_store:
-        logger.error('No frontend store')
-        try:
-            fe_store = stores[0]
-        except IndexError:
-            logger.error('No stores')
-    return fe_store
-
-
-stores = get_stores(settings)
-frontend_store = get_frontend_store(stores)
+stores = SimpleLazyObject(lambda: Stores(settings))
+frontend_store = SimpleLazyObject(lambda: stores.frontend_store)
