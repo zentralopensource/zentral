@@ -5,9 +5,10 @@
 #
 
 set -e
+set -o pipefail
 
 get_do_instance_id () {
-  curl -s --connect-timeout 2 http://169.254.169.254/metadata/v1/id
+  curl -s --fail --connect-timeout 2 http://169.254.169.254/metadata/v1/id
 }
 
 get_docker_instance_id () {
@@ -15,15 +16,15 @@ get_docker_instance_id () {
 }
 
 get_ec2_instance_id () {
-  curl -s --connect-timeout 2 http://169.254.169.254/latest/meta-data/instance-id
+  curl -s --fail --connect-timeout 2 http://169.254.169.254/latest/meta-data/instance-id
 }
 
 get_gce_instance_id () {
-  curl -s --connect-timeout 2 -H 'Metadata-Flavor:Google' http://metadata.google.internal/computeMetadata/v1/instance/id
+  curl -s --fail --connect-timeout 2 -H 'Metadata-Flavor:Google' http://metadata.google.internal/computeMetadata/v1/instance/id
 }
 
 get_watchman_id () {
-  python3 -c 'import json;print(json.load(open("/etc/monitoringclient/client_settings.conf", "r"))["WatchmanID"])'
+  python3 -c 'import json,os,sys;p="/etc/monitoringclient/client_settings.conf";print(json.load(open(p,"r"))["WatchmanID"]) if os.path.exists(p) else sys.exit(1)'
 }
 
 get_host_identifier () {
@@ -41,7 +42,7 @@ get_host_identifier () {
   elif [ -x /usr/sbin/dmidecode ]; then
     HOST_IDENTIFIER=$(sudo dmidecode -s system-uuid)
   fi
-  if [ -z "$HOST_IDENTIFIER" ]; then
+  if [ -z "$HOST_IDENTIFIER" ] || [ "$HOST_IDENTIFIER" == "Not Settable" ]; then
     if [ -e /var/lib/dbus/machine-id ]; then
         HOST_IDENTIFIER=$(cat /var/lib/dbus/machine-id)
     else
