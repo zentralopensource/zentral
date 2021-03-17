@@ -11,6 +11,7 @@ class JamfInstanceForm(forms.ModelForm):
             "business_unit",
             "host", "port", "path",
             "user", "password",
+            "inventory_apps_shard",
         )
         widgets = {
             'password': forms.PasswordInput(render_value=True)

@@ -31,6 +31,11 @@ class JamfInstance(models.Model):
                                 help_text="API user password")
     secret = models.CharField(max_length=256, editable=False, unique=True,
                               default=make_secret)
+    inventory_apps_shard = models.IntegerField(
+        validators=[MinValueValidator(0),
+                    MaxValueValidator(100)],
+        default=100
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -69,6 +74,7 @@ class JamfInstance(models.Model):
             "user": self.user,
             "password": self.password,
             "secret": self.secret,
+            "inventory_apps_shard": self.inventory_apps_shard,
             "tag_configs": [tm.serialize() for tm in self.tagconfig_set.select_related("taxonomy").all()],
         }
         if self.business_unit:

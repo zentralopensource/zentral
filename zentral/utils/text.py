@@ -1,3 +1,4 @@
+from hashlib import md5
 import unicodedata
 
 
@@ -29,3 +30,9 @@ def split_comma_separated_quoted_string(s):
                 current_word.append(c)
         yield flush(current_word)
     return list(w for w in iterator(s) if w)
+
+
+def shard(key, salt="", modulo=100):
+    if not isinstance(salt, str):
+        salt = str(salt)
+    return int(md5((key + salt).encode("utf-8")).hexdigest(), 16) % modulo

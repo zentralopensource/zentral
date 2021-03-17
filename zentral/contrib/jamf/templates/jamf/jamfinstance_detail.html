@@ -10,24 +10,36 @@
 
 <h2>{{ title }}</h2>
 
-<dl class="dl-horizontal">
-  <dt>Business unit</dt>
-  <dd>
-    {% if object.business_unit %}
-    <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.id %}">
-      {{ object.business_unit }}
-    </a>
-    {% else %}
-    -
-    {% endif %}
-  </dd>
-  <dt>API URL</dt>
-  <dd>{{ object.api_base_url }}</dd>
-  <dt>API User</dt>
-  <dd>{{ object.user }}</dd>
-</dl>
+<table class="table">
+  <tbody>
+    <tr>
+      <th>Business unit</th>
+      <td>
+        {% if object.business_unit %}
+        <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.id %}">
+          {{ object.business_unit }}
+        </a>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>API URL</th>
+      <td>{{ object.api_base_url }}</td>
+    </tr>
+    <tr>
+      <th>API user</th>
+      <td>{{ object.user }}</td>
+    </tr>
+    <tr>
+      <th>Inventory apps shard</th>
+      <td>{{ object.inventory_apps_shard }}%</td>
+    </tr>
+  </tbody>
+</table>
 
-<dl class="dl-horizontal">
+<dl>
   <dt class="small" style="opacity:0.5">Version</dt>
   <dd class="small" style="opacity:0.5">{{ object.version }}</dd>
   <dt class="small" style="opacity:0.5">Created at</dt>

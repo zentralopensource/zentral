@@ -10,6 +10,7 @@ import requests
 from requests.packages.urllib3.util import Retry
 from zentral.conf import settings
 from zentral.contrib.inventory.utils import clean_ip_address
+from zentral.utils.text import shard
 from .events import JAMF_EVENTS
 
 
@@ -47,6 +48,8 @@ class APIClient(object):
         self.mobile_device_groups = {}
         self.reverse_computer_groups = {}
         self.group_tag_regex = None
+        # inventory apps shard
+        self.inventory_apps_shard = kwargs.get("inventory_apps_shard", 100)
         # tags from groups
         self.tag_configs = []
         for tag_config in kwargs.get("tag_configs", []):
@@ -203,11 +206,12 @@ class APIClient(object):
 
     def get_computer_machine_d(self, jamf_id):
         computer = self._computer(jamf_id)
+        serial_number = computer['general']['serial_number']
         # serial number, reference
         ct = {'source': self.get_source_d(),
               'reference': self.machine_reference("computer", jamf_id),
               'links': self._machine_links_from_id("computer", jamf_id),
-              'serial_number': computer['general']['serial_number']}
+              'serial_number': serial_number}
         last_contact = computer['general'].get('last_contact_time_utc')
         if last_contact:
             ct['last_seen'] = parser.parse(last_contact)
@@ -320,17 +324,23 @@ class APIClient(object):
 
         # osx apps
         osx_app_instances = []
-        has_duplicated_apps = False
-        for app_d in computer['software']['applications']:
-            osx_app_d = {'bundle_path': app_d['path'],
-                         'app': {'bundle_name': app_d['name'],
-                                 'bundle_version_str': app_d['version']}}
-            if osx_app_d not in osx_app_instances:
-                osx_app_instances.append(osx_app_d)
-            else:
-                has_duplicated_apps = True
-        if has_duplicated_apps:
-            logger.warning("%s computer %s: duplicated app(s)", self.api_base_url, jamf_id)
+        if (
+            self.inventory_apps_shard == 100
+            or serial_number and shard(serial_number, "jamf_apps") < self.inventory_apps_shard
+        ):
+            has_duplicated_apps = False
+            for app_d in computer['software']['applications']:
+                osx_app_d = {'bundle_path': app_d['path'],
+                             'app': {'bundle_name': app_d['name'],
+                                     'bundle_version_str': app_d['version']}}
+                if osx_app_d not in osx_app_instances:
+                    osx_app_instances.append(osx_app_d)
+                else:
+                    has_duplicated_apps = True
+            if has_duplicated_apps:
+                logger.warning("%s computer %s: duplicated app(s)", self.api_base_url, jamf_id)
+        else:
+            logger.debug("%s computer %s: skipped osx app instances", self.api_base_url, jamf_id)
         ct['osx_app_instances'] = osx_app_instances
         return ct
 
