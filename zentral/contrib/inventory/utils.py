@@ -1494,9 +1494,8 @@ def _export_machine_csv_zip(query, basename, window_size=5000):
 
     filename = "{}_{:%Y-%m-%d_%H-%M-%S}.zip".format(slugify(basename).replace("-", "_"), datetime.utcnow())
     filepath = os.path.join("exports", filename)
-    zip_f = os.fdopen(zip_fh, "rb")
-    default_storage.save(filepath, zip_f)
-    zip_f.close()
+    with os.fdopen(zip_fh, "rb") as zip_f:
+        default_storage.save(filepath, zip_f)
     os.unlink(zip_p)
 
     return {
