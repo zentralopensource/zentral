@@ -15,6 +15,10 @@
   {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / macOS apps
 </h2>
 
+<p>
+  <input class="form-control" type="text" id="search-input" autofocus="" placeholder="Search bundle name" style="max-width:30vw">
+</p>
+
 {% if machine.snapshots_with_osx_app_instances %}
 <ul class="nav nav-tabs">
   {% for ms in machine.snapshots_with_osx_app_instances %}
@@ -28,7 +32,7 @@
 
 {% for ms in machine.snapshots_with_osx_app_instances %}
 <div class="table-reponsive appstab" id="apps-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
-  <table class="table table-condensed">
+  <table class="table table-condensed table-filtered">
     <thead>
       <th>Bundle</th>
       <th>Version</th>
@@ -38,7 +42,7 @@
       {% for osx_app_instance in ms.ordered_osx_app_instances %}
       {% with osx_app_instance.app as app %}
       <tr>
-        <td>
+        <td class="search-cell">
           {% if perms.inventory.view_osxapp and perms.inventory.view_osxappinstance %}
           <a href="{% url 'inventory:macos_app' app.id %}">{{ app.all_names|join:" / "|default:"-" }}</a>
           {% else %}
@@ -89,10 +93,37 @@
     link.parent().addClass('active');
   }
 
+  function filterTables(tables, $input) {
+    var filter, tr, td, i, txtValue, lineMatched;
+    filter = $input.val().toUpperCase();
+    tables.forEach(function(table) {
+      tr = table.getElementsByTagName("tr");
+      for (i = 0; i < tr.length; i++) {
+        lineMatched = false;
+        td = tr[i].getElementsByClassName("search-cell");
+        for (j=0; j < td.length; j++) {
+          txtValue = td[j].textContent || td[j].innerText;
+          if (txtValue.toUpperCase().indexOf(filter) > -1) {
+            tr[i].style.display = "";
+            lineMatched = true;
+            break
+          }
+        }
+        if (lineMatched === false) {
+            tr[i].style.display = "none";
+        }
+      }
+    });
+  }
+
   $(document).ready(function(){
     $("li[role=presentation] a").click(function(event){
       event.preventDefault();
       switchTabs($(this));
+    });
+    var tables = document.querySelectorAll(".table-filtered");
+    $("#search-input").keyup(function (event) {
+      filterTables(tables, $(this));
     });
   });
 </script>

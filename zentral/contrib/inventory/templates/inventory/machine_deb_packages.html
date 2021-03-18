@@ -15,6 +15,10 @@
   {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / macOS apps
 </h2>
 
+<p>
+  <input class="form-control" type="text" id="search-input" autofocus="" placeholder="Search name, source" style="max-width:30vw">
+</p>
+
 {% if machine.snapshots_with_deb_packages %}
 <ul class="nav nav-tabs">
   {% for ms in machine.snapshots_with_deb_packages %}
@@ -28,7 +32,7 @@
 
 {% for ms in machine.snapshots_with_deb_packages %}
 <div class="table-reponsive mstab" id="ms-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
-  <table class="table table-condensed">
+  <table class="table table-condensed table-filtered">
     <thead>
       <th>Name</th>
       <th>Version</th>
@@ -38,9 +42,9 @@
     <tbody>
       {% for deb_package in ms.ordered_deb_packages %}
       <tr>
-        <td>{{ deb_package.name|default:"-" }}</td>
+        <td class="search-cell">{{ deb_package.name|default:"-" }}</td>
         <td>{{ deb_package.version|default:"-" }}</td>
-        <td>{{ deb_package.source|default:"-" }}</td>
+        <td class="search-cell">{{ deb_package.source|default:"-" }}</td>
         <td>{{ deb_package.status|default:"-" }}</td>
       </tr>
       {% endfor %}
@@ -76,10 +80,37 @@
     link.parent().addClass('active');
   }
 
+  function filterTables(tables, $input) {
+    var filter, tr, td, i, txtValue, lineMatched;
+    filter = $input.val().toUpperCase();
+    tables.forEach(function(table) {
+      tr = table.getElementsByTagName("tr");
+      for (i = 0; i < tr.length; i++) {
+        lineMatched = false;
+        td = tr[i].getElementsByClassName("search-cell");
+        for (j=0; j < td.length; j++) {
+          txtValue = td[j].textContent || td[j].innerText;
+          if (txtValue.toUpperCase().indexOf(filter) > -1) {
+            tr[i].style.display = "";
+            lineMatched = true;
+            break
+          }
+        }
+        if (lineMatched === false) {
+            tr[i].style.display = "none";
+        }
+      }
+    });
+  }
+
   $(document).ready(function(){
     $("li[role=presentation] a").click(function(event){
       event.preventDefault();
       switchTabs($(this));
+    });
+    var tables = document.querySelectorAll(".table-filtered");
+    $("#search-input").keyup(function (event) {
+      filterTables(tables, $(this));
     });
   });
 </script>
