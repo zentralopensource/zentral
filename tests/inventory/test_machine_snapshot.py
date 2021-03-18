@@ -15,11 +15,14 @@ from zentral.contrib.inventory.models import (BusinessUnit,
                                               MetaMachine,
                                               Source,
                                               Tag, Taxonomy)
+from zentral.contrib.inventory.utils import inventory_events_from_machine_snapshot_commit
 from zentral.utils.mt_models import MTOError
 
 
 @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
 class MachineSnapshotTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         cls.serial_number = "GODZILLAKOMMT"
@@ -56,11 +59,11 @@ class MachineSnapshotTestCase(TestCase):
         cls.business_unit_tree = {
             "name": "bulle",
             "reference": "bulle 1",
-            "source": cls.source
+            "source": copy.deepcopy(cls.source)
         }
         cls.business_unit, _ = BusinessUnit.objects.commit(cls.business_unit_tree)
         cls.meta_business_unit = cls.business_unit.meta_business_unit
-        cls.machine_snapshot = {'source': cls.source,
+        cls.machine_snapshot = {'source': copy.deepcopy(cls.source),
                                 'business_unit': cls.business_unit_tree,
                                 'serial_number': cls.serial_number,
                                 'osx_app_instances': []}
@@ -68,12 +71,12 @@ class MachineSnapshotTestCase(TestCase):
                                              'serial_number': cls.serial_number,
                                              'os_version': cls.os_version,
                                              'osx_app_instances': [cls.osx_app_instance]}
-        cls.machine_snapshot2 = {'source': cls.source,
+        cls.machine_snapshot2 = {'source': copy.deepcopy(cls.source),
                                  'business_unit': cls.business_unit_tree,
                                  'serial_number': cls.serial_number,
                                  'os_version': cls.os_version,
                                  'osx_app_instances': [cls.osx_app_instance]}
-        cls.machine_snapshot3 = {'source': cls.source,
+        cls.machine_snapshot3 = {'source': copy.deepcopy(cls.source),
                                  'business_unit': cls.business_unit_tree,
                                  'serial_number': cls.serial_number,
                                  'os_version': cls.os_version,
@@ -98,6 +101,10 @@ class MachineSnapshotTestCase(TestCase):
         tree = copy.deepcopy(self.machine_snapshot)
         msc2, ms2 = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         self.assertEqual(ms, ms2)
+        self.assertEqual(
+            list(inventory_events_from_machine_snapshot_commit(msc2)),
+            [('inventory_heartbeat', msc2.last_seen, {'source': self.source})]
+        )
         self.assertEqual(CurrentMachineSnapshot.objects.all().count(), 1)
         cms = CurrentMachineSnapshot.objects.get(serial_number=self.serial_number, source=ms.source)
         self.assertEqual(cms.machine_snapshot, ms)
@@ -141,6 +148,14 @@ class MachineSnapshotTestCase(TestCase):
                           "last_seen": {"added": msc2.last_seen,
                                         "removed": msc1.last_seen},
                           "platform": {"added": MACOS}})  # don't forget platform !!!
+        self.assertEqual(
+            list(inventory_events_from_machine_snapshot_commit(msc2)),
+            [('add_machine_osx_app_instance', None,
+              {"osx_app_instance": osx_app_instance_diff, "source": self.source}),
+             ('add_machine_os_version', None,
+              {'os_version': self.os_version, 'source': self.source}),
+             ('inventory_heartbeat', msc2.last_seen, {'source': self.source})]
+        )
         tree = copy.deepcopy(self.machine_snapshot3)
         msc3, ms3 = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         self.assertEqual(msc3.parent, msc2)
@@ -152,10 +167,22 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(msc3.update_diff(),
                          {"last_seen": {"added": msc3.last_seen, "removed": msc2.last_seen},
                           "osx_app_instances": {"added": [osx_app_instance2_diff]}})
+        self.assertEqual(
+            list(inventory_events_from_machine_snapshot_commit(msc3)),
+            [('add_machine_osx_app_instance', None,
+              {'osx_app_instance': osx_app_instance2_diff, "source": self.source}),
+             ('inventory_heartbeat', msc3.last_seen, {'source': self.source})]
+        )
         self.assertEqual(ms3.mt_hash, ms3.hash())
         self.assertEqual(Certificate.objects.count(), 1)
         tree = copy.deepcopy(self.machine_snapshot2)
         msc4, ms4 = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        self.assertEqual(
+            list(inventory_events_from_machine_snapshot_commit(msc4)),
+            [('remove_machine_osx_app_instance', None,
+              {'osx_app_instance': osx_app_instance2_diff, "source": self.source}),
+             ('inventory_heartbeat', msc4.last_seen, {'source': self.source})]
+        )
         self.assertEqual(ms4, ms2)
         self.assertEqual(msc4.parent, msc3)
         self.assertEqual(msc4.machine_snapshot, ms2)
