@@ -10,7 +10,10 @@ from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionReq
 from .forms import MacOSAppSearchForm
 from .models import MetaBusinessUnit, Tag
 from .serializers import MetaBusinessUnitSerializer, TagSerializer
-from .tasks import export_inventory, export_macos_apps
+from .tasks import (export_inventory, export_macos_apps,
+                    export_machine_macos_app_instances,
+                    export_machine_program_instances,
+                    export_machine_deb_packages)
 from .utils import MSQuery
 
 
@@ -43,6 +46,39 @@ class MacOSAppsExport(APIView):
             raise ValidationError("Invalid search parameters")
         filename = "macos_apps_export_{:%Y-%m-%d_%H-%M-%S}.{}".format(timezone.now(), export_format)
         result = export_macos_apps.apply_async((request.data, filename,))
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)
+
+
+class MachineMacOSAppInstancesExport(APIView):
+    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
+    permission_required = [IsAuthenticated, DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        result = export_machine_macos_app_instances.apply_async()
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)
+
+
+class MachineProgramInstancesExport(APIView):
+    permission_required = ("inventory.view_program", "inventory.view_programinstance")
+    permission_required = [IsAuthenticated, DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        result = export_machine_program_instances.apply_async()
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)
+
+
+class MachineDebPackagesExport(APIView):
+    permission_required = "inventory.view_debpackage"
+    permission_required = [IsAuthenticated, DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        result = export_machine_deb_packages.apply_async()
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
