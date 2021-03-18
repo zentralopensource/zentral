@@ -37,7 +37,11 @@ class EventStore(BaseEventStore):
     @staticmethod
     def _convert_datetime(dt):
         if isinstance(dt, str):
-            dt = datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S.%f")
+            if "." in dt:
+                fmt = "%Y-%m-%dT%H:%M:%S.%f"
+            else:
+                fmt = "%Y-%m-%dT%H:%M:%S"
+            dt = datetime.strptime(dt, fmt)
         ts = time.mktime(dt.timetuple()) + dt.microsecond / 1e6
         return "{:.3f}".format(ts)
 
