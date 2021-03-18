@@ -220,9 +220,11 @@ class AbstractMTObject(models.Model):
             h.add_field(f.name, v)
         return h.hexdigest()
 
-    def serialize(self):
+    def serialize(self, exclude=None):
         d = {}
         for f, v in self._iter_mto_fields():
+            if exclude and f.name in exclude:
+                continue
             if f.many_to_one and v:
                 v = v.serialize()
             elif f.many_to_many:
