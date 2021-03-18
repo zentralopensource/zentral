@@ -1348,55 +1348,56 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
     source = machine_snapshot_commit.source.serialize()
     diff = machine_snapshot_commit.update_diff()
     if diff is None:
-        yield ('inventory_machine_added',
+        machine_payload = machine_snapshot_commit.machine_snapshot.serialize()
+        machine_payload
+        yield ('add_machine',
                None,
-               {'source': source,
-                'machine_snapshot': machine_snapshot_commit.machine_snapshot.serialize()})
+               machine_snapshot_commit.machine_snapshot.serialize(
+                   exclude=["network_interfaces",
+                            "osx_app_instance",
+                            "deb_packages",
+                            "program_instances"]
+               ))
         yield ('inventory_heartbeat',
                machine_snapshot_commit.last_seen,
                {'source': source})
         return
-    for m2m_attr, event_type in (('links', 'inventory_link_update'),
-                                 ('network_interfaces', 'inventory_network_interface_update'),
-                                 ('osx_app_instances', 'inventory_osx_app_instance_update'),
-                                 ('deb_packages', 'inventory_deb_package_update'),
-                                 ('program_instances', 'inventory_program_instance_update'),
-                                 ('certificates', 'inventory_certificate_update'),
-                                 ('groups', 'inventory_group_update')):
-        m2m_diff = diff.get(m2m_attr, {})
-        for action in ['added', 'removed']:
-            for obj in m2m_diff.get(action, []):
-                obj['action'] = action
-                if 'source' not in obj:
-                    obj['source'] = source
-                yield (event_type, None, obj)
-    for fk_attr in ('reference',
-                    'machine',
-                    'business_unit',
-                    'os_version',
-                    'system_info',
-                    'teamviewer',
-                    'puppet_node',
-                    'principal_user'):
-        event_type = 'inventory_{}_update'.format(fk_attr)
-        fk_diff = diff.get(fk_attr, {})
-        for action in ['added', 'removed']:
-            obj = fk_diff.get(action, None)
+    for m2m_diff_attr in ('links',
+                          'groups',
+                          'network_interfaces',
+                          'osx_app_instances',
+                          'deb_packages',
+                          'program_instances',
+                          'certificates'):
+        m2m_diff = diff.get(m2m_diff_attr, {})
+        if not m2m_diff:
+            continue
+        event_attr = m2m_diff_attr[:-1]
+        for diff_action, event_action in [('added', 'add'), ('removed', 'remove')]:
+            event_type = f"{event_action}_machine_{event_attr}"
+            for obj in m2m_diff.get(diff_action, []):
+                yield (event_type, None, {event_attr: obj, "source": source})
+    for attr in ('business_unit',
+                 'os_version',
+                 'system_info',
+                 'teamviewer',
+                 'puppet_node',
+                 'principal_user'):
+        fk_diff = diff.get(attr, {})
+        if not fk_diff:
+            continue
+        for diff_action, event_action in [('added', 'add'), ('removed', 'remove')]:
+            event_type = f"{event_action}_machine_{attr}"
+            obj = fk_diff.get(diff_action)
             if obj:
-                if isinstance(obj, dict):
-                    event = obj
-                    if 'source' not in obj:
-                        event['source'] = source
-                else:
-                    event = {'source': source,
-                             fk_attr: obj}
-                event['action'] = action
-                yield (event_type, None, event)
+                if not isinstance(obj, dict):
+                    # this should not happen
+                    logger.error("Unsupported diff value %s %s", attr, diff_action)
+                    continue
+                yield (event_type, None, {attr: obj, "source": source})
     added_last_seen = diff.get("last_seen", {}).get("added")
     if added_last_seen:
-        yield ("inventory_heartbeat",
-               added_last_seen,
-               {'source': source})
+        yield ("inventory_heartbeat", added_last_seen, {'source': source})
 
 
 def commit_machine_snapshot_and_trigger_events(tree):

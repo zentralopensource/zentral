@@ -5,22 +5,7 @@ from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
 logger = logging.getLogger('zentral.contrib.inventory.events')
 
 
-ALL_EVENTS_SEARCH_DICT = {"tag": "inventory_update"}
-
-
-class InventoryMachineAdded(BaseEvent):
-    event_type = 'inventory_machine_added'
-
-
-register_event_type(InventoryMachineAdded)
-
-
-class InventoryHeartbeat(BaseEvent):
-    event_type = 'inventory_heartbeat'
-    tags = ['heartbeat']
-
-
-register_event_type(InventoryHeartbeat)
+ALL_EVENTS_SEARCH_DICT = {"tag": "machine"}
 
 
 class EnrollmentSecretVerificationEvent(BaseEvent):
@@ -31,9 +16,27 @@ register_event_type(EnrollmentSecretVerificationEvent)
 
 
 # Inventory update events
-for attr in ('reference',
-             'machine',
-             'link',
+
+
+class InventoryHeartbeat(BaseEvent):
+    event_type = 'inventory_heartbeat'
+    namespace = "machine"
+    tags = ['heartbeat', 'machine']
+
+
+register_event_type(InventoryHeartbeat)
+
+
+class AddMachine(BaseEvent):
+    event_type = 'add_machine'
+    namespace = "machine"
+    tags = ['machine']
+
+
+register_event_type(AddMachine)
+
+
+for attr in ('link',
              'business_unit',
              'group',
              'os_version',
@@ -46,10 +49,17 @@ for attr in ('reference',
              'puppet_node',
              'principal_user',
              'certificate'):
-    event_type = 'inventory_{}_update'.format(attr)
-    event_class_name = "".join(s.title() for s in event_type.split('_'))
-    event_class = type(event_class_name, (BaseEvent,), {'event_type': event_type, 'tags': ['inventory_update']})
-    register_event_type(event_class)
+    for action in ("add", "remove"):
+        event_type = f"{action}_machine_{attr}"
+        event_class_name = "".join(s.title() for s in event_type.split('_'))
+        event_class = type(
+            event_class_name,
+            (BaseEvent,),
+            {'event_type': event_type,
+             'namespace': 'machine',
+             'tags': ['machine', 'machine_update']}
+        )
+        register_event_type(event_class)
 
 
 def post_inventory_events(msn, events):

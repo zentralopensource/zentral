@@ -142,9 +142,9 @@ class MetadataFilterBaseProbeTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.event_tags = ["osquery",
-                          "inventory_update"]
-        cls.event_types = ["inventory_reference_update",
-                           "inventory_group_update"]
+                          "machine_update"]
+        cls.event_types = ["remove_machine_link",
+                           "add_machine_group"]
         cls.probe_source = ProbeSource.objects.create(
             model="BaseProbe",
             name="base probe",
@@ -172,24 +172,24 @@ class MetadataFilterBaseProbeTestCase(TestCase):
         self.assertEqual(metadata_filter.get_event_type_classes(),
                          [event_types[et] for et in sorted(self.event_types)])
         self.assertEqual(metadata_filter.get_event_types_display(),
-                         "inventory group update, inventory reference update")
+                         "add machine group, remove machine link")
 
     def test_metadata_filter_event_tags(self):
         metadata_filter = self.probe.metadata_filters[0]
         self.assertEqual(metadata_filter.event_tags,
                          set(self.event_tags))
         self.assertEqual(metadata_filter.get_event_tags_display(),
-                         "inventory update, osquery")
+                         "machine update, osquery")
 
     def test_metadata_filter_test_event_metadata(self):
         metadata_filter = self.probe.metadata_filters[0]
         for event_type, tags, result in (("santa_event", ["yo"], False),
-                                         ("inventory_group_update", ["yo"], False),
+                                         ("add_machine_group", ["yo"], False),
                                          ("santa_event", ["osquery"], False),
-                                         ("inventory_group_update", [], False),
-                                         ("inventory_group_update", ["osquery"], True),
-                                         ("inventory_group_update", ["osquery", "yo"], True),
-                                         ("inventory_reference_update", ["osquery", "inventory_update"], True)):
+                                         ("add_machine_group", [], False),
+                                         ("add_machine_group", ["osquery"], True),
+                                         ("add_machine_group", ["osquery", "yo"], True),
+                                         ("remove_machine_link", ["osquery", "inventory_update"], True)):
             metadata = EventMetadata(machine_serial_number="YO",
                                      event_type=event_type, tags=tags)
             self.assertEqual(metadata_filter.test_event_metadata(metadata),
@@ -198,7 +198,7 @@ class MetadataFilterBaseProbeTestCase(TestCase):
     def test_probe_test_event(self):
         for event_type, tags, result in (("santa_event", ["yo"], False),
                                          ("osquery_result", ["super", "michel"], True),
-                                         ("inventory_group_update", ["osquery", "yo"], True)):
+                                         ("add_machine_group", ["osquery", "yo"], True)):
             event = BaseEvent(EventMetadata(machine_serial_number="YO",
                                             event_type=event_type, tags=tags),
                               {"godzilla": "kommt"})
