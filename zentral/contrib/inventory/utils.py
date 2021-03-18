@@ -1485,13 +1485,20 @@ def _export_machine_csv_zip(query, basename, window_size=5000):
                 csv_w = csv.writer(csv_f)
                 csv_w.writerow(columns)
             csv_w.writerow(row)
+
+    zip_fh, zip_p = tempfile.mkstemp()
+    with zipfile.ZipFile(zip_p, mode='w', compression=zipfile.ZIP_DEFLATED) as zip_a:
+        for source_name, csv_p in csv_files:
+            zip_a.write(csv_p, "{}.csv".format(slugify(source_name)))
+            os.unlink(csv_p)
+
     filename = "{}_{:%Y-%m-%d_%H-%M-%S}.zip".format(slugify(basename).replace("-", "_"), datetime.utcnow())
     filepath = os.path.join("exports", filename)
-    with default_storage.open(filepath, "wb") as of:
-        with zipfile.ZipFile(of, mode='w', compression=zipfile.ZIP_DEFLATED) as zip_f:
-            for source_name, csv_p in csv_files:
-                zip_f.write(csv_p, "{}.csv".format(slugify(source_name)))
-                os.unlink(csv_p)
+    zip_f = os.fdopen(zip_fh, "rb")
+    default_storage.save(filepath, zip_f)
+    zip_f.close()
+    os.unlink(zip_p)
+
     return {
         "filepath": filepath,
         "headers": {
