@@ -244,6 +244,9 @@ class AbstractMTObject(models.Model):
         if mto._meta.model != self._meta.model:
             raise MTOError("Can only compare to an object of the same model")
         diff = {}
+        # if same objects or same hash, we can optimize and return an empty diff
+        if self == mto or self.mt_hash == mto.mt_hash:
+            return diff
         for f, v in self._iter_mto_fields():
             fdiff = {}
             if f.many_to_many:
