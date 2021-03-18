@@ -2,6 +2,33 @@ from rest_framework import serializers
 from .models import EnrollmentSecret, MetaBusinessUnit, Tag
 
 
+# Machine mass tagging
+
+
+class MachineTagsUpdatePrincipalUsers(serializers.Serializer):
+    unique_ids = serializers.ListField(
+        child=serializers.CharField(min_length=1),
+        required=False
+    )
+    principal_names = serializers.ListField(
+        child=serializers.CharField(min_length=1),
+        required=False
+    )
+
+    def validate(self, data):
+        if not data.get("unique_ids") and not data.get("principal_names"):
+            raise serializers.ValidationError("Unique ids and principal names cannot be both empty.")
+        return data
+
+
+class MachineTagsUpdateSerializer(serializers.Serializer):
+    tags = serializers.DictField(child=serializers.CharField(allow_null=True), allow_empty=False)
+    principal_users = MachineTagsUpdatePrincipalUsers()
+
+
+# Standard model serializers
+
+
 class MetaBusinessUnitSerializer(serializers.ModelSerializer):
     api_enrollment_enabled = serializers.BooleanField(required=False)
 
