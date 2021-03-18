@@ -66,6 +66,7 @@ def post_inventory_events(msn, events):
     for index, (event_type, created_at, data) in enumerate(events):
         event_cls = event_cls_from_type(event_type)
         metadata = EventMetadata(event_cls.event_type,
+                                 namespace=event_cls.namespace,
                                  machine_serial_number=msn,
                                  index=index,
                                  created_at=created_at,
