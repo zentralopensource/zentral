@@ -37,6 +37,7 @@ class EventStore(BaseEventStore):
     @staticmethod
     def _convert_datetime(dt):
         if isinstance(dt, str):
+            dt = dt.replace("+00:00", "").replace("Z", "").strip()
             if "." in dt:
                 fmt = "%Y-%m-%dT%H:%M:%S.%f"
             else:

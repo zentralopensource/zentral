@@ -34,9 +34,11 @@
 <div class="table-reponsive appstab" id="apps-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
   <table class="table table-condensed table-filtered">
     <thead>
-      <th>Bundle</th>
-      <th>Version</th>
-      <th>Path</th>
+      <tr>
+        <th>Bundle</th>
+        <th>Version</th>
+        <th>Path</th>
+      </tr>
     </thead>
     <tbody>
       {% for osx_app_instance in ms.ordered_osx_app_instances %}
@@ -98,7 +100,7 @@
     filter = $input.val().toUpperCase();
     tables.forEach(function(table) {
       tr = table.getElementsByTagName("tr");
-      for (i = 0; i < tr.length; i++) {
+      for (i = 1; i < tr.length; i++) {
         lineMatched = false;
         td = tr[i].getElementsByClassName("search-cell");
         for (j=0; j < td.length; j++) {

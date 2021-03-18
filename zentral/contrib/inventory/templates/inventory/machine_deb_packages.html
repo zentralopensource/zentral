@@ -12,7 +12,7 @@
 <h2>
   {% machine_type_icon machine %}
   {% machine_platform_icon machine %}
-  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / macOS apps
+  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / deb packages
 </h2>
 
 <p>
@@ -34,10 +34,12 @@
 <div class="table-reponsive mstab" id="ms-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
   <table class="table table-condensed table-filtered">
     <thead>
-      <th>Name</th>
-      <th>Version</th>
-      <th>Source</th>
-      <th>Status</th>
+      <tr>
+        <th>Name</th>
+        <th>Version</th>
+        <th>Source</th>
+        <th>Status</th>
+      </tr>
     </thead>
     <tbody>
       {% for deb_package in ms.ordered_deb_packages %}
@@ -85,7 +87,7 @@
     filter = $input.val().toUpperCase();
     tables.forEach(function(table) {
       tr = table.getElementsByTagName("tr");
-      for (i = 0; i < tr.length; i++) {
+      for (i = 1; i < tr.length; i++) {
         lineMatched = false;
         td = tr[i].getElementsByClassName("search-cell");
         for (j=0; j < td.length; j++) {
