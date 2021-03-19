@@ -47,7 +47,7 @@ class Stores:
                 continue
             if not user.is_superuser and store.events_url_authorized_groups:
                 if not user.group_name_set:
-                    # use is not a member of any group, it cannot be a match
+                    # user is not a member of any group, it cannot be a match
                     continue
                 if not store.events_url_authorized_groups.intersection(user.group_name_set):
                     # no common groups
