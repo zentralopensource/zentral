@@ -4,6 +4,7 @@ import uuid
 from django.conf import settings
 from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login
 from django.core import signing
+from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import resolve_url
 from django.template.response import TemplateResponse
@@ -16,6 +17,7 @@ from django.views.generic import FormView, View
 from accounts.events import post_failed_verification_event
 from accounts.forms import VerifyTOTPForm, VerifyU2FForm, ZentralAuthenticationForm
 from realms.models import Realm
+from zentral.conf import settings as zentral_settings
 from zentral.utils.http import user_agent_and_ip_address_from_request
 
 
@@ -125,6 +127,26 @@ class VerifyU2FView(VerificationMixin, FormView):
 
 
 class NginxAuthRequestView(View):
+    def get_external_link_authorization_groups(self):
+        original_uri = self.request.META.get("HTTP_X_ORIGINAL_URI")
+        if not original_uri:
+            return
+        original_uri_first_elem = original_uri.strip("/").split("/")[0]
+        if "." in original_uri_first_elem or not len(original_uri_first_elem) > 3:
+            return
+        for link in zentral_settings.get('extra_links', []):
+            authorized_groups = link.get("authorized_groups")
+            if not authorized_groups:
+                return
+            url = link.get("url")
+            if not url:
+                continue
+            if url.startswith("http") or url.startswith("//"):
+                continue
+            url_first_elem = url.strip("/").split("/")[0]
+            if url_first_elem == original_uri_first_elem:
+                return link.get("authorized_groups")
+
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             if request.is_ajax() or request.META.get('HTTP_ACCEPT', '').startswith('application/json'):
@@ -135,6 +157,11 @@ class NginxAuthRequestView(View):
             response.status_code = status_code
             return response
         else:
+            if not request.user.is_superuser:
+                authorized_groups = self.get_external_link_authorization_groups()
+                if authorized_groups and not request.user.group_name_set.intersection(authorized_groups):
+                    # no common groups
+                    raise PermissionDenied("Not allowed")
             response = HttpResponse("OK")
             response["X-Zentral-Username"] = request.user.username
             response["X-Zentral-Email"] = request.user.email
