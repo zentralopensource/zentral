@@ -137,7 +137,7 @@ class NginxAuthRequestView(View):
         for link in zentral_settings.get('extra_links', []):
             authorized_groups = link.get("authorized_groups")
             if not authorized_groups:
-                return
+                continue
             url = link.get("url")
             if not url:
                 continue
@@ -145,7 +145,7 @@ class NginxAuthRequestView(View):
                 continue
             url_first_elem = url.strip("/").split("/")[0]
             if url_first_elem == original_uri_first_elem:
-                return link.get("authorized_groups")
+                return authorized_groups
 
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
