@@ -5,6 +5,8 @@ from zentral.core.probes import probe_classes
 def extra_links(request):
     """Django context processor to add the extra links from base.json"""
     extra_links = []
+    if not request.user.is_authenticated:
+        return extra_links
     for link in settings.get('extra_links', []):
         authorized_groups = link.get("authorized_groups", None)
         if authorized_groups and not request.user.is_superuser:
