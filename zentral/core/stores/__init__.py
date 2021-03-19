@@ -41,19 +41,15 @@ class Stores:
         yield from self.stores.values()
 
     def _iter_events_url_store_for_user(self, key, user):
-        user_groups = None
         for store in self.stores.values():
             if not getattr(store, f"{key}_events_url", False):
                 # store doesn't implement this functionality
                 continue
             if not user.is_superuser and store.events_url_authorized_groups:
-                # groups memberships need to be checked
-                if user_groups is None:
-                    user_groups = set(user.groups.values_list("name", flat=True))
-                if not user_groups:
+                if not user.group_name_set:
                     # use is not a member of any group, it cannot be a match
                     continue
-                if not store.events_url_authorized_groups.intersection(user_groups):
+                if not store.events_url_authorized_groups.intersection(user.group_name_set):
                     # no common groups
                     continue
             yield store

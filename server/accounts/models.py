@@ -100,6 +100,11 @@ class User(AbstractUser):
         else:
             return ua_verification_devices
 
+    @cached_property
+    def group_name_set(self):
+        """A set with all the group names. Used for authz."""
+        return set(self.groups.values_list("name", flat=True))
+
 
 class UserPasswordHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
