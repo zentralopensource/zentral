@@ -132,8 +132,6 @@ class NginxAuthRequestView(View):
         if not original_uri:
             return
         original_uri_first_elem = original_uri.strip("/").split("/")[0]
-        if "." in original_uri_first_elem or not len(original_uri_first_elem) > 3:
-            return
         for link in zentral_settings.get('extra_links', []):
             authorized_groups = link.get("authorized_groups")
             if not authorized_groups:
