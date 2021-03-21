@@ -1,9 +1,15 @@
 .DS_Store
-.python-version
-*.pyc
 __pycache__
 *.sw[op]
 *credentials.json
+
+/.*
+!/.gitignore
+!/.dockerignore
+!/.github
+
+/venv/
+
 /*.yml
 !/docker-compose.yml
 !/docker-compose.basic-auth.yml
@@ -14,7 +20,7 @@ __pycache__
 !/docker-compose.saml2.yml
 !/docker-compose.syslog.yml
 !/mkdocs.yml
-!/.travis.yml
+
 /conf/*
 !/conf/start
 !/conf/logstash
@@ -22,6 +28,6 @@ __pycache__
 !/conf/puppet
 !/conf/saml2
 !/conf/syslog
-/fabfile.py
-/venv/
-/wheels/
+
+tests/osquery/fixtures/*
+tests/santa/fixtures/*
