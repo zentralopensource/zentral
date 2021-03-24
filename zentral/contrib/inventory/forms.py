@@ -69,6 +69,16 @@ class CreateTagForm(forms.ModelForm):
         model = Tag
         fields = ("meta_business_unit", "taxonomy", "name", "color")
 
+    def clean_name(self):
+        name = self.cleaned_data.get("name")
+        if name:
+            if Tag.objects.filter(name=name).exists():
+                raise ValidationError("A tag with this name already exists.")
+            slug = slugify(name)
+            if Tag.objects.filter(slug=slug).exists():
+                raise ValidationError("A tag with a conflicting slug already exists.")
+        return name
+
     def clean(self):
         super().clean()
         taxonomy = self.cleaned_data["taxonomy"]
@@ -90,6 +100,19 @@ class UpdateTagForm(forms.ModelForm):
             self.fields["taxonomy"].queryset = self.fields["taxonomy"].queryset.filter(
                 meta_business_unit=self.instance.meta_business_unit
             )
+
+    def clean_name(self):
+        name = self.cleaned_data.get("name")
+        if name:
+            qs = Tag.objects.all()
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.filter(name=name).exists():
+                raise ValidationError("A tag with this name already exists.")
+            slug = slugify(name)
+            if qs.filter(slug=slug).exists():
+                raise ValidationError("A tag with a conflicting slug already exists.")
+        return name
 
 
 class AddTagForm(forms.Form):
