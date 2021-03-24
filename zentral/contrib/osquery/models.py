@@ -27,25 +27,51 @@ SOURCE_NAME = "osquery"
 
 class Platform(enum.Enum):
     # https://osquery.readthedocs.io/en/stable/deployment/configuration/#schedule
-    DARWIN = "darwin"  # for macOS hosts
-    FREEBSD = "freebsd"  # or FreeBSD hosts
-    LINUX = "linux"  # for any RedHat or Debian-based hosts
-    POSIX = "posix"  # darwin or freebsd or linux
-    WINDOWS = "windows"  # for any Windows desktop or server hosts
+    DARWIN = ("darwin", 0x10)  # for macOS hosts
+    FREEBSD = ("freebsd", 0x20)  # or FreeBSD hosts
+    LINUX = ("linux", 0x08)  # for any RedHat or Debian-based hosts
+    POSIX = ("posix", 0x01)  # darwin or freebsd or linux
+    WINDOWS = ("windows", 0x02)  # for any Windows desktop or server hosts
 
     @classmethod
     def choices(cls):
-        return tuple((i.value, i.value) for i in cls)
+        return tuple((i.value[0], i.value[0]) for i in cls)
 
     @classmethod
     def accepted_platforms(cls):
-        return set(i.value for i in cls)
+        return set(i.value[0] for i in cls)
+
+    @classmethod
+    def platforms_from_mask(cls, mask):
+        platforms = []
+        for i in cls:
+            if i.value[1] & mask:
+                platforms.append(i.value[0])
+        return platforms
+
+
+osquery_version_validator = RegexValidator(r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(\.[0-9]{1,4})?$")
 
 
 class Query(models.Model):
     name = models.CharField(max_length=256, unique=True)
 
     sql = models.TextField()
+
+    platforms = ArrayField(
+        models.CharField(max_length=32, choices=Platform.choices()),
+        blank=True,
+        default=list,
+        help_text="Restrict this query to some platforms, default is 'all' platforms"
+    )
+    minimum_osquery_version = models.CharField(
+        max_length=14,
+        validators=[osquery_version_validator],
+        null=True,
+        blank=True,
+        help_text="This query will only execute on osquery versions greater than or equal-to this version string"
+    )
+
     description = models.TextField(blank=True)
     value = models.TextField(blank=True)
 
@@ -67,8 +93,21 @@ class Query(models.Model):
     def tables(self):
         return sorted(tables_in_query(self.sql))
 
+    def serialize(self):
+        d = {"query": self.sql}
+        if self.platforms:
+            d["platform"] = ",".join(self.platforms)
+        if self.minimum_osquery_version:
+            d["version"] = self.minimum_osquery_version
+        return d
+
     def serialize_for_event(self):
-        d = {"sql": self.sql, "version": self.version}
+        d = {"sql": self.sql,
+             "version": self.version}
+        if self.platforms:
+            d["platform"] = ",".join(self.platforms)
+        if self.minimum_osquery_version:
+            d["version"] = self.minimum_osquery_version
         if self.description:
             d["description"] = self.description
         if self.value:
@@ -88,19 +127,6 @@ class Pack(models.Model):
         blank=True,
         default=list,
         help_text="This pack will only execute if all discovery queries return results."
-    )
-    platforms = ArrayField(
-        models.CharField(max_length=32, choices=Platform.choices()),
-        blank=True,
-        default=list,
-        help_text="Restrict this pack to some platforms, default is 'all' platforms"
-    )
-    minimum_osquery_version = models.CharField(
-        max_length=14,
-        validators=[RegexValidator(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}")],
-        null=True,
-        blank=True,
-        help_text="This pack will only execute on osquery versions greater than or equal-to this version string"
     )
     shard = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(100)],
@@ -126,10 +152,6 @@ class Pack(models.Model):
                          for pq in self.packquery_set.select_related("query").all()}}
         if self.discovery_queries:
             d["discovery"] = self.discovery_queries
-        if self.platforms:
-            d["platform"] = ",".join(self.platforms)
-        if self.minimum_osquery_version:
-            d["version"] = self.minimum_osquery_version
         if self.shard and self.shard != 100:
             d["shard"] = self.shard
         return d
@@ -142,10 +164,6 @@ class Pack(models.Model):
         d["name"] = self.name
         if self.discovery_queries:
             d["discovery_queries"] = self.discovery_queries
-        if self.platforms:
-            d["platforms"] = self.platforms
-        if self.minimum_osquery_version:
-            d["minimum_osquery_version"] = self.minimum_osquery_version
         if self.shard:
             d["shard"] = self.shard
         return d
@@ -180,19 +198,6 @@ class PackQuery(models.Model):
         default=False,
         help_text="Run this query in 'snapshot' mode"
     )
-    platforms = ArrayField(
-        models.CharField(max_length=32, choices=Platform.choices()),
-        blank=True,
-        default=list,
-        help_text="restrict this query to some platforms, default is 'all' platforms"
-    )
-    minimum_osquery_version = models.CharField(
-        max_length=14,
-        validators=[RegexValidator(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}")],
-        null=True,
-        blank=True,
-        help_text="only run this query on osquery versions greater than or equal-to this version string"
-    )
     shard = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(100)],
         null=True,
@@ -219,16 +224,12 @@ class PackQuery(models.Model):
         return f"{self.slug}{Pack.DELIMITER}{self.query.pk}{Pack.DELIMITER}{self.query.version}"
 
     def serialize(self):
-        d = {"query": self.query.sql,
-             "interval": self.interval}
+        d = self.query.serialize()
+        d["interval"] = self.interval
         if not self.log_removed_actions:
             d["removed"] = False
         if self.snapshot_mode:
             d["snapshot"] = True
-        if self.platforms:
-            d["platform"] = ",".join(self.platforms)
-        if self.minimum_osquery_version:
-            d["version"] = self.minimum_osquery_version
         if self.shard and self.shard != 100:
             d["shard"] = self.shard
         if not self.can_be_denylisted:
@@ -244,10 +245,6 @@ class PackQuery(models.Model):
              "log_removed_actions": self.log_removed_actions,
              "snapshot_mode": self.snapshot_mode,
              "can_be_denylisted": self.can_be_denylisted}
-        if self.platforms:
-            d["platforms"] = self.platforms
-        if self.minimum_osquery_version:
-            d["minimum_osquery_version"] = self.minimum_osquery_version
         if self.shard and self.shard != 100:
             d["shard"] = self.shard
         return d
@@ -438,12 +435,24 @@ class EnrolledMachine(models.Model):
     serial_number = models.TextField(db_index=True)
     node_key = models.CharField(max_length=64, unique=True)
     osquery_version = models.CharField(max_length=14, blank=True, null=True)
+    platform_mask = models.PositiveSmallIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = (("enrollment", "serial_number"),)
+
+    @property
+    def platforms(self):
+        return Platform.platforms_from_mask(self.platform_mask)
+
+    @cached_property
+    def osquery_version_tuple(self):
+        if self.osquery_version:
+            return tuple(int(v) for v in self.osquery_version.split("."))
+        else:
+            return (0, 0, 0)
 
 
 # Distributed queries
@@ -457,28 +466,41 @@ class DistributedQueryManager(models.Manager):
                 .filter(valid_from__lte=now)
         )
 
-    def iter_queries_for_machine(self, machine):
+    def iter_queries_for_enrolled_machine(self, enrolled_machine, tags):
+        serial_number = enrolled_machine.serial_number
         qs = (
             self.active()
                 .distinct()
-                .filter(Q(serial_numbers__len=0) | Q(serial_numbers__contains=[machine.serial_number]))
-                .filter(Q(tags__isnull=True) | Q(tags__in=machine.tags))
-                .exclude(distributedquerymachine__serial_number=machine.serial_number)
+                .filter(Q(platforms__len=0) | Q(platforms__overlap=enrolled_machine.platforms))
+                .filter(Q(serial_numbers__len=0) | Q(serial_numbers__contains=[serial_number]))
+                .filter(Q(tags__isnull=True) | Q(tags__in=tags))
+                .exclude(distributedquerymachine__serial_number=serial_number)
                 .order_by("pk")
         )
         for dq in qs:
-            if dq.shard == 100:
+            # min osquery version verification
+            if dq.minimum_osquery_version_tuple > enrolled_machine.osquery_version_tuple:
+                continue
+            # consistant sharding per dq and serial number
+            if dq.shard == 100 or shard(serial_number, dq.pk) <= dq.shard:
                 yield dq
-            else:
-                # consistant sharding per dq and serial number
-                if shard(machine.serial_number, dq.pk) <= dq.shard:
-                    yield dq
 
 
 class DistributedQuery(models.Model):
     query = models.ForeignKey(Query, on_delete=models.SET_NULL, null=True, editable=False)
     query_version = models.IntegerField(editable=False)
     sql = models.TextField(editable=False)
+    platforms = ArrayField(
+        models.CharField(max_length=32, choices=Platform.choices()),
+        editable=False,
+        default=list
+    )
+    minimum_osquery_version = models.CharField(
+        max_length=14,
+        validators=[osquery_version_validator],
+        editable=False,
+        null=True,
+    )
 
     valid_from = models.DateTimeField()
     valid_until = models.DateTimeField(blank=True, null=True)
@@ -516,6 +538,13 @@ class DistributedQuery(models.Model):
         if self.valid_until and self.valid_until < now:
             return False
         return True
+
+    @property
+    def minimum_osquery_version_tuple(self):
+        if self.minimum_osquery_version:
+            return tuple(int(v) for v in self.minimum_osquery_version.split("."))
+        else:
+            return (0, 0, 0)
 
 
 class DistributedQueryMachine(models.Model):

@@ -8,15 +8,31 @@
   <li><a href="{% url 'osquery:packs' %}">Packs</a></li>
   <li><a href="{{ pack.get_absolute_url }}">{{ pack }}</a></li>
   {% if object %}
-  <li class="active">Update query</li>
+  <li class="active">Update pack query</li>
   {% else %}
-  <li class="active">Add query</li>
+  <li class="active">Add pack query</li>
   {% endif %}
 </ol>
 
 <h2>{% if object %}Update{% else %}Add{% endif %} query</h2>
 
 <form method="post" class="form">{% csrf_token %}
+  {% if object %}
+  {% with object.query as query %}
+  <div class="form-group">
+    <label class="control-label" for="id_query_sql">SQL</label>
+    <div>{{ query.get_sql_html|safe }}</div>
+  </div>
+  <div class="form-group">
+    <label class="control-label" for="id_query_min_osquery_version">Platform{{ query.platforms|length|pluralize }}</label>
+    <div>{{ query.platforms|join:", "|default:"-" }}</div>
+  </div>
+  <div class="form-group">
+    <label class="control-label" for="id_query_min_osquery_version">Min. osquery version</label>
+    <div>{{ query.minimum_osquery_version|default:"-" }}</div>
+  </div>
+  {% endwith %}
+  {% endif %}
   {{ form|bootstrap }}
   <p>
     <a class="btn btn-default" href="{{ pack.get_absolute_url }}#queries">

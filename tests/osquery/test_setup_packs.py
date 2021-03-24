@@ -73,7 +73,6 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         self.assertContains(response, pack_name)
         pack = response.context["object"]
         self.assertEqual(pack.name, pack_name)
-        self.assertEqual(pack.platforms, [])
 
     # update pack
 
@@ -108,7 +107,6 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         pack = response.context["object"]
         self.assertEqual(pack.name, new_name)
         self.assertEqual(pack.shard, 97)
-        self.assertEqual(pack.platforms, [])
 
     # delete pack
 

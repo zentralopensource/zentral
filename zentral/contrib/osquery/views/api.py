@@ -93,9 +93,13 @@ class EnrollView(BaseJsonPostView):
         # update or create enrolled machine
         enrolled_machine_defaults = {"node_key": get_random_string(32)}
         try:
+            enrolled_machine_defaults["platform_mask"] = int(self.data["platform_type"])
+        except (KeyError, ValueError, TypeError):
+            logger.error("Could not get platform_mask from enrollment data")
+        try:
             enrolled_machine_defaults["osquery_version"] = self.data["host_details"]["osquery_info"]["version"]
         except KeyError:
-            pass
+            logger.error("Could not get osquery version from enrollment data")
         enrolled_machine, _ = EnrolledMachine.objects.update_or_create(
             enrollment=enrollment,
             serial_number=self.serial_number,
@@ -280,7 +284,7 @@ class DistributedReadView(BaseNodeView):
     def do_node_post(self):
         dqm_list = []
         for distributed_query in islice(
-            DistributedQuery.objects.iter_queries_for_machine(self.machine),
+            DistributedQuery.objects.iter_queries_for_enrolled_machine(self.enrolled_machine, self.machine.tags),
             self.batch_size
         ):
             dqm_list.append(

@@ -61,7 +61,7 @@ class OsqueryQuerySerializer(serializers.Serializer):
     removed = serializers.BooleanField(required=False)
     snapshot = serializers.BooleanField(required=False)
     platform = OsqueryPlatformField(required=False)
-    version = serializers.RegexField(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}", required=False)
+    version = serializers.RegexField(r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$", required=False)
     shard = serializers.IntegerField(min_value=1, max_value=100, required=False)
     denylist = serializers.BooleanField(default=True, required=False)
     description = serializers.CharField(allow_blank=True, required=False)
@@ -79,7 +79,7 @@ class OsqueryPackSerializer(serializers.Serializer):
     description = serializers.CharField(required=False)
     discovery = serializers.ListField(child=serializers.CharField(allow_blank=False), allow_empty=True, required=False)
     platform = OsqueryPlatformField(required=False)
-    version = serializers.RegexField(r"[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}", required=False)
+    version = serializers.RegexField(r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$", required=False)
     shard = serializers.IntegerField(min_value=1, max_value=100, required=False)
     queries = serializers.DictField(child=OsqueryQuerySerializer(), allow_empty=False)
 
@@ -88,26 +88,26 @@ class OsqueryPackSerializer(serializers.Serializer):
             "name": self.data.get("name", slug),
             "description": self.data.get("description", ""),
             "discovery_queries": self.data.get("discovery", []),
-            "platforms": self.data.get("platform", []),
-            "minimum_osquery_version": self.data.get("version", None),
             "shard": self.data.get("shard", None)
         }
 
     def iter_query_defaults(self, pack_slug):
+        pack_platforms = self.data.get("platform", [])
+        pack_minimum_osquery_version = self.data.get("version", None)
         for query_slug, query_data in self.data["queries"].items():
             pack_query_defaults = {
                 "slug": query_slug,
                 "interval": query_data["interval"],
                 "log_removed_actions": not query_data.get("snapshot", False) and query_data.get("removed", True),
                 "snapshot_mode": query_data.get("snapshot", False),
-                "platforms": query_data.get("platform", []),
-                "minimum_osquery_version": query_data.get("version"),
                 "shard": query_data.get("shard"),
                 "can_be_denylisted": query_data.get("can_be_denylisted", True),
             }
             query_defaults = {
                 "name": f"{pack_slug}{Pack.DELIMITER}{query_slug}",
                 "sql": query_data["query"],
+                "platforms": query_data.get("platform", pack_platforms),
+                "minimum_osquery_version": query_data.get("version", pack_minimum_osquery_version),
                 "description": query_data.get("description", ""),
                 "value": query_data.get("value", "")
             }

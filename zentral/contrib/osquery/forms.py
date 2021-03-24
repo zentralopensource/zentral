@@ -103,6 +103,8 @@ class DistributedQueryForm(forms.ModelForm):
             self.instance.query = self.query
             self.instance.sql = self.query.sql
             self.instance.query_version = self.query.version
+            self.instance.platforms = self.query.platforms
+            self.instance.minimum_osquery_version = self.query.minimum_osquery_version
 
     def save(self, *args, **kwargs):
         if not self.instance.pk and self.cleaned_data.get("halt_current_runs"):
@@ -182,7 +184,6 @@ class PackForm(forms.ModelForm):
     class Meta:
         model = Pack
         fields = "__all__"
-        widgets = {"platforms": PlatformsWidget}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -207,7 +208,6 @@ class PackQueryForm(forms.ModelForm):
     class Meta:
         model = PackQuery
         fields = "__all__"
-        widgets = {"platforms": PlatformsWidget}
 
     def __init__(self, *args, **kwargs):
         self.pack = kwargs.pop("pack", None)
@@ -237,6 +237,7 @@ class QueryForm(forms.ModelForm):
     class Meta:
         model = Query
         fields = "__all__"
+        widgets = {"platforms": PlatformsWidget}
 
     def clean_sql(self):
         sql = self.cleaned_data.get("sql")

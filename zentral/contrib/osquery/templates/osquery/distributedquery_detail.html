@@ -15,22 +15,35 @@
   <div class="col-md-12">
     <table class="table">
       <thead>
+      <tr>
         <th>Attribute</th>
         <th>Value</th>
+      </tr>
       </thead>
       <tbody>
-      <tr>
-        <td>SQL</td>
-        <td>{{ object.get_sql_html|safe }}</td>
-      </tr>
       {% if perms.osquery.view_query and object.query %}
       <tr>
         <td>Query</td>
         <td>
-          <a href="{{ object.query.get_absolute_url }}">{{ query }}</a>, version: {{ query.version }}</p>
+          <a href="{{ object.query.get_absolute_url }}">{{ query }}</a> / current version: {{ query.version }}</p>
         </td>
       </tr>
       {% endif %}
+      <tr>
+        <td>SQL</td>
+        <td>
+          {{ object.get_sql_html|safe }}
+          <p>version: {{ object.query_version }}</p>
+        </td>
+      </tr>
+      <tr>
+        <td>Platform{{ object.platforms|length|pluralize }}</td>
+        <td>{{ object.platforms|join:", "|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Minimum osquery version</td>
+        <td>{{ object.minimum_osquery_version|default:"-" }}</td>
+      </tr>
       <tr>
         <td>Validity</td>
         <td class="{% if object.is_active %}text-success{% else %}text-muted{% endif %}">{{ object.valid_from }} → {% if object.valid_until %}{{ object.valid_until }}{% endif %}</td>

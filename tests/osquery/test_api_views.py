@@ -267,7 +267,8 @@ class APIViewsTestCase(TestCase):
 
         # create pack
         pack = {
-            "platform": "darwin",
+            "platform": "posix",
+            "version": "1.2.3",
             "discovery": [
               "select 1 from users where username='root'",
             ],
@@ -275,7 +276,7 @@ class APIViewsTestCase(TestCase):
                 "Leverage-A_1": {
                     "query": "select * from launchd where path like '%UserEvent.System.plist';",
                     "interval": "3600",
-                    "version": "1.4.5",
+                    "version": "1.4.9",
                     "description": (
                         "(http://www.intego.com/mac-security-blog/"
                         "new-mac-trojan-discovered-related-to-syria/)"
@@ -311,6 +312,19 @@ class APIViewsTestCase(TestCase):
              'result': 'created',
              'query_results': {'created': 3, 'deleted': 0, 'present': 0, 'updated': 0}}
         )
+        for pack_query in p.packquery_set.select_related("query").all():
+            query = pack_query.query
+            if pack_query.slug == "Leverage-A_1":
+                self.assertEqual(query.platforms, ["posix"])
+                self.assertEqual(query.minimum_osquery_version, "1.4.9")
+            elif pack_query.slug == "Leverage-A_2":
+                self.assertEqual(query.platforms, ["posix"])
+                self.assertEqual(query.minimum_osquery_version, "1.4.5")
+            elif pack_query.slug == "Snapshot1":
+                self.assertEqual(query.platforms, ["darwin"])
+                self.assertEqual(query.minimum_osquery_version, "1.2.3")
+            else:
+                raise ValueError("Unknown plack slug")
 
         # update pack
         pack["name"] = "YOLO"

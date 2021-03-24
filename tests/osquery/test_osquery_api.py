@@ -154,11 +154,13 @@ class OsqueryAPIViewsTestCase(TestCase):
                                 json.dumps(data),
                                 content_type="application/json")
 
-    def force_enrolled_machine(self):
+    def force_enrolled_machine(self, osquery_version="1.2.3", platform_mask=21):
         return EnrolledMachine.objects.create(
             enrollment=self.enrollment,
             serial_number=get_random_string(),
-            node_key=get_random_string()
+            node_key=get_random_string(),
+            osquery_version=osquery_version,
+            platform_mask=platform_mask
         )
 
     def post_default_inventory_query_snapshot(self, node_key, platform, with_app=False, with_azure_ad=False):
@@ -223,11 +225,15 @@ class OsqueryAPIViewsTestCase(TestCase):
         response = self.post_as_json(
             "enroll",
             {"enroll_secret": self.enrollment.secret.secret,
-             "host_details": {"system_info": {"hardware_serial": serial_number}}}
+             "platform_type": "21",
+             "host_details": {"system_info": {"hardware_serial": serial_number},
+                              "osquery_info": {"version": "1.2.3"}}}
         )
         self.assertEqual(response.status_code, 200)
         em = EnrolledMachine.objects.get(enrollment=self.enrollment, serial_number=serial_number)
         self.assertEqual(response.json(), {"node_key": em.node_key})
+        self.assertEqual(em.platform_mask, 21)
+        self.assertEqual(em.osquery_version, "1.2.3")
         ms = MachineSnapshot.objects.filter(source__module="zentral.contrib.osquery",
                                             serial_number=serial_number)
         self.assertEqual(ms.first().reference, em.node_key)
@@ -377,25 +383,45 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(json_response, {"queries": {}})
 
     def test_distributed_read_one_query(self):
-        em = self.force_enrolled_machine()
-        # one distributed query probe
+        em = self.force_enrolled_machine(osquery_version="17.0.0", platform_mask=21)
         dq = DistributedQuery.objects.create(sql="select username from users;",
+                                             # no minimum osquery version
+                                             # no platforms
                                              valid_from=datetime.utcnow(),
                                              query_version=1)
+        dq2 = DistributedQuery.objects.create(sql="select * from osquery_schedule;",
+                                              minimum_osquery_version="17.0.0",  # OK
+                                              platforms=["darwin"],  # OK
+                                              valid_from=datetime.utcnow(),
+                                              query_version=1)
+        DistributedQuery.objects.create(sql="select username from users;",
+                                        minimum_osquery_version="18.0.0",  # too high
+                                        platforms=["darwin"],  # OK
+                                        valid_from=datetime.utcnow(),
+                                        query_version=1)
+        DistributedQuery.objects.create(sql="select username from users;",
+                                        minimum_osquery_version="17.0.0",  # OK
+                                        platforms=["linux"],  # wrong platform
+                                        valid_from=datetime.utcnow(),
+                                        query_version=1)
         response = self.post_as_json("distributed_read", {"node_key": em.node_key})
         self.assertEqual(response.status_code, 200)
-        dqm_qs = DistributedQueryMachine.objects.filter(distributed_query=dq, serial_number=em.serial_number)
-        self.assertEqual(dqm_qs.count(), 1)
-        self.assertEqual(dqm_qs.first().status, None)
+        dqm_qs = (DistributedQueryMachine.objects.filter(serial_number=em.serial_number)
+                                                 .order_by("distributed_query__pk"))
+        self.assertEqual(dqm_qs.count(), 2)
+        dqm, dqm2 = tuple(dqm_qs)
+        self.assertEqual(dqm.distributed_query, dq)
+        self.assertEqual(dqm.status, None)
+        self.assertEqual(dqm2.distributed_query, dq2)
+        self.assertEqual(dqm2.status, None)
         json_response = response.json()
-        self.assertEqual(json_response, {"queries": {str(dqm_qs.first().pk): dq.sql}})
-        # 2nd distributed read still has the inventory query
+        self.assertEqual(json_response, {"queries": {str(dqm.pk): dq.sql,
+                                                     str(dqm2.pk): dq2.sql}})
         response = self.post_as_json("distributed_read", {"node_key": em.node_key})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {"queries": {}})
-        self.assertEqual(dqm_qs.count(), 1)
-        self.assertEqual(dqm_qs.first().status, None)
+        self.assertEqual(dqm_qs.count(), 2)
 
     def test_distributed_write_405(self):
         response = self.client.get(reverse("osquery:distributed_write"))

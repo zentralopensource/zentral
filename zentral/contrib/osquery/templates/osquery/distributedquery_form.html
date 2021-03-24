@@ -17,10 +17,33 @@
 <h2>{% if object %}Update run{% else %}🚀 Launch query <i>{{ query.name }}</i>{% endif %}</h2>
 
 <form method="post" class="form">{% csrf_token %}
+  {% if object %}
   <div class="form-group">
     <label class="control-label" for="id_query_sql">SQL</label>
-    <div>{% if object %}{{ object.get_sql_html|safe }}{% else %}{{ query.get_sql_html|safe }}{% endif %}</div>
+    <div>{{ object.get_sql_html|safe }}</div>
   </div>
+  <div class="form-group">
+    <label class="control-label" for="id_query_sql">Platform{{ object.platforms|length|pluralize }}</label>
+    <div>{{ object.platforms|join:", "|default:"-" }}</div>
+  </div>
+  <div class="form-group">
+    <label class="control-label" for="id_query_sql">Minimum osquery version</label>
+    <div>{{ object.minimum_osquery_version|default:"-" }}</div>
+  </div>
+  {% else %}
+  <div class="form-group">
+    <label class="control-label" for="id_query_sql">SQL</label>
+    <div>{{ query.get_sql_html|safe }}</div>
+  </div>
+  <div class="form-group">
+    <label class="control-label" for="id_query_sql">Platform{{ query.platforms|length|pluralize }}</label>
+    <div>{{ query.platforms|join:", "|default:"-" }}</div>
+  </div>
+  <div class="form-group">
+    <label class="control-label" for="id_query_sql">Minimum osquery version</label>
+    <div>{{ query.minimum_osquery_version|default:"-" }}</div>
+  </div>
+  {% endif %}
   {{ form|bootstrap }}
   <p>
     <a class="btn btn-default" href="{% if object %}{{ object.get_absolute_url }}{% else %}{{ query.get_absolute_url }}#runs{% endif %}">

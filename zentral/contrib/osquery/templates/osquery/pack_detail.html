@@ -36,14 +36,6 @@
         <td>{% if object.discovery_queries %}<pre>{{ object.discovery_queries|join:"&#10;" }}</pre>{% else %}-{% endif %}</td>
       </tr>
       <tr>
-        <td>Platform{{ object.platforms|length|pluralize }}</td>
-        <td>{{ object.platforms|join:", "|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Min. osquery ver.</td>
-        <td>{{ object.minimum_osquery_version|default:"-" }}</td>
-      </tr>
-      <tr>
         <td>Shard</td>
         <td>{% if object.shard %}{{ object.shard }}%{% else %}-{% endif %}</td>
       </tr>
@@ -130,6 +122,14 @@
       </td>
     </tr>
     <tr>
+      <td>Platform{{ query.platforms|length|pluralize }}</td>
+      <td>{{ query.platforms|join:", "|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>Min. osquery ver.</td>
+      <td>{{ query.minimum_osquery_version|default:"-" }}</td>
+    </tr>
+    <tr>
       <td>Description</td>
       <td>{{ query.description|default:"-" }}</td>
     </tr>
@@ -148,14 +148,6 @@
     <tr>
       <td>Snapshot mode?</td>
       <td>{{ pack_query.snapshot_mode|yesno }}</td>
-    </tr>
-    <tr>
-      <td>Platform{{ pack_query.platforms|length|pluralize }}</td>
-      <td>{% if pack_query.platforms %}{{ pack_query.platforms|join:", " }}{% else %}-{% endif %}</td>
-    </tr>
-    <tr>
-      <td>Min. osquery ver.</td>
-      <td>{{ pack_query.minimum_osquery_version|default:"-" }}</td>
     </tr>
     <tr>
       <td>Shard</td>

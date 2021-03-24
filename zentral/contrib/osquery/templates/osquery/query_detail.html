@@ -15,8 +15,10 @@
   <div class="col-md-12">
     <table class="table">
       <thead>
-        <th>Attribute</th>
-        <th>Value</th>
+        <tr>
+          <th>Attribute</th>
+          <th>Value</th>
+        </tr>
       </thead>
       <tbody>
       <tr>
@@ -26,6 +28,14 @@
       <tr>
         <td>SQL</td>
         <td>{{ object.get_sql_html|safe }}</td>
+      </tr>
+      <tr>
+        <td>Platform{{ object.platforms|length|pluralize }}</td>
+        <td>{{ object.platforms|join:", "|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Minimum osquery version</td>
+        <td>{{ object.minimum_osquery_version|default:"-" }}</td>
       </tr>
       <tr>
         <td>Description</td>
