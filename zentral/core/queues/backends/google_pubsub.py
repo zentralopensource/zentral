@@ -160,6 +160,7 @@ class EnrichWorker(BaseWorker):
 
     def callback(self, message):
         event_dict = json.loads(message.data)
+        event_type = event_dict['_zentral']['type']
         try:
             for event in self.enrich_event(event_dict):
                 new_message = json.dumps(event.serialize(machine_metadata=True)).encode("utf-8")
@@ -171,7 +172,7 @@ class EnrichWorker(BaseWorker):
             message.nack()
         else:
             message.ack()
-            self.inc_counter("enriched_events", event_dict['_zentral']['type'])
+            self.inc_counter("enriched_events", event_type)
 
 
 class ProcessWorker(BaseWorker):
@@ -214,9 +215,10 @@ class ProcessWorker(BaseWorker):
 
     def callback(self, message):
         event_dict = json.loads(message.data)
+        event_type = event_dict['_zentral']['type']
         self.process_event(event_dict)
         message.ack()
-        self.inc_counter("processed_events", event_dict['_zentral']['type'])
+        self.inc_counter("processed_events", event_type)
 
 
 class StoreWorker(BaseWorker):
@@ -269,6 +271,7 @@ class StoreWorker(BaseWorker):
     def callback(self, message):
         self.log_debug("store event")
         event_dict = json.loads(message.data)
+        event_type = event_dict['_zentral']['type']
         try:
             self.event_store.store(event_dict)
         except Exception:
@@ -276,7 +279,7 @@ class StoreWorker(BaseWorker):
             message.nack()
         else:
             message.ack()
-            self.inc_counter("stored_events", event_dict['_zentral']['type'])
+            self.inc_counter("stored_events", event_type)
 
 
 class EventQueues(object):
