@@ -45,6 +45,12 @@ ORPHANS = (
     # DebPackage
     ("inventory_debpackage", "id",
      (("debpackage_id", "inventory_machinesnapshot_deb_packages"),)),
+    # ProgramInstance
+    ("inventory_programinstance", "id",
+     (("programinstance_id", "inventory_machinesnapshot_program_instances"),)),
+    # Program
+    ("inventory_program", "id",
+     (("program_id", "inventory_programinstance"),)),
     # MachineGroup
     ("inventory_machinegroup", "id",
      (("machinegroup_id", "inventory_machinesnapshot_groups"),)),
