@@ -98,7 +98,7 @@ class EventStore(BaseEventStore):
         if self.index:
             query_chunks.append(("index", self.index))
         if event_type:
-            query_chunks.append(("event_type", event_type))
+            query_chunks.append(("sourcetype", event_type))
         return " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in query_chunks)
 
     def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
@@ -114,7 +114,7 @@ class EventStore(BaseEventStore):
         if self.index:
             filter_chunks.append(("index", self.index))
         if event_type:
-            filter_chunks.append(("event_type", event_type))
+            filter_chunks.append(("sourcetype", event_type))
         filter_str = " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in filter_chunks)
         return f'{filter_str} | spath "probes{{}}.pk" | search "probes{{}}.pk"={probe.pk}'
 
