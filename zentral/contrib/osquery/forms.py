@@ -237,7 +237,9 @@ class QueryForm(forms.ModelForm):
     class Meta:
         model = Query
         fields = "__all__"
-        widgets = {"platforms": PlatformsWidget}
+        widgets = {"platforms": PlatformsWidget,
+                   "description": forms.Textarea(attrs={"rows": 2}),
+                   "value": forms.Textarea(attrs={"rows": 2})}
 
     def clean_sql(self):
         sql = self.cleaned_data.get("sql")
