@@ -24,6 +24,8 @@
       <td style="width:15%">Query</td>
       <td>
         <dl>
+          <dt>Name</dt>
+          <dd><a href="{{ query.get_absolute_url }}">{{ query }}</a></dd>
           <dt>SQL</dt>
           <dd>{{ query.get_sql_html|safe }}</dd>
           {% if query.platforms %}

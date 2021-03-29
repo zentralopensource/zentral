@@ -21,28 +21,29 @@
       </tr>
       </thead>
       <tbody>
-      {% if perms.osquery.view_query and object.query %}
       <tr>
         <td>Query</td>
         <td>
-          <a href="{{ object.query.get_absolute_url }}">{{ query }}</a> / current version: {{ query.version }}</p>
+          <dl>
+            {% if perms.osquery.view_query and object.query %}
+            <dt>Name</dt>
+            <dd>
+              <a href="{{ object.query.get_absolute_url }}">{{ query }}</a>
+              {% if object.query_version < object.query.version %}/ <span class="text-danger">Updated since run creation</span>{% endif %}
+            </dd>
+            {% endif %}
+            <dt>SQL</dt>
+            <dd>{{ object.get_sql_html|safe }}</dd>
+            {% if object.platforms %}
+            <dt>Platform{{ object.platforms|length|pluralize }}</dt>
+            <dd>{{ object.platforms|join:", " }}</dd>
+            {% endif %}
+            {% if object.minimum_osquery_version %}
+            <dt>Min. osquery ver.</dt>
+            <dd>{{ object.minimum_osquery_version }}</dd>
+            {% endif %}
+          </dl>
         </td>
-      </tr>
-      {% endif %}
-      <tr>
-        <td>SQL</td>
-        <td>
-          {{ object.get_sql_html|safe }}
-          <p>version: {{ object.query_version }}</p>
-        </td>
-      </tr>
-      <tr>
-        <td>Platform{{ object.platforms|length|pluralize }}</td>
-        <td>{{ object.platforms|join:", "|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Minimum osquery version</td>
-        <td>{{ object.minimum_osquery_version|default:"-" }}</td>
       </tr>
       <tr>
         <td>Validity</td>
