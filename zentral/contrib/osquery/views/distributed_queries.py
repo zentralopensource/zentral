@@ -147,7 +147,7 @@ class DistributedQueryResultListView(PermissionRequiredMixin, ListView):
         ctx["distributed_query"] = self.distributed_query
         page = ctx["page_obj"]
         ctx["columns"] = sorted(set(chain.from_iterable(r.row.keys() for r in page)))
-        ctx["rows"] = [[r.serial_number] + [r.row.get(c) for c in ctx["columns"]] for r in page]
+        ctx["rows"] = [(r.serial_number, [r.row.get(c) for c in ctx["columns"]]) for r in page]
         if page.has_next():
             qd = self.request.GET.copy()
             qd['page'] = page.next_page_number()

@@ -42,8 +42,12 @@
     {% endfor %}
   </thead>
   <tbody>
-  {% for row in rows %}
+  {% for serial_number, row in rows %}
   <tr>
+    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+      <a href="{% machine_url serial_number %}">{{ serial_number }}</a>
+    </td>
+    </td>
     {% for cell in row %}
     <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ cell|default:"-" }}</td>
     {% endfor %}

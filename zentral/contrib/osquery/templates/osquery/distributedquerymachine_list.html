@@ -42,7 +42,7 @@
   <tbody>
   {% for dqm in page_obj %}
   <tr>
-    <td>{{ dqm.serial_number }}</a></td>
+    <td><a href="{% machine_url dqm.serial_number %}">{{ dqm.serial_number }}</a></td>
     <td>{% if dqm.status > 0 %}Error{% else %}{% if dqm.status == 0 %}OK{% else %}In flight{% endif %}{% endif %}</td>
     <td>{{ dqm.error_message|default:"-" }}</td>
   </tr>
