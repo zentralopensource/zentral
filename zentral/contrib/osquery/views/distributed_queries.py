@@ -16,20 +16,34 @@ logger = logging.getLogger('zentral.contrib.osquery.views.distributed_queries')
 class DistributedQueryListView(PermissionRequiredMixin, ListView):
     permission_required = "osquery.view_distributedquery"
     model = DistributedQuery
+    paginate_by = 50
 
     def get_queryset(self):
         return (
             super().get_queryset()
                    .select_related("query")
                    .annotate(machine_count=Count("distributedquerymachine", distinct=True))
-                   .annotate(result_count=Count("distributedqueryresult"))
-                   .annotate(file_carving_session_count=Count("filecarvingsession"))
+                   .annotate(result_count=Count("distributedqueryresult", distinct=True))
+                   .annotate(file_carving_session_count=Count("filecarvingsession", distinct=True))
                    .order_by("-created_at", "-pk")
         )
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["distributed_query_count"] = ctx["object_list"].count()
+        page = ctx["page_obj"]
+        ctx["distributed_query_count"] = page.paginator.count
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            ctx['reset_link'] = "?{}".format(qd.urlencode())
         return ctx
 
 
