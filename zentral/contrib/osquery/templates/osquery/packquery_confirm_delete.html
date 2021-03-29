@@ -7,16 +7,16 @@
   <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
   <li><a href="{% url 'osquery:packs' %}">Packs</a></li>
   <li><a href="{{ object.pack.get_absolute_url }}">{{ object.pack }}</a></li>
-  <li class="active">Delete query</li>
+  <li class="active">Remove query</li>
 </ol>
 
-<h2>Delete query</h2>
+<h3>Remove query <i>{{ object.query.name }}</i></h3>
 
 <form method="post" class="form">{% csrf_token %}
-  <p>Do you really want to delete query <i>{{ object.query }}</i> from the pack <i>{{ object.pack }}</i>?</p>
+  <p>Do you really want to remove the <i>{{ object.query }}</i> query from the <i>{{ object.pack }}</i> pack?</p>
   <p>
     <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
-    <button class="btn btn-danger" type="submit">Delete</button>
+    <button class="btn btn-danger" type="submit">Remove</button>
   </p>
 </form>
 {% endblock %}

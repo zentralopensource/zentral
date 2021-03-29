@@ -112,30 +112,35 @@
 {% with pack_query.query as query %}
 <div id="pq{{ pack_query.pk }}" class="panel panel-default">
   <div class="panel-heading">
-    <h3 class="panel-title">{{ query.name|default:"-" }}</h3>
+    <h3 class="panel-title">{{ query }}</h3>
   </div>
   <table class="table table-condensed probe-panel">
     <tr>
-      <td style="width:15%">Query</td>
-      <td>
-        {{ query.get_sql_html|safe }}
+      <td style="width:15%">
+        <a href="{{ query.get_absolute_url }}">Query</a>
       </td>
-    </tr>
-    <tr>
-      <td>Platform{{ query.platforms|length|pluralize }}</td>
-      <td>{{ query.platforms|join:", "|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Min. osquery ver.</td>
-      <td>{{ query.minimum_osquery_version|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Description</td>
-      <td>{{ query.description|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Value</td>
-      <td>{{ pack_query.value|default:"-" }}</td>
+      <td>
+        <dl>
+          <dt>SQL</dt>
+          <dd>{{ query.get_sql_html|safe }}</dd>
+          {% if query.platforms %}
+          <dt>Platform{{ query.platforms|length|pluralize }}</dt>
+          <dd>{{ query.platforms|join:", " }}</dd>
+          {% endif %}
+          {% if query.minimum_osquery_version %}
+          <dt>Min. osquery ver.</dt>
+          <dd>{{ query.minimum_osquery_version }}</dd>
+          {% endif %}
+          {% if query.description %}
+          <dt>Description</dt>
+          <dd>{{ query.description|default:"-" }}</dd>
+          {% endif %}
+          {% if query.value %}
+          <dt>Value</dt>
+          <dd>{{ query.value }}</dd>
+          {% endif %}
+        </dl>
+      </td>
     </tr>
     <tr>
       <td>Interval</td>
