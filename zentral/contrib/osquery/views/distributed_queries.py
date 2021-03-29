@@ -160,8 +160,31 @@ class DistributedQueryResultListView(PermissionRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["distributed_query"] = self.distributed_query
         page = ctx["page_obj"]
-        ctx["columns"] = sorted(set(chain.from_iterable(r.row.keys() for r in page)))
-        ctx["rows"] = [(r.serial_number, [r.row.get(c) for c in ctx["columns"]]) for r in page]
+        fields = set(chain.from_iterable(r.row.keys() for r in page))
+        selected_fields = set(self.request.GET.getlist("f")).intersection(fields)
+        for field in sorted(fields):
+            qd = self.request.GET.copy()
+            qdf = qd.setlistdefault("f", [])
+            if field in selected_fields:
+                ctx_key = "selected_fields"
+                while True:
+                    try:
+                        qdf.pop(qdf.index(field))
+                    except ValueError:
+                        break
+            else:
+                ctx_key = "available_fields"
+                qdf.append(field)
+            ctx.setdefault(ctx_key, []).append(
+                ("{}?{}".format(self.request.path, qd.urlencode()), field)
+            )
+        rows = []
+        selected_fields = sorted(selected_fields)
+        if selected_fields:
+            for result in page:
+                rows.append((result.serial_number, [result.row.get(field) for field in selected_fields]))
+        ctx["rows"] = rows
+        ctx["headers"] = ["Serial number"] + selected_fields
         if page.has_next():
             qd = self.request.GET.copy()
             qd['page'] = page.next_page_number()

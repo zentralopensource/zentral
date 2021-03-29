@@ -571,6 +571,12 @@ class DistributedQueryResult(models.Model):
             models.Index(fields=["distributed_query", "serial_number"])
         ]
 
+    def iter_row_kv(self):
+        if not isinstance(self.row, dict):
+            return
+        for k in sorted(self.row.keys()):
+            yield k, self.row.get(k)
+
 
 # File carving
 

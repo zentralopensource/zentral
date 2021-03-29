@@ -15,9 +15,9 @@
   <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h2>Run <i>{{ distributed_query }}</i></h2>
+<h3>Run <i>{{ distributed_query }}</i></h3>
 
-<h3 id="results">{{ page_obj.paginator.count }} Result{{ page_obj.paginator.count|pluralize }}</h3>
+<h4 id="results">{{ page_obj.paginator.count }} Result{{ page_obj.paginator.count|pluralize }}</h4>
 
 {% if next_url or previous_url %}
 <nav>
@@ -33,28 +33,77 @@
 {% endif %}
 
 {% if page_obj %}
-<div class="table-responsive">
-<table class="table">
-  <thead>
-    <th>Serial number</th>
-    {% for column in columns %}
-    <th>{{ column }}</th>
+<div class="row">
+  <div class="col-md-2" style="position:sticky;top:20px">
+    <div id="osquery-dist-q-fields" class="panel panel-default">
+      <div class="panel-heading">
+        <h4 class="panel-title">Fields</h4>
+      </div>
+      <div class="panel-body">
+        {% if selected_fields %}
+        <p><strong>Selected field{{ selected_fields|length|pluralize }}</strong></p>
+        <ul class="list-unstyled osquery-dist-q-sel-f">
+          {% for link, field in selected_fields %}
+          <li><a href="{{ link }}">{{ field }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% if available_fields %}
+        <p><strong>Available field{{ available_fields|length|pluralize }}</strong></p>
+        <ul class="list-unstyled osquery-dist-q-ava-f">
+          {% for link, field in available_fields %}
+          <li><a href="{{ link }}">{{ field }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-10">
+    {% if rows %}
+    <div class="table-responsive">
+      <table class="table table-condensed">
+        <thead>
+          <tr>
+            {% for header in headers %}
+            <th>{{ header }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for serial_number, row in rows %}
+          <tr>
+            <th style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              <a href="{% machine_url serial_number %}">{{ serial_number }}</a>
+            </th>
+            {% for cell in row %}
+            <td>{{ cell|default:"-" }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    {% for object in page_obj %}
+    <table class="table table-condensed">
+      <thead>
+        <tr>
+          <th colspan="2"><a href="{% machine_url object.serial_number %}">{{ object.serial_number }}</a></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for k, v in object.iter_row_kv %}
+        <tr>
+          <th width="200px">{{ k }}</th>
+          <td>{{ v|default:"-" }}</td>
+        </tr>
+        {% endfor %}
+      <tbody>
+    </table>
     {% endfor %}
-  </thead>
-  <tbody>
-  {% for serial_number, row in rows %}
-  <tr>
-    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-      <a href="{% machine_url serial_number %}">{{ serial_number }}</a>
-    </td>
-    </td>
-    {% for cell in row %}
-    <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ cell|default:"-" }}</td>
-    {% endfor %}
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+    {% endif %}
+  </div>
 </div>
 {% endif %}
 
