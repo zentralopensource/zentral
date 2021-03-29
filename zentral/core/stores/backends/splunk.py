@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 import logging
 import random
 import time
@@ -12,6 +13,7 @@ logger = logging.getLogger('zentral.core.stores.backends.splunk')
 
 
 class EventStore(BaseEventStore):
+    max_batch_size = 100
     max_retries = 3
 
     def __init__(self, config_d):
@@ -31,7 +33,8 @@ class EventStore(BaseEventStore):
     def collector_session(self):
         session = requests.Session()
         session.verify = self.verify_tls
-        session.headers.update({'Authorization': "Splunk {}".format(self.hec_token)})
+        session.headers.update({'Authorization': f'Splunk {self.hec_token}',
+                                'Content-Type': 'application/json'})
         return session
 
     @staticmethod
@@ -74,6 +77,30 @@ class EventStore(BaseEventStore):
             r = self.collector_session.post(self.collector_url, json=payload)
             if r.ok:
                 return
+            if r.status_code > 500:
+                logger.error("Temporary server error")
+                if i + 1 < self.max_retries:
+                    seconds = random.uniform(3, 4) * (i + 1)
+                    logger.error("Retry in %.1fs", seconds)
+                    time.sleep(seconds)
+                    continue
+            r.raise_for_status()
+
+    def bulk_store(self, events):
+        if self.batch_size < 2:
+            raise RuntimeError("bulk_store is not available when batch_size < 2")
+        event_keys = []
+        data = b""
+        for event in events:
+            payload = self._serialize_event(event)
+            event_keys.append((payload["event"]["id"], payload["event"]["index"]))
+            if data:
+                data += b"\n"
+            data += json.dumps(payload).encode("utf-8")
+        for i in range(self.max_retries):
+            r = self.collector_session.post(self.collector_url, data=data)
+            if r.ok:
+                return event_keys
             if r.status_code > 500:
                 logger.error("Temporary server error")
                 if i + 1 < self.max_retries:
