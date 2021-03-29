@@ -19,19 +19,6 @@
 
 <h4 id="results">{{ page_obj.paginator.count }} Result{{ page_obj.paginator.count|pluralize }}</h4>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
-
 {% if page_obj %}
 <div class="row">
   <div class="col-md-2" style="position:sticky;top:20px">
@@ -60,6 +47,19 @@
     </div>
   </div>
   <div class="col-md-10">
+    {% if next_url or previous_url %}
+    <nav>
+      <ul class="pager">
+        {% if next_url %}
+        <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+        {% endif %}
+        {% if previous_url %}
+        <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+    {% endif %}
+
     {% if rows %}
     <div class="table-responsive">
       <table class="table table-condensed">
@@ -103,21 +103,20 @@
     </table>
     {% endfor %}
     {% endif %}
+
+    {% if next_url or previous_url %}
+    <nav>
+      <ul class="pager">
+        {% if next_url %}
+        <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+        {% endif %}
+        {% if previous_url %}
+        <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+    {% endif %}
   </div>
 </div>
 {% endif %}
-
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
-
 {% endblock %}
