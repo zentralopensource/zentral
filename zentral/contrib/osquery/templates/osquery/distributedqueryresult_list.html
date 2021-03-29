@@ -15,13 +15,11 @@
   <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h3>Run <i>{{ distributed_query }}</i></h3>
-
-<h4 id="results">{{ page_obj.paginator.count }} Result{{ page_obj.paginator.count|pluralize }}</h4>
-
 {% if page_obj %}
 <div class="row">
   <div class="col-md-2" style="position:sticky;top:20px">
+    <h3 style="margin-top:0">Run <i>{{ distributed_query }}</i></h3>
+    <h4 id="results">{{ page_obj.paginator.count }} Result{{ page_obj.paginator.count|pluralize }}</h4>
     <div id="osquery-dist-q-fields" class="panel panel-default">
       <div class="panel-heading">
         <h4 class="panel-title">Fields</h4>
