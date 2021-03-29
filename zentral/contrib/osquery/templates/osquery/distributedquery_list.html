@@ -5,16 +5,15 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li class="active">Runs</li>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">{{ distributed_query_count }} record{{ distributed_query_count|pluralize }}</a></li>
+  <li><a href="{{ reset_link }}">Runs</a></li>
   {% else %}
-  <li class="active">{{ distributed_query_count }} record{{ distributed_query_count|pluralize }}</li>
+  <li class="active">Runs</li>
   {% endif %}
   <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h2>{{ distributed_query_count }} Run{{ distributed_query_count|pluralize }}</h2>
+<h3>{{ distributed_query_count }} Run{{ distributed_query_count|pluralize }}</h3>
 
 {% if next_url or previous_url %}
 <nav>
