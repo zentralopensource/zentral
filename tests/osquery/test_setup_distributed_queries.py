@@ -362,7 +362,6 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "osquery/distributedqueryresult_list.html")
         self.assertContains(response, f"{dqr_count} Results")
         self.assertContains(response, serial_numbers[-1])
-        self.assertContains(response, "<th>un</th>")
         self.assertContains(response, f"page 1 of {dqr_count}")
 
     # distributed query file carving sessions
