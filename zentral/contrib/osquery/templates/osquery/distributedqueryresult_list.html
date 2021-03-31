@@ -15,7 +15,6 @@
   <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-{% if page_obj %}
 <div class="row">
   <div class="col-md-2" style="position:sticky;top:20px">
     <h3 style="margin-top:0">Run <i>{{ distributed_query }}</i></h3>
@@ -33,6 +32,12 @@
       </ul>
     </div>
     {% endif %}
+    <form method="get">
+      <div class="form-group">
+        <input type="text" class="form-control" placeholder="search SN, result…" name="q" value="{{ search_q|default:"" }}" autofocus>
+      </div>
+    </form>
+    {% if selected_fields or available_fields %}
     <div id="osquery-dist-q-fields" class="panel panel-default">
       <div class="panel-heading">
         <h4 class="panel-title">Fields</h4>
@@ -56,6 +61,7 @@
         {% endif %}
       </div>
     </div>
+    {% endif %}
   </div>
   <div class="col-md-10">
     {% if next_url or previous_url %}
@@ -129,7 +135,6 @@
     {% endif %}
   </div>
 </div>
-{% endif %}
 {% endblock %}
 
 {% block extrajs %}

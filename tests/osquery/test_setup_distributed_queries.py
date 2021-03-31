@@ -363,6 +363,21 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertContains(response, f"{dqr_count} Results")
         self.assertContains(response, serial_numbers[-1])
         self.assertContains(response, f"page 1 of {dqr_count}")
+        search_term = serial_numbers[0] + get_random_string()
+        response = self.client.get(
+            "{}?q={}".format(reverse("osquery:distributed_query_results", args=(distributed_query.pk,)),
+                             search_term)
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, search_term)
+        self.assertContains(response, "0 Results")
+        search_term = serial_numbers[0]
+        response = self.client.get(
+            "{}?q={}".format(reverse("osquery:distributed_query_results", args=(distributed_query.pk,)),
+                             search_term)
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "1 Result")
 
     # distributed query file carving sessions
 

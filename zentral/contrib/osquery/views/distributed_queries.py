@@ -2,7 +2,7 @@ from itertools import chain
 import logging
 from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -151,15 +151,27 @@ class DistributedQueryResultListView(PermissionRequiredMixin, ListView):
         self.distributed_query = get_object_or_404(
             DistributedQuery.objects.select_related("query"), pk=self.kwargs["pk"]
         )
-        return (
+        qs = (
             super().get_queryset()
                    .filter(distributed_query=self.distributed_query)
                    .order_by("-pk")
         )
+        self.is_search = False
+        self.search_q = None
+        q = self.request.GET.get("q")
+        if q:
+            q = q.strip()
+            if q:
+                self.search_q = q
+                self.is_search = True
+                qs = qs.filter(Q(serial_number__icontains=q) | Q(row__icontains=q))
+        return qs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["distributed_query"] = self.distributed_query
+        ctx["is_search"] = self.is_search
+        ctx["search_q"] = self.search_q
         page = ctx["page_obj"]
         fields = set(chain.from_iterable(r.row.keys() for r in page))
         selected_fields = set(self.request.GET.getlist("f")).intersection(fields)
