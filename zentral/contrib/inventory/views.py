@@ -622,7 +622,8 @@ class MachineEventsView(PermissionRequiredMixin, TemplateView):
         store_redirect_url = reverse("inventory:machine_events_store_redirect",
                                      args=(self.machine.get_urlsafe_serial_number(),))
         for store in stores.iter_machine_events_url_store_for_user(self.request.user):
-            store_links.append((store_redirect_url, store.name))
+            if not self.request_event_type or store.is_event_type_included(self.request_event_type):
+                store_links.append((store_redirect_url, store.name))
         context["store_links"] = store_links
         return context
 
