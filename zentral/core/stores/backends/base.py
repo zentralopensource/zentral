@@ -15,6 +15,21 @@ class BaseEventStore(object):
         self.frontend = config_d.get('frontend', False)
         self.configured = False
         self.batch_size = min(self.max_batch_size, max(config_d.get("batch_size") or 1, 1))
+        # excluded / included event types
+        for prefix in ("excluded", "included"):
+            attr = f"{prefix}_event_types"
+            val = config_d.get(attr)
+            if val:
+                val = set(val)
+            else:
+                val = None
+            setattr(self, attr, val)
+
+    def is_event_type_included(self, event_type):
+        return (
+            (not self.excluded_event_types or event_type not in self.excluded_event_types)
+            and (not self.included_event_types or event_type in self.included_event_types)
+        )
 
     def wait_and_configure(self):
         self.configured = True

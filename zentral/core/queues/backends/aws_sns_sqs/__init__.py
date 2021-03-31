@@ -188,6 +188,10 @@ class SimpleStoreWorker(WorkerMixin, Consumer):
         self.event_store = event_store
         self.name = "store worker {}".format(self.event_store.name)
 
+    def skip_event(self, receipt_handle, event_d):
+        event_type = event_d['_zentral']['type']
+        return not self.event_store.is_event_type_included(event_type)
+
     def run(self, *args, **kwargs):
         self.log_info("run")
         super().setup_metrics_exporter(*args, **kwargs)
@@ -216,6 +220,10 @@ class BulkStoreWorker(WorkerMixin, BatchConsumer):
         )
         self.event_store = event_store
         self.name = "store worker {}".format(self.event_store.name)
+
+    def skip_event(self, receipt_handle, event_d):
+        event_type = event_d['_zentral']['type']
+        return not self.event_store.is_event_type_included(event_type)
 
     def run(self, *args, **kwargs):
         self.log_info("run")

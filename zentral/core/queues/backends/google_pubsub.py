@@ -272,6 +272,10 @@ class StoreWorker(BaseWorker):
         self.log_debug("store event")
         event_dict = json.loads(message.data)
         event_type = event_dict['_zentral']['type']
+        if not self.event_store.is_event_type_included(event_type):
+            self.log_debug("skip %s event", event_type)
+            message.ack()
+            return
         try:
             self.event_store.store(event_dict)
         except Exception:

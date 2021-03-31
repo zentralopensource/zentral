@@ -62,6 +62,10 @@ class BaseConsumer:
     def start_run_loop(self):
         raise NotImplementedError
 
+    def skip_event(self, receipt_handle, event_d):
+        # to override in the sub-classes if necessary
+        return False
+
 
 # Consumer
 
@@ -76,8 +80,11 @@ class Consumer(BaseConsumer):
                 if self.stop_receiving_event.is_set():
                     break
             else:
-                logger.debug("receipt handle %s: process new event", receipt_handle[-7:])
-                self.process_event(routing_key, event_d)
+                if self.skip_event(receipt_handle, event_d):
+                    logger.debug("receipt handle %s: event skipped", receipt_handle[-7:])
+                else:
+                    logger.debug("receipt handle %s: process new event", receipt_handle[-7:])
+                    self.process_event(routing_key, event_d)
                 logger.debug("receipt handle %s: queue for deletion", receipt_handle[-7:])
                 self.delete_message_queue.put((receipt_handle, time.monotonic()))
 
@@ -114,12 +121,19 @@ class BatchConsumer(BaseConsumer):
                 if self.stop_receiving_event.is_set():
                     break
             else:
-                logger.debug("receipt handle %s: queue new event for batch processing", receipt_handle[-7:])
-                self.batch.append((receipt_handle, routing_key, event_d))
-                if self.batch_start_ts is None:
-                    self.batch_start_ts = time.monotonic()
-                if len(self.batch) >= self.batch_size:
-                    self._process_batch()
+                if self.skip_event(receipt_handle, event_d):
+                    logger.debug("receipt handle %s: event skipped", receipt_handle[-7:])
+                    self.delete_message_queue.put((receipt_handle, time.monotonic()))
+                    if self.batch and time.monotonic() > self.batch_start_ts + self.max_event_age_seconds:
+                        logger.debug("process events because max event age reached")
+                        self._process_batch()
+                else:
+                    logger.debug("receipt handle %s: queue new event for batch processing", receipt_handle[-7:])
+                    self.batch.append((receipt_handle, routing_key, event_d))
+                    if self.batch_start_ts is None:
+                        self.batch_start_ts = time.monotonic()
+                    if len(self.batch) >= self.batch_size:
+                        self._process_batch()
 
     def _process_batch(self):
         for receipt_handle in self.process_events(self.batch):
