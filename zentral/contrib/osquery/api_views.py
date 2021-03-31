@@ -5,16 +5,19 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import F
 from django_filters import rest_framework as filters
+from django.urls import reverse
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import ParseError, ValidationError
 from rest_framework.parsers import BaseParser, JSONParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
-from zentral.utils.drf import DefaultDjangoModelPermissions
+from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .events import post_osquery_pack_update_events
 from .models import Configuration, Enrollment, Pack, PackQuery, Query
 from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryPackSerializer
+from .tasks import export_distributed_query_results
 
 
 class ConfigurationList(generics.ListCreateAPIView):
@@ -288,3 +291,17 @@ class PackView(APIView):
         pack.delete()
 
         return Response(pack_update_event)
+
+
+class ExportDistributedQueryResults(APIView):
+    permission_required = ("osquery.view_distributedqueryresult",)
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        export_format = request.GET.get("export_format", "csv")
+        if export_format not in ("csv", "ndjson", "xlsx"):
+            raise ValidationError("Unknown export format")
+        result = export_distributed_query_results.apply_async((int(kwargs["pk"]), f".{export_format}"))
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)

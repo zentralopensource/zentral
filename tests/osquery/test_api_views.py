@@ -1,3 +1,4 @@
+from datetime import datetime
 from functools import reduce
 import json
 import operator
@@ -8,7 +9,7 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase
 from rest_framework.authtoken.models import Token
 from accounts.models import User
-from zentral.contrib.osquery.models import Pack, PackQuery, Query
+from zentral.contrib.osquery.models import DistributedQuery, Pack, PackQuery, Query
 
 
 class APIViewsTestCase(TestCase):
@@ -51,6 +52,12 @@ class APIViewsTestCase(TestCase):
             "osquery.delete_pack",
             "osquery.delete_packquery",
         )
+
+    def post(self, url, include_token=True):
+        kwargs = {}
+        if include_token:
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+        return self.client.post(url, **kwargs)
 
     def put_data(self, url, data, content_type, include_token=True):
         kwargs = {"content_type": content_type}
@@ -543,3 +550,36 @@ class APIViewsTestCase(TestCase):
              'result': 'deleted',
              'query_results': {'created': 0, 'deleted': 3, 'present': 0, 'updated': 0}}
         )
+
+    # export distributed query results
+
+    def _force_distributed_query(self):
+        query = Query.objects.create(
+            name=get_random_string(),
+            sql="select * from osquery_schedule;"
+        )
+        return DistributedQuery.objects.create(
+            query=query,
+            query_version=query.version,
+            sql=query.sql,
+            valid_from=datetime.utcnow(),
+        )
+
+    def test_export_distributed_query_results_401(self):
+        dq = self._force_distributed_query()
+        response = self.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)),
+                             include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_export_distributed_query_results_403(self):
+        dq = self._force_distributed_query()
+        response = self.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)),
+                             include_token=True)
+        self.assertEqual(response.status_code, 403)
+
+    def test_export_distributed_query_results_ok(self):
+        dq = self._force_distributed_query()
+        self.set_permissions("osquery.view_distributedqueryresult")
+        response = self.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)),
+                             include_token=True)
+        self.assertEqual(response.status_code, 201)

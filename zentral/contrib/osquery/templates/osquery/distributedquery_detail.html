@@ -97,7 +97,7 @@
 
 <h3 id="results">{{ result_count }} Result{{ result_count|pluralize }}</h3>
 
-{% if result_count %}
+{% if perms.osquery.view_distributedqueryresult and result_count %}
 <a class="btn btn-default" href="{% url 'osquery:distributed_query_results' object.pk %}">See the result{{ result_count|pluralize }}</a>
 {% endif %}
 

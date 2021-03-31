@@ -1,6 +1,7 @@
 from django.urls import path
 from .api_views import (ConfigurationDetail, ConfigurationList,
                         EnrollmentDetail, EnrollmentList,
+                        ExportDistributedQueryResults,
                         PackView)
 
 
@@ -11,4 +12,6 @@ urlpatterns = [
     path('enrollments/', EnrollmentList.as_view(), name="enrollments"),
     path('enrollments/<int:pk>/', EnrollmentDetail.as_view(), name="enrollment"),
     path('packs/<slug:slug>/', PackView.as_view(), name="pack"),
+    path('runs/<int:pk>/results/export/',
+         ExportDistributedQueryResults.as_view(), name="export_distributed_query_results"),
 ]

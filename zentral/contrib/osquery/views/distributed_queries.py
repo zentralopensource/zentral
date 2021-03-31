@@ -1,9 +1,10 @@
 from itertools import chain
 import logging
+from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 from zentral.contrib.osquery.forms import DistributedQueryForm
 from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
@@ -142,7 +143,7 @@ class DistributedQueryMachineListView(PermissionRequiredMixin, ListView):
 
 
 class DistributedQueryResultListView(PermissionRequiredMixin, ListView):
-    permission_required = "osquery.view_distributedquery"
+    permission_required = "osquery.view_distributedqueryresult"
     model = DistributedQueryResult
     paginate_by = 50
 
@@ -185,6 +186,8 @@ class DistributedQueryResultListView(PermissionRequiredMixin, ListView):
                 rows.append((result.serial_number, [result.row.get(field) for field in selected_fields]))
         ctx["rows"] = rows
         ctx["headers"] = ["Serial number"] + selected_fields
+
+        # pagination
         if page.has_next():
             qd = self.request.GET.copy()
             qd['page'] = page.next_page_number()
@@ -197,6 +200,14 @@ class DistributedQueryResultListView(PermissionRequiredMixin, ListView):
             qd = self.request.GET.copy()
             qd.pop('page', None)
             ctx['reset_link'] = "?{}".format(qd.urlencode())
+
+        # export links
+        ctx['export_links'] = []
+        export_path = reverse("osquery_api:export_distributed_query_results", args=(self.distributed_query.pk,))
+        for fmt in ("csv", "ndjson", "xlsx"):
+            export_qd = {"export_format": fmt}
+            ctx['export_links'].append((fmt, "{}?{}".format(export_path, urlencode(export_qd))))
+
         return ctx
 
 

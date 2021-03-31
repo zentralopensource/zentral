@@ -356,7 +356,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
             ) for i in range(dqr_count)
         )
         DistributedQueryResult.objects.bulk_create(dqr_gen)
-        self._login("osquery.view_distributedquery")
+        self._login("osquery.view_distributedqueryresult")
         response = self.client.get(reverse("osquery:distributed_query_results", args=(distributed_query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/distributedqueryresult_list.html")
