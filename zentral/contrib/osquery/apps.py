@@ -8,6 +8,7 @@ class ZentralOsqueryAppConfig(ZentralAppConfig):
         "automatictableconstruction",
         "configuration",
         "distributedquery",
+        "distributedqueryresult",
         "enrollment",
         "filecategory",
         "filecarvingsession",
