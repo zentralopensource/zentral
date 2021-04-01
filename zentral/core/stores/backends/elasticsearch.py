@@ -58,11 +58,6 @@ class EventStore(BaseEventStore):
                         }
                     }
                 }
-            },
-            "osquery_distributed_query_result": {
-                "properties": {
-                    "result": {"enabled": False}
-                }
             }
         }
     }
