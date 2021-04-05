@@ -128,7 +128,13 @@
     <tr id="{{ group_mapping.pk }}">
       <td>{{ group_mapping.claim }}</td>
       <td>{{ group_mapping.value }}</td>
-      <td><a href="{% url 'accounts:group' group.pk %}">{{ group }}</a></td>
+      <td>
+        {% if perms.auth.view_group %}
+        <a href="{% url 'accounts:group' group.pk %}">{{ group }}</a>
+        {% else %}
+        {{ group }}
+        {% endif %}
+      </td>
       <td>
         {% if not request.realm_authentication_session.is_remote and perms.realms.change_realmgroupmapping %}
         <a class="btn btn-default" href="{% url 'realms:update_group_mapping' object.pk group_mapping.pk %}">
