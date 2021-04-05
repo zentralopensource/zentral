@@ -38,14 +38,17 @@ class ProbeViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _force_probe(self, event_types=None, active=True):
+    def _force_probe(self, event_types=None, active=True, platforms=None):
         if event_types is None:
             event_types = ["zentral_login", "zentral_logout"]
+        filters = {"metadata": [{"event_types": event_types}]}
+        if platforms:
+            filters["inventory"] = [{"platforms": platforms}]
         return ProbeSource.objects.create(
             model="BaseProbe",
             name=get_random_string(),
             status=ProbeSource.ACTIVE if active else ProbeSource.INACTIVE,
-            body={"filters": {"metadata": [{"event_types": event_types}]}}
+            body={"filters": filters}
         )
 
     # create probe
@@ -88,6 +91,158 @@ class ProbeViewsTestCase(TestCase):
         self.assertEqual(probe.name, name)
         self.assertEqual(probe_source.name, name)
         self.assertEqual(probe_source.pk, probe.pk)
+
+    # update probe
+
+    def test_update_probe_redirect(self):
+        probe_source = self._force_probe()
+        self._login_redirect(reverse("probes:update", args=(probe_source.pk,)))
+
+    def test_update_probe_permission_denied(self):
+        probe_source = self._force_probe()
+        self._login()
+        response = self.client.get(reverse("probes:update", args=(probe_source.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_probe_get(self):
+        probe_source = self._force_probe()
+        self._login("probes.change_probesource")
+        response = self.client.get(reverse("probes:update", args=(probe_source.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/probes/form.html")
+
+    def test_update_probe_post(self):
+        probe_source = self._force_probe(active=True)
+        self._login("probes.change_probesource", "probes.view_probesource")
+        response = self.client.post(reverse("probes:update", args=(probe_source.pk,)),
+                                    {"name": probe_source.name,
+                                     "status": ProbeSource.INACTIVE},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/probes/probe.html")
+        ctx_probe_source = response.context["object"]
+        self.assertEqual(ctx_probe_source, probe_source)
+        self.assertEqual(ctx_probe_source.status, ProbeSource.INACTIVE)
+
+    # delete probe
+
+    def test_delete_probe_redirect(self):
+        probe_source = self._force_probe()
+        self._login_redirect(reverse("probes:delete", args=(probe_source.pk,)))
+
+    def test_delete_probe_permission_denied(self):
+        probe_source = self._force_probe()
+        self._login()
+        response = self.client.get(reverse("probes:delete", args=(probe_source.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_probe_get(self):
+        probe_source = self._force_probe()
+        self._login("probes.delete_probesource")
+        response = self.client.get(reverse("probes:delete", args=(probe_source.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/probes/delete.html")
+
+    def test_delete_probe_post(self):
+        probe_source = self._force_probe()
+        self._login("probes.delete_probesource", "probes.view_probesource")
+        response = self.client.post(reverse("probes:delete", args=(probe_source.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/probes/index.html")
+
+    # add filter
+
+    def test_add_probe_filter_redirect(self):
+        probe_source = self._force_probe()
+        self._login_redirect(reverse("probes:add_filter", args=(probe_source.pk, "inventory")))
+
+    def test_add_probe_filter_permission_denied(self):
+        probe_source = self._force_probe()
+        self._login()
+        response = self.client.get(reverse("probes:add_filter", args=(probe_source.pk, "inventory")))
+        self.assertEqual(response.status_code, 403)
+
+    def test_add_probe_filter_get(self):
+        probe_source = self._force_probe()
+        self._login("probes.change_probesource")
+        response = self.client.get(reverse("probes:add_filter", args=(probe_source.pk, "inventory")))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/probes/filter_form.html")
+
+    def test_add_probe_filter_post(self):
+        probe_source = self._force_probe()
+        self._login("probes.change_probesource", "probes.view_probesource")
+        response = self.client.post(reverse("probes:add_filter", args=(probe_source.pk, "inventory")),
+                                    {"platforms": "LINUX"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/probes/probe.html")
+        ctx_probe_source = response.context["object"]
+        self.assertEqual(ctx_probe_source, probe_source)
+        self.assertEqual(ctx_probe_source.body["filters"]["inventory"][0],
+                         {'platforms': ['LINUX']})
+
+    # update filter
+
+    def test_update_probe_filter_redirect(self):
+        probe_source = self._force_probe(platforms=["LINUX"])
+        self._login_redirect(reverse("probes:update_filter", args=(probe_source.pk, "inventory", 0)))
+
+    def test_update_probe_filter_permission_denied(self):
+        probe_source = self._force_probe(platforms=["LINUX"])
+        self._login()
+        response = self.client.get(reverse("probes:update_filter", args=(probe_source.pk, "inventory", 0)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_probe_filter_get(self):
+        probe_source = self._force_probe(platforms=["LINUX"])
+        self._login("probes.change_probesource")
+        response = self.client.get(reverse("probes:update_filter", args=(probe_source.pk, "inventory", 0)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/probes/filter_form.html")
+
+    def test_update_probe_filter_post(self):
+        probe_source = self._force_probe(platforms=["LINUX"])
+        self._login("probes.change_probesource", "probes.view_probesource")
+        response = self.client.post(reverse("probes:update_filter", args=(probe_source.pk, "inventory", 0)),
+                                    {"platforms": "WINDOWS"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/probes/probe.html")
+        ctx_probe_source = response.context["object"]
+        self.assertEqual(ctx_probe_source, probe_source)
+        self.assertEqual(ctx_probe_source.body["filters"]["inventory"][0],
+                         {'platforms': ['WINDOWS']})
+
+    # delete filter
+
+    def test_delete_probe_filter_redirect(self):
+        probe_source = self._force_probe(platforms=["LINUX"])
+        self._login_redirect(reverse("probes:delete_filter", args=(probe_source.pk, "inventory", 0)))
+
+    def test_delete_probe_filter_permission_denied(self):
+        probe_source = self._force_probe(platforms=["LINUX"])
+        self._login()
+        response = self.client.get(reverse("probes:delete_filter", args=(probe_source.pk, "inventory", 0)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_probe_filter_get(self):
+        probe_source = self._force_probe(platforms=["LINUX"])
+        self._login("probes.change_probesource")
+        response = self.client.get(reverse("probes:delete_filter", args=(probe_source.pk, "inventory", 0)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/probes/delete_filter.html")
+
+    def test_delete_probe_filter_post(self):
+        probe_source = self._force_probe(platforms=["LINUX"])
+        self._login("probes.change_probesource", "probes.view_probesource")
+        response = self.client.post(reverse("probes:delete_filter", args=(probe_source.pk, "inventory", 0)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/probes/probe.html")
+        ctx_probe_source = response.context["object"]
+        self.assertEqual(ctx_probe_source, probe_source)
+        self.assertEqual(ctx_probe_source.body["filters"]["inventory"], [])
 
     # index
 

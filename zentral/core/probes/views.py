@@ -418,7 +418,7 @@ class CloneProbeView(PermissionRequiredMixin, FormView):
 
 
 class ReviewProbeUpdateView(PermissionRequiredMixin, TemplateView):
-    permission_required = "probes.update_probesource"
+    permission_required = "probes.change_probesource"
     template_name = "core/probes/review_update.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -447,7 +447,7 @@ class ReviewProbeUpdateView(PermissionRequiredMixin, TemplateView):
 
 
 class EditActionView(PermissionRequiredMixin, FormView):
-    permission_required = "probes.update_probesource"
+    permission_required = "probes.change_probesource"
     template_name = "core/probes/action_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -494,7 +494,7 @@ class EditActionView(PermissionRequiredMixin, FormView):
 
 
 class DeleteActionView(PermissionRequiredMixin, TemplateView):
-    permission_required = "probes.update_probesource"
+    permission_required = "probes.change_probesource"
     template_name = "core/probes/delete_action.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -523,7 +523,7 @@ class DeleteActionView(PermissionRequiredMixin, TemplateView):
 
 
 class AddFilterView(PermissionRequiredMixin, FormView):
-    permission_required = "probes.update_probesource"
+    permission_required = "probes.change_probesource"
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -561,7 +561,7 @@ class AddFilterView(PermissionRequiredMixin, FormView):
 
 
 class UpdateFilterView(PermissionRequiredMixin, FormView):
-    permission_required = "probes.update_probesource"
+    permission_required = "probes.change_probesource"
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -607,7 +607,7 @@ class UpdateFilterView(PermissionRequiredMixin, FormView):
 
 
 class DeleteFilterView(PermissionRequiredMixin, TemplateView):
-    permission_required = "probes.update_probesource"
+    permission_required = "probes.change_probesource"
     template_name = "core/probes/delete_filter.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -637,7 +637,7 @@ class DeleteFilterView(PermissionRequiredMixin, TemplateView):
 
 
 class BaseProbeItemView(PermissionRequiredMixin, FormView):
-    permission_required = "probes.update_probesource"
+    permission_required = "probes.change_probesource"
     probe_item_attribute = None
     success_anchor = None
     permission = None
