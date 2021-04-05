@@ -85,7 +85,7 @@ def post_event(event_cls, request, user, payload=None):
                              namespace=event_cls.namespace,
                              request=event_request,
                              tags=event_cls.tags)
-    if user != request.user:
+    if user and user != request.user:
         payload["user"] = {"pk": user.pk, "username": user.username}
     event = event_cls(metadata, payload)
     event.post()
