@@ -17,7 +17,9 @@
     <th>Name</th>
     <th>Priority</th>
     <th>Created at</th>
+    {% if manual_catalog_management %}
     <th>Archived at</th>
+    {% endif %}
   </thead>
   <tbody>
     {% for catalog in object_list %}
@@ -27,7 +29,9 @@
       </td>
       <td>{{ catalog.priority }}</td>
       <td>{{ catalog.created_at }}</td>
+      {% if manual_catalog_management %}
       <td>{{ catalog.archived_at|default:"-" }}</td>
+      {% endif %}
     </tr>
     {% endfor %}
   </tbody>

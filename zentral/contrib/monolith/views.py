@@ -180,6 +180,12 @@ class CatalogsView(PermissionRequiredMixin, ListView):
     permission_required = "monolith.view_catalog"
     model = Catalog
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if not monolith_conf.repository.manual_catalog_management:
+            qs = qs.filter(archived_at__isnull=True)
+        return qs
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
