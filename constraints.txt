@@ -16,7 +16,7 @@ coverage==5.4
 cryptography==3.4.4
 decorator==4.4.2
 defusedxml==0.6.0
-Django==2.2.18
+Django==2.2.20
 django-bootstrap-form==3.4
 django-celery-results==1.2.1
 django-filter==2.4.0
