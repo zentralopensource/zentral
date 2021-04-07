@@ -26,7 +26,7 @@ class EnrollmentForm(forms.ModelForm):
         # meta business unit not used in this enrollment form
         self.meta_business_unit = kwargs.pop("meta_business_unit", None)
         self.configuration = kwargs.pop("configuration", None)
-        self.update_for = kwargs.pop("update_for", None)
+        self.enrollment_only = kwargs.pop("enrollment_only", False)
         self.standalone = kwargs.pop("standalone", False)
         super().__init__(*args, **kwargs)
         # hide configuration dropdown if configuration if fixed
@@ -35,7 +35,7 @@ class EnrollmentForm(forms.ModelForm):
 
         # release
         release_field = self.fields["filebeat_release"]
-        if self.update_for:
+        if self.enrollment_only:
             release_field.widget = forms.HiddenInput()
         else:
             release_choices = [(version, version) for version in get_filebeat_versions()]

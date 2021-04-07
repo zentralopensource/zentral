@@ -15,11 +15,11 @@ The Munki repository is on the same server as Zentral. Only osquery is proposed 
 "zentral.contrib.monolith": {
   "enrollment_package_builders": {
     "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
-      "update_for": "munkitools_core",
+      "requires": ["munkitools_core"],
       "optional": false
     },
     "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
-      "update_for": "osquery",
+      "requires": ["osquery"],
       "optional": true
     }
   },
@@ -39,11 +39,11 @@ The Munki repository is in a S3 bucket. Only santa is proposed for enrollment. T
 "zentral.contrib.monolith": {
   "enrollment_package_builders": {
     "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
-      "update_for": "munkitools_core",
+      "requires": ["munkitools_core"],
       "optional": false
     },
     "zentral.contrib.santa.osx_package.builder.SantaZentralEnrollPkgBuilder": {
-      "update_for": "santa",
+      "requires": ["santa"],
       "optional": true
     }
   },

@@ -23,9 +23,16 @@ class MonolithConf(object):
     def enrollment_package_builders(self):
         package_builders = get_package_builders()
         enrollment_package_builders = {}
-        ep_cfg = self.app_config()['enrollment_package_builders']
+        ep_cfg = self.app_config()['enrollment_package_builders'].serialize()
         for builder, builder_cfg in ep_cfg.items():
-            builder_cfg = builder_cfg.copy()
+            requires = builder_cfg.get("requires")
+            if not requires:
+                requires = []
+            elif isinstance(requires, str):
+                requires = [requires]
+            elif not isinstance(requires, list):
+                raise ValueError("Unknown requires format")
+            builder_cfg["requires"] = requires
             builder_cfg["class"] = package_builders[builder]
             enrollment_package_builders[builder] = builder_cfg
         return enrollment_package_builders

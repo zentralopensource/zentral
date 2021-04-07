@@ -50,7 +50,6 @@ class EnrollmentForm(forms.ModelForm):
         # meta business unit not used in this enrollment form
         self.meta_business_unit = kwargs.pop("meta_business_unit", None)
         self.configuration = kwargs.pop("configuration", None)
-        self.update_for = kwargs.pop("update_for", None)
         self.standalone = kwargs.pop("standalone", False)
         super().__init__(*args, **kwargs)
         # hide configuration dropdown if configuration if fixed

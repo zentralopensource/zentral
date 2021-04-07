@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from itertools import chain
 import logging
 import os.path
 import plistlib
@@ -608,10 +609,10 @@ class Manifest(models.Model):
         return PkgInfo.objects.raw(query)
 
     def enrollment_packages_pkginfo_deps(self, tags=None):
-        """PkgInfos that enrollment packages are an update for with their dependencies"""
-        update_for_gen = (ep.get_update_for()
-                          for ep in self.enrollment_packages(tags).values())
-        return self._pkginfo_deps_and_updates(update_for_gen, tags)
+        """PkgInfos that enrollment packages require, with their dependencies"""
+        required_packages_iter = chain.from_iterable(ep.get_requires()
+                                                     for ep in self.enrollment_packages(tags).values())
+        return self._pkginfo_deps_and_updates(required_packages_iter, tags)
 
     def printers_pkginfo_deps(self, tags=None):
         """PkgInfos that printers require, with their dependencies"""
@@ -644,8 +645,19 @@ class Manifest(models.Model):
             pkginfo_list.append(sma.get_pkg_info())
 
         # the enrollment packages
-        for enrollment_package in self.enrollment_packages(tags).values():
+
+        # add the unique selected enrollment package in scope for each builder
+        in_scope_mep_builders = []
+        for builder, enrollment_package in self.enrollment_packages(tags).items():
+            in_scope_mep_builders.append(builder)
             pkginfo_list.append(enrollment_package.get_pkg_info())
+
+        # add all the enrollment packages, for the builders not in scope, to allow removal
+        not_in_scope_mep_qs = self.manifestenrollmentpackage_set.all()
+        if in_scope_mep_builders:
+            not_in_scope_mep_qs = not_in_scope_mep_qs.exclude(builder__in=in_scope_mep_builders)
+        for not_in_scope_mep in not_in_scope_mep_qs:
+            pkginfo_list.append(not_in_scope_mep.get_pkg_info())
 
         # include the catalog with all the printers for autoremove
         for printer in self.printer_set.all():
@@ -669,15 +681,11 @@ class Manifest(models.Model):
         # loop on the configured enrollment package builders
         enrollment_packages = self.enrollment_packages(tags)
         for builder, builder_config in monolith_conf.enrollment_package_builders.items():
-            update_for = builder_config["update_for"]
+            mep_name = builder_config["class"].name
             if builder in enrollment_packages:
-                # add the package it is an update_for to the managed_installs
-                if update_for not in data['managed_installs']:
-                    data['managed_installs'].append(update_for)
+                data['managed_installs'].append(mep_name)
             else:
-                if update_for not in data['managed_installs']:
-                    # the package it is an update_for is not in the managed_installs, remove it.
-                    data.setdefault('managed_uninstalls', []).append(update_for)
+                data.setdefault('managed_uninstalls', []).append(mep_name)
 
         # include only the matching active printers as managed installs
         for printer in self.printers(tags):
@@ -742,8 +750,8 @@ class ManifestEnrollmentPackage(models.Model):
     def get_name(self):
         return self.builder_class.name
 
-    def get_update_for(self):
-        return monolith_conf.enrollment_package_builders[self.builder]["update_for"]
+    def get_requires(self):
+        return monolith_conf.enrollment_package_builders[self.builder]["requires"]
 
     def get_pkg_info(self):
         pkg_info = self.pkg_info.copy()

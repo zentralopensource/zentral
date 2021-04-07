@@ -947,7 +947,7 @@ class BaseEditManifestEnrollmentPackageView(TemplateView):
     def get_forms(self):
         builder_form_kwargs = {
             "prefix": "builder",
-            "update_for": self.builder_config["update_for"]
+            "enrollment_only": len(self.builder_config["requires"]) > 0
         }
         mep_form_kwargs = {
             "prefix": "mep",

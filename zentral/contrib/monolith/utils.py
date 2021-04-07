@@ -45,7 +45,7 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
             'unattended_uninstall': True,
             'uninstallable': True,
             'uninstall_method': 'removepackages',
-            'update_for': [manifest_enrollment_package.get_update_for()],
+            'requires': manifest_enrollment_package.get_requires(),
             'version': builder.package_version}
 
 

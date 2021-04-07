@@ -29,7 +29,7 @@ class EnrollmentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.configuration = kwargs.pop("configuration", None)
-        kwargs.pop("update_for", None)
+        kwargs.pop("enrollment_only", None)
         kwargs.pop("standalone", None)
         super().__init__(*args, **kwargs)
         if self.configuration:
