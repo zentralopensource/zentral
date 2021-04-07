@@ -680,12 +680,15 @@ class Manifest(models.Model):
 
         # loop on the configured enrollment package builders
         enrollment_packages = self.enrollment_packages(tags)
-        for builder, builder_config in monolith_conf.enrollment_package_builders.items():
-            mep_name = builder_config["class"].name
-            if builder in enrollment_packages:
-                data['managed_installs'].append(mep_name)
+        for mep in self.manifestenrollmentpackage_set.all():
+            mep_name = mep.get_name()
+            if mep.builder in enrollment_packages:
+                if mep_name not in data['managed_installs']:
+                    data['managed_installs'].append(mep_name)
             else:
-                data.setdefault('managed_uninstalls', []).append(mep_name)
+                managed_uninstalls = data.setdefault('managed_uninstalls', [])
+                if mep_name not in managed_uninstalls:
+                    managed_uninstalls.append(mep_name)
 
         # include only the matching active printers as managed installs
         for printer in self.printers(tags):
