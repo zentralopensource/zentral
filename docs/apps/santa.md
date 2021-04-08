@@ -47,7 +47,7 @@ Each enrollment has a secret associated with it, and this secret is part of the 
 
 #### Main santa configuration
 
-This is the payload that is generated when creating an enrollment on a Zentral santa configuration (see previous section.) You can further customize this payload to add for example the `MachineOwner` [Santa configuration key](https://santa.readthedocs.io/en/latest/deployment/configuration/) using [Jamf Payload Variables](https://docs.jamf.com/jamf-school/deploy-guide-docs/Payload_Variables.html).
+This is the payload that is generated when creating an enrollment on a Zentral santa configuration (see previous section.) You can further customize this payload to add for example the `MachineOwner` [Santa configuration key](https://santa.readthedocs.io/en/latest/deployment/configuration/) using [Jamf Payload Variables](https://docs.jamf.com/jamf-pro/administrator-guide/Computer_Configuration_Profiles.html).
 
 
 #### Privacy preference policy control
