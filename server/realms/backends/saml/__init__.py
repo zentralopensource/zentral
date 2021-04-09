@@ -95,6 +95,10 @@ class SAMLRealmBackend(BaseBackend):
         ras.save()
 
         saml2_client = self.get_saml2_client()
+        # can throw error
+        # like saml2.s_utils.UnsupportedBinding: urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+        # if the IdP configuration and thus the metadata is wrong, but these should be caught at creation time
+        # in the realm form.
         request_id, request_info = saml2_client.prepare_for_authenticate(relay_state=str(ras.pk))
 
         # save request ID in auth session

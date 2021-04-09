@@ -1,6 +1,7 @@
 import uuid
 from django import forms
 from saml2 import BINDING_HTTP_POST
+from saml2.client import Saml2Client
 from saml2.config import Config as Saml2Config
 from saml2.saml import NAMEID_FORMAT_EMAILADDRESS
 from realms.forms import RealmForm
@@ -34,6 +35,7 @@ class SAMLRealmForm(RealmForm):
         except Exception:
             self.add_error("metadata_file", forms.ValidationError("Could not read SAML metadata file"))
             return
+
         # try to load the settings with fake entityid and acs url
         settings = {
             "metadata": {
@@ -62,8 +64,19 @@ class SAMLRealmForm(RealmForm):
             sp_config.load(settings)
         except Exception:
             self.add_error("metadata_file", forms.ValidationError("Invalid SAML metadata file"))
+
+        # try to prepare a request
+        # to catch errors like:
+        # saml2.s_utils.UnsupportedBinding: urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+        # when the IdP is not configured to accept redirects from Zentral
+        try:
+            client = Saml2Client(config=sp_config)
+            client.prepare_for_authenticate(relay_state=str(uuid.uuid4()))
+        except Exception as e:
+            self.add_error("metadata_file", forms.ValidationError("{}: {}".format(e.__class__.__name__, str(e))))
         else:
             cleaned_data["idp_metadata"] = idp_metadata
+
         return cleaned_data
 
     def get_config(self):
