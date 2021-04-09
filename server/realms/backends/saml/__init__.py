@@ -41,7 +41,7 @@ class SAMLRealmBackend(BaseBackend):
         return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
                              reverse("realms:saml_metadata", args=(self.instance.uuid,)))
 
-    def get_saml2_config(self):
+    def get_saml2_config(self, missing_idp_metadata_ok=False):
         settings = {
             "entityid": self.entity_id(),
             "service": {
@@ -66,7 +66,10 @@ class SAMLRealmBackend(BaseBackend):
         try:
             settings["metadata"] = {"inline": [self.instance.config["idp_metadata"]]}
         except KeyError:
-            pass
+            if missing_idp_metadata_ok:
+                pass
+            else:
+                raise
         sp_config = Saml2Config()
         sp_config.allow_unknown_attributes = True
         sp_config.load(settings)

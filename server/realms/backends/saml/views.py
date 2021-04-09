@@ -150,7 +150,7 @@ class AssertionConsumerServiceView(BaseSPView):
 
 class MetadataView(BaseSPView):
     def get(self, request, *args, **kwargs):
-        saml2_config = self.backend_instance.get_saml2_config()
+        saml2_config = self.backend_instance.get_saml2_config(missing_idp_metadata_ok=True)
         metadata = entity_descriptor(saml2_config)
         return HttpResponse(str(metadata).encode("utf-8"),
                             content_type="text/xml; charset=utf8")

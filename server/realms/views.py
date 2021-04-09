@@ -1,5 +1,6 @@
 import logging
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.contrib.auth.views import redirect_to_login
@@ -195,11 +196,11 @@ class TestRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, View):
             redirect_url = realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
         except Exception:
             logger.exception("Could not get realm %s redirect URL", realm.pk)
+        if redirect_url:
+            return HttpResponseRedirect(redirect_url)
         else:
-            if redirect_url:
-                return HttpResponseRedirect(redirect_url)
-            else:
-                raise ValueError("Empty realm {} redirect URL".format(realm.pk))
+            messages.error(request, "Configuration error")
+            return HttpResponseRedirect(realm.get_absolute_url())
 
 
 class RealmAuthenticationSessionView(LocalUserRequiredMixin, PermissionRequiredMixin, DetailView):
