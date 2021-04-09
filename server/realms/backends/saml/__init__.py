@@ -86,6 +86,12 @@ class SAMLRealmBackend(BaseBackend):
         ]
         if self.default_relay_state:
             attributes.append(("Default relay state", self.default_relay_state, False))
+        try:
+            client = self.get_saml2_client()
+            # REDIRECT by default
+            attributes.append(("IdP redirect", client.sso_location() or "-", False))
+        except Exception:
+            pass
         return attributes
 
     def initialize_session(self, request, callback, **callback_kwargs):
