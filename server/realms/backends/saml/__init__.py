@@ -43,9 +43,6 @@ class SAMLRealmBackend(BaseBackend):
 
     def get_saml2_config(self):
         settings = {
-            "metadata": {
-                "inline": [self.instance.config["idp_metadata"]],
-            },
             "entityid": self.entity_id(),
             "service": {
                 "sp": {
@@ -66,6 +63,10 @@ class SAMLRealmBackend(BaseBackend):
                 },
             },
         }
+        try:
+            settings["metadata"] = {"inline": [self.instance.config["idp_metadata"]]}
+        except KeyError:
+            pass
         sp_config = Saml2Config()
         sp_config.allow_unknown_attributes = True
         sp_config.load(settings)
