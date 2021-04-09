@@ -85,7 +85,7 @@ class SAMLRealmBackend(BaseBackend):
             ("Allow IdP-initiated login", "yes" if self.allow_idp_initiated_login else "no", False),
         ]
         if self.default_relay_state:
-            attributes.append(("Default relay state", self.default_relay_state, False))
+            attributes.append(("Default relay state", self.default_relay_state, True))
         try:
             client = self.get_saml2_client()
             # REDIRECT by default
