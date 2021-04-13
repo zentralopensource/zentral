@@ -171,7 +171,7 @@ pack.conf  ([Real examples](https://github.com/osquery/osquery/blob/master/packs
 $ curl -XPUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/x-osquery-conf' \
-  -d @pack.conf \
+  --data-binary @pack.conf \
   https://zentral.example.com/api/osquery/packs/second-pack-slug/ \
   |python -m json.tool
 ```
@@ -218,7 +218,7 @@ queries:
 $ curl -XPUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/yaml' \
-  -d @pack.yml \
+  --data-binary @pack.yml \
   https://zentral.example.com/api/osquery/packs/second-pack-slug/ \
   |python -m json.tool
 ```
