@@ -187,7 +187,7 @@ class PackQuery(models.Model):
 
     interval = models.IntegerField(
         validators=[MinValueValidator(10),  # 10s
-                    MaxValueValidator(86400)],  # 1d
+                    MaxValueValidator(1000000)],  # 11d, 13h, 46m, 40s
         help_text="interval in seconds to run the query (subject to splay/smoothing)"
     )
     log_removed_actions = models.BooleanField(
