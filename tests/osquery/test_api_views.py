@@ -233,7 +233,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'queries': {'first_query': {'interval': ['Ensure this value is less than or equal to 86400.']}}}
+            {'queries': {'first_query': {'interval': ['Ensure this value is less than or equal to 1000000.']}}}
         )
 
     def test_put_invalid_shard_query(self):

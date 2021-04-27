@@ -57,7 +57,7 @@ class OsqueryPlatformField(serializers.ListField):
 
 class OsqueryQuerySerializer(serializers.Serializer):
     query = serializers.CharField(allow_blank=False)
-    interval = serializers.IntegerField(min_value=1, max_value=86400)
+    interval = serializers.IntegerField(min_value=1, max_value=1000000)
     removed = serializers.BooleanField(required=False)
     snapshot = serializers.BooleanField(required=False)
     platform = OsqueryPlatformField(required=False)
