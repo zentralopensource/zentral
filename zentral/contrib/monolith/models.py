@@ -338,6 +338,12 @@ class Condition(models.Model):
     def can_be_deleted(self):
         return not self.submanifestpkginfo_set.count() and not self.submanifestattachment_set.count()
 
+    def manifests(self):
+        return Manifest.objects.distinct().filter(
+            Q(manifestsubmanifest__sub_manifest__submanifestpkginfo__condition=self)
+            | Q(manifestsubmanifest__sub_manifest__submanifestattachment__condition=self)
+        )
+
 
 class SubManifestPkgInfo(models.Model):
     sub_manifest = models.ForeignKey(SubManifest, on_delete=models.CASCADE)

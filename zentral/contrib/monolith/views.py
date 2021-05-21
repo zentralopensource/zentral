@@ -378,6 +378,12 @@ class UpdateConditionView(PermissionRequiredMixin, UpdateView):
         context['title'] = "Update condition {}".format(condition.name)
         return context
 
+    def form_valid(self, form):
+        condition = form.save()
+        for manifest in condition.manifests():
+            manifest.bump_version()
+        return redirect(condition)
+
 
 class DeleteConditionView(PermissionRequiredMixin, DeleteView):
     permission_required = "monolith.delete_condition"
