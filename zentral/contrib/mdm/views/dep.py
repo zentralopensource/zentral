@@ -68,7 +68,7 @@ class DEPEnrollView(DEPEnrollMixin, MDMProfileResponseMixin, View):
         return self.request.read()
 
     def post(self, request, *args, **kwargs):
-        payload = self.get_payload(request)
+        payload = self.get_payload()
         es_request, dep_profile = self.verify_dep_profile_enrollment_secret()
         if dep_profile.realm:
             # should never happen
