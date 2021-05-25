@@ -4,15 +4,15 @@ WORKDIR /go/src/
 RUN mkdir -p github.com/micromdm && \
     git clone https://github.com/micromdm/scep.git github.com/micromdm/scep
 WORKDIR /go/src/github.com/micromdm/scep/
-RUN make deps && make build-scepserver
+RUN make scepserver-linux-amd64
 
 
-FROM debian:stretch-slim
+FROM debian:10-slim
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -yq python3 vim openssl python3-pip
 
-COPY --from=build_container /go/src/github.com/micromdm/scep/build/scepserver-linux-amd64 /usr/local/bin/scepserver
+COPY --from=build_container /go/src/github.com/micromdm/scep/scepserver-linux-amd64 /usr/local/bin/scepserver
 
 RUN groupadd -r scep --gid=999 && useradd -r -s /bin/false -g scep --uid=999 scep
 
