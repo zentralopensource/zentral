@@ -36,7 +36,13 @@
 
 <dl class="dl-horizontal">
   <dt>Realm</dt>
-  <dd><a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a></dd>
+  <dd>
+    {% if object.realm %}
+    <a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a>
+    {% else %}
+    -
+    {% endif %}
+  </dd>
   <dt>Use realm user</dt>
   <dd>{{ object.use_realm_user|yesno }}</dd>
   <dt>Realm user is admin</dt>
