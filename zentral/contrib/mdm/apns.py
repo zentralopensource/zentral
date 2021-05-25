@@ -63,15 +63,15 @@ class APNSClient(object):
                         "response_status": response_status})
         return MDMDeviceNotificationEvent(metadata, payload)
 
-    def send_device_notification(self, enrolled_device, apns_expiration=3600, apns_priority=5):
+    def send_device_notification(self, enrolled_device, apns_priority=10):
         if enrolled_device.push_certificate != self.push_certificate:
-            raise ValueError("Enrolled device {} has a different push certificate".format(enrolled_device.pk))
+            raise ValueError("Enrolled device {} has a different push certificate".format(enrolled_device.pk))
         if not enrolled_device.can_be_poked():
             raise ValueError("Cannot send notification to enrolled device {}".format(enrolled_device.pk))
         url = "/3/device/{}".format(enrolled_device.token.hex())
         body = json.dumps({"mdm": enrolled_device.push_magic}).encode("utf-8")
         headers = {"Content-Type": "application/json; charset=utf-8",
-                   "apns-expiration": str(apns_expiration),
+                   "apns-expiration": str(int(time.time()) + 3600),
                    "apns-priority": str(apns_priority),
                    "apns-topic": self.push_certificate.topic}
         if self.conn is None:
