@@ -14,14 +14,18 @@ from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DeviceSearchForm,
-                                       CreateDEPProfileForm, UpdateDEPProfileForm, OTAEnrollmentForm,
+                                       CreateDEPProfileForm, UpdateDEPProfileForm,
+                                       OTAEnrollmentForm,
+                                       UserEnrollmentForm, UserEnrollmentEnrollForm,
                                        UploadConfigurationProfileForm)
 from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate,
                                         EnrolledDevice,
                                         DEPDevice, DEPEnrollmentSession, DEPProfile,
                                         OTAEnrollment, OTAEnrollmentSession,
+                                        UserEnrollment, UserEnrollmentSession,
                                         KernelExtensionPolicy, MDMEnrollmentPackage, ConfigurationProfile)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
+                                          build_mdm_configuration_profile,
                                           build_profile_service_configuration_profile)
 from zentral.contrib.mdm.tasks import send_enrolled_device_notification, send_mbu_enrolled_devices_notifications
 from zentral.utils.osx_package import get_standalone_package_builders
@@ -58,6 +62,8 @@ class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
                                                          .order_by("name", "pk"))
         context["ota_enrollment_list"] = (OTAEnrollment.objects.filter(enrollment_secret__meta_business_unit=mbu)
                                                                .order_by("name", "pk"))
+        context["user_enrollment_list"] = (UserEnrollment.objects.filter(enrollment_secret__meta_business_unit=mbu)
+                                                                 .order_by("name", "pk"))
         context["kext_policy_list"] = (KernelExtensionPolicy.objects.filter(meta_business_unit=mbu,
                                                                             trashed_at__isnull=True)
                                                                     .order_by("pk"))
@@ -218,6 +224,7 @@ class UpdateDEPProfileView(LoginRequiredMixin, TemplateView):
                                   enrollment_secret_form=enrollment_secret_form)
         )
 
+
 # OTA Enrollments
 
 
@@ -365,6 +372,126 @@ class OTAEnrollmentEnrollView(View):
                 build_profile_service_configuration_profile(ota_enrollment_session),
                 "zentral_profile_service"
             )
+
+
+# User Enrollments
+
+
+class CreateUserEnrollmentView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/create_user_enrollment.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["meta_business_unit"] = self.meta_business_unit
+        user_enrollment_form = kwargs.get("user_enrollment_form")
+        if not user_enrollment_form:
+            user_enrollment_form = UserEnrollmentForm(prefix="ue")
+        context["user_enrollment_form"] = user_enrollment_form
+        enrollment_secret_form = kwargs.get("enrollment_secret_form")
+        if not enrollment_secret_form:
+            enrollment_secret_form = EnrollmentSecretForm(
+                prefix="es",
+                meta_business_unit=self.meta_business_unit,
+            )
+        context["enrollment_secret_form"] = enrollment_secret_form
+        return context
+
+    def post(self, request, *args, **kwargs):
+        user_enrollment_form = UserEnrollmentForm(request.POST, prefix="ue")
+        enrollment_secret_form = EnrollmentSecretForm(
+            request.POST,
+            prefix="es",
+            meta_business_unit=self.meta_business_unit,
+        )
+        if user_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
+            user_enrollment = user_enrollment_form.save(commit=False)
+            user_enrollment.enrollment_secret = enrollment_secret_form.save()
+            enrollment_secret_form.save_m2m()
+            user_enrollment.save()
+            return HttpResponseRedirect(user_enrollment.get_absolute_url())
+        else:
+            return self.render_to_response(
+                self.get_context_data(user_enrollment_form=user_enrollment_form,
+                                      enrollment_secret_form=enrollment_secret_form)
+            )
+
+
+class UserEnrollmentView(LoginRequiredMixin, DetailView):
+    template_name = "mdm/user_enrollment.html"
+    model = UserEnrollment
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        user_enrollment = ctx["object"]
+        ctx["meta_business_unit"] = user_enrollment.enrollment_secret.meta_business_unit
+        ctx["enroll_url"] = user_enrollment.get_enroll_full_url()
+        # TODO: pagination
+        ctx["user_enrollment_sessions"] = (ctx["object"].userenrollmentsession_set.all()
+                                                        .select_related("enrollment_secret")
+                                                        .order_by("-created_at"))
+        ctx["user_enrollment_sessions_count"] = ctx["user_enrollment_sessions"].count()
+        return ctx
+
+
+class RevokeUserEnrollmentView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/revoke_user_enrollment.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.user_enrollment = get_object_or_404(
+            UserEnrollment,
+            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
+            pk=kwargs["pk"]
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["user_enrollment"] = self.user_enrollment
+        ctx["meta_business_unit"] = self.user_enrollment.enrollment_secret.meta_business_unit
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        self.user_enrollment.revoke()
+        return HttpResponseRedirect(self.user_enrollment.get_absolute_url())
+
+
+class UserEnrollmentEnrollView(FormView):
+    form_class = UserEnrollmentEnrollForm
+    template_name = "mdm/user_enrollment_enroll.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.user_enrollment = get_object_or_404(
+            UserEnrollment,
+            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
+            pk=kwargs["pk"]
+        )
+        if not self.user_enrollment.enrollment_secret.is_valid():
+            # should not happen
+            raise SuspiciousOperation
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["user_enrollment"] = self.user_enrollment
+        return ctx
+
+    def form_valid(self, form):
+        managed_apple_id = form.cleaned_data["managed_apple_id"]
+        user_enrollment_session = UserEnrollmentSession.objects.create_from_managed_apple_id(
+            self.user_enrollment, managed_apple_id
+        )
+        push_certificate = (user_enrollment_session.enrollment_secret
+                                                   .meta_business_unit
+                                                   .metabusinessunitpushcertificate
+                                                   .push_certificate)
+        return build_configuration_profile_response(
+            build_mdm_configuration_profile(user_enrollment_session, push_certificate),
+            "zentral_user_enrollment"
+        )
 
 
 # kernel extension policies

@@ -170,10 +170,15 @@ class EnrollmentSession(models.Model):
         return "MBU${}".format(self.enrollment_secret.meta_business_unit.pk)
 
     def get_serial_number(self):
-        return self.enrollment_secret.serial_numbers[0]
+        try:
+            return self.enrollment_secret.serial_numbers[0]
+        except TypeError:
+            pass
 
     def get_urlsafe_serial_number(self):
-        return MetaMachine(self.get_serial_number()).get_urlsafe_serial_number()
+        serial_number = self.get_serial_number()
+        if serial_number:
+            return MetaMachine(serial_number).get_urlsafe_serial_number()
 
     def get_challenge(self):
         path = reverse("mdm:verify_scep_csr")
@@ -723,6 +728,117 @@ class DEPEnrollmentSession(EnrollmentSession):
 
     def serialize_for_event(self):
         return super().serialize_for_event("dep", self.dep_profile.serialize_for_event())
+
+    # status update methods
+
+    def set_scep_verified_status(self, es_request):
+        test = (es_request
+                and self.status == self.STARTED
+                and self.scep_request is None
+                and not self.enrolled_device)
+        self._set_next_status(self.SCEP_VERIFIED, test, scep_request=es_request)
+
+    def set_authenticated_status(self, enrolled_device):
+        test = (enrolled_device
+                and self.status == self.SCEP_VERIFIED
+                and self.scep_request is not None
+                and not self.enrolled_device)
+        self._set_next_status(self.AUTHENTICATED, test, enrolled_device=enrolled_device)
+
+    def set_completed_status(self, enrolled_device):
+        test = (enrolled_device
+                and self.status == self.AUTHENTICATED
+                and self.scep_request is not None
+                and self.enrolled_device == enrolled_device)
+        self._set_next_status(self.COMPLETED, test)
+
+
+# User Enrollment
+
+
+class UserEnrollment(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+                                             related_name="user_enrollment")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return self.name
+
+    def serialize_for_event(self):
+        d = {"pk": self.pk,
+             "name": self.name,
+             "created_at": self.created_at,
+             "updated_at": self.updated_at}
+        d.update(self.enrollment_secret.serialize_for_event())
+        return {"user_enrollment": d}
+
+    def get_absolute_url(self):
+        return reverse("mdm:user_enrollment", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
+
+    def get_enroll_full_url(self):
+        path = reverse("mdm:user_enrollment_enroll", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
+        return "{}{}".format(settings["api"]["tls_hostname"], path)
+
+    def revoke(self):
+        if not self.enrollment_secret.revoked_at:
+            # TODO events
+            self.enrollment_secret.revoked_at = timezone.now()
+            self.enrollment_secret.save()
+            self.save()
+
+
+class UserEnrollmentSessionManager(models.Manager):
+    def create_from_managed_apple_id(self, user_enrollment, managed_apple_id):
+        enrollment_secret = user_enrollment.enrollment_secret
+        tags = list(enrollment_secret.tags.all())
+        new_es = EnrollmentSecret(
+            meta_business_unit=enrollment_secret.meta_business_unit,
+            quota=1,
+            expired_at=enrollment_secret.expired_at
+        )
+        new_es.save(secret_length=55)  # CN max 64 - $ separator - mdm$user
+        new_es.tags.set(tags)
+        enrollment_session = self.model(status=self.model.STARTED,
+                                        user_enrollment=user_enrollment,
+                                        managed_apple_id=managed_apple_id,
+                                        enrollment_secret=new_es)
+        enrollment_session.save()
+        return enrollment_session
+
+
+class UserEnrollmentSession(EnrollmentSession):
+    STARTED = "STARTED"
+    SCEP_VERIFIED = "SCEP_VERIFIED"
+    AUTHENTICATED = "AUTHENTICATED"
+    COMPLETED = "COMPLETED"
+    STATUS_CHOICES = (
+        (STARTED, _("Started")),
+        (SCEP_VERIFIED, _("SCEP verified")),
+        (AUTHENTICATED, _("Authenticated")),  # first MDM Checkin Authenticate call
+        (COMPLETED, _("Completed")),  # first MDM Checkin TokenUpdate call
+    )
+    status = models.CharField(max_length=64, choices=STATUS_CHOICES)
+    user_enrollment = models.ForeignKey(UserEnrollment, on_delete=models.CASCADE)
+    managed_apple_id = models.EmailField()
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+                                             related_name="user_enrollment_session")
+    scep_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT, null=True, related_name="+")
+
+    objects = UserEnrollmentSessionManager()
+
+    def get_prefix(self):
+        if self.status == self.STARTED:
+            return "MDM$USER"
+        else:
+            raise ValueError("Wrong enrollment sessions status")
+
+    def serialize_for_event(self):
+        return super().serialize_for_event("user", self.user_enrollment.serialize_for_event())
 
     # status update methods
 

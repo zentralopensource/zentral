@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">MDM</li>
+  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
+  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
+  <li class="active">User enrollment {{ object.name }}</li>
+</ol>
+
+<h2>User enrollment <i>{{ object.name }}</i></h2>
+
+{% with object.enrollment_secret as secret %}
+<p>
+  {% if secret.is_valid|first %}
+  <a class="btn btn-danger"
+     href="{% url 'mdm:revoke_user_enrollment' meta_business_unit.id object.id %}">
+    <span class="glyphicon glyphicon-remove-circle" aria-hidden="true"></span>
+    Revoke
+  </a>
+  {% endif %}
+</p>
+
+<div class="row">
+  <div class="col-md-6">
+    <dl class="dl-horizontal">
+      <dt>Name</dt>
+      <dd>{{ object.name }}</dd>
+      <dt>Enrollment URL</dt>
+      <dd>
+        {% if enroll_url %}
+        <a href="{{ enroll_url }}">{{ enroll_url }}</a>
+        {% else %}
+        -
+        {% endif %}
+      </dd>
+      <dt>Business unit</dt>
+      <dd><a href="{% url 'mdm:mbu' secret.meta_business_unit.id %}">{{ secret.meta_business_unit }}</a></dd>
+      <dt>Enrollment tags</dt>
+      <dd>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</dd>
+      <dt>Serial number{{ secret.serial_numbers|length|pluralize }}</dt>
+      <dd>{% for serial_number, urlsafe_serial_number in secret.urlsafe_serial_numbers %}<a href="{% url 'mdm:device' urlsafe_serial_number %}">{{ serial_number }}</a>{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</dd>
+      <dt>UDID{{ secret.udids|length|pluralize }}</dt>
+      <dd>{% if secret.udids %}{{ secret.udids|join:", " }}{% else %}-{% endif %}</dd>
+    </dl>
+  </div>
+  <div class="col-md-6">
+    <dl class="dl-horizontal">
+      <dt>Request count</dt>
+      <dd class="{% if secret.is_used_up %}bg-danger{% else %}bg-success{% endif %}">
+        {{ secret.request_count }}{% if secret.quota %}/{{ secret.quota }}{% endif %}
+      </dd>
+      <dt>Expired</dt>
+      <dd class="{% if secret.is_expired %}bg-danger{% else %}bg-success{% endif %}">
+        {{ secret.expired_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
+      </dd>
+      <dt>Revoked</dt>
+      <dd class="{% if secret.is_revoked %}bg-danger{% else %}bg-success{% endif %}">
+        {{ secret.revoked_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
+      </dd>
+    </dl>
+  </div>
+  <div class="col-md-12">
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+    </dl>
+  </div>
+</div>
+{% endwith %}
+
+<h2>{{ user_enrollment_sessions_count }} Session{{ user_enrollment_sessions_count|pluralize }}</h2>
+
+<table class="table">
+  <thead>
+    <th>Managed apple ID</th>
+    <th>Status</th>
+    <th>Created at</th>
+    <th>Updated at</th>
+  </thead>
+  <tbody>
+    {% for s in user_enrollment_sessions %}
+    <tr>
+      <td>{{ s.managed_apple_id }}</td>
+      <td>{{ s.get_status_display }}</td>
+      <td>{{ s.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ s.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

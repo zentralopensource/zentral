@@ -93,6 +93,43 @@
 </table>
 {% endif %}
 
+<h3>{{ ota_enrollment_list|length }} User enrollment{{ ota_enrollment_list|length|pluralize }}</h3>
+
+<p>
+  <a class="btn btn-default" href="{% url 'mdm:create_user_enrollment' object.id %}">
+    Create
+  </a>
+</p>
+
+{% if user_enrollment_list %}
+<table class="table">
+  <thead>
+    <th class="col-md-4">Name</th>
+    <th class="col-md-3">Enrollment tags</th>
+    <th class="col-md-2">Validity</th>
+    <th class="col-md-2">Created at</th>
+  </thead>
+  <tbody>
+    {% for user_enrollment in user_enrollment_list %}
+    {% with user_enrollment.enrollment_secret as enrollment_secret %}
+    {% with enrollment_secret.is_valid|first as is_valid %}
+    {% with enrollment_secret.is_valid|last as err_msg %}
+    <tr>
+      <td><a href="{{ user_enrollment.get_absolute_url }}">{{ user_enrollment.name }}</a></td>
+      <td>
+        {% for tag in enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}
+      </td>
+      <td class="{% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
+      <td>{{ ota_enrollment.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+    </tr>
+    {% endwith %}
+    {% endwith %}
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
 <h3>Artifacts</h3>
 
 <h4>{{ kext_policy_list|length }} Kernel extension polic{{ kext_policy_list|length|pluralize:"y,ies" }}</h4>

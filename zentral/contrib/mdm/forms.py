@@ -6,7 +6,7 @@ from zentral.contrib.inventory.models import MetaMachine
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .models import (DEPDevice, DEPOrganization, DEPProfile, DEPToken, DEPVirtualServer,
-                     OTAEnrollment, PushCertificate, MetaBusinessUnitPushCertificate,
+                     OTAEnrollment, UserEnrollment, PushCertificate, MetaBusinessUnitPushCertificate,
                      ConfigurationProfile)
 from .pkcs12 import load_push_certificate
 
@@ -15,6 +15,16 @@ class OTAEnrollmentForm(forms.ModelForm):
     class Meta:
         model = OTAEnrollment
         fields = ("name", "realm")
+
+
+class UserEnrollmentForm(forms.ModelForm):
+    class Meta:
+        model = UserEnrollment
+        fields = ("name",)
+
+
+class UserEnrollmentEnrollForm(forms.Form):
+    managed_apple_id = forms.EmailField(label="Email", required=True)
 
 
 class PushCertificateForm(forms.ModelForm):
