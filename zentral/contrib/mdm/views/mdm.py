@@ -107,9 +107,20 @@ class CheckinView(MDMView):
                                           "topic": self.push_certificate.topic}
         super().post_event(*args, **kwargs)
 
+    def get_push_certificate(self):
+        topic = self.payload.get("Topic")
+        try:
+            self.push_certificate = PushCertificate.objects.get(topic=topic)
+        except PushCertificate.DoesNotExist:
+            self.abort("unknown topic", topic=topic)
+
     def do_authenticate(self):
+        self.get_push_certificate()
         # commit machine infos
-        self.commit_tree()
+        commit_machine_snapshot_and_trigger_events(tree_from_payload(self.udid,
+                                                                     self.serial_number,
+                                                                     self.meta_business_unit,
+                                                                     self.payload))
 
         # save the enrolled device (NOT YET ENROLLED!)
         enrolled_device_defaults = {"enrollment_id": self.payload.get("EnrollmentID"),
@@ -136,7 +147,7 @@ class CheckinView(MDMView):
             self.post_event("success", reenrollment=True)
 
     def do_token_update(self):
-        # TODO: do something with AwaitingConfiguration. Part of the DEP setup.
+        self.get_push_certificate()
         awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
         enrolled_device_defaults = {"enrollment_id": self.payload.get("EnrollmentID"),
                                     "awaiting_configuration": awaiting_configuration,
@@ -208,7 +219,32 @@ class CheckinView(MDMView):
                         device_created=device_created,
                         user_created=user_created)
 
+    def do_set_bootstrap_token(self):
+        awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
+        bootstrap_token = self.payload.get("BootstrapToken")
+        result = (EnrolledDevice.objects.filter(udid=self.udid)
+                                        .update(awaiting_configuration=awaiting_configuration,
+                                                bootstrap_token=bootstrap_token))
+        if result == 1:
+            self.post_event("success")
+        else:
+            self.abort(f"Enrolled device {self.udid} not found")
+
+    def do_get_bootstrap_token(self):
+        try:
+            enrolled_device = EnrolledDevice.objects.get(udid=self.udid)
+        except EnrolledDevice.DoesNotExist:
+            self.abort(f"Enrolled device {self.udid} not found")
+        else:
+            if not enrolled_device.bootstrap_token:
+                self.abort(f"Enrolled device {self.udid} has no bootstrap token")
+            else:
+                self.post_event("success")
+                return HttpResponse(plistlib.dumps({"BootstrapToken": enrolled_device.bootstrap_token.tobytes()}),
+                                    content_type="application/xml")
+
     def do_checkout(self):
+        self.get_push_certificate()
         try:
             enrolled_device = EnrolledDevice.objects.get(push_certificate=self.push_certificate,
                                                          udid=self.udid)
@@ -220,22 +256,8 @@ class CheckinView(MDMView):
             enrolled_device.do_checkout()
             self.post_event("success")
 
-    def commit_tree(self):
-        commit_machine_snapshot_and_trigger_events(tree_from_payload(self.udid,
-                                                                     self.serial_number,
-                                                                     self.meta_business_unit,
-                                                                     self.payload))
-
     def do_put(self):
         self.message_type = self.payload.get("MessageType")
-        self.push_certificate = None
-
-        # get push certificate
-        topic = self.payload.get("Topic")
-        try:
-            self.push_certificate = PushCertificate.objects.get(topic=topic)
-        except PushCertificate.DoesNotExist:
-            self.abort("unknown topic", topic=topic)
 
         # route the payload
         if self.message_type == "Authenticate":
@@ -246,6 +268,10 @@ class CheckinView(MDMView):
             return HttpResponse(status_code=410)
         elif self.message_type == "TokenUpdate":
             self.do_token_update()
+        elif self.message_type == "SetBootstrapToken":
+            self.do_set_bootstrap_token()
+        elif self.message_type == "GetBootstrapToken":
+            return self.do_get_bootstrap_token()
         elif self.message_type == "CheckOut":
             self.do_checkout()
         else:
