@@ -88,6 +88,9 @@ class EnrolledDevice(models.Model):
     # unlock token
     unlock_token = models.BinaryField(blank=True, null=True)
 
+    # bootstrap token
+    bootstrap_token = models.BinaryField(blank=True, null=True)
+
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -483,36 +486,43 @@ class DEPVirtualServer(models.Model):
 
 
 class DEPProfile(models.Model):
+    # https://developer.apple.com/documentation/devicemanagement/skipkeys
     SKIPPABLE_SETUP_PANES = (
+        ("Accessibility", True),
+        ("Android", True),
+        ("Appearance", False),
         ("AppleID", True),
         ("Biometric", False),
+        ("DeviceToDeviceMigration", True),
         ("Diagnostics", True),
         ("DisplayTone", True),
+        ("FileVault", True),
+        ("HomeButtonSensitivity", True),
+        ("iCloudDiagnostics", True),
+        ("iCloudStorage", True),
+        ("iMessageAndFaceTime", True),
         ("Location", False),  # messes with NTP and other things?
+        ("MessagingActivationUsingPhoneNumber", True),
+        ("OnBoarding", True),
         ("Passcode", True),
         ("Payment", True),
         ("Privacy", True),
         ("Restore", True),
-        ("Siri", True),
-        ("TOS", True),
-        ("Zoom", True),
-        ("Android", True),
-        ("Appearance", True),
-        ("HomeButtonSensitivity", True),
-        ("iMessageAndFaceTime", True),
-        ("OnBoarding", True),
-        ("ScreenTime", True),
-        ("SoftwareUpdate", True),
-        ("WatchMigration", True),
-        ("FileVault", True),
-        ("iCloudDiagnostics", True),
-        ("iCloudStorage", True),
-        ("Registration", True),
+        ("RestoreCompleted", True),
         ("ScreenSaver", True),
+        ("ScreenTime", True),
+        ("SIMSetup", True),
+        ("Siri", True),
+        ("SoftwareUpdate", True),
         ("TapToSetup", True),
+        ("TOS", True),
         ("TVHomeScreenSync", True),
         ("TVProviderSignIn", True),
         ("TVRoom", True),
+        ("UpdateCompleted", True),
+        ("WatchMigration", True),
+        ("Welcome", True),
+        ("Zoom", True),
     )
     SKIPPABLE_SETUP_PANE_CHOICES = [(name, name) for name, __ in SKIPPABLE_SETUP_PANES]
 
@@ -655,7 +665,7 @@ class DEPDevice(models.Model):
 
 
 class DEPEnrollmentSessionManager(models.Manager):
-    def create_from_dep_profile(self, dep_profile, serial_number, udid, payload, commit=False):
+    def create_from_dep_profile(self, dep_profile, serial_number, udid, payload, commit=True):
         # Build a new secret, only for one enrollment, only for this machine
         # scep server.
 
