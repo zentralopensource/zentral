@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<h2>Enroll with user enrollment <i>{{ user_enrollment }}</i></h2>
+
+<form method="POST">{% csrf_token %}
+  {{ form.as_p }}
+  <p>
+    <button class="btn btn-danger" type="submit">Enroll</button>
+  </p>
+</form>
+{% endblock %}

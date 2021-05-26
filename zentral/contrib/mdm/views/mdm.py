@@ -8,7 +8,7 @@ from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_
 from zentral.contrib.mdm.commands import queue_account_configuration_command_if_needed
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.models import (EnrolledDevice, EnrolledUser,
-                                        DEPEnrollmentSession, OTAEnrollmentSession,
+                                        DEPEnrollmentSession, OTAEnrollmentSession, UserEnrollmentSession,
                                         PushCertificate)
 from zentral.contrib.mdm.tasks import send_enrolled_device_notification
 from zentral.utils.certificates import parse_dn
@@ -70,12 +70,21 @@ class MDMView(PostEventMixin, View):
                 )
             except DEPEnrollmentSession.DoesNotExist:
                 self.abort("Bad DEP enrollment session secret in client certificate CN")
+        elif enrollment_type == "USER":
+            try:
+                self.enrollment_session = (
+                    UserEnrollmentSession.objects
+                    .select_for_update()
+                    .get(enrollment_secret__secret=enrollment_secret_secret)
+                )
+            except UserEnrollmentSession.DoesNotExist:
+                self.abort("Bad user enrollment session secret in client certificate CN")
         else:
             self.abort("unknown MDM enrollment type {}".format(enrollment_type))
 
         # verify serial number
         self.serial_number = dn_d.get("serialNumber")
-        if not self.serial_number:
+        if not self.serial_number and enrollment_type != "USER":
             self.abort("empty serial number in client certificate CN")
 
         # verify meta business unit
@@ -91,7 +100,12 @@ class MDMView(PostEventMixin, View):
 
         # read payload
         self.payload = plistlib.loads(self.request.read())
+        self.enrollment_id = self.payload.get("EnrollmentID")
+        self.enrollment_user_id = self.payload.get("EnrollmentUserID")
         self.udid = self.payload.get("UDID")
+        self.user_id = self.payload.get("UserID")
+        if not self.serial_number:
+            self.serial_number = self.enrollment_id
         return self.do_put()
 
 
@@ -117,13 +131,13 @@ class CheckinView(MDMView):
     def do_authenticate(self):
         self.get_push_certificate()
         # commit machine infos
-        commit_machine_snapshot_and_trigger_events(tree_from_payload(self.udid,
+        commit_machine_snapshot_and_trigger_events(tree_from_payload(self.udid or self.enrollment_id,
                                                                      self.serial_number,
                                                                      self.meta_business_unit,
                                                                      self.payload))
 
         # save the enrolled device (NOT YET ENROLLED!)
-        enrolled_device_defaults = {"enrollment_id": self.payload.get("EnrollmentID"),
+        enrolled_device_defaults = {"enrollment_id": self.enrollment_id,
                                     "awaiting_configuration": None,
                                     "serial_number": self.serial_number,
                                     "push_certificate": self.push_certificate,
@@ -131,7 +145,7 @@ class CheckinView(MDMView):
                                     "push_magic": None,
                                     "unlock_token": None,
                                     "checkout_at": None}
-        enrolled_device, created = EnrolledDevice.objects.update_or_create(udid=self.udid,
+        enrolled_device, created = EnrolledDevice.objects.update_or_create(udid=self.udid or self.enrollment_id,
                                                                            defaults=enrolled_device_defaults)
 
         # purge the installed artifacts and sent commands, to start from scratch
@@ -149,24 +163,27 @@ class CheckinView(MDMView):
     def do_token_update(self):
         self.get_push_certificate()
         awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
-        enrolled_device_defaults = {"enrollment_id": self.payload.get("EnrollmentID"),
+        enrolled_device_defaults = {"enrollment_id": self.enrollment_id,
                                     "awaiting_configuration": awaiting_configuration,
                                     "serial_number": self.serial_number,
                                     "push_certificate": self.push_certificate,
                                     "push_magic": self.payload.get("PushMagic"),
-                                    "unlock_token": self.payload.get("UnlockToken"),
                                     "checkout_at": None}
+
+        # UnlockToken can be absent, and must not be deleted
+        unlock_token = self.payload.get("UnlockToken")
+        if unlock_token:
+            enrolled_device_defaults["unlock_token"] = unlock_token
 
         payload_token = self.payload.get("Token")
 
-        user_id = self.payload.get("UserID")
-        if not user_id:
+        if not self.user_id and not self.enrollment_user_id:
             # payload token is the enrolled device token
             enrolled_device_defaults["token"] = payload_token
 
         # enrolled device
         enrolled_device, device_created = EnrolledDevice.objects.update_or_create(
-            udid=self.udid,
+            udid=self.udid or self.enrollment_id,
             defaults=enrolled_device_defaults
         )
 
@@ -184,7 +201,7 @@ class CheckinView(MDMView):
                 logger.error("AwaitingConfiguration but not a DEP enrollment session ???")
 
         # send first push notifications
-        if not user_id and enrolled_device.can_be_poked():
+        if not self.user_id and not self.enrollment_user_id and enrolled_device.can_be_poked():
             transaction.on_commit(lambda: send_enrolled_device_notification(
                 enrolled_device,
                 delay=self.first_device_notification_delay
@@ -200,22 +217,25 @@ class CheckinView(MDMView):
 
         # enrolled user
         user_created = False
-        if user_id and user_id.upper() != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF":
+        if (
+            (self.user_id and self.user_id.upper() != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")
+            or self.enrollment_user_id
+        ):
             # user channel and no shared ipad
             # see https://developer.apple.com/documentation/devicemanagement/tokenupdaterequest
             enrolled_user_defaults = {"enrolled_device": enrolled_device,
-                                      "enrollment_id": self.payload.get("EnrollmentUserID"),
+                                      "enrollment_id": self.enrollment_user_id,
                                       "long_name": self.payload.get("UserLongName"),
                                       "short_name": self.payload.get("UserShortName"),
                                       "token": payload_token}
             enrolled_user, user_created = EnrolledUser.objects.update_or_create(
-                user_id=user_id,
+                user_id=self.user_id or self.enrollment_user_id,
                 defaults=enrolled_user_defaults
             )
 
         self.post_event("success",
-                        token_type="user" if user_id else "device",
-                        user_id=user_id,
+                        token_type="user" if (self.user_id or self.enrollment_user_id) else "device",
+                        user_id=self.user_id or self.enrollment_user_id,
                         device_created=device_created,
                         user_created=user_created)
 
@@ -247,11 +267,11 @@ class CheckinView(MDMView):
         self.get_push_certificate()
         try:
             enrolled_device = EnrolledDevice.objects.get(push_certificate=self.push_certificate,
-                                                         udid=self.udid)
+                                                         udid=self.udid or self.enrollment_id)
         except EnrolledDevice.DoesNotExist:
             self.abort("Could not do checkout. Unknown enrolled device",
                        push_certificate_topic=self.push_certificate.topic,
-                       device_udid=self.udid)
+                       device_udid=self.udid or self.enrollment_id)
         else:
             enrolled_device.do_checkout()
             self.post_event("success")
@@ -264,7 +284,7 @@ class CheckinView(MDMView):
             self.do_authenticate()
         elif self.message_type == "UserAutenticate":
             # TODO: network / mobile user management
-            self.post_event("warning", user_id=self.payload.get("UserID"))
+            self.post_event("warning", user_id=self.user_id or self.enrollment_user_id)
             return HttpResponse(status_code=410)
         elif self.message_type == "TokenUpdate":
             self.do_token_update()
@@ -291,11 +311,10 @@ class ConnectView(MDMView):
     def do_put(self):
         command_uuid = self.payload.get("CommandUUID", None)
         payload_status = self.payload["Status"]
-        user_id = self.payload.get("UserID")
         self.post_event(self.get_success(payload_status),
                         command_uuid=command_uuid,
                         payload_status=payload_status,
-                        user_id=user_id)
+                        user_id=self.user_id or self.enrollment_user_id)
 
         enrolled_device = self.enrollment_session.enrolled_device
 
@@ -306,7 +325,7 @@ class ConnectView(MDMView):
                                    self.payload)
 
         # response
-        if user_id:
+        if self.user_id or self.enrollment_user_id:
             # TODO: do something!!!
             return HttpResponse()
         elif payload_status in ["Idle", "Acknowledged", "Error", "CommandFormatError"]:

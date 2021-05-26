@@ -1,6 +1,6 @@
 import logging
 from zentral.contrib.mdm.events import MDMSCEPVerificationEvent
-from zentral.contrib.mdm.models import DEPEnrollmentSession, OTAEnrollmentSession
+from zentral.contrib.mdm.models import DEPEnrollmentSession, OTAEnrollmentSession, UserEnrollmentSession
 from zentral.utils.api_views import BaseVerifySCEPCSRView
 
 
@@ -14,7 +14,6 @@ class VerifySCEPCSRView(BaseVerifySCEPCSRView):
     event_class = MDMSCEPVerificationEvent
 
     def get_enrollment_session_info(self, cn_prefix):
-        # CN prefix => OTA enrollment phase
         if cn_prefix == "OTA" or cn_prefix == "MDM$OTA":
             model = "ota_enrollment_session"
             if cn_prefix == "OTA":
@@ -23,5 +22,7 @@ class VerifySCEPCSRView(BaseVerifySCEPCSRView):
                 return model, OTAEnrollmentSession.PHASE_3, "set_phase3_scep_verified_status"
         elif cn_prefix == "MDM$DEP":
             return "dep_enrollment_session", DEPEnrollmentSession.STARTED, "set_scep_verified_status"
+        elif cn_prefix == "MDM$USER":
+            return "user_enrollment_session", UserEnrollmentSession.STARTED, "set_scep_verified_status"
         else:
             self.abort("Unknown CN prefix {}".format(cn_prefix))

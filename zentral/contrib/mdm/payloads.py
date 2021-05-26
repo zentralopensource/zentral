@@ -67,13 +67,16 @@ def build_root_ca_configuration_profile():
 
 
 def build_scep_payload(enrollment_session):
+    subject = [[["CN", enrollment_session.get_common_name()]]]
+    serial_number = enrollment_session.get_serial_number()
+    if serial_number:
+        subject.append([["2.5.4.5", serial_number]])
+    subject.append([["O", enrollment_session.get_organization()]])
     return build_payload("com.apple.security.scep",
                          enrollment_session.get_payload_name(),
                          "scep",
                          {"URL": "{}/scep".format(settings["api"]["tls_hostname"]),  # TODO: hardcoded scep url
-                          "Subject": [[["CN", enrollment_session.get_common_name()]],
-                                      [["2.5.4.5", enrollment_session.get_serial_number()]],
-                                      [["O", enrollment_session.get_organization()]]],
+                          "Subject": subject,
                           "Challenge": enrollment_session.get_challenge(),
                           "Keysize": 2048,
                           "KeyType": "RSA",
@@ -111,22 +114,29 @@ def build_ota_scep_configuration_profile(ota_enrollment_session):
 def build_mdm_configuration_profile(enrollment_session, push_certificate):
     scep_payload = build_scep_payload(enrollment_session)
     payloads = build_root_ca_payloads()
+    mdm_config = {
+        "IdentityCertificateUUID": scep_payload["PayloadUUID"],
+        "Topic": push_certificate.topic,
+        "ServerURL": "{}{}".format(
+            settings["api"]["tls_hostname_for_client_cert_auth"],
+            reverse("mdm:connect")),
+        "ServerCapabilities": ["com.apple.mdm.bootstraptoken",
+                               "com.apple.mdm.per-user-connections"],
+        "CheckInURL": "{}{}".format(
+            settings["api"]["tls_hostname_for_client_cert_auth"],
+            reverse("mdm:checkin")),
+        "CheckOutWhenRemoved": True,
+    }
+    managed_apple_id = getattr(enrollment_session, "managed_apple_id", None)
+    if managed_apple_id:
+        # User Enrollment
+        mdm_config["ManagedAppleID"] = managed_apple_id
+    else:
+        mdm_config["AccessRights"] = 8191,  # TODO: config
     payloads.extend([
         scep_payload,
         build_payload("com.apple.mdm",
                       "Zentral - MDM",
-                      "mdm",
-                      {"IdentityCertificateUUID": scep_payload["PayloadUUID"],
-                       "Topic": push_certificate.topic,
-                       "ServerURL": "{}{}".format(
-                           settings["api"]["tls_hostname_for_client_cert_auth"],
-                           reverse("mdm:connect")),
-                       "ServerCapabilities": ["com.apple.mdm.per-user-connections"],
-                       "CheckInURL": "{}{}".format(
-                           settings["api"]["tls_hostname_for_client_cert_auth"],
-                           reverse("mdm:checkin")),
-                       "CheckOutWhenRemoved": True,
-                       "AccessRights": 8191,  # TODO: config
-                       })
+                      "mdm", mdm_config)
     ])
     return build_profile("Zentral - MDM enrollment", "mdm", payloads)

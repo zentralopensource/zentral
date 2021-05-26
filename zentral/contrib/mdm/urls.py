@@ -122,6 +122,20 @@ urlpatterns = [
         views.OTAEnrollmentEnrollView.as_view(),
         name='ota_enrollment_enroll'),
 
+    # business_units / user enrollments
+    url(r'^business_units/(?P<pk>\d+)/user_enrollments/create/$',
+        views.CreateUserEnrollmentView.as_view(),
+        name='create_user_enrollment'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/user_enrollments/(?P<pk>\d+)/$',
+        views.UserEnrollmentView.as_view(),
+        name='user_enrollment'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/user_enrollments/(?P<pk>\d+)/revoke/$',
+        views.RevokeUserEnrollmentView.as_view(),
+        name='revoke_user_enrollment'),
+    url(r'^business_units/(?P<mbu_pk>\d+)/user_enrollments/(?P<pk>\d+)/enroll/$',
+        views.UserEnrollmentEnrollView.as_view(),
+        name='user_enrollment_enroll'),
+
     # business_units / management views / kernel extension policies
     url(r'^business_units/(?P<pk>\d+)/kernel_extensions_policies/create/$',
         views.CreateKernelExtensionPolicyView.as_view(),
