@@ -103,7 +103,7 @@ class EnrolledDevice(models.Model):
         self.devicecommand_set.all().delete()
 
     def do_checkout(self):
-        self.token = self.push_magic = self.unlock_token = None
+        self.token = self.push_magic = self.unlock_token = self.bootstrap_token = None
         self.checkout_at = timezone.now()
         self.purge_state()
         self.save()
