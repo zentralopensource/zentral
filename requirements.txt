@@ -13,13 +13,13 @@ django-filter                   # API
 elasticsearch
 geoip2
 gunicorn
-hyper                           # MDM (apns)
+httpx[http2]                    # MDM (apns)
 ipython
 jinja2                          # events templates
 kombu<5                         # events queues
 pip
 prometheus_client               # publish prometheus metrics
-psycopg2-binary
+psycopg2
 pygments                        # SQL syntax highlighting
 pyopenssl                       # MDM
 pyotp                           # Auth / 2nd factor
