@@ -1,26 +1,49 @@
 import base64
 from datetime import timedelta
+import enum
 import logging
+import plistlib
 import uuid
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField, JSONField
-from django.core.exceptions import ObjectDoesNotExist
-from django.db import models
-from django.db.models import F
+from django.db import connection, models
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.text import slugify
+from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 from realms.models import Realm, RealmUser
 from zentral.conf import settings
-from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaBusinessUnit, MetaMachine
-from zentral.utils.osx_package import get_standalone_package_builders
+from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaMachine
+from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
+from zentral.utils.iso_639_1 import ISO_639_1_CHOICES
+from zentral.utils.payloads import get_payload_identifier
 from .exceptions import EnrollmentSessionStatusError
-from .utils import build_mdm_enrollment_package
 
 
 logger = logging.getLogger("zentral.contrib.mdm.models")
+
+
+class Channel(enum.Enum):
+    Device = "Device"
+    User = "User"
+
+    @classmethod
+    def choices(cls):
+        return tuple((i.name, i.value) for i in cls)
+
+
+class Platform(enum.Enum):
+    iOS = "iOS"
+    iPadOS = "iPadOS"
+    macOS = "macOS"
+    tvOS = "tvOS"
+
+    @classmethod
+    def choices(cls):
+        return tuple((i.name, i.value) for i in cls)
+
+    @classmethod
+    def all_values(cls):
+        return [i.value for i in cls]
 
 
 # Push certificates
@@ -46,61 +69,69 @@ class PushCertificate(models.Model):
         return reverse("mdm:push_certificate", args=(self.pk,))
 
 
-# MetaBusinessUnit n <-> 1 PushCertificate
-# Should be a ForeignKey on MetaBusinessUnit, but we don't want to introduce a dependency.
-# MetaBusinessUnitPushCertificate defines, for each MetaBusinessUnit, the corresponding PushCertificate
+# Blueprint
 
 
-class MetaBusinessUnitPushCertificate(models.Model):
-    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.CASCADE)
-    meta_business_unit = models.OneToOneField(MetaBusinessUnit, on_delete=models.CASCADE)
+class Blueprint(models.Model):
+    name = models.CharField(max_length=256, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name", "created_at")
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("mdm:blueprint", args=(self.pk,))
 
 
 # Enrollment
 
 
-class EnrolledDeviceManager(models.Manager):
-    def active_in_mbu(self, meta_business_unit):
-        try:
-            push_certificate = meta_business_unit.metabusinessunitpushcertificate.push_certificate
-        except ObjectDoesNotExist:
-            return self.none()
-        return self.filter(checkout_at__isnull=True,
-                           token__isnull=False,
-                           push_magic__isnull=False,
-                           push_certificate=push_certificate)
-
-
 class EnrolledDevice(models.Model):
-    enrollment_id = models.TextField(null=True)
-    awaiting_configuration = models.BooleanField(null=True)
-
     # device info
-    serial_number = models.TextField(db_index=True)
     udid = models.CharField(max_length=36, unique=True)
+    enrollment_id = models.TextField(null=True)
+    serial_number = models.TextField(db_index=True)
+    platform = models.CharField(max_length=64, choices=Platform.choices())
 
     # push
-    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.CASCADE)
+    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
     token = models.BinaryField(blank=True, null=True)
     push_magic = models.TextField(blank=True, null=True)
 
-    # unlock token
+    # tokens
     unlock_token = models.BinaryField(blank=True, null=True)
-
-    # bootstrap token
     bootstrap_token = models.BinaryField(blank=True, null=True)
+
+    # cert
+    cert_fingerprint = models.BinaryField(blank=True, null=True)
+    cert_not_valid_after = models.DateTimeField(blank=True, null=True)
+
+    blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
+    awaiting_configuration = models.BooleanField(null=True)
 
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    objects = EnrolledDeviceManager()
+    def __str__(self):
+        return self.udid
+
+    def get_absolute_url(self):
+        return reverse("mdm:enrolled_device", args=(self.pk,))
+
+    def get_urlsafe_serial_number(self):
+        if self.serial_number:
+            return MetaMachine(self.serial_number).get_urlsafe_serial_number()
 
     def purge_state(self):
-        self.installeddeviceartifact_set.all().delete()
-        self.devicecommand_set.all().delete()
+        self.commands.all().delete()
+        self.installed_artifacts.all().delete()
+        self.enrolleduser_set.all().delete()
 
     def do_checkout(self):
         self.token = self.push_magic = self.unlock_token = self.bootstrap_token = None
@@ -109,15 +140,23 @@ class EnrolledDevice(models.Model):
         self.save()
 
     def can_be_poked(self):
-        return self.checkout_at is None and self.token is not None and self.push_magic is not None
+        now = timezone.now()
+        return (
+            self.checkout_at is None
+            and self.push_certificate is not None
+            and self.push_certificate.not_before < now
+            and now < self.push_certificate.not_after
+            and self.token is not None
+            and self.push_magic is not None
+        )
 
 
 class EnrolledUser(models.Model):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
-    enrollment_id = models.TextField(null=True)
 
     # user info
     user_id = models.CharField(max_length=36, unique=True)
+    enrollment_id = models.TextField(null=True)
     long_name = models.TextField()
     short_name = models.TextField()
 
@@ -128,39 +167,24 @@ class EnrolledUser(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return self.long_name or self.short_name
 
-# Common base model for the OTA and DEP enrollment sessions
+    def get_absolute_url(self):
+        return reverse("mdm:enrolled_user", args=(self.enrolled_device.pk, self.pk,))
+
+
+# Common base model for the DEP, OTA and user enrollment sessions
 
 
 class EnrollmentSession(models.Model):
-    product = models.TextField()
-    version = models.TextField()
-    imei = models.CharField(max_length=18, null=True)
-    meid = models.CharField(max_length=18, null=True)
-    language = models.CharField(max_length=64, null=True)
-
     realm_user = models.ForeignKey(RealmUser, on_delete=models.PROTECT, blank=True, null=True)
-
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, null=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         abstract = True
-
-    def update_with_payload(self, payload, commit=True):
-        for attr in ("product", "version", "imei", "meid", "language"):
-            val = payload.get(attr.upper(), None)
-            if val:
-                field = self._meta.get_field(attr)
-                field_max_length = getattr(field, "max_length", None)
-                if field_max_length and len(val) > field_max_length:
-                    logger.error("Value %s for field %s too long. Will be truncated.", val, attr)
-                    val = val[:field_max_length]
-                setattr(self, attr, val)
-        if commit:
-            self.save()
 
     def get_common_name(self):
         return "{prefix}${secret}".format(prefix=self.get_prefix(),
@@ -172,7 +196,7 @@ class EnrollmentSession(models.Model):
     def get_serial_number(self):
         try:
             return self.enrollment_secret.serial_numbers[0]
-        except TypeError:
+        except (IndexError, TypeError):
             pass
 
     def get_urlsafe_serial_number(self):
@@ -194,16 +218,9 @@ class EnrollmentSession(models.Model):
         d = {"pk": self.pk,
              "type": enrollment_session_type,
              "status": self.status,
-             "product": self.product,
-             "version": self.version,
-             "language": self.language,
              "enrollment_secret": self.enrollment_secret.serialize_for_event(),
              "created_at": self.created_at,
              "updated_at": self.updated_at}
-        if self.imei:
-            d["imei"] = self.imei
-        if self.meid:
-            d["meid"] = self.meid
         d.update(extra_dict)
         return {"enrollment_session": d}
 
@@ -226,6 +243,10 @@ class OTAEnrollment(models.Model):
     name = models.CharField(max_length=256, unique=True)
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="ota_enrollment")
+
+    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
+    blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
+
     # linked to an auth realm
     # if linked, a user has to authenticate to get the mdm payload.
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
@@ -248,12 +269,12 @@ class OTAEnrollment(models.Model):
         return {"ota_enrollment": d}
 
     def get_absolute_url(self):
-        return reverse("mdm:ota_enrollment", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
+        return reverse("mdm:ota_enrollment", args=(self.pk,))
 
     def get_enroll_full_url(self):
         if self.realm:
-            path = reverse("mdm:ota_enrollment_enroll", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
-            return "{}{}".format(settings["api"]["tls_hostname"], path)
+            return "{}{}".format(settings["api"]["tls_hostname"],
+                                 reverse("mdm:ota_enrollment_enroll", args=(self.pk,)))
 
     def revoke(self):
         if not self.enrollment_secret.revoked_at:
@@ -281,7 +302,7 @@ class OTAEnrollmentSessionManager(models.Manager):
         enrollment_session.save()
         return enrollment_session
 
-    def create_from_machine_info(self, ota_enrollment, serial_number, udid, payload):
+    def create_from_machine_info(self, ota_enrollment, serial_number, udid):
         # Build a new secret that can be used only by one specific machine
         enrollment_secret = ota_enrollment.enrollment_secret
         tags = list(enrollment_secret.tags.all())
@@ -294,11 +315,9 @@ class OTAEnrollmentSessionManager(models.Manager):
         )
         new_es.save(secret_length=56)  # CN max 64 - $ separator - prefix, ota or mdm$ota
         new_es.tags.set(tags)
-        enrollment_session = self.model(status=self.model.PHASE_2,
-                                        ota_enrollment=ota_enrollment,
-                                        enrollment_secret=new_es)
-        enrollment_session.update_with_payload(payload)
-        return enrollment_session
+        return self.create(status=self.model.PHASE_2,
+                           ota_enrollment=ota_enrollment,
+                           enrollment_secret=new_es)
 
 
 class OTAEnrollmentSession(EnrollmentSession):
@@ -342,12 +361,14 @@ class OTAEnrollmentSession(EnrollmentSession):
     def serialize_for_event(self):
         return super().serialize_for_event("ota", self.ota_enrollment.serialize_for_event())
 
+    def get_blueprint(self):
+        return self.ota_enrollment.blueprint
+
     # status update methods
 
-    def set_phase2_status(self, es_request, serial_number, udid, payload):
+    def set_phase2_status(self, es_request, serial_number, udid):
         test = (serial_number
                 and udid
-                and payload
                 and self.realm_user
                 and self.status == self.PHASE_1
                 and not self.phase2_request
@@ -359,8 +380,6 @@ class OTAEnrollmentSession(EnrollmentSession):
         self.enrollment_secret.serial_numbers = [serial_number]
         self.enrollment_secret.udids = [udid]
         self.enrollment_secret.save()
-        # save the current machine info
-        self.update_with_payload(payload)
 
     def set_phase2_scep_verified_status(self, es_request):
         test = (es_request
@@ -436,7 +455,7 @@ class DEPOrganization(models.Model):
         return self.name
 
     def address_lines(self):
-        return "\n".join(l for l in (l.strip() for l in self.address.split(",")) if l)
+        return "\n".join(line for line in (line.strip() for line in self.address.split(",")) if line)
 
 
 class DEPToken(models.Model):
@@ -490,7 +509,7 @@ class DEPVirtualServer(models.Model):
         return reverse("mdm:dep_virtual_server", args=(self.pk,))
 
 
-class DEPProfile(models.Model):
+class DEPEnrollment(models.Model):
     # https://developer.apple.com/documentation/devicemanagement/skipkeys
     SKIPPABLE_SETUP_PANES = (
         ("Accessibility", True),
@@ -532,52 +551,57 @@ class DEPProfile(models.Model):
     SKIPPABLE_SETUP_PANE_CHOICES = [(name, name) for name, __ in SKIPPABLE_SETUP_PANES]
 
     # link with the Apple DEP web services
-    virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE)
     uuid = models.UUIDField(unique=True, editable=False)
+    virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE)
 
-    # linked to an auth realm
-    # if linked, a user has to authenticate to get the mdm payload.
+    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT, null=True)
+    blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
+
+    # to protect the dep enrollment endpoint. Link to the meta business unit too
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+                                             related_name="dep_enrollment", editable=False)
+
+    # Authentication
+
+    # if linked to a realm, a user has to authenticate to get the mdm payload.
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
-
     # if realm, use the realm user either to auto populate the user form
     # or auto create the admin
     use_realm_user = models.BooleanField(default=False)
-
     # if the realm user is not an admin, we will only use the info
     # to autopopulate the user form, and we will need a default admin
     realm_user_is_admin = models.BooleanField(default=True)
-
     # optional admin account info
     admin_full_name = models.CharField(max_length=80, blank=True, null=True)
     admin_short_name = models.CharField(max_length=32, blank=True, null=True)
     admin_password_hash = JSONField(null=True, editable=False)
 
     # standard DEP profile configuration
+
+    # https://developer.apple.com/documentation/devicemanagement/profile
     name = models.CharField(max_length=125, unique=True)  # see CONFIG_NAME_INVALID error
-    allow_pairing = models.BooleanField(default=False)
-    is_supervised = models.BooleanField(default=True)
-    # cf doc: Only available for Apple School Manager
-    # is_multi_user = models.BooleanField(default=True)
-    is_mandatory = models.BooleanField(default=True)
-    await_device_configured = models.BooleanField(default=False)
+    allow_pairing = models.BooleanField(default=False)  # deprecated in iOS 13
     auto_advance_setup = models.BooleanField(default=False)
+    await_device_configured = models.BooleanField(default=False)
+    # configuration_web_url is automatically set for authentication or direct MDM payload download
+    department = models.CharField(max_length=125, blank=True)  # see DEPARTMENT_INVALID error
+    # devices see DEPDevice
+    is_mandatory = models.BooleanField(default=True)
     is_mdm_removable = models.BooleanField(default=False)  # can be set to False only if is_supervised is True
+    is_multi_user = models.BooleanField(default=True)
+    is_supervised = models.BooleanField(default=True)  # deprecated
+    language = models.CharField(max_length=3, choices=ISO_639_1_CHOICES, blank=True)
+    org_magic = models.CharField(max_length=256, blank=True)  # see MAGIC_INVALID error
+    region = models.CharField(max_length=2, choices=ISO_3166_1_ALPHA_2_CHOICES, blank=True)
     skip_setup_items = ArrayField(models.CharField(max_length=64,
                                                    choices=SKIPPABLE_SETUP_PANE_CHOICES),
                                   editable=False)
-    support_phone_number = models.CharField(max_length=50, blank=True)  # see SUPPORT_PHONE_INVALID error
-    support_email_address = models.EmailField(max_length=250, blank=True)  # see SUPPORT_EMAIL_INVALID error
-    org_magic = models.CharField(max_length=256, blank=True)  # see MAGIC_INVALID error
-    department = models.CharField(max_length=125, blank=True)  # see DEPARTMENT_INVALID error
     # TODO: supervising_host_certs
-    # Auto populate anchor_certs the fullchain when building the profile payload?
+    support_email_address = models.EmailField(max_length=250, blank=True)  # see SUPPORT_EMAIL_INVALID error
+    support_phone_number = models.CharField(max_length=50, blank=True)  # see SUPPORT_PHONE_INVALID error
+    # url is automatically set using the enrollment secret
+    # Auto populate anchor_certs using the fullchain when building the profile payload?
     include_tls_certificates = models.BooleanField(default=False)
-    # devices, does not apply
-    # TODO: language, region
-
-    # to protect the dep enrollment endpoint. Link to the meta business unit too
-    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
-                                             related_name="dep_profile", editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -589,20 +613,19 @@ class DEPProfile(models.Model):
         return self.name
 
     def get_absolute_url(self):
-        return reverse("mdm:dep_profile", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
+        return reverse("mdm:dep_enrollment", args=(self.pk,))
 
     def assigned_devices(self):
         return self.depdevice_set.exclude(last_op_type=DEPDevice.OP_TYPE_DELETED)
 
-    def get_meta_business_unit(self):
-        return self.enrollment_secret.meta_business_unit
-
     def serialize_for_event(self):
-        return {"dep_profile": {"pk": self.pk,
-                                "uuid": str(self.uuid),
-                                "name": self.name,
-                                "created_at": self.created_at,
-                                "updated_at": self.updated_at}}
+        return {"dep_enrollment": {"uuid": self.pk,
+                                   "name": self.name,
+                                   "created_at": self.created_at,
+                                   "updated_at": self.updated_at}}
+
+    def requires_account_configuration(self):
+        return self.use_realm_user or (self.admin_full_name and self.admin_short_name and self.admin_password_hash)
 
 
 class DEPDevice(models.Model):
@@ -630,14 +653,13 @@ class DEPDevice(models.Model):
     virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE, editable=False)
     serial_number = models.TextField(unique=True)
 
+    # ABM info
     # assignment
     device_assigned_by = models.EmailField(editable=False)
     device_assigned_date = models.DateTimeField(editable=False)
-
     # sync service
     last_op_type = models.CharField(max_length=64, choices=OP_TYPE_CHOICES, null=True, editable=False)
     last_op_date = models.DateTimeField(null=True, editable=False)
-
     # profile
     profile_status = models.CharField(max_length=64,
                                       choices=PROFILE_STATUS_CHOICES,
@@ -647,8 +669,8 @@ class DEPDevice(models.Model):
     profile_assign_time = models.DateTimeField(null=True, editable=False)
     profile_push_time = models.DateTimeField(null=True, editable=False)
 
-    # our profile
-    profile = models.ForeignKey(DEPProfile, on_delete=models.PROTECT, null=True)
+    # Zentral enrollment/profile
+    enrollment = models.ForeignKey(DEPEnrollment, on_delete=models.PROTECT, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -660,21 +682,18 @@ class DEPDevice(models.Model):
         return self.serial_number
 
     def get_absolute_url(self):
-        return "{}#dep_device".format(
-            reverse("mdm:device",
-                    args=(MetaMachine(self.serial_number).get_urlsafe_serial_number(),))
-        )
+        return "{}#{}".format(self.virtual_server.get_absolute_url(), self.serial_number)
 
     def is_deleted(self):
         return self.last_op_type == self.OP_TYPE_DELETED
 
 
 class DEPEnrollmentSessionManager(models.Manager):
-    def create_from_dep_profile(self, dep_profile, serial_number, udid, payload, commit=True):
+    def create_from_dep_enrollment(self, dep_enrollment, serial_number, udid, commit=True):
         # Build a new secret, only for one enrollment, only for this machine
         # scep server.
 
-        enrollment_secret = dep_profile.enrollment_secret
+        enrollment_secret = dep_enrollment.enrollment_secret
 
         meta_business_unit = enrollment_secret.meta_business_unit
         tags = list(enrollment_secret.tags.all())
@@ -695,9 +714,10 @@ class DEPEnrollmentSessionManager(models.Manager):
         new_es.save(secret_length=56)  # CN max 64 - $ separator - prefix MDM$DEP
         new_es.tags.set(tags)
         enrollment_session = self.model(status=self.model.STARTED,
-                                        dep_profile=dep_profile,
+                                        dep_enrollment=dep_enrollment,
                                         enrollment_secret=new_es)
-        enrollment_session.update_with_payload(payload, commit=commit)
+        if commit:
+            enrollment_session.save()
         return enrollment_session
 
 
@@ -713,7 +733,7 @@ class DEPEnrollmentSession(EnrollmentSession):
         (COMPLETED, _("Completed")),  # first MDM Checkin TokenUpdate call
     )
     status = models.CharField(max_length=64, choices=STATUS_CHOICES)
-    dep_profile = models.ForeignKey(DEPProfile, on_delete=models.CASCADE)
+    dep_enrollment = models.ForeignKey(DEPEnrollment, on_delete=models.CASCADE)
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="dep_enrollment_session")
     scep_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT, null=True, related_name="+")
@@ -727,7 +747,10 @@ class DEPEnrollmentSession(EnrollmentSession):
             raise ValueError("Wrong enrollment sessions status")
 
     def serialize_for_event(self):
-        return super().serialize_for_event("dep", self.dep_profile.serialize_for_event())
+        return super().serialize_for_event("dep", self.dep_enrollment.serialize_for_event())
+
+    def get_blueprint(self):
+        return self.dep_enrollment.blueprint
 
     # status update methods
 
@@ -758,8 +781,13 @@ class DEPEnrollmentSession(EnrollmentSession):
 
 class UserEnrollment(models.Model):
     name = models.CharField(max_length=256, unique=True)
+
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="user_enrollment")
+
+    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
+    blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -778,11 +806,11 @@ class UserEnrollment(models.Model):
         return {"user_enrollment": d}
 
     def get_absolute_url(self):
-        return reverse("mdm:user_enrollment", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
+        return reverse("mdm:user_enrollment", args=(self.pk,))
 
     def get_enroll_full_url(self):
-        path = reverse("mdm:user_enrollment_enroll", args=(self.enrollment_secret.meta_business_unit.pk, self.pk))
-        return "{}{}".format(settings["api"]["tls_hostname"], path)
+        return "{}{}".format(settings["api"]["tls_hostname"],
+                             reverse("mdm:user_enrollment_enroll", args=(self.pk,)))
 
     def revoke(self):
         if not self.enrollment_secret.revoked_at:
@@ -840,6 +868,9 @@ class UserEnrollmentSession(EnrollmentSession):
     def serialize_for_event(self):
         return super().serialize_for_event("user", self.user_enrollment.serialize_for_event())
 
+    def get_blueprint(self):
+        return self.user_enrollment.blueprint
+
     # status update methods
 
     def set_scep_verified_status(self, es_request):
@@ -864,301 +895,330 @@ class UserEnrollmentSession(EnrollmentSession):
         self._set_next_status(self.COMPLETED, test)
 
 
-# MDM commands
+# Artifacts
 
 
-class DeviceCommand(models.Model):
-    STATUS_CODE_ACKNOWLEDGED = "Acknowledged"
-    STATUS_CODE_ERROR = "Error"
-    STATUS_CODE_COMMAND_FORMAT_ERROR = "CommandFormatError"
-    STATUS_CODE_NOT_NOW = "NotNow"
-    STATUS_CODE_CHOICES = (
-        (STATUS_CODE_ACKNOWLEDGED, "Acknowledged"),
-        (STATUS_CODE_ERROR, "Error"),
-        (STATUS_CODE_COMMAND_FORMAT_ERROR, "Command format error"),
-        (STATUS_CODE_NOT_NOW, "Not now"),
-    )
+class ArtifactType(enum.Enum):
+    EnterpriseApp = "Enterprise App"
+    Profile = "Profile"
 
-    # enrolled_device
-    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
+    @classmethod
+    def choices(cls):
+        return tuple((i.name, i.value) for i in cls)
 
-    # command
-    uuid = models.UUIDField(unique=True, default=uuid.uuid4)
-    request_type = models.CharField(max_length=128)
-    body = models.TextField()
+
+class ArtifactOperation(enum.Enum):
+    Installation = "Installation"
+    Removal = "Removal"
+
+    @classmethod
+    def choices(cls):
+        return tuple((i.name, i.value) for i in cls)
+
+
+class Artifact(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=256, unique=True)
+    type = models.CharField(max_length=64, choices=ArtifactType.choices(), editable=False)
+    channel = models.CharField(max_length=64, choices=Channel.choices(), editable=False)
+    platforms = ArrayField(models.CharField(max_length=64, choices=Platform.choices()), default=Platform.all_values)
+
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+    trashed_at = models.DateTimeField(null=True, editable=False)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("mdm:artifact", args=(self.pk,))
+
+
+class BlueprintArtifact(models.Model):
+    blueprint = models.ForeignKey(Blueprint, on_delete=models.CASCADE)
+    artifact = models.ForeignKey(Artifact, on_delete=models.CASCADE)
+    install_before_setup_assistant = models.BooleanField(default=False)
+    auto_update = models.BooleanField(default=True)
+    priority = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    def get_absolute_url(self):
+        return "{}#ba-{}".format(self.artifact.get_absolute_url(), self.pk)
+
+
+class ArtifactVersionManager(models.Manager):
+    def _next_to(self, target, select, artifact_operation, artifact_types=None, fetch_all=False):
+        if isinstance(target, EnrolledDevice):
+            enrolled_device = target
+            channel = Channel.Device
+            command_table = "mdm_devicecommand"
+            target_table = "mdm_deviceartifact"
+            target_attr = "enrolled_device_id"
+        elif isinstance(target, EnrolledUser):
+            enrolled_device = target.enrolled_device
+            channel = Channel.User
+            command_table = "mdm_usercommand"
+            target_table = "mdm_userartifact"
+            target_attr = "enrolled_user_id"
+        else:
+            raise ValueError("Target must be an EnrolledDevice or an EnrolledUser")
+
+        blueprint = enrolled_device.blueprint
+        if blueprint is None and artifact_operation == ArtifactOperation.Installation:
+            return
+
+        # Sorry… use -1 as blueprint pk when no blueprint is configured
+        # will return 0 blueprint artifact versions
+        # used to remove all installed artifact versions
+        args = [channel.name, enrolled_device.platform, blueprint.pk if blueprint else -1]
+        ba_where_list = ["a.channel = %s", "%s = ANY(a.platforms)", "ba.blueprint_id = %s"]
+        if enrolled_device.awaiting_configuration:
+            args.append(True)
+            ba_where_list.append("ba.install_before_setup_assistant = %s")
+        if artifact_types:
+            args.append([at.name for at in artifact_types])
+            ba_where_list.append("a.type = ANY(%s)")
+        ba_wheres = " and ".join(ba_where_list)
+        args.extend([target.pk, target.pk, artifact_operation.name])
+        query = (
+            "with all_blueprint_artifact_versions as ("  # All blueprint artifact versions, ranked by version
+            "  select av.id, av.version, av.artifact_id, av.created_at,"
+            "  rank() over (partition by av.artifact_id order by version desc) rank,"
+            "  ba.auto_update, ba.priority"
+            "  from mdm_artifactversion as av"
+            "  join mdm_artifact as a on (a.id = av.artifact_id)"
+            "  join mdm_blueprintartifact as ba on (ba.artifact_id = a.id)"
+            f"  where {ba_wheres}"
+            "), blueprint_artifact_versions as ("  # Keep only the latest versions of each artifact
+            "  select id, version, created_at, artifact_id, auto_update, priority"
+            "  from all_blueprint_artifact_versions"
+            "  where rank=1"
+            "), target_artifact_versions as ("  # All the artifact versions installed on the target
+            "  select av.id, av.version, av.artifact_id, av.created_at"
+            "  from mdm_artifactversion as av"
+            f"  join {target_table} as ta on (ta.artifact_version_id = av.id)"
+            f"  where ta.{target_attr} = %s"
+            "), failed_artifact_version_operations as ("  # All the artifact versions with failed operations
+            "  select distinct artifact_version_id as id"
+            f"  from {command_table}"
+            f"  where {target_attr} = %s and artifact_operation = %s and status = 'Error'"
+            f") {select}"
+        )
+        if not fetch_all:
+            query += " limit 1"
+
+        cursor = connection.cursor()
+        cursor.execute(query, args)
+        pk_list = [t[0] for t in cursor.fetchall()]
+        qs = self.select_related("artifact", "profile", "enterprise_app")
+        if fetch_all:
+            artifact_version_list = list(qs.filter(pk__in=pk_list))
+            artifact_version_list.sort(key=lambda artifact_version: pk_list.index(artifact_version.pk))
+            return artifact_version_list
+        else:
+            if pk_list:
+                return qs.get(pk=pk_list[0])
+
+    def next_to_install(self, target, fetch_all=False):
+        select = (
+            # Present in the blueprint
+            "select bav.id from blueprint_artifact_versions as bav "
+            "left join failed_artifact_version_operations as favo on (favo.id = bav.id) "
+            "left join target_artifact_versions as tav on (tav.artifact_id = bav.artifact_id) "
+            # - No previous installation error AND
+            #   - Not installed on the target OR
+            #   - Installed but with a different version, if auto update is true
+            # if auto update is false, a more recent version will not be installed.
+            # The version number is not used, because different artifact versions of the same artifact
+            # can end up having the same version number.
+            "where favo.id is null and (tav.id is null or (bav.id <> tav.id and bav.auto_update)) "
+            "order by bav.priority desc, bav.created_at asc"
+        )
+        return self._next_to(
+            target, select, ArtifactOperation.Installation,
+            fetch_all=fetch_all
+        )
+
+    def next_to_remove(self, target, fetch_all=False):
+        select = (
+            # Installed on the target
+            "select tav.id from target_artifact_versions as tav "
+            "left join failed_artifact_version_operations as favo on (favo.id = tav.id) "
+            "left join blueprint_artifact_versions as bav on (bav.artifact_id = tav.artifact_id) "
+            # - No previous removal error AND
+            # - Not present in the blueprint
+            "where favo.id is null and bav.id is null "
+            "order by tav.created_at asc"
+        )
+        # only profiles can be removed
+        artifact_types = [ArtifactType.Profile]
+        return self._next_to(
+            target, select, ArtifactOperation.Removal,
+            artifact_types=artifact_types, fetch_all=fetch_all
+        )
+
+
+class ArtifactVersion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    artifact = models.ForeignKey(Artifact, on_delete=models.CASCADE)
+    version = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+
+    objects = ArtifactVersionManager()
+
+    def __str__(self):
+        return f"{self.artifact} v{self.version}"
+
+    def get_absolute_url(self):
+        return "{}#{}".format(self.artifact.get_absolute_url(), self.pk)
+
+    class Meta:
+        unique_together = (("artifact", "version"),)
+
+
+class Profile(models.Model):
+    artifact_version = models.OneToOneField(ArtifactVersion, related_name="profile", on_delete=models.CASCADE)
+    source = models.BinaryField()
+    filename = models.TextField()
+    payload_identifier = models.TextField(db_index=True)
+    payload_uuid = models.TextField()
+    payload_display_name = models.TextField()
+    payload_description = models.TextField()
+
+    def __str__(self):
+        return self.payload_display_name
+
+    @cached_property
+    def payloads(self):
+        return [
+            (payload.get("PayloadType"), payload.get("PayloadDisplayName"))
+            for payload in plistlib.loads(self.source).get("PayloadContent", [])
+        ]
+
+    def get_payload_description(self):
+        return plistlib.loads(self.source).get("PayloadDescription")
+
+    def installed_payload_identifier(self):
+        return get_payload_identifier("artifact", self.artifact_version.artifact.pk)
+
+    def installed_payload_uuid(self):
+        return str(self.artifact_version.pk).upper()
+
+
+def enterprise_application_package_path(instance, filename):
+    return f"mdm/enterprise_applications/{instance.artifact.pk}/{instance.artifact_version.pk}.pkg"
+
+
+class EnterpriseApp(models.Model):
+    artifact_version = models.OneToOneField(ArtifactVersion, related_name="enterprise_app", on_delete=models.CASCADE)
+    package = models.FileField(upload_to=enterprise_application_package_path)
+    bundle_identifier = models.TextField()
+    bundle_version = models.TextField()
+    manifest = JSONField()
+
+    def __str__(self):
+        return f"{self.bundle_identifier} {self.bundle_version}"
+
+    class Meta:
+        indexes = [models.Index(fields=["bundle_identifier", "bundle_version"])]
+
+
+class DeviceArtifact(models.Model):
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, related_name="installed_artifacts")
+    artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class UserArtifact(models.Model):
+    enrolled_user = models.ForeignKey(EnrolledUser, on_delete=models.CASCADE, related_name="installed_artifacts")
+    artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+# Commands
+
+
+class CommandStatus(enum.Enum):
+    Acknowledged = "Acknowledged"
+    Error = "Error"
+    CommandFormatError = "CommandFormatError"
+    NotNow = "NotNow"
+
+    @classmethod
+    def choices(cls):
+        return tuple((i.value[0], i.value[0]) for i in cls)
+
+
+class Command(models.Model):
+    uuid = models.UUIDField(unique=True, editable=False)
+
+    name = models.CharField(max_length=128)
+    artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.PROTECT, null=True)
+    artifact_operation = models.CharField(max_length=64, choices=ArtifactOperation.choices(), null=True)
+    kwargs = JSONField(default=dict)
 
     time = models.DateTimeField(null=True)  # no time => queued
     result_time = models.DateTimeField(null=True)
-    status_code = models.CharField(max_length=64, choices=STATUS_CODE_CHOICES, null=True)
+    status = models.CharField(max_length=64, choices=CommandStatus.choices(), null=True)
+    error_chain = JSONField(null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return " - ".join(s for s in (self.request_type, str(self.uuid), self.status_code) if s)
-
-
-# MDM artifacts
-
-
-class BaseArtifact(models.Model):
-    # to be set in the concrete models:
-    # artifact_type - str - The reference name of the artifact
-    # artifact_can_be_removed - boolean - If we should/can send the command to remove it or not.
-
-    # install it during the AwaitingConfiguration phase ?
-    install_before_setup_assistant = models.BooleanField(default=False)
-
-    # devices
-    # TODO: add tags
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit,
-                                           related_name="%(app_label)s_%(class)s",
-                                           editable=False,
-                                           on_delete=models.CASCADE)
-
-    # version
-    version = models.PositiveIntegerField(default=0, editable=False)
-
-    # timestamps
-    created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    updated_at = models.DateTimeField(auto_now=True, editable=False)
-    trashed_at = models.DateTimeField(null=True, editable=False)
+        return " - ".join(s for s in (self.name, str(self.uuid), self.status) if s)
 
     class Meta:
         abstract = True
 
 
-# Pushed artifacts
+class DeviceCommand(Command):
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, related_name="commands")
 
 
-class InstalledDeviceArtifact(models.Model):
-    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
-
-    # artifact
-    artifact_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    artifact_id = models.PositiveIntegerField()
-    artifact = GenericForeignKey("artifact_content_type", "artifact_id")
-    artifact_version = models.PositiveIntegerField()
-
-    created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    updated_at = models.DateTimeField(auto_now=True, editable=False)
-
-    class Meta:
-        unique_together = ("enrolled_device", "artifact_content_type", "artifact_id")
+class UserCommand(Command):
+    enrolled_user = models.ForeignKey(EnrolledUser, on_delete=models.CASCADE, related_name="commands")
 
 
-class DeviceArtifactCommand(models.Model):
-    ACTION_INSTALL = "INSTALL"
-    ACTION_REMOVE = "REMOVE"
-    ACTION_CHOICES = (
-        (ACTION_INSTALL, "Install"),
-        (ACTION_REMOVE, "Remove"),
-    )
-
-    # artifact
-    artifact_content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    artifact_id = models.PositiveIntegerField()
-    artifact = GenericForeignKey("artifact_content_type", "artifact_id")
-    artifact_version = models.PositiveIntegerField()
-
-    # action
-    action = models.CharField(max_length=64, choices=ACTION_CHOICES)
-
-    # command
-    command = models.OneToOneField(DeviceCommand, on_delete=models.CASCADE)
+# SCEP
 
 
-# Kernel extension policy
+class SCEPChallengeType(enum.Enum):
+    STATIC = "Static"
+    MICROSOFT_CA = "Microsoft CA Web Enrollment (certsrv)"
+
+    @classmethod
+    def choices(cls):
+        return [(i.name, i.value) for i in cls]
 
 
-class KernelExtensionTeam(models.Model):
-    name = models.TextField(unique=True)
-    identifier = models.CharField(max_length=10, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    updated_at = models.DateTimeField(auto_now=True, editable=False)
-
-    class Meta:
-        ordering = ("name",)
+class SCEPConfig(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+    url = models.URLField()
+    key_usage = models.IntegerField(choices=((0, 'None (0)'),
+                                             (1, 'Signing (1)'),
+                                             (4, 'Encryption (4)'),
+                                             (5, 'Signing & Encryption (1 | 4 = 5)')),
+                                    default=0,
+                                    help_text="A bitmask indicating the use of the key.")
+    key_is_extractable = models.BooleanField(default=False,
+                                             help_text="If true, the private key can be exported from the keychain.")
+    keysize = models.IntegerField(choices=((1024, '1024-bit'),
+                                           (2048, '2048-bit'),
+                                           (4096, '4096-bit')),
+                                  default=2048)
+    allow_all_apps_access = models.BooleanField(default=False,
+                                                help_text="If true, all apps have access to the private key.")
+    challenge_type = models.CharField(max_length=64, choices=SCEPChallengeType.choices())
+    challenge_kwargs = JSONField(editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return "{} {}".format(self.name, self.identifier)
+        return self.name
 
     def get_absolute_url(self):
-        return "{}#team_{}".format(reverse("mdm:kernel_extensions_index"), self.identifier)
-
-
-class KernelExtension(models.Model):
-    team = models.ForeignKey(KernelExtensionTeam, on_delete=models.PROTECT)
-    name = models.TextField(unique=True)
-    identifier = models.TextField(unique=True)
-    created_at = models.DateTimeField(auto_now_add=True, editable=False)
-    updated_at = models.DateTimeField(auto_now=True, editable=False)
-
-    class Meta:
-        ordering = ("team__name", "name")
-
-    def __str__(self):
-        return "{} - {} {}".format(self.team, self.name, self.identifier)
-
-    def get_absolute_url(self):
-        return "{}#kext_{}".format(reverse("mdm:kernel_extensions_index"), self.identifier)
-
-
-class KernelExtensionPolicy(BaseArtifact):
-    artifact_type = "ConfigurationProfile"
-    artifact_can_be_removed = True
-
-    # content
-    allow_user_overrides = models.BooleanField(help_text=("If set to true, users can approve additional kernel "
-                                                          "extensions not explicitly allowed by configuration "
-                                                          "profiles"),
-                                               default=True)
-    allowed_teams = models.ManyToManyField(KernelExtensionTeam, blank=True)
-    allowed_kernel_extensions = models.ManyToManyField(KernelExtension, blank=True)
-
-    def get_absolute_url(self):
-        return reverse("mdm:kernel_extension_policy", args=(self.meta_business_unit.pk, self.pk))
-
-    def __str__(self):
-        return "{} kernel extension policy".format(self.meta_business_unit)
-
-    def save(self, *args, **kwargs):
-        if self.pk:
-            self.version = F("version") + 1
-        super().save(*args, **kwargs)
-
-    def get_configuration_profile_payload_identifier_suffix(self):
-        return "kext-policy.{}".format(self.pk)
-
-    def get_payloads(self):
-        allowed_kernel_extensions_d = {}
-        for kext in self.allowed_kernel_extensions.all():
-            allowed_kernel_extensions_d.setdefault(kext.team.identifier, []).append(kext.identifier)
-        payload = {"AllowUserOverrides": self.allow_user_overrides,
-                   "AllowedTeamIdentifiers": [team.identifier for team in self.allowed_teams.all()],
-                   "AllowedKernelExtensions": allowed_kernel_extensions_d}
-        yield "com.apple.syspolicy.kernel-extension-policy", str(self), payload
-
-
-# Enrollment packages
-
-
-def enrollment_package_path(instance, filename):
-    # TODO overflow ?
-    return 'mdm/meta_business_unit/{0:08d}/enrollment_packages/{1}'.format(
-        instance.meta_business_unit.id,
-        filename
-    )
-
-
-class MDMEnrollmentPackage(BaseArtifact):
-    artifact_type = "Application"
-    artifact_can_be_removed = False  # TODO: not implemented. Verify if possible.
-
-    # content
-    builder = models.CharField(max_length=256)
-    enrollment_pk = models.PositiveIntegerField()
-    file = models.FileField(upload_to=enrollment_package_path, blank=True)
-    manifest = JSONField(blank=True, null=True)
-
-    def __str__(self):
-        enrollment = self.get_enrollment()
-        if enrollment:
-            return enrollment.get_description_for_distributor()
-        else:
-            return "{} {}".format(self.get_description_for_enrollment(),
-                                  self.builder.split(".")[-1])
-
-    def enrollment_update_callback(self):
-        self.version = F("version") + 1
-        self.save()
-        self.refresh_from_db()
-        build_mdm_enrollment_package(self)
-
-    def get_builder_class(self):
-        return get_standalone_package_builders()[self.builder]
-
-    def get_enrollment(self):
-        try:
-            enrollment_model = self.get_builder_class().form.Meta.model
-            return enrollment_model.objects.get(pk=self.enrollment_pk)
-        except (AttributeError, ObjectDoesNotExist):
-            pass
-
-    def delete(self, *args, **kwargs):
-        self.file.delete(save=False)
-        enrollment = self.get_enrollment()
-        if enrollment:
-            enrollment.delete()
-
-    def get_description_for_enrollment(self):
-        return "MDM enrollment package"
-
-    def serialize_for_event(self):
-        """used for the enrollment secret verification events, via the enrollment"""
-        return {"mdm_enrollment_package": {"pk": self.pk,
-                                           "version": self.version,
-                                           "meta_business_unit": {"pk": self.meta_business_unit.pk,
-                                                                  "name": str(self.meta_business_unit)}}}
-
-    def get_enrollment_package_filename(self):
-        return "{}.pkg".format(slugify("{} pk{} v{}".format(self.get_builder_class().name,
-                                                            self.id,
-                                                            self.version)))
-
-    def get_absolute_url(self):
-        return "{}#enrollment_package_{}".format(reverse("mdm:mbu",
-                                                         args=(self.meta_business_unit.pk,)), self.pk)
-
-    def save(self, *args, **kwargs):
-        if not self.trashed_at:
-            query_set = MDMEnrollmentPackage.objects.filter(meta_business_unit=self.meta_business_unit,
-                                                            builder=self.builder,
-                                                            trashed_at__isnull=True)
-            if self.pk:
-                query_set = query_set.exclude(pk=self.pk)
-            if query_set.count():
-                raise ValueError("An active enrollment package for this business unit "
-                                 "and this builder already exists.")
-        super(MDMEnrollmentPackage, self).save(*args, **kwargs)
-
-
-# Configuration profiles
-
-
-class ConfigurationProfile(BaseArtifact):
-    artifact_type = "ConfigurationProfile"
-    artifact_can_be_removed = True
-
-    # content
-    source = JSONField()
-    source_payload_identifier = models.TextField(editable=False)
-    payload_display_name = models.TextField(blank=True, null=True, editable=False)
-    payload_description = models.TextField(blank=True, null=True, editable=False)
-
-    def __str__(self):
-        if self.payload_display_name:
-            return self.payload_display_name
-        else:
-            return "Configuration Profile {}".format(self.pk)
-
-    class Meta:
-        unique_together = (("meta_business_unit", "source_payload_identifier"),)
-
-    def save(self, *args, **kwargs):
-        if self.pk:
-            self.version = F("version") + 1
-        super().save(*args, **kwargs)
-
-    def get_absolute_url(self):
-        return "{}#configuration_profile_{}".format(reverse("mdm:mbu",
-                                                            args=(self.meta_business_unit.pk,)), self.pk)
-
-    def get_configuration_profile_payload_identifier_suffix(self):
-        return "configuration-profile.{}".format(self.pk)
-
-    def get_payloads(self):
-        for idx, payload in enumerate(self.source.get("PayloadContent", [])):
-            payload_name = payload.get("PayloadDisplayName", "{} #{}".format(self, idx + 1))
-            payload_content = {k: v for k, v in payload.items() if not k.startswith("Payload")}
-            yield payload["PayloadType"], payload_name, payload_content
+        return reverse("mdm:scep_config", args=(self.pk,))
