@@ -1,25 +1,62 @@
+import copy
+import plistlib
+import uuid
 from datetime import datetime
-from django.contrib.contenttypes.models import ContentType
-from django.http import HttpResponse
 from django.test import TestCase
-from django.urls import reverse
-from django.utils import timezone
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.models import (DeviceArtifactCommand, EnrolledDevice,
-                                        InstalledDeviceArtifact, KernelExtensionPolicy, MDMEnrollmentPackage,
-                                        MetaBusinessUnitPushCertificate, PushCertificate)
-from zentral.contrib.mdm.views.utils import (get_configured_device_artifact_dict,
-                                             get_installed_device_artifact_dict,
-                                             iter_next_device_artifact_actions,
-                                             get_next_device_artifact_command_response,
-                                             get_next_device_command_response,
-                                             update_device_artifact_command)
+from zentral.contrib.mdm.models import (Artifact, ArtifactOperation, ArtifactType, ArtifactVersion,
+                                        Blueprint, BlueprintArtifact,
+                                        Channel, DeviceArtifact, DeviceCommand,
+                                        EnrolledDevice, EnrolledUser,
+                                        Platform, Profile, PushCertificate,
+                                        UserArtifact, UserCommand)
+
+
+PROFILE_TEMPLATE = {
+    'PayloadContent': [{
+        'PayloadType': 'com.apple.dock',
+        'PayloadDescription': 'Dock Payload',
+        'PayloadDisplayName': 'Dock',
+        'PayloadVersion': 1,
+        'orientation': 'right'
+    }],
+    'PayloadType': 'Configuration',
+    'PayloadDescription': 'Superbe profile imbattable!!!',
+    'PayloadDisplayName': 'Test User Profile with Dock',
+    'PayloadVersion': 1,
+    'PayloadOrganization': 'Zentral',
+    'PayloadScope': 'User',
+}
+
+
+def build_profile(
+    payload_display_name=None,
+    payload_description=None,
+    payload_identifier=None,
+    payload_uuid=None,
+    channel=Channel.Device
+):
+    if payload_uuid is None:
+        payload_uuid = str(uuid.uuid4()).upper()
+    if payload_identifier is None:
+        payload_identifier = f"io.zentral.test.{payload_uuid}"
+    profile = copy.deepcopy(PROFILE_TEMPLATE)
+    profile["PayloadIdentifier"] = payload_identifier
+    profile["PayloadUUID"] = payload_uuid
+    profile["PayloadDisplayName"] = payload_display_name or get_random_string(16)
+    profile["PayloadDescription"] = payload_description or get_random_string(32)
+    profile["PayloadScope"] = "System" if channel == Channel.Device else "User"
+    payload = profile["PayloadContent"][0]
+    payload["PayloadIdentifier"] = f"{payload_identifier}.0"
+    payload["PayloadUUID"] = str(uuid.uuid4()).upper()
+    return plistlib.dumps(profile)
 
 
 class TestMDMArtifacts(TestCase):
     @classmethod
     def setUpTestData(cls):
+        cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(32))
         push_certificate = PushCertificate.objects.create(
             name=get_random_string(64),
             topic=get_random_string(256),
@@ -28,242 +65,290 @@ class TestMDMArtifacts(TestCase):
             certificate=get_random_string(64).encode("utf-8"),
             private_key=get_random_string(64).encode("utf-8")
         )
-        cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(32))
-        cls.meta_business_unit.create_enrollment_business_unit()
-        MetaBusinessUnitPushCertificate.objects.create(
-            push_certificate=push_certificate,
-            meta_business_unit=cls.meta_business_unit
-        )
-        cls.enrolled_device = EnrolledDevice.objects.create(
+        cls.blueprint1 = Blueprint.objects.create(name=get_random_string(32))
+
+        # Enrolled devices / user
+        cls.enrolled_device_no_blueprint = EnrolledDevice.objects.create(
             push_certificate=push_certificate,
             serial_number=get_random_string(64),
+            platform="macOS",
             udid=get_random_string(36),
             token=get_random_string(32).encode("utf-8"),
             push_magic=get_random_string(73),
             unlock_token=get_random_string(32).encode("utf-8")
         )
-        cls.serial_number = cls.enrolled_device.serial_number
-
-    def create_mdm_enrollment_package(self):
-        return MDMEnrollmentPackage.objects.create(
-            meta_business_unit=self.meta_business_unit,
-            builder=get_random_string(256),
-            enrollment_pk=17,  # better than 42
-            manifest={"yolo": get_random_string(256)}
+        cls.enrolled_device = EnrolledDevice.objects.create(
+            push_certificate=push_certificate,
+            serial_number=get_random_string(64),
+            platform="macOS",
+            blueprint=cls.blueprint1,
+            udid=get_random_string(36),
+            token=get_random_string(32).encode("utf-8"),
+            push_magic=get_random_string(73),
+            unlock_token=get_random_string(32).encode("utf-8")
+        )
+        cls.enrolled_user = EnrolledUser.objects.create(
+            enrolled_device=cls.enrolled_device,
+            user_id=str(uuid.uuid4()).upper(),
+            long_name=get_random_string(),
+            short_name=get_random_string(),
+            token=get_random_string().encode("utf-8"),
+        )
+        cls.enrolled_device_awaiting_configuration = EnrolledDevice.objects.create(
+            push_certificate=push_certificate,
+            serial_number=get_random_string(64),
+            platform="macOS",
+            blueprint=cls.blueprint1,
+            awaiting_configuration=True,
+            udid=get_random_string(36),
+            token=get_random_string(32).encode("utf-8"),
+            push_magic=get_random_string(73),
+            unlock_token=get_random_string(32).encode("utf-8")
         )
 
-    def test_no_configured_device_artifacts(self):
-        self.assertEqual({}, get_configured_device_artifact_dict(self.meta_business_unit, self.serial_number))
-
-    def test_artifacts_not_for_device(self):
-        meta_business_unit2 = MetaBusinessUnit.objects.create(name=get_random_string(32))
-        meta_business_unit2.create_enrollment_business_unit()
-        KernelExtensionPolicy.objects.create(meta_business_unit=meta_business_unit2)
-        self.assertEqual({}, get_configured_device_artifact_dict(self.meta_business_unit, self.serial_number))
-
-    def test_kext_policy_artifact_for_device(self):
-        kext_policy = KernelExtensionPolicy.objects.create(meta_business_unit=self.meta_business_unit)
-        kext_policy_ct = ContentType.objects.get_for_model(kext_policy)
-        self.assertEqual(
-            {kext_policy_ct: {kext_policy.pk: kext_policy.version}},
-            get_configured_device_artifact_dict(self.meta_business_unit, self.serial_number)
+    def _force_artifact(
+        self,
+        version_count=1,
+        artifact_type=ArtifactType.Profile,
+        channel=Channel.Device,
+        platforms=None,
+        install_before_setup_assistant=False,
+        auto_update=True,
+        priority=0
+    ):
+        if platforms is None:
+            platforms = Platform.all_values()
+        artifact = Artifact.objects.create(
+            name=get_random_string(32),
+            type=artifact_type.name,
+            channel=channel.name,
+            platforms=platforms
         )
+        artifact_versions = []
+        payload_identifier = "{}.{}.{}".format(get_random_string(2), get_random_string(4), str(uuid.uuid4()))
+        payload_identifier = None
+        for version in range(version_count, 0, -1):
+            artifact_version = ArtifactVersion.objects.create(artifact=artifact, version=version)
+            artifact_versions.append(artifact_version)
+            if artifact_type == ArtifactType.Profile:
+                if payload_identifier is None:
+                    payload_identifier = "{}.{}.{}".format(get_random_string(2),
+                                                           get_random_string(4),
+                                                           str(uuid.uuid4()).upper())
+                payload_uuid = str(uuid.uuid4()).upper()
+                payload_display_name = get_random_string(16)
+                payload_description = get_random_string(32)
+                Profile.objects.create(
+                    artifact_version=artifact_version,
+                    source=build_profile(
+                        payload_display_name=payload_display_name,
+                        payload_description=payload_description,
+                        payload_identifier=payload_identifier,
+                        payload_uuid=payload_uuid,
+                        channel=channel
+                    ),
+                    payload_identifier=payload_identifier,
+                    payload_uuid=payload_uuid,
+                    payload_display_name=payload_display_name,
+                    payload_description=payload_description
+                )
+        return artifact, artifact_versions
 
-    def test_no_installed_device_artifacts(self):
-        self.assertEqual({}, get_installed_device_artifact_dict(self.enrolled_device))
-
-    def test_no_next_device_artifact_action(self):
-        self.assertEqual([],
-                         list(iter_next_device_artifact_actions(self.meta_business_unit, self.enrolled_device)))
-
-    def test_install_kext_next_device_artifact_action(self):
-        kext_policy = KernelExtensionPolicy.objects.create(meta_business_unit=self.meta_business_unit)
-        kext_policy_ct = ContentType.objects.get_for_model(kext_policy)
-        self.assertEqual([(DeviceArtifactCommand.ACTION_INSTALL, kext_policy_ct, kext_policy)],
-                         list(iter_next_device_artifact_actions(self.meta_business_unit, self.enrolled_device)))
-
-    def test_install_application_next_device_artifact_action(self):
-        mdm_enrollment_package = self.create_mdm_enrollment_package()
-        mdm_enrollment_package_ct = ContentType.objects.get_for_model(mdm_enrollment_package)
-        self.assertEqual([(DeviceArtifactCommand.ACTION_INSTALL, mdm_enrollment_package_ct, mdm_enrollment_package)],
-                         list(iter_next_device_artifact_actions(self.meta_business_unit, self.enrolled_device)))
-
-    def test_no_next_device_artifact_command_response(self):
-        self.assertEqual(None,
-                         get_next_device_artifact_command_response(self.meta_business_unit, self.enrolled_device))
-
-    def check_install_profile_command(self, artifact, device_artifact_command, response):
-        self.assertIsInstance(response, HttpResponse)
-        self.assertEqual(response["Content-Type"], "application/xml; charset=UTF-8")
-        self.assertEqual(device_artifact_command.action, DeviceArtifactCommand.ACTION_INSTALL)
-        self.assertEqual(device_artifact_command.artifact, artifact)
-        self.assertContains(response, "InstallProfile")
-        self.assertContains(response, device_artifact_command.command_uuid)
-
-    def test_install_kext_next_device_artifact_command_response(self):
-        kext_policy = KernelExtensionPolicy.objects.create(meta_business_unit=self.meta_business_unit)
-        response = get_next_device_artifact_command_response(self.meta_business_unit, self.enrolled_device)
-        device_artifact_command = DeviceArtifactCommand.objects.all()[0]
-        self.check_install_profile_command(kext_policy, device_artifact_command, response)
-
-    def test_install_kext_next_device_command_response(self):
-        kext_policy = KernelExtensionPolicy.objects.create(meta_business_unit=self.meta_business_unit)
-        response = get_next_device_command_response(self.meta_business_unit, self.enrolled_device)
-        device_artifact_command = DeviceArtifactCommand.objects.all()[0]
-        self.check_install_profile_command(kext_policy, device_artifact_command, response)
-
-    def check_install_application_command(self, artifact, device_artifact_command, response):
-        self.assertIsInstance(response, HttpResponse)
-        self.assertEqual(response["Content-Type"], "application/xml; charset=UTF-8")
-        self.assertEqual(device_artifact_command.action, DeviceArtifactCommand.ACTION_INSTALL)
-        self.assertEqual(device_artifact_command.artifact, artifact)
-        self.assertContains(response, "InstallApplication")
-        self.assertContains(response, device_artifact_command.command_uuid)
-        self.assertContains(response, reverse("mdm:install_application_manifest",
-                                              args=(device_artifact_command.command_uuid,)))
-
-    def test_install_application_next_devive_artifact_command_response(self):
-        mdm_enrollment_package = self.create_mdm_enrollment_package()
-        response = get_next_device_artifact_command_response(self.meta_business_unit, self.enrolled_device)
-        device_artifact_command = DeviceArtifactCommand.objects.all()[0]
-        self.check_install_application_command(mdm_enrollment_package, device_artifact_command, response)
-
-    def test_install_application_next_device_command_response(self):
-        mdm_enrollment_package = self.create_mdm_enrollment_package()
-        response = get_next_device_command_response(self.meta_business_unit, self.enrolled_device)
-        device_artifact_command = DeviceArtifactCommand.objects.all()[0]
-        self.check_install_application_command(mdm_enrollment_package, device_artifact_command, response)
-
-    def test_update_device_artifact_command_acknowledged(self):
-        kext_policy = KernelExtensionPolicy.objects.create(meta_business_unit=self.meta_business_unit)
-        get_next_device_command_response(self.meta_business_unit, self.enrolled_device)
-        device_artifact_command = DeviceArtifactCommand.objects.all()[0]
-        device_artifact_command = update_device_artifact_command(
-            self.enrolled_device,
-            device_artifact_command.command_uuid,
-            DeviceArtifactCommand.STATUS_CODE_ACKNOWLEDGED
+    def _force_blueprint_artifact(
+        self,
+        version_count=1,
+        artifact_type=ArtifactType.Profile,
+        channel=Channel.Device,
+        platforms=None,
+        install_before_setup_assistant=False,
+        auto_update=True,
+        priority=0,
+        blueprint=None
+    ):
+        artifact, artifact_versions = self._force_artifact(
+            version_count,
+            artifact_type,
+            channel,
+            platforms,
+            install_before_setup_assistant,
+            auto_update,
+            priority
         )
-        # verify that the device_artifact_command has been updated
-        self.assertIsInstance(device_artifact_command, DeviceArtifactCommand)
-        device_artifact_command.refresh_from_db()
-        self.assertEqual(device_artifact_command.status_code, DeviceArtifactCommand.STATUS_CODE_ACKNOWLEDGED)
-        # verify that the newly installed artifact is present in the installed device artifacts
-        kext_policy_ct = ContentType.objects.get_for_model(kext_policy)
-        self.assertEqual({kext_policy_ct: {kext_policy.id: kext_policy.version}},
-                         get_installed_device_artifact_dict(self.enrolled_device))
-        # verify that there is no new command
-        response = get_next_device_command_response(self.meta_business_unit, self.enrolled_device)
-        self.assertIsInstance(response, HttpResponse)
-        self.assertEqual(response.content, b"")
-
-    def test_remove_kext_next_device_artifact_action(self):
-        kext_policy = KernelExtensionPolicy.objects.create(meta_business_unit=self.meta_business_unit)
-        kext_policy_ct = ContentType.objects.get_for_model(kext_policy)
-        InstalledDeviceArtifact.objects.create(
-            enrolled_device=self.enrolled_device,
-            artifact_content_type=kext_policy_ct,
-            artifact_id=kext_policy.pk,
-            artifact_version=kext_policy.version
+        BlueprintArtifact.objects.create(
+            blueprint=blueprint or self.blueprint1,
+            artifact=artifact,
+            install_before_setup_assistant=install_before_setup_assistant,
+            auto_update=auto_update,
+            priority=priority,
         )
-        # trash the policy
-        kext_policy.trashed_at = timezone.now()
-        kext_policy.save()
-        # verify that a remove command would be scheduled
-        self.assertEqual([(DeviceArtifactCommand.ACTION_REMOVE, kext_policy_ct, kext_policy)],
-                         list(iter_next_device_artifact_actions(self.meta_business_unit, self.enrolled_device)))
+        return artifact, artifact_versions
 
-    def test_no_remove_application_next_device_artifact_action(self):
-        mdm_enrollment_package = self.create_mdm_enrollment_package()
-        mdm_enrollment_package_ct = ContentType.objects.get_for_model(mdm_enrollment_package)
-        InstalledDeviceArtifact.objects.create(
-            enrolled_device=self.enrolled_device,
-            artifact_content_type=mdm_enrollment_package_ct,
-            artifact_id=mdm_enrollment_package.pk,
-            artifact_version=mdm_enrollment_package.version
-        )
-        # trash the enrollment package
-        mdm_enrollment_package.trashed_at = timezone.now()
-        mdm_enrollment_package.save()
-        # verify that no remove command would be scheduled, because it is not implemented
-        self.assertEqual([],
-                         list(iter_next_device_artifact_actions(self.meta_business_unit, self.enrolled_device)))
+    def _force_target_artifact_version(self, target, artifact_version):
+        kwargs = {"artifact_version__artifact": artifact_version.artifact,
+                  "defaults": {"artifact_version": artifact_version}}
+        if isinstance(target, EnrolledDevice):
+            model = DeviceArtifact
+            kwargs["enrolled_device"] = target
+        else:
+            model = UserArtifact
+            kwargs["enrolled_user"] = target
+        return model.objects.update_or_create(**kwargs)[0]
 
-    def check_remove_profile_command(self, artifact, device_artifact_command, response):
-        self.assertIsInstance(response, HttpResponse)
-        self.assertEqual(response["Content-Type"], "application/xml; charset=UTF-8")
-        self.assertEqual(device_artifact_command.action, DeviceArtifactCommand.ACTION_REMOVE)
-        self.assertEqual(device_artifact_command.artifact, artifact)
-        self.assertContains(response, "RemoveProfile")
-        self.assertContains(response, device_artifact_command.command_uuid)
+    # ArtifactVersion.objects.next_to_install
 
-    def test_remove_kext_next_device_artifact_command_response(self):
-        kext_policy = KernelExtensionPolicy.objects.create(meta_business_unit=self.meta_business_unit)
-        kext_policy_ct = ContentType.objects.get_for_model(kext_policy)
-        InstalledDeviceArtifact.objects.create(
-            enrolled_device=self.enrolled_device,
-            artifact_content_type=kext_policy_ct,
-            artifact_id=kext_policy.pk,
-            artifact_version=kext_policy.version
-        )
-        # trash the policy
-        kext_policy.trashed_at = timezone.now()
-        kext_policy.save()
-        # verify that a remove command would be scheduled
-        response = get_next_device_artifact_command_response(self.meta_business_unit, self.enrolled_device)
-        device_artifact_command = DeviceArtifactCommand.objects.all()[0]
-        self.check_remove_profile_command(kext_policy, device_artifact_command, response)
+    def test_no_blueprint_nothing_to_install(self):
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_device_no_blueprint), None)
 
-    def test_remove_kext_next_device_command_response(self):
-        kext_policy = KernelExtensionPolicy.objects.create(meta_business_unit=self.meta_business_unit)
-        kext_policy_ct = ContentType.objects.get_for_model(kext_policy)
-        InstalledDeviceArtifact.objects.create(
-            enrolled_device=self.enrolled_device,
-            artifact_content_type=kext_policy_ct,
-            artifact_id=kext_policy.pk,
-            artifact_version=kext_policy.version
-        )
-        # trash the policy
-        kext_policy.trashed_at = timezone.now()
-        kext_policy.save()
-        # verify that a remove command would be scheduled
-        response = get_next_device_artifact_command_response(self.meta_business_unit, self.enrolled_device)
-        device_artifact_command = DeviceArtifactCommand.objects.all()[0]
-        self.check_remove_profile_command(kext_policy, device_artifact_command, response)
+    def test_empty_blueprint_nothing_to_install(self):
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_device), None)
 
-    def test_update_kext_next_device_artifact_action(self):
-        kext_policy = KernelExtensionPolicy.objects.create(meta_business_unit=self.meta_business_unit)
-        kext_policy.save()  # bump version
-        kext_policy.refresh_from_db()
-        self.assertEqual(kext_policy.version, 2)
-        kext_policy_ct = ContentType.objects.get_for_model(kext_policy)
-        InstalledDeviceArtifact.objects.create(
-            enrolled_device=self.enrolled_device,
-            artifact_content_type=kext_policy_ct,
-            artifact_id=kext_policy.pk,
-            artifact_version=1
-        )
-        # verify that an install command would be scheduled
-        self.assertEqual([(DeviceArtifactCommand.ACTION_INSTALL, kext_policy_ct, kext_policy)],
-                         list(iter_next_device_artifact_actions(self.meta_business_unit, self.enrolled_device)))
+    def test_blueprint_install_one_device_profile(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2)
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_device),
+                         artifact_versions[0])
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_device, fetch_all=True),
+                         artifact_versions[:1])
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_user), None)
 
-    def test_update_enrollment_package_next_device_artifact_action(self):
-        mdm_enrollment_package = self.create_mdm_enrollment_package()
-        mdm_enrollment_package.refresh_from_db()
-        mdm_enrollment_package.version += 1  # bump version
-        mdm_enrollment_package.save()
-        mdm_enrollment_package_ct = ContentType.objects.get_for_model(mdm_enrollment_package)
-        InstalledDeviceArtifact.objects.create(
-            enrolled_device=self.enrolled_device,
-            artifact_content_type=mdm_enrollment_package_ct,
-            artifact_id=mdm_enrollment_package.pk,
-            artifact_version=mdm_enrollment_package.version - 1
-        )
-        # verify that an install command would be scheduled
-        self.assertEqual([(DeviceArtifactCommand.ACTION_INSTALL, mdm_enrollment_package_ct, mdm_enrollment_package)],
-                         list(iter_next_device_artifact_actions(self.meta_business_unit, self.enrolled_device)))
+    def test_blueprint_install_one_device_profile_with_previous_error_older_version(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2)
+        DeviceCommand.objects.create(enrolled_device=self.enrolled_device,
+                                     uuid=uuid.uuid4(),
+                                     name="InstallProfile",
+                                     artifact_version=artifact_versions[1],
+                                     artifact_operation=ArtifactOperation.Installation.name,
+                                     status="Error")
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_device),
+                         artifact_versions[0])
 
-    def tearDown(self):
-        DeviceArtifactCommand.objects.all().delete()
-        InstalledDeviceArtifact.objects.all().delete()
-        KernelExtensionPolicy.objects.all().delete()
-        MDMEnrollmentPackage.objects.all().delete()
+    def test_blueprint_no_install_one_device_profile_with_previous_error_same_version(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2)
+        DeviceCommand.objects.create(enrolled_device=self.enrolled_device,
+                                     uuid=uuid.uuid4(),
+                                     name="InstallProfile",
+                                     artifact_version=artifact_versions[0],
+                                     artifact_operation=ArtifactOperation.Installation.name,
+                                     status="Error")
+        self.assertIsNone(ArtifactVersion.objects.next_to_install(self.enrolled_device))
+
+    def test_blueprint_install_device_profile_priority(self):
+        self._force_blueprint_artifact()
+        artifact, artifact_versions = self._force_blueprint_artifact(priority=100)
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_device),
+                         artifact_versions[0])
+
+    def test_blueprint_install_device_profile_awaiting_configuration_true(self):
+        self._force_blueprint_artifact(priority=100)
+        artifact, artifact_versions = self._force_blueprint_artifact(install_before_setup_assistant=True)
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_device_awaiting_configuration),
+                         artifact_versions[0])
+
+    def test_blueprint_install_device_profile_awaiting_configuration_false(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(priority=100)
+        self._force_blueprint_artifact(install_before_setup_assistant=True)
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_device),
+                         artifact_versions[0])
+
+    def test_blueprint_install_one_user_profile(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2, channel=Channel.User)
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_user),
+                         artifact_versions[0])
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_user, fetch_all=True),
+                         artifact_versions[:1])
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_device), None)
+
+    def test_blueprint_install_one_user_profile_with_previous_error_older_version(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2, channel=Channel.User)
+        UserCommand.objects.create(enrolled_user=self.enrolled_user,
+                                   uuid=uuid.uuid4(),
+                                   name="InstallProfile",
+                                   artifact_version=artifact_versions[1],
+                                   artifact_operation=ArtifactOperation.Installation.name,
+                                   status="Error")
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_user),
+                         artifact_versions[0])
+
+    def test_blueprint_no_install_one_user_profile_with_previous_error_same_version(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2, channel=Channel.User)
+        UserCommand.objects.create(enrolled_user=self.enrolled_user,
+                                   uuid=uuid.uuid4(),
+                                   name="InstallProfile",
+                                   artifact_version=artifact_versions[0],
+                                   artifact_operation=ArtifactOperation.Installation.name,
+                                   status="Error")
+        self.assertIsNone(ArtifactVersion.objects.next_to_install(self.enrolled_user))
+
+    def test_blueprint_install_one_user_profile_already_present(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2, channel=Channel.User)
+        UserArtifact.objects.update_or_create(enrolled_user=self.enrolled_user,
+                                              artifact_version__artifact=artifact,
+                                              defaults={"artifact_version": artifact_versions[0]})
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_user), None)
+
+    def test_blueprint_install_one_user_profile_already_present_obsolete(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2, channel=Channel.User)
+        UserArtifact.objects.update_or_create(enrolled_user=self.enrolled_user,
+                                              artifact_version__artifact=artifact,
+                                              defaults={"artifact_version": artifact_versions[1]})
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_user),
+                         artifact_versions[0])
+
+    def test_blueprint_install_one_user_profile_no_auto_update(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2,
+                                                                     channel=Channel.User,
+                                                                     auto_update=False)
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_user),
+                         artifact_versions[0])
+
+    def test_blueprint_install_one_user_profile_already_present_no_auto_update(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2,
+                                                                     channel=Channel.User,
+                                                                     auto_update=False)
+        UserArtifact.objects.update_or_create(enrolled_user=self.enrolled_user,
+                                              artifact_version__artifact=artifact,
+                                              defaults={"artifact_version": artifact_versions[1]})
+        self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_user), None)
+
+    # ArtifactVersion.objects.next_to_remove
+
+    def test_no_blueprint_nothing_to_remove(self):
+        self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_device_no_blueprint), None)
+
+    def test_empty_blueprint_nothing_to_remove(self):
+        self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_device), None)
+
+    def test_no_blueprint_remove_one_device_profile(self):
+        artifact, artifact_versions = self._force_artifact(version_count=1)
+        self._force_target_artifact_version(self.enrolled_device_no_blueprint, artifact_versions[0])
+        self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_device_no_blueprint),
+                         artifact_versions[0])
+        self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_device_no_blueprint, fetch_all=True),
+                         artifact_versions)
+
+    def test_no_blueprint_no_remove_one_device_profile_with_previous_error_same_version(self):
+        artifact, artifact_versions = self._force_artifact(version_count=1)
+        self._force_target_artifact_version(self.enrolled_device_no_blueprint, artifact_versions[0])
+        DeviceCommand.objects.create(enrolled_device=self.enrolled_device_no_blueprint,
+                                     uuid=uuid.uuid4(),
+                                     name="RemoveProfile",
+                                     artifact_version=artifact_versions[0],
+                                     artifact_operation=ArtifactOperation.Removal.name,
+                                     status="Error")
+        self.assertIsNone(ArtifactVersion.objects.next_to_remove(self.enrolled_device_no_blueprint))
+
+    def test_empty_blueprint_remove_one_device_profile(self):
+        artifact, artifact_versions = self._force_artifact(version_count=1)
+        self._force_target_artifact_version(self.enrolled_device, artifact_versions[0])
+        self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_device),
+                         artifact_versions[0])
+        self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_user), None)
+
+    def test_blueprint_do_not_remove_one_device_profile_same_version(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2)
+        self._force_target_artifact_version(self.enrolled_device, artifact_versions[0])
+        self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_device), None)
+
+    def test_blueprint_do_not_remove_one_device_profile_different_version(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2)
+        self._force_target_artifact_version(self.enrolled_device, artifact_versions[1])
+        self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_device), None)
