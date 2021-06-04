@@ -1,11 +1,8 @@
-import json
 import logging
-import os
 import random
-import tempfile
+from tempfile import NamedTemporaryFile
 import time
-from hyper import HTTP20Connection
-from hyper.tls import init_context
+import httpx
 from zentral.core.events.base import EventMetadata
 from .events import MDMDeviceNotificationEvent
 
@@ -14,91 +11,77 @@ logger = logging.getLogger('zentral.contrib.mdm.apns')
 
 
 class APNSClient(object):
-    APNs_PRODUCTION_SERVER = "api.push.apple.com"
-    STATUS_SUCCESS = "success"
-    STATUS_FAILURE = "failure"
-    STATUS_INVALID_TOKEN = "invalid_token"
-    MAX_RETRIES = 3
+    apns_production_base_url = "https://api.push.apple.com"
+    timeout = 5
+    max_retries = 2
 
     def __init__(self, push_certificate):
         self.push_certificate = push_certificate
-        self.conn = None
+        # We have to materialize the certificate
+        # Python SSL contexts cannot load cert and key from memory
+        # TODO update when the Python API is available
+        with NamedTemporaryFile() as tmp_cert_file:
+            tmp_cert_file.write(self.push_certificate.certificate.tobytes())
+            tmp_cert_file.flush()
+            with NamedTemporaryFile() as tmp_key_file:
+                tmp_key_file.write(self.push_certificate.private_key.tobytes())
+                tmp_key_file.flush()
+                self.client = httpx.Client(base_url=self.apns_production_base_url,
+                                           http2=True,
+                                           verify=True,
+                                           cert=(tmp_cert_file.name, tmp_key_file.name),
+                                           timeout=self.timeout)
 
-    def get_ssl_context(self):
-        # sadly have to materialize the certificate for apns2 and the ssl context
-        # TODO: verify
-        tmp_cert_fd, tmp_cert = tempfile.mkstemp()
-        with os.fdopen(tmp_cert_fd, "wb") as f:
-            f.write(self.push_certificate.certificate)
-        tmp_key_fd, tmp_key = tempfile.mkstemp()
-        with os.fdopen(tmp_key_fd, "wb") as f:
-            f.write(self.push_certificate.private_key)
+    def _send_notification(self, enrolled_device, target, priority, expiration_seconds):
+        logger.debug("APNS notify device %s, target %s", enrolled_device, target)
+        path = "/3/device/{}".format(target.token.hex())
+        json_data = {"mdm": enrolled_device.push_magic}
+        headers = {"apns-expiration": str(int(time.time()) + expiration_seconds),
+                   "apns-priority": str(priority),
+                   "apns-topic": self.push_certificate.topic}
 
-        # load the certificates in a ssl context
-        ssl_context = init_context()
-        ssl_context.load_cert_chain(tmp_cert, tmp_key)
+        status = "failure"
+        for retry_num in range(self.max_retries + 1):
+            try:
+                r = self.client.post(path, json=json_data, headers=headers)
+            except Exception:
+                logger.exception("Could not send notification")
+            else:
+                if r.status_code == httpx.codes.OK:
+                    status = "success"
+                    break
+                elif r.status_code < 500:
+                    # only retry 500s
+                    break
+                else:
+                    logger.error("Status code: %s", r.status_code)
 
-        # remove the temp files
-        os.unlink(tmp_cert)
-        os.unlink(tmp_key)
+            sleep_time = random.random() * 2 ** retry_num
+            logger.warning("Could not send notification. Sleep %.2f seconds before retry %s of %s.",
+                           sleep_time, retry_num, self.MAX_RETRIES)
+            time.sleep(sleep_time)
 
-        return ssl_context
+        event_metadata = EventMetadata(machine_serial_number=enrolled_device.serial_number)
+        event_payload = {"status": status, "udid": enrolled_device.udid,
+                         "apns_priority": priority, "apns_expiration_seconds": expiration_seconds}
+        if target != enrolled_device:
+            event_payload["user_id"] = target.user_id
+        event = MDMDeviceNotificationEvent(event_metadata, event_payload)
+        event.post()
 
-    def get_connection(self):
-        self.conn = HTTP20Connection(self.APNs_PRODUCTION_SERVER,
-                                     force_proto="h2",
-                                     port=443, secure=True,
-                                     ssl_context=self.get_ssl_context())
+        return status
 
-    def build_event(self, enrolled_device, response_status, **payload):
-        status = self.STATUS_FAILURE
-        if response_status == 200:
-            status = self.STATUS_SUCCESS
-        elif response_status == 410:
-            status = self.STATUS_INVALID_TOKEN
-        metadata = EventMetadata(MDMDeviceNotificationEvent.event_type,
-                                 machine_serial_number=enrolled_device.serial_number,
-                                 tags=MDMDeviceNotificationEvent.tags)
-        payload.update({"status": status,
-                        "response_status": response_status})
-        return MDMDeviceNotificationEvent(metadata, payload)
-
-    def send_device_notification(self, enrolled_device, apns_expiration_seconds=3600, apns_priority=10):
+    def _verify_enrolled_device(self, enrolled_device):
         if enrolled_device.push_certificate != self.push_certificate:
             raise ValueError("Enrolled device {} has a different push certificate".format(enrolled_device.pk))
         if not enrolled_device.can_be_poked():
             raise ValueError("Cannot send notification to enrolled device {}".format(enrolled_device.pk))
-        url = "/3/device/{}".format(enrolled_device.token.hex())
-        body = json.dumps({"mdm": enrolled_device.push_magic}).encode("utf-8")
-        apns_expiration_seconds = 3600
-        headers = {"Content-Type": "application/json; charset=utf-8",
-                   "apns-expiration": str(int(time.time()) + apns_expiration_seconds),
-                   "apns-priority": str(apns_priority),
-                   "apns-topic": self.push_certificate.topic}
-        if self.conn is None:
-            self.get_connection()
-        for retry_num in range(self.MAX_RETRIES + 1):
-            if retry_num > 0:
-                sleep_time = random.random() * 2 ** retry_num
-                logger.warning("Could not send notification to device %s. "
-                               "Sleep %.2f seconds before retry %s of %s.",
-                               enrolled_device.serial_number, sleep_time, retry_num, self.MAX_RETRIES)
-                time.sleep(sleep_time)
-            try:
-                if retry_num > 0:
-                    self.get_connection()
-                stream_id = self.conn.request("POST", url, body=body, headers=headers)
-                if stream_id:
-                    args = [stream_id]
-                else:
-                    args = []
-                response = self.conn.get_response(*args)
-            except Exception:
-                if retry_num == self.MAX_RETRIES:
-                    logger.exception("Could not send notification to device %s.", enrolled_device.serial_number)
-                else:
-                    continue
-            else:
-                return self.build_event(enrolled_device, response.status,
-                                        expiration_seconds=apns_expiration_seconds,
-                                        priority=apns_priority)
+
+    def send_device_notification(self, enrolled_device, priority=10, expiration_seconds=3600):
+        self._verify_enrolled_device(enrolled_device)
+        return self._send_notification(enrolled_device, enrolled_device, priority, expiration_seconds)
+
+    def send_user_notification(self, enrolled_user, priority=10, expiration_seconds=3600):
+        enrolled_device = enrolled_user.enrolled_device
+        self._verify_enrolled_device(enrolled_device)
+        return self._send_notification(enrolled_device, enrolled_user, priority, expiration_seconds)
