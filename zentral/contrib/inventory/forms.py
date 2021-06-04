@@ -311,6 +311,8 @@ class EnrollmentSecretForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.no_restrictions = kwargs.pop("no_restrictions", False)
+        self.no_serial_numbers = kwargs.pop("no_serial_numbers", False)
+        self.no_udids = kwargs.pop("no_udids", False)
         self.meta_business_unit = kwargs.pop("meta_business_unit", None)
         super().__init__(*args, **kwargs)
         mbu_field = self.fields["meta_business_unit"]
@@ -323,6 +325,11 @@ class EnrollmentSecretForm(forms.ModelForm):
         if self.no_restrictions:
             for field_name in ("serial_numbers", "udids", "quota"):
                 self.fields[field_name].widget = forms.HiddenInput()
+        else:
+            if self.no_serial_numbers:
+                self.fields["serial_numbers"].widget = forms.HiddenInput()
+            if self.no_udids:
+                self.fields["udids"].widget = forms.HiddenInput()
 
     def clean(self):
         super().clean()
