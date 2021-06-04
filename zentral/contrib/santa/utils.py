@@ -1,7 +1,7 @@
 import plistlib
 from dateutil import parser
 from zentral.conf import settings
-from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload_openssl
+from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload
 
 
 def build_santa_enrollment_configuration(enrollment):
@@ -46,7 +46,7 @@ def build_configuration_profile(enrollment):
         "PayloadVersion": 1
     }
 
-    content = sign_payload_openssl(plistlib.dumps(configuration_profile_data))
+    content = sign_payload(plistlib.dumps(configuration_profile_data))
     return "{}.mobileconfig".format(identifier), content
 
 
