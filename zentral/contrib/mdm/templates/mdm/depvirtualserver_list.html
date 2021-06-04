@@ -4,17 +4,19 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li class="active">DEP virtual servers</li>
 </ol>
 
 <h2>{{ object_list|length }} DEP virtual server{{ object_list|length|pluralize }}</h2>
 
+{% if perms.mdm.add_depvirtualserver %}
 <form action="{% url 'mdm:connect_dep_virtual_server' %}" method="post">{% csrf_token %}
   <button class="btn btn-default" name="action" value="start">
     Connect an existing server
   </button>
 </form>
+{% endif %}
 
 <table class="table">
   <thead>

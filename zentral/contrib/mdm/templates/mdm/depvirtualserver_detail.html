@@ -4,7 +4,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
   <li class="active">{{ object }}</li>
 </ol>
@@ -50,7 +50,7 @@
   {% with object.token as token %}
   <div class="col-md-6">
     <h4>DEP Token</h3>
-    {% if token %}
+    {% if perms.mdm.change_change_depvirtualserver and token %}
     <a href="{% url 'mdm:renew_dep_token' token.id %}" class="btn btn-default">Renew</a>
     <dl class="dl-horizontal">
       <dt>expiry</dt>
@@ -69,33 +69,31 @@
 
 <div class="row">
   <div class="col-md-12">
-    {% with object.depprofile_set.count as profile_count %}
+    {% with object.depenrollment_set.count as enrollment_count %}
 
-    <h3>{{ profile_count }} Profile{{ profile_count|pluralize }}</h3>
+    <h3>{{ enrollment_count }} Profile{{ enrollment_count|pluralize }}</h3>
 
-    {% if profile_count %}
+    {% if enrollment_count %}
     <table class="table">
       <thead>
-        <th class="col-md-4">Name</th>
+        <th class="col-md-4">Enrollment</th>
         <th class="col-md-2">Business unit</th>
         <th class="col-md-2">Assigned devices</th>
         <th class="col-md-2">Created at</th>
         <th class="col-md-2">Updated at</th>
       </thead>
       <tbody>
-        {% for profile in object.depprofile_set.all %}
-        {% with profile.get_meta_business_unit as profile_mbu %}
+        {% for enrollment in object.depenrollment_set.all %}
         <tr>
           <td>
-            <a href="{{ profile.get_absolute_url }}">{{ profile }}</a>
-            <br>{{ profile.uuid }}
+            <a href="{{ enrollment.get_absolute_url }}">{{ enrollment }}</a>
+            <br>{{ enrollment.uuid }}
           </td>
-          <td><a href="{% url 'mdm:mbu' profile_mbu.pk %}">{{ profile_mbu }}</a></td>
-          <td>{{ profile.assigned_devices.count }}</td>
-          <td>{{ profile.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-          <td>{{ profile.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+          <td>{{ enrollment.enrollment_secret.meta_business_unit }}</td>
+          <td>{{ enrollment.assigned_devices.count }}</td>
+          <td>{{ enrollment.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+          <td>{{ enrollment.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
         </tr>
-        {% endwith %}
         {% endfor %}
       </tbody>
     </table>
@@ -110,26 +108,58 @@
     {% with object.depdevice_set.count as device_count %}
 
     <h3>{{ device_count }} Device{{ device_count|pluralize }}</h3>
+    {% if perms.mdm.change_depvirtualserver %}
     <a id="devices-sync-btn" href="{% url 'mdm_api:dep_virtual_server_sync_devices' object.id %}" class="btn btn-default task">Sync</a>
+    {% endif %}
 
     {% if device_count %}
     <table class="table">
       <thead>
         <th>Serial number</th>
-        <th>Assigned by</th>
-        <th>Assigned date</th>
         <th>Profile</th>
+        <th>Last Assigment</th>
+        <th>Status</th>
+        {% if perms.mdm.change_depdevice %}
+        <th></th>
+        {% endif %}
       </thead>
       <tbody>
         {% for device in object.depdevice_set.all %}
-        <tr>
-          <td><a href="{{ device.get_absolute_url }}">{{ device }}</a>{% if device.is_deleted %} <span class="label label-danger">DELETED</span>{% endif %}</td>
-          <td>{{ device.device_assigned_by|default:"-" }}</td>
-          <td>{{ device.device_assigned_date|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+        <tr id="{{ device.serial_number }}">
+          <td>{{ device }}{% if device.is_deleted %} <span class="label label-danger">DELETED</span>{% endif %}</td>
+          <td>
+            {% if device.enrollment %}
+            {% if perms.mdm.view_depenrollment %}
+            <a href="{{ device.enrollment.get_absolute_url }}">{{ device.enrollment }}</a>
+            {% else %}
+            {{ device.enrollment }}
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+          </td>
+          <td>
+            {{ device.device_assigned_by|default:"-" }}
+            {% if device.device_assigned_by %} - {{ device.device_assigned_date|date:"SHORT_DATETIME_FORMAT"|default:"-" }}{% endif %}
+          </td>
           <td>
             {{ device.profile_status }}
-            {% if device.profile %} - <a href="{{ device.profile.get_absolute_url }}">{{ device.profile }}</a>{% endif %}
+            {% if device.profile_status == "pushed" and device.profile_push_time  %} - {{ device.profile_push_time|date:"SHORT_DATETIME_FORMAT" }}{% endif %}
           </td>
+          {% if perms.mdm.change_depdevice %}
+          <td>
+            {% if not dep_device.is_deleted %}
+            <form action="{% url 'mdm:refresh_dep_device' device.pk %}" method="post">{% csrf_token %}
+            <a href="{% url 'mdm:assign_dep_device_profile' device.pk %}" class="btn btn-default">
+              <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+            </a>
+            <button type="submit" class="btn btn-default">
+              <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
+            </button>
+            </form>
+            {% endif %}
+          </td>
+          {% endif %}
         </tr>
         {% endfor %}
       </tbody>

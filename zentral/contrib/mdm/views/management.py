@@ -1,205 +1,165 @@
 import logging
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib import messages
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
-from django.http import Http404, HttpResponseRedirect
-from django.shortcuts import get_object_or_404
-from django.urls import reverse
+from django.db.models import Count, Max
+from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-from django.views.generic import CreateView, DeleteView, DetailView, FormView, TemplateView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from realms.models import RealmUser
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
-from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
-from zentral.contrib.mdm.forms import (AssignDEPDeviceProfileForm, DeviceSearchForm,
-                                       CreateDEPProfileForm, UpdateDEPProfileForm,
+from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
+                                       CreateDEPEnrollmentForm, UpdateDEPEnrollmentForm,
+                                       EnrolledDeviceSearchForm,
                                        OTAEnrollmentForm,
+                                       SCEPConfigForm,
+                                       UpdateArtifactForm,
                                        UserEnrollmentForm, UserEnrollmentEnrollForm,
-                                       UploadConfigurationProfileForm)
-from zentral.contrib.mdm.models import (MetaBusinessUnitPushCertificate,
-                                        EnrolledDevice,
-                                        DEPDevice, DEPEnrollmentSession, DEPProfile,
+                                       UploadProfileForm)
+from zentral.contrib.mdm.models import (Artifact, ArtifactType, Blueprint, BlueprintArtifact,
+                                        DEPDevice, DEPEnrollment,
+                                        EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         OTAEnrollment, OTAEnrollmentSession,
+                                        SCEPChallengeType, SCEPConfig,
                                         UserEnrollment, UserEnrollmentSession,
-                                        KernelExtensionPolicy, MDMEnrollmentPackage, ConfigurationProfile)
+                                        Profile)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_mdm_configuration_profile,
                                           build_profile_service_configuration_profile)
-from zentral.contrib.mdm.tasks import send_enrolled_device_notification, send_mbu_enrolled_devices_notifications
-from zentral.utils.osx_package import get_standalone_package_builders
+from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm
+from zentral.contrib.mdm.scep.static import StaticChallengeForm
+from zentral.contrib.mdm.tasks import (send_artifact_notifications,
+                                       send_blueprint_notifications,
+                                       send_blueprints_notifications,
+                                       send_enrolled_device_notification,
+                                       send_enrolled_user_notification)
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
 
 
-# Meta business units
+# All enrollments
 
 
-class MetaBusinessUnitListView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/metabusinessunit_list.html"
+class EnrollmentListView(LoginRequiredMixin, TemplateView):
+    template_name = "mdm/enrollment_list.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["dep_enrollments"] = list(DEPEnrollment.objects.all().order_by("-pk"))
+        ctx["ota_enrollments"] = list(OTAEnrollment.objects.all().order_by("-pk"))
+        ctx["user_enrollments"] = list(UserEnrollment.objects.all().order_by("-pk"))
+        return ctx
+
+
+# DEP enrollments
+
+
+class CreateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "mdm.add_depenrollment"
+    template_name = "mdm/depenrollment_form.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        context["mbu_list"] = sorted(set(
-            mbupc.meta_business_unit
-            for mbupc in MetaBusinessUnitPushCertificate.objects.select_related("meta_business_unit").all()
-        ), key=lambda mbu: mbu.name)
-        return context
-
-
-class MetaBusinessUnitDetailView(LoginRequiredMixin, DetailView):
-    model = MetaBusinessUnit
-    template_name = "mdm/metabusinessunit_detail.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data()
-        context["mdm"] = True
-        mbu = context["object"]
-        context["dep_profile_list"] = (DEPProfile.objects.select_related("virtual_server")
-                                                         .filter(enrollment_secret__meta_business_unit=mbu)
-                                                         .order_by("name", "pk"))
-        context["ota_enrollment_list"] = (OTAEnrollment.objects.filter(enrollment_secret__meta_business_unit=mbu)
-                                                               .order_by("name", "pk"))
-        context["user_enrollment_list"] = (UserEnrollment.objects.filter(enrollment_secret__meta_business_unit=mbu)
-                                                                 .order_by("name", "pk"))
-        context["kext_policy_list"] = (KernelExtensionPolicy.objects.filter(meta_business_unit=mbu,
-                                                                            trashed_at__isnull=True)
-                                                                    .order_by("pk"))
-        context["enrollment_package_list"] = (MDMEnrollmentPackage.objects.filter(meta_business_unit=mbu,
-                                                                                  trashed_at__isnull=True)
-                                                                          .order_by("builder", "pk"))
-        existing_enrollment_package_builders = [ep.builder for ep in context["enrollment_package_list"]]
-        create_enrollment_package_url = reverse("mdm:create_enrollment_package", args=(mbu.pk,))
-        context["create_enrollment_package_links"] = [("{}?builder={}".format(create_enrollment_package_url, k),
-                                                       v.name)
-                                                      for k, v in get_standalone_package_builders().items()
-                                                      if k not in existing_enrollment_package_builders]
-        context["configuration_profile_list"] = (ConfigurationProfile.objects.filter(meta_business_unit=mbu,
-                                                                                     trashed_at__isnull=True)
-                                                                             .order_by("payload_description", "pk"))
-        return context
-
-
-# DEP Profiles
-
-
-class CreateDEPProfileView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/depprofile_form.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        context["meta_business_unit"] = self.meta_business_unit
-        dep_profile_form = kwargs.get("dep_profile_form")
-        if not dep_profile_form:
-            dep_profile_form = CreateDEPProfileForm(prefix="dp")
-        context["dep_profile_form"] = dep_profile_form
+        dep_enrollment_form = kwargs.get("dep_enrollment_form")
+        if not dep_enrollment_form:
+            dep_enrollment_form = CreateDEPEnrollmentForm(prefix="de")
+        context["dep_enrollment_form"] = dep_enrollment_form
         enrollment_secret_form = kwargs.get("enrollment_secret_form")
         if not enrollment_secret_form:
             enrollment_secret_form = EnrollmentSecretForm(
                 prefix="es",
                 no_restrictions=True,
-                meta_business_unit=self.meta_business_unit,
             )
         context["enrollment_secret_form"] = enrollment_secret_form
         return context
 
     def post(self, request, *args, **kwargs):
-        dep_profile_form = CreateDEPProfileForm(request.POST, prefix="dp")
+        dep_enrollment_form = CreateDEPEnrollmentForm(request.POST, prefix="de")
         enrollment_secret_form = EnrollmentSecretForm(
             request.POST,
             prefix="es",
             no_restrictions=True,
-            meta_business_unit=self.meta_business_unit,
         )
-        if dep_profile_form.is_valid() and enrollment_secret_form.is_valid():
-            dep_profile = dep_profile_form.save(commit=False)
-            dep_profile.enrollment_secret = enrollment_secret_form.save()
+        if dep_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
+            dep_enrollment = dep_enrollment_form.save(commit=False)
+            dep_enrollment.enrollment_secret = enrollment_secret_form.save()
             enrollment_secret_form.save_m2m()
             try:
-                add_dep_profile(dep_profile)
+                add_dep_profile(dep_enrollment)
             except DEPClientError as error:
-                dep_profile_form.add_error(None, str(error))
+                dep_enrollment_form.add_error(None, str(error))
             else:
-                return HttpResponseRedirect(dep_profile.get_absolute_url())
+                return redirect(dep_enrollment)
         return self.render_to_response(
-            self.get_context_data(dep_profile_form=dep_profile_form,
+            self.get_context_data(dep_enrollment_form=dep_enrollment_form,
                                   enrollment_secret_form=enrollment_secret_form)
         )
 
 
-class DEPProfileView(LoginRequiredMixin, DetailView):
-    model = DEPProfile
-
-    def get_queryset(self):
-        return DEPProfile.objects.filter(enrollment_secret__meta_business_unit__pk=self.kwargs["mbu_pk"])
+class DEPEnrollmentView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_depenrollment"
+    model = DEPEnrollment
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["mdm"] = True
-        ctx["meta_business_unit"] = self.object.get_meta_business_unit()
+        # TODO: pagination, separate view
+        ctx["dep_enrollment_sessions"] = (ctx["object"].depenrollmentsession_set.all()
+                                                       .select_related("enrollment_secret",
+                                                                       "realm_user")
+                                                       .order_by("-created_at"))
+        ctx["dep_enrollment_sessions_count"] = ctx["dep_enrollment_sessions"].count()
         return ctx
 
 
-class CheckDEPProfileView(LoginRequiredMixin, DetailView):
-    model = DEPProfile
-    template_name = "mdm/depprofile_check.html"
-
-    def get_queryset(self):
-        return DEPProfile.objects.filter(enrollment_secret__meta_business_unit__pk=self.kwargs["mbu_pk"])
+class CheckDEPEnrollmentView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_depenrollment"
+    model = DEPEnrollment
+    template_name = "mdm/depenrollment_check.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["mdm"] = True
-        ctx["meta_business_unit"] = self.object.get_meta_business_unit()
         dep_client = DEPClient.from_dep_virtual_server(self.object.virtual_server)
         ctx["fetched_profile"] = dep_client.get_profile(self.object.uuid)
         return ctx
 
 
-class UpdateDEPProfileView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/depprofile_form.html"
+class UpdateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "mdm.change_depenrollment"
+    template_name = "mdm/depenrollment_form.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.object = get_object_or_404(
-            DEPProfile,
-            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
+            DEPEnrollment,
             pk=kwargs["pk"]
         )
-        self.meta_business_unit = self.object.get_meta_business_unit()
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["mdm"] = True
         context["object"] = self.object
-        context["meta_business_unit"] = self.meta_business_unit
-        dep_profile_form = kwargs.get("dep_profile_form")
-        if not dep_profile_form:
-            dep_profile_form = UpdateDEPProfileForm(prefix="dp",
-                                                    instance=self.object)
-        context["dep_profile_form"] = dep_profile_form
+        dep_enrollment_form = kwargs.get("dep_enrollment_form")
+        if not dep_enrollment_form:
+            dep_enrollment_form = UpdateDEPEnrollmentForm(prefix="de", instance=self.object)
+        context["dep_enrollment_form"] = dep_enrollment_form
         enrollment_secret_form = kwargs.get("enrollment_secret_form")
         if not enrollment_secret_form:
             enrollment_secret_form = EnrollmentSecretForm(
                 prefix="es",
                 instance=self.object.enrollment_secret,
                 no_restrictions=True,
-                meta_business_unit=self.meta_business_unit,
             )
         context["enrollment_secret_form"] = enrollment_secret_form
         return context
 
     def post(self, request, *args, **kwargs):
-        dep_profile_form = UpdateDEPProfileForm(
+        dep_enrollment_form = UpdateDEPEnrollmentForm(
             request.POST,
-            prefix="dp",
+            prefix="de",
             instance=self.object
         )
         enrollment_secret_form = EnrollmentSecretForm(
@@ -207,20 +167,19 @@ class UpdateDEPProfileView(LoginRequiredMixin, TemplateView):
             prefix="es",
             instance=self.object.enrollment_secret,
             no_restrictions=True,
-            meta_business_unit=self.meta_business_unit,
         )
-        if dep_profile_form.is_valid() and enrollment_secret_form.is_valid():
-            dep_profile = dep_profile_form.save(commit=False)
-            dep_profile.enrollment_secret = enrollment_secret_form.save()
+        if dep_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
+            dep_enrollment = dep_enrollment_form.save(commit=False)
+            dep_enrollment.enrollment_secret = enrollment_secret_form.save()
             enrollment_secret_form.save_m2m()
             try:
-                add_dep_profile(dep_profile)
+                add_dep_profile(dep_enrollment)
             except DEPClientError as error:
-                dep_profile_form.add_error(None, str(error))
+                dep_enrollment_form.add_error(None, str(error))
             else:
-                return HttpResponseRedirect(dep_profile.get_absolute_url())
+                return redirect(dep_enrollment)
         return self.render_to_response(
-            self.get_context_data(dep_profile_form=dep_profile_form,
+            self.get_context_data(dep_enrollment_form=dep_enrollment_form,
                                   enrollment_secret_form=enrollment_secret_form)
         )
 
@@ -228,17 +187,12 @@ class UpdateDEPProfileView(LoginRequiredMixin, TemplateView):
 # OTA Enrollments
 
 
-class CreateOTAEnrollmentView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/create_ota_enrollment.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
+class CreateOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "mdm.add_otaenrollment"
+    template_name = "mdm/otaenrollment_form.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        context["meta_business_unit"] = self.meta_business_unit
         ota_enrollment_form = kwargs.get("ota_enrollment_form")
         if not ota_enrollment_form:
             ota_enrollment_form = OTAEnrollmentForm(prefix="oe")
@@ -246,8 +200,7 @@ class CreateOTAEnrollmentView(LoginRequiredMixin, TemplateView):
         enrollment_secret_form = kwargs.get("enrollment_secret_form")
         if not enrollment_secret_form:
             enrollment_secret_form = EnrollmentSecretForm(
-                prefix="es",
-                meta_business_unit=self.meta_business_unit,
+                prefix="es"
             )
         context["enrollment_secret_form"] = enrollment_secret_form
         return context
@@ -256,15 +209,14 @@ class CreateOTAEnrollmentView(LoginRequiredMixin, TemplateView):
         ota_enrollment_form = OTAEnrollmentForm(request.POST, prefix="oe")
         enrollment_secret_form = EnrollmentSecretForm(
             request.POST,
-            prefix="es",
-            meta_business_unit=self.meta_business_unit,
+            prefix="es"
         )
         if ota_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
             ota_enrollment = ota_enrollment_form.save(commit=False)
             ota_enrollment.enrollment_secret = enrollment_secret_form.save()
             enrollment_secret_form.save_m2m()
             ota_enrollment.save()
-            return HttpResponseRedirect(ota_enrollment.get_absolute_url())
+            return redirect(ota_enrollment)
         else:
             return self.render_to_response(
                 self.get_context_data(ota_enrollment_form=ota_enrollment_form,
@@ -272,29 +224,30 @@ class CreateOTAEnrollmentView(LoginRequiredMixin, TemplateView):
             )
 
 
-class OTAEnrollmentView(LoginRequiredMixin, DetailView):
-    template_name = "mdm/ota_enrollment.html"
+class OTAEnrollmentView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_otaenrollment"
     model = OTAEnrollment
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["mdm"] = True
         ota_enrollment = ctx["object"]
         ctx["meta_business_unit"] = ota_enrollment.enrollment_secret.meta_business_unit
         ctx["enroll_url"] = ota_enrollment.get_enroll_full_url()
-        # TODO: pagination
+        # TODO: pagination, separate view
         ctx["ota_enrollment_sessions"] = (ctx["object"].otaenrollmentsession_set.all()
-                                                       .select_related("enrollment_secret")
+                                                       .select_related("enrollment_secret",
+                                                                       "realm_user")
                                                        .order_by("-created_at"))
         ctx["ota_enrollment_sessions_count"] = ctx["ota_enrollment_sessions"].count()
         return ctx
 
 
-class DownloadProfileServicePayloadView(LoginRequiredMixin, View):
+class DownloadProfileServicePayloadView(PermissionRequiredMixin, View):
+    permission_required = "mdm.view_otaenrollment"
+
     def get(self, request, *args, **kwargs):
         ota_enrollment = get_object_or_404(
             OTAEnrollment,
-            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
             pk=kwargs["pk"],
             realm__isnull=True
         )
@@ -307,27 +260,80 @@ class DownloadProfileServicePayloadView(LoginRequiredMixin, View):
         )
 
 
-class RevokeOTAEnrollmentView(LoginRequiredMixin, TemplateView):
+class RevokeOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "mdm.change_otaenrollment"
     template_name = "mdm/revoke_ota_enrollment.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.ota_enrollment = get_object_or_404(
             OTAEnrollment,
-            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
             pk=kwargs["pk"]
         )
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["mdm"] = True
         ctx["ota_enrollment"] = self.ota_enrollment
         ctx["meta_business_unit"] = self.ota_enrollment.enrollment_secret.meta_business_unit
         return ctx
 
     def post(self, request, *args, **kwargs):
         self.ota_enrollment.revoke()
-        return HttpResponseRedirect(self.ota_enrollment.get_absolute_url())
+        return redirect(self.ota_enrollment)
+
+
+class UpdateOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "mdm.change_otaenrollment"
+    template_name = "mdm/otaenrollment_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.ota_enrollment = get_object_or_404(
+            OTAEnrollment,
+            pk=kwargs["pk"]
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["object"] = self.ota_enrollment
+        ota_enrollment_form = kwargs.get("ota_enrollment_form")
+        if not ota_enrollment_form:
+            ota_enrollment_form = OTAEnrollmentForm(
+                instance=self.ota_enrollment,
+                prefix="oe"
+            )
+        context["ota_enrollment_form"] = ota_enrollment_form
+        enrollment_secret_form = kwargs.get("enrollment_secret_form")
+        if not enrollment_secret_form:
+            enrollment_secret_form = EnrollmentSecretForm(
+                instance=self.ota_enrollment.enrollment_secret,
+                prefix="es"
+            )
+        context["enrollment_secret_form"] = enrollment_secret_form
+        return context
+
+    def post(self, request, *args, **kwargs):
+        ota_enrollment_form = OTAEnrollmentForm(
+            request.POST,
+            instance=self.ota_enrollment,
+            prefix="oe"
+        )
+        enrollment_secret_form = EnrollmentSecretForm(
+            request.POST,
+            instance=self.ota_enrollment.enrollment_secret,
+            prefix="es"
+        )
+        if ota_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
+            ota_enrollment = ota_enrollment_form.save(commit=False)
+            ota_enrollment.enrollment_secret = enrollment_secret_form.save()
+            enrollment_secret_form.save_m2m()
+            ota_enrollment.save()
+            return redirect(ota_enrollment)
+        else:
+            return self.render_to_response(
+                self.get_context_data(ota_enrollment_form=ota_enrollment_form,
+                                      enrollment_secret_form=enrollment_secret_form)
+            )
 
 
 def ota_enroll_callback(request, realm_authentication_session, ota_enrollment_pk):
@@ -346,7 +352,6 @@ class OTAEnrollmentEnrollView(View):
     def get(self, request, *args, **kwargs):
         ota_enrollment = get_object_or_404(
             OTAEnrollment,
-            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
             pk=kwargs["pk"],
             realm__isnull=False
         )
@@ -363,7 +368,7 @@ class OTAEnrollmentEnrollView(View):
             callback = "zentral.contrib.mdm.views.management.ota_enroll_callback"
             callback_kwargs = {"ota_enrollment_pk": ota_enrollment.pk}
             return HttpResponseRedirect(
-                ota_enrollment.realm.backend_instance.initialize_session(callback, **callback_kwargs)
+                ota_enrollment.realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
             )
         else:
             ota_enrollment_session = OTAEnrollmentSession.objects.create_from_realm_user(ota_enrollment, realm_user)
@@ -377,16 +382,12 @@ class OTAEnrollmentEnrollView(View):
 # User Enrollments
 
 
-class CreateUserEnrollmentView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/create_user_enrollment.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
+class CreateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "mdm.add_userenrollment"
+    template_name = "mdm/userenrollment_form.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["meta_business_unit"] = self.meta_business_unit
         user_enrollment_form = kwargs.get("user_enrollment_form")
         if not user_enrollment_form:
             user_enrollment_form = UserEnrollmentForm(prefix="ue")
@@ -395,7 +396,8 @@ class CreateUserEnrollmentView(LoginRequiredMixin, TemplateView):
         if not enrollment_secret_form:
             enrollment_secret_form = EnrollmentSecretForm(
                 prefix="es",
-                meta_business_unit=self.meta_business_unit,
+                no_serial_numbers=True,
+                no_udids=True
             )
         context["enrollment_secret_form"] = enrollment_secret_form
         return context
@@ -405,14 +407,15 @@ class CreateUserEnrollmentView(LoginRequiredMixin, TemplateView):
         enrollment_secret_form = EnrollmentSecretForm(
             request.POST,
             prefix="es",
-            meta_business_unit=self.meta_business_unit,
+            no_serial_numbers=True,
+            no_udids=True
         )
         if user_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
             user_enrollment = user_enrollment_form.save(commit=False)
             user_enrollment.enrollment_secret = enrollment_secret_form.save()
             enrollment_secret_form.save_m2m()
             user_enrollment.save()
-            return HttpResponseRedirect(user_enrollment.get_absolute_url())
+            return redirect(user_enrollment)
         else:
             return self.render_to_response(
                 self.get_context_data(user_enrollment_form=user_enrollment_form,
@@ -420,8 +423,8 @@ class CreateUserEnrollmentView(LoginRequiredMixin, TemplateView):
             )
 
 
-class UserEnrollmentView(LoginRequiredMixin, DetailView):
-    template_name = "mdm/user_enrollment.html"
+class UserEnrollmentView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_userenrollment"
     model = UserEnrollment
 
     def get_context_data(self, **kwargs):
@@ -429,7 +432,7 @@ class UserEnrollmentView(LoginRequiredMixin, DetailView):
         user_enrollment = ctx["object"]
         ctx["meta_business_unit"] = user_enrollment.enrollment_secret.meta_business_unit
         ctx["enroll_url"] = user_enrollment.get_enroll_full_url()
-        # TODO: pagination
+        # TODO: pagination, separate view
         ctx["user_enrollment_sessions"] = (ctx["object"].userenrollmentsession_set.all()
                                                         .select_related("enrollment_secret")
                                                         .order_by("-created_at"))
@@ -437,13 +440,13 @@ class UserEnrollmentView(LoginRequiredMixin, DetailView):
         return ctx
 
 
-class RevokeUserEnrollmentView(LoginRequiredMixin, TemplateView):
+class RevokeUserEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "mdm.change_userenrollment"
     template_name = "mdm/revoke_user_enrollment.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.user_enrollment = get_object_or_404(
             UserEnrollment,
-            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
             pk=kwargs["pk"]
         )
         return super().dispatch(request, *args, **kwargs)
@@ -451,12 +454,68 @@ class RevokeUserEnrollmentView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["user_enrollment"] = self.user_enrollment
-        ctx["meta_business_unit"] = self.user_enrollment.enrollment_secret.meta_business_unit
         return ctx
 
     def post(self, request, *args, **kwargs):
         self.user_enrollment.revoke()
-        return HttpResponseRedirect(self.user_enrollment.get_absolute_url())
+        return redirect(self.user_enrollment)
+
+
+class UpdateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
+    permission_required = "mdm.change_userenrollment"
+    template_name = "mdm/userenrollment_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.user_enrollment = get_object_or_404(
+            UserEnrollment,
+            pk=kwargs["pk"]
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user_enrollment_form = kwargs.get("user_enrollment_form")
+        if not user_enrollment_form:
+            user_enrollment_form = UserEnrollmentForm(
+                instance=self.user_enrollment,
+                prefix="ue"
+            )
+        context["user_enrollment_form"] = user_enrollment_form
+        enrollment_secret_form = kwargs.get("enrollment_secret_form")
+        if not enrollment_secret_form:
+            enrollment_secret_form = EnrollmentSecretForm(
+                instance=self.user_enrollment.enrollment_secret,
+                prefix="es",
+                no_serial_numbers=True,
+                no_udids=True
+            )
+        context["enrollment_secret_form"] = enrollment_secret_form
+        return context
+
+    def post(self, request, *args, **kwargs):
+        user_enrollment_form = UserEnrollmentForm(
+            request.POST,
+            instance=self.user_enrollment,
+            prefix="ue"
+        )
+        enrollment_secret_form = EnrollmentSecretForm(
+            request.POST,
+            instance=self.user_enrollment.enrollment_secret,
+            prefix="es",
+            no_serial_numbers=True,
+            no_udids=True
+        )
+        if user_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
+            user_enrollment = user_enrollment_form.save(commit=False)
+            user_enrollment.enrollment_secret = enrollment_secret_form.save()
+            enrollment_secret_form.save_m2m()
+            user_enrollment.save()
+            return redirect(user_enrollment)
+        else:
+            return self.render_to_response(
+                self.get_context_data(user_enrollment_form=user_enrollment_form,
+                                      enrollment_secret_form=enrollment_secret_form)
+            )
 
 
 class UserEnrollmentEnrollView(FormView):
@@ -466,7 +525,6 @@ class UserEnrollmentEnrollView(FormView):
     def dispatch(self, request, *args, **kwargs):
         self.user_enrollment = get_object_or_404(
             UserEnrollment,
-            enrollment_secret__meta_business_unit__pk=kwargs["mbu_pk"],
             pk=kwargs["pk"]
         )
         if not self.user_enrollment.enrollment_secret.is_valid():
@@ -484,358 +542,532 @@ class UserEnrollmentEnrollView(FormView):
         user_enrollment_session = UserEnrollmentSession.objects.create_from_managed_apple_id(
             self.user_enrollment, managed_apple_id
         )
-        push_certificate = (user_enrollment_session.enrollment_secret
-                                                   .meta_business_unit
-                                                   .metabusinessunitpushcertificate
-                                                   .push_certificate)
         return build_configuration_profile_response(
-            build_mdm_configuration_profile(user_enrollment_session, push_certificate),
+            build_mdm_configuration_profile(user_enrollment_session, self.user_enrollment.push_certificate),
             "zentral_user_enrollment"
         )
 
 
-# kernel extension policies
+# Artifacts
 
 
-class CreateKernelExtensionPolicyView(LoginRequiredMixin, CreateView):
-    model = KernelExtensionPolicy
-    fields = "__all__"
+class ArtifactListView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_artifact"
+    model = Artifact
 
-    def dispatch(self, request, *args, **kwargs):
-        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
+    def get_queryset(self):
+        return super().get_queryset().filter(trashed_at__isnull=True).annotate(Count("blueprintartifact"))
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        context["meta_business_unit"] = self.meta_business_unit
-        return context
+
+class UploadProfileView(PermissionRequiredMixin, FormView):
+    permission_required = "mdm.add_artifact"
+    form_class = UploadProfileForm
+    template_name = "mdm/profile_form.html"
 
     def form_valid(self, form):
-        existing_kext_policies = (KernelExtensionPolicy.objects.select_for_update()
-                                                               .filter(meta_business_unit=self.meta_business_unit))
-        # there should be at most a trashed one.
-        try:
-            instance = existing_kext_policies[0]
-        except IndexError:
-            pass
+        self.artifact, operation = form.save()
+        if operation:
+            messages.info(self.request, f"Artifact {operation}")
+            # TODO optimize
+            transaction.on_commit(lambda: send_artifact_notifications(self.artifact))
         else:
-            form.instance = instance
-        kext_policy = form.save(commit=False)
-        kext_policy.meta_business_unit = self.meta_business_unit
-        kext_policy.trashed_at = None
-        kext_policy.save()
-        form.save_m2m()
-        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(kext_policy.meta_business_unit))
-        return HttpResponseRedirect(kext_policy.get_absolute_url())
+            messages.warning(self.request, "Artifact already exists")
+        return redirect(self.artifact)
 
 
-class KernelExtensionPolicyView(LoginRequiredMixin, DetailView):
-    model = KernelExtensionPolicy
+class ArtifactView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_artifact"
+    model = Artifact
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        return context
+        ctx = super().get_context_data(**kwargs)
+        model_class = None
+        if self.object.type == ArtifactType.Profile.name:
+            model_class = Profile
+        elif self.object.type == ArtifactType.EnterpriseApp.name:
+            model_class = EnterpriseApp
+        if model_class:
+            ctx[f"{model_class._meta.model_name}_list"] = qs = (
+                model_class.objects.select_related("artifact_version")
+                                   .filter(artifact_version__artifact=self.object)
+                                   .order_by("-artifact_version__version")
+            )
+            ctx["versions_count"] = qs.count()
+        ctx["blueprint_artifacts"] = (self.object.blueprintartifact_set.select_related("blueprint")
+                                                                       .order_by("blueprint__name"))
+        ctx["blueprint_artifacts_count"] = ctx["blueprint_artifacts"].count()
+        return ctx
 
 
-class UpdateKernelExtensionPolicyView(LoginRequiredMixin, UpdateView):
-    model = KernelExtensionPolicy
-    fields = "__all__"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["mbu_pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        context["meta_business_unit"] = self.meta_business_unit
-        return context
+class UpdateArtifactView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_artifact"
+    model = Artifact
+    form_class = UpdateArtifactForm
 
     def form_valid(self, form):
-        kext_policy = form.save(commit=False)
-        kext_policy.meta_business_unit = self.meta_business_unit
-        kext_policy.save()
-        form.save_m2m()
-        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(kext_policy.meta_business_unit))
-        return HttpResponseRedirect(kext_policy.get_absolute_url())
+        response = super().form_valid(form)
+        # TODO optimize
+        transaction.on_commit(lambda: send_artifact_notifications(self.object))
+        return response
 
 
-class TrashKernelExtensionPolicyView(LoginRequiredMixin, DeleteView):
-    model = KernelExtensionPolicy
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        return context
+class TrashArtifactView(PermissionRequiredMixin, DeleteView):
+    permission_required = "mdm.delete_artifact"
+    model = Artifact
 
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
-        self.object.trashed_at = timezone.now()
-        self.object.save()
-        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(self.object.meta_business_unit))
-        return HttpResponseRedirect(reverse("mdm:mbu", args=(self.object.meta_business_unit.pk,)))
+        blueprints = list(Blueprint.objects.filter(blueprintartifact__artifact=self.object))
+        try:
+            self.object.delete()
+        except Exception:
+            # TODO verify
+            self.object.trashed_at = timezone.now()
+            self.object.save()
+            self.object.blueprintartifact_set.all().delete()
+        # TODO optimize
+        transaction.on_commit(lambda: send_blueprints_notifications(blueprints))
+        return redirect("mdm:artifacts")
 
 
-# Enrollment Packages
-
-
-class CreateEnrollmentPackageView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/mdmenrollmentpackage_form.html"
+class CreateBlueprintArtifactView(PermissionRequiredMixin, CreateView):
+    permission_required = "mdm.add_blueprintartifact"
+    model = BlueprintArtifact
+    form_class = BlueprintArtifactForm
 
     def dispatch(self, request, *args, **kwargs):
-        standalone_builders = get_standalone_package_builders()
-        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
-        try:
-            self.builder_key = request.GET["builder"]
-            self.builder = standalone_builders[self.builder_key]
-        except KeyError:
-            raise Http404
-        try:
-            # test if an active mep exists. protect ourselves if there is a bug and many exist!
-            mep = MDMEnrollmentPackage.objects.filter(meta_business_unit=self.meta_business_unit,
-                                                      builder=self.builder_key,
-                                                      trashed_at__isnull=True)[0]
-        except IndexError:
-            pass
-        else:
-            # prevent the creation of a second enrollment package with the same builder
-            # if an active enrollment package exists
-            messages.error(request,
-                           "An active enrollment package for this business unit and this service already exists.")
-            return HttpResponseRedirect(mep.get_absolute_url())
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_forms(self):
-        secret_form_kwargs = {"prefix": "secret",
-                              "no_restrictions": True,
-                              "meta_business_unit": self.meta_business_unit}
-        enrollment_form_kwargs = {"meta_business_unit": self.meta_business_unit,
-                                  "standalone": True}  # w/o dependencies. all in the package.
-        if self.request.method == "POST":
-            secret_form_kwargs["data"] = self.request.POST
-            enrollment_form_kwargs["data"] = self.request.POST
-        return (EnrollmentSecretForm(**secret_form_kwargs),
-                self.builder.form(**enrollment_form_kwargs))
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        context["title"] = "Create enrollment package"
-        context["meta_business_unit"] = self.meta_business_unit
-        context["builder_name"] = self.builder.name
-        if "secret_form" not in kwargs or "enrollment_form" not in kwargs:
-            context["secret_form"], context["enrollment_form"] = self.get_forms()
-        return context
-
-    def forms_invalid(self, secret_form, enrollment_form):
-        return self.render_to_response(self.get_context_data(secret_form=secret_form,
-                                                             enrollment_form=enrollment_form))
-
-    def forms_valid(self, secret_form, enrollment_form):
-        # make secret
-        secret = secret_form.save()
-        # make enrollment
-        enrollment = enrollment_form.save(commit=False)
-        enrollment.version = 0
-        enrollment.secret = secret
-        enrollment.save()
-        enrollment_form.save_m2m()
-        # MDM enrollment package
-        mep = MDMEnrollmentPackage.objects.create(
-            meta_business_unit=secret.meta_business_unit,
-            builder=self.builder_key,
-            enrollment_pk=enrollment.pk
-        )
-        # link from enrollment to mdm enrollment package, for config update propagation
-        enrollment.distributor = mep
-        enrollment.save()  # build package and package manifest via callback call
-        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(mep.meta_business_unit))
-        return HttpResponseRedirect(mep.get_absolute_url())
-
-    def post(self, request, *args, **kwargs):
-        secret_form, enrollment_form = self.get_forms()
-        if secret_form.is_valid() and enrollment_form.is_valid():
-            return self.forms_valid(secret_form, enrollment_form)
-        else:
-            return self.forms_invalid(secret_form, enrollment_form)
-
-
-class TrashEnrollmentPackageView(LoginRequiredMixin, DeleteView):
-    model = MDMEnrollmentPackage
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        return context
-
-    def delete(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        self.object.trashed_at = timezone.now()
-        self.object.save()
-        return HttpResponseRedirect(reverse("mdm:mbu", args=(self.object.meta_business_unit.pk,)))
-
-
-# Configuration Profiles
-
-
-class UploadConfigurationProfileView(LoginRequiredMixin, FormView):
-    model = ConfigurationProfile
-    form_class = UploadConfigurationProfileForm
-    template_name = "mdm/configurationprofile_form.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.meta_business_unit = get_object_or_404(MetaBusinessUnit, pk=kwargs["pk"])
+        self.artifact = get_object_or_404(Artifact, pk=kwargs["pk"])
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["meta_business_unit"] = self.meta_business_unit
+        kwargs["artifact"] = self.artifact
         return kwargs
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        context["title"] = "upload a configuration profile"
-        context["meta_business_unit"] = self.meta_business_unit
-        return context
+        ctx = super().get_context_data(**kwargs)
+        ctx["artifact"] = self.artifact
+        return ctx
 
     def form_valid(self, form):
-        self.configuration_profile = form.save()
-        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(self.meta_business_unit))
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        return self.configuration_profile.get_absolute_url()
+        response = super().form_valid(form)
+        # TODO: optimize
+        transaction.on_commit(lambda: send_blueprint_notifications(self.object.blueprint))
+        return response
 
 
-class TrashConfigurationProfileView(LoginRequiredMixin, DeleteView):
-    model = ConfigurationProfile
+class UpdateBlueprintArtifactView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_blueprintartifact"
+    model = BlueprintArtifact
+    form_class = BlueprintArtifactForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.artifact = get_object_or_404(Artifact, pk=kwargs["artifact_pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return super().get_queryset().filter(artifact=self.artifact)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["artifact"] = self.artifact
+        return kwargs
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        return context
+        ctx = super().get_context_data(**kwargs)
+        ctx["artifact"] = self.artifact
+        return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # TODO: optimize
+        transaction.on_commit(lambda: send_blueprint_notifications(self.object.blueprint))
+        return response
+
+
+class DeleteBlueprintArtifactView(PermissionRequiredMixin, DeleteView):
+    permission_required = "mdm.delete_blueprintartifact"
+    model = BlueprintArtifact
+
+    def dispatch(self, request, *args, **kwargs):
+        self.artifact = get_object_or_404(Artifact, pk=kwargs["artifact_pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return super().get_queryset().filter(artifact=self.artifact)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["artifact"] = self.artifact
+        return ctx
 
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
-        self.object.trashed_at = timezone.now()
-        self.object.save()
-        transaction.on_commit(lambda: send_mbu_enrolled_devices_notifications(self.object.meta_business_unit))
-        return HttpResponseRedirect(reverse("mdm:mbu", args=(self.object.meta_business_unit.pk,)))
+        blueprint = self.object.blueprint
+        self.object.delete()
+        # TODO: optimize
+        transaction.on_commit(lambda: send_blueprint_notifications(blueprint))
+        return redirect(self.artifact)
+
+
+# Blueprints
+
+
+class BlueprintListView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_blueprint"
+    model = Blueprint
+
+    def get_queryset(self):
+        return (super().get_queryset().annotate(Count("blueprintartifact", distinct=True),
+                                                Count("depenrollment", distinct=True),
+                                                Count("otaenrollment", distinct=True),
+                                                Count("userenrollment", distinct=True))
+                                      .order_by("name"))
+
+
+class CreateBlueprintView(PermissionRequiredMixin, CreateView):
+    permission_required = "mdm.add_blueprint"
+    model = Blueprint
+    fields = ("name",)
+
+
+class BlueprintView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_blueprint"
+    model = Blueprint
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["artifacts"] = (self.object.blueprintartifact_set.select_related("artifact")
+                                                             .annotate(Max("artifact__artifactversion__version"))
+                                                             .order_by(
+                                                                 "-install_before_setup_assistant",
+                                                                 "-priority", "artifact__name"))
+        ctx["artifacts_count"] = ctx["artifacts"].count()
+        for enrollment_type in ("dep", "ota", "user"):
+            ctx[f"{enrollment_type}_enrollments"] = list(
+                getattr(self.object, f"{enrollment_type}enrollment_set").order_by("name").all()
+            )
+        return ctx
+
+
+class UpdateBlueprintView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_blueprint"
+    model = Blueprint
+    fields = ("name",)
+
+
+# SCEP Configurations
+
+
+class SCEPConfigListView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_scepconfig"
+    model = SCEPConfig
+    paginate_by = 20
+
+
+class CreateSCEPConfigView(PermissionRequiredMixin, TemplateView):
+    template_name = "mdm/scepconfig_form.html"
+    permission_required = "mdm.add_scepconfig"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        scep_config_form = kwargs.get("scep_config_form")
+        if not scep_config_form:
+            scep_config_form = SCEPConfigForm(prefix="sc")
+        context["scep_config_form"] = scep_config_form
+        microsoft_ca_form = kwargs.get("microsoft_ca_form")
+        if not microsoft_ca_form:
+            microsoft_ca_form = MicrosoftCAChallengeForm(prefix="mc")
+        context["microsoft_ca_form"] = microsoft_ca_form
+        static_form = kwargs.get("static_form")
+        if not static_form:
+            static_form = StaticChallengeForm(prefix="s")
+        context["static_form"] = static_form
+        return context
+
+    def post(self, request, *args, **kwargs):
+        scep_config_form = SCEPConfigForm(request.POST, prefix="sc")
+        microsoft_ca_form = MicrosoftCAChallengeForm(request.POST, prefix="mc")
+        static_form = StaticChallengeForm(request.POST, prefix="s")
+        if scep_config_form.is_valid():
+            challenge_type = SCEPChallengeType[scep_config_form.cleaned_data["challenge_type"]]
+            if challenge_type == SCEPChallengeType.MICROSOFT_CA:
+                challenge_form = microsoft_ca_form
+            elif challenge_type == SCEPChallengeType.STATIC:
+                challenge_form = static_form
+            if challenge_form.is_valid():
+                scep_config = scep_config_form.save(commit=False)
+                scep_config.challenge_kwargs = challenge_form.cleaned_data
+                scep_config.save()
+                return redirect(scep_config)
+        else:
+            return self.render_to_response(
+                self.get_context_data(scep_config_form=scep_config_form,
+                                      microsoft_ca_form=microsoft_ca_form,
+                                      static_form=static_form)
+            )
+
+
+class SCEPConfigView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_scepconfig"
+    model = SCEPConfig
+
+
+class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
+    template_name = "mdm/scepconfig_form.html"
+    permission_required = "mdm.change_scepconfig"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.scep_config = get_object_or_404(SCEPConfig, pk=kwargs["pk"])
+        self.challenge_type = SCEPChallengeType[self.scep_config.challenge_type]
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["object"] = self.scep_config
+        scep_config_form = kwargs.get("scep_config_form")
+        if not scep_config_form:
+            scep_config_form = SCEPConfigForm(
+                instance=self.scep_config,
+                prefix="sc"
+            )
+        context["scep_config_form"] = scep_config_form
+        microsoft_ca_form = kwargs.get("microsoft_ca_form")
+        if not microsoft_ca_form:
+            microsoft_ca_form = MicrosoftCAChallengeForm(
+                prefix="mc",
+                initial=(
+                    self.scep_config.challenge_kwargs
+                    if self.challenge_type == SCEPChallengeType.MICROSOFT_CA
+                    else None
+                )
+            )
+        context["microsoft_ca_form"] = microsoft_ca_form
+        static_form = kwargs.get("static_form")
+        if not static_form:
+            static_form = StaticChallengeForm(
+                prefix="s",
+                initial=(
+                    self.scep_config.challenge_kwargs
+                    if self.challenge_type == SCEPChallengeType.STATIC
+                    else None
+                )
+            )
+        context["static_form"] = static_form
+        return context
+
+    def post(self, request, *args, **kwargs):
+        scep_config_form = SCEPConfigForm(
+            request.POST,
+            instance=self.scep_config,
+            prefix="sc"
+        )
+        microsoft_ca_form = MicrosoftCAChallengeForm(
+            request.POST,
+            prefix="mc",
+            initial=(
+                self.scep_config.challenge_kwargs
+                if self.challenge_type == SCEPChallengeType.MICROSOFT_CA
+                else None
+            )
+        )
+        static_form = StaticChallengeForm(
+            request.POST,
+            prefix="s",
+            initial=(
+                self.scep_config.challenge_kwargs
+                if self.challenge_type == SCEPChallengeType.STATIC
+                else None
+            )
+        )
+        if scep_config_form.is_valid():
+            challenge_type = SCEPChallengeType[scep_config_form.cleaned_data["challenge_type"]]
+            if challenge_type == SCEPChallengeType.MICROSOFT_CA:
+                challenge_form = microsoft_ca_form
+            elif challenge_type == SCEPChallengeType.STATIC:
+                challenge_form = static_form
+            if challenge_form.is_valid():
+                scep_config = scep_config_form.save(commit=False)
+                scep_config.challenge_kwargs = challenge_form.cleaned_data
+                scep_config.save()
+                return redirect(scep_config)
+        else:
+            return self.render_to_response(
+                self.get_context_data(scep_config_form=scep_config_form,
+                                      microsoft_ca_form=microsoft_ca_form,
+                                      static_form=static_form)
+            )
+
+
+class DeleteSCEPConfigView(PermissionRequiredMixin, DeleteView):
+    permission_required = "mdm.delete_scepconfig"
+    model = SCEPConfig
+    success_url = reverse_lazy("mdm:scep_configs")
 
 
 # Devices
 
 
-class DevicesView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/device_list.html"
+class EnrolledDeviceListView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_enrolleddevice"
+    model = EnrolledDevice
+    paginate_by = 20
 
-    def get(self, request, *args, **kwargs):
-        self.form = DeviceSearchForm(request.GET)
+    def dispatch(self, request, *args, **kwargs):
+        self.form = EnrolledDeviceSearchForm(request.GET)
         self.form.is_valid()
-        self.devices = list(self.form.fetch_devices())
-        if len(self.devices) == 1:
-            return HttpResponseRedirect(reverse("mdm:device", args=(self.devices[0]["urlsafe_serial_number"],)))
-        return super().get(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return self.form.get_queryset()
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["mdm"] = True
         ctx["form"] = self.form
-        ctx["devices"] = self.devices
-        ctx["devices_count"] = len(self.devices)
-        bc = [(None, "MDM")]
-        if not self.form.is_initial():
-            bc.extend([(reverse("mdm:devices"), "Devices"),
-                       (None, "Search")])
+        bc = [(reverse("mdm:index"), "MDM")]
+        page = ctx["page_obj"]
+        reset_link = None
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            reset_link = "?{}".format(qd.urlencode())
+        if self.form.has_changed():
+            bc.extend([(reverse("mdm:enrolled_devices"), "Devices"),
+                       (reset_link, "Search")])
         else:
-            bc.extend([(None, "Devices")])
+            bc.extend([(reset_link, "Devices")])
         ctx["breadcrumbs"] = bc
         return ctx
 
 
-class DeviceView(LoginRequiredMixin, TemplateView):
-    template_name = "mdm/device_info.html"
+class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_enrolleddevice"
+    model = EnrolledDevice
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["mdm"] = True
-        ctx["machine"] = machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
-        ctx["serial_number"] = machine.serial_number
-        # enrolled devices
-        ctx["enrolled_devices"] = (EnrolledDevice.objects.filter(serial_number=machine.serial_number)
-                                                         .order_by("-updated_at"))
-        ctx["enrolled_devices_count"] = ctx["enrolled_devices"].count()
-        # dep device?
         try:
-            ctx["dep_device"] = DEPDevice.objects.get(serial_number=machine.serial_number)
+            ctx["dep_device"] = (DEPDevice.objects.select_related("virtual_server", "enrollment")
+                                                  .get(serial_number=self.object.serial_number))
         except DEPDevice.DoesNotExist:
             pass
-        # dep enrollment sessions
-        ctx["dep_enrollment_sessions"] = DEPEnrollmentSession.objects.filter(
-            enrollment_secret__serial_numbers__contains=[machine.serial_number]
-        ).order_by("-updated_at")
+        ctx["installed_artifacts"] = (self.object.installed_artifacts
+                                                 .select_related("artifact_version__artifact")
+                                                 .all()
+                                                 .order_by("-updated_at"))
+        ctx["installed_artifacts_count"] = ctx["installed_artifacts"].count()
+        ctx["commands"] = (self.object.commands
+                                      .select_related("artifact_version__artifact")
+                                      .all()
+                                      .order_by("-created_at"))
+        ctx["commands_count"] = ctx["commands"].count()
+        ctx["dep_enrollment_sessions"] = (self.object.depenrollmentsession_set
+                                                     .select_related("dep_enrollment", "realm_user")
+                                                     .all()
+                                                     .order_by("-pk"))
         ctx["dep_enrollment_sessions_count"] = ctx["dep_enrollment_sessions"].count()
-        # ota enrollment sessions
-        ctx["ota_enrollment_sessions"] = OTAEnrollmentSession.objects.filter(
-            enrollment_secret__serial_numbers__contains=[machine.serial_number]
-        ).order_by("-updated_at")
+        ctx["ota_enrollment_sessions"] = (self.object.otaenrollmentsession_set
+                                                     .select_related("ota_enrollment", "realm_user")
+                                                     .all()
+                                                     .order_by("-pk"))
         ctx["ota_enrollment_sessions_count"] = ctx["ota_enrollment_sessions"].count()
         return ctx
 
 
-class PokeEnrolledDeviceView(LoginRequiredMixin, View):
+class PokeEnrolledDeviceView(PermissionRequiredMixin, View):
+    permission_required = "mdm.change_enrolleddevice"
+
     def post(self, request, *args, **kwargs):
         enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
         send_enrolled_device_notification(enrolled_device)
         messages.info(request, "Device poked!")
-        return HttpResponseRedirect(
-            reverse("mdm:device",
-                    args=(MetaMachine(enrolled_device.serial_number).get_urlsafe_serial_number(),))
-        )
+        return redirect(enrolled_device)
 
 
-class EnrolledDeviceArtifactsView(LoginRequiredMixin, DetailView):
+class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_enrolleddevice"
     model = EnrolledDevice
-    template_name = "mdm/enrolled_device_artifacts.html"
+    fields = ("blueprint",)
+
+    def form_valid(self, form):
+        old_blueprint = EnrolledDevice.objects.get(pk=self.object.pk).blueprint
+        if self.object.blueprint != old_blueprint:
+            transaction.on_commit(lambda: send_enrolled_device_notification(
+                self.object, notify_users=True
+            ))
+        return super().form_valid(form)
+
+
+class EnrolledUserView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_enrolleduser"
+    model = EnrolledUser
+
+    def get_queryset(self):
+        return (super().get_queryset().select_related("enrolled_device")
+                                      .filter(enrolled_device__pk=self.kwargs["device_pk"]))
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        context["urlsafe_serial_number"] = MetaMachine(self.object.serial_number).get_urlsafe_serial_number()
-        context["installed_device_artifacts"] = sorted(self.object.installeddeviceartifact_set.all(),
-                                                       key=lambda ida: ida.created_at, reverse=True)
-        context["device_artifact_commands"] = sorted(self.object.deviceartifactcommand_set.all(),
-                                                     key=lambda dac: dac.id, reverse=True)
-        return context
+        ctx = super().get_context_data(**kwargs)
+        ctx["enrolled_device"] = ctx["object"].enrolled_device
+        ctx["installed_artifacts"] = (self.object.installed_artifacts
+                                                 .select_related("artifact_version__artifact")
+                                                 .all()
+                                                 .order_by("-updated_at"))
+        ctx["installed_artifacts_count"] = ctx["installed_artifacts"].count()
+        ctx["commands"] = (self.object.commands
+                                      .select_related("artifact_version__artifact")
+                                      .all()
+                                      .order_by("-created_at"))
+        ctx["commands_count"] = ctx["commands"].count()
+        return ctx
 
 
-class AssignDEPDeviceProfileView(LoginRequiredMixin, UpdateView):
+class PokeEnrolledUserView(PermissionRequiredMixin, View):
+    permission_required = "mdm.change_enrolleduser"
+
+    def post(self, request, *args, **kwargs):
+        enrolled_user = get_object_or_404(
+            EnrolledUser.objects.select_related("enrolled_device__push_certificate"),
+            pk=kwargs["pk"]
+        )
+        send_enrolled_user_notification(enrolled_user)
+        messages.info(request, "User poked!")
+        return redirect(enrolled_user)
+
+
+# DEP device
+
+
+class AssignDEPDeviceProfileView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_depdevice"
     model = DEPDevice
-    form_class = AssignDEPDeviceProfileForm
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["mdm"] = True
-        return context
+    form_class = AssignDEPDeviceEnrollmentForm
 
     def form_valid(self, form):
         dep_device = form.save(commit=False)
         try:
-            assign_dep_device_profile(dep_device, dep_device.profile)
+            assign_dep_device_profile(dep_device, dep_device.enrollment)
         except DEPClientError as e:
             form.add_error(None, str(e))
             return self.form_invalid(form)
         else:
             messages.info(self.request, "Profile {} successfully assigned to device {}.".format(
-                dep_device.profile, dep_device.serial_number
+                dep_device.enrollment, dep_device.serial_number
             ))
-            return HttpResponseRedirect(dep_device.get_absolute_url())
+            return redirect(dep_device)
 
 
-class RefreshDEPDeviceView(LoginRequiredMixin, View):
+class RefreshDEPDeviceView(PermissionRequiredMixin, View):
+    permission_required = "mdm.change_depdevice"
+
     def post(self, request, *args, **kwargs):
         dep_device = get_object_or_404(DEPDevice, pk=kwargs["pk"])
         try:
@@ -844,7 +1076,4 @@ class RefreshDEPDeviceView(LoginRequiredMixin, View):
             messages.error(request, str(error))
         else:
             messages.info(request, "DEP device refreshed")
-        return HttpResponseRedirect("{}#dep_device".format(
-            reverse("mdm:device",
-                    args=(MetaMachine(dep_device.serial_number).get_urlsafe_serial_number(),))
-        ))
+        return redirect(dep_device)

@@ -4,7 +4,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
   {% if virtual_server %}
   <li><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
   <li><a href="{{ virtual_server.get_absolute_url }}">{{ virtual_server }}</a></li>

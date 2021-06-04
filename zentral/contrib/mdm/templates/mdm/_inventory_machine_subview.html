@@ -1,0 +1,36 @@
+{% if enrolled_devices %}
+<h3>MDM</h3>
+{% if err_message %}
+<p class="text-danger">{{ err_message }}</p>
+{% endif %}
+{% for enrolled_device, enrolled_users in enrolled_devices %}
+<dl class="dl-horizontal">
+  <dt>Device</dt>
+  <dd>
+    {% if can_view_device %}
+    <a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a>
+    {% else %}
+    {{ enrolled_device }}
+    {% endif %}
+  </dd>
+  <dt>User{{ users|pluralize }}</dt>
+  <dd>
+    {% if enrolled_users %}
+    <ul class="list-unstyled">
+      {% for enrolled_user in enrolled_users %}
+      <li>
+        {% if can_view_user %}
+        <a href="{{ enrolled_user.get_absolute_url }}">{{ enrolled_user }}</a> 
+        {% else %}
+        {{ enrolled_user }}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    -
+    {% endif %}
+  </dd>
+</dl>
+{% endfor %}
+{% endif %}

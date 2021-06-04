@@ -4,93 +4,224 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">MDM</li>
-  <li><a href="{% url 'mdm:devices' %}">Devices</a></li>
-  <li class="active">{{ serial_number }}</li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
+  <li class="active">{{ object }}</li>
 </ol>
 
 
-<h2>Device <a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></h2>
+<h3>Device {{ object }}</h3>
 
-<h3>{{ enrolled_devices_count }} Enrolled device{{ enrolled_devices_count|pluralize }}</h3>
+<table class="table table-condensed">
+  <tbody>
+    <tr>
+      <th style="width:160px">UDID</th>
+      <td><code>{{ object.udid }}</code></th>
+    </tr>
+    <tr>
+      <th>Serial number</th>
+      <td>
+        {% with object.get_urlsafe_serial_number as urlsafe_serial_number %}
+        {% if urlsafe_serial_number %}
+        {% if perms.inventory.view_machinesnapshot %}
+        <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number }}</a>
+        {% else %}
+        {{ object.serial_number }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+        {% endwith %}
+      </td>
+    </tr>
+    <tr>
+      <th>DEP assignment</th>
+      <td>
+        {% if dep_device %}
+        {% if perms.mdm.view_depvirtualserver %}
+        <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
+        {% else %}
+        {{ dep_device.virtual_server }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    </tr>
+    <tr>
+      <th>Platform</th>
+      <td>{{ object.get_platform_display }}</th>
+    </tr>
+    <tr>
+      <th>Push certificate</th>
+      <td>
+        {% if perms.mdm.view_pushcertificate %}
+        <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
+        {% else %}
+        {{ object.push_certificate }}
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Blueprint</th>
+      <td>
+        {% if object.blueprint %}
+        {% if perms.mdm.view_blueprint %}
+        <a href="{{ object.blueprint.get_absolute_url }}">{{ object.blueprint }}</a>
+        {% else %}
+        {{ object.blueprint }}
+        {% endif %}
+        {% else %}
+        no blueprint
+        {% endif %}
+        {% if perms.mdm.change_enrolleddevice %}
+        <a href="{% url 'mdm:change_enrolled_device_blueprint' object.pk %}" class="btn btn-primary btn-xs" style="margin-left:10px">
+          Change
+        </a>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Certificate fingerprint</th>
+      <td><code>{{ object.cert_fingerprint.hex }}</code></td>
+    </tr>
+    <tr>
+      <th>Certificate expiry</th>
+      <td>{{ object.cert_not_valid_after|date:"SHORT_DATETIME_FORMAT" }}</td>
+    </tr>
+    <tr>
+      <th>Checkout</th>
+      <td>{{ object.checkout_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+    </tr>
+    {% with object.enrolleduser_set.count as users_count %}
+    <tr>
+      <th>MDM user{{ users_count|pluralize }}</th>
+      <td>
+        {% if users_count %}
+        <ul class="list-unstyled">
+          {% for user in object.enrolleduser_set.all %}
+          <li>
+            {% if perms.mdm.view_enrolleduser %}
+            <a href="{{ user.get_absolute_url }}">{{ user.long_name }}</a>
+            {% else %}
+            {{ user.long_name }}
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+  </tbody>
+</table>
 
-{% if enrolled_devices_count %}
-<table class="table">
+<h3>{{ installed_artifacts_count }} Artifact{{ installed_artifacts_count|pluralize }}</h3>
+
+{% if installed_artifacts_count %}
+<table class="table table-condensed">
   <thead>
-    <th>push certificate</th>
-    <th>udid</th>
-    <th>checkout at</th>
-    <th>updated at</th>
-    <th></th>
+    <tr>
+      <th>Type</th>
+      <th>Artifact</th>
+      <th>Version</th>
+      <th>Last updated</th>
+    </tr>
   </thead>
   <tbody>
-    {% for enrolled_device in enrolled_devices %}
+    {% for installed_artifact in installed_artifacts %}
+    {% with installed_artifact.artifact_version as artifact_version %}
+    {% with artifact_version.artifact as artifact %}
     <tr>
-      <td><a href="{% url 'mdm:push_certificate' enrolled_device.push_certificate.id %}">{{ enrolled_device.push_certificate.name }}</a></td>
-      <td>{{ enrolled_device.udid }}</td>
-      <td>{{ enrolled_device.checkout_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-      <td>{{ enrolled_device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ artifact.get_type_display }}</td>
       <td>
-        <a class="btn btn-default" href="{% url 'mdm:enrolled_device_artifacts' enrolled_device.id %}">
-          Artifacts
-        </a>
-        <form style="display:inline-block" method="POST" action="{% url 'mdm:poke_enrolled_device' enrolled_device.id %}">{% csrf_token %}
-          <button type="submit" class="btn btn-success" {% if not enrolled_device.can_be_poked %}disabled="disabled"{% endif %}>Poke!</button>
-        </form>
+        {% if perms.mdm.view_artifact %}
+        <a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a>
+        {% else %}
+        {{ artifact }}
+        {% endif %}
       </td>
+      <td>
+        {% if perms.mdm.view_artifact %}
+        <a href="{{ artifact_version.get_absolute_url }}">{{ artifact_version.version }}</a>
+        {% else %}
+        {{ artifact_version.version }}
+        {% endif %}
+      </td>
+      <td>
+        {{ installed_artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h3>Last commands</h3>
+
+{% if perms.mdm.change_enrolleddevice %}
+<form style="display:inline-block" method="POST" action="{% url 'mdm:poke_enrolled_device' object.id %}">{% csrf_token %}
+  <button type="submit" class="btn btn-success" {% if not object.can_be_poked %}disabled="disabled"{% endif %}>Poke!</button>
+</form>
+{% endif %}
+
+{% if commands_count %}
+<table class="table table-condensed">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Artifact</th>
+      <th>Time</th>
+      <th>Result time</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for command in commands %}
+    <tr>
+      <td>
+        {{ command.name }}
+      </td>
+      <td>
+        {% if command.artifact_version %}
+        {% if perms.mdm.view_artifactversion %}
+        <a href="{{ command.artifact_version.get_absolute_url }}">{{ command.artifact_version }}</a>
+        {% else %}
+        {{ command.artifact_version }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      <td>
+        {% if command.time %}
+        {{ command.time|date:"SHORT_DATETIME_FORMAT" }}
+        {% else %}
+        Queued since {{ command.created_at|date:"SHORT_DATETIME_FORMAT" }}
+        {% endif %}
+      </td>
+      <td>
+        {{ command.result_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
+      </td>
+      <td>{{ command.get_status_display }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 {% endif %}
 
-{% if dep_device %}
-<a name="dep_device"></a>
-<h3>DEP Device{% if dep_device.is_deleted %} <span class="label label-danger">DELETED</span>{% endif %}</h3>
-
-{% if not dep_device.is_deleted %}
-<form action="{% url 'mdm:refresh_dep_device' dep_device.pk %}" method="post">{% csrf_token %}
-  <a href="{% url 'mdm:assign_dep_device_profile' dep_device.pk %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-  </a>
-  <button type="submit" class="btn btn-default">
-    <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
-  </button>
-</form>
-{% endif %}
-
-<dl class="dl-horizontal">
-  <dt>Virtual server</dt>
-  <dd><a href="{{ dep_device.virtual_server.get_absolute_url }}">{{ dep_device.virtual_server }}</a></dd>
-  <dt>Assigned by</dt>
-  <dd>{{ dep_device.device_assigned_by }}</dd>
-  <dt>Assigned date</dt>
-  <dd>{{ dep_device.device_assigned_date|date:"SHORT_DATETIME_FORMAT" }}</dd>
-  <dt>Profile</dt>
-  <dd>
-    {% if dep_device.profile %}
-    <a href="{{ dep_device.profile.get_absolute_url }}">{{ dep_device.profile }}</a>
-    {% else %}
-    -
-    {% endif %}
-  </dd>
-  <dt>Profile status</dt>
-  <dd>{{ dep_device.get_profile_status_display }}</dd>
-  <dt>Profile assign time</dt>
-  <dd>{{ dep_device.profile_assign_time|date:"SHORT_DATETIME_FORMAT" }}</dd>
-  <dt>Profile push time</dt>
-  <dd>{{ dep_device.profile_push_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</dd>
-</dl>
-{% endif %}
-
-
 <h3>{{ dep_enrollment_sessions_count }} DEP enrollment session{{ dep_enrollment_sessions_count|pluralize }}</h3>
 
 {% if dep_enrollment_sessions_count %}
-<table class="table">
+<table class="table table-condensed">
   <thead>
-    <th class="col-md-6">profile</th>
-    <th class="col-md-6">realm user</th>
+    <th class="col-md-3">profile</th>
+    <th class="col-md-3">realm user</th>
     <th class="col-md-2">status</th>
     <th class="col-md-2">created at</th>
     <th class="col-md-2">updated at</th>
@@ -98,8 +229,16 @@
   <tbody>
     {% for dep_enrollment_session in dep_enrollment_sessions %}
     <tr>
-      <td><a href="{{ dep_enrollment_session.dep_profile.get_absolute_url }}">{{ dep_enrollment_session.dep_profile }}</a></td>
-      <td>{% if dep_enrollment_session.realm_user %}{{ dep_enrollment_session.realm_user }}{% else %}-{% endif %}</td>
+      <td>
+        {% if perms.mdm.view_depenrollment %}
+        <a href="{{ dep_enrollment_session.dep_enrollment.get_absolute_url }}">{{ dep_enrollment_session.dep_enrollment }}</a>
+        {% else %}
+        {{ dep_enrollment_session.dep_enrollment }}
+        {% endif %}
+      </td>
+      <td>
+        {% if dep_enrollment_session.realm_user %}{{ dep_enrollment_session.realm_user }}{% else %}-{% endif %}
+      </td>
       <td class="{% if dep_enrollment_session.is_completed %}bg-success{% else %}bg-warning{% endif %}">
         {{ dep_enrollment_session.get_status_display }}
       </td>
@@ -114,9 +253,10 @@
 <h3>{{ ota_enrollment_sessions_count }} OTA enrollment session{{ ota_enrollment_sessions_count|pluralize }}</h3>
 
 {% if ota_enrollment_sessions_count %}
-<table class="table">
+<table class="table table-condensed">
   <thead>
-    <th class="col-md-6">ota enrollment</th>
+    <th class="col-md-3">ota enrollment</th>
+    <th class="col-md-3">realm user</th>
     <th class="col-md-2">status</th>
     <th class="col-md-2">created at</th>
     <th class="col-md-2">updated at</th>
@@ -124,7 +264,16 @@
   <tbody>
     {% for ota_enrollment_session in ota_enrollment_sessions %}
     <tr>
-      <td><a href="{{ ota_enrollment_session.ota_enrollment.get_absolute_url }}">{{ ota_enrollment_session.ota_enrollment }}</a></td>
+      <td>
+        {% if perms.mdm.view_otaenrollment %}
+        <a href="{{ ota_enrollment_session.ota_enrollment.get_absolute_url }}">{{ ota_enrollment_session.ota_enrollment }}</a>
+        {% else %}
+        {{ ota_enrollment_session.ota_enrollment }}
+        {% endif %}
+      </td>
+      <td>
+        {% if ota_enrollment_session.realm_user %}{{ ota_enrollment_session.realm_user }}{% else %}-{% endif %}
+      </td>
       <td class="{% if ota_enrollment_session.is_completed %}bg-success{% else %}bg-warning{% endif %}">
         {{ ota_enrollment_session.get_status_display }}
       </td>
@@ -134,27 +283,6 @@
     {% endfor %}
   </tbody>
 </table>
-{% endif %}
-
-{% if object.enrolleduser_set.count %}
-<h2>{{ object.enrolleduser_set.count }} enrolled user{{ object.enrolleduser_set.count|pluralize }}</h2>
-{% for enrolled_user in object.enrolleduser_set.all %}
-<dl class="dl-horizontal">
-  <dt>Long name</dt>
-  <dd>{{ enrolled_user.long_name }}</dd>
-  <dt>Short name</dt>
-  <dd>{{ enrolled_user.short_name }}</dd>
-  <dt>ID</dt>
-  <dd>{{ enrolled_user.user_id }}</dd>
-</dl>
-
-<dl class="dl-horizontal">
-  <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ enrolled_user.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-  <dt class="small" style="opacity:0.5">Updated at</dt>
-  <dd class="small" style="opacity:0.5">{{ enrolled_user.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-</dl>
-{% endfor %}
 {% endif %}
 
 {% endblock %}

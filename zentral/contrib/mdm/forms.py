@@ -1,26 +1,28 @@
 import plistlib
 from django import forms
-from django.db import connection
+from django.db.models import Q
 from realms.utils import build_password_hash_dict
-from zentral.contrib.inventory.models import MetaMachine
+from .crypto import load_push_certificate
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
-from .models import (DEPDevice, DEPOrganization, DEPProfile, DEPToken, DEPVirtualServer,
-                     OTAEnrollment, UserEnrollment, PushCertificate, MetaBusinessUnitPushCertificate,
-                     ConfigurationProfile)
-from .pkcs12 import load_push_certificate
+from .models import (Artifact, ArtifactType, ArtifactVersion, BlueprintArtifact, Channel,
+                     DEPDevice, DEPOrganization, DEPEnrollment, DEPToken, DEPVirtualServer,
+                     EnrolledDevice, Platform,
+                     SCEPConfig,
+                     OTAEnrollment, UserEnrollment, PushCertificate,
+                     Profile)
 
 
 class OTAEnrollmentForm(forms.ModelForm):
     class Meta:
         model = OTAEnrollment
-        fields = ("name", "realm")
+        fields = ("name", "realm", "push_certificate", "blueprint")
 
 
 class UserEnrollmentForm(forms.ModelForm):
     class Meta:
         model = UserEnrollment
-        fields = ("name",)
+        fields = ("name", "push_certificate", "blueprint")
 
 
 class UserEnrollmentEnrollForm(forms.Form):
@@ -41,94 +43,26 @@ class PushCertificateForm(forms.ModelForm):
         password = cleaned_data.pop("password", None)
         if certificate_file:
             try:
-                push_certificate_d = load_push_certificate(certificate_file.read(),
-                                                           password)
+                push_certificate_d = load_push_certificate(certificate_file.read(), password)
             except Exception:
                 raise forms.ValidationError("Could not process push certificate")
             else:
-                cleaned_data.update(push_certificate_d)
+                for key, val in push_certificate_d.items():
+                    setattr(self.instance, key, val)
         return cleaned_data
 
-    def _post_clean(self):
-        # Hack, to add the computed fields
-        super()._post_clean()
-        for key, val in self.cleaned_data.items():
-            setattr(self.instance, key, val)
 
+class EnrolledDeviceSearchForm(forms.Form):
+    q = forms.CharField(required=False,
+                        widget=forms.TextInput(attrs={"placeholder": "Serial number, UDID",
+                                                      "autofocus": True}))
 
-class AddPushCertificateBusinessUnitForm(forms.ModelForm):
-    class Meta:
-        model = MetaBusinessUnitPushCertificate
-        fields = ('meta_business_unit',)
-
-    def __init__(self, *args, **kwargs):
-        push_certificate = kwargs.pop("push_certificate")
-        super().__init__(*args, **kwargs)
-        mbu_f = self.fields["meta_business_unit"]
-        mbu_id_list = [mbupc.meta_business_unit_id
-                       for mbupc in push_certificate.metabusinessunitpushcertificate_set.all()]
-        mbu_f.queryset = mbu_f.queryset.exclude(pk__in=mbu_id_list)
-
-
-class DeviceSearchForm(forms.Form):
-    serial_number = forms.CharField(label="serial number", required=False,
-                                    widget=forms.TextInput(attrs={"placeholder": "serial number",
-                                                                  "autofocus": True}))
-
-    def is_initial(self):
-        return not {k: v for k, v in self.cleaned_data.items() if v}
-
-    def build_query(self):
-        query = (
-            "WITH devices AS ("
-
-            "SELECT serial_number, NULL AS product, udid AS udid, checkout_at, created_at, updated_at "
-            "FROM mdm_enrolleddevice "
-
-            "UNION "
-
-            "SELECT sec.serial_numbers[1], sess.product, sec.udids[1], NULL, sess.created_at, sess.updated_at "
-            "FROM mdm_depenrollmentsession as sess "
-            "JOIN inventory_enrollmentsecret as sec ON (sec.id = sess.enrollment_secret_id) "
-
-            "UNION "
-
-            "SELECT sec.serial_numbers[1], sess.product, sec.udids[1], NULL, sess.created_at, sess.updated_at "
-            "FROM mdm_otaenrollmentsession as sess "
-            "JOIN inventory_enrollmentsecret as sec ON (sec.id = sess.enrollment_secret_id) "
-
-            "UNION "
-
-            "SELECT serial_number, NULL, NULL, NULL, created_at, updated_at "
-            "FROM mdm_depdevice"
-
-            ") SELECT serial_number, max(product) AS product, array_agg(DISTINCT udid) AS udids, "
-            "max(checkout_at) AS checkout_at, min(created_at) AS created_at, max(updated_at) AS updated_at "
-            "FROM devices "
-        )
-        args = []
-
-        # serial number ?
-        serial_number = self.cleaned_data.get("serial_number")
-        if serial_number:
-            query = "{} WHERE UPPER(serial_number) LIKE UPPER(%s) ".format(query)
-            args.append("%{}%".format(connection.ops.prep_for_like_query(serial_number)))
-
-        # group by and order
-        query = "{} GROUP BY serial_number ORDER BY max(updated_at) DESC;".format(query)
-
-        return query, args
-
-    def fetch_devices(self):
-        query, args = self.build_query()
-        with connection.cursor() as cursor:
-            cursor.execute(query, args)
-            attributes = [col.name for col in cursor.description]
-            for row in cursor.fetchall():
-                device = dict(zip(attributes, row))
-                device["udids"] = sorted(udid for udid in device["udids"] if udid)
-                device["urlsafe_serial_number"] = MetaMachine(device["serial_number"]).get_urlsafe_serial_number()
-                yield device
+    def get_queryset(self):
+        qs = EnrolledDevice.objects.all().order_by("-updated_at")
+        q = self.cleaned_data.get("q")
+        if q:
+            qs = qs.filter(Q(serial_number__icontains=q) | Q(udid__icontains=q))
+        return qs
 
 
 class EncryptedDEPTokenForm(forms.ModelForm):
@@ -200,17 +134,18 @@ class EncryptedDEPTokenForm(forms.ModelForm):
         return dep_token
 
 
-class CreateDEPProfileForm(forms.ModelForm):
+class CreateDEPEnrollmentForm(forms.ModelForm):
     admin_password = forms.CharField(required=False, widget=forms.PasswordInput)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         field_order = [
+            "push_certificate", "blueprint",
             "virtual_server", "name",
-            "allow_pairing", "is_supervised", "is_mandatory", "is_mdm_removable",
-            "await_device_configured", "auto_advance_setup",
+            "allow_pairing", "is_supervised", "is_mandatory", "is_mdm_removable", "is_multi_user",
+            "await_device_configured", "auto_advance_setup", "include_tls_certificates",
             "support_phone_number", "support_email_address",
-            "org_magic", "department", "include_tls_certificates"
+            "org_magic", "department", "language", "region"
         ]
         for pane, initial in self.Meta.model.SKIPPABLE_SETUP_PANES:
             if self.instance.pk:
@@ -220,9 +155,11 @@ class CreateDEPProfileForm(forms.ModelForm):
         field_order.extend(["realm", "use_realm_user", "realm_user_is_admin",
                             "admin_full_name", "admin_short_name", "admin_password"])
         self.order_fields(field_order)
+        self.fields["language"].choices = sorted(self.fields["language"].choices, key=lambda t: (t[1], t[0]))
+        self.fields["region"].choices = sorted(self.fields["region"].choices, key=lambda t: (t[1], t[0]))
 
     class Meta:
-        model = DEPProfile
+        model = DEPEnrollment
         fields = "__all__"
 
     def clean_is_mdm_removable(self):
@@ -278,9 +215,14 @@ class CreateDEPProfileForm(forms.ModelForm):
         return dep_profile
 
 
-class UpdateDEPProfileForm(CreateDEPProfileForm):
+class UpdateDEPEnrollmentForm(CreateDEPEnrollmentForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["language"].choices = sorted(self.fields["language"].choices, key=lambda t: (t[1], t[0]))
+        self.fields["region"].choices = sorted(self.fields["region"].choices, key=lambda t: (t[1], t[0]))
+
     class Meta:
-        model = DEPProfile
+        model = DEPEnrollment
         exclude = ("virtual_server",)
 
     def clean_admin_password(self):
@@ -291,53 +233,137 @@ class UpdateDEPProfileForm(CreateDEPProfileForm):
             self.cleaned_data["admin_password_hash"] = self.instance.admin_password_hash
 
 
-class AssignDEPDeviceProfileForm(forms.ModelForm):
+class AssignDEPDeviceEnrollmentForm(forms.ModelForm):
     class Meta:
         model = DEPDevice
-        fields = ("profile",)
+        fields = ("enrollment",)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.pk:
-            profile_f = self.fields["profile"]
+            profile_f = self.fields["enrollment"]
             profile_f.queryset = profile_f.queryset.filter(virtual_server=self.instance.virtual_server)
 
 
-class UploadConfigurationProfileForm(forms.Form):
+class UploadProfileForm(forms.Form):
     source_file = forms.FileField(required=True,
                                   help_text="configuration profile file (.mobileconfig)")
-
-    def __init__(self, *args, **kwargs):
-        self.meta_business_unit = kwargs.pop("meta_business_unit")
-        super().__init__(*args, **kwargs)
 
     def clean(self):
         source_file = self.cleaned_data.get("source_file")
         if source_file:
             try:
-                source = plistlib.load(source_file)
+                payload = plistlib.load(source_file)
             except Exception:
                 raise forms.ValidationError("This file is not a plist.")
-            self.cleaned_data["source"] = source
             try:
-                self.cleaned_data["source_payload_identifier"] = source["PayloadIdentifier"]
+                self.cleaned_data["payload_identifier"] = payload["PayloadIdentifier"]
             except KeyError:
                 raise forms.ValidationError("Missing PayloadIdentifier")
-
-            for source_key, obj_key in (("PayloadDisplayName", "payload_display_name"),
-                                        ("PayloadDescription", "payload_description")):
-                self.cleaned_data[obj_key] = source.get(source_key) or ""
+            try:
+                self.cleaned_data["payload_uuid"] = payload["PayloadUUID"]
+            except KeyError:
+                raise forms.ValidationError("Missing PayloadUUID")
+            payload_scope = payload.get("PayloadScope", "User")
+            if payload_scope == "System":
+                self.cleaned_data["channel"] = Channel.Device.value
+            elif payload_scope == "User":
+                self.cleaned_data["channel"] = Channel.User.value
+            else:
+                raise forms.ValidationError(f"Unknown PayloadScope: {payload_scope}")
+            for payload_key, obj_key in (("PayloadDisplayName", "payload_display_name"),
+                                         ("PayloadDescription", "payload_description")):
+                self.cleaned_data[obj_key] = payload.get(payload_key) or ""
+            name = self.cleaned_data.get("payload_display_name") or self.cleaned_data["payload_uuid"]
+            if (
+                Artifact.objects.exclude(
+                    artifactversion__profile__payload_identifier=self.cleaned_data["payload_identifier"]
+                ).filter(name=name).count()
+            ):
+                raise forms.ValidationError(
+                    "An artifact with the same name but a different payload identifier already exists"
+                )
+            self.cleaned_data["name"] = name
+            source_file = self.cleaned_data.pop("source_file")
+            source_file.seek(0)
+            self.cleaned_data["source"] = source_file.read()
+            self.cleaned_data["filename"] = source_file.name
             return self.cleaned_data
 
     def save(self):
         cleaned_data = self.cleaned_data
-        source_payload_identifier = cleaned_data["source_payload_identifier"]
-        configuration_profile, _ = ConfigurationProfile.objects.update_or_create(
-            meta_business_unit=self.meta_business_unit,
-            source_payload_identifier=source_payload_identifier,
-            defaults={"source": cleaned_data["source"],
-                      "payload_display_name": cleaned_data["payload_display_name"],
-                      "payload_description": cleaned_data["payload_description"],
-                      "trashed_at": None}
-        )
-        return configuration_profile
+        payload_identifier = cleaned_data["payload_identifier"]
+        name = cleaned_data.pop("name")
+        channel = cleaned_data.pop("channel")
+        operation = None
+        profiles = (Profile.objects.select_for_update()
+                                   .filter(payload_identifier=payload_identifier)
+                                   .select_related("artifact_version__artifact"))
+        profile = profiles.order_by("-artifact_version__version").first()
+        if profile is None:
+            operation = "created"
+            artifact = Artifact.objects.create(name=name,
+                                               type=ArtifactType.Profile.value,
+                                               channel=channel,
+                                               platforms=Platform.all_values())
+            artifact_version = ArtifactVersion.objects.create(artifact=artifact, version=1)
+            profile = Profile.objects.create(artifact_version=artifact_version, **cleaned_data)
+        else:
+            artifact = profile.artifact_version.artifact
+            if profile.source.tobytes() != cleaned_data["source"]:
+                operation = "updated"
+                artifact_version = ArtifactVersion.objects.create(artifact=artifact,
+                                                                  version=profile.artifact_version.version + 1)
+                profile = Profile.objects.create(artifact_version=artifact_version, **cleaned_data)
+                artifact.name = name
+                artifact.channel = channel
+                artifact.trashed_at = None
+                artifact.save()
+        return artifact, operation
+
+
+class PlatformsWidget(forms.CheckboxSelectMultiple):
+    def __init__(self, attrs=None, choices=()):
+        super().__init__(attrs, choices=Platform.choices())
+
+    def format_value(self, value):
+        if isinstance(value, str) and value:
+            value = [v.strip() for v in value.split(",")]
+        return super().format_value(value)
+
+
+class UpdateArtifactForm(forms.ModelForm):
+    class Meta:
+        model = Artifact
+        fields = ("platforms",)
+        widgets = {"platforms": PlatformsWidget}
+
+
+class BlueprintArtifactForm(forms.ModelForm):
+    class Meta:
+        model = BlueprintArtifact
+        fields = ("blueprint", "priority", "install_before_setup_assistant", "auto_update")
+
+    def __init__(self, *args, **kwargs):
+        self.artifact = kwargs.pop("artifact")
+        super().__init__(*args, **kwargs)
+        current_blueprint_pk = None
+        if self.instance.pk:
+            current_blueprint_pk = self.instance.blueprint.pk
+        exluded_bpa_pk = [
+            bpa.blueprint.pk for bpa in self.artifact.blueprintartifact_set.all()
+            if not bpa.blueprint.pk == current_blueprint_pk
+        ]
+        bpqs = self.fields["blueprint"].queryset
+        bpqs = bpqs.exclude(pk__in=exluded_bpa_pk)
+        self.fields["blueprint"].queryset = bpqs
+
+    def save(self, *args, **kwargs):
+        self.instance.artifact = self.artifact
+        return super().save(*args, **kwargs)
+
+
+class SCEPConfigForm(forms.ModelForm):
+    class Meta:
+        model = SCEPConfig
+        fields = "__all__"

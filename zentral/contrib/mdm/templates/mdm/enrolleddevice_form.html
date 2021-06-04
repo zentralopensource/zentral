@@ -5,15 +5,16 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
-  <li><a href="{{ object.virtual_server.get_absolute_url }}">{{ object.virtual_server }}</a></li>
-  <li class="active">{{ object }} DEP profile</li>
+  <li><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="active">Change blueprint</li>
 </ol>
 
-<h3>DEP device {{ object }}</h3>
 
-<form class="form" method="POST">{% csrf_token %}
-  {{ form|bootstrap }}
+<h3>Device {{ object }}</h3>
+
+<form method="post">{% csrf_token %}
+  {{ form|bootstrap }}
   <p>
     <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
     <button type="submit" class="btn btn-primary">Save</button>

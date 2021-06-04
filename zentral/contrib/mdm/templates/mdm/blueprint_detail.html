@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:blueprints' %}">Blueprints</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h3>{{ object }}</h3>
+
+{% if perms.mdm.change_blueprint %}
+<p>
+  <a class="btn btn-default" href="{% url 'mdm:update_blueprint' object.pk %}">Update</a>
+</p>
+{% endif %}
+
+<h4>{{ artifacts_count }} Artifact{{ artifacts_count|pluralize }}</h4>
+
+{% if artifacts_count %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Version</th>
+      <th>Priority</th>
+      <th>Before S.A.?</th>
+      <th>Auto update?</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for ba in artifacts %}
+    {% with ba.artifact as a %}
+    <tr>
+      <td>
+        {% if perms.mdm.view_artifact %}
+        <a href="{{ a.get_absolute_url }}">{{ a }}</a>
+        {% else %}
+        {{ a }}
+        {% endif %}
+      </td>
+      <td>{{ a.get_type_display }}</td>
+      <td>{{ ba.artifact__artifactversion__version__max }}</td>
+      <td>{{ ba.priority }}</td>
+      <td>{{ ba.install_before_setup_assistant|yesno }}</td>
+      <td>{{ ba.auto_update|yesno }}</td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<div class="row">
+  {% if dep_enrollments %}
+  <div class="col-md-4">
+    <h4>{{ dep_enrollments|length }} DEP enrollment{{ dep_enrollments|length|pluralize }}</h4>
+    <ul>
+      {% for dep_enrollment in dep_enrollments %}
+      <li>
+        {% if perms.mdm.view_depenrollment %}
+        <a href="{{ dep_enrollment.get_absolute_url }}">{{ dep_enrollment }}</a>
+        {% else %}
+        {{ dep_enrollment }}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if ota_enrollments %}
+  <div class="col-md-4">
+    <h4>{{ ota_enrollments|length }} OTA enrollment{{ ota_enrollments|length|pluralize }}</h4>
+    <ul>
+      {% for ota_enrollment in ota_enrollments %}
+      <li>
+        {% if perms.mdm.view_depenrollment %}
+        <a href="{{ ota_enrollment.get_absolute_url }}">{{ ota_enrollment }}</a>
+        {% else %}
+        {{ ota_enrollment }}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if user_enrollments %}
+  <div class="col-md-4">
+    <h4>{{ user_enrollments|length }} user enrollment{{ user_enrollments|length|pluralize }}</h4>
+    <ul>
+      {% for user_enrollment in user_enrollments %}
+      <li>
+        {% if perms.mdm.view_userenrollment %}
+        <a href="{{ user_enrollment.get_absolute_url }}">{{ user_enrollment }}</a>
+        {% else %}
+        {{ user_enrollment }}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

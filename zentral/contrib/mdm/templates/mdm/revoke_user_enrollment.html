@@ -5,9 +5,8 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li class="active">MDM</li>
-  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
-  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
-  <li><a href="{{ ota_enrollment.get_absolute_url }}">User enrollment {{ user_enrollment }}</a></li>
+  <li><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
+  <li><a href="{{ user_enrollment.get_absolute_url }}">[USER] {{ user_enrollment }}</a></li>
   <li class="active">revoke</li>
 </ol>
 
