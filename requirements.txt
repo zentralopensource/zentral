@@ -13,7 +13,7 @@ django-filter                   # API
 elasticsearch
 geoip2
 gunicorn
-hyper                           # MDM (apns)
+httpx[http2]                    # MDM (apns)
 ipython
 jinja2                          # events templates
 kombu<5                         # events queues
