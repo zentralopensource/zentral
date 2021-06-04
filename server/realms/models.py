@@ -84,9 +84,14 @@ class RealmUser(models.Model):
             else:
                 return self.username
 
-    def get_device_username(self):
+    @property
+    def device_username(self):
         # TODO: better
         return self.username.split("@")[0].replace(".", "")
+
+    @property
+    def email_prefix(self):
+        return self.email.split("@")[0].strip()
 
 
 class LocalAuthenticationSession:
