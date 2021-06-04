@@ -11,42 +11,76 @@
   <li class="active">{{ anchor_text }}</li>
   {% endif %}
   {% endfor %}
+  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h2>{{ devices_count  }} device{{ devices_count|pluralize }}</h2>
+<h3>{{ page_obj.paginator.count }} device{{ page_obj.paginator.count|pluralize }}</h3>
 
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
   <div class="form-group">
-    {{ form.serial_number|bootstrap_inline }}
+    {{ form.q|bootstrap_inline }}
   </div>
   <button type="submit" class="btn btn-default">Search</button>
 </form>
 
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
 <table class="table">
   <thead>
-    <th>serial number</th>
-    <th>product</th>
-    <th>udids</th>
-    <th>created at</th>
-    <th>updated at</th>
+    <tr>
+      <th>serial number</th>
+      <th>UDID</th>
+      <th>created at</th>
+      <th>updated at</th>
+    </tr>
   </thead>
   <tbody>
-    {% for device in devices %}
+    {% for enrolled_device in object_list %}
     <tr>
-      <td><a href="{% url 'mdm:device' device.urlsafe_serial_number %}">{{ device.serial_number }}</a></td>
-      <td>{{ device.product|default:"" }}</td>
       <td>
-        {% if device.udids %}
-        <ul>
-          {% for udid in device.udids %}
-          <li>{{ udid }}</li>
-          {% endfor %}
-        </ul>
+        {% with enrolled_device.get_urlsafe_serial_number as urlsafe_serial_number %}
+        {% if urlsafe_serial_number %}
+        {% if perms.inventory.view_machinsnapshot %}
+        <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ enrolled_device.serial_number|default:"-" }}</a>
+        {% else %}
+        {{ enrolled_device.serial_number|default:"-" }}
         {% endif %}
-      <td>{{ device.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-      <td>{{ device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        {% else %}
+        -
+        {% endif %}
+        {% endwith %}
+      </td>
+      <td>
+        <a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device.udid }}</a>
+      </td>
+      <td>{{ enrolled_device.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ enrolled_device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
 {% endblock %}

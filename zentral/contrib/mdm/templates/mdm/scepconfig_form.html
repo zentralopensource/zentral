@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></li>
+  {% if object %}
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="active">update</li>
+  {% else %}
+  <li class="active">create</li>
+  {% endif %}
+</ol>
+
+<h3>{% if object %}Update {{ object }}{% else %}Create SCEP configuration{% endif %}</h3>
+
+<form method="post">{% csrf_token %}
+  {{ scep_config_form|bootstrap }}
+  <div class="challenge" id="STATIC" style="display:none">
+    {{ static_form|bootstrap }}
+  </div>
+  <div class="challenge" id="MICROSOFT_CA" style="display:none">
+    {{ microsoft_ca_form|bootstrap }}
+  </div>
+  <p>
+    {% if object %}
+    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    {% else %}
+    <a class="btn btn-default" href="{% url 'mdm:scep_configs' %}">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save</button>
+  </p>
+</form>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  const challengeForms = document.querySelectorAll('.challenge');
+
+  function updateChallengeForms() {
+    const challengeType = $("#id_sc-challenge_type").val();
+    challengeForms.forEach(function(challengeForm){
+        if (challengeType === challengeForm.id) {
+          challengeForm.style.display = "";
+          challengeForm.querySelectorAll("[data-required='1']").forEach(function(requiredFormElm) {
+            requiredFormElm.setAttribute('required', '');
+          });
+        } else {
+          challengeForm.style.display = "none";
+          challengeForm.querySelectorAll("[required]").forEach(function(requiredFormElm) {
+            requiredFormElm.dataset.required = '1';
+            requiredFormElm.removeAttribute('required');
+          });
+        }
+    });
+  }
+
+  $(document).ready(function () {
+    $("#id_sc-challenge_type").change(function () {
+      updateChallengeForms();
+    });
+    updateChallengeForms();
+  });
+</script>
+{% endblock %}

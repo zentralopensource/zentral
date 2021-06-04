@@ -4,20 +4,28 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">MDM</li>
-  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
-  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
+  {% if object %}
+  <li><a href="{{ object.get_absolute_url }}">[USER] {{ object }}</a></li>
+  <li class="active">edit</li>
+  {% else %}
   <li class="active">create user enrollment</li>
+  {% endif %}
 </ol>
 
-<h2>Create user enrollment</h2>
+<h3>{% if object %}[USER] {{ object }}{% else %}Create user enrollment{% endif %}</h3>
 
 <form class="form" method="POST">{% csrf_token %}
   {{ user_enrollment_form|bootstrap }}
   {{ enrollment_secret_form|bootstrap }}
   <p>
-    <a href="{% url 'mdm:mbu' meta_business_unit.id %}" class="btn btn-default">Cancel</a>
-    <button type="submit" class="btn btn-primary">Create</button>
+    {% if object %}
+    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    {% else %}
+    <a href="{% url 'mdm:enrollments' %}" class="btn btn-default">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save</button>
   </p>
 </form>
 {% endblock %}

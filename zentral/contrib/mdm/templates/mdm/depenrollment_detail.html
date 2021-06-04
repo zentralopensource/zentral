@@ -4,139 +4,269 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">MDM</li>
-  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
-  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
-  <li class="active">DEP profile {{ object }}</li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
+  <li class="active">[DEP] {{ object }}</li>
 </ol>
 
-<h2>DEP profile {{ object }}</h2>
+<h3>DEP {{ object }}</h3>
+
+<h4 style="margin-top:20px">Configuration</h4>
+<table class="table table-condensed">
+  <tbody>
+    <tr>
+      <th width="160px">Push certificate</th>
+      <td>
+        {% if perms.mdm.view_pushcertificate %}
+        <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
+        {% else %}
+        {{ push_certificate }}
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Blueprint</th>
+      <td>
+        {% if object.blueprint %}
+        {% if perms.mdm.view_blueprint %}
+        <a href="{{ object.blueprint.get_absolute_url }}">{{ object.blueprint }}</a>
+        {% else %}
+        {{ blueprint }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Business unit</th>
+      <td>{{ object.enrollment_secret.meta_business_unit }}</td>
+    </tr>
+    <tr>
+      <th>Enrollment tag{{ secret.tags.count|pluralize }}</th>
+      <td>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Authentication</h4>
+<table class="table table-condensed">
+  <tbody>
+    <tr>
+      <th width="160px">Realm</th>
+      <td>
+        {% if object.realm %}
+        {% if perms.realms.view_realm %}
+        <a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a>
+        {% else %}
+        {{ object.realm }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Use realm user</th>
+      <td>{{ object.use_realm_user|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Realm user is admin</th>
+      <td>{{ object.realm_user_is_admin|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Admin full name</th>
+      <td>{{ object.admin_full_name|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th>Admin short name</th>
+      <td>{{ object.admin_short_name|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th>Admin password set</th>
+      <td>{% if object.admin_password_hash %}yes{% else %}no{% endif %}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>DEP Profile</h4>
+
+<table class="table table-condensed">
+  <tbody>
+    {% with object.virtual_server as virtual_server %}
+    <tr>
+      <th style="width:160px">Virtual server</th>
+      <td>
+        {% if perms.mdm.view_depvirtualserver %}
+        <a href="{{ virtual_server.get_absolute_url }}">{{ virtual_server }}</a>
+        {% else %}
+        {{ virtual_server }}
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Organization</th>
+      <td>{{ virtual_server.organization }}</dt>
+    </tr>
+    {% endwith %}
+    <tr>
+      <th colspan="2"><h5>Org info</h5></th>
+    </tr>
+    <tr>
+      <th>Support phone number</th>
+      <td>{{ object.support_phone_number|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th>Support email</th>
+      <td>{{ object.support_email_atdress|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th>Org magic</th>
+      <td>{{ object.org_magic|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th>Department</th>
+      <td>{{ object.department|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th colspan="2"><h5>Localization</h5></th>
+    </tr>
+    <tr>
+      <th>Language</th>
+      <td>{{ object.get_language_display|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th>Region</th>
+      <td>{{ object.get_region_display|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th colspan="2"><h5>Settings</h5></th>
+    </tr>
+    <tr>
+      <th>allow pairing</th>
+      <td>{{ object.allow_pairing|yesno }}</td>
+    </tr>
+    <tr>
+      <th>supervised</th>
+      <td>{{ object.is_supervised|yesno }}</td>
+    </tr>
+    <tr>
+      <th>mandatory</th>
+      <td>{{ object.is_mandatory|yesno }}</td>
+    </tr>
+    <tr>
+      <th>await device configured</th>
+      <td>{{ object.await_device_configured|yesno }}</td>
+    </tr>
+    <tr>
+      <th>auto advance setup</th>
+      <td>{{ object.auto_advance_setup|yesno }}</td>
+    </tr>
+    <tr>
+      <th>mdm removable</th>
+      <td>{{ object.is_mdm_removable|yesno }}</td>
+    </tr>
+    <tr>
+      <th>include tls certificates</th>
+      <td>{{ object.include_tls_certificates|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Skip setup items</th>
+      <td>
+        <ul class="list-inline">
+          {% for pane in object.skip_setup_items %}
+          <li>{{ pane }}</li>
+          {% endfor %}
+        <ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 <p>
-  <a href="{% url 'mdm:check_dep_profile' meta_business_unit.pk object.pk %}" class="btn btn-default">
+  <a href="{% url 'mdm:check_dep_enrollment' object.pk %}" class="btn btn-default">
     <span class="glyphicon glyphicon-cloud-download" aria-hidden="true"></span>
+    Download from ABM
   </a>
-  <a href="{% url 'mdm:update_dep_profile' meta_business_unit.pk object.pk %}" class="btn btn-default">
+  {% if perms.mdm.change_depenrollment %}
+  <a href="{% url 'mdm:update_dep_enrollment' object.pk %}" class="btn btn-default">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Edit
   </a>
+  {% endif %}
 </p>
 
-<h3>DEP virtual server</h3>
+{% with object.depdevice_set.count as device_count %}
+{% with object.assigned_devices.count as assigned_device_count %}
 
-{% with object.virtual_server as virtual_server %}
-<dl class="dl-horizontal">
-  <dt>Virtual server</dt>
-  <dd><a href="{{ virtual_server.get_absolute_url }}">{{ virtual_server }}</a> / {{ virtual_server.uuid }}</dd>
-  <dt>Organization</dt>
-  <dd>{{ virtual_server.organization }}</dd>
-</dl>
+<h3 style="margin-top:40px">Assigned to {{ assigned_device_count }} device{{ assigned_device_count|pluralize }} ({{ device_count }} total)</h3>
+
+{% if device_count %}
+<table class="table">
+  <thead>
+    <th class="col-md-4">Serial number</th>
+    <th class="col-md-4">Profile status</th>
+    <th class="col-md-2">Profile assign time</th>
+    <th class="col-md-2">Profile push time</th>
+  </thead>
+  <tbody>
+    {% for device in object.depdevice_set.all %}
+    <tr>
+      <td>
+        <a name="{{ device.serial_number }}" href="{{ device.get_absolute_url }}">{{ device.serial_number }}</a>
+        {% if device.is_deleted %}
+        <span class="label label-danger">DELETED</span>
+        {% endif %}
+      </td>
+      <td>{{ device.profile_status }}</td>
+      <td>{{ device.profile_assign_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+      <td>{{ device.profile_push_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endwith %}
 {% endwith %}
 
-<h3>Users</h3>
+<h3 style="margin-top:40px">{{ dep_enrollment_sessions_count }} Session{{ dep_enrollment_sessions_count|pluralize }}</h3>
 
-<dl class="dl-horizontal">
-  <dt>Realm</dt>
-  <dd>
+<table class="table">
+  <thead>
+    <th>Serial number</th>
     {% if object.realm %}
-    <a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a>
-    {% else %}
-    -
+    <th>Realm user</th>
     {% endif %}
-  </dd>
-  <dt>Use realm user</dt>
-  <dd>{{ object.use_realm_user|yesno }}</dd>
-  <dt>Realm user is admin</dt>
-  <dd>{{ object.realm_user_is_admin|yesno }}</dd>
-  <dt>Admin full name</dt>
-  <dd>{{ object.admin_full_name|default:"-" }}</dd>
-  <dt>Admin short name</dt>
-  <dd>{{ object.admin_short_name|default:"-" }}</dd>
-  <dt>Admin password set</dt>
-  <dd>{% if object.admin_password_hash %}yes{% else %}no{% endif %}</dd>
-</dl>
+    <th>Status</th>
+    <th>Created at</th>
+    <th>Updated at</th>
+  </thead>
+  <tbody>
+    {% for s in dep_enrollment_sessions %}
+    <tr>
+      <td>
+        {% with s.get_serial_number as sn %}
+        {% if sn %}
+        {% if perms.mdm.view_enrolleddevice and s.enrolled_device %}
+        <a href="{% url 'mdm:enrolled_device' s.enrolled_device.pk %}">{{ sn }}</a>
+        {% else %}
+        {{ s.get_serial_number }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+        {% endwith %}
+      </td>
+      {% if object.realm %}
+      <td>{% if s.realm_user %}{{ s.realm_user }}{% else %}-{% endif %}</td>
+      {% endif %}
+      <td>{{ s.get_status_display }}</td>
+      <td>{{ s.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ s.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
 
-<div class="row">
-  <div class="col-md-4">
-    <h3>Org info</h3>
-    <dl class="dl-horizontal">
-      <dt>Business unit</dt>
-      <dd><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></dd>
-      <dt>Enrollment tags</dt>
-      <dd>{% for tag in object.enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</dd>
-      <dt>Support phone number</dt>
-      <dd>{{ object.support_phone_number|default:"-" }}</dd>
-      <dt>Support email</dt>
-      <dd>{{ object.support_email_address|default:"-" }}</dd>
-      <dt>Org magic</dt>
-      <dd>{{ object.org_magic|default:"-" }}</dd>
-      <dt>Department</dt>
-      <dd>{{ object.department }}</dd>
-    </dl>
-  </div>
-  <div class="col-md-4">
-    <h3>Settings</h3>
-    <dl class="dl-horizontal">
-      <dt>allow pairing</dt>
-      <dd>{{ object.allow_pairing|yesno }}</dd>
-      <dt>supervised</dt>
-      <dd>{{ object.is_supervised|yesno }}</dd>
-      <dt>mandatory</dt>
-      <dd>{{ object.is_mandatory|yesno }}</dd>
-      <dt>await device configured</dt>
-      <dd>{{ object.await_device_configured|yesno }}</dd>
-      <dt>auto advance setup</dt>
-      <dd>{{ object.auto_advance_setup|yesno }}</dd>
-      <dt>mdm removable</dt>
-      <dd>{{ object.is_mdm_removable|yesno }}</dd>
-      <dt>include tls certificates</dt>
-      <dd>{{ object.include_tls_certificates|yesno }}</dd>
-    </dl>
-  </div>
-  <div class="col-md-4">
-    <h3>Skip setup items</h3>
-    <ul>
-      {% for pane in object.skip_setup_items %}
-      <li>{{ pane }}</li>
-      {% endfor %}
-    <ul>
-  </div>
-</div>
-
-<div class="row">
-  <div class="col-md-12">
-    {% with object.depdevice_set.count as device_count %}
-    {% with object.assigned_devices.count as assigned_device_count %}
-
-    <h3>Assigned to {{ assigned_device_count }} device{{ assigned_device_count|pluralize }} ({{ device_count }} total)</h3>
-
-    {% if device_count %}
-    <table class="table">
-      <thead>
-        <th class="col-md-4">Serial number</th>
-        <th class="col-md-4">Profile status</th>
-        <th class="col-md-2">Profile assign time</th>
-        <th class="col-md-2">Profile push time</th>
-      </thead>
-      <tbody>
-        {% for device in object.depdevice_set.all %}
-        <tr>
-          <td>
-            <a name="{{ device.serial_number }}" href="{{ device.get_absolute_url }}">{{ device.serial_number }}</a>
-            {% if device.is_deleted %}
-            <span class="label label-danger">DELETED</span>
-            {% endif %}
-          </td>
-          <td>{{ device.profile_status }}</td>
-          <td>{{ device.profile_assign_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
-          <td>{{ device.profile_push_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% endif %}
-
-    {% endwith %}
-    {% endwith %}
-  </div>
-</div>
 {% endblock %}

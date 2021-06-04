@@ -4,15 +4,17 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM setup</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li class="active">Push certificates</li>
 </ol>
 
 <h2>{{ object_list|length }} MDM push certificate{{ object_list|length|pluralize }}</h2>
 
+{% if perms.mdm.add_pushcertificate %}
 <p>
   <a href="{% url 'mdm:add_push_certificate' %}" class="btn btn-default">Add</a>
 </p>
+{% endif %}
 
 <table class="table">
   <thead>

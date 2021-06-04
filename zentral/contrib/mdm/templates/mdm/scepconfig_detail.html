@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h3>{{ object }}</h3>
+
+<table class="table table-condensed">
+  <tbody>
+    <tr>
+      <th width="160px">URL</th>
+      <td>{{ object.url }}</th>
+    </tr>
+    <tr>
+      <th>Key usage</th>
+      <td>{{ object.key_usage }}</td>
+    </tr>
+    <tr>
+      <th>Key is extractable</th>
+      <td>{{ object.key_is_extractable|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Keysize</th>
+      <td>{{ object.get_keysize_display }}</td>
+    </tr>
+    <tr>
+      <th>Allow all apps access</th>
+      <td>{{ object.allow_all_apps_access|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Challenge
+      <td>
+        <dl>
+          <dt>Type</dt>
+          <dd>{{ object.get_challenge_type_display }}</dd>
+          {% with object.challenge_kwargs as kwargs %}
+          {% if object.challenge_type == "STATIC" %}
+          <dt>Challenge</dt>
+          <dd>
+            <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+            <span hidden>{{ kwargs.challenge }}</span>
+          </dd>
+          {% elif object.challenge_type == "MICROSOFT_CA" %}
+          <dt>NDES mscep_admin/ endpoint</dt>
+          <dd>{{ kwargs.url }}</dd>
+          <dt>mscep admin user</dt>
+          <dd>{{ kwargs.username }}</dt>
+          <dt>mscep admin password</dt>
+          <dd>
+            <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+            <span hidden>{{ kwargs.password }}</span>
+          </dd>
+          {% endif %}
+          {% endwith %}
+        </dl>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">Created at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+  <dt class="small" style="opacity:0.5">Updated at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+</dl>
+
+<p>
+  {% if perms.mdm.change_scepconfig %}
+  <a class="btn btn-default"
+     href="{% url 'mdm:update_scep_config' object.pk %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Edit
+  </a>
+  {% endif %}
+  {% if perms.mdm.delete_scepconfig %}
+  <a class="btn btn-danger"
+     href="{% url 'mdm:delete_scep_config' object.pk %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    Delete
+  </a>
+  {% endif %}
+</p>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  var openEyes = document.querySelectorAll(".glyphicon-eye-open");
+  openEyes.forEach(function(openEye) {
+    openEye.addEventListener("click", function(event) {
+      var valueSpan = openEye.nextElementSibling;
+      if (valueSpan.hidden) {
+        valueSpan.hidden = false;
+        openEye.classList.remove("glyphicon-eye-open");
+        openEye.classList.add("glyphicon-eye-close");
+      } else {
+        valueSpan.hidden = true;
+        openEye.classList.remove("glyphicon-eye-close");
+        openEye.classList.add("glyphicon-eye-open");
+      }
+    });
+  });
+</script>
+{% endblock %}

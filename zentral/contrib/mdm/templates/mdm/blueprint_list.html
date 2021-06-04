@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="active">Blueprints</li>
+</ol>
+
+<h3>{{ object_list|length  }} blueprint{{ object_list|length|pluralize }}</h3>
+
+{% if perms.mdm.add_blueprint %}
+<p>
+  <a class="btn btn-default" href="{% url 'mdm:create_blueprint' %}">Create</a>
+</p>
+{% endif %}
+
+{% if object_list %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Artifacts</th>
+      <th>DEP enr.</th>
+      <th>OTA enr.</th>
+      <th>User enr.</th>
+      <th>updated at</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for blueprint in object_list %}
+    <tr>
+      <td><a href="{{ blueprint.get_absolute_url }}">{{ blueprint }}</a></td>
+      <td>{{ blueprint.blueprintartifact__count }}</td>
+      <td>{{ blueprint.depenrollment__count }}</td>
+      <td>{{ blueprint.otaenrollment__count }}</td>
+      <td>{{ blueprint.userenrollment__count }}</td>
+      <td>{{ blueprint.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

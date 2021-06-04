@@ -4,74 +4,136 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">MDM</li>
-  <li><a href="{% url 'mdm:mbu_list' %}">Business units</a></li>
-  <li><a href="{% url 'mdm:mbu' meta_business_unit.pk %}">{{ meta_business_unit }}</a></li>
-  <li class="active">User enrollment {{ object.name }}</li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
+  <li class="active">[USER] {{ object }}</li>
 </ol>
 
-<h2>User enrollment <i>{{ object.name }}</i></h2>
+<h3>[USER] {{ object }}</h3>
 
 {% with object.enrollment_secret as secret %}
-<p>
-  {% if secret.is_valid|first %}
-  <a class="btn btn-danger"
-     href="{% url 'mdm:revoke_user_enrollment' meta_business_unit.id object.id %}">
-    <span class="glyphicon glyphicon-remove-circle" aria-hidden="true"></span>
-    Revoke
-  </a>
-  {% endif %}
-</p>
 
-<div class="row">
-  <div class="col-md-6">
-    <dl class="dl-horizontal">
-      <dt>Name</dt>
-      <dd>{{ object.name }}</dd>
-      <dt>Enrollment URL</dt>
-      <dd>
+<table class="table table-condensed">
+  <tbody>
+    <tr>
+      <th width="160px">Push certificate</th>
+      <td>
+        {% if perms.mdm.view_pushcertificate %}
+        <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
+        {% else %}
+        {{ push_certificate }}
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Blueprint</th>
+      <td>
+        {% if object.blueprint %}
+        {% if perms.mdm.view_blueprint %}
+        <a href="{{ object.blueprint.get_absolute_url }}">{{ object.blueprint }}</a>
+        {% else %}
+        {{ blueprint }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Business unit</th>
+      <td>{{ secret.meta_business_unit }}</td>
+    </tr>
+    <tr>
+      <th>Enrollment tag{{ secret.tags.count|pluralize }}</th>
+      <td>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Authentication</h4>
+<table class="table table-condensed">
+  <tbody>
+    <tr>
+      <th width="160px">Self-Enrollment URL</th>
+      <td>
         {% if enroll_url %}
         <a href="{{ enroll_url }}">{{ enroll_url }}</a>
         {% else %}
         -
         {% endif %}
-      </dd>
-      <dt>Business unit</dt>
-      <dd><a href="{% url 'mdm:mbu' secret.meta_business_unit.id %}">{{ secret.meta_business_unit }}</a></dd>
-      <dt>Enrollment tags</dt>
-      <dd>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</dd>
-      <dt>Serial number{{ secret.serial_numbers|length|pluralize }}</dt>
-      <dd>{% for serial_number, urlsafe_serial_number in secret.urlsafe_serial_numbers %}<a href="{% url 'mdm:device' urlsafe_serial_number %}">{{ serial_number }}</a>{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</dd>
-      <dt>UDID{{ secret.udids|length|pluralize }}</dt>
-      <dd>{% if secret.udids %}{{ secret.udids|join:", " }}{% else %}-{% endif %}</dd>
-    </dl>
-  </div>
-  <div class="col-md-6">
-    <dl class="dl-horizontal">
-      <dt>Request count</dt>
-      <dd class="{% if secret.is_used_up %}bg-danger{% else %}bg-success{% endif %}">
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Restrictions</h4>
+<table class="table table-condensed">
+  <tbody>
+    <tr>
+      <th style="width:160px">Quota</th>
+      <td>{% if secret.quota %}{{ secret.quota }}{% else %}-{% endif %}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Status</h4>
+<table class="table table-condensed">
+  <tbody>
+    <tr>
+      <th style="width:160px">Request count</td>
+      <td class="{% if secret.is_used_up %}text-danger{% else %}text-success{% endif %}">
         {{ secret.request_count }}{% if secret.quota %}/{{ secret.quota }}{% endif %}
-      </dd>
-      <dt>Expired</dt>
-      <dd class="{% if secret.is_expired %}bg-danger{% else %}bg-success{% endif %}">
-        {{ secret.expired_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
-      </dd>
-      <dt>Revoked</dt>
-      <dd class="{% if secret.is_revoked %}bg-danger{% else %}bg-success{% endif %}">
-        {{ secret.revoked_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
-      </dd>
-    </dl>
-  </div>
-  <div class="col-md-12">
-    <dl class="dl-horizontal">
-      <dt class="small" style="opacity:0.5">Created at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-    </dl>
-  </div>
-</div>
+      </td>
+    </tr>
+    <tr>
+      <th>Expired</th>
+      <td class="{% if secret.is_expired %}text-danger{% else %}text-success{% endif %}">
+        {{ secret.expired_at|date:"SHORT_DATETIME_FORMAT"|default:"no" }}
+      </td>
+    </tr>
+    <tr>
+      <th>Revoked</th>
+      <td class="{% if secret.is_revoked %}text-danger{% else %}text-success{% endif %}">
+        {% if secret.is_revoked %}
+        {{ secret.revoked_at|date:"SHORT_DATETIME_FORMAT" }}
+        {% else %}
+        no
+        {% if perms.mdm.change_otaenrollment %}
+        <a class="btn btn-danger btn-xs" href="{% url 'mdm:revoke_user_enrollment' object.id %}">
+          <span class="glyphicon glyphicon-remove-circle" aria-hidden="true"></span>
+          Revoke
+        </a>
+        {% else %}
+        no
+        {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<dl class="dl-horizontal">
+  <dt class="small" style="opacity:0.5">Created at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+  <dt class="small" style="opacity:0.5">Updated at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+</dl>
+
+{% if not secret.is_revoked %}
+<p>
+  {% if perms.mdm.change_userenrollment %}
+  <a class="btn btn-default"
+     href="{% url 'mdm:update_user_enrollment' object.pk %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Edit
+  </a>
+  {% endif %}
+<p>
+{% endif %}
+
 {% endwith %}
 
-<h2>{{ user_enrollment_sessions_count }} Session{{ user_enrollment_sessions_count|pluralize }}</h2>
+<h3 style="margin-top:40px">{{ user_enrollment_sessions_count }} Session{{ user_enrollment_sessions_count|pluralize }}</h3>
 
 <table class="table">
   <thead>

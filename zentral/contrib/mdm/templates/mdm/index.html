@@ -4,17 +4,35 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">MDM setup</li>
+  <li class="active">MDM</li>
 </ol>
 
-<h2>MDM setup</h2>
+<h2>MDM</h2>
 
+<h3>Manage devices</h3>
+
+{% if perms.mdm.view_depenrollment or perms.mdm.view_otaenrollment or perms.mdm.view_userenrollment %}
+<p><a href="{% url 'mdm:enrollments' %}">Enrollments</a></p>
+{% endif %}
+{% if perms.mdm.view_enrolleddevice %}
+<p><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></p>
+{% endif %}
+{% if perms.mdm.view_artifact %}
+<p><a href="{% url 'mdm:artifacts' %}">Artifacts</a></p>
+{% endif %}
+{% if perms.mdm.view_blueprint %}
+<p><a href="{% url 'mdm:blueprints' %}">Blueprints</a></p>
+{% endif %}
+{% if perms.mdm.view_scepconfig %}
+<p><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></p>
+{% endif %}
+
+<h3>Setup</h3>
+{% if perms.mdm.view_pushcertificate %}
 <p><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></p>
+{% endif %}
+{% if perms.mdm.view_depvirtualserver %}
 <p><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></p>
-<p><a href="{% url 'mdm:ota_enrollments' %}">OTA MDM Enrollments</a></p>
-<p><a href="{% url 'mdm:dep_profiles' %}">DEP profiles</a></p>
-<hr>
-<p><a href="{% url 'mdm:kernel_extensions_index' %}">Manage kernel extensions</a></p>
-<hr>
+{% endif %}
 <p><a href="{% url 'mdm:root_ca' %}">Trusted Root CA configuration profile</a></p>
 {% endblock %}

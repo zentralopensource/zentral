@@ -4,9 +4,9 @@ from cryptography.x509.oid import NameOID
 from django.views.generic import View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.utils import verify_enrollment_secret
-from zentral.contrib.mdm.cms import (verify_signed_payload,
-                                     verify_apple_iphone_device_ca_issuer_openssl,
-                                     verify_zentral_scep_ca_issuer_openssl)
+from zentral.contrib.mdm.crypto import (verify_signed_payload,
+                                        verify_apple_iphone_device_ca_issuer,
+                                        verify_zentral_scep_ca_issuer)
 from zentral.contrib.mdm.events import OTAEnrollmentRequestEvent
 from zentral.contrib.mdm.exceptions import EnrollmentSessionStatusError
 from zentral.contrib.mdm.models import OTAEnrollmentSession
@@ -31,17 +31,15 @@ class OTAEnrollView(PostEventMixin, View):
         # find out which CA signed the certificate used to sign the payload
         # if iPhone CA: phase 2
         # if SCEP CA: phase 3
-        # if unknown: phase 2  # TODO: verify. seen with self signed cert in 10.13 beta in VMWare.
         for certificate_i_cn, certificate_bytes, signing_certificate in certificates:
-            if verify_apple_iphone_device_ca_issuer_openssl(certificate_bytes):
+            if verify_apple_iphone_device_ca_issuer(certificate_bytes):
                 phase = 2
                 break
-            elif verify_zentral_scep_ca_issuer_openssl(certificate_bytes):
+            elif verify_zentral_scep_ca_issuer(certificate_bytes):
                 phase = 3
                 break
-            else:
-                self.post_event("warning", reason="unknown signing certificate issuer '{}'".format(certificate_i_cn))
-                phase = 2
+        else:
+            self.abort(f"Unknown signing certificate issuer: {certificate_i_cn}")
 
         payload = plistlib.loads(payload)
         self.serial_number = payload["SERIAL"]
@@ -73,7 +71,7 @@ class OTAEnrollView(PostEventMixin, View):
                 self.realm_user = ota_enrollment_session.realm_user
 
                 # update the OTA enrollment session
-                ota_enrollment_session.set_phase2_status(es_request, self.serial_number, self.udid, payload)
+                ota_enrollment_session.set_phase2_status(es_request, self.serial_number, self.udid)
 
             else:
                 # running off a simple ota enrollment
@@ -94,8 +92,7 @@ class OTAEnrollView(PostEventMixin, View):
                 # Start an OTA enrollment session directly in phase 2
                 ota_enrollment_session = OTAEnrollmentSession.objects.create_from_machine_info(
                     ota_enrollment,
-                    self.serial_number, self.udid,
-                    payload
+                    self.serial_number, self.udid
                 )
 
             configuration_profile = build_ota_scep_configuration_profile(ota_enrollment_session)
@@ -136,7 +133,7 @@ class OTAEnrollView(PostEventMixin, View):
                 self.abort("DN mbu doesn't match ota enrollment session mbu", phase=phase)
 
             # Get the MDM push certificate
-            push_certificate = ota_enrollment_session_mbu.metabusinessunitpushcertificate.push_certificate
+            push_certificate = ota_enrollment_session.ota_enrollment.push_certificate
 
             configuration_profile = build_mdm_configuration_profile(ota_enrollment_session, push_certificate)
             configuration_profile_filename = "zentral_mdm"
