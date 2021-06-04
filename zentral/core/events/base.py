@@ -3,6 +3,7 @@ import logging
 import os.path
 import re
 import uuid
+import weakref
 from dateutil import parser
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.contenttypes.models import ContentType
@@ -13,6 +14,7 @@ from zentral.core.probes.conf import all_probes_dict
 from zentral.core.queues import queues
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .template_loader import TemplateLoader
+from .utils import decode_args, encode_args
 from . import register_event_type
 
 logger = logging.getLogger('zentral.core.events.base')
@@ -219,9 +221,8 @@ class EventRequest(object):
 
 
 class EventMetadata(object):
-    def __init__(self, event_type, **kwargs):
-        self.event_type = event_type
-        self.namespace = kwargs.pop('namespace', event_type)
+    def __init__(self, **kwargs):
+        self._deserialized = kwargs.pop("_deserialized", False)
         self.uuid = kwargs.pop('uuid', uuid.uuid4())
         if isinstance(self.uuid, str):
             self.uuid = uuid.UUID(self.uuid)
@@ -238,14 +239,27 @@ class EventMetadata(object):
             self.machine = None
         self.observer = kwargs.pop('observer', None)
         self.request = kwargs.pop('request', None)
-        self.tags = kwargs.pop('tags', [])
         self.probes = kwargs.pop('probes', [])
         self.incidents = kwargs.pop('incidents', [])
+        self.tags = kwargs.pop('tags', [])
+        self.objects = {k: [decode_args(args) for args in v] for k, v in kwargs.pop('objects', {}).items()}
+
+    @property
+    def event_type(self):
+        return self.event.event_type
+
+    @property
+    def namespace(self):
+        return self.event.namespace or self.event_type
+
+    @cached_property
+    def all_tags(self):
+        return set(self.tags + self.event.tags)
 
     @classmethod
     def deserialize(cls, event_d_metadata):
         kwargs = event_d_metadata.copy()
-        kwargs['event_type'] = kwargs.pop('type')
+        kwargs["_deserialized"] = True
         kwargs['uuid'] = kwargs.pop('id')
         observer_d = kwargs.pop('observer', None)
         if observer_d:
@@ -260,21 +274,26 @@ class EventMetadata(object):
              'id': str(self.uuid),
              'index': self.index,
              'type': self.event_type,
+             'namespace': self.namespace,
              }
-        if self.namespace:
-            d['namespace'] = self.namespace
+        if self.all_tags:
+            d['tags'] = list(self.all_tags)
         if self.observer:
             d['observer'] = self.observer.serialize()
         if self.request:
             d['request'] = self.request.serialize()
-        if self.tags:
-            d['tags'] = self.tags
         if self.probes:
             d['probes'] = self.probes
         if self.incidents:
             d['incidents'] = self.incidents
         if self.machine_serial_number:
             d['machine_serial_number'] = self.machine_serial_number
+        if self._deserialized:
+            objects = self.objects
+        else:
+            objects = self.event.get_linked_objects_keys()
+        if objects:
+            d['objects'] = {k: [encode_args(args) for args in v] for k, v in objects.items()}
         if not machine_metadata or not self.machine:
             return d
         elif self.machine:
@@ -313,14 +332,12 @@ class BaseEvent(object):
             request = None
         if observer:
             observer = EventObserver.deserialize(observer)
-        metadata = EventMetadata(cls.event_type,
-                                 namespace=cls.namespace or cls.event_type,
-                                 machine_serial_number=msn,
-                                 observer=observer,
-                                 request=request,
-                                 tags=cls.tags)
+        event_uuid = uuid.uuid4()
         for index, payload in enumerate(payloads):
-            metadata.index = index
+            metadata = EventMetadata(uuid=event_uuid, index=index,
+                                     machine_serial_number=msn,
+                                     observer=observer,
+                                     request=request)
             if get_created_at:
                 try:
                     metadata.created_at = get_created_at(payload)
@@ -334,6 +351,7 @@ class BaseEvent(object):
             event.post()
 
     def __init__(self, metadata, payload):
+        metadata.event = weakref.proxy(self)
         self.metadata = metadata
         self.payload = payload
 
@@ -374,6 +392,11 @@ class BaseEvent(object):
 
     def post(self):
         queues.post_event(self)
+
+    # linked objects
+
+    def get_linked_objects_keys(self):
+        return {}
 
     # notification methods
 
@@ -438,9 +461,8 @@ def post_command_events(message, source, tags):
                 payload['args'] = [arg for arg in args.split('#') if arg]
             for serial_number in m.group('serial_numbers').split('$'):
                 if serial_number:
-                    metadata = EventMetadata(CommandEvent.event_type,
-                                             machine_serial_number=serial_number,
-                                             tags=CommandEvent.tags + tags)
+                    metadata = EventMetadata(machine_serial_number=serial_number,
+                                             tags=tags)
                     event = CommandEvent(metadata, payload.copy())
                     event.post()
 
@@ -462,9 +484,7 @@ register_event_type(MachineConflictEvent)
 
 
 def post_machine_conflict_event(request, module, reported_serial_number, enrollment_serial_number, machine_info):
-    metadata = EventMetadata(MachineConflictEvent.event_type,
-                             machine_serial_number=reported_serial_number,
-                             tags=MachineConflictEvent.tags,
+    metadata = EventMetadata(machine_serial_number=reported_serial_number,
                              request=EventRequest.build_from_request(request))
     payload = {"module": module,
                "reported_machine_info": machine_info,

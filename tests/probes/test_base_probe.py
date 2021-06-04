@@ -8,6 +8,17 @@ from zentral.core.probes.models import ProbeSource
 from tests.inventory.utils import MockMetaMachine
 
 
+def _build_event(event_type, machine_serial_number=None, payload=None, tags=None):
+    cls = type("".join(w.title() for w in event_type.split("_")),
+               (BaseEvent,),
+               {"event_type": event_type,
+                "tags": tags or []})
+    event_metadata = EventMetadata(machine_serial_number=machine_serial_number)
+    if payload is None:
+        payload = {}
+    return cls(event_metadata, payload)
+
+
 class EmptyBaseProbeTestCase(TestCase):
     def setUp(self):
         self.probe_source = ProbeSource.objects.create(model="BaseProbe",
@@ -129,8 +140,8 @@ class InventoryFilterBaseProbeTestCase(TestCase):
                                          ([self.mbu1.id], [self.tag1.id], "WINDOWS", "LAPTOP", True),
                                          ([self.mbu1.id], [self.tag1.id], "WINDOWS", "VM", True),
                                          ):
-            event_metadata = EventMetadata(machine_serial_number="YO",
-                                           event_type="base")
+            event = _build_event("base", machine_serial_number="YO")
+            event_metadata = event.metadata
             # TODO hack
             event_metadata.machine = MockMetaMachine(mbuis, tis, p, t)
             event = BaseEvent(event_metadata, {"godzilla": "kommt"})
@@ -190,18 +201,15 @@ class MetadataFilterBaseProbeTestCase(TestCase):
                                          ("add_machine_group", ["osquery"], True),
                                          ("add_machine_group", ["osquery", "yo"], True),
                                          ("remove_machine_link", ["osquery", "inventory_update"], True)):
-            metadata = EventMetadata(machine_serial_number="YO",
-                                     event_type=event_type, tags=tags)
-            self.assertEqual(metadata_filter.test_event_metadata(metadata),
+            event = _build_event(event_type, machine_serial_number="YO", tags=tags)
+            self.assertEqual(metadata_filter.test_event_metadata(event.metadata),
                              result)
 
     def test_probe_test_event(self):
         for event_type, tags, result in (("santa_event", ["yo"], False),
                                          ("osquery_result", ["super", "michel"], True),
                                          ("add_machine_group", ["osquery", "yo"], True)):
-            event = BaseEvent(EventMetadata(machine_serial_number="YO",
-                                            event_type=event_type, tags=tags),
-                              {"godzilla": "kommt"})
+            event = _build_event(event_type, machine_serial_number="YO", tags=tags, payload={"godzilla": "kommt"})
             self.assertEqual(self.probe.test_event(event), result)
 
 
@@ -334,7 +342,5 @@ class PayloadFilterBaseProbeTestCase(TestCase):
                                 ({"a": [{"b": {"c": "abc", "d": "d"}}]}, True),
                                 ({"a": [{"b": [{"c": "abc", "d": "d"}]}]}, True),
                                 ):
-            event = BaseEvent(EventMetadata(machine_serial_number="YOZO",
-                                            event_type=BaseEvent.event_type),
-                              payload)
+            event = _build_event("base", machine_serial_number="YOZO", payload=payload)
             self.assertEqual(self.probe.test_event(event), result)

@@ -99,10 +99,8 @@ class BeatPreprocessor:
                 else:
                     machine_serial_number = ms.serial_number
         # event
-        metadata = EventMetadata(JAMFChangeManagementEvent.event_type,
-                                 machine_serial_number=machine_serial_number,
-                                 created_at=self.get_created_at(raw_event_d),
-                                 tags=JAMFChangeManagementEvent.tags)
+        metadata = EventMetadata(machine_serial_number=machine_serial_number,
+                                 created_at=self.get_created_at(raw_event_d))
         return JAMFChangeManagementEvent(metadata, payload)
 
     def build_software_server_event(self, raw_event_d):
@@ -121,9 +119,7 @@ class BeatPreprocessor:
             return None
         else:
             # event
-            metadata = EventMetadata(JAMFSoftwareServerEvent.event_type,
-                                     created_at=self.get_created_at(raw_event_d),
-                                     tags=JAMFSoftwareServerEvent.tags)
+            metadata = EventMetadata(created_at=self.get_created_at(raw_event_d))
             return JAMFSoftwareServerEvent(metadata, payload)
 
     def build_access_event(self, raw_event_d):
@@ -134,9 +130,7 @@ class BeatPreprocessor:
             logger.error("Could not build access event %s", raw_event_d)
             return
         # event
-        metadata = EventMetadata(JAMFAccessEvent.event_type,
-                                 created_at=self.get_created_at(raw_event_d),
-                                 tags=JAMFAccessEvent.tags)
+        metadata = EventMetadata(created_at=self.get_created_at(raw_event_d))
         return JAMFAccessEvent(metadata, payload)
 
     def build_client_event(self, raw_event_d):
@@ -153,10 +147,8 @@ class BeatPreprocessor:
             logger.exception("Could not process jamf client log raw event")
         else:
             # event
-            metadata = EventMetadata(JAMFClientEvent.event_type,
-                                     machine_serial_number=serial_number,
-                                     created_at=created_at,
-                                     tags=JAMFClientEvent.tags)
+            metadata = EventMetadata(machine_serial_number=serial_number,
+                                     created_at=created_at)
             return JAMFClientEvent(metadata, payload)
 
     def get_jamf_instance(self, raw_event_d):

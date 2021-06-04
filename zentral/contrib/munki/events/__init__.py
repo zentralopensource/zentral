@@ -37,6 +37,18 @@ class MunkiEvent(BaseEvent):
                               ("version", "Version str.")]}),
     ]
 
+    def get_linked_objects_keys(self):
+        keys = {}
+        event_type = self.payload.get("type")
+        if event_type == "install":
+            name = self.payload.get("name")
+            if name:
+                keys["pkginfoname"] = [(name,)]
+                version = self.payload.get("version")
+                if version:
+                    keys["pkginfo"] = [(name, version)]
+        return keys
+
 
 register_event_type(MunkiEvent)
 
@@ -48,10 +60,8 @@ def post_munki_request_event(msn, user_agent, ip, **kwargs):
 def post_munki_events(msn, user_agent, ip, data):
     for report in data:
         events = report.pop('events')
-        metadata = EventMetadata(MunkiEvent.event_type,
-                                 machine_serial_number=msn,
-                                 request=EventRequest(user_agent, ip),
-                                 tags=MunkiEvent.tags)
+        metadata = EventMetadata(machine_serial_number=msn,
+                                 request=EventRequest(user_agent, ip))
         for index, (created_at, payload) in enumerate(events):
             metadata.index = index
             metadata.created_at = parser.parse(created_at)

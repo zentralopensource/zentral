@@ -94,7 +94,7 @@ class MetadataFilter(object):
     def test_event_metadata(self, metadata):
         if self.event_types and metadata.event_type not in self.event_types:
             return False
-        if self.event_tags and not set(metadata.tags) & self.event_tags:
+        if self.event_tags and not metadata.all_tags & self.event_tags:
             return False
         return True
 

@@ -19,8 +19,7 @@ def make_event(ip=None, ua=None, with_msn=True):
         request = EventRequest(user_agent=ua, ip=ip)
     else:
         request = None
-    return TestEvent3(EventMetadata(TestEvent3.event_type,
-                                    machine_serial_number=msn,
+    return TestEvent3(EventMetadata(machine_serial_number=msn,
                                     request=request),
                       {"godzilla": "yo"})
 

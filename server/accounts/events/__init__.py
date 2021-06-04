@@ -80,11 +80,7 @@ register_event_type(RemoveUserFromGroupEvent)
 def post_event(event_cls, request, user, payload=None):
     if payload is None:
         payload = {}
-    event_request = EventRequest.build_from_request(request)
-    metadata = EventMetadata(event_cls.event_type,
-                             namespace=event_cls.namespace,
-                             request=event_request,
-                             tags=event_cls.tags)
+    metadata = EventMetadata(request=EventRequest.build_from_request(request))
     if user and user != request.user:
         payload["user"] = {"pk": user.pk, "username": user.username}
     event = event_cls(metadata, payload)
@@ -111,10 +107,7 @@ def user_login_failed_callback(sender, credentials, **kwargs):
     request = kwargs.get("request")  # introduced in django 1.11
     if request:
         request = EventRequest.build_from_request(request)
-    metadata = EventMetadata(FailedLoginEvent.event_type,
-                             namespace=FailedLoginEvent.namespace,
-                             request=request,
-                             tags=FailedLoginEvent.tags)
+    metadata = EventMetadata(request=request)
     event = FailedLoginEvent(metadata, {"user": {k: str(v) for k, v in credentials.items() if k in ("username",)}})
     event.post()
 
@@ -152,28 +145,20 @@ def post_group_membership_updates(request, added_groups, removed_groups, user=No
             "is_service_account": user.is_service_account
         }
     if added_groups:
-        event_metadata = EventMetadata(AddUserToGroupEvent.event_type,
-                                       namespace=AddUserToGroupEvent.namespace,
-                                       request=event_request,
-                                       tags=AddUserToGroupEvent.tags,
-                                       uuid=event_uuid,
-                                       created_at=created_at)
         for added_group in added_groups:
-            event_metadata.index = event_index
+            event_metadata = EventMetadata(request=event_request,
+                                           uuid=event_uuid, index=event_index,
+                                           created_at=created_at)
             payload = base_payload.copy()
             payload["group"] = {"pk": added_group.pk, "name": added_group.name}
             event = AddUserToGroupEvent(event_metadata, payload)
             event.post()
             event_index += 1
     if removed_groups:
-        event_metadata = EventMetadata(RemoveUserFromGroupEvent.event_type,
-                                       namespace=RemoveUserFromGroupEvent.namespace,
-                                       request=event_request,
-                                       tags=RemoveUserFromGroupEvent.tags,
-                                       uuid=event_uuid,
-                                       created_at=created_at)
         for removed_group in removed_groups:
-            event_metadata.index = event_index
+            event_metadata = EventMetadata(request=event_request,
+                                           uuid=event_uuid, index=event_index,
+                                           created_at=created_at)
             payload = base_payload.copy()
             payload["group"] = {"pk": removed_group.pk, "name": removed_group.name}
             event = RemoveUserFromGroupEvent(event_metadata, payload)

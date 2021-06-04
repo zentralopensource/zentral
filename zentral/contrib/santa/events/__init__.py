@@ -273,19 +273,18 @@ def post_enrollment_event(msn, user_agent, ip, data):
 
 
 def post_santa_rule_update_event(request, data):
-    metadata = EventMetadata(SantaRuleUpdateEvent.event_type,
-                             request=EventRequest.build_from_request(request))
+    metadata = EventMetadata(request=EventRequest.build_from_request(request))
     event = SantaRuleUpdateEvent(metadata, data)
     event.post()
 
 
 def post_santa_ruleset_update_events(request, ruleset_data, rules_data):
     event_request = EventRequest.build_from_request(request)
-    ruleset_update_event_metadata = EventMetadata(SantaRuleSetUpdateEvent.event_type, request=event_request)
+    ruleset_update_event_metadata = EventMetadata(request=event_request)
     ruleset_update_event = SantaRuleSetUpdateEvent(ruleset_update_event_metadata, ruleset_data)
     ruleset_update_event.post()
     for idx, rule_data in enumerate(rules_data):
-        rule_update_event_metadata = EventMetadata(SantaRuleUpdateEvent.event_type, request=event_request,
+        rule_update_event_metadata = EventMetadata(request=event_request,
                                                    uuid=ruleset_update_event_metadata.uuid, index=idx + 1)
         rule_update_event = SantaRuleUpdateEvent(rule_update_event_metadata, rule_data)
         rule_update_event.post()
