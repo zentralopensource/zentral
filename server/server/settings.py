@@ -293,9 +293,14 @@ LOGGING = {
             'level': log_level,
             'handlers': ['console'],
         },
+        # dependencies
         'elasticsearch': {
             'level': 'ERROR',
             'handlers': ['console'],
-        }
+        },
+        'hpack': {
+            'level': 'WARNING',
+            'handlers': ['console'],
+        },
     }
 }
