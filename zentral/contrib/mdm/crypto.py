@@ -4,93 +4,68 @@ import tempfile
 from asn1crypto import cms
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.serialization.pkcs12 import load_key_and_certificates
 from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.x509.oid import NameOID
+from django.utils.functional import SimpleLazyObject
+from zentral.conf import settings
 from OpenSSL import crypto
-from .conf import SCEP_CA_FULLCHAIN
 
 
-APPLE_PKI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Apple_PKI")
-IPHONE_CA_CN = "Apple iPhone Device CA"
-IPHONE_CA_FULLCHAIN = os.path.join(APPLE_PKI_DIR, "Apple_iPhone_Device_CA_Fullchain.pem")
+# CA verification
 
 
-def decrypt_cms_payload(payload, private_key_bytes):
-    tmp_inkey_fd, tmp_inkey = tempfile.mkstemp()
-    with os.fdopen(tmp_inkey_fd, "wb") as f:
-        f.write(private_key_bytes)
-    p = subprocess.Popen(["/usr/bin/openssl", "smime",  "-decrypt", "-inkey", tmp_inkey],
-                         stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE)
-    stdout, stderr = p.communicate(payload)
-    os.unlink(tmp_inkey)
-    return stdout
+IPHONE_DEVICE_CA_CN = "Apple iPhone Device CA"
+IPHONE_DEVICE_CA_FULLCHAIN = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "assets",
+    "Apple_iPhone_Device_CA_Fullchain.pem"
+)
 
 
-def get_openssl_version():
-    cp = subprocess.run(["/usr/bin/openssl", "version"], capture_output=True)
-    major, minor, patch = cp.stdout.decode("utf-8").split()[1].split(".")
-    major = int(major)
-    minor = int(minor)
-    try:
-        patch = int(patch)
-    except ValueError:
-        patch_number, patch_letter = patch[:-1], patch[-1]
-        return (major, minor, int(patch_number), patch_letter)
-    else:
-        return (major, minor, patch)
-
-
-def verify_ca_issuer_openssl(ca_fullchain, certificate_bytes, strict=True):
-    args = ["/usr/bin/openssl", "verify"]
-    openssl_version = get_openssl_version()
-    if not strict and openssl_version >= (1, 1):
-        args.append("-no_check_time")
-    args.extend(["-CAfile", ca_fullchain])
-    p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+def verify_store_certificate(store, certificate_bytes):
     certificate = crypto.load_certificate(crypto.FILETYPE_ASN1, certificate_bytes)
-    stdout, stderr = p.communicate(crypto.dump_certificate(crypto.FILETYPE_PEM, certificate))
-    for line in stdout.splitlines():
-        if strict and "error" in line.lower():
-            return False
-        if b'OK' in line:
-            return True
-    return False
-
-
-def verify_apple_iphone_device_ca_issuer_openssl(certificate_bytes):
-    # only check the chain, no expiration !!!
-    return verify_ca_issuer_openssl(IPHONE_CA_FULLCHAIN, certificate_bytes, strict=False)
-
-
-def verify_zentral_scep_ca_issuer_openssl(certificate_bytes):
-    return verify_ca_issuer_openssl(SCEP_CA_FULLCHAIN, certificate_bytes, strict=False)
-
-
-def get_apple_pki_store():
-    store = crypto.X509Store()
-    # add apple CA
-    for filename in ("Apple_iPhone_Device_CA.pem",
-                     "Apple_iPhone_Certification_Authority.pem",
-                     "Apple_Root_CA.pem"):
-        with open(os.path.join(APPLE_PKI_DIR, filename), "rb") as f:
-            store.add_cert(crypto.load_certificate(crypto.FILETYPE_PEM, f.read()))
-    return store
-
-
-APPLE_PKI_STORE = get_apple_pki_store()
-
-
-def verify_apple_iphone_device_ca_issuer_pyopenssl(certificate_bytes):
-    certificate = crypto.load_certificate(crypto.FILETYPE_ASN1, certificate_bytes)
-    store_ctx = crypto.X509StoreContext(APPLE_PKI_STORE, certificate)
+    store_ctx = crypto.X509StoreContext(store, certificate)
     try:
         store_ctx.verify_certificate()
     except crypto.X509StoreContextError:
         return False
     else:
         return True
+
+
+def get_scep_ca_store():
+    store = crypto.X509Store()
+    head = "-----BEGIN CERTIFICATE-----"
+    for tail in settings["apps"]["zentral.contrib.mdm"]["scep_ca_fullchain"].split(head)[1:]:
+        certificate_bytes = (head + tail).encode("utf-8")
+        store.add_cert(crypto.load_certificate(crypto.FILETYPE_PEM, certificate_bytes))
+    return store
+
+
+SCEP_CA_STORE = SimpleLazyObject(get_scep_ca_store)
+
+
+def verify_zentral_scep_ca_issuer(certificate_bytes):
+    return verify_store_certificate(SCEP_CA_STORE, certificate_bytes)
+
+
+def get_iphone_device_ca_store():
+    store = crypto.X509Store()
+    store.load_locations(IPHONE_DEVICE_CA_FULLCHAIN)
+    store.set_flags(0x200000)  # TODO hack! see X509_V_FLAG_NO_CHECK_TIME, because one of the cert has expired!
+    return store
+
+
+IPHONE_DEVICE_CA_STORE = SimpleLazyObject(get_iphone_device_ca_store)
+
+
+def verify_apple_iphone_device_ca_issuer(certificate_bytes):
+    return verify_store_certificate(IPHONE_DEVICE_CA_STORE, certificate_bytes)
+
+
+# CMS / PKCS7
 
 
 def get_signer_certificate(content, signer):
@@ -100,10 +75,10 @@ def get_signer_certificate(content, signer):
         if certificate.chosen.serial_number == signer_id.chosen["serial_number"].native and \
            certificate.chosen.issuer == signer_id.chosen["issuer"]:
             certificate_bytes = certificate.dump()
-            certificate = x509.load_der_x509_certificate(certificate_bytes, default_backend())
+            certificate = x509.load_der_x509_certificate(certificate_bytes)
             certificate_i_cn = ", ".join(
                 o.value
-                for o in certificate.issuer.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+                for o in certificate.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
             )
             return certificate_i_cn, certificate_bytes, certificate
 
@@ -169,18 +144,36 @@ def verify_signed_payload(data):
 def verify_iphone_ca_signed_payload(data):
     certificates, payload = verify_signed_payload(data)
     for certificate_i_cn, certificate_bytes, certificate in certificates:
-        if certificate_i_cn == IPHONE_CA_CN and verify_apple_iphone_device_ca_issuer_openssl(certificate_bytes):
+        if certificate_i_cn == IPHONE_DEVICE_CA_CN and verify_apple_iphone_device_ca_issuer(certificate_bytes):
             return payload
     raise ValueError("Untrusted CA")
 
 
-if __name__ == "__main__":
-    import sys
-    with open(sys.argv[1], "rb") as f:
-        certificates, payload = verify_signed_payload(f.read())
-        for certificate_i_cn, certificate_bytes, certificate in certificates:
-            print("ISSUER", certificate_i_cn)
-            print("VERIFY WITH OPENSSL",
-                  verify_apple_iphone_device_ca_issuer_openssl(certificate_bytes))
-            print("VERIFY WITH PYOPENSSL",
-                  verify_apple_iphone_device_ca_issuer_pyopenssl(certificate_bytes))
+def decrypt_cms_payload(payload, private_key_bytes):
+    tmp_inkey_fd, tmp_inkey = tempfile.mkstemp()
+    with os.fdopen(tmp_inkey_fd, "wb") as f:
+        f.write(private_key_bytes)
+    p = subprocess.Popen(["/usr/bin/openssl", "smime",  "-decrypt", "-inkey", tmp_inkey],
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE)
+    stdout, stderr = p.communicate(payload)
+    os.unlink(tmp_inkey)
+    return stdout
+
+
+# PKCS12
+
+
+def load_push_certificate(pkcs12_bytes, password=None):
+    if password and isinstance(password, str):
+        password = password.encode("utf-8")
+    private_key, cert, _ = load_key_and_certificates(pkcs12_bytes, password)
+    return {"certificate": cert.public_bytes(serialization.Encoding.PEM),
+            "private_key": private_key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.PKCS8,
+                serialization.NoEncryption()
+            ),
+            "not_before": cert.not_valid_before,
+            "not_after": cert.not_valid_after,
+            "topic": cert.subject.get_attributes_for_oid(NameOID.USER_ID)[0].value}

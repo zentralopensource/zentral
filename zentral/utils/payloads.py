@@ -1,9 +1,8 @@
 import logging
-import os
-import subprocess
-import tempfile
-from urllib.parse import urlparse
 import uuid
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.serialization import pkcs7
 from zentral.conf import settings
 
 
@@ -14,36 +13,37 @@ def generate_payload_uuid():
     return str(uuid.uuid4())
 
 
-def get_payload_identifier(suffix):
-    o = urlparse(settings["api"]["tls_hostname"])
-    netloc = o.netloc.split(":")[0].split(".")
-    netloc.reverse()
-    netloc.append(suffix)
-    return ".".join(netloc)
+def get_payload_identifier(*suffixes):
+    items = settings["api"]["fqdn"].split(".")
+    items.reverse()
+    for suffix in suffixes:
+        if not isinstance(suffix, str):
+            suffix = str(suffix)
+        items.append(suffix)
+    return ".".join(items)
 
 
-def sign_payload_openssl(payload):
+def sign_payload(payload):
     api_settings = settings["api"]
-    old_umask = os.umask(0o077)
-    fcfd, fullchain = tempfile.mkstemp(suffix="-tls_fullchain.pem")
-    with os.fdopen(fcfd, "w") as fcf:
-        fcf.write(api_settings["tls_fullchain"])
-    pkfd, privkey = tempfile.mkstemp(suffix="-tls_privkey.pem")
-    with os.fdopen(pkfd, "w") as pkf:
-        pkf.write(api_settings["tls_privkey"])
-    p = subprocess.Popen(["/usr/bin/openssl", "smime", "-sign",
-                          "-signer", fullchain, "-certfile",  fullchain,
-                          "-inkey", privkey,
-                          "-outform", "der", "-nodetach"],
-                         stderr=subprocess.PIPE,
-                         stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE)
-    stdout, stderr = p.communicate(payload)
-    os.unlink(fullchain)
-    os.unlink(privkey)
-    os.umask(old_umask)
-    if not stdout:
-        logger.error("Could not sign payload: %s", stderr.decode("utf-8", errors="replace"))
+    tls_privkey = api_settings.get("tls_privkey")
+    if not tls_privkey:
+        logger.error("Could not sign payload: missing tls privkey")
         return payload
-    else:
-        return stdout
+    tls_fullchain = api_settings.get("tls_fullchain")
+    if not tls_fullchain:
+        logger.error("Could not sign payload: missing tls fullchain")
+        return payload
+    certificates = []
+    key = serialization.load_pem_private_key(api_settings["tls_privkey"].encode("utf-8"), None)
+    head = "-----BEGIN CERTIFICATE-----"
+    for tail in api_settings["tls_fullchain"].split(head)[1:]:
+        cert_data = (head + tail).encode("utf-8")
+        certificates.append(x509.load_pem_x509_certificate(cert_data))
+    signature_builder = pkcs7.PKCS7SignatureBuilder().set_data(
+        payload
+    ).add_signer(
+        certificates.pop(0), key, hashes.SHA256()
+    )
+    for certificate in certificates:
+        signature_builder = signature_builder.add_certificate(certificate)
+    return signature_builder.sign(serialization.Encoding.DER, [pkcs7.PKCS7Options.Binary])
