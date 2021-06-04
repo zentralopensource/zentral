@@ -13,6 +13,14 @@ from zentral.core.probes.models import ProbeSource
 from tests.inventory.utils import MockMetaMachine
 
 
+class IncidentTestCaseMatchEvent(BaseEvent):
+    event_type = "match_testttttttttttt"
+
+
+class IncidentTestCaseNoMatchEvent(BaseEvent):
+    event_type = "no_match_testttttttttttt"
+
+
 class IncidentTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -25,15 +33,25 @@ class IncidentTestCase(TestCase):
             status=ProbeSource.ACTIVE,
             body={"incident_severity": SEVERITY_CRITICAL,
                   "filters": {
-                      "metadata": [{"event_types": ["test"]}]
+                      "metadata": [{"event_types": [IncidentTestCaseMatchEvent.event_type]}]
                   }}
         )
         cls.probe = cls.probe_source.load()
         all_probes.clear()
 
+    def _build_match_event(self, payload, machine_serial_number=None):
+        event_metadata = EventMetadata(machine_serial_number=machine_serial_number)
+        if machine_serial_number:
+            event_metadata.machine = MockMetaMachine([self.mbu1], [self.tag1],
+                                                     "WINDOWS", "LAPTOP",
+                                                     serial_number=machine_serial_number)
+        return IncidentTestCaseMatchEvent(event_metadata, payload)
+
+    def _build_no_match_event(self, payload):
+        return IncidentTestCaseNoMatchEvent(EventMetadata(), payload)
+
     def test_create_open_incident(self):
-        event_metadata = EventMetadata(event_type="test")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_match_event({"joe": "jackson"})
         self.assertTrue(self.probe.test_event(event))
         self.assertEqual(self.probe.get_matching_event_incident_severity(event), SEVERITY_CRITICAL)
         incident, event_payloads = update_or_create_open_incident(self.probe_source,
@@ -60,14 +78,12 @@ class IncidentTestCase(TestCase):
         self.assertEqual(event_payload.get("incident"), None)  # not a machine incident payload
 
     def test_same_open_incident(self):
-        event1_metadata = EventMetadata(event_type="test")
-        event1 = BaseEvent(event1_metadata, {"joe": "jackson"})
+        event1 = self._build_match_event({"joe": "jackson"})
         self.assertTrue(self.probe.test_event(event1))
         incident, _ = update_or_create_open_incident(self.probe_source,
                                                      SEVERITY_CRITICAL,
                                                      event1.metadata.uuid)
-        event2_metadata = EventMetadata(event_type="test")
-        event2 = BaseEvent(event2_metadata, {"joe": "jackson"})
+        event2 = self._build_match_event({"joe": "jackson"})
         self.assertTrue(self.probe.test_event(event2))
         incident2, event_payloads = update_or_create_open_incident(self.probe_source,
                                                                    SEVERITY_CRITICAL,
@@ -76,8 +92,7 @@ class IncidentTestCase(TestCase):
         self.assertEqual(len(event_payloads), 0)
 
     def test_update_open_incident(self):
-        event_metadata = EventMetadata(event_type="test")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_match_event({"joe": "jackson"})
         self.assertTrue(self.probe.test_event(event))
         incident, _ = update_or_create_open_incident(self.probe_source,
                                                      SEVERITY_CRITICAL,
@@ -97,11 +112,7 @@ class IncidentTestCase(TestCase):
         self.assertEqual(event_payload["severity"], SEVERITY_CRITICAL + 100)
 
     def test_create_open_machine_incident(self):
-        event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
-        event_metadata.machine = MockMetaMachine([self.mbu1], [self.tag1],
-                                                 "WINDOWS", "LAPTOP",
-                                                 serial_number="YOLOFOMO")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_match_event({"joe": "jackson"}, machine_serial_number="YOLOFOMO")
         self.assertTrue(self.probe.test_event(event))
         machine_incident, event_payloads = update_or_create_open_machine_incident(
             self.probe_source,
@@ -138,11 +149,7 @@ class IncidentTestCase(TestCase):
         self.assertEqual(MetaMachine("YOLOFOMO").max_incident_severity(), SEVERITY_CRITICAL)
 
     def test_same_open_machine_incident(self):
-        event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
-        event_metadata.machine = MockMetaMachine([self.mbu1], [self.tag1],
-                                                 "WINDOWS", "LAPTOP",
-                                                 serial_number="YOLOFOMO")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_match_event({"joe": "jackson"}, machine_serial_number="YOLOFOMO")
         self.assertTrue(self.probe.test_event(event))
         machine_incident1, _ = update_or_create_open_machine_incident(
             self.probe_source,
@@ -160,11 +167,7 @@ class IncidentTestCase(TestCase):
         self.assertEqual(len(event_payloads), 0)
 
     def test_update_open_machine_incident(self):
-        event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
-        event_metadata.machine = MockMetaMachine([self.mbu1], [self.tag1],
-                                                 "WINDOWS", "LAPTOP",
-                                                 serial_number="YOLOFOMO")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_match_event({"joe": "jackson"}, machine_serial_number="YOLOFOMO")
         self.assertTrue(self.probe.test_event(event))
         machine_incident1, _ = update_or_create_open_machine_incident(
             self.probe_source,
@@ -193,11 +196,7 @@ class IncidentTestCase(TestCase):
         self.assertEqual(MetaMachine("YOLOFOMO").max_incident_severity(), SEVERITY_CRITICAL + 100)
 
     def test_close_open_machine_incident(self):
-        event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
-        event_metadata.machine = MockMetaMachine([self.mbu1], [self.tag1],
-                                                 "WINDOWS", "LAPTOP",
-                                                 serial_number="YOLOFOMO")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_match_event({"joe": "jackson"}, machine_serial_number="YOLOFOMO")
         self.assertTrue(self.probe.test_event(event))
         machine_incident1, _ = update_or_create_open_machine_incident(
             self.probe_source,
@@ -242,11 +241,7 @@ class IncidentTestCase(TestCase):
         self.assertEqual(MetaMachine("YOLOFOMO").max_incident_severity(), None)
 
     def test_close_manually_changed_incident_open_machine_incident(self):
-        event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
-        event_metadata.machine = MockMetaMachine([self.mbu1], [self.tag1],
-                                                 "WINDOWS", "LAPTOP",
-                                                 serial_number="YOLOFOMO")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_match_event({"joe": "jackson"}, machine_serial_number="YOLOFOMO")
         self.assertTrue(self.probe.test_event(event))
         machine_incident1, _ = update_or_create_open_machine_incident(
             self.probe_source,
@@ -277,11 +272,7 @@ class IncidentTestCase(TestCase):
         self.assertEqual(event_payload["incident"]["status"], STATUS_IN_PROGRESS)  # incident still in progress
 
     def test_close_manually_changed_open_machine_incident(self):
-        event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
-        event_metadata.machine = MockMetaMachine([self.mbu1], [self.tag1],
-                                                 "WINDOWS", "LAPTOP",
-                                                 serial_number="YOLOFOMO")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_match_event({"joe": "jackson"}, machine_serial_number="YOLOFOMO")
         self.assertTrue(self.probe.test_event(event))
         machine_incident1, _ = update_or_create_open_machine_incident(
             self.probe_source,
@@ -303,11 +294,7 @@ class IncidentTestCase(TestCase):
         self.assertEqual(len(event_payloads), 0)
 
     def test_close_one_of_two_open_machine_incident(self):
-        event_metadata1 = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO1")
-        event_metadata1.machine = MockMetaMachine([self.mbu1], [self.tag1],
-                                                  "WINDOWS", "LAPTOP",
-                                                  serial_number="YOLOFOMO1")
-        event1 = BaseEvent(event_metadata1, {"joe": "jackson"})
+        event1 = self._build_match_event({"joe": "jackson"}, machine_serial_number="YOLOFOMO1")
         self.assertTrue(self.probe.test_event(event1))
         machine_incident1, _ = update_or_create_open_machine_incident(
             self.probe_source,
@@ -315,11 +302,7 @@ class IncidentTestCase(TestCase):
             event1.metadata.machine_serial_number,
             event1.metadata.uuid
         )
-        event_metadata2 = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO2")
-        event_metadata2.machine = MockMetaMachine([self.mbu1], [self.tag1],
-                                                  "WINDOWS", "LAPTOP",
-                                                  serial_number="YOLOFOMO2")
-        event2 = BaseEvent(event_metadata2, {"joe": "jackson"})
+        event2 = self._build_match_event({"joe": "jackson"}, machine_serial_number="YOLOFOMO2")
         self.assertTrue(self.probe.test_event(event2))
         machine_incident2, _ = update_or_create_open_machine_incident(
             self.probe_source,
@@ -353,14 +336,12 @@ class IncidentTestCase(TestCase):
         self.assertEqual(event_payload["status"], STATUS_CLOSED)
 
     def test_enrich_event_no_match(self):
-        event_metadata = EventMetadata(event_type="test2")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_no_match_event({"joe": "jackson"})
         self.assertFalse(self.probe.test_event(event))
         self.assertEqual([event], list(enrich_event(event)))
 
     def test_enrich_event_incident_match(self):
-        event_metadata = EventMetadata(event_type="test")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_match_event({"joe": "jackson"})
         self.assertTrue(self.probe.test_event(event))
         enriched_events = list(enrich_event(event))
         self.assertEqual(len(enriched_events), 2)
@@ -379,13 +360,11 @@ class IncidentTestCase(TestCase):
         self.assertEqual(eevent2, event)
 
     def test_enrich_event_existing_incident(self):
-        event1_metadata = EventMetadata(event_type="test")
-        event1 = BaseEvent(event1_metadata, {"joe": "jackson1"})
+        event1 = self._build_match_event({"joe": "jackson1"})
         self.assertTrue(self.probe.test_event(event1))
         for _ in enrich_event(event1):
             continue
-        event2_metadata = EventMetadata(event_type="test")
-        event2 = BaseEvent(event2_metadata, {"joe": "jackson2"})
+        event2 = self._build_match_event({"joe": "jackson2"})
         self.assertTrue(self.probe.test_event(event2))
         enriched_events = list(enrich_event(event2))
         incident = Incident.objects.get(probe_source=self.probe_source)
@@ -400,11 +379,7 @@ class IncidentTestCase(TestCase):
         self.assertEqual(eevent_incident.get("machine_incident"), None)
 
     def test_enrich_event_machine_incident_match(self):
-        event_metadata = EventMetadata(event_type="test", machine_serial_number="YOLOFOMO")
-        event_metadata.machine = MockMetaMachine([self.mbu1], [self.tag1],
-                                                 "WINDOWS", "LAPTOP",
-                                                 serial_number="YOLOFOMO")
-        event = BaseEvent(event_metadata, {"joe": "jackson"})
+        event = self._build_match_event({"joe": "jackson"}, machine_serial_number="YOLOFOMO")
         self.assertTrue(self.probe.test_event(event))
         enriched_events = list(enrich_event(event))
         self.assertEqual(len(enriched_events), 3)

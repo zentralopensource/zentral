@@ -1,4 +1,5 @@
 import logging
+import uuid
 from django.core.cache import cache
 from django.db import transaction
 from zentral.contrib.inventory.models import (MachineGroup, MachineSnapshot, MachineSnapshotCommit,
@@ -76,14 +77,13 @@ class WebhookEventPreprocessor(object):
                 logger.exception("Could not commit machine snapshot")
             else:
                 if msc:
+                    event_uuid = uuid.uuid4()
                     for idx, (event_type, created_at, payload) in enumerate(
                             inventory_events_from_machine_snapshot_commit(msc)):
                         event_cls = event_cls_from_type(event_type)
-                        metadata = EventMetadata(event_cls.event_type,
-                                                 machine_serial_number=ms.serial_number,
-                                                 index=idx,
-                                                 created_at=created_at,
-                                                 tags=event_cls.tags)
+                        metadata = EventMetadata(machine_serial_number=ms.serial_number,
+                                                 uuid=event_uuid, index=idx,
+                                                 created_at=created_at)
                         event = event_cls(metadata, payload)
                         yield event
             if tags:

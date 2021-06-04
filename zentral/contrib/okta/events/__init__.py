@@ -64,10 +64,8 @@ def post_okta_events(event_hook, data):
         except (KeyError, TypeError, ValueError):
             logger.error("Could not parse datetime from Okta event")
             created_at = None
-        event_metadata = EventMetadata(event_cls.event_type,
-                                       request=EventRequest(client_user_agent, client_ip, geo=event_request_geo),
+        event_metadata = EventMetadata(request=EventRequest(client_user_agent, client_ip, geo=event_request_geo),
                                        observer=event_observer,
-                                       created_at=created_at,
-                                       tags=event_cls.tags)
+                                       created_at=created_at)
         event = event_cls(event_metadata, payload)
         event.post()

@@ -2,6 +2,7 @@ from datetime import datetime
 import logging
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.core.queues import queues
+from zentral.contrib.osquery.models import Pack
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
 
@@ -24,6 +25,20 @@ class OsqueryRequestEvent(OsqueryEvent):
     event_type = "osquery_request"
     tags = ['osquery', 'heartbeat']
     heartbeat_timeout = 2 * 60
+
+    def get_linked_objects_keys(self):
+        keys = {}
+        enrollment = self.payload.get("enrollment")
+        if enrollment:
+            enrollment_pk = enrollment.get("pk")
+            if enrollment_pk:
+                keys["enrollment"] = [(enrollment_pk,)]
+            configuration = enrollment.get("configuration")
+            if configuration:
+                configuration_pk = configuration.get("pk")
+                if configuration_pk:
+                    keys["configuration"] = [(configuration_pk,)]
+        return keys
 
 
 register_event_type(OsqueryRequestEvent)
@@ -49,6 +64,22 @@ class OsqueryResultEvent(OsqueryEvent):
                 logger.warning("Unknown query %s", query_name)
                 pass
         return ctx
+
+    def get_linked_objects_keys(self):
+        keys = {}
+        try:
+            prefix, _, pack_pk, _, query_pk, _ = self.payload["name"].split(Pack.DELIMITER)
+            pack_pk = int(pack_pk)
+            query_pk = int(query_pk)
+        except (AttributeError, KeyError, ValueError):
+            logger.warning("Could not parse osquery result name")
+            return keys
+        if prefix != "pack":
+            logger.warning("Unknown result name prefix")
+            return keys
+        keys["pack"] = [(pack_pk,)]
+        keys["query"] = [(query_pk,)]
+        return keys
 
 
 register_event_type(OsqueryResultEvent)
@@ -150,11 +181,11 @@ def post_status_logs(msn, user_agent, ip, logs):
 
 def post_osquery_pack_update_events(request, pack_data, pack_queries_data):
     event_request = EventRequest.build_from_request(request)
-    pack_update_event_metadata = EventMetadata(OsqueryPackUpdateEvent.event_type, request=event_request)
+    pack_update_event_metadata = EventMetadata(request=event_request)
     pack_update_event = OsqueryPackUpdateEvent(pack_update_event_metadata, pack_data)
     pack_update_event.post()
     for idx, pack_query_data in enumerate(pack_queries_data):
-        pack_query_update_event_metadata = EventMetadata(OsqueryPackQueryUpdateEvent.event_type, request=event_request,
+        pack_query_update_event_metadata = EventMetadata(request=event_request,
                                                          uuid=pack_update_event_metadata.uuid, index=idx + 1)
         pack_query_update_event = OsqueryPackQueryUpdateEvent(pack_query_update_event_metadata, pack_query_data)
         pack_query_update_event.post()

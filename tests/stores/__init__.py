@@ -28,9 +28,7 @@ def make_event(idx=0, first_type=True, with_request=True):
                                EventRequestUser(username="yolo"))
     else:
         request = None
-    return event_cls(EventMetadata(event_cls.event_type,
-                                   namespace=event_cls.namespace,
-                                   machine_serial_number='012356789',
+    return event_cls(EventMetadata(machine_serial_number='012356789',
                                    request=request),
                      {'idx': idx})
 

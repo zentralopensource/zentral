@@ -1,4 +1,5 @@
 import logging
+import uuid
 from zentral.core.events import event_cls_from_type, register_event_type
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
 
@@ -63,14 +64,12 @@ for attr in ('link',
 
 
 def post_inventory_events(msn, events):
+    event_uuid = uuid.uuid4()
     for index, (event_type, created_at, data) in enumerate(events):
         event_cls = event_cls_from_type(event_type)
-        metadata = EventMetadata(event_cls.event_type,
-                                 namespace=event_cls.namespace,
-                                 machine_serial_number=msn,
-                                 index=index,
-                                 created_at=created_at,
-                                 tags=event_cls.tags)
+        metadata = EventMetadata(machine_serial_number=msn,
+                                 uuid=event_uuid, index=index,
+                                 created_at=created_at)
         event = event_cls(metadata, data)
         event.post()
 
@@ -79,10 +78,8 @@ def post_enrollment_secret_verification_failure(model,
                                                 user_agent, public_ip_address, serial_number,
                                                 err_msg, enrollment_secret):
     event_cls = EnrollmentSecretVerificationEvent
-    metadata = EventMetadata(event_cls.event_type,
-                             machine_serial_number=serial_number,
-                             request=EventRequest(user_agent, public_ip_address),
-                             tags=event_cls.tags)
+    metadata = EventMetadata(machine_serial_number=serial_number,
+                             request=EventRequest(user_agent, public_ip_address))
     payload = {"status": "failure",
                "reason": err_msg,
                "type": model}
@@ -96,10 +93,8 @@ def post_enrollment_secret_verification_failure(model,
 def post_enrollment_secret_verification_success(request, model):
     obj = getattr(request.enrollment_secret, model)
     event_cls = EnrollmentSecretVerificationEvent
-    metadata = EventMetadata(event_cls.event_type,
-                             machine_serial_number=request.serial_number,
-                             request=EventRequest(request.user_agent, request.public_ip_address),
-                             tags=event_cls.tags)
+    metadata = EventMetadata(machine_serial_number=request.serial_number,
+                             request=EventRequest(request.user_agent, request.public_ip_address))
     payload = {"status": "success",
                "type": model}
     payload.update(obj.serialize_for_event())
