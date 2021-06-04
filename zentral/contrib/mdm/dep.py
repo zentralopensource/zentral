@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from zentral.conf import settings
 from zentral.utils.certificates import split_certificate_chain
-from .cms import decrypt_cms_payload
+from .crypto import decrypt_cms_payload
 from .dep_client import DEPClient, DEPClientError
 from .models import DEPDevice
 
@@ -74,45 +74,49 @@ def decrypt_dep_token(dep_token, payload):
     return json.loads("".join(message_lines))
 
 
-def serialize_dep_profile(dep_profile):
-    payload = {"profile_name": dep_profile.name,
+def serialize_dep_profile(dep_enrollment):
+    payload = {"profile_name": dep_enrollment.name,
                "url": "{}{}".format(
                    settings["api"]["tls_hostname"],
-                   reverse("mdm:dep_enroll", args=(dep_profile.enrollment_secret.secret,))
+                   reverse("mdm:dep_enroll", args=(dep_enrollment.enrollment_secret.secret,))
                ),
                "devices": [dep_device.serial_number
-                           for dep_device in dep_profile.depdevice_set.all()]}
+                           for dep_device in dep_enrollment.depdevice_set.all()]}
 
     # do authentication in webview if a realm is present
-    if dep_profile.realm:
+    if dep_enrollment.realm:
         payload["configuration_web_url"] = "{}{}".format(
             settings["api"]["tls_hostname"],
-            reverse("mdm:dep_web_enroll", args=(dep_profile.enrollment_secret.secret,))
+            reverse("mdm:dep_web_enroll", args=(dep_enrollment.enrollment_secret.secret,))
         )
 
     # standard attibutes
     for attr in ("allow_pairing",
-                 "is_supervised",
-                 "is_mandatory",
-                 "await_device_configured",
-                 "is_mdm_removable",
                  "auto_advance_setup",
+                 "await_device_configured",
+                 "is_mandatory",
+                 "is_mdm_removable",
+                 "is_multi_user",
+                 "is_supervised",
                  "skip_setup_items"):
-        payload[attr] = getattr(dep_profile, attr)
+        payload[attr] = getattr(dep_enrollment, attr)
 
     # optional strings
-    for attr in ("support_phone_number",
-                 "support_email_address",
+    for attr in ("department",
+                 "language",
                  "org_magic",
-                 "department"):
-        val = getattr(dep_profile, attr)
+                 "region",
+                 "support_phone_number",
+                 "support_email_address",
+                 ):
+        val = getattr(dep_enrollment, attr)
         if val:
             val = val.strip()
             if val:
                 payload[attr] = val
 
     # certificates
-    if dep_profile.include_tls_certificates:
+    if dep_enrollment.include_tls_certificates:
         anchor_certs = []
         crypto_backend = default_backend()
         for pem_data in split_certificate_chain(settings["api"]["tls_fullchain"]):
