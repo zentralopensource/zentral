@@ -22,7 +22,8 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('builder', models.CharField(max_length=256)),
                 ('enrollment_pk', models.PositiveIntegerField()),
-                ('file', models.FileField(blank=True, upload_to=zentral.contrib.mdm.models.enrollment_package_path)),
+                # zentral.contrib.mdm.models.enrollment_package_path removed
+                ('file', models.FileField(blank=True, upload_to=None)),
                 ('manifest', django.contrib.postgres.fields.jsonb.JSONField(blank=True, null=True)),
                 ('version', models.PositiveIntegerField(default=0)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
