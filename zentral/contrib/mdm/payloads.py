@@ -5,7 +5,7 @@ from django.urls import reverse
 from zentral.conf import settings
 from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
-from zentral.utils.payloads import sign_payload_openssl
+from zentral.utils.payloads import sign_payload
 from .models import OTAEnrollment, OTAEnrollmentSession
 
 
@@ -31,7 +31,7 @@ def build_profile(display_name, suffix, content,
         profile["PayloadDescription"] = payload_description
     data = plistlib.dumps(profile)
     if sign:
-        data = sign_payload_openssl(data)
+        data = sign_payload(data)
     return data
 
 
@@ -132,7 +132,7 @@ def build_mdm_configuration_profile(enrollment_session, push_certificate):
         # User Enrollment
         mdm_config["ManagedAppleID"] = managed_apple_id
     else:
-        mdm_config["AccessRights"] = 8191,  # TODO: config
+        mdm_config["AccessRights"] = 8191  # TODO: config
     payloads.extend([
         scep_payload,
         build_payload("com.apple.mdm",

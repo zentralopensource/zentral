@@ -17,8 +17,10 @@ class Command(BaseCommand):
         return self.apns_clients[push_certificate]
 
     def handle(self, *args, **kwargs):
-        for d in EnrolledDevice.objects.filter(token__isnull=False):
-            print("Device", d.serial_number, d.udid)
+        for d in EnrolledDevice.objects.select_related("push_certificate").all():
+            print("Device", d.serial_number, d.udid, end=" ")
             c = self.get_apns_client(d)
-            event = c.send_device_notification(d)
-            print("=>", event.serialize().get("status", "STATUS UNKNOWN"))
+            try:
+                print(c.send_device_notification(d))
+            except ValueError:
+                print("failure")
