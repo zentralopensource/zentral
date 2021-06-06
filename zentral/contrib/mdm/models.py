@@ -1107,21 +1107,22 @@ class Profile(models.Model):
 
 
 def enterprise_application_package_path(instance, filename):
-    return f"mdm/enterprise_applications/{instance.artifact.pk}/{instance.artifact_version.pk}.pkg"
+    return f"mdm/enterprise_apps/{instance.artifact_version.artifact.pk}/{instance.artifact_version.pk}.pkg"
 
 
 class EnterpriseApp(models.Model):
     artifact_version = models.OneToOneField(ArtifactVersion, related_name="enterprise_app", on_delete=models.CASCADE)
     package = models.FileField(upload_to=enterprise_application_package_path)
-    bundle_identifier = models.TextField()
-    bundle_version = models.TextField()
+    filename = models.TextField()
+    product_id = models.TextField()
+    product_version = models.TextField()
     manifest = JSONField()
 
     def __str__(self):
-        return f"{self.bundle_identifier} {self.bundle_version}"
+        return f"{self.product_id} {self.product_version}"
 
     class Meta:
-        indexes = [models.Index(fields=["bundle_identifier", "bundle_version"])]
+        indexes = [models.Index(fields=["product_id", "product_version"])]
 
 
 class DeviceArtifact(models.Model):
