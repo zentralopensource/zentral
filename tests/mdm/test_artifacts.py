@@ -8,7 +8,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import (Artifact, ArtifactOperation, ArtifactType, ArtifactVersion,
                                         Blueprint, BlueprintArtifact,
                                         Channel, DeviceArtifact, DeviceCommand,
-                                        EnrolledDevice, EnrolledUser,
+                                        EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         Platform, Profile, PushCertificate,
                                         UserArtifact, UserCommand)
 
@@ -151,6 +151,14 @@ class TestMDMArtifacts(TestCase):
                     payload_uuid=payload_uuid,
                     payload_display_name=payload_display_name,
                     payload_description=payload_description
+                )
+            elif artifact_type == ArtifactType.EnterpriseApp:
+                EnterpriseApp.objects.create(
+                    artifact_version=artifact_version,
+                    filename="{}.pkg".format(get_random_string(17)),
+                    product_id="{}.{}.{}".format(get_random_string(2), get_random_string(4), get_random_string(8)),
+                    product_version="17",
+                    manifest={"version": version}
                 )
         return artifact, artifact_versions
 
@@ -343,10 +351,23 @@ class TestMDMArtifacts(TestCase):
                          artifact_versions[0])
         self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_user), None)
 
+    def test_empty_blueprint_no_remove_one_enterprise_application(self):
+        artifact, artifact_versions = self._force_artifact(version_count=1,
+                                                           artifact_type=ArtifactType.EnterpriseApp)
+        self._force_target_artifact_version(self.enrolled_device, artifact_versions[0])
+        # cannot remove Enterprise Apps
+        self.assertIsNone(ArtifactVersion.objects.next_to_remove(self.enrolled_device))
+
     def test_blueprint_do_not_remove_one_device_profile_same_version(self):
         artifact, artifact_versions = self._force_blueprint_artifact(version_count=2)
         self._force_target_artifact_version(self.enrolled_device, artifact_versions[0])
         self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_device), None)
+
+    def test_blueprint_do_not_remove_one_enterprise_app_same_version(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2,
+                                                                     artifact_type=ArtifactType.EnterpriseApp)
+        self._force_target_artifact_version(self.enrolled_device, artifact_versions[0])
+        self.assertIsNone(ArtifactVersion.objects.next_to_remove(self.enrolled_device))
 
     def test_blueprint_do_not_remove_one_device_profile_different_version(self):
         artifact, artifact_versions = self._force_blueprint_artifact(version_count=2)
