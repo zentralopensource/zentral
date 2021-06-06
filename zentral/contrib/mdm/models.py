@@ -948,7 +948,7 @@ class BlueprintArtifact(models.Model):
 
 
 class ArtifactVersionManager(models.Manager):
-    def _next_to(self, target, select, artifact_operation, artifact_types=None, fetch_all=False):
+    def _next_to(self, target, select, artifact_operation, fetch_all=False):
         if isinstance(target, EnrolledDevice):
             enrolled_device = target
             channel = Channel.Device
@@ -976,9 +976,6 @@ class ArtifactVersionManager(models.Manager):
         if enrolled_device.awaiting_configuration:
             args.append(True)
             ba_where_list.append("ba.install_before_setup_assistant = %s")
-        if artifact_types:
-            args.append([at.name for at in artifact_types])
-            ba_where_list.append("a.type = ANY(%s)")
         ba_wheres = " and ".join(ba_where_list)
         args.extend([target.pk, target.pk, artifact_operation.name])
         query = (
@@ -1035,28 +1032,22 @@ class ArtifactVersionManager(models.Manager):
             "where favo.id is null and (tav.id is null or (bav.id <> tav.id and bav.auto_update)) "
             "order by bav.priority desc, bav.created_at asc"
         )
-        return self._next_to(
-            target, select, ArtifactOperation.Installation,
-            fetch_all=fetch_all
-        )
+        return self._next_to(target, select, ArtifactOperation.Installation, fetch_all=fetch_all)
 
     def next_to_remove(self, target, fetch_all=False):
         select = (
             # Installed on the target
             "select tav.id from target_artifact_versions as tav "
+            "left join mdm_artifact as a on (tav.artifact_id = a.id) "
             "left join failed_artifact_version_operations as favo on (favo.id = tav.id) "
             "left join blueprint_artifact_versions as bav on (bav.artifact_id = tav.artifact_id) "
+            # - Only Profiles
             # - No previous removal error AND
             # - Not present in the blueprint
-            "where favo.id is null and bav.id is null "
+            "where a.type = 'Profile' and favo.id is null and bav.id is null "
             "order by tav.created_at asc"
         )
-        # only profiles can be removed
-        artifact_types = [ArtifactType.Profile]
-        return self._next_to(
-            target, select, ArtifactOperation.Removal,
-            artifact_types=artifact_types, fetch_all=fetch_all
-        )
+        return self._next_to(target, select, ArtifactOperation.Removal, fetch_all=fetch_all)
 
 
 class ArtifactVersion(models.Model):
