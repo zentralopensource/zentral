@@ -36,6 +36,9 @@ class InstallProfile(Command):
                              "first_name", "last_name", "full_name"):
                     obj = obj.replace(f"$REALM_USER.{attr.upper()}",
                                       getattr(self.realm_user, attr))
+            managed_apple_id = getattr(self.enrollment_session, "managed_apple_id", None)
+            if managed_apple_id:
+                obj = obj.replace("$MANAGED_APPLE_ID.EMAIL", managed_apple_id)
         return obj
 
     def build_command(self):
