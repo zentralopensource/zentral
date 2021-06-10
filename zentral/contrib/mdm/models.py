@@ -1152,6 +1152,7 @@ class Command(models.Model):
     artifact_operation = models.CharField(max_length=64, choices=ArtifactOperation.choices(), null=True)
     kwargs = JSONField(default=dict)
 
+    not_before = models.DateTimeField(null=True)
     time = models.DateTimeField(null=True)  # no time => queued
     result_time = models.DateTimeField(null=True)
     status = models.CharField(max_length=64, choices=CommandStatus.choices(), null=True)
