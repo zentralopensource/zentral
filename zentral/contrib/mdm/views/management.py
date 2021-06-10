@@ -435,6 +435,7 @@ class UserEnrollmentView(PermissionRequiredMixin, DetailView):
         user_enrollment = ctx["object"]
         ctx["meta_business_unit"] = user_enrollment.enrollment_secret.meta_business_unit
         ctx["enroll_url"] = user_enrollment.get_enroll_full_url()
+        ctx["service_discovery_url"] = user_enrollment.get_service_discovery_full_url()
         # TODO: pagination, separate view
         ctx["user_enrollment_sessions"] = (ctx["object"].userenrollmentsession_set.all()
                                                         .select_related("enrollment_secret")
@@ -477,6 +478,7 @@ class UpdateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["object"] = self.user_enrollment
         user_enrollment_form = kwargs.get("user_enrollment_form")
         if not user_enrollment_form:
             user_enrollment_form = UserEnrollmentForm(
@@ -542,7 +544,7 @@ class UserEnrollmentEnrollView(FormView):
 
     def form_valid(self, form):
         managed_apple_id = form.cleaned_data["managed_apple_id"]
-        user_enrollment_session = UserEnrollmentSession.objects.create_from_managed_apple_id(
+        user_enrollment_session = UserEnrollmentSession.objects.create_from_user_enrollment(
             self.user_enrollment, managed_apple_id
         )
         return build_configuration_profile_response(

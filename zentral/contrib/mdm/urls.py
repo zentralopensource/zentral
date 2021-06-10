@@ -197,13 +197,21 @@ urlpatterns = [
     path('ota_session_enroll/', csrf_exempt(views.OTAEnrollView.as_view()),
          kwargs={"session": True}, name='ota_session_enroll'),
 
-    # DEP protocol / dep view
+    # DEP protocol / dep views
     path('dep_enroll/<str:dep_enrollment_secret>/',
          csrf_exempt(views.DEPEnrollView.as_view()), name='dep_enroll'),
     path('dep_web_enroll/<str:dep_enrollment_secret>/',
          views.DEPWebEnrollView.as_view(), name='dep_web_enroll'),
     path('dep_enrollment_session/<str:dep_enrollment_session_secret>/',
          views.DEPEnrollmentSessionView.as_view(), name='dep_enrollment_session'),
+
+    # User Enrollment protocol / user views
+    path('user_enrollment/<str:secret>/com.apple.remotemanagement/',
+         csrf_exempt(views.UserEnrollmentServiceDiscoveryView.as_view()), name='user_enrollment_service_discovery'),
+    path('user_enrollment/<str:secret>/enroll/',
+         csrf_exempt(views.EnrollUserView.as_view()), name='enroll_user'),
+    path('user_enrollment_session/<str:secret>/authenticate/',
+         csrf_exempt(views.AuthenticateUserView.as_view()), name='authenticate_user'),
 
     # MDM protocol / mdm views
     path('checkin/', csrf_exempt(views.CheckinView.as_view()), name='checkin'),

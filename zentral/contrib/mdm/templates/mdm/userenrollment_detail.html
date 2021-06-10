@@ -25,6 +25,20 @@
         {% endif %}
       </td>
     </tr>
+      <th>Realm</th>
+      <td>
+        {% if object.realm %}
+        {% if perms.realms.view_realm %}
+        <a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a>
+        {% else %}
+        {{ object.realm }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    <tr>
+    </tr>
     <tr>
       <th>Blueprint</th>
       <td>
@@ -54,10 +68,20 @@
 <table class="table table-condensed">
   <tbody>
     <tr>
-      <th width="160px">Self-Enrollment URL</th>
+      <th width="160px">Self-Enrollment</th>
       <td>
         {% if enroll_url %}
         <a href="{{ enroll_url }}">{{ enroll_url }}</a>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th width="160px">Service discovery</th>
+      <td>
+        {% if service_discovery_url %}
+        <a href="{{ service_discovery_url }}">https://YOUR_DOMAIN/.well-known/com.apple.remotemanagement/</a>
         {% else %}
         -
         {% endif %}
@@ -145,7 +169,7 @@
   <tbody>
     {% for s in user_enrollment_sessions %}
     <tr>
-      <td>{{ s.managed_apple_id }}</td>
+      <td>{{ s.managed_apple_id|default:"-" }}</td>
       <td>{{ s.get_status_display }}</td>
       <td>{{ s.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>{{ s.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>

@@ -23,7 +23,7 @@ class OTAEnrollmentForm(forms.ModelForm):
 class UserEnrollmentForm(forms.ModelForm):
     class Meta:
         model = UserEnrollment
-        fields = ("name", "push_certificate", "blueprint")
+        fields = ("name", "realm", "push_certificate", "blueprint")
 
 
 class UserEnrollmentEnrollForm(forms.Form):

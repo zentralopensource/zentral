@@ -8,6 +8,7 @@ from django.contrib.postgres.fields import ArrayField, JSONField
 from django.db import connection, models
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 from realms.models import Realm, RealmUser
@@ -785,6 +786,9 @@ class UserEnrollment(models.Model):
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="user_enrollment")
 
+    # if linked to a realm, the enrollment can start from the device
+    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
+
     push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
     blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
 
@@ -809,8 +813,17 @@ class UserEnrollment(models.Model):
         return reverse("mdm:user_enrollment", args=(self.pk,))
 
     def get_enroll_full_url(self):
-        return "{}{}".format(settings["api"]["tls_hostname"],
-                             reverse("mdm:user_enrollment_enroll", args=(self.pk,)))
+        return "https://{}{}".format(
+            settings["api"]["fqdn"],
+            reverse("mdm:user_enrollment_enroll", args=(self.pk,))
+        )
+
+    def get_service_discovery_full_url(self):
+        if self.realm:
+            return "https://{}{}".format(
+                settings["api"]["fqdn"],
+                reverse("mdm:user_enrollment_service_discovery", args=(self.enrollment_secret.secret,))
+            )
 
     def revoke(self):
         if not self.enrollment_secret.revoked_at:
@@ -821,17 +834,23 @@ class UserEnrollment(models.Model):
 
 
 class UserEnrollmentSessionManager(models.Manager):
-    def create_from_managed_apple_id(self, user_enrollment, managed_apple_id):
+    def create_from_user_enrollment(self, user_enrollment, managed_apple_id=None):
+        if managed_apple_id:
+            status = self.model.STARTED
+            quota = 1  # verified once with SCEP
+        else:
+            status = self.model.ACCOUNT_DRIVEN_START
+            quota = 10  # verified at the beginning of the authentication and once with SCEP
         enrollment_secret = user_enrollment.enrollment_secret
         tags = list(enrollment_secret.tags.all())
         new_es = EnrollmentSecret(
             meta_business_unit=enrollment_secret.meta_business_unit,
-            quota=1,
+            quota=quota,
             expired_at=enrollment_secret.expired_at
         )
         new_es.save(secret_length=55)  # CN max 64 - $ separator - mdm$user
         new_es.tags.set(tags)
-        enrollment_session = self.model(status=self.model.STARTED,
+        enrollment_session = self.model(status=status,
                                         user_enrollment=user_enrollment,
                                         managed_apple_id=managed_apple_id,
                                         enrollment_secret=new_es)
@@ -840,11 +859,15 @@ class UserEnrollmentSessionManager(models.Manager):
 
 
 class UserEnrollmentSession(EnrollmentSession):
+    ACCOUNT_DRIVEN_START = "ACCOUNT_DRIVEN_START"
+    ACCOUNT_DRIVEN_AUTHENTICATED = "ACCOUNT_DRIVEN_AUTHENTICATED"
     STARTED = "STARTED"
     SCEP_VERIFIED = "SCEP_VERIFIED"
     AUTHENTICATED = "AUTHENTICATED"
     COMPLETED = "COMPLETED"
     STATUS_CHOICES = (
+        (ACCOUNT_DRIVEN_START, _("Account-based onboarding initiated")),
+        (ACCOUNT_DRIVEN_AUTHENTICATED, _("Account-based onboarding authenticated")),
         (STARTED, _("Started")),
         (SCEP_VERIFIED, _("SCEP verified")),
         (AUTHENTICATED, _("Authenticated")),  # first MDM Checkin Authenticate call
@@ -852,10 +875,12 @@ class UserEnrollmentSession(EnrollmentSession):
     )
     status = models.CharField(max_length=64, choices=STATUS_CHOICES)
     user_enrollment = models.ForeignKey(UserEnrollment, on_delete=models.CASCADE)
-    managed_apple_id = models.EmailField()
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="user_enrollment_session")
     scep_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT, null=True, related_name="+")
+
+    managed_apple_id = models.EmailField(null=True)
+    access_token = models.CharField(max_length=40, unique=True, null=True)
 
     objects = UserEnrollmentSessionManager()
 
@@ -872,6 +897,22 @@ class UserEnrollmentSession(EnrollmentSession):
         return self.user_enrollment.blueprint
 
     # status update methods
+
+    def set_account_driven_authenticated_status(self, realm_user):
+        test = (realm_user
+                and realm_user.email
+                and self.status == self.ACCOUNT_DRIVEN_START)
+        self._set_next_status(self.ACCOUNT_DRIVEN_AUTHENTICATED, test,
+                              realm_user=realm_user,
+                              managed_apple_id=realm_user.email,
+                              access_token=get_random_string(40))
+
+    def set_started_status(self):
+        test = (self.realm_user
+                and self.managed_apple_id
+                and self.access_token
+                and self.status == self.ACCOUNT_DRIVEN_AUTHENTICATED)
+        self._set_next_status(self.STARTED, test)
 
     def set_scep_verified_status(self, es_request):
         test = (es_request
