@@ -1,5 +1,7 @@
 import logging
+from django.db.models import Q
 from django.http import HttpResponse
+from django.utils import timezone
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         Channel, CommandStatus,
                                         DeviceCommand, UserCommand)
@@ -25,12 +27,14 @@ def get_command(channel, uuid):
                                                             "artifact_version__profile")
                                             .get(uuid=uuid))
     except db_model_class.DoesNotExist:
-        raise ValueError(f"Unknown command: {channel.name} {uuid}")
+        logger.error("Unknown command: %s %s", channel.name, uuid)
+        return
     try:
         model_class = registered_commands[db_command.name]
     except KeyError:
-        raise ValueError(f"Unknown command model class: {db_command.name}")
-    return model_class(channel, db_command)
+        logger.error("Unknown command model class: %s", db_command.name)
+    else:
+        return model_class(channel, db_command)
 
 
 def load_command(db_command):
@@ -48,14 +52,18 @@ def load_command(db_command):
 
 
 def _get_next_queued_command(channel, enrollment_session, enrolled_device, enrolled_user):
-    kwargs = {"time__isnull": True}
+    kwargs = {}
     if channel == Channel.Device:
         command_model = DeviceCommand
         kwargs["enrolled_device"] = enrolled_device
     else:
         command_model = UserCommand
         kwargs["enrolled_user"] = enrolled_user
-    db_command = command_model.objects.select_for_update().filter(**kwargs).order_by("created_at").first()
+    # TODO reschedule the NotNow commands
+    queryset = (command_model.objects.select_for_update()
+                                     .filter(time__isnull=True)
+                                     .filter(Q(not_before__isnull=True) | Q(not_before__lte=timezone.now())))
+    db_command = queryset.filter(**kwargs).order_by("created_at").first()
     if db_command:
         command = load_command(db_command)
         command.set_time()

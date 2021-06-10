@@ -1,3 +1,4 @@
+from datetime import timedelta
 import logging
 import plistlib
 import uuid
@@ -17,39 +18,72 @@ class Command:
     artifact_operation = None
 
     @classmethod
-    def _verify_channel(cls, channel):
+    def verify_channel_and_device(cls, channel, enrolled_device):
+        # verify channel
         allowed_channels = cls.allowed_channel
         if isinstance(allowed_channels, Channel):
             allowed_channels = (allowed_channels,)
         if channel not in allowed_channels:
-            raise ValueError("Incompatible channel")
-
-    @classmethod
-    def _verify_platforms(cls, enrolled_device):
+            logger.debug("Command %s: incompatible channel %s", cls.request_type, channel.name)
+            return False
+        # verify platform
         allowed_platforms = cls.allowed_platform
         if isinstance(allowed_platforms, Platform):
             allowed_platforms = (allowed_platforms,)
-        if any(enrolled_device.platform == p.name for p in allowed_platforms):
-            return
-        raise ValueError("Incompatible platform")
+        if all(enrolled_device.platform != p.name for p in allowed_platforms):
+            logger.debug("Command %s: incompatible platform %s", cls.request_type, enrolled_device.platform)
+            return False
+        return True
 
     @classmethod
-    def create_for_device(cls, enrolled_device, artifact_version=None, kwargs=None, queue=False):
-        cls._verify_channel(Channel.Device)
-        cls._verify_platforms(enrolled_device)
-        return cls(Channel.Device, DeviceCommand(enrolled_device=enrolled_device,
-                                                 artifact_version=artifact_version,
-                                                 kwargs=kwargs or {},
-                                                 time=None if queue else timezone.now()))
+    def create_for_target(
+        cls,
+        enrolled_device, target,
+        artifact_version=None,
+        kwargs=None,
+        queue=False, delay=None
+    ):
+        if enrolled_device == target:
+            channel = Channel.Device
+            db_command = DeviceCommand(enrolled_device=target)
+        else:
+            channel = Channel.User
+            db_command = UserCommand(enrolled_user=target)
+
+        if not cls.verify_channel_and_device(channel, enrolled_device):
+            raise ValueError("Incompatible channel or device")
+
+        db_command.artifact_version = artifact_version
+        db_command.kwargs = kwargs or {}
+
+        # scheduling
+        if not queue:
+            if delay:
+                raise ValueError("Cannot have a not-queued command with delay")
+            db_command.not_before = None
+            db_command.time = timezone.now()
+        else:
+            db_command.time = None
+            if not delay:
+                db_command.not_before = None
+            else:
+                db_command.not_before = timezone.now() + timedelta(seconds=delay)
+
+        return cls(channel, db_command)
 
     @classmethod
-    def create_for_user(cls, enrolled_user, artifact_version=None, kwargs=None, queue=False):
-        cls._verify_channel(Channel.User)
-        cls._verify_platforms(enrolled_user.enrolled_device)
-        return cls(Channel.User, UserCommand(enrolled_user=enrolled_user,
-                                             artifact_version=artifact_version,
-                                             kwargs=kwargs or {},
-                                             time=None if queue else timezone.now()))
+    def create_for_device(cls, enrolled_device, artifact_version=None, kwargs=None, queue=False, delay=0):
+        return cls.create_for_target(
+            enrolled_device, enrolled_device,
+            artifact_version, kwargs, queue, delay
+        )
+
+    @classmethod
+    def create_for_user(cls, enrolled_user, artifact_version=None, kwargs=None, queue=False, delay=0):
+        return cls.create_for_target(
+            enrolled_user.enrolled_device, enrolled_user,
+            artifact_version, kwargs, queue, delay
+        )
 
     def load_kwargs(self):
         pass
@@ -57,10 +91,7 @@ class Command:
     def __init__(self, channel, db_command):
         self.channel = channel
         self.db_command = db_command
-        if self.db_command.pk:
-            # command loaded from db
-            self.load_kwargs()
-        else:
+        if not self.db_command.pk:
             # new command
             self.db_command.uuid = uuid.uuid4()
             self.db_command.name = self.request_type
@@ -78,6 +109,8 @@ class Command:
         if self.db_command.artifact_version:
             self.artifact_version = self.db_command.artifact_version
             self.artifact = self.artifact_version.artifact
+        # kwargs?
+        self.load_kwargs()
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
