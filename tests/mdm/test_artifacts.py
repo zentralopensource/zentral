@@ -10,6 +10,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactOperation, ArtifactTyp
                                         Channel, DeviceArtifact, DeviceCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         Platform, Profile, PushCertificate,
+                                        TargetArtifactStatus,
                                         UserArtifact, UserCommand)
 
 
@@ -300,6 +301,18 @@ class TestMDMArtifacts(TestCase):
                                               defaults={"artifact_version": artifact_versions[1]})
         self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_user),
                          artifact_versions[0])
+
+    def test_blueprint_no_install_one_user_profile_awaiting_confirmation(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(version_count=2, channel=Channel.User)
+        # old version installed
+        UserArtifact.objects.update_or_create(enrolled_user=self.enrolled_user,
+                                              artifact_version=artifact_versions[1],
+                                              status=TargetArtifactStatus.Installed.name)
+        # new version awaiting confirmation
+        UserArtifact.objects.update_or_create(enrolled_user=self.enrolled_user,
+                                              artifact_version=artifact_versions[0],
+                                              status=TargetArtifactStatus.AwaitingConfirmation.name)
+        self.assertIsNone(ArtifactVersion.objects.next_to_install(self.enrolled_user))
 
     def test_blueprint_install_one_user_profile_no_auto_update(self):
         artifact, artifact_versions = self._force_blueprint_artifact(version_count=2,

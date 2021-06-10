@@ -2,12 +2,13 @@ import plistlib
 from django import forms
 from django.db.models import Q
 from realms.utils import build_password_hash_dict
+from .app_manifest import build_enterprise_app_manifest
 from .crypto import load_push_certificate
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .models import (Artifact, ArtifactType, ArtifactVersion, BlueprintArtifact, Channel,
                      DEPDevice, DEPOrganization, DEPEnrollment, DEPToken, DEPVirtualServer,
-                     EnrolledDevice, Platform,
+                     EnrolledDevice, EnterpriseApp, Platform,
                      SCEPConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
                      Profile)
@@ -245,6 +246,69 @@ class AssignDEPDeviceEnrollmentForm(forms.ModelForm):
             profile_f.queryset = profile_f.queryset.filter(virtual_server=self.instance.virtual_server)
 
 
+class UploadEnterpriseAppForm(forms.Form):
+    package = forms.FileField(required=True,
+                              help_text="macOS distribution package (.pkg)")
+
+    def clean(self):
+        package = self.cleaned_data.get("package")
+        if package:
+            try:
+                title, product_id, product_version, manifest, bundles = build_enterprise_app_manifest(package)
+            except Exception as e:
+                raise forms.ValidationError(f"Invalid package: {e}")
+            if title is None:
+                title = product_id
+            name = f"{title} - {product_version}"
+            if (
+                Artifact.objects.exclude(
+                    artifactversion__enterprise_app__product_id=product_id,
+                    artifactversion__enterprise_app__product_version=product_version
+                ).filter(name=name).count()
+            ):
+                raise forms.ValidationError(
+                    "An artifact with the same name but a different product already exists"
+                )
+            self.cleaned_data["name"] = name
+            self.cleaned_data["filename"] = package.name
+            self.cleaned_data["product_id"] = product_id
+            self.cleaned_data["product_version"] = product_version
+            self.cleaned_data["manifest"] = manifest
+            self.cleaned_data["bundles"] = bundles
+            return self.cleaned_data
+
+    def save(self):
+        cleaned_data = self.cleaned_data
+        product_id = cleaned_data["product_id"]
+        product_version = cleaned_data["product_version"]
+        name = cleaned_data.pop("name")
+        operation = None
+        enterprise_apps = (EnterpriseApp.objects.select_for_update()
+                                                .filter(product_id=product_id,
+                                                        product_version=product_version)
+                                                .select_related("artifact_version__artifact"))
+        enterprise_app = enterprise_apps.order_by("-artifact_version__version").first()
+        if enterprise_app is None:
+            operation = "created"
+            artifact = Artifact.objects.create(name=name,
+                                               type=ArtifactType.EnterpriseApp.name,
+                                               channel=Channel.Device.name,
+                                               platforms=[Platform.macOS.name])
+            artifact_version = ArtifactVersion.objects.create(artifact=artifact, version=1)
+            enterprise_app = EnterpriseApp.objects.create(artifact_version=artifact_version, **cleaned_data)
+        else:
+            artifact = enterprise_app.artifact_version.artifact
+            if enterprise_app.manifest != cleaned_data["manifest"]:
+                operation = "updated"
+                artifact_version = ArtifactVersion.objects.create(artifact=artifact,
+                                                                  version=enterprise_app.artifact_version.version + 1)
+                enterprise_app = EnterpriseApp.objects.create(artifact_version=artifact_version, **cleaned_data)
+                artifact.name = name
+                artifact.trashed_at = None
+                artifact.save()
+        return artifact, operation
+
+
 class UploadProfileForm(forms.Form):
     source_file = forms.FileField(required=True,
                                   help_text="configuration profile file (.mobileconfig)")
@@ -303,7 +367,7 @@ class UploadProfileForm(forms.Form):
         if profile is None:
             operation = "created"
             artifact = Artifact.objects.create(name=name,
-                                               type=ArtifactType.Profile.value,
+                                               type=ArtifactType.Profile.name,
                                                channel=channel,
                                                platforms=Platform.all_values())
             artifact_version = ArtifactVersion.objects.create(artifact=artifact, version=1)
@@ -317,6 +381,9 @@ class UploadProfileForm(forms.Form):
                 profile = Profile.objects.create(artifact_version=artifact_version, **cleaned_data)
                 artifact.name = name
                 artifact.channel = channel
+                artifact.trashed_at = None
+                artifact.save()
+            elif artifact.trashed_at:
                 artifact.trashed_at = None
                 artifact.save()
         return artifact, operation

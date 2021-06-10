@@ -1,3 +1,4 @@
+import json
 import logging
 import plistlib
 from urllib.parse import unquote
@@ -5,18 +6,26 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from django.core.files.storage import default_storage
 from django.db import transaction
-from django.http import FileResponse, HttpResponse, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
 from django.views.generic import View
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.commands.declarative_management import DeclarativeManagement
+from zentral.contrib.mdm.commands.device_information import DeviceInformation
+from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.utils import get_command, get_next_command_response
+from zentral.contrib.mdm.declarations import (build_activation,
+                                              build_legacy_profile,
+                                              build_management_status_subscriptions,
+                                              build_declaration_items)
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.models import (Channel, DeviceCommand, EnrolledDevice, EnrolledUser,
+from zentral.contrib.mdm.inventory import commit_tree_from_payload
+from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
+                                        Channel, DeviceCommand, EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession, UserEnrollmentSession,
                                         PushCertificate)
 from zentral.contrib.mdm.tasks import send_enrolled_device_notification, send_enrolled_user_notification
-from zentral.contrib.mdm.utils import commit_tree_from_payload
 from zentral.utils.certificates import parse_dn
 from zentral.utils.storage import file_storage_has_signed_urls
 from .base import PostEventMixin
@@ -208,6 +217,12 @@ class CheckinView(MDMView):
             # TODO do not purge if renewal
             enrolled_device.purge_state()
 
+        # schedule a DeviceInformation command
+        DeviceInformation.create_for_device(enrolled_device, queue=True)
+        # switch on declarative management if possible
+        if DeclarativeManagement.verify_channel_and_device(Channel.Device, enrolled_device):
+            DeclarativeManagement.create_for_device(enrolled_device, queue=True)
+
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)
 
@@ -298,6 +313,41 @@ class CheckinView(MDMView):
             return HttpResponse(plistlib.dumps({"BootstrapToken": enrolled_device.bootstrap_token.tobytes()}),
                                 content_type="application/xml")
 
+    def do_declarative_management(self):
+        # https://developer.apple.com/documentation/devicemanagement/declarativemanagementrequest
+        endpoint = self.payload.get("Endpoint")
+        event_payload = {"endpoint": endpoint}
+        data = self.payload.get("Data")
+        if data:
+            json_data = json.loads(data)
+            event_payload["data"] = json_data
+        enrolled_device = self.get_enrolled_device()
+        blueprint = enrolled_device.blueprint
+        if not blueprint:
+            self.abort("Missing blueprint. No declarative management possible.", **event_payload)
+        if endpoint == "tokens":
+            self.abort("Declarative management tokens endpoint not implemented", **event_payload)
+        elif endpoint == "declaration-items":
+            response = build_declaration_items(blueprint)
+        elif endpoint == "status":
+            # TODO update DB objects
+            self.post_event("success", **event_payload)
+            return HttpResponse(status=204)
+        elif endpoint.startswith("declaration"):
+            _, declaration_type, declaration_identifier = endpoint.split("/")
+            event_payload["declaration_type"] = declaration_type
+            event_payload["declaration_identifier"] = declaration_identifier
+            if declaration_identifier.endswith("management-status-subscriptions"):
+                response = build_management_status_subscriptions(blueprint)
+            elif declaration_identifier.endswith("activation"):
+                response = build_activation(blueprint)
+            elif "legacy-profiles" in declaration_identifier:
+                response = build_legacy_profile(blueprint, declaration_identifier, self.enrollment_session)
+            else:
+                self.abort("Unknown declaration", **event_payload)
+        self.post_event("success", **event_payload)
+        return JsonResponse(response)
+
     def do_checkout(self):
         enrolled_device = self.get_enrolled_device()
         enrolled_device.do_checkout()
@@ -312,13 +362,15 @@ class CheckinView(MDMView):
         elif self.message_type == "UserAutenticate":
             # TODO: network / mobile user management
             self.post_event("warning", user_id=self.enrolled_user_id)
-            return HttpResponse(status_code=410)
+            return HttpResponse(status=410)
         elif self.message_type == "TokenUpdate":
             self.do_token_update()
         elif self.message_type == "SetBootstrapToken":
             self.do_set_bootstrap_token()
         elif self.message_type == "GetBootstrapToken":
             return self.do_get_bootstrap_token()
+        elif self.message_type == "DeclarativeManagement":
+            return self.do_declarative_management()
         elif self.message_type == "CheckOut":
             self.do_checkout()
         else:
@@ -338,11 +390,8 @@ class ConnectView(MDMView):
 
         # result
         if payload_status != "Idle":
-            try:
-                command = get_command(self.channel, command_uuid)
-            except ValueError:
-                logger.exception("Could not get command %s %s", self.channel.value, command_uuid)
-            else:
+            command = get_command(self.channel, command_uuid)
+            if command:
                 command.process_response(self.payload, self.enrollment_session, self.meta_business_unit)
         if payload_status in ["Idle", "Acknowledged", "Error", "CommandFormatError"]:
             # we can send another command
@@ -371,3 +420,29 @@ class EnterpriseAppDownloadView(View):
             return HttpResponseRedirect(default_storage.url(package_file.name))
         else:
             return FileResponse(default_storage.open(package_file.name), as_attachment=True)
+
+
+class ProfileDownloadView(View):
+    def get(self, response, *args, **kwargs):
+        # TODO limit access
+        # TODO DownloadProfileEvent with mdm namespace
+        model_name = kwargs["enrollment_session_model"]
+        for model in (DEPEnrollmentSession, OTAEnrollmentSession, UserEnrollmentSession):
+            if not model._meta.model_name == model_name:
+                continue
+            try:
+                enrollment_session = (model.objects.select_related("enrolled_device", "realm_user")
+                                                   .get(enrollment_secret__secret=kwargs["enrollment_session_secret"]))
+            except model.DoesNotExist:
+                pass
+            else:
+                break
+        else:
+            raise Http404("Unknown enrollment session.")
+        artifact_version = get_object_or_404(
+            ArtifactVersion.objects.select_related("profile"),
+            pk=kwargs["pk"],
+            artifact__type=ArtifactType.Profile.name
+        )
+        return HttpResponse(build_payload(artifact_version.profile, enrollment_session),
+                            content_type="application/x-apple-aspen-config")

@@ -12,7 +12,7 @@
 <h3>{{ object }}</h3>
 
 <p>
-  {% if perms.mdm.change_artifact %}
+  {% if perms.mdm.change_artifact and object.type == 'Profile' %}
   <a class="btn btn-default" href="{% url 'mdm:update_artifact' object.pk %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
@@ -40,6 +40,48 @@
       <th>Platform{{ object.platforms|length|pluralize }}</th>
       <td>{{ object.platforms|join:", "|default:"-" }}</td>
     </tr>
+    {% if enterpriseapp_list %}
+    {% with enterpriseapp_list|first as enterprise_app %}
+    <tr>
+      <th colspan="2"><h4>Enterprise App</h4></th>
+    </tr>
+    <tr>
+      <th>Product ID</th>
+      <td>{{ enterprise_app.product_id }}</td>
+    </tr>
+    <tr>
+      <th>Product version</th>
+      <th>{{ enterprise_app.product_version }}</td>
+    </tr>
+    <tr>
+      <th>Bundle{{ enterprise_app.bundles|length|pluralize }}</th>
+      <td>
+        {% if enterprise_app.bundles %}
+        <table class="table table-condensed">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Version</th>
+              <th>Path</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for bundle in enterprise_app.bundles %}
+            <tr>
+              <td>{{ bundle.id }}</td>
+              <td>{{ bundle.version_str }}{% if bundle.version != bundle.version_str %} / {{ bundle.version }}{% endif %}</td>
+              <td>{{ bundle.path }}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endif %}
     {% if profile_list %}
     {% with profile_list|first as profile %}
     <tr>
@@ -73,6 +115,27 @@
 </dl>
 
 <h4>{{ versions_count }} Version{{ versions_count|pluralize }}</h4>
+
+{% if enterpriseapp_list %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Version</th>
+      <th>Filename</th>
+      <th>Created at</td>
+    </tr>
+  </thead>
+  <tbody>
+    {% for enterprise_app in enterpriseapp_list %}
+    <tr id="{{ enterprise_app.artifact_version.pk }}">
+      <td>{{ enterprise_app.artifact_version.version }}</td>
+      <td>{{ enterprise_app.filename|default:"-" }}</td>
+      <td>{{ enterprise_app.artifact_version.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
 
 {% if profile_list %}
 <table class="table">

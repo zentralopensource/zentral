@@ -1,6 +1,6 @@
 import logging
+from zentral.contrib.mdm.inventory import commit_tree_from_payload
 from zentral.contrib.mdm.models import Channel, Platform
-from zentral.contrib.mdm.utils import commit_tree_from_payload
 from .base import register_command, Command
 
 
@@ -42,6 +42,7 @@ class DeviceInformation(Command):
         "IMEI",
         "IsActivationLockEnabled",
         "IsActivationLockSupported",
+        "IsAppleSilicon",
         "IsCloudBackupEnabled",
         "IsDeviceLocatorServiceEnabled",
         "IsDoNotDisturbInEffect",
@@ -74,6 +75,7 @@ class DeviceInformation(Command):
         "ResidentUsers",
         "SerialNumber",
         "ServiceSubscriptions",
+        "SoftwareUpdateDeviceID",
         "SubscriberCarrierNetwork",
         "SubscriberMCC",
         "SubscriberMNC",

@@ -1,49 +1,9 @@
-from hashlib import md5
 import logging
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from .models import Platform
 
 
-logger = logging.getLogger("zentral.contrib.mdm.utils")
-
-
-MD5_SIZE = 10 * 2**20  # 10MB
-
-
-def get_md5s(package_file, md5_size=MD5_SIZE):
-    file_chunk_size = 64 * 2**10  # 64KB
-    md5_size = (md5_size // file_chunk_size) * file_chunk_size
-    md5s = []
-    h = md5()
-    current_size = 0
-    for chunk in package_file.chunks(chunk_size=file_chunk_size):
-        h.update(chunk)
-        current_size += len(chunk)
-        if current_size == md5_size:
-            md5s.append(h.hexdigest())
-            h = md5()
-            current_size = 0
-    if current_size:
-        md5s.append(h.hexdigest())
-        if len(md5s) == 1:
-            md5_size = current_size
-    return md5_size, md5s
-
-
-def build_manifest(title, package_file, pkg_refs):
-    md5_size, md5s = get_md5s(package_file)
-    asset = {"kind": "software-package",
-             "md5-size": md5_size,
-             "md5s": md5s}
-    metadata = {"kind": "software", "title": title, "sizeInBytes": package_file.size}
-    # we will add the url dynamically
-    bundles = [{"bundle-identifier": pkg_ref["id"],
-                "bundle-version": pkg_ref["version"]}
-               for pkg_ref in pkg_refs]
-    metadata.update(bundles.pop(0))
-    if bundles:
-        metadata["items"] = bundles
-    return {"items": [{"assets": [asset], "metadata": metadata}]}
+logger = logging.getLogger("zentral.contrib.mdm.inventory")
 
 
 def commit_tree_from_payload(udid, serial_number, meta_business_unit, payload):
@@ -77,8 +37,11 @@ def commit_tree_from_payload(udid, serial_number, meta_business_unit, payload):
     # System Info
     system_info_d = {}
     for si_attr, attr in (("computer_name", "DeviceName"),
+                          ("hardware_model", "ProductName"),  # iPad5,2, seen during User Enrollment
                           ("hardware_model", "Model"),  # MacBookPro11,1
                           ("hardware_serial", "SerialNumber")):
+        if system_info_d.get(si_attr):
+            continue
         val = payload.get(attr)
         if val:
             system_info_d[si_attr] = val

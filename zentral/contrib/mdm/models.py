@@ -112,6 +112,7 @@ class EnrolledDevice(models.Model):
 
     blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
     awaiting_configuration = models.BooleanField(null=True)
+    declarative_management = models.BooleanField(default=False)
 
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
@@ -129,6 +130,9 @@ class EnrolledDevice(models.Model):
             return MetaMachine(self.serial_number).get_urlsafe_serial_number()
 
     def purge_state(self):
+        # TODO purge tokens?
+        self.declarative_management = False
+        self.save()
         self.commands.all().delete()
         self.installed_artifacts.all().delete()
         self.enrolleduser_set.all().delete()
@@ -217,11 +221,7 @@ class EnrollmentSession(models.Model):
     def serialize_for_event(self, enrollment_session_type, extra_dict):
         d = {"pk": self.pk,
              "type": enrollment_session_type,
-             "status": self.status,
-             "enrollment_secret": self.enrollment_secret.serialize_for_event(),
-             "created_at": self.created_at,
-             "updated_at": self.updated_at}
-        d.update(extra_dict)
+             "status": self.status}
         return {"enrollment_session": d}
 
     # status update methods
@@ -991,11 +991,16 @@ class ArtifactVersionManager(models.Manager):
             "  select id, version, created_at, artifact_id, auto_update, priority"
             "  from all_blueprint_artifact_versions"
             "  where rank=1"
-            "), target_artifact_versions as ("  # All the artifact versions installed on the target
-            "  select av.id, av.version, av.artifact_id, av.created_at"
+            "), all_target_artifact_versions as ("  # All the artifact versions installed on the target
+            "  select av.id, av.version, av.artifact_id, av.created_at,"
+            "  rank() over (partition by av.artifact_id order by version desc) rank"
             "  from mdm_artifactversion as av"
             f"  join {target_table} as ta on (ta.artifact_version_id = av.id)"
             f"  where ta.{target_attr} = %s"
+            "), target_artifact_versions as ("  # Keep only the latest versions of each target artifact
+            "  select id, version, artifact_id, created_at"
+            "  from all_target_artifact_versions"
+            "  where rank=1"
             "), failed_artifact_version_operations as ("  # All the artifact versions with failed operations
             "  select distinct artifact_version_id as id"
             f"  from {command_table}"
@@ -1107,6 +1112,7 @@ class EnterpriseApp(models.Model):
     filename = models.TextField()
     product_id = models.TextField()
     product_version = models.TextField()
+    bundles = JSONField(default=list)
     manifest = JSONField()
 
     def __str__(self):
@@ -1116,18 +1122,42 @@ class EnterpriseApp(models.Model):
         indexes = [models.Index(fields=["product_id", "product_version"])]
 
 
-class DeviceArtifact(models.Model):
+class TargetArtifactStatus(enum.Enum):
+    Acknowledged = "Acknowledged"
+    AwaitingConfirmation = "Awaiting confirmation"
+    Installed = "Installed"
+
+    @classmethod
+    def choices(cls):
+        return tuple((i.name, i.name) for i in cls)
+
+
+class TargetArtifact(models.Model):
+    artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.PROTECT)
+    status = models.CharField(
+        max_length=64,
+        choices=TargetArtifactStatus.choices(),
+        default=TargetArtifactStatus.Acknowledged.name
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class DeviceArtifact(TargetArtifact):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, related_name="installed_artifacts")
-    artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.PROTECT)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("enrolled_device", "artifact_version")
 
 
-class UserArtifact(models.Model):
+class UserArtifact(TargetArtifact):
     enrolled_user = models.ForeignKey(EnrolledUser, on_delete=models.CASCADE, related_name="installed_artifacts")
-    artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.PROTECT)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("enrolled_user", "artifact_version")
 
 
 # Commands
