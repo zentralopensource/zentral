@@ -180,11 +180,17 @@
     {% for s in ota_enrollment_sessions %}
     <tr>
       <td>
-        {% if perms.mdm.view_enrolleddevice %}
-        <a href="{% url 'mdm:device' s.get_urlsafe_serial_number %}">{{ s.get_serial_number }}</a>
+        {% with s.get_serial_number as sn %}
+        {% if sn %}
+        {% if perms.mdm.view_enrolleddevice and s.enrolled_device %}
+        <a href="{% url 'mdm:enrolled_device' s.enrolled_device.pk %}">{{ sn }}</a>
         {% else %}
-        {{ s.get_serial_number }}
+        {{ sn }}
         {% endif %}
+        {% else %}
+        -
+        {% endif %}
+        {% endwith %}
       </td>
       {% if object.realm %}
       <td>{% if s.realm_user %}{{ s.realm_user }}{% else %}-{% endif %}</td>

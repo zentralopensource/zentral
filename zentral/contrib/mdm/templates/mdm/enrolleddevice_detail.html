@@ -83,6 +83,10 @@
       </td>
     </tr>
     <tr>
+      <th>Declarative management</th>
+      <td>{{ object.declarative_management|yesno }}</td>
+    </tr>
+    <tr>
       <th>Certificate fingerprint</th>
       <td><code>{{ object.cert_fingerprint.hex }}</code></td>
     </tr>
@@ -128,6 +132,7 @@
       <th>Type</th>
       <th>Artifact</th>
       <th>Version</th>
+      <th>Status</th>
       <th>Last updated</th>
     </tr>
   </thead>
@@ -151,6 +156,7 @@
         {{ artifact_version.version }}
         {% endif %}
       </td>
+      <td>{{ installed_artifact.get_status_display }}</td>
       <td>
         {{ installed_artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}
       </td>
@@ -208,7 +214,7 @@
       <td>
         {{ command.result_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
       </td>
-      <td>{{ command.get_status_display }}</td>
+      <td>{{ command.get_status_display|default:"-" }}</td>
     </tr>
     {% endfor %}
   </tbody>

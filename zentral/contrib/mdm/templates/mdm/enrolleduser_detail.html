@@ -48,6 +48,7 @@
       <th>Type</th>
       <th>Artifact</th>
       <th>Version</th>
+      <th>Status</th>
       <th>Last updated</th>
     </tr>
   </thead>
@@ -71,6 +72,7 @@
         {{ artifact_version.version }}
         {% endif %}
       </td>
+      <td>{{ installed_artifact.get_status_display }}</td>
       <td>
         {{ installed_artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}
       </td>

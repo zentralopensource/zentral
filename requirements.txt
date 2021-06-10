@@ -5,6 +5,7 @@ boto3                           # conf, monolith, events (kinesis, sns/sqs)
 celery<4.5
 django-celery-results==1.2.1
 cryptography                    # MDM, monolith (cloudfront), munki
+defusedxml
 django-bootstrap-form
 django>=2.2,<2.3
 djangorestframework

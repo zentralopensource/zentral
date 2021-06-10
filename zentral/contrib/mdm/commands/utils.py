@@ -102,6 +102,8 @@ def _renew_mdm_payload(channel, enrollment_session, enrolled_device, enrolled_us
 
 
 def _install_artifacts(channel, enrollment_session, enrolled_device, enrolled_user):
+    if enrolled_device.declarative_management:
+        return
     if channel == Channel.Device:
         target = enrolled_device
     else:

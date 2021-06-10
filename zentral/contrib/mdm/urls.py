@@ -106,6 +106,9 @@ urlpatterns = [
     path('artifacts/upload/profile/',
          views.UploadProfileView.as_view(),
          name="upload_profile"),
+    path('artifacts/upload/enterprise_app/',
+         views.UploadEnterpriseAppView.as_view(),
+         name="upload_enterprise_app"),
     path('artifacts/<uuid:pk>/',
          views.ArtifactView.as_view(),
          name="artifact"),
@@ -208,6 +211,9 @@ urlpatterns = [
     path('device_commands/<uuid:uuid>/enterprise_app/',
          views.EnterpriseAppDownloadView.as_view(),
          name="enterprise_app_download"),
+    path('profiles/<str:enrollment_session_model>/<str:enrollment_session_secret>/<uuid:pk>/',
+         views.ProfileDownloadView.as_view(),
+         name="profile_download_view"),
 ]
 
 setup_menu_cfg = {

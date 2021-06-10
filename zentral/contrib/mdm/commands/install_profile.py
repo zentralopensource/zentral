@@ -9,6 +9,44 @@ from .base import register_command, Command
 logger = logging.getLogger("zentral.contrib.mdm.commands.install_profile")
 
 
+def substitute_variables(obj, enrollment_session, enrolled_user=None):
+    if isinstance(obj, dict):
+        obj = {k: substitute_variables(v, enrollment_session, enrolled_user) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        obj = [substitute_variables(i, enrollment_session, enrolled_user) for i in obj]
+    elif isinstance(obj, str):
+        enrolled_device = enrollment_session.enrolled_device
+        for attr in ("serial_number", "udid"):
+            obj = obj.replace(f"$ENROLLED_DEVICE.{attr.upper()}",
+                              getattr(enrolled_device, attr))
+        if enrolled_user:
+            for attr in ("long_name", "short_name"):
+                obj = obj.replace(f"$ENROLLED_USER.{attr.upper()}",
+                                  getattr(enrolled_user, attr))
+        realm_user = enrollment_session.realm_user
+        if realm_user:
+            for attr in ("username", "device_username",
+                         "email_prefix", "email_prefix",  # WARNING order is important
+                         "email", "email",
+                         "first_name", "last_name", "full_name"):
+                obj = obj.replace(f"$REALM_USER.{attr.upper()}",
+                                  getattr(realm_user, attr))
+        managed_apple_id = getattr(enrollment_session, "managed_apple_id", None)
+        if managed_apple_id:
+            obj = obj.replace("$MANAGED_APPLE_ID.EMAIL", managed_apple_id)
+    return obj
+
+
+def build_payload(profile, enrollment_session, enrolled_user=None):
+    payload = plistlib.loads(profile.source)
+    payload = substitute_variables(payload, enrollment_session, enrolled_user)
+    process_scep_payloads(payload)
+    payload["PayloadIdentifier"] = profile.installed_payload_identifier()
+    payload["PayloadUUID"] = profile.installed_payload_uuid()
+    # TODO encryption
+    return sign_payload(plistlib.dumps(payload))
+
+
 class InstallProfile(Command):
     request_type = "InstallProfile"
     allowed_channel = (Channel.Device, Channel.User)
@@ -16,40 +54,8 @@ class InstallProfile(Command):
     allowed_in_user_enrollment = True
     artifact_operation = ArtifactOperation.Installation
 
-    def substitute_variables(self, obj):
-        if isinstance(obj, dict):
-            obj = {k: self.substitute_variables(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            obj = [self.substitute_variables(i) for i in obj]
-        elif isinstance(obj, str):
-            for attr in ("serial_number", "udid"):
-                obj = obj.replace(f"$ENROLLED_DEVICE.{attr.upper()}",
-                                  getattr(self.enrolled_device, attr))
-            if self.enrolled_user:
-                for attr in ("long_name", "short_name"):
-                    obj = obj.replace(f"$ENROLLED_USER.{attr.upper()}",
-                                      getattr(self.enrolled_user, attr))
-            if self.realm_user:
-                for attr in ("username", "device_username",
-                             "email_prefix", "email_prefix",  # WARNING order is important
-                             "email", "email",
-                             "first_name", "last_name", "full_name"):
-                    obj = obj.replace(f"$REALM_USER.{attr.upper()}",
-                                      getattr(self.realm_user, attr))
-            managed_apple_id = getattr(self.enrollment_session, "managed_apple_id", None)
-            if managed_apple_id:
-                obj = obj.replace("$MANAGED_APPLE_ID.EMAIL", managed_apple_id)
-        return obj
-
     def build_command(self):
-        profile = self.artifact_version.profile
-        payload = plistlib.loads(profile.source)
-        payload = self.substitute_variables(payload)
-        process_scep_payloads(payload)
-        payload["PayloadIdentifier"] = profile.installed_payload_identifier()
-        payload["PayloadUUID"] = profile.installed_payload_uuid()
-        # TODO encryption
-        return {"Payload": sign_payload(plistlib.dumps(payload))}
+        return {"Payload": build_payload(self.artifact_version.profile, self.enrollment_session, self.enrolled_user)}
 
     def command_acknowledged(self):
         if self.channel == Channel.Device:

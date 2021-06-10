@@ -2,12 +2,15 @@ import logging
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib import messages
 from django.core.exceptions import SuspiciousOperation
+from django.core.files.uploadhandler import TemporaryFileUploadHandler
 from django.db import transaction
 from django.db.models import Count, Max
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from realms.models import RealmUser
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
@@ -20,7 +23,7 @@ from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintA
                                        SCEPConfigForm,
                                        UpdateArtifactForm,
                                        UserEnrollmentForm, UserEnrollmentEnrollForm,
-                                       UploadProfileForm)
+                                       UploadEnterpriseAppForm, UploadProfileForm)
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, Blueprint, BlueprintArtifact,
                                         DEPDevice, DEPEnrollment,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
@@ -559,10 +562,10 @@ class ArtifactListView(PermissionRequiredMixin, ListView):
         return super().get_queryset().filter(trashed_at__isnull=True).annotate(Count("blueprintartifact"))
 
 
-class UploadProfileView(PermissionRequiredMixin, FormView):
+class BaseUploadArtifactView(PermissionRequiredMixin, FormView):
     permission_required = "mdm.add_artifact"
-    form_class = UploadProfileForm
-    template_name = "mdm/profile_form.html"
+    form_class = None
+    template_name = None
 
     def form_valid(self, form):
         self.artifact, operation = form.save()
@@ -573,6 +576,24 @@ class UploadProfileView(PermissionRequiredMixin, FormView):
         else:
             messages.warning(self.request, "Artifact already exists")
         return redirect(self.artifact)
+
+
+@method_decorator(csrf_protect, 'post')
+class UploadEnterpriseAppView(BaseUploadArtifactView):
+    form_class = UploadEnterpriseAppForm
+    template_name = "mdm/enterpriseapp_form.html"
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        # for temporary file, for xar.
+        # see https://docs.djangoproject.com/en/3.1/topics/http/file-uploads/#modifying-upload-handlers-on-the-fly
+        request.upload_handlers = [TemporaryFileUploadHandler(request)]
+        return super().dispatch(request, *args, **kwargs)
+
+
+class UploadProfileView(BaseUploadArtifactView):
+    form_class = UploadProfileForm
+    template_name = "mdm/profile_form.html"
 
 
 class ArtifactView(PermissionRequiredMixin, DetailView):
@@ -603,6 +624,9 @@ class UpdateArtifactView(PermissionRequiredMixin, UpdateView):
     permission_required = "mdm.change_artifact"
     model = Artifact
     form_class = UpdateArtifactForm
+
+    def get_queryset(self):
+        return super().get_queryset().exclude(type=ArtifactType.EnterpriseApp.name)
 
     def form_valid(self, form):
         response = super().form_valid(form)
