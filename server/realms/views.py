@@ -6,12 +6,11 @@ from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.http import is_safe_url
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView, View
 from .backends import backend_classes
-from .exceptions import RealmUserError
 from .forms import RealmGroupMappingForm
 from .models import Realm, RealmAuthenticationSession, RealmGroupMapping
 from .utils import get_realm_user_mapped_groups
@@ -229,25 +228,3 @@ class RealmAuthenticationSessionView(LocalUserRequiredMixin, PermissionRequiredM
         ctx["mapped_group_count"] = len(ctx["mapped_groups"])
 
         return ctx
-
-
-# SSO error view
-
-
-def ras_finalization_error(request, ras, realm_user=None, exception=None):
-    ctx = {"realm": ras.realm,
-           "message": str(exception)}
-    if isinstance(exception, RealmUserError):
-        claims = exception.claims
-        if claims:
-            ctx["original_claims"] = claims.pop("claims", {})
-            ctx["claims"] = claims
-    if realm_user:
-        ctx["original_claims"] = realm_user.claims
-        ctx["claims"] = {
-            k: v
-            for k, v in ((a, getattr(realm_user, a))
-                         for a in ("username", "email", "first_name", "last_name", "full_name"))
-            if v
-        }
-    return render(request, "realms/ras_finalization_error.html", ctx, status=503)

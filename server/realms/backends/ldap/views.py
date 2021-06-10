@@ -1,10 +1,9 @@
 import logging
-from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.views.generic import FormView
+from realms.backends.views import finalize_session, ras_finalization_error
 from realms.exceptions import RealmUserError
 from realms.models import RealmAuthenticationSession
-from realms.views import ras_finalization_error
 from .forms import LoginForm
 
 
@@ -53,14 +52,4 @@ class LoginView(FormView):
             return ras_finalization_error(self.request, self.session, exception=e)
 
         # finalize the authentication session
-        redirect_url = None
-        try:
-            redirect_url = self.session.finalize(self.request, realm_user)
-        except Exception as e:
-            logger.exception("Could not finalize the authentication session")
-            return ras_finalization_error(self.request, self.session, realm_user=realm_user, exception=e)
-        else:
-            if redirect_url:
-                return HttpResponseRedirect(redirect_url)
-            else:
-                raise ValueError("Empty authentication session redirect url")
+        return finalize_session(self.session, self.request, realm_user)

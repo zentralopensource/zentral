@@ -7,7 +7,6 @@ from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.urls import reverse
 from django.utils.functional import cached_property
-from .backends import backend_classes
 
 logger = logging.getLogger('zentral.realms.models')
 
@@ -40,6 +39,7 @@ class Realm(models.Model):
 
     @cached_property
     def backend_instance(self):
+        from .backends import backend_classes
         backend_class = backend_classes.get(self.backend)
         if backend_class:
             return backend_class(self)
@@ -113,9 +113,6 @@ class LocalAuthenticationSession:
     def get_callback_function(self):
         raise NotImplementedError
 
-    def finalize(self, request, realm_user, expires_at=None):
-        raise NotImplementedError
-
     def computed_expiry(self, default_session_expiry=300, from_dt=None):
         raise NotImplementedError
 
@@ -154,18 +151,6 @@ class RealmAuthenticationSession(models.Model):
         if callback is None:
             logger.exception("Could not find function %s in callback module %s", module_name, function_name)
         return callback
-
-    def finalize(self, request, realm_user, expires_at=None):
-        if self.user:
-            raise ValueError("Session already finalized")
-        elif not isinstance(realm_user, RealmUser):
-            raise ValueError("invalid realm user")
-        self.user = realm_user
-        self.expires_at = expires_at
-        self.save()
-        callback_function = self.get_callback_function()
-        if callback_function:
-            return callback_function(request=request, realm_authentication_session=self, **self.callback_kwargs)
 
     def computed_expiry(self, default_session_expiry=300, from_dt=None):
         # returns the effective session expiry in seconds, based on the realm settings and its on expires_at attribute
