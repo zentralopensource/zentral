@@ -25,6 +25,14 @@ class OTAEnrollmentRequestEvent(BaseEvent):
 register_event_type(OTAEnrollmentRequestEvent)
 
 
+class UserEnrollmentRequestEvent(BaseEvent):
+    event_type = "user_enrollment_request"
+    tags = ["mdm"]
+
+
+register_event_type(UserEnrollmentRequestEvent)
+
+
 class MDMSCEPVerificationEvent(BaseEvent):
     event_type = "mdm_scep_verification"
     tags = ["mdm", "heartbeat"]

@@ -5,3 +5,4 @@ from .mdm import *  # NOQA
 from .ota import *  # NOQA
 from .scep import *  # NOQA
 from .setup import *  # NOQA
+from .user import *  # NOQA

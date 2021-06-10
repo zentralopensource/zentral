@@ -129,8 +129,13 @@ def build_mdm_configuration_profile(enrollment_session, push_certificate):
     }
     managed_apple_id = getattr(enrollment_session, "managed_apple_id", None)
     if managed_apple_id:
-        # User Enrollment
-        mdm_config["ManagedAppleID"] = managed_apple_id
+        if enrollment_session.access_token:
+            # account-driven user enrollment
+            mdm_config["AssignedManagedAppleID"] = managed_apple_id
+            mdm_config["EnrollmentMode"] = "BYOD"
+        else:
+            # unauthenticated user enrollment
+            mdm_config["ManagedAppleID"] = managed_apple_id
     else:
         mdm_config["AccessRights"] = 8191  # TODO: config
     payloads.extend([
