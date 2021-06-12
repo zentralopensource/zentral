@@ -6,7 +6,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from django.core.files.storage import default_storage
 from django.db import transaction
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import FileResponse, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
 from django.views.generic import View
@@ -15,10 +15,9 @@ from zentral.contrib.mdm.commands.declarative_management import DeclarativeManag
 from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.utils import get_command, get_next_command_response
-from zentral.contrib.mdm.declarations import (build_activation,
-                                              build_legacy_profile,
+from zentral.contrib.mdm.declarations import (build_legacy_profile,
                                               build_management_status_subscriptions,
-                                              build_declaration_items)
+                                              update_enrolled_device_artifacts)
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.inventory import commit_tree_from_payload
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
@@ -48,7 +47,7 @@ class MDMView(PostEventMixin, View):
             kwargs.update(self.enrollment_session.serialize_for_event())
         super().post_event(*args, **kwargs)
 
-    def put(self, request, *args, **kwargs):
+    def dispatch(self, request, *args, **kwargs):
         # DN => serial_number + meta_business_unit
         dn = request.META.get("HTTP_X_SSL_CLIENT_S_DN")
         if not dn:
@@ -112,7 +111,9 @@ class MDMView(PostEventMixin, View):
                 self.meta_business_unit = MetaBusinessUnit.objects.get(pk=mbu_pk)
             except (MetaBusinessUnit.DoesNotExist, ValueError):
                 self.abort("unknown meta business unit in client certificate DN")
+        return super().dispatch(request, *args, **kwargs)
 
+    def put(self, request, *args, **kwargs):
         # read payload
         self.payload = plistlib.loads(self.request.read())
 
@@ -324,13 +325,15 @@ class CheckinView(MDMView):
         enrolled_device = self.get_enrolled_device()
         blueprint = enrolled_device.blueprint
         if not blueprint:
+            # TODO default empty configuration?
             self.abort("Missing blueprint. No declarative management possible.", **event_payload)
         if endpoint == "tokens":
-            self.abort("Declarative management tokens endpoint not implemented", **event_payload)
+            logger.warning("Declarative management tokens endpoint not implemented")
+            response = {}
         elif endpoint == "declaration-items":
-            response = build_declaration_items(blueprint)
+            response = blueprint.declaration_items
         elif endpoint == "status":
-            # TODO update DB objects
+            update_enrolled_device_artifacts(enrolled_device, json_data)
             self.post_event("success", **event_payload)
             return HttpResponse(status=204)
         elif endpoint.startswith("declaration"):
@@ -340,9 +343,9 @@ class CheckinView(MDMView):
             if declaration_identifier.endswith("management-status-subscriptions"):
                 response = build_management_status_subscriptions(blueprint)
             elif declaration_identifier.endswith("activation"):
-                response = build_activation(blueprint)
-            elif "legacy-profiles" in declaration_identifier:
-                response = build_legacy_profile(blueprint, declaration_identifier, self.enrollment_session)
+                response = blueprint.activation
+            elif "legacy-profile" in declaration_identifier:
+                response = build_legacy_profile(blueprint, declaration_identifier)
             else:
                 self.abort("Unknown declaration", **event_payload)
         self.post_event("success", **event_payload)
@@ -422,27 +425,14 @@ class EnterpriseAppDownloadView(View):
             return FileResponse(default_storage.open(package_file.name), as_attachment=True)
 
 
-class ProfileDownloadView(View):
+class ProfileDownloadView(MDMView):
     def get(self, response, *args, **kwargs):
         # TODO limit access
         # TODO DownloadProfileEvent with mdm namespace
-        model_name = kwargs["enrollment_session_model"]
-        for model in (DEPEnrollmentSession, OTAEnrollmentSession, UserEnrollmentSession):
-            if not model._meta.model_name == model_name:
-                continue
-            try:
-                enrollment_session = (model.objects.select_related("enrolled_device", "realm_user")
-                                                   .get(enrollment_secret__secret=kwargs["enrollment_session_secret"]))
-            except model.DoesNotExist:
-                pass
-            else:
-                break
-        else:
-            raise Http404("Unknown enrollment session.")
         artifact_version = get_object_or_404(
             ArtifactVersion.objects.select_related("profile"),
             pk=kwargs["pk"],
             artifact__type=ArtifactType.Profile.name
         )
-        return HttpResponse(build_payload(artifact_version.profile, enrollment_session),
+        return HttpResponse(build_payload(artifact_version.profile, self.enrollment_session),
                             content_type="application/x-apple-aspen-config")

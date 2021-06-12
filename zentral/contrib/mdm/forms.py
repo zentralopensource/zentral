@@ -4,6 +4,7 @@ from django.db.models import Q
 from realms.utils import build_password_hash_dict
 from .app_manifest import build_enterprise_app_manifest
 from .crypto import load_push_certificate
+from .declarations import update_blueprint_declaration_items
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .models import (Artifact, ArtifactType, ArtifactVersion, BlueprintArtifact, Channel,
@@ -386,6 +387,8 @@ class UploadProfileForm(forms.Form):
             elif artifact.trashed_at:
                 artifact.trashed_at = None
                 artifact.save()
+        for blueprint_artifact in artifact.blueprintartifact_set.select_related("blueprint").all():
+            update_blueprint_declaration_items(blueprint_artifact.blueprint, commit=True)
         return artifact, operation
 
 
