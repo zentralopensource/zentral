@@ -6,6 +6,7 @@ from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         Channel, CommandStatus,
                                         DeviceCommand, UserCommand)
 from .account_configuration import AccountConfiguration
+from .declarative_management import DeclarativeManagement
 from .device_configured import DeviceConfigured
 from .install_profile import InstallProfile
 from .install_enterprise_application import InstallEnterpriseApplication
@@ -124,6 +125,8 @@ def _install_artifacts(channel, enrollment_session, enrolled_device, enrolled_us
 
 
 def _remove_artifacts(channel, enrollment_session, enrolled_device, enrolled_user):
+    if enrolled_device.declarative_management:
+        return
     if channel == Channel.Device:
         target = enrolled_device
     else:
@@ -141,6 +144,18 @@ def _remove_artifacts(channel, enrollment_session, enrolled_device, enrolled_use
             return command_class.create_for_user(enrolled_user, artifact_version)
 
 
+def _trigger_declarative_management(channel, enrollment_session, enrolled_device, enrolled_user):
+    if not enrolled_device.declarative_management:
+        return
+    if channel != Channel.Device:
+        return
+    if (
+        enrolled_device.blueprint
+        and enrolled_device.declarations_token != enrolled_device.blueprint.declarations_token
+    ):
+        return DeclarativeManagement.create_for_device(enrolled_device)
+
+
 def _finish_dep_enrollment_configuration(channel, enrollment_session, enrolled_device, enrolled_user):
     if channel != Channel.Device:
         return
@@ -155,6 +170,7 @@ def get_next_command_response(channel, enrollment_session, enrolled_device, enro
                               _renew_mdm_payload,
                               _install_artifacts,
                               _remove_artifacts,
+                              _trigger_declarative_management,
                               _finish_dep_enrollment_configuration):
         command = next_command_func(channel, enrollment_session, enrolled_device, enrolled_user)
         if command:

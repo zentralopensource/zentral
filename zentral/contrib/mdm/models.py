@@ -75,6 +75,10 @@ class PushCertificate(models.Model):
 
 class Blueprint(models.Model):
     name = models.CharField(max_length=256, unique=True)
+
+    activation = JSONField(default=dict, editable=False)
+    declaration_items = JSONField(default=dict, editable=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -86,6 +90,10 @@ class Blueprint(models.Model):
 
     def get_absolute_url(self):
         return reverse("mdm:blueprint", args=(self.pk,))
+
+    @property
+    def declarations_token(self):
+        return uuid.UUID(self.declaration_items["DeclarationsToken"])
 
 
 # Enrollment
@@ -114,6 +122,7 @@ class EnrolledDevice(models.Model):
     blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
     awaiting_configuration = models.BooleanField(null=True)
     declarative_management = models.BooleanField(default=False)
+    declarations_token = models.UUIDField(null=True)
 
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
@@ -1094,6 +1103,29 @@ class ArtifactVersionManager(models.Manager):
             "order by tav.created_at asc"
         )
         return self._next_to(target, select, ArtifactOperation.Removal, fetch_all=fetch_all)
+
+    def latest_for_blueprint(self, blueprint, artifact_type=None):
+        ba_where_list = ["ba.blueprint_id = %s"]
+        args = [blueprint.pk]
+        if artifact_type:
+            ba_where_list.append("a.type = %s")
+            args.append(artifact_type.name)
+        ba_wheres = " and ".join(ba_where_list)
+        query = (
+            "with all_blueprint_artifact_versions as ("  # All blueprint artifact versions, ranked by version
+            "  select av.artifact_id, av.id,"
+            "  rank() over (partition by av.artifact_id order by version desc) rank"
+            "  from mdm_artifactversion as av"
+            "  join mdm_artifact as a on (a.id = av.artifact_id)"
+            "  join mdm_blueprintartifact as ba on (ba.artifact_id = a.id)"
+            f"  where {ba_wheres}"
+            ") select artifact_id, id "
+            "from all_blueprint_artifact_versions "
+            "where rank=1"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, args)
+        return cursor.fetchall()
 
 
 class ArtifactVersion(models.Model):

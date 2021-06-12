@@ -1,9 +1,10 @@
 import logging
+import uuid
 from django.http import Http404
 from django.urls import reverse
 from zentral.conf import settings
 from zentral.utils.payloads import get_payload_identifier
-from zentral.contrib.mdm.models import Artifact, ArtifactType, ArtifactVersion
+from zentral.contrib.mdm.models import Artifact, ArtifactType, ArtifactVersion, DeviceArtifact, TargetArtifactStatus
 
 
 logger = logging.getLogger("zentral.contrib.mdm.declarations")
@@ -32,17 +33,17 @@ def build_management_status_subscriptions(blueprint):
                 {"Name": "management.push-token"},
             ]
         },
-        "ServerToken": blueprint.updated_at.isoformat(),
+        "ServerToken": "1",  # We start with hard-coded one, because it will not change at first
         "Type": "com.apple.configuration.management.status-subscriptions"
     }
 
 
-def get_legacy_profile_identifier(artifact):
-    return get_payload_identifier("legacy-profiles", artifact.pk)
+def get_legacy_profile_identifier(artifact_pk):
+    return get_payload_identifier("legacy-profile", artifact_pk)
 
 
 # https://developer.apple.com/documentation/devicemanagement/legacyprofile
-def build_legacy_profile(blueprint, declaration_identifier, enrollment_session):
+def build_legacy_profile(blueprint, declaration_identifier):
     artifact_pk = declaration_identifier.split(".")[-1]
     artifact_version = (ArtifactVersion.objects.select_related("artifact")
                                                .filter(artifact__pk=artifact_pk,
@@ -51,13 +52,11 @@ def build_legacy_profile(blueprint, declaration_identifier, enrollment_session):
     if artifact_version is None:
         raise Http404
     return {
-        "Identifier": get_legacy_profile_identifier(artifact_version.artifact),
+        "Identifier": get_legacy_profile_identifier(artifact_version.artifact.pk),
         "Payload": {
             "ProfileURL": "https://{}{}".format(
-                settings["api"]["fqdn"],
-                reverse("mdm:profile_download_view", args=(enrollment_session._meta.model_name,
-                                                           enrollment_session.enrollment_secret.secret,
-                                                           artifact_version.pk))
+                settings["api"]["fqdn_mtls"],
+                reverse("mdm:profile_download_view", args=(artifact_version.pk,))
             )
         },
         "ServerToken": str(artifact_version.pk),
@@ -66,40 +65,87 @@ def build_legacy_profile(blueprint, declaration_identifier, enrollment_session):
 
 
 # https://developer.apple.com/documentation/devicemanagement/activationsimple
-def build_activation(blueprint):
-    standard_configurations = [get_declaration_identifier(blueprint, "management-status-subscriptions")]
-    for artifact in Artifact.objects.filter(type="Profile", blueprintartifact__blueprint=blueprint):
-        standard_configurations.append(get_legacy_profile_identifier(artifact))
-    return {
-        "Identifier": get_declaration_identifier(blueprint, "activation"),
-        "Payload": {
-            "StandardConfigurations": standard_configurations
-        },
-        "ServerToken": blueprint.updated_at.isoformat(),
-        "Type": "com.apple.activation.simple"
+def update_blueprint_activation(blueprint, commit=True):
+    payload = {
+        "StandardConfigurations": [
+            get_declaration_identifier(blueprint, "management-status-subscriptions"),
+        ]
     }
+    for artifact in Artifact.objects.filter(type=ArtifactType.Profile.name, blueprintartifact__blueprint=blueprint):
+        payload["StandardConfigurations"].append(get_legacy_profile_identifier(artifact.pk))
+    payload["StandardConfigurations"].sort()
+    if not blueprint.activation or blueprint.activation["Payload"] != payload:
+        blueprint.activation = {
+            "Identifier": get_declaration_identifier(blueprint, "activation"),
+            "Payload": payload,
+            "ServerToken": str(uuid.uuid4()),
+            "Type": "com.apple.activation.simple"
+        }
+        if commit:
+            blueprint.save()
+        return True
+    return False
 
 
 # https://developer.apple.com/documentation/devicemanagement/declarationitemsresponse/manifestdeclarationitems
-def build_declaration_items(blueprint):
-    configurations = [
-        {"Identifier": get_declaration_identifier(blueprint, "management-status-subscriptions"),
-         "ServerToken": blueprint.updated_at.isoformat()},
-    ]
-    for artifact_version in (ArtifactVersion.objects.select_related("artifact")
-                                                    .filter(artifact__type=ArtifactType.Profile.name,
-                                                            artifact__blueprintartifact__blueprint=blueprint)):
-        configurations.append({"Identifier": get_legacy_profile_identifier(artifact_version.artifact),
-                               "ServerToken": str(artifact_version.pk)})
-    return {
-        "Declarations": {
-            "Activations": [
-                {"Identifier": get_declaration_identifier(blueprint, "activation"),
-                 "ServerToken": blueprint.updated_at.isoformat()},
-            ],
-            "Assets": [],
-            "Configurations": configurations,
-            "Management": []
-        },
-        "DeclarationsToken": blueprint.updated_at.isoformat()
+def update_blueprint_declaration_items(blueprint, commit=True):
+    management_status_subscriptions = build_management_status_subscriptions(blueprint)
+    declarations = {
+        "Activations": [
+            {"Identifier": blueprint.activation["Identifier"],
+             "ServerToken": blueprint.activation["ServerToken"]},
+        ],
+        "Assets": [],
+        "Configurations": [
+            {"Identifier": management_status_subscriptions["Identifier"],
+             "ServerToken": management_status_subscriptions["ServerToken"]}
+        ],
+        "Management": []
     }
+    for artifact_pk, artifact_version_pk in ArtifactVersion.objects.latest_for_blueprint(blueprint,
+                                                                                         ArtifactType.Profile):
+        declarations["Configurations"].append(
+           {"Identifier": get_legacy_profile_identifier(artifact_pk),
+            "ServerToken": str(artifact_version_pk)}
+        )
+    declarations["Configurations"].sort(key=lambda d: (d["Identifier"], d["ServerToken"]))
+    if not blueprint.declaration_items or blueprint.declaration_items["Declarations"] != declarations:
+        blueprint.declaration_items = {
+            "Declarations": declarations,
+            "DeclarationsToken": str(uuid.uuid4())
+        }
+        if commit:
+            blueprint.save()
+        return True
+    return False
+
+
+def update_enrolled_device_artifacts(enrolled_device, status_report):
+    try:
+        configurations = status_report["StatusItems"]["management"]["declarations"]["configurations"]
+    except KeyError:
+        logger.warning("Could not find configurations in status report")
+        return
+    installed_artifacts = {}
+    for configuration in configurations:
+        if "legacy-profile" in configuration["identifier"]:
+            artifact_pk = configuration["identifier"].split(".")[-1]
+            artifact_version_pk = configuration["server-token"]
+            if configuration["active"] and configuration["valid"] == "valid":
+                installed_artifacts[artifact_pk] = artifact_version_pk
+    # cleanup
+    (DeviceArtifact.objects.filter(enrolled_device=enrolled_device,
+                                   artifact_version__artifact__type=ArtifactType.Profile.name)
+                           .exclude(artifact_version__artifact__pk__in=list(installed_artifacts.keys()))
+                           .delete())
+    for artifact_pk, artifact_version_pk in installed_artifacts.items():
+        # cleanup
+        (DeviceArtifact.objects.filter(enrolled_device=enrolled_device,
+                                       artifact_version__artifact__pk=artifact_pk)
+                               .exclude(artifact_version__pk=artifact_version_pk).delete())
+        # update or create
+        DeviceArtifact.objects.update_or_create(
+            enrolled_device=enrolled_device,
+            artifact_version=ArtifactVersion.objects.get(pk=artifact_version_pk),
+            defaults={"status": TargetArtifactStatus.Installed.name}
+        )

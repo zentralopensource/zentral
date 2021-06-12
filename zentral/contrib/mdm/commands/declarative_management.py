@@ -13,10 +13,17 @@ class DeclarativeManagement(Command):
     allowed_in_user_enrollment = True
 
     def command_acknowledged(self):
-        if self.enrolled_device.declarative_management:
-            logger.error("Enrolled device %s: declarative management already set", self.enrolled_device.pk)
-        else:
+        device_updated = False
+        if not self.enrolled_device.declarative_management:
             self.enrolled_device.declarative_management = True
+            device_updated = True
+        if (
+            self.enrolled_device.blueprint
+            and self.enrolled_device.declarations_token != self.enrolled_device.blueprint.declarations_token
+        ):
+            self.enrolled_device.declarations_token = self.enrolled_device.blueprint.declarations_token
+            device_updated = True
+        if device_updated:
             self.enrolled_device.save()
 
 

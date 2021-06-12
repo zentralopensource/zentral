@@ -14,6 +14,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from realms.models import RealmUser
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
+from zentral.contrib.mdm.declarations import update_blueprint_activation, update_blueprint_declaration_items
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
@@ -677,8 +678,11 @@ class CreateBlueprintArtifactView(PermissionRequiredMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
+        blueprint = self.object.blueprint
+        update_blueprint_activation(blueprint, commit=False)
+        update_blueprint_declaration_items(blueprint, commit=True)
         # TODO: optimize
-        transaction.on_commit(lambda: send_blueprint_notifications(self.object.blueprint))
+        transaction.on_commit(lambda: send_blueprint_notifications(blueprint))
         return response
 
 
@@ -731,6 +735,8 @@ class DeleteBlueprintArtifactView(PermissionRequiredMixin, DeleteView):
         self.object = self.get_object()
         blueprint = self.object.blueprint
         self.object.delete()
+        update_blueprint_activation(blueprint, commit=False)
+        update_blueprint_declaration_items(blueprint, commit=True)
         # TODO: optimize
         transaction.on_commit(lambda: send_blueprint_notifications(blueprint))
         return redirect(self.artifact)
