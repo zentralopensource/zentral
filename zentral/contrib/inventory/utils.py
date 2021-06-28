@@ -11,7 +11,7 @@ import urllib.parse
 import zipfile
 from django import forms
 from django.core.files.storage import default_storage
-from django.db import connection
+from django.db import connection, transaction
 from django.http import QueryDict
 from django.urls import reverse
 from django.utils.text import slugify
@@ -1461,30 +1461,35 @@ def clean_ip_address(addr):
 
 
 def _export_machine_csv_zip(query, basename, window_size=5000):
-    cursor = connection.cursor()
-    cursor.execute(query)
-    columns = [c.name for c in cursor.description]
+    columns = None
     csv_files = []
     current_source_name = csv_f = csv_w = csv_p = None
-    while True:
-        rows = cursor.fetchmany(window_size)
-        if not rows:
-            if current_source_name:
-                csv_f.close()
-                csv_files.append((current_source_name, csv_p))
-            break
-        for row in rows:
-            source_name = row[columns.index("source_name")]
-            if source_name != current_source_name:
+
+    # iter all rows over a server-side cursor
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute(f"DECLARE machine_csv_zip_export_cursor CURSOR FOR {query}")
+        while True:
+            cursor.execute("FETCH %s FROM machine_csv_zip_export_cursor", [window_size])
+            if columns is None:
+                columns = [c.name for c in cursor.description]
+            rows = cursor.fetchall()
+            if not rows:
                 if current_source_name:
                     csv_f.close()
                     csv_files.append((current_source_name, csv_p))
-                current_source_name = source_name
-                csv_fh, csv_p = tempfile.mkstemp()
-                csv_f = os.fdopen(csv_fh, mode='w', newline='')
-                csv_w = csv.writer(csv_f)
-                csv_w.writerow(columns)
-            csv_w.writerow(row)
+                break
+            for row in rows:
+                source_name = row[columns.index("source_name")]
+                if source_name != current_source_name:
+                    if current_source_name:
+                        csv_f.close()
+                        csv_files.append((current_source_name, csv_p))
+                    current_source_name = source_name
+                    csv_fh, csv_p = tempfile.mkstemp()
+                    csv_f = os.fdopen(csv_fh, mode='w', newline='')
+                    csv_w = csv.writer(csv_f)
+                    csv_w.writerow(columns)
+                csv_w.writerow(row)
 
     zip_fh, zip_p = tempfile.mkstemp()
     with zipfile.ZipFile(zip_p, mode='w', compression=zipfile.ZIP_DEFLATED) as zip_a:
