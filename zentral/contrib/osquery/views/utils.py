@@ -48,6 +48,15 @@ def update_system_uptime(tree, t):
             tree['system_uptime'] = system_uptime
 
 
+def collect_disk(disks, t):
+    disk = clean_dict(t)
+    if disk:
+        if disk not in disks:
+            disks.append(disk)
+        else:
+            logger.warning("Duplicated disk")
+
+
 def collect_network_interface(network_interfaces, t):
     network_interface = clean_dict(t)
     if network_interface:
@@ -179,6 +188,7 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
     to the machine snapshot tree
     """
     deb_packages = []
+    disks = []
     network_interfaces = []
     osx_app_instances = []
     program_instances = []
@@ -192,6 +202,8 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
             update_system_info(tree, t)
         elif table_name == 'uptime':
             update_system_uptime(tree, t)
+        elif table_name == 'disks':
+            collect_disk(disks, t)
         elif table_name == 'network_interface':
             collect_network_interface(network_interfaces, t)
         elif table_name == 'deb_packages':
@@ -206,6 +218,8 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
             collect_program_instance(program_instances, t)
     if deb_packages:
         tree["deb_packages"] = deb_packages
+    if disks:
+        tree["disks"] = disks
     if network_interfaces:
         tree["network_interfaces"] = network_interfaces
     if osx_app_instances:

@@ -155,6 +155,25 @@
       </dl>
       {% endif %}
 
+      {% with ms.disks.count as disks %}
+      {% if disks %}
+      <h3>{{ disks }} Disk{{ disks|pluralize }}</h3>
+      <table class="table table-condensed">
+        <thead>
+          <th>Name</th>
+          <th>Size</th>
+        <thead>
+        <tbody>
+          {% for disk in ms.disks.all %}
+          <tr>
+            <td>{{ disk.name }}</td>
+            <td>{{ disk.size|filesizeformat }}</td>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      {% endwith %}
+
       {% with ms.network_interfaces.count as nic %}
       {% if nic %}
       <h3>{{ nic }} Interface{{ nic|pluralize }}</h3>

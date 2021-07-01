@@ -287,6 +287,11 @@ class SystemInfo(AbstractMTObject):
     physical_memory = models.BigIntegerField(blank=True, null=True)
 
 
+class Disk(AbstractMTObject):
+    name = models.TextField()
+    size = models.BigIntegerField()
+
+
 class NetworkInterface(AbstractMTObject):
     interface = models.TextField(blank=False, null=False)
     mac = models.CharField(max_length=23, blank=False, null=False)  # 48 or 64 bit with separators
@@ -496,6 +501,7 @@ class MachineSnapshot(AbstractMTObject):
     platform = models.CharField(max_length=32, blank=True, null=True, choices=PLATFORM_CHOICES)
     system_info = models.ForeignKey(SystemInfo, on_delete=models.PROTECT, blank=True, null=True)
     type = models.CharField(max_length=32, blank=True, null=True, choices=TYPE_CHOICES)
+    disks = models.ManyToManyField(Disk)
     network_interfaces = models.ManyToManyField(NetworkInterface)
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
     deb_packages = models.ManyToManyField(DebPackage)

@@ -1354,22 +1354,24 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
         yield ('add_machine',
                None,
                machine_snapshot_commit.machine_snapshot.serialize(
-                   exclude=["network_interfaces",
+                   exclude=["deb_packages",
+                            "disks",
+                            "network_interfaces",
                             "osx_app_instance",
-                            "deb_packages",
                             "program_instances"]
                ))
         yield ('inventory_heartbeat',
                machine_snapshot_commit.last_seen,
                {'source': source})
         return
-    for m2m_diff_attr in ('links',
+    for m2m_diff_attr in ('certificates',
+                          'deb_packages',
+                          'disks',
                           'groups',
+                          'links',
                           'network_interfaces',
                           'osx_app_instances',
-                          'deb_packages',
-                          'program_instances',
-                          'certificates'):
+                          'program_instances'):
         m2m_diff = diff.get(m2m_diff_attr, {})
         if not m2m_diff:
             continue

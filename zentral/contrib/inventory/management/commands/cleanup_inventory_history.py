@@ -60,6 +60,9 @@ ORPHANS = (
       ("link_id", "inventory_machinegroup_links"),
       ("link_id", "inventory_machinegroup_machine_links"),
       ("link_id", "inventory_businessunit_links"))),
+    # Disks
+    ("inventory_disk", "id",
+     (("disk_id", "inventory_machinesnapshot_disks"),)),
     # NetworkInterface
     ("inventory_networkinterface", "id",
      (("networkinterface_id", "inventory_machinesnapshot_network_interfaces"),)),

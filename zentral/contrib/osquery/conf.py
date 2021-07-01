@@ -1,5 +1,5 @@
 import logging
-from zentral.contrib.inventory.conf import MACOS, WINDOWS
+from zentral.contrib.inventory.conf import LINUX, MACOS, WINDOWS
 from django.db.models import Q
 
 
@@ -30,6 +30,33 @@ INVENTORY_QUERIES = (
 
 
 DEB_PACKAGE_QUERY = "select 'deb_packages' as table_name, * from deb_packages;"
+
+
+LINUX_DISK_QUERY = (
+    "select 'disks' as table_name, "
+    "bd.name, bd.block_size * bd.size as size "
+    "from block_devices as bd "
+    "left join usb_devices as ud on (replace(bd.model, ' ', '_') = ud.model) "
+    "where bd.parent = '' and bd.type = '' "
+    "and bd.name not like '/dev/dm-%' and bd.name not like '/dev/loop%' and bd.name not like '/dev/md%' "
+    "and ud.usb_address is null;"
+)
+
+
+MACOS_DISK_QUERY = (
+    "select 'disks' as table_name, "
+    "name, block_size * size as size "
+    "from block_devices "
+    "where type not in ('USB', 'Virtual Interface') and label <> 'AppleAPFSMedia' and parent = '';"
+)
+
+
+WINDOWS_DISK_QUERY = (
+    "select 'disks' as table_name, "
+    "name, disk_size as size "
+    "from disk_info "
+    "where type not in ('USB', '1394');"
+)
 
 
 OSX_APP_INSTANCE_QUERY = (
@@ -64,7 +91,7 @@ CERTIFICATES_QUERY = (
     "issuer LIKE '/DC=net/DC=windows/CN=MS-Organization-Access/OU=%' OR "
     "issuer = '/CN=Microsoft Intune MDM Device CA' OR "
     "issuer LIKE '%JSS%'"
-    ")"
+    ");"
 )
 
 
@@ -85,10 +112,15 @@ def _get_inventory_queries_for_machine(machine, include_apps=False):
             yield "programs", WIN_PROGRAM_QUERY
         elif machine.has_deb_packages:
             yield "deb_packages", DEB_PACKAGE_QUERY
+    if machine.platform == LINUX:
+        yield "disks", LINUX_DISK_QUERY
     if machine.platform == MACOS:
+        yield "disks", MACOS_DISK_QUERY
         yield "company_portal", MACOS_PRINCIPAL_USER_QUERY
     if machine.platform in (MACOS, WINDOWS):
         yield "certificates", CERTIFICATES_QUERY
+    if machine.platform == WINDOWS:
+        yield "disks", WINDOWS_DISK_QUERY
 
 
 def get_inventory_query_for_machine(machine, include_apps):
