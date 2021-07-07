@@ -4,6 +4,7 @@ from .api_views import (MachinesExport, MacOSAppsExport,
                         MachineMacOSAppInstancesExport,
                         MachineProgramInstancesExport,
                         MachineDebPackagesExport,
+                        MachineSnapshotsExport,
                         MetaBusinessUnitDetail, MetaBusinessUnitList,
                         TagDetail, TagList, UpdateMachineTags)
 
@@ -27,6 +28,9 @@ urlpatterns = [
     url('^machines/export_program_instances/$',
         MachineProgramInstancesExport.as_view(),
         name="machine_program_instances_export"),
+    url('^machines/export_snapshots/$',
+        MachineSnapshotsExport.as_view(),
+        name="machine_snapshots_export"),
 
     # standard DRF views
     url('^meta_business_units/$', MetaBusinessUnitList.as_view(), name="meta_business_units"),

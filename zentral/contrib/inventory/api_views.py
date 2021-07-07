@@ -14,7 +14,8 @@ from .serializers import MachineTagsUpdateSerializer, MetaBusinessUnitSerializer
 from .tasks import (export_inventory, export_macos_apps,
                     export_machine_macos_app_instances,
                     export_machine_program_instances,
-                    export_machine_deb_packages)
+                    export_machine_deb_packages,
+                    export_machine_snapshots)
 from .utils import MSQuery
 
 
@@ -139,7 +140,7 @@ class MacOSAppsExport(APIView):
 
 class MachineMacOSAppInstancesExport(APIView):
     permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
-    permission_required = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         result = export_machine_macos_app_instances.apply_async()
@@ -150,7 +151,7 @@ class MachineMacOSAppInstancesExport(APIView):
 
 class MachineDebPackagesExport(APIView):
     permission_required = "inventory.view_debpackage"
-    permission_required = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         result = export_machine_deb_packages.apply_async()
@@ -161,10 +162,21 @@ class MachineDebPackagesExport(APIView):
 
 class MachineProgramInstancesExport(APIView):
     permission_required = ("inventory.view_program", "inventory.view_programinstance")
-    permission_required = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         result = export_machine_program_instances.apply_async()
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)
+
+
+class MachineSnapshotsExport(APIView):
+    permission_required = ("inventory.view_machinesnapshot",)
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        result = export_machine_snapshots.apply_async()
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)

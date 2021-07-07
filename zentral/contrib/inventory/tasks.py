@@ -8,7 +8,8 @@ from .forms import MacOSAppSearchForm
 from .utils import (MSQuery,
                     export_machine_macos_app_instances as do_export_machine_macos_app_instances,
                     export_machine_program_instances as do_export_machine_program_instances,
-                    export_machine_deb_packages as do_export_machine_deb_packages)
+                    export_machine_deb_packages as do_export_machine_deb_packages,
+                    export_machine_snapshots as do_export_machine_snapshots)
 
 
 @shared_task
@@ -103,3 +104,8 @@ def export_machine_program_instances():
 @shared_task
 def export_machine_deb_packages():
     return do_export_machine_deb_packages()
+
+
+@shared_task
+def export_machine_snapshots():
+    return do_export_machine_snapshots()
