@@ -20,7 +20,7 @@ register_event_type(EnrollmentSecretVerificationEvent)
 
 class InventoryHeartbeat(BaseEvent):
     event_type = 'inventory_heartbeat'
-    namespace = "machine"
+    namespace = "inventory"
     tags = ['heartbeat', 'machine']
 
 
@@ -29,7 +29,7 @@ register_event_type(InventoryHeartbeat)
 
 class AddMachine(BaseEvent):
     event_type = 'add_machine'
-    namespace = "machine"
+    namespace = "inventory"
     tags = ['machine']
 
 
@@ -57,7 +57,7 @@ for attr in ('link',
             event_class_name,
             (BaseEvent,),
             {'event_type': event_type,
-             'namespace': 'machine',
+             'namespace': 'inventory',
              'tags': ['machine', 'machine_update']}
         )
         register_event_type(event_class)
