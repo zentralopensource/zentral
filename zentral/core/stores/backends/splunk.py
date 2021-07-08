@@ -5,6 +5,7 @@ import random
 import time
 from urllib.parse import urlencode, urljoin
 from django.utils.functional import cached_property
+from django.utils.text import slugify
 import requests
 from zentral.core.stores.backends.base import BaseEventStore
 
@@ -21,6 +22,13 @@ class EventStore(BaseEventStore):
         self.collector_url = urljoin(config_d["hec_url"], "/services/collector/event")
         self.hec_token = config_d["hec_token"]
         self.search_app_url = config_d.get("search_app_url")
+        # If set, the computer name of the machine snapshots of these sources will be used
+        # as host field value. First source with a non-empty value will be picked.
+        self.computer_name_as_host_sources = [
+            slugify(src)
+            for src in config_d.get("computer_name_as_host_sources", [])
+        ]
+        self.serial_number_field = config_d.get("serial_number_field", "machine_serial_number")
         if self.search_app_url:
             self.machine_events_url = True
             self.probe_events_url = True
@@ -57,10 +65,23 @@ class EventStore(BaseEventStore):
         event_type = payload_event.pop("type")
         namespace = payload_event.get("namespace", event_type)
         payload_event[namespace] = event
+        # host / serial number
+        host = "Zentral"
+        machine_serial_number = payload_event.pop("machine_serial_number", None)
+        if machine_serial_number:
+            payload_event[self.serial_number_field] = machine_serial_number
+            host = machine_serial_number
+            for ms_src_slug in self.computer_name_as_host_sources:
+                machine_name = payload_event.get("machine", {}).get(ms_src_slug, {}).get("name")
+                if machine_name:
+                    host = machine_name
+                    break
+        else:
+            observer = payload_event.get("observer", {}).get("hostname")
+            if observer:
+                host = observer
         payload = {
-            "host": (payload_event.get("machine_serial_number")
-                     or payload_event.get("observer", {}).get("hostname")
-                     or "Zentral"),
+            "host": host,
             "sourcetype": event_type,
             "time": self._convert_datetime(created_at),
             "event": payload_event,
