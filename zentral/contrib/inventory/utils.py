@@ -1564,7 +1564,8 @@ def export_machine_deb_packages():
     return _export_machine_csv_zip(query, "inventory_machine_deb_packages_export")
 
 
-def export_machine_snapshots(window_size=5000):
+def export_machine_snapshots(source_name=None, window_size=5000):
+    args = []
     query = (
         "select "
         "ms.serial_number, ms.imei, ms.meid, ms.platform, ms.type, ms.mt_created_at as last_change,"
@@ -1621,6 +1622,11 @@ def export_machine_snapshots(window_size=5000):
         "left join inventory_disk as d on (d.id = md.disk_id) "
         "left join inventory_machinesnapshot_network_interfaces as mni on (mni.machinesnapshot_id = ms.id) "
         "left join inventory_networkinterface as ni on (ni.id = mni.networkinterface_id) "
+    )
+    if source_name:
+        query += "where UPPER(s.name) = %s "
+        args.append(source_name.upper())
+    query += (
         "group by "
         "ms.serial_number, ms.imei, ms.meid, ms.platform, ms.type, ms.mt_created_at,"
         "s.module, s.name,"
@@ -1659,7 +1665,7 @@ def export_machine_snapshots(window_size=5000):
 
     # iter all rows over a server-side cursor
     with transaction.atomic(), connection.cursor() as cursor:
-        cursor.execute(f"DECLARE machine_snapshot_export_cursor CURSOR FOR {query}")
+        cursor.execute(f"DECLARE machine_snapshot_export_cursor CURSOR FOR {query}", args)
         while True:
             cursor.execute("FETCH %s FROM machine_snapshot_export_cursor", [window_size])
             if columns is None:

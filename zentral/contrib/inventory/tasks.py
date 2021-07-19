@@ -107,5 +107,5 @@ def export_machine_deb_packages():
 
 
 @shared_task
-def export_machine_snapshots():
-    return do_export_machine_snapshots()
+def export_machine_snapshots(source_name=None):
+    return do_export_machine_snapshots(source_name=source_name)

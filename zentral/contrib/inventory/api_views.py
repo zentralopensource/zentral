@@ -176,7 +176,8 @@ class MachineSnapshotsExport(APIView):
     permission_classes = [IsAuthenticated, DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
-        result = export_machine_snapshots.apply_async()
+        source_name = request.query_params.get('source_name')
+        result = export_machine_snapshots.apply_async(kwargs={"source_name": source_name})
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
