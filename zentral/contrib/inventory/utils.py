@@ -1692,7 +1692,7 @@ def export_machine_snapshots(source_name=None, window_size=5000):
     zip_fh, zip_p = tempfile.mkstemp()
     with zipfile.ZipFile(zip_p, mode='w', compression=zipfile.ZIP_DEFLATED) as zip_a:
         for source_name, json_p in json_files:
-            zip_a.write(json_p, "{}.json".format(slugify(source_name)))
+            zip_a.write(json_p, "{}.jsonl".format(slugify(source_name)))
             os.unlink(json_p)
 
     filename = "machine_snapshots_{:%Y-%m-%d_%H-%M-%S}.zip".format(datetime.utcnow())
