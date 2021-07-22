@@ -4,8 +4,6 @@ from .base import BaseAction
 
 
 class Action(BaseAction):
-    action_form_class = None
-
     def trigger(self, event, probe, action_config_d):
         url = self.config_d["url"]
         auth = None
