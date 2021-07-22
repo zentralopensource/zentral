@@ -29,7 +29,7 @@ The configuration can be loaded from a file or an environment variable. To load 
  * [`api`](api/)
  * [`django`](django/)
  * `queues`
- * `stores`
+ * [`stores`](stores/)
  * `actions`
  * `apps`
  * `events`
