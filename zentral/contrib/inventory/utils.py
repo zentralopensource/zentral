@@ -1464,14 +1464,17 @@ def clean_ip_address(addr):
 # App export
 
 
-def _export_machine_csv_zip(query, basename, window_size=5000):
+def _export_machine_csv_zip(query, source_name, basename, window_size=5000):
     columns = None
     csv_files = []
     current_source_name = csv_f = csv_w = csv_p = None
 
     # iter all rows over a server-side cursor
+    query_args = []
+    if source_name:
+        query_args.append(source_name.upper())
     with transaction.atomic(), connection.cursor() as cursor:
-        cursor.execute(f"DECLARE machine_csv_zip_export_cursor CURSOR FOR {query}")
+        cursor.execute(f"DECLARE machine_csv_zip_export_cursor CURSOR FOR {query}", query_args)
         while True:
             cursor.execute("FETCH %s FROM machine_csv_zip_export_cursor", [window_size])
             if columns is None:
@@ -1517,7 +1520,7 @@ def _export_machine_csv_zip(query, basename, window_size=5000):
     }
 
 
-def export_machine_macos_app_instances():
+def export_machine_macos_app_instances(source_name=None):
     query = (
         "select cms.serial_number, s.module as source_module, s.name as source_name,"
         "oa.bundle_id, oa.bundle_name, oa.bundle_display_name, oa.bundle_version, oa.bundle_version_str,"
@@ -1528,12 +1531,16 @@ def export_machine_macos_app_instances():
         "join inventory_machinesnapshot_osx_app_instances as msoai on (msoai.machinesnapshot_id = ms.id) "
         "join inventory_osxappinstance as oai on (oai.id = msoai.osxappinstance_id) "
         "join inventory_osxapp as oa on (oa.id = oai.app_id) "
+    )
+    if source_name:
+        query += "where UPPER(s.name) = %s "
+    query += (
         "order by s.name, cms.serial_number, oa.bundle_id, oa.bundle_name, oa.bundle_version, oa.bundle_version_str;"
     )
-    return _export_machine_csv_zip(query, "inventory_machine_macos_app_instances_export")
+    return _export_machine_csv_zip(query, source_name, "inventory_machine_macos_app_instances_export")
 
 
-def export_machine_program_instances():
+def export_machine_program_instances(source_name=None):
     query = (
         "select cms.serial_number, s.module as source_module, s.name as source_name,"
         "p.name, p.version, p.language, p.publisher, p.identifying_number,"
@@ -1544,12 +1551,14 @@ def export_machine_program_instances():
         "join inventory_machinesnapshot_program_instances as mspi on (mspi.machinesnapshot_id = ms.id) "
         "join inventory_programinstance as pi on (pi.id = mspi.programinstance_id) "
         "join inventory_program as p on (p.id = pi.program_id) "
-        "order by s.name, cms.serial_number, p.name, p.version, p.identifying_number, p.id;"
     )
-    return _export_machine_csv_zip(query, "inventory_machine_program_instances_export")
+    if source_name:
+        query += "where UPPER(s.name) = %s "
+    query += "order by s.name, cms.serial_number, p.name, p.version, p.identifying_number, p.id;"
+    return _export_machine_csv_zip(query, source_name, "inventory_machine_program_instances_export")
 
 
-def export_machine_deb_packages():
+def export_machine_deb_packages(source_name=None):
     query = (
         "select cms.serial_number, s.module as source_module, s.name as source_name,"
         "dp.name, dp.version, dp.source, dp.size, dp.arch,"
@@ -1559,9 +1568,11 @@ def export_machine_deb_packages():
         "join inventory_source as s on ms.source_id = s.id "
         "join inventory_machinesnapshot_deb_packages as msdp on (msdp.machinesnapshot_id = ms.id) "
         "join inventory_debpackage as dp on (dp.id = msdp.debpackage_id) "
-        "order by s.name, cms.serial_number, dp.name, dp.version, dp.revision, dp.id;"
     )
-    return _export_machine_csv_zip(query, "inventory_machine_deb_packages_export")
+    if source_name:
+        query += "where UPPER(s.name) = %s "
+    query += "order by s.name, cms.serial_number, dp.name, dp.version, dp.revision, dp.id;"
+    return _export_machine_csv_zip(query, source_name, "inventory_machine_deb_packages_export")
 
 
 def export_machine_snapshots(source_name=None, window_size=5000):

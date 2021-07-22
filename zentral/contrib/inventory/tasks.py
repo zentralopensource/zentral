@@ -92,18 +92,18 @@ def export_macos_apps(form_data, filename):
 
 
 @shared_task
-def export_machine_macos_app_instances():
-    return do_export_machine_macos_app_instances()
+def export_machine_macos_app_instances(source_name=None):
+    return do_export_machine_macos_app_instances(source_name=source_name)
 
 
 @shared_task
-def export_machine_program_instances():
-    return do_export_machine_program_instances()
+def export_machine_program_instances(source_name=None):
+    return do_export_machine_program_instances(source_name=source_name)
 
 
 @shared_task
-def export_machine_deb_packages():
-    return do_export_machine_deb_packages()
+def export_machine_deb_packages(source_name=None):
+    return do_export_machine_deb_packages(source_name=source_name)
 
 
 @shared_task

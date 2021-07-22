@@ -143,7 +143,8 @@ class MachineMacOSAppInstancesExport(APIView):
     permission_classes = [IsAuthenticated, DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
-        result = export_machine_macos_app_instances.apply_async()
+        source_name = request.query_params.get('source_name')
+        result = export_machine_macos_app_instances.apply_async(kwargs={"source_name": source_name})
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
@@ -154,7 +155,8 @@ class MachineDebPackagesExport(APIView):
     permission_classes = [IsAuthenticated, DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
-        result = export_machine_deb_packages.apply_async()
+        source_name = request.query_params.get('source_name')
+        result = export_machine_deb_packages.apply_async(kwargs={"source_name": source_name})
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
@@ -165,7 +167,8 @@ class MachineProgramInstancesExport(APIView):
     permission_classes = [IsAuthenticated, DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
-        result = export_machine_program_instances.apply_async()
+        source_name = request.query_params.get('source_name')
+        result = export_machine_program_instances.apply_async(kwargs={"source_name": source_name})
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
