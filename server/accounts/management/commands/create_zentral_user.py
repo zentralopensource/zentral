@@ -1,8 +1,10 @@
 import json
 import sys
 from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 from django.core.validators import EmailValidator, ValidationError
+from django.template import loader
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.encoding import force_bytes
@@ -25,12 +27,14 @@ class Command(BaseCommand):
                             help="Generate an API token for the user")
         parser.add_argument('--json', action='store_true',
                             help="Set output mode to 'json'")
+        parser.add_argument('--send-email', action='store_true',
+                            help="Send email")
 
     def exit_with_error(self, message, exit_code=1):
         if self.json:
             print(json.dumps({"error": message}, indent=2))
         else:
-            print("ERROR", message)
+            print("ERROR:" if exit_code else "WARNING:", message)
         sys.exit(exit_code)
 
     def handle(self, *args, **kwargs):
@@ -102,6 +106,24 @@ class Command(BaseCommand):
             settings["api"]["tls_hostname"],
             reverse('password_reset_confirm', args=(uid, token))
         )
+
+        if kwargs.get("send_email", False):
+            context = {
+                'email': user.email,
+                'domain': settings["api"]["fqdn"],
+                'site_name': settings["api"]["fqdn"],
+                'uid': uid,
+                'user': user,
+                'token': token,
+                'protocol': 'https',
+            }
+            subject = loader.render_to_string("registration/password_reset_subject.txt", context)
+            subject = ''.join(subject.splitlines())
+            body = loader.render_to_string("registration/password_reset_email.html", context)
+            if not send_mail(subject, body, None, [user.email]):
+                self.exit_with_error("Could not send invitation email")
+            elif not self.json:
+                print("Invitation email sent")
 
         if self.json:
             print(json.dumps({
