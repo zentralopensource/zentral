@@ -34,3 +34,4 @@ The configuration can be loaded from a file or an environment variable. To load 
  * `apps`
  * `events`
  * `extra_links`
+ * [`users`](users/)

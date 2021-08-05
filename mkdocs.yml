@@ -16,6 +16,7 @@ nav:
   - API: configuration/api.md
   - Django: configuration/django.md
   - Event stores: configuration/stores.md
+  - Users: configuration/users.md
 - Apps:
   - Monolith: apps/monolith.md
   - Osquery: apps/osquery.md

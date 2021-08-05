@@ -14,6 +14,7 @@ import pyotp
 from u2flib_server.u2f import begin_authentication, complete_authentication
 from .models import User, UserTOTP, UserU2F
 from zentral.conf import settings as zentral_settings
+from zentral.conf.config import ConfigList
 
 
 class ZentralAuthenticationForm(AuthenticationForm):
@@ -63,6 +64,27 @@ class InviteUserForm(forms.ModelForm):
         fields = ("username", "email")
         field_classes = {'username': UsernameField}
         widgets = {'username': forms.TextInput({"autofocus": True})}
+
+    def clean_email(self):
+        email = self.cleaned_data.get("email")
+        if not email:
+            return email
+        try:
+            allowed_domains = zentral_settings["users"]["allowed_invitation_domains"]
+        except KeyError:
+            # not configured, nothing to check
+            return email
+        if not isinstance(allowed_domains, ConfigList) or any(not isinstance(d, str) for d in allowed_domains):
+            raise forms.ValidationError("Configuration error: "
+                                        "users.allowed_invitation_domains is not a list of strings")
+        try:
+            domain = email.split("@")[1]
+        except IndexError:
+            # should never happen
+            raise forms.ValidationError("Could not extract domain.")
+        if domain not in allowed_domains:
+            raise forms.ValidationError("Email domain not allowed.")
+        return email
 
     def save(self, request):
         user = super(InviteUserForm, self).save(commit=False)

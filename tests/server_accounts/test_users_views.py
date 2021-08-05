@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from rest_framework.authtoken.models import Token
 from accounts.models import User
+from zentral.conf import ConfigDict, settings
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -153,12 +154,33 @@ class AccountUsersViewsTestCase(TestCase):
                                     follow=True)
         self.assertFormError(response, "form", "email", "User with this Email already exists.")
 
-    def test_user_invite_ok(self):
+    def test_user_invite_email_not_allowed(self):
+        self.login("accounts.add_user", "accounts.view_user")
+        settings._collection["users"] = ConfigDict({"allowed_invitation_domains": ["allowed.example.com"]})
+        response = self.client.post(reverse("accounts:invite_user"),
+                                    {"username": "test",
+                                     "email": "test@example.com"},
+                                    follow=True)
+        del settings._collection["users"]
+        self.assertFormError(response, "form", "email", "Email domain not allowed.")
+
+    def test_user_invite_any_ok(self):
         self.login("accounts.add_user", "accounts.view_user")
         response = self.client.post(reverse("accounts:invite_user"),
                                     {"username": "test",
                                      "email": "test@example.com"},
                                     follow=True)
+        for text in ("5 Users", "test", "test@example.com"):
+            self.assertContains(response, text)
+
+    def test_user_invite_allowed_ok(self):
+        self.login("accounts.add_user", "accounts.view_user")
+        settings._collection["users"] = ConfigDict({"allowed_invitation_domains": ["example.com", "example2.com"]})
+        response = self.client.post(reverse("accounts:invite_user"),
+                                    {"username": "test",
+                                     "email": "test@example.com"},
+                                    follow=True)
+        del settings._collection["users"]
         for text in ("5 Users", "test", "test@example.com"):
             self.assertContains(response, text)
 
