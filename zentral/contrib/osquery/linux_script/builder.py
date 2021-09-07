@@ -37,6 +37,7 @@ class OsqueryZentralEnrollScriptBuilder(APIConfigToolsMixin):
             serialized_flags.append("--tls_server_certs=/etc/zentral/tls_server_certs.crt")
         else:
             content = content.replace("%INCLUDE_TLS_SERVER_CERTS%", "false")
+            content = content.replace("%TLS_SERVER_CERTS%", "")
 
         # enrollment secret
         content = content.replace("%ENROLL_SECRET_SECRET%", self.build_kwargs["enrollment_secret_secret"])
