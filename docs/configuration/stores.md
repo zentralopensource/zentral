@@ -27,6 +27,7 @@ The python module implementing the store, as a string. Currently available:
 * `zentral.core.stores.backends.azure_log_analytics`
 * `zentral.core.stores.backends.datadog`
 * `zentral.core.stores.backends.elasticsearch`
+* `zentral.core.stores.backends.http`
 * `zentral.core.stores.backends.humio`
 * `zentral.core.stores.backends.kinesis`
 * `zentral.core.stores.backends.splunk`
@@ -127,5 +128,70 @@ The name of the Splunk event field to use for the machine serial number. Default
     "verify_tls": true,
     "computer_name_as_host_sources": ["santa", "osquery"],
     "serial_number_field": "serial_number"
+}
+```
+
+## HTTP backend options
+
+### `endpoint_url`
+
+**MANDATORY**
+
+The URL where the Zentral events will be POSTed.
+
+For example: `https://acme.service-now.com/api/now/import/zentral_events`.
+
+### `username`
+
+**OPTIONAL**
+
+Username used for Basic Authentication. If used, `password` **MUST** be set too.
+
+### `password`
+
+**OPTIONAL**
+
+Password used for Basic Authentication. If used, `username` **MUST** be set too.
+
+### `headers`
+
+**OPTIONAL**
+
+A string / string dictionary of extra headers to be set for the HTTP requests. The `Content-Type` header is set to `application/json` by default.
+
+**WARNING** Basic Authentication via `username` and `password` conflicts with the configuration of the `Authorization` header.
+
+### Full example
+
+```json
+{
+    "backend": "zentral.core.stores.backends.http",
+    "endpoint_url": "https://acme.service-now.com/api/now/import/zentral_events",
+    "username": "Zentral",
+    "password": "{{ env:SERVICE_NOW_API_PASSWORD }}",
+    "verify_tls": true,
+    "included_event_types": [
+      "add_machine",
+      "add_machine_os_version",
+      "remove_machine_os_version",
+      "add_machine_system_info",
+      "remove_machine_system_info",
+      "add_machine_business_unit",
+      "remove_machine_business_unit",
+      "add_machine_group",
+      "remove_machine_group",
+      "add_machine_disk",
+      "remove_machine_disk",
+      "add_machine_network_interface",
+      "remove_machine_network_interface",
+      "add_machine_osx_app_instance",
+      "remove_machine_osx_app_instance",
+      "add_machine_deb_package",
+      "remove_machine_deb_package",
+      "add_machine_program_instance",
+      "remove_machine_program_instance",
+      "add_machine_principal_user",
+      "remove_machine_principal_user"
+    ]
 }
 ```

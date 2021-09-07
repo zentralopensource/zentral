@@ -37,6 +37,7 @@ You can deploy it on your machine with [Docker](./deployment/docker-compose), or
 * Kinesis
 * [Azure log analytics](https://docs.microsoft.com/en-us/azure/azure-monitor/log-query/get-started-portal)
 * [Splunk](https://www.splunk.com/en_us/software/features-comparison-chart.html)
+* Generic HTTP POST endpoint
 
 ## Actions
 
