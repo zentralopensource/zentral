@@ -22,6 +22,8 @@ RUN apt-get update && \
             libssl-dev \
             libffi-dev \
             python3-dev \
+# dep for psycopg2 \
+            libpq-dev \
 # dep for python-ldap
             libldap2-dev \
             libsasl2-dev && \
@@ -47,16 +49,25 @@ RUN set -eux ; \
 
 # bomutils & xar build (to generate the pkg files with zentral)
 # as seen in https://github.com/boot2docker/osx-installer/blob/master/Dockerfile
-RUN curl -fsSL https://github.com/zentralopensource/bomutils/archive/master.tar.gz | tar xvz && \
-    cd bomutils-* && \
-    make && make install && \
-    cd .. && rm -rf bomutils-*
-RUN curl -fsSL https://github.com/mackyle/xar/archive/xar-1.6.1.tar.gz | tar xvz && \
-    cd xar-*/xar && \
-    sed -i 's/OpenSSL_add_all_ciphers/CRYPTO_new_ex_data/' configure.ac && \
-    ./autogen.sh && ./configure --with-bzip2 && \
-    make && make install && \
-    cd ../.. && rm -rf xar-*
+RUN set -eux ; \
+    \
+    curl -fsSL https://github.com/zentralopensource/bomutils/archive/master.tar.gz | tar xvz ; \
+    cd bomutils-* ; \
+    make ; make install ; \
+    cd .. ; rm -rf bomutils-*
+RUN set -eux ; \
+    \
+    curl -fsSL https://github.com/mackyle/xar/archive/xar-1.6.1.tar.gz | tar xvz; \
+    cd xar-*/xar ; \
+    sed -i 's/OpenSSL_add_all_ciphers/CRYPTO_new_ex_data/' configure.ac ; \
+    curl -L -o config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' ; \
+    ./autogen.sh && ./configure --with-bzip2 ; \
+    if [ "$(arch)" = "aarch64" ] ; then \
+      sed -i 's/CPPFLAGS :=/CPPFLAGS := -fsigned-char/' Makefile ; \
+      sed -i 's/CFLAGS :=/CFLAGS := -fsigned-char/' Makefile ; \
+    fi ; \
+    make ; make install ; \
+    cd ../.. ; rm -rf xar-*
 
 # Create a virtualenv and use it
 RUN python -m venv /opt/venv && /opt/venv/bin/pip install -U pip setuptools wheel
@@ -97,7 +108,7 @@ RUN pip install -r requirements_gcp.txt
 # - copy tini, mkbom and xar from stage 0
 #
 
-FROM python:3.9-slim as base-runner
+FROM python:3.9-slim-buster as base-runner
 
 # zentral apt dependencies
 RUN apt-get update && \
@@ -109,6 +120,8 @@ RUN apt-get update && \
             bsdcpio \
 # xmlsec1 for PySAML2
             xmlsec1 \
+# libpq5 for psycopg2
+            libpq5 \
 # extra dependencies for python crypto / u2f
             libssl1.1 \
             libffi6 \

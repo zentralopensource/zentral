@@ -19,7 +19,7 @@ jinja2                          # events templates
 kombu<5                         # events queues
 pip
 prometheus_client               # publish prometheus metrics
-psycopg2-binary
+psycopg2
 pygments                        # SQL syntax highlighting
 pyopenssl                       # MDM
 pyotp                           # Auth / 2nd factor
