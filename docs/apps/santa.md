@@ -1,6 +1,6 @@
 # Santa
 
-[Santa](https://santa.readthedocs.io/en/latest/) is a binary authorization system for macOS. Zentral can act as a [sync server](https://santa.readthedocs.io/en/latest/introduction/syncing-overview/) for Santa, to configure the rules, and collect the events.
+[Santa](https://santa.dev) is a binary authorization system for macOS. Zentral can act as a [sync server](https://santa.dev/introduction/syncing-overview.html) for Santa, to configure the rules, and collect the events.
 
 ## Zentral configuration
 
@@ -10,7 +10,7 @@ To activate the santa module, you need to add a `zentral.contrib.santa` section 
 
 ### Create a Santa agent configuration
 
-In Zentral, go to Setup > Santa configurations. Click on the [Create] button. The form mirrors the [Santa configuration keys](https://santa.readthedocs.io/en/latest/deployment/configuration/) (some of them are omitted and will be set automatically by Zentral).
+In Zentral, go to Setup > Santa configurations. Click on the [Create] button. The form mirrors the [Santa configuration keys](https://santa.dev/deployment/configuration.html) (some of them are omitted and will be set automatically by Zentral).
 
 **WARNING** be careful and do not configure Santa in lockdown mode unless you know what you are doing!!!
 
@@ -47,7 +47,7 @@ Each enrollment has a secret associated with it, and this secret is part of the 
 
 #### Main santa configuration
 
-This is the payload that is generated when creating an enrollment on a Zentral santa configuration (see previous section.) You can further customize this payload to add for example the `MachineOwner` [Santa configuration key](https://santa.readthedocs.io/en/latest/deployment/configuration/) using [Jamf Payload Variables](https://docs.jamf.com/jamf-pro/administrator-guide/Computer_Configuration_Profiles.html).
+This is the payload that is generated when creating an enrollment on a Zentral santa configuration (see previous section.) You can further customize this payload to add for example the `MachineOwner` [Santa configuration key](https://santa.dev/deployment/configuration.html) using [Jamf Payload Variables](https://docs.jamf.com/jamf-pro/administrator-guide/Computer_Configuration_Profiles.html).
 
 
 #### Privacy preference policy control
@@ -128,7 +128,7 @@ On any Zentral configuration page (the one with the configuration information an
 
 You can filter the list using the search form at the top. From this list, you can edit or delete existing rules (if they are not part of a ruleset, see API section below), and add more rules. To add a rule, click on the [Add] button at the top, and select the kind of rule you want to add. We will start with a "Base rule".
 
-To get the necessary information about a binary or a certificate you want to block or allow, use the [`santactl fileinfo` command](https://santa.readthedocs.io/en/latest/details/santactl/#fileinfo).
+To get the necessary information about a binary or a certificate you want to block or allow, use the [`santactl fileinfo` command](https://santa.dev/details/santactl.html#fileinfo).
 
 Once you have set the rule type, the sha256 and the policy, you can click on the [Save] button, and the rule will be added to the configuration for all the machines.
 
@@ -180,7 +180,7 @@ A full synchronization has 4 phases:
 
 ### Preflight
 
-The Santa agent sends some information about the system (os version, identifiers, …) and itself (version, number of rule for each rule types, …). Zentral responds with the updated [sync server provided configuration](https://santa.readthedocs.io/en/latest/deployment/configuration/#sync-server-provided-configuration). Using this mechanism, some of the updated Zentral Santa configuration attributes will be applied without having to deploy new payloads. For example, it is possible to switch from Monitor to Lockdown mode, or to increase the full sync interval to 20min.
+The Santa agent sends some information about the system (os version, identifiers, …) and itself (version, number of rule for each rule types, …). Zentral responds with the updated [sync server provided configuration](https://santa.dev/deployment/configuration.html#sync-server-provided-configuration). Using this mechanism, some of the updated Zentral Santa configuration attributes will be applied without having to deploy new payloads. For example, it is possible to switch from Monitor to Lockdown mode, or to increase the full sync interval to 20min.
 
 Zentral will also request a clean sync if the machine is new – never seen before or previonsly enrolled on a different configuration. Santa will delete all the existing rule in the local database during a clean sync.
 
@@ -232,7 +232,7 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * method: POST
 * Content-Type: application/json
 
-This endpoint is designed to ingest the JSON output of the [`santactl fileinfo` command](https://santa.readthedocs.io/en/latest/details/santactl/#fileinfo). This can be used to quickly and automatically upload information about binaries and certificates to Zentral. This information will be used to add context to sha256 rules, and in the rule forms.
+This endpoint is designed to ingest the JSON output of the [`santactl fileinfo` command](https://santa.dev/details/santactl.html#fileinfo). This can be used to quickly and automatically upload information about binaries and certificates to Zentral. This information will be used to add context to sha256 rules, and in the rule forms.
 
 Example:
 
