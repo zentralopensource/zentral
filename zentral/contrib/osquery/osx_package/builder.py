@@ -38,14 +38,13 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         hostname_replacement = (("%TLS_HOSTNAME%", self.get_tls_hostname()),)
         self.replace_in_file(self.get_build_path("scripts", "postinstall"), hostname_replacement)
 
-        # Launch daemon extra ProgramArguments
-        extra_prog_args = self.build_kwargs["serialized_flags"]
+        # Extra flags
+        extra_flags = self.build_kwargs["serialized_flags"]
 
         # include the certs and point to them in the ProgramArguments if necessary
         tls_server_certs_install_path = self.include_tls_server_certs()
         if tls_server_certs_install_path:
-            extra_prog_args.append("--tls_server_certs={}".format(tls_server_certs_install_path))
-        launchd_plist = self.get_root_path("Library/LaunchDaemons/com.facebook.osqueryd.plist")
+            extra_flags.append("--tls_server_certs={}".format(tls_server_certs_install_path))
 
-        # add the extra prog args in the plist
-        self.append_to_plist_key(launchd_plist, "ProgramArguments", extra_prog_args)
+        self.replace_in_file(self.get_root_path("usr/local/zentral/osquery/flagfile.txt"),
+                             (("%EXTRA_FLAGS%", "\n".join(extra_flags)),))

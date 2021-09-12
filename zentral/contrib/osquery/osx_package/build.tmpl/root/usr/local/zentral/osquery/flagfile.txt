@@ -1,0 +1,3 @@
+--database_path=/usr/local/zentral/osquery/db
+--enroll_secret_path=/usr/local/zentral/osquery/enroll_secret.txt
+%EXTRA_FLAGS%

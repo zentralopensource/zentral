@@ -1,14 +1,17 @@
-#!/bin/sh
+#!/bin/bash
 # Preinstall script
 
 ZENTRAL_OSQUERY_ROOT="/usr/local/zentral/osquery"
 OSQUERY_ROCKSDB_PATH="$ZENTRAL_OSQUERY_ROOT/db"
 OSQUERY_ENROLL_SECRET_PATH="$ZENTRAL_OSQUERY_ROOT/enroll_secret.txt"
-OSQUERY_PLIST="/Library/LaunchDaemons/com.facebook.osqueryd.plist"
+LEGACY_OSQUERY_PLIST="/Library/LaunchDaemons/com.facebook.osqueryd.plist"
 LEGACY_WATCHDOG_PLIST="/Library/LaunchDaemons/io.zentral.osquery.watchdog.plist"
 
-# unload com.facebook.osqueryd
-/bin/launchctl unload -w "$OSQUERY_PLIST"
+# unload and uninstall the legacy launch daemon
+if [[ -e "$LEGACY_OSQUERY_PLIST" ]]; then
+    /bin/launchctl unload -w "$LEGACY_OSQUERY_PLIST"
+    rm "$LEGACY_OSQUERY_PLIST"
+fi
 
 # unload and uninstall the legacy watchdog if necessary
 if [[ -e "$LEGACY_WATCHDOG_PLIST" ]]; then

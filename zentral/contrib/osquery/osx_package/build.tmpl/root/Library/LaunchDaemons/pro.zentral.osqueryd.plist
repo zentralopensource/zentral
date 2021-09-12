@@ -7,12 +7,11 @@
   <key>Disabled</key>
   <false/>
   <key>Label</key>
-  <string>com.facebook.osqueryd</string>
+  <string>pro.zentral.osqueryd</string>
   <key>ProgramArguments</key>
   <array>
     <string>/usr/local/bin/osqueryd</string>
-    <string>--database_path=/usr/local/zentral/osquery/db</string>
-    <string>--enroll_secret_path=/usr/local/zentral/osquery/enroll_secret.txt</string>
+    <string>--flagfile=/usr/local/zentral/osquery/flagfile.txt</string>
   </array>
   <key>RunAtLoad</key>
   <true/>

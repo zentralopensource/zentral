@@ -1,10 +1,19 @@
-#!/bin/sh
-## postinstall
+#!/bin/bash
+# Postinstall script
 
-## load com.facebook.osqueryd
-/bin/launchctl load -w "/Library/LaunchDaemons/com.facebook.osqueryd.plist"
+OSQUERYD_PATH="/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd"
+PLIST_OSQUERYD_PATH="/usr/local/bin/osqueryd"
 
-## write zentral base url
+# symlink for launch daemon plist
+if [[ -e "$OSQUERYD_PATH" ]]
+then
+    ln -s "$OSQUERYD_PATH" "$PLIST_OSQUERYD_PATH"
+fi
+
+# load launch daemon
+/bin/launchctl load -w "/Library/LaunchDaemons/pro.zentral.osqueryd.plist"
+
+# write zentral base url
 /usr/bin/defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"
 
 exit 0
