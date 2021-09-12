@@ -204,7 +204,8 @@ class ProductArchiveBuilder(BasePackageBuilder):
                          "CFBundleVersion",
                          "id",
                          "path"):
-                bundle.set(attr, pkg_bundle_elm.attrib[attr])
+                if attr in pkg_bundle_elm.attrib:
+                    bundle.set(attr, pkg_bundle_elm.attrib[attr])
             bundle_version.append(bundle)
         pkg_ref.append(bundle_version)
         root.append(pkg_ref)
