@@ -467,6 +467,9 @@ class PrincipalUser(AbstractMTObject):
     principal_name = models.TextField(db_index=True)
     display_name = models.TextField(blank=True, null=True)
 
+    def __str__(self):
+        return self.principal_name
+
 
 class MachineSnapshotManager(MTObjectManager):
     def current(self):
@@ -1002,7 +1005,7 @@ class MetaMachine:
         query = (
             "with ms as ("
             "  select s.name as src, ms.id, ms.type, ms.platform,"
-            "  ms.business_unit_id, ms.os_version_id, ms.system_info_id"
+            "  ms.business_unit_id, ms.os_version_id, ms.system_info_id, ms.principal_user_id"
             "  from inventory_machinesnapshot as ms"
             "  join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)"
             "  join inventory_source as s on (ms.source_id = s.id)"
@@ -1040,6 +1043,13 @@ class MetaMachine:
             "select null, 'tags' as key,"
             "jsonb_build_object('id', t.id, 'name', it.name) "
             "from t join inventory_tag as it on (it.id = t.id) "
+            
+            "union "
+
+            # principal user
+            "select null, 'principal_user' as key,"
+            "jsonb_build_object('id', pu.id, 'unique_id', pu.unique_id, 'principal_name', pu.principal_name) "
+            "from ms join inventory_principaluser as pu on (ms.principal_user_id = pu.id) "
 
             "union "
 
@@ -1131,6 +1141,8 @@ class MetaMachine:
                                              'name': ms.business_unit.name}
             if ms.os_version:
                 ms_d['os_version'] = str(ms.os_version)
+            if ms.principal_user:
+                ms_d['principal_user'] = ms.principal_user
             if self._include_groups_in_serialized_info_for_event:
                 for group in ms.groups.all():
                     ms_d.setdefault('groups', []).append({'reference': group.reference,
