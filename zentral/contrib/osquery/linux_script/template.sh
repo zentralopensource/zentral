@@ -12,11 +12,12 @@ get_do_instance_id () {
 }
 
 get_docker_instance_id () {
-  cat /proc/self/cgroup | grep "docker" | sed s/\\//\\n/g | tail -1 | cut -c-12
+  grep "docker" /proc/self/cgroup | sed s/\\//\\n/g | tail -1 | cut -c-12
 }
 
 get_ec2_instance_id () {
-  curl -s --fail --connect-timeout 2 http://169.254.169.254/latest/meta-data/instance-id
+  IMDSv2_TOKEN=$(curl -s --fail --connect-timeout 2 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 30")
+  curl -s --fail --connect-timeout 2 -H "X-aws-ec2-metadata-token: $IMDSv2_TOKEN" http://169.254.169.254/latest/meta-data/instance-id
 }
 
 get_gce_instance_id () {
@@ -98,7 +99,12 @@ install_osquery_deb () {
   sudo /bin/sed -i '/^deb.*osquery.*$/d' /etc/apt/sources.list
 
   # add osquery repository
-  sudo add-apt-repository "deb [arch=amd64] https://pkg.osquery.io/deb deb main"
+  case "$(arch)" in
+    aarch64) DEB_ARCH="arm64" ;;
+    x86_64) DEB_ARCH="amd64" ;;
+    *) echo "Unkown architecture: $(arch)" ; exit 1 ;;
+  esac
+  sudo add-apt-repository "deb [arch=$DEB_ARCH] https://pkg.osquery.io/deb deb main"
 
   # update available package list
   sudo apt-get update
