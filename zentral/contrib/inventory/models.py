@@ -784,8 +784,17 @@ class MetaBusinessUnitTag(models.Model):
 class MetaMachine:
     """Simplified access to the ms."""
     def __init__(self, serial_number, snapshots=None):
-        self._include_groups_in_serialized_info_for_event = True
         self.serial_number = serial_number
+
+    @cached_property
+    def _event_serialization_options(self):
+        return settings["apps"]["zentral.contrib.inventory"].get("event_serialization", {})
+
+    def _include_groups_in_serialized_info_for_event(self):
+        return self._event_serialization_options.get("include_groups", True)
+
+    def _include_principal_user_in_serialized_info_for_event(self):
+        return self._event_serialization_options.get("include_principal_user", True)
 
     @classmethod
     def from_urlsafe_serial_number(cls, urlsafe_serial_number):
@@ -1043,13 +1052,6 @@ class MetaMachine:
 
             "union "
 
-            # principal user
-            "select ms.src, 'principal_user' as key,"
-            "jsonb_build_object('id', pu.id, 'unique_id', pu.unique_id, 'principal_name', pu.principal_name) "
-            "from ms join inventory_principaluser as pu on (ms.principal_user_id = pu.id) "
-
-            "union "
-
             # os versions
             "select ms.src, 'os_version' as key,"
             "jsonb_build_object("
@@ -1077,7 +1079,7 @@ class MetaMachine:
             "from inventory_metabusinessunit as mbu "
             "join bu on (bu.meta_business_unit_id = mbu.id)"
         )
-        if self._include_groups_in_serialized_info_for_event:
+        if self._include_groups_in_serialized_info_for_event():
             query += (
                 "union "
 
@@ -1087,6 +1089,15 @@ class MetaMachine:
                 "from inventory_machinegroup as g "
                 "join inventory_machinesnapshot_groups as msg on (msg.machinegroup_id = g.id) "
                 "join ms on (ms.id = msg.machinesnapshot_id) "
+            )
+        if self._include_principal_user_in_serialized_info_for_event():
+            query += (
+                "union "
+
+                # principal user
+                "select ms.src, 'principal_user' as key,"
+                "jsonb_build_object('id', pu.id, 'unique_id', pu.unique_id, 'principal_name', pu.principal_name) "
+                "from ms join inventory_principaluser as pu on (ms.principal_user_id = pu.id) "
             )
 
         cursor = connection.cursor()
@@ -1138,15 +1149,15 @@ class MetaMachine:
                                              'name': ms.business_unit.name}
             if ms.os_version:
                 ms_d['os_version'] = str(ms.os_version)
-            if ms.principal_user:
-                ms_d['principal_user'] = {'id': ms.principal_user.pk,
-                                          'unique_id': ms.principal_user.unique_id,
-                                          'principal_name': ms.principal_user.principal_name}
-            if self._include_groups_in_serialized_info_for_event:
+            if self._include_groups_in_serialized_info_for_event():
                 for group in ms.groups.all():
                     ms_d.setdefault('groups', []).append({'reference': group.reference,
                                                           'key': group.get_short_key(),
                                                           'name': group.name})
+            if self._include_principal_user_in_serialized_info_for_event() and ms.principal_user:
+                ms_d['principal_user'] = {'id': ms.principal_user.pk,
+                                          'unique_id': ms.principal_user.unique_id,
+                                          'principal_name': ms.principal_user.principal_name}
             key = slugify(source.name)
             machine_d[key] = ms_d
         for tag in self.tags:

@@ -18,6 +18,7 @@ nav:
   - Event stores: configuration/stores.md
   - Users: configuration/users.md
 - Apps:
+  - Inventory: apps/inventory.md
   - Monolith: apps/monolith.md
   - Osquery: apps/osquery.md
   - Santa: apps/santa.md
