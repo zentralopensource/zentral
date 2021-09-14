@@ -467,9 +467,6 @@ class PrincipalUser(AbstractMTObject):
     principal_name = models.TextField(db_index=True)
     display_name = models.TextField(blank=True, null=True)
 
-    def __str__(self):
-        return self.principal_name
-
 
 class MachineSnapshotManager(MTObjectManager):
     def current(self):
@@ -1043,11 +1040,11 @@ class MetaMachine:
             "select null, 'tags' as key,"
             "jsonb_build_object('id', t.id, 'name', it.name) "
             "from t join inventory_tag as it on (it.id = t.id) "
-            
+
             "union "
 
             # principal user
-            "select null, 'principal_user' as key,"
+            "select ms.src, 'principal_user' as key,"
             "jsonb_build_object('id', pu.id, 'unique_id', pu.unique_id, 'principal_name', pu.principal_name) "
             "from ms join inventory_principaluser as pu on (ms.principal_user_id = pu.id) "
 
@@ -1142,7 +1139,9 @@ class MetaMachine:
             if ms.os_version:
                 ms_d['os_version'] = str(ms.os_version)
             if ms.principal_user:
-                ms_d['principal_user'] = ms.principal_user
+                ms_d['principal_user'] = {'id': ms.principal_user.pk,
+                                          'unique_id': ms.principal_user.unique_id,
+                                          'principal_name': ms.principal_user.principal_name}
             if self._include_groups_in_serialized_info_for_event:
                 for group in ms.groups.all():
                     ms_d.setdefault('groups', []).append({'reference': group.reference,
@@ -1191,6 +1190,8 @@ class MetaMachine:
                     d[key] = os_version_str
             elif key in ("types", "platforms"):
                 d[key[:-1]] = Counter(agg).most_common(1)[0][0]
+            elif key == "principal_user":
+                d[key] = agg
             else:
                 d.setdefault(key, []).append(agg)
         return machine_d
