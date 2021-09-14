@@ -11,7 +11,7 @@ django>=2.2,<2.3
 djangorestframework
 djangorestframework-yaml
 django-filter                   # API
-elasticsearch
+elasticsearch<7.14              # max 7.13.X to maintain compatibility with OpenSearch
 geoip2
 gunicorn
 httpx[http2]                    # MDM (apns)
