@@ -32,12 +32,12 @@ class OsqueryRequestEvent(OsqueryEvent):
         if enrollment:
             enrollment_pk = enrollment.get("pk")
             if enrollment_pk:
-                keys["enrollment"] = [(enrollment_pk,)]
+                keys["osquery_enrollment"] = [(enrollment_pk,)]
             configuration = enrollment.get("configuration")
             if configuration:
                 configuration_pk = configuration.get("pk")
                 if configuration_pk:
-                    keys["configuration"] = [(configuration_pk,)]
+                    keys["osquery_configuration"] = [(configuration_pk,)]
         return keys
 
 
@@ -77,8 +77,8 @@ class OsqueryResultEvent(OsqueryEvent):
         if prefix != "pack":
             logger.warning("Unknown result name prefix")
             return keys
-        keys["pack"] = [(pack_pk,)]
-        keys["query"] = [(query_pk,)]
+        keys["osquery_pack"] = [(pack_pk,)]
+        keys["osquery_query"] = [(query_pk,)]
         return keys
 
 

@@ -43,10 +43,10 @@ class MunkiEvent(BaseEvent):
         if event_type == "install":
             name = self.payload.get("name")
             if name:
-                keys["pkginfoname"] = [(name,)]
+                keys["munki_pkginfo_name"] = [(name,)]
                 version = self.payload.get("version")
                 if version:
-                    keys["pkginfo"] = [(name, version)]
+                    keys["munki_pkginfo"] = [(name, version)]
         return keys
 
 
