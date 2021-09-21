@@ -208,7 +208,38 @@ class SantaAPIViewsTestCase(TestCase):
               "sha256": target.sha256,
               "policy": "REMOVE"}]
         )
+        # rule out of scope with excluded serial number, same remove rule
+        rule.serial_numbers = []
+        rule.excluded_serial_numbers = [self.enrolled_machine.serial_number]
+        rule.save()
+        response = self.post_as_json(url, {})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(
+            json_response["rules"],
+            [{"rule_type": Target.BINARY,
+              "sha256": target.sha256,
+              "policy": "REMOVE"}]
+        )
         # remove rule acknowleged, no rules
+        response = self.post_as_json(url, {"cursor": json_response["cursor"]})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response, {"rules": []})
+        # rule again in scope by removing excluded serial number, we get the rule
+        rule.excluded_serial_numbers = [get_random_string(15)]
+        rule.save()
+        response = self.post_as_json(url, {})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(
+            json_response["rules"],
+            [{"rule_type": Target.BINARY,
+              "sha256": target.sha256,
+              "policy": "BLOCKLIST",
+              "custom_msg": rule.custom_msg}]
+        )
+        # rule again in scope acknowleged, no rules
         response = self.post_as_json(url, {"cursor": json_response["cursor"]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()

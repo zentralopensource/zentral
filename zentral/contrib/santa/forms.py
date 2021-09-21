@@ -114,15 +114,48 @@ class RuleSearchForm(forms.Form):
         return qs
 
 
-class RuleForm(forms.Form):
+class RuleFormMixin:
+    def validate_scope(self):
+        # primary user conflicts
+        primary_user_conflicts = ", ".join(f"'{u}'" for u in self.cleaned_data["primary_users"]
+                                           if u in self.cleaned_data["excluded_primary_users"])
+        if primary_user_conflicts:
+            self.add_error(
+                "excluded_primary_users",
+                f"{primary_user_conflicts} both included and excluded"
+            )
+
+        # serial number conflicts
+        serial_number_conflicts = ", ".join(f"'{sn}'" for sn in self.cleaned_data["serial_numbers"]
+                                            if sn in self.cleaned_data["excluded_serial_numbers"])
+        if serial_number_conflicts:
+            self.add_error(
+                "excluded_serial_numbers",
+                f"{serial_number_conflicts} both included and excluded"
+            )
+
+        # tag conflicts
+        tag_conflicts = ", ".join(f"'{t.name}'" for t in self.cleaned_data["tags"]
+                                  if t in self.cleaned_data["excluded_tags"])
+        if tag_conflicts:
+            self.add_error(
+                "excluded_tags",
+                f"{tag_conflicts} both included and excluded"
+            )
+
+
+class RuleForm(RuleFormMixin, forms.Form):
     target_type = forms.ChoiceField(choices=Target.TYPE_CHOICES)
     target_sha256 = forms.CharField(validators=[validate_sha256])
     policy = forms.ChoiceField(choices=Rule.POLICY_CHOICES)
     custom_msg = forms.CharField(label="Custom message", required=False,
                                  widget=forms.Textarea(attrs={"cols": "40", "rows": "10"}))
     serial_numbers = SimpleArrayField(forms.CharField(), required=False)
+    excluded_serial_numbers = SimpleArrayField(forms.CharField(), required=False)
     primary_users = SimpleArrayField(forms.CharField(), required=False)
+    excluded_primary_users = SimpleArrayField(forms.CharField(), required=False)
     tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.all(), required=False)
+    excluded_tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.all(), required=False)
 
     def __init__(self, *args, **kwargs):
         self.configuration = kwargs.pop("configuration")
@@ -185,6 +218,8 @@ class RuleForm(forms.Form):
 
         cleaned_data["target_type"] = target_type
         cleaned_data["target_sha256"] = target_sha256
+
+        self.validate_scope()
         return cleaned_data
 
     def save(self):
@@ -195,17 +230,25 @@ class RuleForm(forms.Form):
                                    policy=self.cleaned_data["policy"],
                                    custom_msg=self.cleaned_data.get("custom_msg", ""),
                                    serial_numbers=self.cleaned_data.get("serial_numbers") or [],
-                                   primary_users=self.cleaned_data.get("primary_users") or [])
+                                   excluded_serial_numbers=self.cleaned_data.get("excluded_serial_numbers") or [],
+                                   primary_users=self.cleaned_data.get("primary_users") or [],
+                                   excluded_primary_users=self.cleaned_data.get("excluded_primary_users") or [])
         tags = self.cleaned_data.get("tags")
         if tags:
             rule.tags.set(tags)
+        excluded_tags = self.cleaned_data.get("excluded_tags")
+        if excluded_tags:
+            rule.excluded_tags.set(excluded_tags)
         return rule
 
 
-class UpdateRuleForm(forms.ModelForm):
+class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
     class Meta:
         model = Rule
-        fields = ("policy", "custom_msg", "serial_numbers", "primary_users", "tags")
+        fields = ("policy", "custom_msg",
+                  "serial_numbers", "excluded_serial_numbers",
+                  "primary_users", "excluded_primary_users",
+                  "tags", "excluded_tags")
 
     def clean(self):
         cleaned_data = super().clean()
@@ -222,6 +265,8 @@ class UpdateRuleForm(forms.ModelForm):
                 custom_msg = cleaned_data.get("custom_msg")
                 if custom_msg:
                     self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")
+
+        self.validate_scope()
 
     def save(self, request):
         # to reverse changes made by the ModelForm validation
@@ -257,6 +302,18 @@ class UpdateRuleForm(forms.ModelForm):
             removed_serial_numbers = old_serial_numbers - serial_numbers
             if removed_serial_numbers:
                 updates.setdefault("removed", {})["serial_numbers"] = sorted(removed_serial_numbers)
+        # excluded_serial_numbers
+        excluded_serial_numbers = set(self.cleaned_data["excluded_serial_numbers"])
+        old_excluded_serial_numbers = set(self.instance.excluded_serial_numbers)
+        if excluded_serial_numbers != old_excluded_serial_numbers:
+            self.instance.excluded_serial_numbers = self.cleaned_data["excluded_serial_numbers"]
+            updated = True
+            added_excluded_serial_numbers = excluded_serial_numbers - old_excluded_serial_numbers
+            if added_excluded_serial_numbers:
+                updates.setdefault("added", {})["excluded_serial_numbers"] = sorted(added_excluded_serial_numbers)
+            removed_excluded_serial_numbers = old_excluded_serial_numbers - excluded_serial_numbers
+            if removed_excluded_serial_numbers:
+                updates.setdefault("removed", {})["excluded_serial_numbers"] = sorted(removed_excluded_serial_numbers)
         # primary_users
         primary_users = set(self.cleaned_data["primary_users"])
         old_primary_users = set(self.instance.primary_users)
@@ -269,6 +326,18 @@ class UpdateRuleForm(forms.ModelForm):
             removed_primary_users = old_primary_users - primary_users
             if removed_primary_users:
                 updates.setdefault("removed", {})["primary_users"] = sorted(removed_primary_users)
+        # excluded_primary_users
+        excluded_primary_users = set(self.cleaned_data["excluded_primary_users"])
+        old_excluded_primary_users = set(self.instance.excluded_primary_users)
+        if excluded_primary_users != old_excluded_primary_users:
+            self.instance.excluded_primary_users = self.cleaned_data["excluded_primary_users"]
+            updated = True
+            added_excluded_primary_users = excluded_primary_users - old_excluded_primary_users
+            if added_excluded_primary_users:
+                updates.setdefault("added", {})["excluded_primary_users"] = sorted(added_excluded_primary_users)
+            removed_excluded_primary_users = old_excluded_primary_users - excluded_primary_users
+            if removed_excluded_primary_users:
+                updates.setdefault("removed", {})["excluded_primary_users"] = sorted(removed_excluded_primary_users)
         if updated:
             self.instance.save()
         # tags
@@ -282,6 +351,19 @@ class UpdateRuleForm(forms.ModelForm):
             removed_tags = old_tags - tags
             if removed_tags:
                 updates.setdefault("removed", {})["tags"] = [{"pk": t.pk, "name": t.name} for t in removed_tags]
+        # excluded_tags
+        excluded_tags = set(self.cleaned_data["excluded_tags"])
+        old_excluded_tags = set(self.instance.excluded_tags.all())
+        if excluded_tags != old_excluded_tags:
+            self.instance.excluded_tags.set(excluded_tags)
+            added_excluded_tags = excluded_tags - old_excluded_tags
+            if added_excluded_tags:
+                updates.setdefault("added", {})["excluded_tags"] = [{"pk": t.pk, "name": t.name}
+                                                                    for t in added_excluded_tags]
+            removed_excluded_tags = old_excluded_tags - excluded_tags
+            if removed_excluded_tags:
+                updates.setdefault("removed", {})["excluded_tags"] = [{"pk": t.pk, "name": t.name}
+                                                                      for t in removed_excluded_tags]
         # event
         if updates:
             rule_update_data = {"rule": self.instance.serialize_for_event(),

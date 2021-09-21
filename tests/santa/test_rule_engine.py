@@ -139,6 +139,31 @@ class SantaRuleEngineTestCase(TestCase):
         rule.save()
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
 
+    def test_one_excluded_serial_number(self):
+        target, rule, result = self.create_and_serialize_for_iter_rule()
+        rule.excluded_serial_numbers = [self.enrolled_machine.serial_number]
+        rule.save()
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
+        rule.excluded_serial_numbers = [get_random_string()]
+        rule.save()
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
+
+    def test_two_primary_user_machines_one_excluded_serial_number(self):
+        target, rule, result = self.create_and_serialize_for_iter_rule()
+        primary_user = get_random_string(15)
+        rule.primary_users.append(primary_user)
+        rule.save()
+        self.enrolled_machine.primary_user = primary_user
+        self.enrolled_machine.save()
+        self.enrolled_machine2.primary_user = primary_user
+        self.enrolled_machine2.save()
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine2, [])), [result])
+        rule.excluded_serial_numbers = [self.enrolled_machine.serial_number]
+        rule.save()
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine2, [])), [result])
+
     def test_iter_primary_user_new_rules(self):
         target, rule, result = self.create_and_serialize_for_iter_rule()
         rule.primary_users = [get_random_string(14)]
@@ -151,12 +176,71 @@ class SantaRuleEngineTestCase(TestCase):
         self.enrolled_machine.save()
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
 
+    def test_one_excluded_primary_user(self):
+        target, rule, result = self.create_and_serialize_for_iter_rule()
+        primary_user = get_random_string()
+        rule.excluded_primary_users = [primary_user]
+        rule.save()
+        self.enrolled_machine.primary_user = primary_user
+        self.enrolled_machine.save()
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
+        rule.excluded_primary_users = [get_random_string()]
+        rule.save()
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
+        # no rules if excluded_primary_users and the machine reports no primary user!!!
+        self.enrolled_machine.primary_user = None
+        self.enrolled_machine.save()
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
+
+    def test_two_serial_number_machines_one_excluded_primary_user(self):
+        target, rule, result = self.create_and_serialize_for_iter_rule()
+        rule.serial_numbers = [self.enrolled_machine.serial_number, self.enrolled_machine2.serial_number]
+        rule.save()
+        primary_user1 = get_random_string(15)
+        self.enrolled_machine.primary_user = primary_user1
+        self.enrolled_machine.save()
+        primary_user2 = get_random_string(15)
+        self.enrolled_machine2.primary_user = primary_user2
+        self.enrolled_machine2.save()
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine2, [])), [result])
+        rule.excluded_primary_users = [primary_user1]
+        rule.save()
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine2, [])), [result])
+
     def test_iter_tag_new_rules(self):
         target, rule, result = self.create_and_serialize_for_iter_rule()
         tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(3)]
         rule.tags.set(tags)
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [tags[0].pk])), [result])
+
+    def test_one_excluded_tag(self):
+        target, rule, result = self.create_and_serialize_for_iter_rule()
+        tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(2)]
+        rule.excluded_tags.set(tags[-1:])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [tags[-1].pk])), [])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [tags[0].pk])), [result])
+        rule.excluded_tags.set([])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [tags[-1].pk])), [result])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [tags[0].pk])), [result])
+
+    def test_primary_user_machine_two_tags_one_excluded_tag(self):
+        target, rule, result = self.create_and_serialize_for_iter_rule()
+        primary_user = get_random_string(14)
+        rule.primary_users = [primary_user]
+        rule.save()
+        self.enrolled_machine.primary_user = primary_user
+        self.enrolled_machine.save()
+        tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(3)]
+        tag_pks = [t.pk for t in tags]
+        rule.tags.set(tags[:-1])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, tag_pks)), [result])
+        rule.excluded_tags.add(tags[-1])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, tag_pks)), [])
 
     def test_iter_bundle_new_rules(self):
         bundle_target, bundle, bundle_rule = self.create_bundle_rule()
@@ -438,8 +522,9 @@ class SantaRuleEngineTestCase(TestCase):
         _, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
         MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
         # scope rule with some tags
-        tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(3)]
-        rule.tags.set(tags)
+        tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(4)]
+        rule.tags.set(tags[:-1])
+        rule.excluded_tags.set(tags[-2:-1])
         # rule not in scope anymore, needs to be removed
         rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
         serialized_remove_rule = serialized_rule.copy()
@@ -456,4 +541,25 @@ class SantaRuleEngineTestCase(TestCase):
         MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk], response_cursor)
         # rule added, noop
         rule_batch, _ = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk])
+        self.assertEqual(rule_batch, [])
+        # rule again not in scope, needs to be removed
+        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine,
+                                                                              [tags[0].pk, tags[-2].pk])
+        serialized_remove_rule = serialized_rule.copy()
+        serialized_remove_rule.pop("custom_msg", None)
+        serialized_remove_rule["policy"] = "REMOVE"
+        self.assertEqual(rule_batch, [serialized_remove_rule])
+        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk, tags[-2].pk], response_cursor)
+        # rule removed, noop
+        rule_batch, _ = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk, tags[-2].pk])
+        self.assertEqual(rule_batch, [])
+        rule.tags.set([])
+        rule.excluded_tags.set(tags[-1:])
+        # rule again in scope, rule needs to be added
+        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine,
+                                                                              [tags[0].pk, tags[-2].pk])
+        self.assertEqual(rule_batch, [serialized_rule])
+        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk, tags[-2].pk], response_cursor)
+        # rule added noop
+        rule_batch, _ = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk, tags[-2].pk])
         self.assertEqual(rule_batch, [])

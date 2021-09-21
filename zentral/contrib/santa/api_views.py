@@ -90,6 +90,7 @@ class RuleSetUpdate(APIView):
                                                          sha256=rule_defaults.pop("sha256"))
                 found_target_pks.append(target.pk)
                 tags = set(all_tags[n] for n in rule_defaults.pop("tags", []))
+                excluded_tags = set(all_tags[n] for n in rule_defaults.pop("excluded_tags", []))
                 rule, rule_created = Rule.objects.get_or_create(
                     configuration=configuration,
                     ruleset=ruleset,
@@ -98,6 +99,7 @@ class RuleSetUpdate(APIView):
                 )
                 if rule_created:
                     rule.tags.set(tags)
+                    rule.excluded_tags.set(excluded_tags)
                     rules_created += 1
                     rule_update_events.append({
                         "rule": rule.serialize_for_event(),
@@ -131,6 +133,21 @@ class RuleSetUpdate(APIView):
                         if added_serial_numbers:
                             rule_updates.setdefault("added", {})["serial_numbers"] = sorted(added_serial_numbers)
                         rule_updated = True
+                    excluded_serial_numbers = set(rule_defaults.get("excluded_serial_numbers", []))
+                    old_excluded_serial_numbers = set(rule.excluded_serial_numbers)
+                    if old_excluded_serial_numbers != excluded_serial_numbers:
+                        removed_excluded_serial_numbers = old_excluded_serial_numbers - excluded_serial_numbers
+                        if removed_excluded_serial_numbers:
+                            rule_updates.setdefault("removed", {})["excluded_serial_numbers"] = sorted(
+                                removed_excluded_serial_numbers
+                            )
+                        rule.excluded_serial_numbers = sorted(excluded_serial_numbers)
+                        added_excluded_serial_numbers = excluded_serial_numbers - old_excluded_serial_numbers
+                        if added_excluded_serial_numbers:
+                            rule_updates.setdefault("added", {})["excluded_serial_numbers"] = sorted(
+                                added_excluded_serial_numbers
+                            )
+                        rule_updated = True
                     primary_users = set(rule_defaults.get("primary_users", []))
                     old_primary_users = set(rule.primary_users)
                     if old_primary_users != primary_users:
@@ -141,6 +158,21 @@ class RuleSetUpdate(APIView):
                         added_primary_users = primary_users - old_primary_users
                         if added_primary_users:
                             rule_updates.setdefault("added", {})["primary_users"] = sorted(added_primary_users)
+                        rule_updated = True
+                    excluded_primary_users = set(rule_defaults.get("excluded_primary_users", []))
+                    old_excluded_primary_users = set(rule.excluded_primary_users)
+                    if old_excluded_primary_users != excluded_primary_users:
+                        removed_excluded_primary_users = old_excluded_primary_users - excluded_primary_users
+                        if removed_excluded_primary_users:
+                            rule_updates.setdefault("removed", {})["excluded_primary_users"] = sorted(
+                                removed_excluded_primary_users
+                            )
+                        rule.excluded_primary_users = sorted(excluded_primary_users)
+                        added_excluded_primary_users = excluded_primary_users - old_excluded_primary_users
+                        if added_excluded_primary_users:
+                            rule_updates.setdefault("added", {})["excluded_primary_users"] = sorted(
+                                added_excluded_primary_users
+                            )
                         rule_updated = True
                     old_tags = set(rule.tags.all())
                     if old_tags != tags:
@@ -153,6 +185,18 @@ class RuleSetUpdate(APIView):
                         if added_tags:
                             rule_updates.setdefault("added", {})["tags"] = [{"pk": t.pk, "name": t.name}
                                                                             for t in added_tags]
+                        rule_updated = True
+                    old_excluded_tags = set(rule.excluded_tags.all())
+                    if old_excluded_tags != excluded_tags:
+                        removed_excluded_tags = old_excluded_tags - excluded_tags
+                        if removed_excluded_tags:
+                            rule_updates.setdefault("removed", {})["excluded_tags"] = [{"pk": t.pk, "name": t.name}
+                                                                                       for t in removed_excluded_tags]
+                        rule.excluded_tags.set(excluded_tags)
+                        added_excluded_tags = excluded_tags - old_excluded_tags
+                        if added_excluded_tags:
+                            rule_updates.setdefault("added", {})["excluded_tags"] = [{"pk": t.pk, "name": t.name}
+                                                                                     for t in added_excluded_tags]
                         rule_updated = True
                     if rule_updated:
                         rule.save()

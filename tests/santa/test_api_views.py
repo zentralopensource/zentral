@@ -154,7 +154,13 @@ class APIViewsTestCase(TestCase):
             "rules": [
                 {"rule_type": "BINARY",
                  "sha256": get_random_string(64, "0123456789abcdef"),
-                 "policy": "BLOCKLIST"}
+                 "policy": "BLOCKLIST",
+                 "primary_users": [get_random_string(32)],
+                 "excluded_primary_users": [get_random_string(32)],
+                 "serial_numbers": [get_random_string(32)],
+                 "excluded_serial_numbers": [get_random_string(32)],
+                 "tags": [get_random_string(32)],
+                 "excluded_tags": [get_random_string(32)]}
             ]
         }
         self.assertEqual(self.configuration.rule_set.count(), 0)
@@ -191,6 +197,12 @@ class APIViewsTestCase(TestCase):
                 target__type=Target.BINARY,
                 target__sha256=data["rules"][0]["sha256"],
                 policy=Rule.BLOCKLIST,
+                serial_numbers=data["rules"][0]["serial_numbers"],
+                excluded_serial_numbers=data["rules"][0]["excluded_serial_numbers"],
+                primary_users=data["rules"][0]["primary_users"],
+                excluded_primary_users=data["rules"][0]["excluded_primary_users"],
+                tags__name=data["rules"][0]["tags"][0],
+                excluded_tags__name=data["rules"][0]["excluded_tags"][0],
                 custom_msg="",
                 ruleset=ruleset,
             ).count(), 1
@@ -200,6 +212,12 @@ class APIViewsTestCase(TestCase):
                 target__type=Target.BINARY,
                 target__sha256=data["rules"][0]["sha256"],
                 policy=Rule.BLOCKLIST,
+                serial_numbers=data["rules"][0]["serial_numbers"],
+                excluded_serial_numbers=data["rules"][0]["excluded_serial_numbers"],
+                primary_users=data["rules"][0]["primary_users"],
+                excluded_primary_users=data["rules"][0]["excluded_primary_users"],
+                tags__name=data["rules"][0]["tags"][0],
+                excluded_tags__name=data["rules"][0]["excluded_tags"][0],
                 custom_msg="",
                 ruleset=ruleset,
             ).count(), 1
@@ -236,6 +254,12 @@ class APIViewsTestCase(TestCase):
 
         # update
         data["rules"][0]["custom_msg"] = get_random_string()
+        data["rules"][0]["serial_numbers"].append(get_random_string())
+        data["rules"][0]["excluded_serial_numbers"].append(get_random_string())
+        data["rules"][0]["primary_users"] = [get_random_string()]
+        data["rules"][0]["excluded_primary_users"].append(get_random_string())
+        data["rules"][0]["tags"].insert(0, get_random_string())
+        data["rules"][0]["excluded_tags"] = [get_random_string()]
         response = self.post_json_data(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -268,6 +292,16 @@ class APIViewsTestCase(TestCase):
                 target__type=Target.BINARY,
                 target__sha256=data["rules"][0]["sha256"],
                 policy=Rule.BLOCKLIST,
+                serial_numbers__overlap=data["rules"][0]["serial_numbers"],
+                serial_numbers__len=len(data["rules"][0]["serial_numbers"]),
+                excluded_serial_numbers__overlap=data["rules"][0]["excluded_serial_numbers"],
+                excluded_serial_numbers__len=len(data["rules"][0]["excluded_serial_numbers"]),
+                primary_users__overlap=data["rules"][0]["primary_users"],
+                primary_users__len=len(data["rules"][0]["primary_users"]),
+                excluded_primary_users__overlap=data["rules"][0]["excluded_primary_users"],
+                excluded_primary_users__len=len(data["rules"][0]["excluded_primary_users"]),
+                tags__name=data["rules"][0]["tags"][0],
+                excluded_tags__name=data["rules"][0]["excluded_tags"][0],
                 custom_msg=data["rules"][0]["custom_msg"],
                 ruleset=ruleset,
             ).count(), 1
@@ -277,6 +311,16 @@ class APIViewsTestCase(TestCase):
                 target__type=Target.BINARY,
                 target__sha256=data["rules"][0]["sha256"],
                 policy=Rule.BLOCKLIST,
+                serial_numbers__overlap=data["rules"][0]["serial_numbers"],
+                serial_numbers__len=len(data["rules"][0]["serial_numbers"]),
+                excluded_serial_numbers__overlap=data["rules"][0]["excluded_serial_numbers"],
+                excluded_serial_numbers__len=len(data["rules"][0]["excluded_serial_numbers"]),
+                primary_users__overlap=data["rules"][0]["primary_users"],
+                primary_users__len=len(data["rules"][0]["primary_users"]),
+                excluded_primary_users__overlap=data["rules"][0]["excluded_primary_users"],
+                excluded_primary_users__len=len(data["rules"][0]["excluded_primary_users"]),
+                tags__name=data["rules"][0]["tags"][0],
+                excluded_tags__name=data["rules"][0]["excluded_tags"][0],
                 custom_msg=data["rules"][0]["custom_msg"],
                 ruleset=ruleset,
             ).count(), 1
@@ -389,4 +433,55 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(
             json_response,
             {"rules": {"0": {"non_field_errors": [f'BUNDLE/{sha256}: bundle unknown or not uploaded']}}}
+        )
+
+        # serial number conflict
+        response = self.post_json_data(
+            url,
+            {"name": get_random_string(),
+             "rules": [{"rule_type": "BINARY",
+                        "sha256": get_random_string(64, "0123456789abcdef"),
+                        "policy": "ALLOWLIST",
+                        "serial_numbers": ["01234567", "12345678"],
+                        "excluded_serial_numbers": ["12345678"]}]}
+        )
+        self.assertEqual(response.status_code, 400)
+        json_response = response.json()
+        self.assertEqual(
+            json_response,
+            {"rules": {"0": {"non_field_errors": ["Conflict between serial_numbers and excluded_serial_numbers"]}}}
+        )
+
+        # primary user conflict
+        response = self.post_json_data(
+            url,
+            {"name": get_random_string(),
+             "rules": [{"rule_type": "BINARY",
+                        "sha256": get_random_string(64, "0123456789abcdef"),
+                        "policy": "ALLOWLIST",
+                        "primary_users": ["vincent", "françois"],
+                        "excluded_primary_users": ["françois", "paul", "les autres…"]}]}
+        )
+        self.assertEqual(response.status_code, 400)
+        json_response = response.json()
+        self.assertEqual(
+            json_response,
+            {"rules": {"0": {"non_field_errors": ["Conflict between primary_users and excluded_primary_users"]}}}
+        )
+
+        # tag conflict
+        response = self.post_json_data(
+            url,
+            {"name": get_random_string(),
+             "rules": [{"rule_type": "BINARY",
+                        "sha256": get_random_string(64, "0123456789abcdef"),
+                        "policy": "ALLOWLIST",
+                        "tags": ["vincent", "françois"],
+                        "excluded_tags": ["françois", "paul", "les autres…"]}]}
+        )
+        self.assertEqual(response.status_code, 400)
+        json_response = response.json()
+        self.assertEqual(
+            json_response,
+            {"rules": {"0": {"non_field_errors": ["Conflict between tags and excluded_tags"]}}}
         )

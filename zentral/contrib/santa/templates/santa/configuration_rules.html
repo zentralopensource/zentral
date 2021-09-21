@@ -160,6 +160,18 @@
       </td>
     </tr>
     {% endif %}
+    {% if rule.excluded_serial_numbers %}
+    <tr>
+      <td>Excluded serial number{{ rule.excluded_serial_numbers|length|pluralize }}</td>
+      <td>
+        <ul>
+          {% for serial_number in rule.excluded_serial_numbers %}
+          <li>{{ serial_number }}</li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+    {% endif %}
     {% if rule.primary_users %}
     <tr>
       <td>Primary user{{ rule.primary_users|length|pluralize }}</td>
@@ -171,12 +183,35 @@
         </ul>
     </tr>
     {% endif %}
+    {% if rule.excluded_primary_users %}
+    <tr>
+      <td>Excluded primary user{{ rule.excluded_primary_users|length|pluralize }}</td>
+      <td>
+        <ul>
+          {% for primary_user in rule.excluded_primary_users %}
+          <li>{{ primary_user }}</li>
+          {% endfor %}
+        </ul>
+    </tr>
+    {% endif %}
     {% with rule.tags.count as tag_count %}
-    {% if rule.tags.count %}
+    {% if tag_count %}
     <tr>
       <td>Tag{{ tag_count|pluralize }}</td>
       <td>
         {% for tag in rule.tags.all %}
+        {% inventory_tag tag %}
+        {% endfor %}
+      </td>
+    </tr>
+    {% endif %}
+    {% endwith %}
+    {% with rule.excluded_tags.count as excluded_tag_count %}
+    {% if excluded_tag_count %}
+    <tr>
+      <td>Excluded tag{{ excluded_tag_count|pluralize }}</td>
+      <td>
+        {% for tag in rule.excluded_tags.all %}
         {% inventory_tag tag %}
         {% endfor %}
       </td>

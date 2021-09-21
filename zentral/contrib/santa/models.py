@@ -432,8 +432,11 @@ class Rule(models.Model):
 
     # scope
     serial_numbers = ArrayField(models.TextField(), blank=True, default=list)
+    excluded_serial_numbers = ArrayField(models.TextField(), blank=True, default=list)
     primary_users = ArrayField(models.TextField(), blank=True, default=list)
-    tags = models.ManyToManyField(Tag, blank=True)
+    excluded_primary_users = ArrayField(models.TextField(), blank=True, default=list)
+    tags = models.ManyToManyField(Tag, blank=True, related_name="+")
+    excluded_tags = models.ManyToManyField(Tag, blank=True, related_name="+")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -459,12 +462,20 @@ class Rule(models.Model):
             d["custom_msg"] = self.custom_msg
         if self.serial_numbers:
             d["serial_numbers"] = sorted(self.serial_numbers)
+        if self.excluded_serial_numbers:
+            d["excluded_serial_numbers"] = sorted(self.excluded_serial_numbers)
         if self.primary_users:
             d["primary_users"] = sorted(self.primary_users)
+        if self.excluded_primary_users:
+            d["excluded_primary_users"] = sorted(self.excluded_primary_users)
         tags = list(self.tags.all())
         if tags:
             d["tags"] = [{"pk": t.pk, "name": t.name} for t in tags]
             d["tags"].sort(key=lambda t: t["pk"])
+        excluded_tags = list(self.excluded_tags.all())
+        if excluded_tags:
+            d["excluded_tags"] = [{"pk": t.pk, "name": t.name} for t in excluded_tags]
+            d["excluded_tags"].sort(key=lambda t: t["pk"])
         return d
 
 
@@ -473,20 +484,23 @@ class MachineRuleManager(models.Manager):
         query = (
             "WITH prepared_rules as ("  # aggregate the tag ids
             "  select r.target_id, r.policy, r.custom_msg, r.version,"
-            "  r.serial_numbers, r.primary_users, array_remove(array_agg(srt.tag_id), null) as tag_ids"
+            "  r.serial_numbers, r.primary_users,"
+            "  array_remove(array_agg(srt.tag_id), null) as tag_ids,"
+            "  r.excluded_serial_numbers, r.excluded_primary_users,"
+            "  array_remove(array_agg(sret.tag_id), null) as excluded_tag_ids"
             "  from santa_rule as r"
             "  left join santa_rule_tags as srt on (srt.rule_id = r.id)"
-            "  where r.configuration_id = %s"
-            "  group by r.target_id, r.policy, r.custom_msg, r.version, r.serial_numbers, r.primary_users"
+            "  left join santa_rule_excluded_tags as sret on (sret.rule_id = r.id)"
+            "  where r.configuration_id = %(configuration_pk)s"
+            "  group by r.target_id, r.policy, r.custom_msg, r.version,"
+            "  r.serial_numbers, r.excluded_serial_numbers,"
+            "  r.primary_users, r.excluded_primary_users"
             "), filtered_rules as ("  # filter the configured rules for the enrolled machine
             "  select pr.target_id, pr.policy, pr.custom_msg, pr.version"
             "  from prepared_rules as pr"
             "  where ("
-            "    (cardinality(pr.serial_numbers) = 0"
-            "     and cardinality(pr.primary_users) = 0"
-            "     and cardinality(pr.tag_ids) = 0) or ("
             "    {wheres}"
-            "  ))"
+            "  )"
             "), expanded_rules as ("  # expand the bundle rules
             "   select case when bt.target_id is not null then bt.target_id else fr.target_id end as target_id,"
             "   fr.policy, fr.custom_msg, fr.version,"
@@ -497,7 +511,7 @@ class MachineRuleManager(models.Manager):
             "), machine_rules as ("  # current enrolled machine machine rules
             "   select target_id, policy, version"
             "   from santa_machinerule"
-            "   where enrolled_machine_id = %s"
+            "   where enrolled_machine_id = %(enrolled_machine_pk)s"
             "), rule_product as ("  # full product of the configured rules and the machine rules
             "  select er.target_id as rule_target_id, er.policy as rule_policy,"
             "  er.custom_msg as rule_custom_msg, er.version as rule_version,"
@@ -524,21 +538,34 @@ class MachineRuleManager(models.Manager):
             "from changed_rules as cr "
             "join santa_target as t on (t.id = cr.target_id) "
             "left join santa_target as t2 on (t2.id = cr.file_bundle_target_id) "
-            "order by t.sha256 limit %s"
+            "order by t.sha256 limit %(batch_size)s"
         )
         configuration = enrolled_machine.enrollment.configuration
-        args = [configuration.pk, enrolled_machine.serial_number]
-        wheres = ["%s = ANY(pr.serial_numbers)"]  # machine specific rules
+        # machine specific rules
+        wheres = ["(cardinality(pr.serial_numbers) = 0 or %(serial_number)s = ANY(pr.serial_numbers))",
+                  "%(serial_number)s <> ALL(pr.excluded_serial_numbers)"]
+        kwargs = {"configuration_pk": configuration.pk,
+                  "serial_number": enrolled_machine.serial_number,
+                  "enrolled_machine_pk": enrolled_machine.pk,
+                  "batch_size": configuration.batch_size}
         if enrolled_machine.primary_user:
-            wheres.append("%s = ANY(pr.primary_users)")  # user specific rules
-            args.append(enrolled_machine.primary_user)
+            # user specific rules
+            wheres.extend(["(cardinality(pr.primary_users) = 0 or %(primary_user)s = ANY(pr.primary_users))",
+                           "%(primary_user)s <> ALL(pr.excluded_primary_users)"])
+            kwargs["primary_user"] = enrolled_machine.primary_user
+        else:
+            wheres.extend(["cardinality(pr.primary_users) = 0",
+                           "cardinality(pr.excluded_primary_users) = 0"])
         if tags:
-            wheres.append("%s && pr.tag_ids")  # tag specific rules
-            args.append(tags)
-        args.extend([enrolled_machine.pk, configuration.batch_size])
-        query = query.format(wheres=" or ".join(wheres))
+            # tag specific rules
+            wheres.extend(["(cardinality(pr.tag_ids) = 0 or %(tags)s && pr.tag_ids)",
+                           "not (%(tags)s && pr.excluded_tag_ids)"])
+            kwargs["tags"] = tags
+        else:
+            wheres.append("cardinality(pr.tag_ids) = 0")
+        query = query.format(wheres=" and ".join(wheres))
         cursor = connection.cursor()
-        cursor.execute(query, args)
+        cursor.execute(query, kwargs)
         columns = [col[0] for col in cursor.description]
         for row in cursor.fetchall():
             rule_info_d = {}

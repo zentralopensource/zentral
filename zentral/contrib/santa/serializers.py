@@ -1,4 +1,5 @@
 from datetime import datetime
+from itertools import chain
 import logging
 import os.path
 from rest_framework import serializers
@@ -17,11 +18,23 @@ class RuleUpdateSerializer(serializers.Serializer):
         child=serializers.CharField(min_length=1),
         required=False,
     )
+    excluded_serial_numbers = serializers.ListField(
+        child=serializers.CharField(min_length=1),
+        required=False,
+    )
     primary_users = serializers.ListField(
         child=serializers.CharField(min_length=1),
         required=False,
     )
+    excluded_primary_users = serializers.ListField(
+        child=serializers.CharField(min_length=1),
+        required=False,
+    )
     tags = serializers.ListField(
+        child=serializers.CharField(min_length=1),
+        required=False,
+    )
+    excluded_tags = serializers.ListField(
         child=serializers.CharField(min_length=1),
         required=False,
     )
@@ -39,6 +52,9 @@ class RuleUpdateSerializer(serializers.Serializer):
             if data["custom_msg"]:
                 raise serializers.ValidationError("Custom message can only be set on BLOCKLIST rules")
             del data["custom_msg"]
+        for attr in ("serial_numbers", "primary_users", "tags"):
+            if set(data.get(attr, [])).intersection(set(data.get(f"excluded_{attr}", []))):
+                raise serializers.ValidationError(f"Conflict between {attr} and excluded_{attr}")
         return data
 
 
@@ -100,7 +116,7 @@ class RuleSetUpdateSerializer(serializers.Serializer):
         return data
 
     def all_tag_names(self):
-        return set(n for r in self.data["rules"] for n in r.get("tags", []))
+        return set(n for r in self.data["rules"] for n in chain(r.get("tags", []), r.get("excluded_tags", [])))
 
 
 # Santa fileinfo

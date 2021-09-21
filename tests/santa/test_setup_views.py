@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import MetaBusinessUnit, File
+from zentral.contrib.inventory.models import MetaBusinessUnit, File, Tag
 from accounts.models import User
 from zentral.contrib.santa.models import Bundle, Rule, Target
 
@@ -315,6 +315,29 @@ class SantaSetupViewsTestCase(TestCase):
         form = response.context["form"]
         self.assertEqual(form.errors, {'__all__': ['A rule for this target already exists']})
 
+    def test_create_configuration_rule_scope_conflict(self):
+        self.login("santa.add_configuration", "santa.view_configuration",
+                   "santa.add_rule", "santa.view_rule")
+        _, configuration = self.create_configuration()
+        binary_hash = get_random_sha256()
+        tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(3)]
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.BINARY,
+                                     "target_sha256": binary_hash,
+                                     "policy": Rule.ALLOWLIST,
+                                     "serial_numbers": "12345678,23456789",
+                                     "excluded_serial_numbers": "12345678",
+                                     "primary_users": "yolo,fomo",
+                                     "excluded_primary_users": "fomo",
+                                     "tags": [t.pk for t in tags],
+                                     "excluded_tags": [tags[0].pk]}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        form = response.context["form"]
+        self.assertEqual(form.errors, {'excluded_serial_numbers': ["'12345678' both included and excluded"],
+                                       'excluded_primary_users': ["'fomo' both included and excluded"],
+                                       'excluded_tags': [f"'{tags[0].name}' both included and excluded"]})
+
     def test_update_configuration_rule(self):
         self.login("santa.add_configuration", "santa.view_configuration",
                    "santa.add_rule", "santa.view_rule")
@@ -355,6 +378,36 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(rule.custom_msg, custom_message)
         self.assertEqual(rule.serial_numbers, serial_numbers)
         self.assertEqual(rule.primary_users, primary_users)
+
+    def test_update_configuration_rule_scope_conflict(self):
+        self.login("santa.add_configuration", "santa.view_configuration",
+                   "santa.add_rule", "santa.view_rule", "santa.change_rule")
+        _, configuration = self.create_configuration()
+        # create
+        binary_hash = get_random_sha256()
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.BINARY,
+                                     "target_sha256": binary_hash,
+                                     "policy": Rule.ALLOWLIST}, follow=True)
+        rule = response.context["object_list"][0]
+        # update
+        tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(3)]
+        response = self.client.post(reverse("santa:update_configuration_rule", args=(configuration.pk, rule.pk)),
+                                    {"target_type": Target.BINARY,
+                                     "target_sha256": binary_hash,
+                                     "policy": Rule.ALLOWLIST,
+                                     "serial_numbers": "12345678,23456789",
+                                     "excluded_serial_numbers": "12345678",
+                                     "primary_users": "yolo,fomo",
+                                     "excluded_primary_users": "fomo",
+                                     "tags": [t.pk for t in tags],
+                                     "excluded_tags": [tags[0].pk]}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        form = response.context["form"]
+        self.assertEqual(form.errors, {'excluded_serial_numbers': ["'12345678' both included and excluded"],
+                                       'excluded_primary_users': ["'fomo' both included and excluded"],
+                                       'excluded_tags': [f"'{tags[0].name}' both included and excluded"]})
 
     def test_delete_configuration_rule(self):
         self.login("santa.add_configuration", "santa.view_configuration",

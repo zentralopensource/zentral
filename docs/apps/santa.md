@@ -310,8 +310,11 @@ ruleset.json
       "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
       "policy": "ALLOWLIST",
       "serial_numbers": ["SN1", "SN2"],
+      "excluded_serial_numbers": ["SN3"],
       "primary_users": ["user1@example.com", "user2@example.com"],
-      "tags": ["tag1", "tag2"]
+      "excluded_primary_users": ["user3@example.com"],
+      "tags": ["tag1", "tag2"],
+      "excluded_tags": ["tag3"]
     }
   ]
 }
