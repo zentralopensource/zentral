@@ -147,15 +147,22 @@ def macos_version_from_build(build):
             name = "OS X"
         else:
             name = "macOS"
-        if minor >= 16:
+        if minor >= 17:
+            major = 12
+            minor = patch
+            patch = 0
+        elif minor >= 16:
             major = 11
             minor = max(0, patch - 1)
-            if build in ("20B29", "20B50", "20D74", "20D75"):
+            if build in ("20B29", "20B50", "20D74", "20D75", "20E241", "20G80"):
                 patch = 1
-            elif build in ("20D80",):
+            elif build in ("20D80", "20G95"):
                 patch = 2
             elif build in ("20D91",):
                 patch = 3
+            elif build in ("20G165",):
+                minor = 6
+                patch = 0
             else:
                 patch = 0
         else:

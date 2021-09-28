@@ -26,7 +26,10 @@ class MacOSBuildTestCase(TestCase):
                                                    ("20C69", ("macOS", 11, 1, 0)),
                                                    ("20D74", ("macOS", 11, 2, 1)),
                                                    ("20D80", ("macOS", 11, 2, 2)),
-                                                   ("20D91", ("macOS", 11, 2, 3))):
+                                                   ("20D91", ("macOS", 11, 2, 3)),
+                                                   ("20G95", ("macOS", 11, 5, 2)),
+                                                   ("20G165", ("macOS", 11, 6, 0)),
+                                                   ("21A5522h", ("macOS", 12, 0, 0))):
             self.assertEqual(macos_version_from_build(build),
                              {"name": name,
                               "major": major,
