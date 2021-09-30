@@ -38,6 +38,14 @@ class SNSPublishThread(threading.Thread):
                         "DataType": "String",
                         "StringValue": routing_key,
                     }
+                else:
+                    try:
+                        message_attributes["zentral.type"] = {
+                            "DataType": "String",
+                            "StringValue": event_d['_zentral']['type']
+                        }
+                    except KeyError:
+                        pass
                 try:
                     response = self.client.publish(
                         TopicArn=self.topic_arn,
