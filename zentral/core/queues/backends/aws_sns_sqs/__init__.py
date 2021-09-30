@@ -182,7 +182,9 @@ class SimpleStoreWorker(WorkerMixin, Consumer):
         super().__init__(
             event_queues.setup_queue(
                 "store-enriched-events-{}".format(slugify(event_store.name)),
-                "enriched-events"
+                "enriched-events",
+                included_event_types=event_store.included_event_types,
+                excluded_event_types=event_store.excluded_event_types
             ),
             event_queues.client_kwargs
         )
@@ -220,7 +222,9 @@ class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
         super().__init__(
             event_queues.setup_queue(
                 "store-enriched-events-{}".format(slugify(event_store.name)),
-                "enriched-events"
+                "enriched-events",
+                included_event_types=event_store.included_event_types,
+                excluded_event_types=event_store.excluded_event_types
             ),
             event_store.concurrency,
             event_queues.client_kwargs
@@ -258,7 +262,9 @@ class BulkStoreWorker(WorkerMixin, BatchConsumer):
         super().__init__(
             event_queues.setup_queue(
                 "store-enriched-events-{}".format(slugify(event_store.name)),
-                "enriched-events"
+                "enriched-events",
+                included_event_types=event_store.included_event_types,
+                excluded_event_types=event_store.excluded_event_types
             ),
             event_store.batch_size,
             event_queues.client_kwargs
@@ -342,6 +348,7 @@ class EventQueues(object):
         self._events_queue = None
         self._stop_event = None
         self._threads = []
+        self._use_filter_policies = config_d.get("use_filter_policies", False)
 
     @cached_property
     def sns_client(self):
@@ -364,9 +371,15 @@ class EventQueues(object):
             self._known_topics[topic_basename] = topic_arn
             return topic_arn
 
-    def setup_queue(self, queue_basename, topic_basename=None):
+    def setup_queue(self, queue_basename, topic_basename=None, included_event_types=None, excluded_event_types=None):
+        filter_policy = None
+        if self._use_filter_policies and topic_basename:
+            if included_event_types:
+                filter_policy = {"zentral.type": list(included_event_types)}
+            elif excluded_event_types:
+                filter_policy = {"zentral.type": [{"anything-but": list(excluded_event_types)}]}
         try:
-            return self._known_queues[queue_basename]
+            queue_url = self._known_queues[queue_basename]
         except KeyError:
             queue_name = "{}{}-queue".format(self._prefix, queue_basename)
             try:
@@ -401,13 +414,45 @@ class EventQueues(object):
                         })
                     }
                 )
+                subscription_attributes = {"RawMessageDelivery": "true"}
+                if filter_policy:
+                    subscription_attributes["FilterPolicy"] = json.dumps(filter_policy)
                 self.sns_client.subscribe(
                     TopicArn=topic_arn,
                     Protocol="sqs",
                     Endpoint=queue_arn,
-                    Attributes={"RawMessageDelivery": "true"},
+                    Attributes=subscription_attributes
                 )
-            return queue_url
+        else:
+            if filter_policy:
+                topic_arn = self._known_topics[topic_basename]
+                response = self.sqs_client.get_queue_attributes(
+                    QueueUrl=queue_url,
+                    AttributeNames=["QueueArn"]
+                )
+                queue_arn = response["Attributes"]["QueueArn"]
+                subscription_arn = None
+                next_token = None
+                while subscription_arn is None:
+                    request_kwargs = {"TopicArn": topic_arn}
+                    if next_token:
+                        request_kwargs["NextToken"] = next_token
+                    response = self.sns_client.list_subscriptions_by_topic(**request_kwargs)
+                    for subscription in response.get("Subscriptions"):
+                        if subscription["Endpoint"] == queue_arn:
+                            subscription_arn = subscription["SubscriptionArn"]
+                            break
+                    else:
+                        next_token = response.get("NextToken")
+                        if not next_token:
+                            break
+                if subscription_arn:
+                    self.sns_client.set_subscription_attributes(
+                        SubscriptionArn=subscription_arn,
+                        AttributeName="FilterPolicy",
+                        AttributeValue=json.dumps(filter_policy)
+                    )
+        return queue_url
 
     def get_preprocess_worker(self):
         return PreprocessWorker(self)
