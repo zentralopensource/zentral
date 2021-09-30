@@ -174,6 +174,7 @@ class ProcessWorker(WorkerMixin, Consumer):
 
 class SimpleStoreWorker(WorkerMixin, Consumer):
     counters = (
+        ("skipped_events", "event_type"),
         ("stored_events", "event_type"),
     )
 
@@ -190,7 +191,11 @@ class SimpleStoreWorker(WorkerMixin, Consumer):
 
     def skip_event(self, receipt_handle, event_d):
         event_type = event_d['_zentral']['type']
-        return not self.event_store.is_event_type_included(event_type)
+        if not self.event_store.is_event_type_included(event_type):
+            self.inc_counter("skipped_events", event_type)
+            return True
+        else:
+            return False
 
     def run(self, *args, **kwargs):
         self.log_info("run")
@@ -206,6 +211,7 @@ class SimpleStoreWorker(WorkerMixin, Consumer):
 
 class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
     counters = (
+        ("skipped_events", "event_type"),
         ("stored_events", "event_type"),
     )
 
@@ -223,7 +229,11 @@ class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
 
     def skip_event(self, receipt_handle, event_d):
         event_type = event_d['_zentral']['type']
-        return not self.event_store.is_event_type_included(event_type)
+        if not self.event_store.is_event_type_included(event_type):
+            self.inc_counter("skipped_events", event_type)
+            return True
+        else:
+            return False
 
     def run(self, *args, **kwargs):
         self.log_info("run")
@@ -240,6 +250,7 @@ class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
 
 class BulkStoreWorker(WorkerMixin, BatchConsumer):
     counters = (
+        ("skipped_events", "event_type"),
         ("stored_events", "event_type"),
     )
 
@@ -257,7 +268,11 @@ class BulkStoreWorker(WorkerMixin, BatchConsumer):
 
     def skip_event(self, receipt_handle, event_d):
         event_type = event_d['_zentral']['type']
-        return not self.event_store.is_event_type_included(event_type)
+        if not self.event_store.is_event_type_included(event_type):
+            self.inc_counter("skipped_events", event_type)
+            return True
+        else:
+            return False
 
     def run(self, *args, **kwargs):
         self.log_info("run")
