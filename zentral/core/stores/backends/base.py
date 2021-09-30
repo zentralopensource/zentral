@@ -1,5 +1,6 @@
 class BaseEventStore(object):
     max_batch_size = 1
+    max_concurrency = 1
     machine_events = False
     machine_events_url = False
     last_machine_heartbeats = False
@@ -15,6 +16,7 @@ class BaseEventStore(object):
         self.frontend = config_d.get('frontend', False)
         self.configured = False
         self.batch_size = min(self.max_batch_size, max(config_d.get("batch_size") or 1, 1))
+        self.concurrency = min(self.max_concurrency, max(config_d.get("concurrency") or 1, 1))
         # excluded / included event types
         for prefix in ("excluded", "included"):
             attr = f"{prefix}_event_types"

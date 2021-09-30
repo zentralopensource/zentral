@@ -11,7 +11,7 @@ from botocore.config import Config
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.conf import settings
-from .consumer import BatchConsumer, Consumer, ConsumerProducer
+from .consumer import BatchConsumer, ConcurrentConsumer, Consumer, ConsumerProducer
 from .sns import SNSPublishThread
 from .sqs import SQSSendThread
 
@@ -204,6 +204,40 @@ class SimpleStoreWorker(WorkerMixin, Consumer):
         self.inc_counter("stored_events", event_type)
 
 
+class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
+    counters = (
+        ("stored_events", "event_type"),
+    )
+
+    def __init__(self, event_queues, event_store):
+        self.event_store = event_store
+        super().__init__(
+            event_queues.setup_queue(
+                "store-enriched-events-{}".format(slugify(event_store.name)),
+                "enriched-events"
+            ),
+            event_store.concurrency,
+            event_queues.client_kwargs
+        )
+        self.name = f"store worker {event_store.name}"
+
+    def skip_event(self, receipt_handle, event_d):
+        event_type = event_d['_zentral']['type']
+        return not self.event_store.is_event_type_included(event_type)
+
+    def run(self, *args, **kwargs):
+        self.log_info("run")
+        super().setup_metrics_exporter(*args, **kwargs)
+        super().run(*args, **kwargs)
+
+    def get_process_thread_constructor(self):
+        return self.event_store.get_process_thread_constructor()
+
+    def update_metrics(self, success, event_type, process_time):
+        if success:
+            self.inc_counter("stored_events", event_type)
+
+
 class BulkStoreWorker(WorkerMixin, BatchConsumer):
     counters = (
         ("stored_events", "event_type"),
@@ -370,10 +404,12 @@ class EventQueues(object):
         return ProcessWorker(self, process_event)
 
     def get_store_worker(self, event_store):
-        if event_store.batch_size == 1:
-            return SimpleStoreWorker(self, event_store)
-        else:
+        if event_store.batch_size > 1:
             return BulkStoreWorker(self, event_store)
+        elif event_store.concurrency > 1:
+            return ConcurrentStoreWorker(self, event_store)
+        else:
+            return SimpleStoreWorker(self, event_store)
 
     def _setup_signal(self):
         for signum in (signal.SIGTERM, signal.SIGINT):

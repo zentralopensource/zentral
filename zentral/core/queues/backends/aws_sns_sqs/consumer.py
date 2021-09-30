@@ -93,6 +93,71 @@ class Consumer(BaseConsumer):
         raise NotImplementedError
 
 
+# ConcurrentConsumer
+
+
+class ConcurrentConsumerFinalThread(threading.Thread):
+    def __init__(self, concurrent_consumer):
+        self.processed_event_queue = concurrent_consumer.processed_event_queue
+        self.delete_message_queue = concurrent_consumer.delete_message_queue
+        self.stop_event = concurrent_consumer.stop_event
+        self.update_metrics_cb = concurrent_consumer.update_metrics
+        super().__init__(name="ConcurrentConsumer final thread")
+
+    def run(self):
+        while True:
+            try:
+                receipt_handle, success, event_type, process_time = self.processed_event_queue.get(block=True,
+                                                                                                   timeout=1)
+            except queue.Empty:
+                logger.debug("[%s] no new processed event", self.name)
+                if self.stop_event.is_set():
+                    logger.info("[%s] graceful exit", self.name)
+                    break
+            else:
+                if success:
+                    logger.debug("[%s] receipt handle %s: new processed event", self.name, receipt_handle[-7:])
+                    self.delete_message_queue.put((receipt_handle, time.monotonic()))
+                else:
+                    logger.error("[%s] receipt handle %s: could not process event", self.name, receipt_handle[-7:])
+                self.update_metrics_cb(success, event_type, process_time)
+
+
+class ConcurrentConsumer(BaseConsumer):
+    def __init__(self, queue_url, concurrency, client_kwargs=None):
+        super().__init__(queue_url, client_kwargs)
+        self.concurrency = concurrency
+        self.process_event_queue = queue.Queue(maxsize=concurrency)
+        self.processed_event_queue = queue.Queue(maxsize=concurrency)
+        process_thread_constructor = self.get_process_thread_constructor()
+        for i in range(concurrency):
+            self._threads.append(
+                process_thread_constructor(
+                    i + 1,
+                    self.process_event_queue,
+                    self.processed_event_queue,
+                    self.stop_event
+                )
+            )
+        self._threads.append(ConcurrentConsumerFinalThread(self))
+
+    def start_run_loop(self):
+        while True:
+            try:
+                receipt_handle, routing_key, event_d = self.process_message_queue.get(block=True, timeout=1)
+            except queue.Empty:
+                logger.debug("no new event to process")
+                if self.stop_receiving_event.is_set():
+                    break
+            else:
+                if self.skip_event(receipt_handle, event_d):
+                    logger.debug("receipt handle %s: event skipped", receipt_handle[-7:])
+                    self.delete_message_queue.put((receipt_handle, time.monotonic()))
+                else:
+                    logger.debug("receipt handle %s: queue new event", receipt_handle[-7:])
+                    self.process_event_queue.put((receipt_handle, routing_key, event_d))
+
+
 # BatchConsumer
 
 
