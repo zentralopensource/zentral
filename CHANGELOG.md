@@ -1,14 +1,18 @@
-## 2021.2 (Unreleased)
+## 2021.2 (October 1, 2021)
 
 ### Features
 
-The Osquery module is being completely overhauled. Better dedicated Osquery models are replacing the legacy Osquery probes.
+The Osquery module has been completely overhauled. Better dedicated Osquery models replace the legacy Osquery probes.
 
-The stores are being updated (Datadog, Splunk), and the dependency on Elasticsearch for the UI is progressively being removed. Extra fingerprinting is put in place in the event pipeline, to be able to filter the events without relying on the full indexing of the event objects.
+The MDM module has been completely overhauled. There is a new Blueprint system, with a feedback mechanism to make sure artifacts have been installed on the endpoints. A first implementation of the declarative MDM protocol is also included.
+
+The stores were updated (Datadog, Splunk), and the dependency on Elasticsearch for the UI is progressively being removed. Extra fingerprinting is put in place in the event pipeline, to be able to filter the events without relying on the full indexing of the event objects.
 
 ### Improvements
 
-Some work is being done to speedup the AWS SNS publisher, and the bulk storage of events is being tested with the compatible stores.
+AWS SNS/SQS queues speedup (multithreading, subscription filters, …).
+
+Bulk or concurrent storage of events works with the compatible queues/stores.
 
 ### Backward incompatibilities
 
@@ -21,6 +25,10 @@ You will have to manually review and update the Osquery configurations after the
 Older distributed query results will not be deleted from the event stores, but you will not be able to fetch them from the Zentral UI.
 
 Older file carving archives will not be deleted from the Django storage, but you will not be able to fetch them from the Zentral UI.
+
+#### 🧨 Major MDM migration
+
+The MDM configuration will have to be manually imported in the new MDM system.
 
 #### Probe events & stores
 
