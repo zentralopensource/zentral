@@ -10,6 +10,10 @@ google-cloud-secret-manager
 # Zentral conf buckets
 google-cloud-storage
 
+# Zentral secret engine
+google-crc32c # explicit here, but required by other dependencies
+google-cloud-kms
+
 # Zentral google_pubsub queues backend
 google-cloud-pubsub<2
 

@@ -8,6 +8,7 @@ from zentral.contrib.inventory.utils import inventory_events_from_machine_snapsh
 from zentral.contrib.jamf.api_client import APIClient, APIClientError
 from zentral.core.events import event_cls_from_type
 from zentral.core.events.base import EventMetadata
+from zentral.core.secret_engines import decrypt_str, DecryptionError
 
 
 logger = logging.getLogger("zentral.contrib.jamf.preprocessors.webhook")
@@ -26,7 +27,16 @@ class WebhookEventPreprocessor(object):
         key = (jamf_instance_d["pk"], jamf_instance_d["version"])
         client = self.clients.get(key)
         if not client:
-            client = APIClient(**jamf_instance_d)
+            password = jamf_instance_d.pop("password")
+            try:
+                password = decrypt_str(password, field="password", model="jamf.jamfinstance", pk=jamf_instance_d["pk"])
+            except DecryptionError:
+                logger.error("Could not decrypt jamf instance %s %s password",
+                             jamf_instance_d["pk"], jamf_instance_d["version"])
+                # event might have been queued before the secret engines migration
+                # allow password as it is in the event
+                pass
+            client = APIClient(password=password, **jamf_instance_d)
             self.clients[key] = client
         return key, client
 

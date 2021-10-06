@@ -16,6 +16,7 @@ nav:
   - API: configuration/api.md
   - Django: configuration/django.md
   - Event stores: configuration/stores.md
+  - Secret engines: configuration/secret_engines.md
   - Users: configuration/users.md
 - Apps:
   - Inventory: apps/inventory.md

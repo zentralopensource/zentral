@@ -30,6 +30,7 @@ The configuration can be loaded from a file or an environment variable. To load 
  * [`django`](django/)
  * `queues`
  * [`stores`](stores/)
+ * [`secret_engines`](secret_engines/)
  * `actions`
  * `apps`
  * `events`

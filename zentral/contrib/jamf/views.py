@@ -64,7 +64,7 @@ class SetupJamfInstanceView(PermissionRequiredMixin, View):
 
     def get(self, request, *args, **kwargs):
         jamf_instance = get_object_or_404(JamfInstance, pk=kwargs["pk"])
-        api_client = APIClient(**jamf_instance.serialize())
+        api_client = APIClient(**jamf_instance.serialize(decrypt_password=True))
         jamf_instance_base_url = jamf_instance.base_url()
         try:
             setup_msg = api_client.setup()
@@ -105,7 +105,7 @@ class DeleteJamfInstanceView(PermissionRequiredMixin, DeleteView):
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
         jamf_instance_base_url = self.object.base_url()
-        api_client = APIClient(**self.object.serialize())
+        api_client = APIClient(**self.object.serialize(decrypt_password=True))
         try:
             api_client.cleanup()
         except APIClientError:

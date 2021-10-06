@@ -5,6 +5,7 @@ from django.db import models
 from django.db.models import F
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from zentral.core.secret_engines import decrypt_str, encrypt_str, rewrap
 
 
 logger = logging.getLogger("zentral.contrib.jamf.models")
@@ -27,8 +28,7 @@ class JamfInstance(models.Model):
                             help_text="path of the server API")
     user = models.CharField(max_length=64,
                             help_text="API user name")
-    password = models.CharField(max_length=256,
-                                help_text="API user password")
+    password = models.TextField(help_text="API user password", editable=False)
     secret = models.CharField(max_length=256, editable=False, unique=True,
                               default=make_secret)
     inventory_apps_shard = models.IntegerField(
@@ -64,7 +64,7 @@ class JamfInstance(models.Model):
     def api_doc_url(self):
         return "{}{}".format(self.base_url(), os.path.join(self.path, "../api"))
 
-    def serialize(self):
+    def serialize(self, decrypt_password=False):
         d = {
             "pk": self.pk,
             "version": self.version,
@@ -72,7 +72,7 @@ class JamfInstance(models.Model):
             "port": self.port,
             "path": self.path,
             "user": self.user,
-            "password": self.password,
+            "password": self.get_password() if decrypt_password else self.password,
             "secret": self.secret,
             "inventory_apps_shard": self.inventory_apps_shard,
             "tag_configs": [tm.serialize() for tm in self.tagconfig_set.select_related("taxonomy").all()],
@@ -87,6 +87,23 @@ class JamfInstance(models.Model):
                 "type": "Jamf Pro",
                 "content_type": "jamf.jamfinstance",
                 "pk": self.pk}
+
+    # secrets
+
+    def get_password(self):
+        if not self.pk:
+            raise ValueError("JamfInstance must have a PK")
+        return decrypt_str(self.password, field="password", model="jamf.jamfinstance", pk=self.pk)
+
+    def set_password(self, password):
+        if not self.pk:
+            raise ValueError("JamfInstance must have a PK")
+        self.password = encrypt_str(password, field="password", model="jamf.jamfinstance", pk=self.pk)
+
+    def rewrap_secrets(self):
+        if not self.pk:
+            raise ValueError("JamfInstance must have a PK")
+        self.password = rewrap(self.password, field="password", model="jamf.jamfinstance", pk=self.pk)
 
 
 class TagConfig(models.Model):

@@ -1,21 +1,21 @@
 import re
 from django import forms
+from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import BusinessUnit
 from .models import JamfInstance, TagConfig
 
 
 class JamfInstanceForm(forms.ModelForm):
+    password = forms.CharField(max_length=256, widget=forms.PasswordInput(render_value=True))
+
     class Meta:
         model = JamfInstance
         fields = (
             "business_unit",
             "host", "port", "path",
-            "user", "password",
+            "user",
             "inventory_apps_shard",
         )
-        widgets = {
-            'password': forms.PasswordInput(render_value=True)
-        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -23,6 +23,25 @@ class JamfInstanceForm(forms.ModelForm):
             BusinessUnit.objects.filter(source__module="zentral.contrib.inventory")
                                 .order_by('meta_business_unit__name')
         )
+        self._password = None
+        if self.instance.pk:
+            self.fields["password"].initial = self.instance.get_password()
+
+    def clean_password(self):
+        self._password = self.cleaned_data.pop("password")
+        # return temporary invalid password
+        return "!" + get_random_string()
+
+    def save(self):
+        if self.instance.pk:
+            jamf_instance = super().save(commit=False)
+            jamf_instance.set_password(self._password)
+            jamf_instance.save()  # bump version
+        else:
+            jamf_instance = super().save()  # commit to get a PK
+            jamf_instance.set_password(self._password)
+            super(JamfInstance, jamf_instance).save()  # do not bump version
+        return jamf_instance
 
 
 class TagConfigForm(forms.ModelForm):

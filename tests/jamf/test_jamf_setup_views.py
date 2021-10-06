@@ -40,13 +40,15 @@ class JamfSetupViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_jamf_instance(self):
-        return JamfInstance.objects.create(
+        jamf_instance = JamfInstance.objects.create(
             host="{}.example.com".format(get_random_string(12)),
             port=443,
             path="/JSSResource",
-            user=get_random_string(),
-            password=get_random_string(),
+            user=get_random_string()
         )
+        jamf_instance.set_password(get_random_string())
+        super(JamfInstance, jamf_instance).save()
+        return jamf_instance
 
     def _force_tag_config(self):
         jamf_instance = self._force_jamf_instance()
@@ -105,6 +107,7 @@ class JamfSetupViewsTestCase(TestCase):
         self.assertContains(response, "0 Tag configs")
         jamf_instance = response.context["object"]
         self.assertEqual(jamf_instance.version, 0)
+        self.assertEqual(jamf_instance.get_password(), "pwd")
         self.assertContains(response, "https://yo.example.com:8443/JSSResource")
         self.assertContains(response, "godzilla")
         self.assertNotContains(response, "pwd")
@@ -159,6 +162,7 @@ class JamfSetupViewsTestCase(TestCase):
         self._login("jamf.change_jamfinstance")
         response = self.client.get(reverse("jamf:update_jamf_instance", args=(jamf_instance.pk,)))
         self.assertContains(response, "Update jamf instance")
+        self.assertContains(response, jamf_instance.get_password())
 
     def test_update_jamf_instance_post(self):
         jamf_instance = self._force_jamf_instance()
@@ -168,7 +172,7 @@ class JamfSetupViewsTestCase(TestCase):
                                      "port": 8443,
                                      "path": "/JSSResource",
                                      "user": "godzilla",
-                                     "password": "pwd",
+                                     "password": "pwd1234",
                                      "inventory_apps_shard": 12},
                                     follow=True)
         self.assertTemplateUsed(response, "jamf/jamfinstance_detail.html")
@@ -178,6 +182,7 @@ class JamfSetupViewsTestCase(TestCase):
         self.assertEqual(jamf_instance, jamf_instance2)
         self.assertEqual(jamf_instance2.version, 1)
         self.assertEqual(jamf_instance2.inventory_apps_shard, 12)
+        self.assertEqual(jamf_instance2.get_password(), "pwd1234")
 
     # create tag config
 

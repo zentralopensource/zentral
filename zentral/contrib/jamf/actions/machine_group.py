@@ -39,7 +39,7 @@ class Action(BaseAction):
                 except JamfInstance.DoesNotExist:
                     logger.error("Could not find jamf instance for config %s", source.config)
                 else:
-                    client = APIClient(**jamf_instance.serialize())
+                    client = APIClient(**jamf_instance.serialize(decrypt_password=True))
 
                     if action == ACTION_ADD_MACHINE:
                         method = client.add_computer_to_group
