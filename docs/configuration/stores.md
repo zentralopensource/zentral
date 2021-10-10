@@ -161,6 +161,14 @@ A string / string dictionary of extra headers to be set for the HTTP requests. T
 
 **WARNING** Basic Authentication via `username` and `password` conflicts with the configuration of the `Authorization` header.
 
+### `concurrency`
+
+**OPTIONAL**
+
+**WARNING** only works if the AWS SNS/SQS queues backend is used.
+
+An integer between 1 and 20, 1 by default. The number of threads to use when posting the events. This can increase the throughput of the store worker.
+
 ### Full example
 
 ```json
