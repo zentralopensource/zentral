@@ -136,6 +136,12 @@ The [default authentication mechanisms](https://cloud.google.com/docs/authentica
 
 The [`roles/cloudkms.cryptoKeyEncrypterDecrypter`](https://cloud.google.com/kms/docs/reference/permissions-and-roles) role can be used to grant the necessary permissions to the service account, at the CryptoKey resource level.
 
+### `credentials`
+
+**OPTIONAL**
+
+The path to a service account JSON key file. To be used if no other default authentication mechanism is available.
+
 ### `project_id`
 
 **MANDATORY**
