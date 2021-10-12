@@ -17,7 +17,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.8"
+USER_AGENT = "Zentral/munkipostflight 0.9"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -105,14 +105,69 @@ class ManagedInstallReport(object):
             events.append((rr.pop('time').strftime('%Y-%m-%d %H:%M:%S +0000'),
                            dict(rr, type='removal')))
         for err in self.data.get('Errors', []):
-            events.append((self.end_time, {'type': 'error', 'message': err}))
+            events.append((self.end_time or self.start_time, {'type': 'error', 'message': err}))
         for warn in self.data.get('Warnings', []):
-            events.append((self.end_time, {'type': 'warning', 'message': warn}))
+            events.append((self.end_time or self.start_time, {'type': 'warning', 'message': warn}))
         events.sort(key=lambda t: t[0])
         return events
 
+    def managed_installs(self):
+        managed_installs = {}
+        # get the installed items
+        for managed_install in self.data.get('ManagedInstalls', []):
+            if managed_install.get("installed"):
+                managed_installs[managed_install["name"]] = (
+                    managed_install["installed_version"],
+                    managed_install["display_name"],
+                    None
+                )
+        # add the items to remove (because they are not removed yet)
+        for item_to_remove in self.data.get('ItemsToRemove', []):
+            if item_to_remove.get("installed"):
+                managed_installs[item_to_remove["name"]] = (
+                    item_to_remove["installed_version"],
+                    item_to_remove["display_name"],
+                    None
+                )
+        # update with the successful installs
+        for install_result in self.data.get('InstallResults', []):
+            if install_result["status"] == 0:
+                managed_installs[install_result["name"]] = (
+                    install_result["version"],
+                    install_result["display_name"],
+                    install_result["time"].strftime("%Y-%m-%d %H:%M:%S +0000")
+                )
+        # update with the successful removals
+        for removal_result in self.data.get('RemovalResults', []):
+            if removal_result["status"] == 0:
+                managed_installs.pop(removal_result["name"], None)
+        return managed_installs
+
+    def updated_managed_installs(self, from_managed_installs):
+        managed_installs = self.managed_installs()
+        # carry over the install time if possible
+        for n, (v, dn, t) in managed_installs.items():
+            if t is None:
+                try:
+                    from_v, _, from_t = from_managed_installs[n]
+                except KeyError:
+                    pass
+                else:
+                    if from_v == v and from_t is not None:
+                        managed_installs[n] = (v, dn, from_t)
+        # carry over the already present pkg info for failed installs
+        for install_result in self.data.get('InstallResults', []):
+            if install_result["status"] != 0:
+                n = install_result["name"]
+                try:
+                    managed_installs[n] = from_managed_installs[n]
+                except KeyError:
+                    pass
+        return managed_installs
+
     def serialize(self):
         d = {'basename': self.basename,
+             'conditions': self.data.get('Conditions', {}),
              'sha1sum': self.sha1sum,
              'run_type': self.data['RunType'],
              'start_time': self.start_time,
@@ -123,13 +178,15 @@ class ManagedInstallReport(object):
         return d
 
 
-def iter_manage_install_reports():
+def iter_manage_install_reports(reverse=True):
     last_report = os.path.join(MANAGED_INSTALLS_DIR, 'ManagedInstallReport.plist')
-    if os.path.exists(last_report):
+    if reverse and os.path.exists(last_report):
         yield last_report
     if os.path.isdir(ARCHIVES_DIR):
-        for filename in sorted(os.listdir(ARCHIVES_DIR), reverse=True):
+        for filename in sorted(os.listdir(ARCHIVES_DIR), reverse=reverse):
             yield os.path.join(ARCHIVES_DIR, filename)
+    if not reverse and os.path.exists(last_report):
+        yield last_report
 
 
 def build_reports_payload(last_seen=None):
@@ -147,6 +204,16 @@ def build_reports_payload(last_seen=None):
         if last_seen is None:
             break
     return payload
+
+
+def build_managed_installs_payload():
+    managed_installs = {}
+    for filepath in iter_manage_install_reports(reverse=False):
+        mir = ManagedInstallReport(filepath)
+        if not mir.end_time:
+            continue
+        managed_installs = mir.updated_managed_installs(managed_installs)
+    return sorted((n, v, dn, t) for n, (v, dn, t) in managed_installs.items())
 
 
 # Machine infos
@@ -574,6 +641,9 @@ if __name__ == '__main__':
     # add the new reports
     last_seen_sha1sum = job_details.get('last_seen_sha1sum')
     data['reports'] = build_reports_payload(last_seen_sha1sum)
+    # add the managed installs if requested
+    if job_details.get('managed_installs', False):
+        data['managed_installs'] = build_managed_installs_payload()
 
     # post the payload to zentral
     post_job(data)

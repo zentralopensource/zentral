@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import json
 import logging
 from dateutil import parser
@@ -5,6 +6,7 @@ from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.crypto import get_random_string
@@ -19,7 +21,7 @@ from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, UpdateInstallProbeForm
-from .models import Configuration, EnrolledMachine, Enrollment, MunkiState
+from .models import Configuration, EnrolledMachine, Enrollment, ManagedInstall, MunkiState
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 from .utils import prepare_ms_tree_certificates
 
@@ -291,13 +293,20 @@ class JobDetailsView(BaseView):
         response_d["tags"] = MetaMachine(self.machine_serial_number).tag_names()
 
         # last seen sha1sum
+        # last managed installs sync
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
         except MunkiState.DoesNotExist:
             pass
         else:
             response_d['last_seen_sha1sum'] = munki_state.sha1sum
-
+            response_d['managed_installs'] = (
+                munki_state.last_managed_installs_sync is None
+                or (
+                    datetime.utcnow() - munki_state.last_managed_installs_sync
+                    > timedelta(days=configuration.managed_installs_sync_interval_days)
+                )
+            )
         return response_d
 
 
@@ -332,6 +341,78 @@ class PostJobView(BaseView):
                 parser.parse(r.pop('end_time')),
                 r
             ))
+        reports.sort()
+
+        # managed installs
+        managed_installs = data.get("managed_installs")
+        if managed_installs is not None:
+            stored_managed_installs_qs = (
+                ManagedInstall.objects.select_for_update()
+                                      .filter(machine_serial_number=self.machine_serial_number)
+            )
+            # build dict with currently stored managed installs
+            stored_managed_installs = {}
+            for stored_managed_install in stored_managed_installs_qs:
+                stored_managed_installs[stored_managed_install.pkg_info_name] = stored_managed_install
+            # create or update existing managed installs
+            for pkg_info_name, pkg_info_version, pkg_info_display_name, installed_at in managed_installs:
+                try:
+                    stored_managed_install = stored_managed_installs.pop(pkg_info_name)
+                except KeyError:
+                    # create new managed install for this pkg info
+                    ManagedInstall.objects.create(
+                        machine_serial_number=self.machine_serial_number,
+                        pkg_info_name=pkg_info_name,
+                        pkg_info_display_name=pkg_info_display_name,
+                        pkg_info_version=pkg_info_version,
+                        installed_at=installed_at
+                    )
+                else:
+                    # eventually update the existing managed install
+                    update = False
+                    if pkg_info_version != stored_managed_install.pkg_info_version:
+                        stored_managed_install.pkg_info_version = pkg_info_version
+                        stored_managed_install.installed_at = installed_at
+                        update = True
+                    elif installed_at is not None and stored_managed_install.installed_at is None:
+                        stored_managed_install.installed_at = installed_at
+                        update = True
+                    if pkg_info_display_name != stored_managed_install.pkg_info_display_name:
+                        stored_managed_install.pkg_info_display_name = pkg_info_display_name
+                        update = True
+                    if update:
+                        stored_managed_install.save()
+            # delete not found stored managed installs
+            if stored_managed_installs:
+                stored_managed_installs_qs.filter(pkg_info_name__in=stored_managed_installs.keys()).delete()
+        else:
+            # update managed installs using the install and removal events in the reports
+            for _, _, report in reports:
+                for created_at, event in report.get("events", []):
+                    event_type = event.get("type")
+                    if event_type not in ("install", "removal"):
+                        continue
+                    event_time = parser.parse(created_at)
+                    pkg_info_name = event.get("name")
+                    if event_type == "install":
+                        mi_defaults = {"pkg_info_version": event.get("version"),
+                                       "pkg_info_display_name": event.get("display_name"),
+                                       "installed_at": event_time}
+                        mi, created = ManagedInstall.objects.get_or_create(
+                            machine_serial_number=self.machine_serial_number,
+                            pkg_info_name=pkg_info_name,
+                            defaults=mi_defaults
+                        )
+                        if not created and (mi.installed_at is None or mi.installed_at < event_time):
+                            for k, v in mi_defaults.items():
+                                setattr(mi, k, v)
+                            mi.save()
+                    elif event_type == "removal":
+                        ManagedInstall.objects.filter(
+                            Q(installed_at__isnull=True) | Q(installed_at__lt=event_time),
+                            machine_serial_number=self.machine_serial_number,
+                            pkg_info_name=pkg_info_name,
+                        ).delete()
 
         # events
         post_munki_request_event(
@@ -351,8 +432,9 @@ class PostJobView(BaseView):
         # MunkiState
         update_dict = {'user_agent': self.user_agent,
                        'ip': self.ip}
+        if managed_installs is not None:
+            update_dict["last_managed_installs_sync"] = datetime.utcnow()
         if reports:
-            reports.sort()
             start_time, end_time, report = reports[-1]
             update_dict.update({'munki_version': report.get('munki_version', None),
                                 'sha1sum': report['sha1sum'],

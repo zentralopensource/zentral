@@ -40,6 +40,10 @@ class Configuration(models.Model):
         blank=True,
         default=list
     )
+    managed_installs_sync_interval_days = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(90)],
+        default=7
+    )
 
     version = models.PositiveIntegerField(editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -83,12 +87,24 @@ class EnrolledMachine(models.Model):
 
 
 class MunkiState(models.Model):
-    machine_serial_number = models.CharField(max_length=64, unique=True)
+    machine_serial_number = models.TextField(unique=True)
     munki_version = models.CharField(max_length=32, blank=True, null=True)
     user_agent = models.CharField(max_length=64)
     ip = models.GenericIPAddressField(blank=True, null=True)
     sha1sum = models.CharField(max_length=40, blank=True, null=True)
+    last_managed_installs_sync = models.DateTimeField(blank=True, null=True)
     run_type = models.CharField(max_length=64, blank=True, null=True)
     start_time = models.DateTimeField(blank=True, null=True)
     end_time = models.DateTimeField(blank=True, null=True)
     last_seen = models.DateTimeField(auto_now=True)
+
+
+class ManagedInstall(models.Model):
+    machine_serial_number = models.TextField(db_index=True)
+    pkg_info_name = models.TextField(db_index=True)
+    pkg_info_display_name = models.TextField()
+    pkg_info_version = models.TextField()
+    installed_at = models.DateTimeField(null=True)
+
+    class Meta:
+        unique_together = (("machine_serial_number", "pkg_info_name"),)
