@@ -150,7 +150,10 @@ def macos_version_from_build(build):
         if minor >= 17:
             major = 12
             minor = patch
-            patch = 0
+            if build == "21A558":
+                patch = 1
+            else:
+                patch = 0
         elif minor >= 16:
             major = 11
             minor = max(0, patch - 1)
