@@ -139,7 +139,7 @@ class BeatPreprocessor:
             payload = self.CLIENT_LOG_RE.match(raw_event_d["message"]).groupdict()
             payload["proc"] = {"pid": int(payload.pop("proc_pid")),
                                "name": payload.pop("proc_name") or "UNKNOWN"}
-            payload["message"] = "\n".join(l.strip() for l in (payload.pop("message") or "").splitlines())
+            payload["message"] = "\n".join(line.strip() for line in (payload.pop("message") or "").splitlines())
             # TODO: TIMEZONE
             created_at = parser.parse(payload.pop("datetime"))
             serial_number = get_serial_number_from_raw_event(raw_event_d)

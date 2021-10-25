@@ -9,7 +9,7 @@ class JAMFChangeManagementLogForm(forms.Form):
             "type": "log",
             "paths": [self.cleaned_data["path"]],
             "multiline": {
-                "pattern": "^\[",
+                "pattern": r"^\[",
                 "negate": True,
                 "match": "after"
             }
@@ -24,7 +24,7 @@ class JAMFSoftwareServerLogForm(forms.Form):
             "type": "log",
             "paths": [self.cleaned_data["path"]],
             "multiline": {
-                "pattern": "^2",
+                "pattern": r"^2",
                 "negate": True,
                 "match": "after"
             }
@@ -49,8 +49,8 @@ class ClientLogForm(forms.Form):
             "type": "log",
             "paths": [self.cleaned_data["path"]],
             "multiline": {
-                "pattern": ("^[A-Z][a-z]{2}\s[A-Z][a-z]{2}\s[\s0-9]{2}\s[\s012]?[0-9]:[0-5][0-9]:[0-5][0-9]\s"
-                            ".*\s\S+\[[0-9]{1,6}\]:\s.*$"),
+                "pattern": (r"^[A-Z][a-z]{2}\s[A-Z][a-z]{2}\s[\s0-9]{2}\s[\s012]?[0-9]:[0-5][0-9]:[0-5][0-9]\s"
+                            r".*\s\S+\[[0-9]{1,6}\]:\s.*$"),
                 "negate": True,
                 "match": "after"
             }
