@@ -163,13 +163,24 @@ class AddTOTPForm(forms.Form):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user")
         super().__init__(*args, **kwargs)
-        self.initial_secret = pyotp.random_base32()
-        self.fields["secret"].initial = self.initial_secret
+        if self.is_bound:
+            # verification code error
+            self.fields["name"].widget.attrs.pop("autofocus")
+            self.fields["verification_code"].widget.attrs["autofocus"] = ""
+        else:
+            # new totp
+            self.fields["secret"].initial = pyotp.random_base32()
+
+    @property
+    def initial_secret(self):
+        if self.is_bound:
+            return self.data["secret"]
+        else:
+            return self.fields["secret"].initial
 
     def get_provisioning_uri(self):
         label = urlparse(zentral_settings["api"]["tls_hostname"]).netloc
-        return (pyotp.totp.TOTP(self.initial_secret)
-                          .provisioning_uri(self.user.email, label))
+        return pyotp.totp.TOTP(self.initial_secret).provisioning_uri(self.user.email, label)
 
     def clean_name(self):
         name = self.cleaned_data["name"]

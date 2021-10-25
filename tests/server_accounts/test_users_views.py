@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+import pyotp
 from rest_framework.authtoken.models import Token
 from accounts.models import User
 from zentral.conf import ConfigDict, settings
@@ -355,3 +356,37 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "accounts/user_detail.html")
         self.assertEqual(response.context["object"], service_account)
         self.assertEqual(Token.objects.filter(user=service_account).count(), 0)
+
+    # totp
+
+    def test_add_totp_redirect(self):
+        self.login_redirect("add_totp")
+        self.login()
+        response = self.client.get(reverse("accounts:add_totp"))
+        self.assertTemplateUsed(response, "accounts/add_totp.html")
+
+    def test_add_totp_validation_error(self):
+        self.login()
+        response = self.client.get(reverse("accounts:add_totp"))
+        form = response.context["form"]
+        response = self.client.post(reverse("accounts:add_totp"),
+                                    {"name": get_random_string(),
+                                     "secret": form.initial_secret,
+                                     "verification_code": "AAAAAA"})
+        self.assertTemplateUsed(response, "accounts/add_totp.html")
+        self.assertFormError(response, "form", "verification_code", "Wrong verification code")
+        new_form = response.context["form"]
+        self.assertEqual(form.initial_secret, new_form.initial_secret)
+
+    def test_add_totp_ok(self):
+        self.login()
+        response = self.client.get(reverse("accounts:add_totp"))
+        form = response.context["form"]
+        name = get_random_string()
+        response = self.client.post(reverse("accounts:add_totp"),
+                                    {"name": name,
+                                     "secret": form.initial_secret,
+                                     "verification_code": pyotp.totp.TOTP(form.initial_secret).now()},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/user_verification_devices.html")
+        self.assertContains(response, name)
