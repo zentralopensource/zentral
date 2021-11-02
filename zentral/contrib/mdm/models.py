@@ -13,10 +13,12 @@ from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmUser
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaMachine
+from zentral.core.secret_engines import decrypt, decrypt_str, encrypt, encrypt_str, rewrap
 from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
 from zentral.utils.iso_639_1 import ISO_639_1_CHOICES
 from zentral.utils.payloads import get_payload_identifier
 from .exceptions import EnrollmentSessionStatusError
+from .scep import SCEPChallengeType, get_scep_challenge, load_scep_challenge
 
 
 logger = logging.getLogger("zentral.contrib.mdm.models")
@@ -55,7 +57,7 @@ class PushCertificate(models.Model):
     not_before = models.DateTimeField()
     not_after = models.DateTimeField()
     certificate = models.BinaryField()
-    private_key = models.BinaryField()
+    private_key = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -67,6 +69,20 @@ class PushCertificate(models.Model):
 
     def get_absolute_url(self):
         return reverse("mdm:push_certificate", args=(self.pk,))
+
+    # secret
+
+    def _get_secret_engine_kwargs(self, field):
+        return {"name": self.name, "model": "mdm.pushcertificate", "field": field}
+
+    def get_private_key(self):
+        return decrypt(self.private_key, **self._get_secret_engine_kwargs("private_key"))
+
+    def set_private_key(self, private_key):
+        self.private_key = encrypt(private_key, **self._get_secret_engine_kwargs("private_key"))
+
+    def rewrap_secrets(self):
+        self.private_key = rewrap(self.private_key, **self._get_secret_engine_kwargs("private_key"))
 
 
 # Blueprint
@@ -95,6 +111,50 @@ class Blueprint(models.Model):
         return uuid.UUID(self.declaration_items["DeclarationsToken"])
 
 
+# SCEP
+
+
+class SCEPConfig(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+    url = models.URLField()
+    key_usage = models.IntegerField(choices=((0, 'None (0)'),
+                                             (1, 'Signing (1)'),
+                                             (4, 'Encryption (4)'),
+                                             (5, 'Signing & Encryption (1 | 4 = 5)')),
+                                    default=0,
+                                    help_text="A bitmask indicating the use of the key.")
+    key_is_extractable = models.BooleanField(default=False,
+                                             help_text="If true, the private key can be exported from the keychain.")
+    keysize = models.IntegerField(choices=((1024, '1024-bit'),
+                                           (2048, '2048-bit'),
+                                           (4096, '4096-bit')),
+                                  default=2048)
+    allow_all_apps_access = models.BooleanField(default=False,
+                                                help_text="If true, all apps have access to the private key.")
+    challenge_type = models.CharField(max_length=64, choices=SCEPChallengeType.choices())
+    challenge_kwargs = models.JSONField(editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("mdm:scep_config", args=(self.pk,))
+
+    def get_challenge_kwargs(self):
+        challenge = load_scep_challenge(self)
+        return challenge.get_kwargs()
+
+    def set_challenge_kwargs(self, kwargs):
+        challenge = get_scep_challenge(self)
+        challenge.set_kwargs(kwargs)
+
+    def rewrap_secrets(self):
+        challenge = load_scep_challenge(self)
+        challenge.rewrap_kwargs()
+
+
 # Enrollment
 
 
@@ -111,8 +171,8 @@ class EnrolledDevice(models.Model):
     push_magic = models.TextField(blank=True, null=True)
 
     # tokens
-    unlock_token = models.BinaryField(blank=True, null=True)
-    bootstrap_token = models.BinaryField(blank=True, null=True)
+    unlock_token = models.TextField(null=True)
+    bootstrap_token = models.TextField(null=True)
 
     # cert
     cert_fingerprint = models.BinaryField(blank=True, null=True)
@@ -134,6 +194,43 @@ class EnrolledDevice(models.Model):
     def get_absolute_url(self):
         return reverse("mdm:enrolled_device", args=(self.pk,))
 
+    # secrets
+
+    def _get_secret_engine_kwargs(self, field):
+        if not self.udid:
+            raise ValueError("EnrolledDevice must have a UDID")
+        return {"field": field, "model": "mdm.enrolleddevice", "udid": self.udid}
+
+    def get_bootstrap_token(self):
+        if not self.bootstrap_token:
+            return None
+        return decrypt(self.bootstrap_token, **self._get_secret_engine_kwargs("bootstrap_token"))
+
+    def set_bootstrap_token(self, token):
+        if token is None:
+            self.bootstrap_token = None
+            return
+        self.bootstrap_token = encrypt(token, **self._get_secret_engine_kwargs("bootstrap_token"))
+
+    def get_unlock_token(self):
+        if not self.unlock_token:
+            return None
+        return decrypt(self.unlock_token, **self._get_secret_engine_kwargs("unlock_token"))
+
+    def set_unlock_token(self, token):
+        if token is None:
+            self.unlock_token = None
+            return
+        self.unlock_token = encrypt(token, **self._get_secret_engine_kwargs("unlock_token"))
+
+    def rewrap_secrets(self):
+        if not self.bootstrap_token and not self.unlock_token:
+            return
+        if self.bootstrap_token:
+            self.bootstrap_token = rewrap(self.bootstrap_token, **self._get_secret_engine_kwargs("bootstrap_token"))
+        if self.unlock_token:
+            self.unlock_token = rewrap(self.unlock_token, **self._get_secret_engine_kwargs("unlock_token"))
+
     def get_urlsafe_serial_number(self):
         if self.serial_number:
             return MetaMachine(self.serial_number).get_urlsafe_serial_number()
@@ -147,7 +244,7 @@ class EnrolledDevice(models.Model):
         self.enrolleduser_set.all().delete()
 
     def do_checkout(self):
-        self.token = self.push_magic = self.unlock_token = self.bootstrap_token = None
+        self.token = self.push_magic = self.bootstrap_token = self.unlock_token = None
         self.checkout_at = timezone.now()
         self.purge_state()
         self.save()
@@ -246,9 +343,20 @@ class EnrollmentSession(models.Model):
 
 class MDMEnrollment(models.Model):
     push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
-    scep_config = models.ForeignKey("mdm.SCEPConfig", on_delete=models.PROTECT)
-    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
+
+    scep_config = models.ForeignKey(SCEPConfig, on_delete=models.PROTECT)
+    scep_verification = models.BooleanField(
+        default=False,
+        help_text="Set to true if the SCEP service is configured to post the CSR to Zentral for verification. "
+                  "If true, successful verifications will be required during the enrollments."
+    )
+
     blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
+
+    # linked to an auth realm
+    # if linked, a user has to authenticate to get the mdm payload.
+    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -375,6 +483,9 @@ class OTAEnrollmentSession(EnrollmentSession):
     def serialize_for_event(self):
         return super().serialize_for_event("ota", self.ota_enrollment.serialize_for_event())
 
+    def get_scep_config(self):
+        return self.ota_enrollment.scep_config
+
     def get_blueprint(self):
         return self.ota_enrollment.blueprint
 
@@ -404,10 +515,17 @@ class OTAEnrollmentSession(EnrollmentSession):
         self._set_next_status(self.PHASE_2_SCEP_VERIFIED, test, phase2_scep_request=es_request)
 
     def set_phase3_status(self):
-        test = (self.status == self.PHASE_2_SCEP_VERIFIED
-                and self.phase2_scep_request is not None
-                and not self.phase3_scep_request
-                and not self.enrolled_device)
+        if self.ota_enrollment.scep_verification:
+            allowed_statuses = (self.PHASE_2_SCEP_VERIFIED,)
+            scep_ok = self.phase2_scep_request is not None and self.phase3_scep_request is None
+        else:
+            allowed_statuses = (self.PHASE_2, self.PHASE_2_SCEP_VERIFIED)
+            scep_ok = self.phase3_scep_request is None
+        test = (
+            scep_ok
+            and self.status in allowed_statuses
+            and not self.enrolled_device
+        )
         self._set_next_status(self.PHASE_3, test)
 
     def set_phase3_scep_verified_status(self, es_request):
@@ -419,18 +537,26 @@ class OTAEnrollmentSession(EnrollmentSession):
         self._set_next_status(self.PHASE_3_SCEP_VERIFIED, test, phase3_scep_request=es_request)
 
     def set_authenticated_status(self, enrolled_device):
+        if self.ota_enrollment.scep_verification:
+            allowed_statuses = (self.PHASE_3_SCEP_VERIFIED,)
+            scep_ok = self.phase2_scep_request is not None and self.phase3_scep_request is not None
+        else:
+            allowed_statuses = (self.PHASE_3, self.PHASE_3_SCEP_VERIFIED)
+            scep_ok = True
         test = (enrolled_device
-                and self.status == self.PHASE_3_SCEP_VERIFIED
-                and self.phase2_scep_request is not None
-                and self.phase3_scep_request is not None
+                and scep_ok
+                and self.status in allowed_statuses
                 and not self.enrolled_device)
         self._set_next_status(self.AUTHENTICATED, test, enrolled_device=enrolled_device)
 
     def set_completed_status(self, enrolled_device):
+        if self.ota_enrollment.scep_verification:
+            scep_ok = self.phase2_scep_request is not None and self.phase3_scep_request is not None
+        else:
+            scep_ok = True
         test = (enrolled_device
+                and scep_ok
                 and self.status == self.AUTHENTICATED
-                and self.phase2_scep_request is not None
-                and self.phase3_scep_request is not None
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.COMPLETED, test)
 
@@ -474,12 +600,12 @@ class DEPOrganization(models.Model):
 
 class DEPToken(models.Model):
     certificate = models.BinaryField(editable=False)
-    private_key = models.BinaryField(editable=False)
+    private_key = models.TextField(null=True, editable=False)
 
     consumer_key = models.CharField(max_length=128, null=True, editable=False)
-    consumer_secret = models.CharField(max_length=128, null=True, editable=False)
+    consumer_secret = models.TextField(null=True, editable=False)
     access_token = models.CharField(max_length=128, null=True, editable=False)
-    access_secret = models.CharField(max_length=128, null=True, editable=False)
+    access_secret = models.TextField(null=True, editable=False)
     access_token_expiry = models.DateTimeField(null=True, editable=False)
 
     sync_cursor = models.CharField(max_length=128, null=True, editable=False)
@@ -503,6 +629,44 @@ class DEPToken(models.Model):
     def expires_soon(self):
         # TODO: hard coded 7 days
         return self.access_token_expiry and self.access_token_expiry <= timezone.now() + timedelta(days=7)
+
+    # secret
+
+    def _get_secret_engine_kwargs(self, field):
+        if not self.pk:
+            raise ValueError("DEPToken must have a pk")
+        return {"pk": self.pk, "model": "mdm.deptoken", "field": field}
+
+    def get_private_key(self):
+        return decrypt(self.private_key, **self._get_secret_engine_kwargs("private_key"))
+
+    def set_private_key(self, private_key):
+        self.private_key = encrypt(private_key, **self._get_secret_engine_kwargs("private_key"))
+
+    def get_consumer_secret(self):
+        if self.consumer_secret:
+            return decrypt_str(self.consumer_secret, **self._get_secret_engine_kwargs("consumer_secret"))
+        else:
+            return None
+
+    def set_consumer_secret(self, consumer_secret):
+        self.consumer_secret = encrypt_str(consumer_secret, **self._get_secret_engine_kwargs("consumer_secret"))
+
+    def get_access_secret(self):
+        if self.access_secret:
+            return decrypt_str(self.access_secret, **self._get_secret_engine_kwargs("access_secret"))
+        else:
+            return None
+
+    def set_access_secret(self, access_secret):
+        self.access_secret = encrypt_str(self.access_secret, **self._get_secret_engine_kwargs("access_secret"))
+
+    def rewrap_secrets(self):
+        self.private_key = rewrap(self.private_key, **self._get_secret_engine_kwargs("private_key"))
+        if self.consumer_secret:
+            self.consumer_secret = rewrap(self.consumer_secret, **self._get_secret_engine_kwargs("consumer_secret"))
+        if self.access_secret:
+            self.access_secret = rewrap(self.access_secret, **self._get_secret_engine_kwargs("access_secret"))
 
 
 class DEPVirtualServer(models.Model):
@@ -759,6 +923,9 @@ class DEPEnrollmentSession(EnrollmentSession):
     def serialize_for_event(self):
         return super().serialize_for_event("dep", self.dep_enrollment.serialize_for_event())
 
+    def get_scep_config(self):
+        return self.dep_enrollment.scep_config
+
     def get_blueprint(self):
         return self.dep_enrollment.blueprint
 
@@ -772,16 +939,26 @@ class DEPEnrollmentSession(EnrollmentSession):
         self._set_next_status(self.SCEP_VERIFIED, test, scep_request=es_request)
 
     def set_authenticated_status(self, enrolled_device):
+        if self.dep_enrollment.scep_verification:
+            allowed_statuses = (self.SCEP_VERIFIED,)
+            scep_ok = self.scep_request is not None
+        else:
+            allowed_statuses = (self.STARTED, self.SCEP_VERIFIED)
+            scep_ok = True
         test = (enrolled_device
-                and self.status == self.SCEP_VERIFIED
-                and self.scep_request is not None
+                and scep_ok
+                and self.status in allowed_statuses
                 and not self.enrolled_device)
         self._set_next_status(self.AUTHENTICATED, test, enrolled_device=enrolled_device)
 
     def set_completed_status(self, enrolled_device):
+        if self.dep_enrollment.scep_verification:
+            scep_ok = self.scep_request is not None
+        else:
+            scep_ok = True
         test = (enrolled_device
+                and scep_ok
                 and self.status == self.AUTHENTICATED
-                and self.scep_request is not None
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.COMPLETED, test)
 
@@ -897,6 +1074,9 @@ class UserEnrollmentSession(EnrollmentSession):
     def serialize_for_event(self):
         return super().serialize_for_event("user", self.user_enrollment.serialize_for_event())
 
+    def get_scep_config(self):
+        return self.user_enrollment.scep_config
+
     def get_blueprint(self):
         return self.user_enrollment.blueprint
 
@@ -926,16 +1106,26 @@ class UserEnrollmentSession(EnrollmentSession):
         self._set_next_status(self.SCEP_VERIFIED, test, scep_request=es_request)
 
     def set_authenticated_status(self, enrolled_device):
+        if self.user_enrollment.scep_verification:
+            allowed_statuses = (self.SCEP_VERIFIED,)
+            scep_ok = self.scep_request is not None
+        else:
+            allowed_statuses = (self.STARTED, self.SCEP_VERIFIED)
+            scep_ok = True
         test = (enrolled_device
-                and self.status == self.SCEP_VERIFIED
-                and self.scep_request is not None
+                and scep_ok
+                and self.status in allowed_statuses
                 and not self.enrolled_device)
         self._set_next_status(self.AUTHENTICATED, test, enrolled_device=enrolled_device)
 
     def set_completed_status(self, enrolled_device):
+        if self.user_enrollment.scep_verification:
+            scep_ok = self.scep_request is not None
+        else:
+            scep_ok = True
         test = (enrolled_device
+                and scep_ok
                 and self.status == self.AUTHENTICATED
-                and self.scep_request is not None
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.COMPLETED, test)
 
@@ -1272,44 +1462,3 @@ class DeviceCommand(Command):
 
 class UserCommand(Command):
     enrolled_user = models.ForeignKey(EnrolledUser, on_delete=models.CASCADE, related_name="commands")
-
-
-# SCEP
-
-
-class SCEPChallengeType(enum.Enum):
-    STATIC = "Static"
-    MICROSOFT_CA = "Microsoft CA Web Enrollment (certsrv)"
-
-    @classmethod
-    def choices(cls):
-        return [(i.name, i.value) for i in cls]
-
-
-class SCEPConfig(models.Model):
-    name = models.CharField(max_length=256, unique=True)
-    url = models.URLField()
-    key_usage = models.IntegerField(choices=((0, 'None (0)'),
-                                             (1, 'Signing (1)'),
-                                             (4, 'Encryption (4)'),
-                                             (5, 'Signing & Encryption (1 | 4 = 5)')),
-                                    default=0,
-                                    help_text="A bitmask indicating the use of the key.")
-    key_is_extractable = models.BooleanField(default=False,
-                                             help_text="If true, the private key can be exported from the keychain.")
-    keysize = models.IntegerField(choices=((1024, '1024-bit'),
-                                           (2048, '2048-bit'),
-                                           (4096, '4096-bit')),
-                                  default=2048)
-    allow_all_apps_access = models.BooleanField(default=False,
-                                                help_text="If true, all apps have access to the private key.")
-    challenge_type = models.CharField(max_length=64, choices=SCEPChallengeType.choices())
-    challenge_kwargs = models.JSONField(editable=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.name
-
-    def get_absolute_url(self):
-        return reverse("mdm:scep_config", args=(self.pk,))

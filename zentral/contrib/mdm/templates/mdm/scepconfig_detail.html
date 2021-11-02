@@ -39,7 +39,7 @@
         <dl>
           <dt>Type</dt>
           <dd>{{ object.get_challenge_type_display }}</dd>
-          {% with object.challenge_kwargs as kwargs %}
+          {% with object.get_challenge_kwargs as kwargs %}
           {% if object.challenge_type == "STATIC" %}
           <dt>Challenge</dt>
           <dd>

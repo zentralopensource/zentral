@@ -1,8 +1,8 @@
 import logging
 import plistlib
 from zentral.utils.payloads import sign_payload
-from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform, UserArtifact
-from zentral.contrib.mdm.scep import process_scep_payloads
+from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform, SCEPConfig, UserArtifact
+from zentral.contrib.mdm.scep import update_scep_payload
 from .base import register_command, Command
 
 
@@ -35,6 +35,25 @@ def substitute_variables(obj, enrollment_session, enrolled_user=None):
         if managed_apple_id:
             obj = obj.replace("$MANAGED_APPLE_ID.EMAIL", managed_apple_id)
     return obj
+
+
+def process_scep_payloads(profile_payload):
+    for payload in profile_payload.get("PayloadContent", []):
+        if payload.get("PayloadType") == "com.apple.security.scep":
+            # does the payload have a name?
+            name = payload.get("Name")
+            if not name:
+                # nothing to do
+                continue
+
+            # do we have a matching config in the DB?
+            try:
+                scep_config = SCEPConfig.objects.get(name=name)
+            except SCEPConfig.DoesNotExist:
+                # nothing to do
+                continue
+
+            update_scep_payload(payload, scep_config)
 
 
 def build_payload(profile, enrollment_session, enrolled_user=None):

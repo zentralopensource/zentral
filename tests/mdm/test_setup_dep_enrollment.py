@@ -44,22 +44,27 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_push_certificate(self):
-        return PushCertificate.objects.create(
+        push_certificate = PushCertificate(
             name=get_random_string(12),
             topic=get_random_string(12),
             not_before="2000-01-01",
             not_after="2040-01-01",
             certificate=b"1",
-            private_key=b"2",
         )
+        push_certificate.set_private_key(b"2")
+        push_certificate.save()
+        return push_certificate
 
     def _force_scep_config(self):
-        return SCEPConfig.objects.create(
+        scep_config = SCEPConfig(
             name=get_random_string(12),
             url="https://example.com/{}".format(get_random_string(12)),
             challenge_type="STATIC",
             challenge_kwargs={"challenge": get_random_string(12)}
         )
+        scep_config.set_challenge_kwargs({"challenge": get_random_string(12)})
+        scep_config.save()
+        return scep_config
 
     def _force_dep_virtual_server(self):
         dep_organization = DEPOrganization.objects.create(
@@ -74,7 +79,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         )
         dep_token = DEPToken.objects.create(
             certificate=get_random_string(12).encode("utf-8"),
-            private_key=get_random_string(12).encode("utf-8"),
         )
         return DEPVirtualServer.objects.create(
             name=get_random_string(12),
@@ -125,6 +129,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:create_dep_enrollment"),
                                     {"de-name": name,
                                      "de-scep_config": scep_config.pk,
+                                     "de-scep_verification": "",
                                      "de-push_certificate": push_certificate.pk,
                                      "de-virtual_server": dep_virtual_server.pk,
                                      "de-is_mdm_removable": "on",
@@ -136,6 +141,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, name)
         self.assertContains(response, push_certificate.name)
         self.assertContains(response, scep_config.name)
+        self.assertContains(response, "without CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, name)
         self.assertEqual(enrollment.push_certificate, push_certificate)
@@ -209,6 +215,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                     {"de-name": new_name,
                                      "de-scep_config": enrollment.scep_config.pk,
+                                     "de-scep_verification": "on",
                                      "de-push_certificate": enrollment.push_certificate.pk,
                                      "de-virtual_server": enrollment.virtual_server.pk,
                                      "de-is_mdm_removable": "on",
@@ -220,6 +227,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, new_name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertContains(response, enrollment.scep_config.name)
+        self.assertContains(response, "with CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, new_name)
         add_dep_profile.assert_called_once_with(enrollment)

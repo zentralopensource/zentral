@@ -33,6 +33,11 @@
         {% else %}
         {{ object.scep_config }}
         {% endif %}
+        {% if object.scep_verification %}
+        / with CSR verification
+        {% else %}
+        / without CSR verification
+        {% endif %}
       </td>
     </tr>
     <tr>

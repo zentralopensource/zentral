@@ -9,7 +9,7 @@
   <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h3>{{ page_obj.paginator.count }} SCEP configurations{{ page_obj.paginator.count|pluralize }}</h3>
+<h3>{{ page_obj.paginator.count }} SCEP configuration{{ page_obj.paginator.count|pluralize }}</h3>
 
 {% if perms.mdm.add_scepconfig %}
 <p>

@@ -1,6 +1,6 @@
 import logging
 from django import forms
-from zentral.contrib.mdm.models import SCEPChallengeType
+from . import SCEPChallengeType
 from .base import SCEPChallenge
 
 
@@ -14,6 +14,7 @@ class StaticChallengeForm(forms.Form):
 class StaticChallenge(SCEPChallenge):
     type = SCEPChallengeType.STATIC
     kwargs_keys = ("challenge",)
+    encrypted_kwargs_keys = ("challenge",)
     form_class = StaticChallengeForm
 
     def get(self, key_usage, subject, subject_alt_name):

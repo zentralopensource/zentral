@@ -41,22 +41,27 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_push_certificate(self):
-        return PushCertificate.objects.create(
+        push_certificate = PushCertificate(
             name=get_random_string(12),
             topic=get_random_string(12),
             not_before="2000-01-01",
             not_after="2040-01-01",
             certificate=b"1",
-            private_key=b"2",
         )
+        push_certificate.set_private_key(b"2")
+        push_certificate.save()
+        return push_certificate
 
     def _force_scep_config(self):
-        return SCEPConfig.objects.create(
+        scep_config = SCEPConfig(
             name=get_random_string(12),
             url="https://example.com/{}".format(get_random_string(12)),
             challenge_type="STATIC",
             challenge_kwargs={"challenge": get_random_string(12)}
         )
+        scep_config.set_challenge_kwargs({"challenge": get_random_string(12)})
+        scep_config.save()
+        return scep_config
 
     def _force_user_enrollment(self):
         return UserEnrollment.objects.create(
@@ -91,6 +96,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:create_user_enrollment"),
                                     {"ue-name": name,
                                      "ue-scep_config": scep_config.pk,
+                                     "ue-scep_verification": "",
                                      "ue-push_certificate": push_certificate.pk,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -99,6 +105,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, name)
         self.assertContains(response, push_certificate.name)
         self.assertContains(response, scep_config.name)
+        self.assertContains(response, "without CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, name)
         self.assertEqual(enrollment.push_certificate, push_certificate)
@@ -167,6 +174,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:update_user_enrollment", args=(enrollment.pk,)),
                                     {"ue-name": new_name,
                                      "ue-scep_config": enrollment.scep_config.pk,
+                                     "ue-scep_verification": "on",
                                      "ue-push_certificate": enrollment.push_certificate.pk,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -175,6 +183,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, new_name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertContains(response, enrollment.scep_config.name)
+        self.assertContains(response, "with CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, new_name)
 

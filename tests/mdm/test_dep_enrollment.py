@@ -31,22 +31,27 @@ class TestDEPEnrollment(TestCase):
         )
 
     def _force_push_certificate(self):
-        return PushCertificate.objects.create(
+        push_certificate = PushCertificate(
             name=get_random_string(12),
             topic=get_random_string(12),
             not_before="2000-01-01",
             not_after="2040-01-01",
             certificate=b"1",
-            private_key=b"2",
         )
+        push_certificate.set_private_key(b"2")
+        push_certificate.save()
+        return push_certificate
 
     def _force_scep_config(self):
-        return SCEPConfig.objects.create(
+        scep_config = SCEPConfig(
             name=get_random_string(12),
             url="https://example.com/{}".format(get_random_string(12)),
             challenge_type="STATIC",
             challenge_kwargs={"challenge": get_random_string(12)}
         )
+        scep_config.set_challenge_kwargs({"challenge": get_random_string(12)})
+        scep_config.save()
+        return scep_config
 
     def _force_dep_virtual_server(self):
         dep_organization = DEPOrganization.objects.create(
@@ -61,7 +66,6 @@ class TestDEPEnrollment(TestCase):
         )
         dep_token = DEPToken.objects.create(
             certificate=get_random_string(12).encode("utf-8"),
-            private_key=get_random_string(12).encode("utf-8"),
         )
         return DEPVirtualServer.objects.create(
             name=get_random_string(12),
@@ -96,4 +100,4 @@ class TestDEPEnrollment(TestCase):
         )
         scep_payload = build_scep_payload(session)
         self.assertEqual(scep_payload["PayloadContent"]["Challenge"],
-                         enrollment.scep_config.challenge_kwargs["challenge"])
+                         enrollment.scep_config.get_challenge_kwargs()["challenge"])

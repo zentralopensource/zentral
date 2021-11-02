@@ -247,11 +247,6 @@ class CheckinView(MDMView):
                                     "push_magic": self.payload.get("PushMagic"),
                                     "checkout_at": None}
 
-        # UnlockToken can be absent, and must not be deleted
-        unlock_token = self.payload.get("UnlockToken")
-        if unlock_token:
-            enrolled_device_defaults["unlock_token"] = unlock_token
-
         payload_token = self.payload.get("Token")
 
         if self.channel == Channel.Device:
@@ -263,6 +258,11 @@ class CheckinView(MDMView):
             udid=self.enrolled_device_udid,
             defaults=enrolled_device_defaults
         )
+        # UnlockToken can be absent, and must not be deleted
+        unlock_token = self.payload.get("UnlockToken")
+        if unlock_token:
+            enrolled_device.set_unlock_token(unlock_token)
+            enrolled_device.save()
 
         # send first push notifications
         if self.channel == Channel.Device and enrolled_device.can_be_poked():
@@ -303,18 +303,19 @@ class CheckinView(MDMView):
         # https://developer.apple.com/documentation/devicemanagement/setbootstraptokenrequest
         enrolled_device = self.get_enrolled_device()
         enrolled_device.awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
-        enrolled_device.bootstrap_token = self.payload.get("BootstrapToken", None)
+        enrolled_device.set_bootstrap_token(self.payload.get("BootstrapToken", None))
         enrolled_device.save()
         self.post_event("success")
 
     def do_get_bootstrap_token(self):
         # https://developer.apple.com/documentation/devicemanagement/get_bootstrap_token
         enrolled_device = self.get_enrolled_device()
-        if not enrolled_device.bootstrap_token:
+        bootstrap_token = enrolled_device.get_bootstrap_token()
+        if not bootstrap_token:
             self.abort(f"Enrolled device {enrolled_device.udid} has no bootstrap token")
         else:
             self.post_event("success")
-            return HttpResponse(plistlib.dumps({"BootstrapToken": enrolled_device.bootstrap_token.tobytes()}),
+            return HttpResponse(plistlib.dumps({"BootstrapToken": bootstrap_token}),
                                 content_type="application/xml")
 
     def do_declarative_management(self):

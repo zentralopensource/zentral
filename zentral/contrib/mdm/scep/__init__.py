@@ -1,19 +1,32 @@
+import enum
 import logging
-from zentral.contrib.mdm.models import SCEPChallengeType, SCEPConfig
-from .microsoft_ca import MicrosoftCAChallenge
-from .static import StaticChallenge
 
 
 logger = logging.getLogger("zentral.contrib.mdm.scep")
 
 
-def load_scep_challenge(scep_config):
+class SCEPChallengeType(enum.Enum):
+    STATIC = "Static"
+    MICROSOFT_CA = "Microsoft CA Web Enrollment (certsrv)"
+
+    @classmethod
+    def choices(cls):
+        return [(i.name, i.value) for i in cls]
+
+
+def get_scep_challenge(scep_config, load=False):
     if scep_config.challenge_type == SCEPChallengeType.STATIC.name:
-        return StaticChallenge(scep_config)
+        from .static import StaticChallenge
+        return StaticChallenge(scep_config, load)
     elif scep_config.challenge_type == SCEPChallengeType.MICROSOFT_CA.name:
-        return MicrosoftCAChallenge(scep_config)
+        from .microsoft_ca import MicrosoftCAChallenge
+        return MicrosoftCAChallenge(scep_config, load)
     else:
         raise ValueError(f"Unknown challenge type: {scep_config.challenge_type}")
+
+
+def load_scep_challenge(scep_config):
+    return get_scep_challenge(scep_config, load=True)
 
 
 def update_scep_payload(scep_payload, scep_config):
@@ -36,26 +49,3 @@ def update_scep_payload(scep_payload, scep_config):
         scep_payload["Challenge"] = scep_challenge.get(scep_payload["Key Usage"],
                                                        scep_payload.get("Subject"),
                                                        scep_payload.get("SubjectAltName"))
-
-
-def process_scep_payload(scep_payload):
-    # does the payload have a name?
-    name = scep_payload.get("Name")
-    if not name:
-        # nothing to do
-        return
-
-    # do we have a matching config in the DB?
-    try:
-        scep_config = SCEPConfig.objects.get(name=name)
-    except SCEPConfig.DoesNotExist:
-        # nothing to do
-        return
-
-    update_scep_payload(scep_payload, scep_config)
-
-
-def process_scep_payloads(profile_payload):
-    for payload in profile_payload.get("PayloadContent", []):
-        if payload.get("PayloadType") == "com.apple.security.scep":
-            process_scep_payload(payload["PayloadContent"])

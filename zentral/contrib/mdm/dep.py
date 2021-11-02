@@ -53,16 +53,18 @@ def build_dep_token_certificate(dep_token):
 def add_dep_token_certificate(dep_token):
     certificate, private_key = build_dep_token_certificate(dep_token)
     dep_token.certificate = certificate.public_bytes(serialization.Encoding.PEM)
-    dep_token.private_key = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption()
+    dep_token.set_private_key(
+        private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()
+        )
     )
     dep_token.save()
 
 
 def decrypt_dep_token(dep_token, payload):
-    decrypted_payload = decrypt_cms_payload(payload, dep_token.private_key)
+    decrypted_payload = decrypt_cms_payload(payload, dep_token.get_private_key())
     message_lines = []
     found_tag = False
     for line in decrypted_payload.splitlines():

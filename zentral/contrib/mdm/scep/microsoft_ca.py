@@ -2,7 +2,7 @@ import logging
 import re
 from django import forms
 import requests
-from zentral.contrib.mdm.models import SCEPChallengeType
+from . import SCEPChallengeType
 from .base import SCEPChallengeError, SCEPChallenge
 
 
@@ -18,6 +18,7 @@ class MicrosoftCAChallengeForm(forms.Form):
 class MicrosoftCAChallenge(SCEPChallenge):
     type = SCEPChallengeType.MICROSOFT_CA
     kwargs_keys = ("url", "username", "password")
+    encrypted_kwargs_keys = ("password",)
     form_class = MicrosoftCAChallengeForm
 
     def get(self, key_usage, subject, subject_alt_name):

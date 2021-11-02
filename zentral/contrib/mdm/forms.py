@@ -18,13 +18,13 @@ from .models import (Artifact, ArtifactType, ArtifactVersion, BlueprintArtifact,
 class OTAEnrollmentForm(forms.ModelForm):
     class Meta:
         model = OTAEnrollment
-        fields = ("name", "realm", "push_certificate", "scep_config", "blueprint")
+        fields = ("name", "realm", "push_certificate", "scep_config", "scep_verification", "blueprint")
 
 
 class UserEnrollmentForm(forms.ModelForm):
     class Meta:
         model = UserEnrollment
-        fields = ("name", "realm", "push_certificate", "scep_config", "blueprint")
+        fields = ("name", "realm", "push_certificate", "scep_config", "scep_verification", "blueprint")
 
 
 class UserEnrollmentEnrollForm(forms.Form):
@@ -57,9 +57,19 @@ class PushCertificateForm(forms.ModelForm):
                 raise forms.ValidationError("Could not load certificate or key file")
             if self.instance.topic and push_certificate_d["topic"] != self.instance.topic:
                 raise forms.ValidationError("The new certificate has a different topic")
-            for key, val in push_certificate_d.items():
-                setattr(self.instance, key, val)
+            cleaned_data["push_certificate_d"] = push_certificate_d
         return cleaned_data
+
+    def save(self):
+        push_certificate_d = self.cleaned_data.pop("push_certificate_d")
+        self.instance.name = self.cleaned_data["name"]
+        for k, v in push_certificate_d.items():
+            if k == "private_key":
+                self.instance.set_private_key(v)
+            else:
+                setattr(self.instance, k, v)
+        self.instance.save()
+        return self.instance
 
 
 class EnrolledDeviceSearchForm(forms.Form):
@@ -100,12 +110,16 @@ class EncryptedDEPTokenForm(forms.ModelForm):
             self.add_error("encrypted_token", "This field is mandatory")
         return self.cleaned_data
 
-    def save(self, *args, **kwargs):
+    def save(self):
         # token
-        kwargs["commit"] = False
-        dep_token = super().save(*args, **kwargs)
+        dep_token = super().save()
         for k, v in self.cleaned_data["decrypted_dep_token"].items():
-            setattr(dep_token, k, v)
+            if k == "access_secret":
+                dep_token.set_access_secret(v)
+            elif k == "consumer_secret":
+                dep_token.set_consumer_secret(v)
+            else:
+                setattr(dep_token, k, v)
         dep_token.save()
 
         account_d = self.cleaned_data["account"]
@@ -150,7 +164,7 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         field_order = [
-            "push_certificate", "scep_config", "blueprint",
+            "push_certificate", "scep_config", "scep_verification", "blueprint",
             "virtual_server", "name",
             "allow_pairing", "is_supervised", "is_mandatory", "is_mdm_removable", "is_multi_user",
             "await_device_configured", "auto_advance_setup", "include_tls_certificates",

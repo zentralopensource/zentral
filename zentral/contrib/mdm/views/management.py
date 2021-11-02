@@ -29,12 +29,13 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactType, Blueprint, Bluep
                                         DEPDevice, DEPEnrollment,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         OTAEnrollment, OTAEnrollmentSession,
-                                        SCEPChallengeType, SCEPConfig,
+                                        SCEPConfig,
                                         UserEnrollment, UserEnrollmentSession,
                                         Profile)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_mdm_configuration_profile,
                                           build_profile_service_configuration_profile)
+from zentral.contrib.mdm.scep import SCEPChallengeType
 from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm
 from zentral.contrib.mdm.scep.static import StaticChallengeForm
 from zentral.contrib.mdm.tasks import (send_artifact_notifications,
@@ -836,7 +837,7 @@ class CreateSCEPConfigView(PermissionRequiredMixin, TemplateView):
                 challenge_form = static_form
             if challenge_form.is_valid():
                 scep_config = scep_config_form.save(commit=False)
-                scep_config.challenge_kwargs = challenge_form.cleaned_data
+                scep_config.set_challenge_kwargs(challenge_form.cleaned_data)
                 scep_config.save()
                 return redirect(scep_config)
         else:
@@ -876,7 +877,7 @@ class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
             microsoft_ca_form = MicrosoftCAChallengeForm(
                 prefix="mc",
                 initial=(
-                    self.scep_config.challenge_kwargs
+                    self.scep_config.get_challenge_kwargs()
                     if self.challenge_type == SCEPChallengeType.MICROSOFT_CA
                     else None
                 )
@@ -887,7 +888,7 @@ class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
             static_form = StaticChallengeForm(
                 prefix="s",
                 initial=(
-                    self.scep_config.challenge_kwargs
+                    self.scep_config.get_challenge_kwargs()
                     if self.challenge_type == SCEPChallengeType.STATIC
                     else None
                 )
@@ -905,7 +906,7 @@ class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
             request.POST,
             prefix="mc",
             initial=(
-                self.scep_config.challenge_kwargs
+                self.scep_config.get_challenge_kwargs()
                 if self.challenge_type == SCEPChallengeType.MICROSOFT_CA
                 else None
             )
@@ -914,7 +915,7 @@ class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
             request.POST,
             prefix="s",
             initial=(
-                self.scep_config.challenge_kwargs
+                self.scep_config.get_challenge_kwargs()
                 if self.challenge_type == SCEPChallengeType.STATIC
                 else None
             )
@@ -927,7 +928,7 @@ class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
                 challenge_form = static_form
             if challenge_form.is_valid():
                 scep_config = scep_config_form.save(commit=False)
-                scep_config.challenge_kwargs = challenge_form.cleaned_data
+                scep_config.set_challenge_kwargs(challenge_form.cleaned_data)
                 scep_config.save()
                 return redirect(scep_config)
         else:

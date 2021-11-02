@@ -54,8 +54,8 @@ class DEPClient(object):
 
     @classmethod
     def from_dep_token(cls, dep_token, batch_request_limit=100):
-        return cls(dep_token.consumer_key, dep_token.consumer_secret,
-                   dep_token.access_token, dep_token.access_secret,
+        return cls(dep_token.consumer_key, dep_token.get_consumer_secret(),
+                   dep_token.access_token, dep_token.get_access_secret(),
                    batch_request_limit=batch_request_limit)
 
     @classmethod
