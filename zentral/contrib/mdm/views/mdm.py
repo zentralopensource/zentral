@@ -48,6 +48,9 @@ class MDMView(PostEventMixin, View):
         super().post_event(*args, **kwargs)
 
     def dispatch(self, request, *args, **kwargs):
+        # PostEventMixin
+        self.setup_with_request(request)
+
         # DN => serial_number + meta_business_unit
         dn = request.META.get("HTTP_X_SSL_CLIENT_S_DN")
         if not dn:
