@@ -5,7 +5,6 @@ from asn1crypto import cms
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.serialization.pkcs12 import load_key_and_certificates
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.x509.oid import NameOID
 from django.utils.functional import SimpleLazyObject
@@ -161,19 +160,42 @@ def decrypt_cms_payload(payload, private_key_bytes):
     return stdout
 
 
-# PKCS12
+# push certificate
 
 
-def load_push_certificate(pkcs12_bytes, password=None):
+def load_push_certificate_and_key(cert_pem_bytes, key_pem_bytes, password=None):
     if password and isinstance(password, str):
         password = password.encode("utf-8")
-    private_key, cert, _ = load_key_and_certificates(pkcs12_bytes, password)
+    else:
+        password = None
+    try:
+        cert = x509.load_pem_x509_certificate(cert_pem_bytes)
+    except Exception:
+        raise ValueError("Could not load PEM certificate")
+    try:
+        key = serialization.load_pem_private_key(key_pem_bytes, password=password)
+    except Exception:
+        raise ValueError("Could not load PEM private key")
+    message = b"Buffalo buffalo buffalo buffalo"
+    pad = padding.OAEP(
+        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+        algorithm=hashes.SHA256(),
+        label=None
+    )
+    try:
+        key.decrypt(cert.public_key().encrypt(message, pad), pad)
+    except Exception:
+        raise ValueError("The certificate and key do not form a pair")
+    try:
+        topic = cert.subject.get_attributes_for_oid(NameOID.USER_ID)[0].value
+    except Exception:
+        raise ValueError("Could not extract the topic from the certificate subject")
     return {"certificate": cert.public_bytes(serialization.Encoding.PEM),
-            "private_key": private_key.private_bytes(
+            "private_key": key.private_bytes(
                 serialization.Encoding.PEM,
                 serialization.PrivateFormat.PKCS8,
                 serialization.NoEncryption()
             ),
             "not_before": cert.not_valid_before,
             "not_after": cert.not_valid_after,
-            "topic": cert.subject.get_attributes_for_oid(NameOID.USER_ID)[0].value}
+            "topic": topic}

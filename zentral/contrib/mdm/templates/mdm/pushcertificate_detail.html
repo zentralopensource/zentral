@@ -9,7 +9,13 @@
   <li class="active">{{ object.name }}</li>
 </ol>
 
-<h2>MDM push certificate <i>{{ object.name }}</i></h2>
+<h3>MDM push certificate <i>{{ object.name }}</i></h3>
+
+{% if perms.mdm.change_pushcertificate %}
+<p>
+  <a href="{% url 'mdm:update_push_certificate' object.pk %}" class="btn btn-default">Update</a>
+</p>
+{% endif %}
 
 <dl class="dl-horizontal">
   <dt>Name</dt>

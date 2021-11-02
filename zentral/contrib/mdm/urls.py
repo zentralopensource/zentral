@@ -23,6 +23,9 @@ urlpatterns = [
     path('push_certificates/<int:pk>/',
          views.PushCertificateView.as_view(),
          name='push_certificate'),
+    path('push_certificates/<int:pk>/update/',
+         views.UpdatePushCertificateView.as_view(),
+         name="update_push_certificate"),
 
     # DEP tokens / setup views
     path('dep/tokens/<int:pk>/download_public_key/',

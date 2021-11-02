@@ -6,15 +6,23 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></li>
+  {% if object %}
+  <li><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
+  <li class="active">Update</li>
+  {% else %}
   <li class="active">Add</li>
+  {% endif %}
 </ol>
 
-<h2>Add a MDM push certificate</h2>
+<h3>
+  {% if object %}Update MDM push certificate <i>{{ object.name }}</i>{% else %}Add a MDM push certificate{% endif %}
+</h3>
 
 <form class="form" method="POST" enctype="multipart/form-data">{% csrf_token %}
   {{ form|bootstrap }}
   <p>
-    <a href="{% url 'mdm:push_certificates' %}" class="btn btn-default">Cancel</a>
+    <a href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'mdm:push_certificates' %}{% endif %}"
+       class="btn btn-default">Cancel</a>
     <button type="submit" class="btn btn-primary">Add</button>
   </p>
 </form>

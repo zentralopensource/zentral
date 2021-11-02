@@ -49,6 +49,12 @@ class PushCertificateView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
+class UpdatePushCertificateView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_pushcertificate"
+    model = PushCertificate
+    form_class = PushCertificateForm
+
+
 # DEP Tokens
 
 

@@ -3,7 +3,7 @@ from django import forms
 from django.db.models import Q
 from realms.utils import build_password_hash_dict
 from .app_manifest import build_enterprise_app_manifest
-from .crypto import load_push_certificate
+from .crypto import load_push_certificate_and_key
 from .declarations import update_blueprint_declaration_items
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
@@ -33,7 +33,8 @@ class UserEnrollmentEnrollForm(forms.Form):
 
 class PushCertificateForm(forms.ModelForm):
     certificate_file = forms.FileField(required=True)
-    password = forms.CharField(widget=forms.PasswordInput, required=False)
+    key_file = forms.FileField(required=True)
+    key_password = forms.CharField(widget=forms.PasswordInput, required=False)
 
     class Meta:
         model = PushCertificate
@@ -42,15 +43,23 @@ class PushCertificateForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         certificate_file = cleaned_data.pop("certificate_file", None)
-        password = cleaned_data.pop("password", None)
-        if certificate_file:
+        key_file = cleaned_data.pop("key_file", None)
+        key_password = cleaned_data.pop("key_password", None)
+        if certificate_file and key_file:
             try:
-                push_certificate_d = load_push_certificate(certificate_file.read(), password)
+                push_certificate_d = load_push_certificate_and_key(
+                    certificate_file.read(),
+                    key_file.read(), key_password
+                )
+            except ValueError as e:
+                raise forms.ValidationError(str(e))
             except Exception:
-                raise forms.ValidationError("Could not process push certificate")
-            else:
-                for key, val in push_certificate_d.items():
-                    setattr(self.instance, key, val)
+                raise
+                raise forms.ValidationError("Could not load certificate or key file")
+            if self.instance.topic and push_certificate_d["topic"] != self.instance.topic:
+                raise forms.ValidationError("The new certificate has a different topic")
+            for key, val in push_certificate_d.items():
+                setattr(self.instance, key, val)
         return cleaned_data
 
 
