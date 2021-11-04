@@ -70,6 +70,14 @@ class PushCertificate(models.Model):
     def get_absolute_url(self):
         return reverse("mdm:push_certificate", args=(self.pk,))
 
+    def can_be_deleted(self):
+        return (
+            self.enrolleddevice_set.count() == 0
+            and self.depenrollment_set.count() == 0
+            and self.otaenrollment_set.count() == 0
+            and self.userenrollment_set.count() == 0
+        )
+
     # secret
 
     def _get_secret_engine_kwargs(self, field):

@@ -1,10 +1,11 @@
 import io
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.core.exceptions import SuspiciousOperation
 from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
-from django.urls import reverse
-from django.views.generic import CreateView, DetailView, ListView, TemplateView, UpdateView, View
+from django.urls import reverse, reverse_lazy
+from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.mdm.dep import add_dep_token_certificate
 from zentral.contrib.mdm.forms import EncryptedDEPTokenForm, PushCertificateForm
 from zentral.contrib.mdm.models import PushCertificate, DEPToken, DEPVirtualServer
@@ -53,6 +54,18 @@ class UpdatePushCertificateView(PermissionRequiredMixin, UpdateView):
     permission_required = "mdm.change_pushcertificate"
     model = PushCertificate
     form_class = PushCertificateForm
+
+
+class DeletePushCertificateView(PermissionRequiredMixin, DeleteView):
+    permission_required = "mdm.delete_pushcertificate"
+    model = PushCertificate
+    success_url = reverse_lazy("mdm:push_certificates")
+
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        if not obj.can_be_deleted():
+            raise SuspiciousOperation("This push certificate cannot be deleted")
+        return obj
 
 
 # DEP Tokens

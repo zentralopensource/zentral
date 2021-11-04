@@ -164,8 +164,9 @@ def decrypt_cms_payload(payload, private_key_bytes):
 
 
 def load_push_certificate_and_key(cert_pem_bytes, key_pem_bytes, password=None):
-    if password and isinstance(password, str):
-        password = password.encode("utf-8")
+    if password:
+        if isinstance(password, str):
+            password = password.encode("utf-8")
     else:
         password = None
     try:

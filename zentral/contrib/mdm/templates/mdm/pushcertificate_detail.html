@@ -11,9 +11,14 @@
 
 <h3>MDM push certificate <i>{{ object.name }}</i></h3>
 
-{% if perms.mdm.change_pushcertificate %}
+{% if perms.mdm.change_pushcertificate or perms.mdm.delete_pushcertificate%}
 <p>
+  {% if perms.mdm.change_pushcertificate %}
   <a href="{% url 'mdm:update_push_certificate' object.pk %}" class="btn btn-default">Update</a>
+  {% endif %}
+  {% if object.can_be_deleted and perms.mdm.delete_pushcertificate %}
+  <a href="{% url 'mdm:delete_push_certificate' object.pk %}" class="btn btn-danger">Delete</a>
+  {% endif %}
 </p>
 {% endif %}
 

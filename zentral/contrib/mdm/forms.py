@@ -55,8 +55,12 @@ class PushCertificateForm(forms.ModelForm):
                 raise forms.ValidationError(str(e))
             except Exception:
                 raise forms.ValidationError("Could not load certificate or key file")
-            if self.instance.topic and push_certificate_d["topic"] != self.instance.topic:
-                raise forms.ValidationError("The new certificate has a different topic")
+            if self.instance.topic:
+                if push_certificate_d["topic"] != self.instance.topic:
+                    raise forms.ValidationError("The new certificate has a different topic")
+            else:
+                if PushCertificate.objects.filter(topic=push_certificate_d["topic"]):
+                    raise forms.ValidationError("A difference certificate with the same topic already exists")
             cleaned_data["push_certificate_d"] = push_certificate_d
         return cleaned_data
 
