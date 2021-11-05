@@ -6,104 +6,40 @@ import random
 import signal
 import threading
 import time
+from django.db import DatabaseError, InterfaceError
+from django.utils.functional import cached_property
 from django.utils.text import slugify
 from kombu.utils import json
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import pubsub_v1
 from google.oauth2 import service_account
 from zentral.conf import settings
+from .consumer import BaseWorker, Consumer, ConsumerProducer
 
 
 logger = logging.getLogger('zentral.core.queues.backends.google_pubsub')
 
 
-class BaseWorker:
-    name = "UNDEFINED"
-    counters = []
-
-    def setup_metrics_exporter(self, *args, **kwargs):
-        self.metrics_exporter = kwargs.pop("metrics_exporter", None)
-        if self.metrics_exporter:
-            for name, label in self.counters:
-                self.metrics_exporter.add_counter(name, [label])
-            self.metrics_exporter.start()
-
-    def inc_counter(self, name, label):
-        if self.metrics_exporter:
-            self.metrics_exporter.inc(name, label)
-
-    def log(self, msg, level, *args):
-        logger.log(level, "{} - {}".format(self.name, msg), *args)
-
-    def log_debug(self, msg, *args):
-        self.log(msg, logging.DEBUG, *args)
-
-    def log_info(self, msg, *args):
-        self.log(msg, logging.INFO, *args)
-
-    def log_error(self, msg, *args):
-        self.log(msg, logging.ERROR, *args)
-
-
-class PreprocessWorker(BaseWorker):
+class PreprocessWorker(ConsumerProducer):
     name = "preprocess worker"
     counters = (
         ("preprocessed_events", "routing_key"),
         ("produced_events", "event_type"),
     )
+    subscription_id = "raw-events-subscription"
 
-    def __init__(self, raw_events_topic, events_topic, credentials):
-        self.raw_events_topic = raw_events_topic
-        self.events_topic = events_topic
-        self.credentials = credentials
-        # preprocessors
-        self.preprocessors = {
-            preprocessor.routing_key: preprocessor
-            for preprocessor in self._get_preprocessors()
-        }
-
-    def _get_preprocessors(self):
+    @cached_property
+    def preprocessors(self):
+        preprocessors = {}
         for app in settings['apps']:
             try:
                 preprocessors_module = import_module("{}.preprocessors".format(app))
             except ImportError:
                 pass
             else:
-                yield from getattr(preprocessors_module, "get_preprocessors")()
-
-    def run(self, *args, **kwargs):
-        self.log_info("run")
-        super().setup_metrics_exporter(*args, **kwargs)
-
-        # subscriber client
-        self.log_info("initialize subscriber")
-        subscriber_client = pubsub_v1.SubscriberClient(credentials=self.credentials)
-        project_id = self.raw_events_topic.split("/")[1]
-        sub_path = subscriber_client.subscription_path(project_id, "raw-events-subscription")
-
-        # create subscription
-        try:
-            subscriber_client.create_subscription(
-                request={'name': sub_path,
-                         'topic': self.raw_events_topic}
-            )
-        except AlreadyExists:
-            self.log_info("preprocess worker subscription %s already exists", sub_path)
-        else:
-            self.log_info("preprocess worker subscription %s created", sub_path)
-
-        # publisher client
-        self.log_info("initialize publisher")
-        self.publisher_client = pubsub_v1.PublisherClient(credentials=self.credentials)
-
-        # async pull
-        self.log_info("start async pull")
-        pull_future = subscriber_client.subscribe(sub_path, self.callback)
-        with subscriber_client:
-            try:
-                pull_future.result()
-            except Exception:
-                pull_future.cancel()
+                for preprocessor in getattr(preprocessors_module, "get_preprocessors")():
+                    preprocessors[preprocessor.routing_key] = preprocessor
+        return preprocessors
 
     def callback(self, message):
         routing_key = message.attributes.get("routing_key")
@@ -115,117 +51,53 @@ class PreprocessWorker(BaseWorker):
                 self.log_error("No preprocessor for routing key %s", routing_key)
             else:
                 for event in preprocessor.process_raw_event(json.loads(message.data)):
-                    new_message = json.dumps(event.serialize(machine_metadata=False)).encode("utf-8")
-                    self.publisher_client.publish(self.events_topic, new_message)
+                    self.publish_event(event, machine_metadata=False)
                     self.inc_counter("produced_events", event.event_type)
         message.ack()
         self.inc_counter("preprocessed_events", routing_key or "UNKNOWN")
 
 
-class EnrichWorker(BaseWorker):
+class EnrichWorker(ConsumerProducer):
     name = "enrich worker"
     counters = (
         ("enriched_events", "event_type"),
         ("produced_events", "event_type"),
     )
+    subscription_id = "events-subscription"
 
     def __init__(self, events_topic, enriched_events_topic, credentials, enrich_event):
-        self.events_topic = events_topic
-        self.enriched_events_topic = enriched_events_topic
-        self.credentials = credentials
+        super().__init__(events_topic, enriched_events_topic, credentials)
         self.enrich_event = enrich_event
-
-    def run(self, *args, **kwargs):
-        self.log_info("run")
-        super().setup_metrics_exporter(*args, **kwargs)
-
-        # subscriber client
-        self.log_info("initialize subscriber")
-        subscriber_client = pubsub_v1.SubscriberClient(credentials=self.credentials)
-        project_id = self.events_topic.split("/")[1]
-        sub_path = subscriber_client.subscription_path(project_id, "events-subscription")
-
-        # create subscription
-        try:
-            subscriber_client.create_subscription(
-                request={'name': sub_path,
-                         'topic': self.events_topic}
-            )
-        except AlreadyExists:
-            self.log_info("enrich worker subscription %s already exists", sub_path)
-        else:
-            self.log_info("enrich worker subscription %s created", sub_path)
-
-        # publisher client
-        self.log_info("initialize publisher")
-        self.publisher_client = pubsub_v1.PublisherClient(credentials=self.credentials)
-
-        # async pull
-        self.log_info("start async pull")
-        pull_future = subscriber_client.subscribe(sub_path, self.callback)
-        with subscriber_client:
-            try:
-                pull_future.result()
-            except Exception:
-                pull_future.cancel()
 
     def callback(self, message):
         event_dict = json.loads(message.data)
         event_type = event_dict['_zentral']['type']
         try:
             for event in self.enrich_event(event_dict):
-                new_message = json.dumps(event.serialize(machine_metadata=True)).encode("utf-8")
-                self.publisher_client.publish(self.enriched_events_topic, new_message)
+                self.publish_event(event, machine_metadata=True)
                 self.inc_counter("produced_events", event.event_type)
-        except Exception as exception:
-            logger.exception("Requeuing message with 1s delay: %s", exception)
-            time.sleep(1)
+        except (DatabaseError, InterfaceError):
+            self.log_exception("DB exception. Shutdown")
+            message.nack()
+            self.shutdown(error=True)
+        except Exception:
+            self.log_exception("Other exception. NACK")
             message.nack()
         else:
             message.ack()
             self.inc_counter("enriched_events", event_type)
 
 
-class ProcessWorker(BaseWorker):
+class ProcessWorker(Consumer):
     name = "process worker"
     counters = (
         ("processed_events", "event_type"),
     )
+    subscription_id = "process-enriched-events-subscription"
 
     def __init__(self, enriched_events_topic, credentials, process_event):
-        self.enriched_events_topic = enriched_events_topic
-        self.credentials = credentials
+        super().__init__(enriched_events_topic, credentials)
         self.process_event = process_event
-
-    def run(self, *args, **kwargs):
-        self.log_info("run")
-        super().setup_metrics_exporter(*args, **kwargs)
-
-        # subscriber client
-        self.log_info("initialize subscriber")
-        subscriber_client = pubsub_v1.SubscriberClient(credentials=self.credentials)
-        project_id = self.enriched_events_topic.split("/")[1]
-        sub_path = subscriber_client.subscription_path(project_id, "process-enriched-events-subscription")
-
-        # create subscription
-        try:
-            subscriber_client.create_subscription(
-                request={'name': sub_path,
-                         'topic': self.enriched_events_topic}
-            )
-        except AlreadyExists:
-            self.log_info("process worker subscription %s already exists", sub_path)
-        else:
-            self.log_info("process worker subscription %s created", sub_path)
-
-        # async pull
-        self.log_info("start async pull")
-        pull_future = subscriber_client.subscribe(sub_path, self.callback)
-        with subscriber_client:
-            try:
-                pull_future.result()
-            except Exception:
-                pull_future.cancel()
 
     def callback(self, message):
         event_dict = json.loads(message.data)
@@ -235,57 +107,16 @@ class ProcessWorker(BaseWorker):
         self.inc_counter("processed_events", event_type)
 
 
-class StoreWorker(BaseWorker):
+class StoreWorker(Consumer):
     counters = (
         ("skipped_events", "event_type"),
         ("stored_events", "event_type"),
     )
 
     def __init__(self, enriched_events_topic, credentials, event_store):
-        self.enriched_events_topic = enriched_events_topic
-        self.credentials = credentials
+        super().__init__(enriched_events_topic, credentials)
         self.event_store = event_store
-        self.name = "store worker {}".format(self.event_store.name)
-
-    def run(self, *args, **kwargs):
-        self.log_info("run")
-        super().setup_metrics_exporter(*args, **kwargs)
-
-        # subscriber client
-        self.log_info("initialize subscriber")
-        subscriber_client = pubsub_v1.SubscriberClient(credentials=self.credentials)
-        project_id = self.enriched_events_topic.split("/")[1]
-        sub_path = subscriber_client.subscription_path(
-            project_id,
-            "{}-store-enriched-events-subscription".format(slugify(self.event_store.name))
-        )
-
-        # create subscription
-        try:
-            subscriber_client.create_subscription(
-                request={'name': sub_path,
-                         'topic': self.enriched_events_topic}
-            )
-        except AlreadyExists:
-            self.log_info("store worker subscription %s already exists", sub_path)
-        else:
-            self.log_info("store worker subscription %s created", sub_path)
-
-        # prometheus
-        prometheus_port = kwargs.pop("prometheus_port", None)
-        if prometheus_port:
-            self.log_info("start prometheus server on port %s", prometheus_port)
-            self.start_prometheus_server(prometheus_port)
-
-        # async pull
-        self.log_info("start async pull")
-        pull_future = subscriber_client.subscribe(sub_path, self.callback)
-        with subscriber_client:
-            try:
-                pull_future.result()
-            except Exception:
-                pull_future.cancel()
-                pull_future.result()
+        self.name = f"store worker {event_store.name}"
 
     def callback(self, message):
         self.log_debug("store event")
@@ -298,8 +129,12 @@ class StoreWorker(BaseWorker):
             return
         try:
             self.event_store.store(event_dict)
+        except (DatabaseError, InterfaceError):
+            self.log_exception("DB exception. Shutdown")
+            message.nack()
+            self.shutdown(error=True)
         except Exception:
-            logger.exception("Could add event to store %s", self.event_store.name)
+            self.log_exception("Other exception. NACK")
             message.nack()
         else:
             message.ack()
@@ -509,9 +344,8 @@ class BulkStoreWorker(BaseWorker):
                         self.log_debug("process events because max batch size reached")
                         self._process_batch()
 
-    def run(self, *args, **kwargs):
+    def run(self, metrics_exporter=None):
         self.log_info("run")
-        super().setup_metrics_exporter(*args, **kwargs)
 
         # subscriber client
         self.log_info("initialize subscriber")
@@ -540,16 +374,13 @@ class BulkStoreWorker(BaseWorker):
         else:
             self.log_info("store worker subscription %s created", self.sub_path)
 
-        # prometheus
-        prometheus_port = kwargs.pop("prometheus_port", None)
-        if prometheus_port:
-            self.log_info("start prometheus server on port %s", prometheus_port)
-            self.start_prometheus_server(prometheus_port)
-
         # signals
-        exit_status = 0
+        exit_code = 0
         signal.signal(signal.SIGTERM, self._handle_signal)
         signal.signal(signal.SIGINT, self._handle_signal)
+
+        # metrics
+        super().start_metrics_exporter(metrics_exporter)
 
         # threads
         threads = [
@@ -576,7 +407,7 @@ class BulkStoreWorker(BaseWorker):
         try:
             self._start_run_loop()
         except Exception as e:
-            exit_status = 1
+            exit_code = 1
             self.log_error("run loop exception: %s", e)
             if not self.stop_receiving_event.is_set():
                 self.log_error("stop receiving")
@@ -590,7 +421,7 @@ class BulkStoreWorker(BaseWorker):
                 thread.join()
             self.log_error("all threads stopped")
         self.subscriber_client.close()
-        return exit_status
+        return exit_code
 
 
 class EventQueues(object):
