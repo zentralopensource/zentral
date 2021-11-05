@@ -127,7 +127,7 @@ class Consumer(BaseWorker):
                 self.pull_future.result()
             except Exception:
                 self.log_exception("Shutdown because of pull future exception")
-                self.shutdown()
+                self.shutdown(error=True)
 
         return self.exit_code
 
