@@ -32,14 +32,14 @@ google-api-core==2.0.1
 google-auth==2.0.2
 google-cloud-core==2.0.0
 google-cloud-kms==2.8.0
-google-cloud-pubsub==1.7.0
+google-cloud-pubsub==2.8.0
 google-cloud-secret-manager==2.7.1
 google-cloud-storage==1.42.1
 google-crc32c==1.1.2
 google-resumable-media==2.0.2
 googleapis-common-protos==1.52.0
 grpc-google-iam-v1==0.12.3
-grpcio==1.38.0
+grpcio==1.41.1
 gunicorn==20.1.0
 h11==0.12.0
 h2==3.2.0

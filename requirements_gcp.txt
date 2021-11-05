@@ -15,7 +15,7 @@ google-crc32c # explicit here, but required by other dependencies
 google-cloud-kms
 
 # Zentral google_pubsub queues backend
-google-cloud-pubsub<2
+google-cloud-pubsub<3
 
 # Redis for celery broker
 redis
