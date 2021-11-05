@@ -116,7 +116,7 @@ class PreprocessWorker(BaseWorker):
             else:
                 for event in preprocessor.process_raw_event(json.loads(message.data)):
                     new_message = json.dumps(event.serialize(machine_metadata=False)).encode("utf-8")
-                    self.publisher_client.publish(request={'topic': self.events_topic, 'messages': new_message})
+                    self.publisher_client.publish(self.events_topic, new_message)
                     self.inc_counter("produced_events", event.event_type)
         message.ack()
         self.inc_counter("preprocessed_events", routing_key or "UNKNOWN")
@@ -175,7 +175,7 @@ class EnrichWorker(BaseWorker):
         try:
             for event in self.enrich_event(event_dict):
                 new_message = json.dumps(event.serialize(machine_metadata=True)).encode("utf-8")
-                self.publisher_client.publish(request={'topic': self.enriched_events_topic, 'messages': new_message})
+                self.publisher_client.publish(self.enriched_events_topic, new_message)
                 self.inc_counter("produced_events", event.event_type)
         except Exception as exception:
             logger.exception("Requeuing message with 1s delay: %s", exception)
