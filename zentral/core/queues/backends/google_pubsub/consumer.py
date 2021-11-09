@@ -11,44 +11,17 @@ logger = logging.getLogger('zentral.core.queues.backends.google_pubsub.consumer'
 
 class BaseWorker:
     name = "UNDEFINED"
-    counters = []
-
-    def start_metrics_exporter(self, metrics_exporter):
-        self.metrics_exporter = metrics_exporter
-        if self.metrics_exporter:
-            for name, label in self.counters:
-                self.metrics_exporter.add_counter(name, [label])
-            self.metrics_exporter.start()
-
-    def inc_counter(self, name, label):
-        if self.metrics_exporter:
-            self.metrics_exporter.inc(name, label)
-
-    def log(self, msg, level, *args):
-        logger.log(level, f"{self.name} - {msg}", *args)
-
-    def log_debug(self, msg, *args):
-        self.log(msg, logging.DEBUG, *args)
-
-    def log_error(self, msg, *args):
-        self.log(msg, logging.ERROR, *args)
-
-    def log_exception(self, msg, *args):
-        logger.exception(f"{self.name} - {msg}", *args)
-
-    def log_info(self, msg, *args):
-        self.log(msg, logging.INFO, *args)
-
-
-class Consumer(BaseWorker):
     subscription_id = "UNDEFINED"
     ack_deadline_seconds = None
+    counters = None
 
-    def __init__(self, topic, credentials):
+    def __init__(self, topic, credentials, included_event_types=None, excluded_event_types=None):
         self.topic = topic
         self.credentials = credentials
-        self.pull_future = None
-        self.exit_code = 0
+        self.included_event_types = included_event_types
+        self.excluded_event_types = excluded_event_types
+
+    # subscriber API
 
     @cached_property
     def subscriber_client(self):
@@ -70,12 +43,25 @@ class Consumer(BaseWorker):
         }
         if self.ack_deadline_seconds is not None:
             sub_kwargs["ack_deadline_seconds"] = self.ack_deadline_seconds
+        if self.included_event_types:
+            sub_kwargs["filter"] = " AND ".join(f'attributes.event_type = "{t}"' for t in self.included_event_types)
+        elif self.excluded_event_types:
+            sub_kwargs["filter"] = " AND ".join(f'attributes.event_type != "{t}"' for t in self.excluded_event_types)
         try:
             self.subscriber_client.create_subscription(request=sub_kwargs)
         except AlreadyExists:
             self.log_info("subscription %s already exists", self.subscription_path)
-            if self.ack_deadline_seconds is not None:
-                self.log_info("set ack deadline seconds to %d", self.ack_deadline_seconds)
+            # verify filter
+            config_filter = sub_kwargs.pop("filter", "")
+            response = self.subscriber_client.get_subscription(request={"subscription": self.subscription_path})
+            if response.filter != config_filter:
+                self.log_error("existing subscription %s has a different filter: '%s'",
+                               self.subscription_path, response.filter)
+                raise ValueError
+            # update ack_deadline_seconds if necessary
+            config_ack_deadline_seconds = sub_kwargs.get("ack_deadline_seconds")
+            if config_ack_deadline_seconds and config_ack_deadline_seconds != response.ack_deadline_seconds:
+                self.log_info("update subcription %s ack_deadline_seconds", self.subscription_path)
                 subscription = pubsub_v1.types.Subscription(**sub_kwargs)
                 update_mask = pubsub_v1.types.FieldMask(paths=["ack_deadline_seconds"])
                 self.subscriber_client.update_subscription(
@@ -84,16 +70,43 @@ class Consumer(BaseWorker):
         else:
             self.log_info("subscription %s created", self.subscription_path)
 
-    def shutdown(self, error=False):
-        self.log_info("shutdown")
-        if error:
-            self.exit_code = 1
-        if self.pull_future:
-            self.log_info("cancel pull future")
-            self.pull_future.cancel()
-            self.log_info("wait for pull future")
-            self.pull_future.result()
-            self.log_info("pull future shut down")
+    # metrics
+
+    def start_metrics_exporter(self, metrics_exporter):
+        if not self.counters:
+            self.log_error("Could not start metric exporters: no counters")
+            return
+        self.metrics_exporter = metrics_exporter
+        if self.metrics_exporter:
+            for name, label in self.counters:
+                self.metrics_exporter.add_counter(name, [label])
+            self.metrics_exporter.start()
+
+    def inc_counter(self, name, label):
+        if self.metrics_exporter:
+            self.metrics_exporter.inc(name, label)
+
+    # logging
+
+    def log(self, msg, level, *args):
+        logger.log(level, f"{self.name} - {msg}", *args)
+
+    def log_debug(self, msg, *args):
+        self.log(msg, logging.DEBUG, *args)
+
+    def log_error(self, msg, *args):
+        self.log(msg, logging.ERROR, *args)
+
+    def log_exception(self, msg, *args):
+        logger.exception(f"{self.name} - {msg}", *args)
+
+    def log_info(self, msg, *args):
+        self.log(msg, logging.INFO, *args)
+
+    # run
+
+    def do_handle_signal(self):
+        raise NotImplementedError
 
     def handle_signal(self, signum, frame):
         if signum == signal.SIGTERM:
@@ -101,24 +114,53 @@ class Consumer(BaseWorker):
         elif signum == signal.SIGINT:
             signum = "SIGINT"
         self.log_debug("received signal %s", signum)
-        self.shutdown()
+        return self.do_handle_signal()
+
+    def do_run(self):
+        raise NotImplementedError
+
+    def run(self, metrics_exporter=None):
+        self.log_info("run")
+        self.exit_code = 0
+
+        # subscription
+        try:
+            self.ensure_subscription()
+        except ValueError:
+            self.exit_code = 1
+        else:
+            # signals
+            signal.signal(signal.SIGTERM, self.handle_signal)
+            signal.signal(signal.SIGINT, self.handle_signal)
+
+            # metrics
+            self.start_metrics_exporter(metrics_exporter)
+
+            self.do_run()
+        return self.exit_code
+
+
+class Consumer(BaseWorker):
+    def __init__(self, topic, credentials, included_event_types=None, excluded_event_types=None):
+        super().__init__(topic, credentials, included_event_types, excluded_event_types)
+        self.pull_future = None
+
+    def shutdown(self, error=False):
+        self.log_info("shutdown")
+        if self.pull_future:
+            self.log_info("cancel pull future")
+            self.pull_future.cancel()
+            self.log_info("wait for pull future")
+            self.pull_future.result()
+            self.log_info("pull future shut down")
 
     def callback(self, message):
         return
 
-    def run(self, metrics_exporter=None):
-        self.log_info("run")
+    def do_handle_signal(self):
+        self.shutdown()
 
-        # subscriptions
-        self.ensure_subscription()
-
-        # signals
-        signal.signal(signal.SIGTERM, self.handle_signal)
-        signal.signal(signal.SIGINT, self.handle_signal)
-
-        # metrics
-        self.start_metrics_exporter(metrics_exporter)
-
+    def do_run(self):
         # async pull
         self.log_info("start async pull")
         self.pull_future = self.subscriber_client.subscribe(self.subscription_path, self.callback)
@@ -127,9 +169,8 @@ class Consumer(BaseWorker):
                 self.pull_future.result()
             except Exception:
                 self.log_exception("Shutdown because of pull future exception")
-                self.shutdown(error=True)
-
-        return self.exit_code
+                self.exit_code = 1
+                self.shutdown()
 
 
 class ConsumerProducer(Consumer):
@@ -143,4 +184,4 @@ class ConsumerProducer(Consumer):
 
     def publish_event(self, event, machine_metadata):
         message = json.dumps(event.serialize(machine_metadata=machine_metadata)).encode("utf-8")
-        self.producer_client.publish(self.out_topic, message)
+        self.producer_client.publish(self.out_topic, message, event_type=event.event_type)

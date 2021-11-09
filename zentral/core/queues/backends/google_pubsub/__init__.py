@@ -3,14 +3,12 @@ from importlib import import_module
 import logging
 import queue
 import random
-import signal
 import threading
 import time
 from django.db import DatabaseError, InterfaceError
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from kombu.utils import json
-from google.api_core.exceptions import AlreadyExists
 from google.cloud import pubsub_v1
 from google.oauth2 import service_account
 from zentral.conf import settings
@@ -22,11 +20,11 @@ logger = logging.getLogger('zentral.core.queues.backends.google_pubsub')
 
 class PreprocessWorker(ConsumerProducer):
     name = "preprocess worker"
+    subscription_id = "raw-events-subscription"
     counters = (
         ("preprocessed_events", "routing_key"),
         ("produced_events", "event_type"),
     )
-    subscription_id = "raw-events-subscription"
 
     @cached_property
     def preprocessors(self):
@@ -59,11 +57,11 @@ class PreprocessWorker(ConsumerProducer):
 
 class EnrichWorker(ConsumerProducer):
     name = "enrich worker"
+    subscription_id = "events-subscription"
     counters = (
         ("enriched_events", "event_type"),
         ("produced_events", "event_type"),
     )
-    subscription_id = "events-subscription"
 
     def __init__(self, events_topic, enriched_events_topic, credentials, enrich_event):
         super().__init__(events_topic, enriched_events_topic, credentials)
@@ -90,10 +88,10 @@ class EnrichWorker(ConsumerProducer):
 
 class ProcessWorker(Consumer):
     name = "process worker"
+    subscription_id = "process-enriched-events-subscription"
     counters = (
         ("processed_events", "event_type"),
     )
-    subscription_id = "process-enriched-events-subscription"
 
     def __init__(self, enriched_events_topic, credentials, process_event):
         super().__init__(enriched_events_topic, credentials)
@@ -113,10 +111,15 @@ class StoreWorker(Consumer):
         ("stored_events", "event_type"),
     )
 
-    def __init__(self, enriched_events_topic, credentials, event_store):
-        super().__init__(enriched_events_topic, credentials)
-        self.event_store = event_store
+    def __init__(self, enriched_events_topic, credentials, event_store, use_message_filters):
         self.name = f"store worker {event_store.name}"
+        self.subscription_id = "{}-store-enriched-events-subscription".format(slugify(event_store.name))
+        kwargs = {}
+        if use_message_filters:
+            kwargs["included_event_types"] = event_store.included_event_types
+            kwargs["excluded_event_types"] = event_store.excluded_event_types
+        super().__init__(enriched_events_topic, credentials, **kwargs)
+        self.event_store = event_store
 
     def callback(self, message):
         self.log_debug("store event")
@@ -242,19 +245,23 @@ class BulkStoreWorkerAckThread(threading.Thread):
 
 
 class BulkStoreWorker(BaseWorker):
+    ack_deadline_seconds = 60  # increased from the default 10s. TODO verify.
     counters = (
         ("skipped_events", "event_type"),
         ("stored_events", "event_type"),
     )
-    ack_deadline_seconds = 60  # increased from the default 10s. TODO verify.
     max_event_age_seconds = 5
     receive_thread_count = 2  # TODO verify
 
-    def __init__(self, enriched_events_topic, credentials, event_store):
-        self.enriched_events_topic = enriched_events_topic
-        self.credentials = credentials
+    def __init__(self, enriched_events_topic, credentials, event_store, use_message_filters):
+        self.name = f"store worker {event_store.name}"
+        self.subscription_id = "{}-store-enriched-events-subscription".format(slugify(event_store.name))
+        kwargs = {}
+        if use_message_filters:
+            kwargs["included_event_types"] = event_store.included_event_types
+            kwargs["excluded_event_types"] = event_store.excluded_event_types
+        super().__init__(enriched_events_topic, credentials, **kwargs)
         self.event_store = event_store
-        self.name = "store worker {}".format(self.event_store.name)
         # threading
         self.process_message_queue = queue.Queue(maxsize=self.event_store.batch_size)
         self.ack_message_queue = queue.Queue(maxsize=self.event_store.batch_size)
@@ -263,16 +270,6 @@ class BulkStoreWorker(BaseWorker):
         # batch
         self.batch = deque()
         self.batch_start_ts = None
-
-    def _handle_signal(self, signum, frame):
-        if signum == signal.SIGTERM:
-            signum = "SIGTERM"
-        elif signum == signal.SIGINT:
-            signum = "SIGINT"
-        self.log_debug("received signal %s", signum)
-        if not self.stop_receiving_event.is_set():
-            self.log_error("signal %s - stop receiving events", signum)
-            self.stop_receiving_event.set()
 
     def _skip_event(self, event_d):
         event_type = event_d['_zentral']['type']
@@ -344,48 +341,16 @@ class BulkStoreWorker(BaseWorker):
                         self.log_debug("process events because max batch size reached")
                         self._process_batch()
 
-    def run(self, metrics_exporter=None):
-        self.log_info("run")
+    def do_handle_signal(self):
+        if not self.stop_receiving_event.is_set():
+            self.log_error("stop receiving events")
+            self.stop_receiving_event.set()
 
-        # subscriber client
-        self.log_info("initialize subscriber")
-        self.subscriber_client = pubsub_v1.SubscriberClient(credentials=self.credentials)
-        project_id = self.enriched_events_topic.split("/")[1]
-        self.sub_path = self.subscriber_client.subscription_path(
-            project_id,
-            "{}-store-enriched-events-subscription".format(slugify(self.event_store.name))
-        )
-
-        # create or update subscription
-        sub_kwargs = {
-            'name': self.sub_path,
-            'topic': self.enriched_events_topic,
-            'ack_deadline_seconds': self.ack_deadline_seconds
-        }
-        try:
-            self.subscriber_client.create_subscription(request=sub_kwargs)
-        except AlreadyExists:
-            self.log_info("store worker subscription %s already exists", self.sub_path)
-            subscription = pubsub_v1.types.Subscription(**sub_kwargs)
-            update_mask = pubsub_v1.types.FieldMask(paths=["ack_deadline_seconds"])
-            self.subscriber_client.update_subscription(
-                request={"subscription": subscription, "update_mask": update_mask}
-            )
-        else:
-            self.log_info("store worker subscription %s created", self.sub_path)
-
-        # signals
-        exit_code = 0
-        signal.signal(signal.SIGTERM, self._handle_signal)
-        signal.signal(signal.SIGINT, self._handle_signal)
-
-        # metrics
-        super().start_metrics_exporter(metrics_exporter)
-
+    def do_run(self):
         # threads
         threads = [
             BulkStoreWorkerAckThread(
-                self.subscriber_client, self.sub_path,
+                self.subscriber_client, self.subscription_path,
                 self.stop_event,
                 self.ack_message_queue,
                 self.event_store.batch_size
@@ -395,7 +360,7 @@ class BulkStoreWorker(BaseWorker):
             threads.append(
                 BulkStoreWorkerReceiveThread(
                     thread_id + 1,
-                    self.subscriber_client, self.sub_path,
+                    self.subscriber_client, self.subscription_path,
                     self.stop_receiving_event,
                     self.process_message_queue,
                     self.event_store.batch_size
@@ -407,7 +372,7 @@ class BulkStoreWorker(BaseWorker):
         try:
             self._start_run_loop()
         except Exception as e:
-            exit_code = 1
+            self.exit_code = 1
             self.log_error("run loop exception: %s", e)
             if not self.stop_receiving_event.is_set():
                 self.log_error("stop receiving")
@@ -421,7 +386,6 @@ class BulkStoreWorker(BaseWorker):
                 thread.join()
             self.log_error("all threads stopped")
         self.subscriber_client.close()
-        return exit_code
 
 
 class EventQueues(object):
@@ -431,6 +395,9 @@ class EventQueues(object):
         self.raw_events_topic = topics["raw_events"]
         self.events_topic = topics["events"]
         self.enriched_events_topic = topics["enriched_events"]
+
+        # subscriptions
+        self.use_message_filters = config_d.get("use_message_filters", False)
 
         # credentials
         self.credentials = None
@@ -442,14 +409,11 @@ class EventQueues(object):
         # publisher client
         self.publisher_client = None
 
-    def _publish(self, topic, event_dict, routing_key=None):
+    def _publish(self, topic, event_dict, **attributes):
         message = json.dumps(event_dict).encode("utf-8")
-        kwargs = {}
-        if routing_key:
-            kwargs["routing_key"] = routing_key
         if self.publisher_client is None:
             self.publisher_client = pubsub_v1.PublisherClient(credentials=self.credentials)
-        self.publisher_client.publish(topic, message, **kwargs)
+        self.publisher_client.publish(topic, message, **attributes)
 
     def get_preprocess_worker(self):
         return PreprocessWorker(self.raw_events_topic, self.events_topic, self.credentials)
@@ -465,10 +429,10 @@ class EventQueues(object):
             worker_class = BulkStoreWorker
         else:
             worker_class = StoreWorker
-        return worker_class(self.enriched_events_topic, self.credentials, event_store)
+        return worker_class(self.enriched_events_topic, self.credentials, event_store, self.use_message_filters)
 
     def post_raw_event(self, routing_key, raw_event):
         self._publish(self.raw_events_topic, raw_event, routing_key=routing_key)
 
     def post_event(self, event):
-        self._publish(self.events_topic, event.serialize(machine_metadata=False))
+        self._publish(self.events_topic, event.serialize(machine_metadata=False), event_type=event.event_type)
