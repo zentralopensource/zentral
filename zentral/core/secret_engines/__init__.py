@@ -90,7 +90,10 @@ def encrypt_str(data, **context):
 
 
 def decrypt(token, **context):
-    secret_engine_name, data = token.split("$")
+    try:
+        secret_engine_name, data = token.split("$")
+    except ValueError:
+        raise DecryptionError("Bad token structure")
     secret_engine = secret_engines.get(secret_engine_name)
     if not secret_engine:
         raise DecryptionError(f"Unknown secret engine: '{secret_engine_name}'")
