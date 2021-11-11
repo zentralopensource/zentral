@@ -563,17 +563,19 @@ class PreflightView(BaseSyncView):
         other_enrolled_machines = (EnrolledMachine.objects.exclude(pk=enrolled_machine.pk)
                                                           .filter(hardware_uuid=self.hardware_uuid))
         if other_enrolled_machines.count():
-            enrollment_action = 're-enrollment'
+            self.enrollment_action = 're-enrollment'
             other_enrolled_machines.delete()
         else:
-            enrollment_action = 'enrollment'
+            self.enrollment_action = 'enrollment'
 
         # post event
-        post_enrollment_event(enrolled_machine.serial_number, self.user_agent, self.ip, {'action': enrollment_action})
+        post_enrollment_event(enrolled_machine.serial_number, self.user_agent, self.ip,
+                              {'action': self.enrollment_action})
 
         return enrolled_machine
 
     def get_enrolled_machine(self):
+        self.enrollment_action = None
         enrolled_machine = super().get_enrolled_machine()
         if not enrolled_machine:
             enrolled_machine = self._enroll_machine()
@@ -637,13 +639,8 @@ class PreflightView(BaseSyncView):
         )
 
         # clean sync?
-        enrolled_machine_rules = MachineRule.objects.filter(enrolled_machine=self.enrolled_machine)
-        if self.request_data.get("request_clean_sync") is True:
-            # clean sync requested, we wipe the existing machine rules
-            enrolled_machine_rules.delete()
-            response_dict["clean_sync"] = True
-        elif not enrolled_machine_rules.count():
-            # no existing machine rules, we tell santa it is a clean sync
+        if self.request_data.get("request_clean_sync") is True or self.enrollment_action is not None:
+            MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).delete()
             response_dict["clean_sync"] = True
 
         return response_dict

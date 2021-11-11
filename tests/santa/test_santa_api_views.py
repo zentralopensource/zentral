@@ -116,6 +116,29 @@ class SantaAPIViewsTestCase(TestCase):
         enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
         self.assertEqual(enrolled_machine.client_mode, Configuration.MONITOR_MODE)
 
+    def test_preflight_clean_sync(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+
+        # enrollment, clean sync not requested → clean sync
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertTrue(json_response["clean_sync"])
+
+        # no enrollment, clean sync not requested → no clean sync
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertFalse(json_response.get("clean_sync", False))
+
+        # no enrollment, clean sync requested → clean sync
+        data["request_clean_sync"] = True
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertTrue(json_response["clean_sync"])
+
     def test_rule_download_not_enrolled(self):
         url = reverse("santa:ruledownload", args=(self.enrollment_secret.secret, uuid.uuid4()))
         # no rules
