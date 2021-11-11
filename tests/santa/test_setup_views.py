@@ -121,6 +121,7 @@ class SantaSetupViewsTestCase(TestCase):
                                      "mode_notification_monitor": "monitor",
                                      "unknown_block_message": "block",
                                      "full_sync_interval": 602,
+                                     "allow_unknown_shard": 87,
                                      }, follow=True)
         configuration = response.context["object"]
         return response, configuration
@@ -131,6 +132,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(configuration.enable_sysx_cache, True)
         self.assertEqual(configuration.full_sync_interval, 602)
+        self.assertEqual(configuration.allow_unknown_shard, 87)
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertContains(response, configuration.name)
 
@@ -147,6 +149,7 @@ class SantaSetupViewsTestCase(TestCase):
                                      "mode_notification_monitor": "monitor",
                                      "unknown_block_message": "block",
                                      "full_sync_interval": 603,
+                                     "allow_unknown_shard": 91,
                                      }, follow=True)
         self.assertEqual(response.status_code, 403)
         self.login("santa.add_configuration", "santa.change_configuration", "santa.view_configuration")
@@ -160,10 +163,12 @@ class SantaSetupViewsTestCase(TestCase):
                                      "mode_notification_monitor": "monitor",
                                      "unknown_block_message": "block",
                                      "full_sync_interval": 603,
+                                     "allow_unknown_shard": 91,
                                      }, follow=True)
         configuration = response.context["object"]
         self.assertEqual(configuration.enable_sysx_cache, False)
         self.assertEqual(configuration.full_sync_interval, 603)
+        self.assertEqual(configuration.allow_unknown_shard, 91)
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertContains(response, "new lockdown message")
 

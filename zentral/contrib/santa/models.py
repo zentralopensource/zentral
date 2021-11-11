@@ -150,6 +150,14 @@ class Configuration(models.Model):
         help_text="The key to use on the machine owner plist."
     )
 
+    # Zentral options
+
+    allow_unknown_shard = models.IntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        default=100,
+        help_text="Restrict the reporting of 'Allow Unknown' events to a percentage (0-100) of hosts"
+    )
+
     # TLS
 
     # for the client cert authentication

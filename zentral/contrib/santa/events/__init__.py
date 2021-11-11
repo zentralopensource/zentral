@@ -3,6 +3,7 @@ import logging
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.contrib.inventory.models import File
 from zentral.contrib.santa.models import Bundle, Target
+from zentral.utils.text import shard
 
 
 logger = logging.getLogger('zentral.contrib.santa.events')
@@ -141,6 +142,10 @@ def _build_file_tree_from_santa_event(event_d):
     return app_d
 
 
+def _is_allow_unknown_event(event_d):
+    return event_d.get('decision') == "ALLOW_UNKNOWN"
+
+
 def _is_bundle_binary_pseudo_event(event_d):
     return event_d.get('decision') == "BUNDLE_BINARY"
 
@@ -246,10 +251,27 @@ def _post_santa_events(enrolled_machine, user_agent, ip, events):
     def get_created_at(payload):
         return datetime.utcfromtimestamp(payload['execution_time'])
 
+    allow_unknown_shard = enrolled_machine.enrollment.configuration.allow_unknown_shard
+    if allow_unknown_shard == 100:
+        include_allow_unknown = True
+    elif allow_unknown_shard == 0:
+        include_allow_unknown = False
+    else:
+        include_allow_unknown = shard(
+            enrolled_machine.serial_number,
+            enrolled_machine.enrollment.configuration.pk
+        ) <= allow_unknown_shard
+
+    event_iterator = (
+        event_d for event_d in events
+        if not _is_bundle_binary_pseudo_event(event_d) and (
+            include_allow_unknown or not _is_allow_unknown_event(event_d)
+        )
+    )
+
     SantaEventEvent.post_machine_request_payloads(
         enrolled_machine.serial_number, user_agent, ip,
-        (event_d for event_d in events if not _is_bundle_binary_pseudo_event(event_d)),
-        get_created_at
+        event_iterator, get_created_at
     )
 
 
