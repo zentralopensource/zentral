@@ -63,7 +63,15 @@ The Munki repository is in a S3 bucket. Only santa is proposed for enrollment. T
 
 ### Webhook
 
-Once the monolith app is configured and Zentral reloaded, go to Zentral. There is a new `Monolith` menu, with a `Webhook` sub-menu. Click on it. You will see a `curl` command line that you can use to trigger a repository sync. During a sync, monolith will import all the available [pkginfo files](https://github.com/munki/munki/wiki/Glossary#info-file-or-pkginfo-file), their [catalogs](https://github.com/munki/munki/wiki/Glossary#catalog), categories, and make them available to the app.
+To sync the repository, you need to make a call to the Zental monolith API.
+
+```
+curl -X POST \
+     -H "Authorization: Token $TOKEN" \
+     https://$FQDN/api/monolith/repository/sync/
+```
+
+During a sync, monolith will import all the available [pkginfo files](https://github.com/munki/munki/wiki/Glossary#info-file-or-pkginfo-file), their [catalogs](https://github.com/munki/munki/wiki/Glossary#catalog), categories, and make them available to the app.
 
 ### Catalogs
 
