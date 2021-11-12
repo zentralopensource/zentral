@@ -24,6 +24,10 @@
       <th>Principal user detection domain{{ object.principal_user_detection_domains|length|pluralize }}</th>
       <td>{{ object.principal_user_detection_domains|join:", "|default:"-" }}</td>
     </tr>
+    <tr>
+      <th>Managed installs sync interval</th>
+      <td>{{ object.managed_installs_sync_interval_days }} day{{ object.managed_installs_sync_interval_days|pluralize }}</td>
+    </tr>
   </tbody>
 </table>
 

@@ -41,6 +41,7 @@ class Configuration(models.Model):
         default=list
     )
     managed_installs_sync_interval_days = models.IntegerField(
+        "Managed installs sync interval in days",
         validators=[MinValueValidator(1), MaxValueValidator(90)],
         default=7
     )

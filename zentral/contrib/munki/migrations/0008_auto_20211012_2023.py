@@ -14,7 +14,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configuration',
             name='managed_installs_sync_interval_days',
-            field=models.IntegerField(default=7, validators=[django.core.validators.MinValueValidator(1), django.core.validators.MaxValueValidator(90)]),
+            field=models.IntegerField(
+                default=7,
+                validators=[django.core.validators.MinValueValidator(1), django.core.validators.MaxValueValidator(90)],
+                verbose_name="Managed installs sync interval in days"
+            ),
         ),
         migrations.AddField(
             model_name='munkistate',
