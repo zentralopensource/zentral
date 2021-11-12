@@ -11,21 +11,25 @@
 <h2>Configuration <i>{{ configuration }}</i></h2>
 
 <table class="table">
+  <thead>
+    <th>Attribute</th>
+    <th>Value</th>
+  </thead>
   <tbody>
     <tr>
-      <th>Inventory apps full information shard</th>
+      <td>Inventory apps full information shard</td>
       <td>{{ object.inventory_apps_full_info_shard }}%</td>
     </tr>
     <tr>
-      <th>Principal user detection source{{ object.principal_user_detection_sources|length|pluralize }}</th>
-      <td>{{ object.principal_user_detection_sources|join:", "|default:"-" }}</td>
+      <td>Principal user detection source{{ object.principal_user_detection_sources|length|pluralize }}</td>
+      <td>{{ principal_user_detection_sources|default:"-" }}</td>
     </tr>
     <tr>
-      <th>Principal user detection domain{{ object.principal_user_detection_domains|length|pluralize }}</th>
+      <td>Principal user detection domain{{ object.principal_user_detection_domains|length|pluralize }}</td>
       <td>{{ object.principal_user_detection_domains|join:", "|default:"-" }}</td>
     </tr>
     <tr>
-      <th>Managed installs sync interval</th>
+      <td>Managed installs sync interval</td>
       <td>{{ object.managed_installs_sync_interval_days }} day{{ object.managed_installs_sync_interval_days|pluralize }}</td>
     </tr>
   </tbody>

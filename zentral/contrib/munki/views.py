@@ -21,7 +21,8 @@ from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, UpdateInstallProbeForm
-from .models import Configuration, EnrolledMachine, Enrollment, ManagedInstall, MunkiState
+from .models import (Configuration, EnrolledMachine, Enrollment, ManagedInstall, MunkiState,
+                     PrincipalUserDetectionSource)
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 from .utils import prepare_ms_tree_certificates
 
@@ -53,6 +54,11 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        # principal user detection sources
+        ctx["principal_user_detection_sources"] = ", ".join(
+            sorted(PrincipalUserDetectionSource[src].value for src in self.object.principal_user_detection_sources)
+        )
+        # enrollments
         enrollments = []
         enrollment_count = 0
         for enrollment in self.object.enrollment_set.select_related("secret").all().order_by("pk"):
