@@ -43,7 +43,7 @@
   <tr>
     <td width="25%">{{ pkg_info.version }}</td>
     <td>
-      {% for catalog in pkg_info.catalogs %}<a href="{% url 'monolith:catalog' catalog.pk %}">{{ catalog.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+      {% for catalog in pkg_info.catalogs %}{% if perms.monolith.view_catalog %}<a href="{% url 'monolith:catalog' catalog.pk %}">{{ catalog.name }}</a>{% else %}{{ catalog.name }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}
     </td>
     <td>{{ pkg_info.count }}</td>
   </tr>
