@@ -140,24 +140,29 @@ class PkgInfoManager(models.Manager):
         name = kwargs.get("name")
         if name:
             params.append("%{}%".format(connection.ops.prep_for_like_query(name)))
-            query = "{} and UPPER(pn.name) LIKE UPPER(%s) ".format(query)
+            query = f"{query} and UPPER(pn.name) LIKE UPPER(%s) "
+        name_id = kwargs.get("name_id")
+        if name_id:
+            params.append(name_id)
+            query = f"{query} and pn.id = %s"
         catalog = kwargs.get("catalog")
         if catalog:
             params.append(catalog.id)
-            query = "{} and c.id = %s ".format(query)
+            query = f"{query} and c.id = %s "
         query = (
-          "{} and c.archived_at is null "
+          f"{query} and c.archived_at is null "
           "group by pn.id, pn.name, pi.id, pi.version "
           "order by pn.name, pn.id, pi.version, pi.id"
-        ).format(query)
+        )
         cursor = connection.cursor()
         cursor.execute(query, params)
         current_pn = current_pn_id = None
         name_c = info_c = 0
         pkg_name_list = []
-        for pn_id, name, pi_id, version, catalogs, count in cursor.fetchall():
+        for pn_id, name, pi_pk, version, catalogs, count in cursor.fetchall():
             info_c += 1
-            pi = {'version': version,
+            pi = {'pk': pi_pk,
+                  'version': version,
                   'catalogs': sorted(catalogs, key=lambda c: (c["priority"], c["name"])),
                   'count': count}
             pi['version_sort'] = []

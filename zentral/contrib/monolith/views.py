@@ -42,6 +42,7 @@ from .models import (MunkiNameError, parse_munki_name,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
 from .utils import build_configuration_plist, build_configuration_profile
 
+
 logger = logging.getLogger('zentral.contrib.monolith.views')
 
 
@@ -136,9 +137,13 @@ class PkgInfoNameView(PermissionRequiredMixin, DetailView):
             sub_manifests.append((smpi.sub_manifest, smpi.get_key_display()))
         ctx["sub_manifests"] = sub_manifests
         # pkg infos
-        ctx["pkg_infos"] = list(pkg_info_name.pkginfo_set.select_related("name")
-                                                         .prefetch_related("catalogs")
-                                                         .filter(archived_at__isnull=True))
+        _, _, pkg_name_list = PkgInfo.objects.alles(name_id=pkg_info_name.pk)
+        try:
+            ctx["pkg_infos"] = pkg_name_list[0]["pkg_infos"]
+        except IndexError:
+            # should never happen
+            logger.error("Could not get pkg infos for name ID %d", pkg_info_name.pk)
+            ctx["pkg_infos"] = []
         # to display update catalog links or not
         ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
         return ctx

@@ -42,6 +42,7 @@
     <tr>
       <th>Version</th>
       <th>Catalogs</th>
+      <th>Installs</th>
       {% if manual_catalog_management %}
       <th></th>
       {% endif %}
@@ -50,22 +51,14 @@
   <tbody>
     {% for pkg_info in pkg_infos %}
     <tr>
-      <td>
-        <a name="{{ pkg_info.id }}"></a>
+      <td id="{{ pkg_info.pk }}">
         {{ pkg_info.version }}
       </td>
       <td>
-        <ul>
-          {% for catalog in pkg_info.catalogs.all %}
-          <li>
-            {% if perms.monolith.view_catalog %}
-            <a href="{% url 'monolith:catalog' catalog.id %}">{{ catalog }}</a>
-            {% else %}
-            {{ catalog }}
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
+        {% for catalog in pkg_info.catalogs %}{% if perms.monolith.view_catalog %}<a href="{% url 'monolith:catalog' catalog.pk %}">{{ catalog.name }}</a>{% else %}{{ catalog.name }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}
+      </td>
+      <td>
+        {{ pkg_info.count }}
       </td>
       {% if manual_catalog_management and perms.monolith.change_pkginfo %}
       <td>
