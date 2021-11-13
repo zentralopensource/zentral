@@ -126,8 +126,8 @@ class PkgInfoManager(models.Manager):
     def alles(self, **kwargs):
         query = (
             "select pn.id, pn.name, pi.id, pi.version,"
-            "json_agg(json_build_object('pk', c.id, 'name', c.name, 'priority', c.priority)) as catalogs,"
-            "count(mi.*) as count "
+            "json_agg(json_build_object('pk', c.id, 'name', c.name, 'priority', c.priority)),"
+            "count(mi.*), sum(count(mi.*)) over (partition by pn.id) as pn_total "
             "from monolith_pkginfoname as pn "
             "join monolith_pkginfo as pi on (pi.name_id = pn.id) "
             "join monolith_pkginfo_catalogs as pc on (pc.pkginfo_id = pi.id) "
@@ -154,17 +154,24 @@ class PkgInfoManager(models.Manager):
           "group by pn.id, pn.name, pi.id, pi.version "
           "order by pn.name, pn.id, pi.version, pi.id"
         )
+        query = (
+            f"with pkginfos as ({query}) "
+            "select *,"
+            "case when pn_total=0 then null else 100.0 * count / pn_total end as percent "
+            "from pkginfos"
+        )
         cursor = connection.cursor()
         cursor.execute(query, params)
         current_pn = current_pn_id = None
         name_c = info_c = 0
         pkg_name_list = []
-        for pn_id, name, pi_pk, version, catalogs, count in cursor.fetchall():
+        for pn_id, pn_name, pi_pk, version, catalogs, count, pn_total, percent in cursor.fetchall():
             info_c += 1
             pi = {'pk': pi_pk,
                   'version': version,
                   'catalogs': sorted(catalogs, key=lambda c: (c["priority"], c["name"])),
-                  'count': count}
+                  'count': count,
+                  'percent': percent}
             pi['version_sort'] = []
             for version_elm in version.split("."):
                 try:
@@ -179,7 +186,8 @@ class PkgInfoManager(models.Manager):
                     name_c += 1
                 current_pn_id = pn_id
                 current_pn = {'id': pn_id,
-                              'name': name,
+                              'name': pn_name,
+                              'count': pn_total,
                               'pkg_infos': []}
             current_pn['pkg_infos'].append(pi)
         if current_pn:

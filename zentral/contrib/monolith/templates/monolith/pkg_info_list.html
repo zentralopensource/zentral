@@ -37,7 +37,8 @@
   <tbody>
   {% for pkg_info_name in pkg_names %}
   <tr>
-    <td colspan=3><a href="{% url 'monolith:pkg_info_name' pkg_info_name.id %}">{{ pkg_info_name.name }}</a></td>
+    <td colspan=2><a href="{% url 'monolith:pkg_info_name' pkg_info_name.id %}">{{ pkg_info_name.name }}</a></td>
+    <td>{{ pkg_info_name.count }}</td>
   </tr>
   {% for pkg_info in pkg_info_name.pkg_infos %}
   <tr>
@@ -45,7 +46,7 @@
     <td>
       {% for catalog in pkg_info.catalogs %}{% if perms.monolith.view_catalog %}<a href="{% url 'monolith:catalog' catalog.pk %}">{{ catalog.name }}</a>{% else %}{{ catalog.name }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}
     </td>
-    <td>{{ pkg_info.count }}</td>
+    <td>{{ pkg_info.count }}{% if pkg_info.percent %} - {{ pkg_info.percent|floatformat }}%{% endif %}</td>
   </tr>
   {% endfor %}
   {% endfor %}

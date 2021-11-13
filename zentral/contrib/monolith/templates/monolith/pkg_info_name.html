@@ -57,9 +57,7 @@
       <td>
         {% for catalog in pkg_info.catalogs %}{% if perms.monolith.view_catalog %}<a href="{% url 'monolith:catalog' catalog.pk %}">{{ catalog.name }}</a>{% else %}{{ catalog.name }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}
       </td>
-      <td>
-        {{ pkg_info.count }}
-      </td>
+      <td>{{ pkg_info.count }}{% if pkg_info.percent %} - {{ pkg_info.percent|floatformat }}%{% endif %}</td>
       {% if manual_catalog_management and perms.monolith.change_pkginfo %}
       <td>
         <a class="btn btn-default" href="{% url 'monolith:update_pkg_info_catalog' pkg_info.id %}">
