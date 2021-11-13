@@ -125,11 +125,15 @@ class PkgInfoName(models.Model):
 class PkgInfoManager(models.Manager):
     def alles(self, **kwargs):
         query = (
-            "select pn.id, pn.name, pi.id, pi.version, c.id, c.name "
+            "select pn.id, pn.name, pi.id, pi.version,"
+            "json_agg(json_build_object('pk', c.id, 'name', c.name, 'priority', c.priority)) as catalogs,"
+            "count(mi.*) as count "
             "from monolith_pkginfoname as pn "
             "join monolith_pkginfo as pi on (pi.name_id = pn.id) "
             "join monolith_pkginfo_catalogs as pc on (pc.pkginfo_id = pi.id) "
             "join monolith_catalog as c on (c.id = pc.catalog_id) "
+            "left join munki_managedinstall as mi on "
+            "(pn.name = mi.pkg_info_name and pi.version = mi.pkg_info_version) "
             "where pi.archived_at is null "
         )
         params = []
@@ -143,35 +147,38 @@ class PkgInfoManager(models.Manager):
             query = "{} and c.id = %s ".format(query)
         query = (
           "{} and c.archived_at is null "
-          "order by pn.name, pn.id, pi.version, pi.id, c.name, c.id"
+          "group by pn.id, pn.name, pi.id, pi.version "
+          "order by pn.name, pn.id, pi.version, pi.id"
         ).format(query)
         cursor = connection.cursor()
         cursor.execute(query, params)
-        current_pn = current_pn_id = current_pi = current_pi_id = None
+        current_pn = current_pn_id = None
         name_c = info_c = 0
         pkg_name_list = []
-        for pn_id, name, pi_id, version, c_id, catalog in cursor.fetchall():
-            if pi_id != current_pi_id:
-                if current_pi is not None:
-                    current_pn['pkg_infos'].append(current_pi)
-                    info_c += 1
-                current_pi_id = pi_id
-                current_pi = {'version': None,
-                              'catalogs': []}
-            current_pi['version'] = version
-            current_pi['catalogs'].append(catalog)
+        for pn_id, name, pi_id, version, catalogs, count in cursor.fetchall():
+            info_c += 1
+            pi = {'version': version,
+                  'catalogs': sorted(catalogs, key=lambda c: (c["priority"], c["name"])),
+                  'count': count}
+            pi['version_sort'] = []
+            for version_elm in version.split("."):
+                try:
+                    version_elm = "{:016d}".format(int(version_elm))
+                except ValueError:
+                    pass
+                pi['version_sort'].append(version_elm)
             if pn_id != current_pn_id:
                 if current_pn is not None:
+                    current_pn['pkg_infos'].sort(key=lambda pi: pi["version_sort"], reverse=True)
                     pkg_name_list.append(current_pn)
                     name_c += 1
                 current_pn_id = pn_id
                 current_pn = {'id': pn_id,
                               'name': name,
                               'pkg_infos': []}
-        if current_pi:
-            current_pn['pkg_infos'].append(current_pi)
-            info_c += 1
+            current_pn['pkg_infos'].append(pi)
         if current_pn:
+            current_pn['pkg_infos'].sort(key=lambda pi: pi["version_sort"], reverse=True)
             pkg_name_list.append(current_pn)
             name_c += 1
         return name_c, info_c, pkg_name_list
