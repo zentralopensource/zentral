@@ -660,7 +660,7 @@ if __name__ == '__main__':
     last_seen_sha1sum = job_details.get('last_seen_sha1sum')
     data['reports'] = build_reports_payload(last_seen_sha1sum)
     # add the managed installs if requested
-    if job_details.get('managed_installs', False):
+    if job_details.get('managed_installs', True):
         data['managed_installs'] = build_managed_installs_payload()
 
     # post the payload to zentral
