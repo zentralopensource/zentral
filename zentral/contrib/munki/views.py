@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.crypto import get_random_string
+from django.utils.timezone import is_aware, make_naive
 from django.views.generic import CreateView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
@@ -362,6 +363,10 @@ class PostJobView(BaseView):
                 stored_managed_installs[stored_managed_install.pkg_info_name] = stored_managed_install
             # create or update existing managed installs
             for pkg_info_name, pkg_info_version, pkg_info_display_name, installed_at in managed_installs:
+                if isinstance(installed_at, str):
+                    installed_at = parser.parse(installed_at)
+                    if is_aware(installed_at):
+                        installed_at = make_naive(installed_at)
                 try:
                     stored_managed_install = stored_managed_installs.pop(pkg_info_name)
                 except KeyError:
@@ -380,7 +385,13 @@ class PostJobView(BaseView):
                         stored_managed_install.pkg_info_version = pkg_info_version
                         stored_managed_install.installed_at = installed_at
                         update = True
-                    elif installed_at is not None and stored_managed_install.installed_at is None:
+                    elif (
+                        installed_at is not None
+                        and (
+                            stored_managed_install.installed_at is None
+                            or stored_managed_install.installed_at < installed_at
+                        )
+                    ):
                         stored_managed_install.installed_at = installed_at
                         update = True
                     if pkg_info_display_name != stored_managed_install.pkg_info_display_name:
@@ -399,6 +410,8 @@ class PostJobView(BaseView):
                     if event_type not in ("install", "removal"):
                         continue
                     event_time = parser.parse(created_at)
+                    if is_aware(event_time):
+                        event_time = make_naive(event_time)
                     pkg_info_name = event.get("name")
                     if event_type == "install":
                         mi_defaults = {"pkg_info_version": event.get("version"),
