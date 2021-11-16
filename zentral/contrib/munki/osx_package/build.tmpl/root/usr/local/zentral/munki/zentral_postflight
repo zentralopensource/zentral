@@ -153,6 +153,9 @@ class ManagedInstallReport(object):
 
     def updated_managed_installs(self, from_managed_installs):
         managed_installs = self.managed_installs()
+        # skip error reports
+        if not managed_installs and self.data.get('Errors'):
+            return from_managed_installs
         # carry over the install time if possible
         for n, (v, dn, t) in managed_installs.items():
             if t is None:
