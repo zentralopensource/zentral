@@ -93,7 +93,8 @@ class MunkiSetupViewsTestCase(TestCase):
                                     {"name": name,
                                      "inventory_apps_full_info_shard": 17,
                                      "principal_user_detection_sources": "logged_in_user",
-                                     "principal_user_detection_domains": "yolo.fr"},
+                                     "principal_user_detection_domains": "yolo.fr",
+                                     "managed_installs_sync_interval_days": 1},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
@@ -125,7 +126,8 @@ class MunkiSetupViewsTestCase(TestCase):
                                     {"name": configuration.name,
                                      "inventory_apps_full_info_shard": 17,
                                      "principal_user_detection_sources": "logged_in_user",
-                                     "principal_user_detection_domains": "yolo.fr"},
+                                     "principal_user_detection_domains": "yolo.fr",
+                                     "managed_installs_sync_interval_days": 2},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
@@ -134,6 +136,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(configuration2.inventory_apps_full_info_shard, 17)
         self.assertEqual(configuration2.principal_user_detection_sources, ["logged_in_user"])
         self.assertEqual(configuration2.principal_user_detection_domains, ["yolo.fr"])
+        self.assertEqual(configuration2.managed_installs_sync_interval_days, 2)
 
     # create enrollment
 

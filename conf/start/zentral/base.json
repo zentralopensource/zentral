@@ -77,6 +77,7 @@
     "zentral.contrib.jamf": {},
     "zentral.contrib.simplemdm": {},
     "zentral.contrib.munki": {
+      "metrics": true,
       "principal_user_detection": {
         "sources": ["company_portal", "google_chrome", "logged_in_user"],
         "domains": ["zentral.pro"]

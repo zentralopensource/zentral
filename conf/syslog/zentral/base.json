@@ -67,7 +67,9 @@
     },
     "zentral.contrib.jamf": {},
     "zentral.contrib.simplemdm": {},
-    "zentral.contrib.munki": {},
+    "zentral.contrib.munki": {
+      "metrics": true
+    },
     "zentral.contrib.nagios": {},
     "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {}

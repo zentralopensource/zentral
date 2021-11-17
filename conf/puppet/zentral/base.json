@@ -57,7 +57,9 @@
     "zentral.contrib.audit": {},
     "zentral.contrib.jamf": {},
     "zentral.contrib.simplemdm": {},
-    "zentral.contrib.munki": {},
+    "zentral.contrib.munki": {
+      "metrics": true
+    },
     "zentral.contrib.nagios": {},
     "zentral.contrib.inventory": {
       "metrics": true,

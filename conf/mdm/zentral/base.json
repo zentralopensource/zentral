@@ -67,7 +67,9 @@
       "scep_ca_fullchain": "/scep_CA/ca.pem"
     },
     "zentral.contrib.simplemdm": {},
-    "zentral.contrib.munki": {},
+    "zentral.contrib.munki": {
+      "metrics": true
+    },
     "zentral.contrib.osquery": {},
     "zentral.contrib.jamf": {},
     "zentral.contrib.nagios": {},

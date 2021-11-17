@@ -141,6 +141,7 @@ class MunkiAPIViewsTestCase(TestCase):
         response_json = response.json()
         expected_response = {
             "apps_full_info_shard": self.configuration.inventory_apps_full_info_shard,
+            "managed_installs": True,
             "tags": [tag_name]
         }
         expected_response["last_seen_sha1sum"] = report_sha1sum

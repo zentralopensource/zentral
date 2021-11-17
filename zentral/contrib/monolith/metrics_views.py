@@ -6,7 +6,7 @@ from .models import PkgInfo
 class MetricsView(BasePrometheusMetricsView):
     def get_registry(self):
         registry = CollectorRegistry()
-        g = Gauge('zentral_monolith_pkginfos', 'Zentral Monolith Pckinfos',
+        g = Gauge('zentral_monolith_pkginfos', 'Zentral Monolith Pkginfos',
                   ['name', 'version'],
                   registry=registry)
         _, _, pkg_names = PkgInfo.objects.alles()
