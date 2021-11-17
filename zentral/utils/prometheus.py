@@ -33,7 +33,7 @@ class BasePrometheusMetricsView(View):
         pass
 
     def get(self, request, *args, **kwargs):
-        bearer_token = settings['apps']['zentral.contrib.inventory'].get('prometheus_bearer_token')
+        bearer_token = settings['api'].get('metrics_bearer_token')
         if bearer_token and request.META.get('HTTP_AUTHORIZATION') == "Bearer {}".format(bearer_token):
             content = ""
             registry = self.get_registry()

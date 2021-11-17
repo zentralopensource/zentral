@@ -4,7 +4,8 @@
     "tls_hostname_for_client_cert_auth": "https://zentral-clicertauth",
     "tls_server_certs": "/zentral/conf/start/docker/tls/zentral_fullchain.crt",
     "tls_server_key": "/zentral/conf/start/docker/tls/zentral.key",
-    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
+    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
+    "metrics_bearer_token": "CHANGE ME!!!"
   },
   "extra_links": [
     {"anchor_text": "Prometheus",
@@ -54,7 +55,7 @@
   },
   "apps": {
     "zentral.contrib.inventory": {
-      "prometheus_bearer_token": "CHANGE ME!!!",
+      "metrics": true,
       "clients": [
         {
           "backend": "zentral.contrib.inventory.clients.dummy"

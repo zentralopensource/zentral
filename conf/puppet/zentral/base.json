@@ -2,7 +2,8 @@
   "api": {
     "tls_hostname": "https://zentral",
     "tls_server_certs": "/zentral/conf/start/docker/tls/zentral_fullchain.crt",
-    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!"
+    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
+    "metrics_bearer_token": "CHANGE ME!!!"
   },
   "extra_links": [
     {
@@ -59,7 +60,7 @@
     "zentral.contrib.munki": {},
     "zentral.contrib.nagios": {},
     "zentral.contrib.inventory": {
-      "prometheus_bearer_token": "CHANGE ME!!!",
+      "metrics": true,
       "clients": []
     },
     "zentral.contrib.osquery": {},

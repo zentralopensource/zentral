@@ -10,7 +10,7 @@ scrape_configs:
       - targets: ['localhost:9090']
 
   - job_name: 'zentral_inventory'
-    metrics_path: '/inventory/prometheus_metrics/'
+    metrics_path: '/metrics/inventory/'
     bearer_token: 'CHANGE ME!!!'
     static_configs:
       - targets: ['web:8000']

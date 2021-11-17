@@ -15,7 +15,6 @@ from zentral.conf import settings
 from zentral.core.events import event_types
 from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores import frontend_store, stores
-from zentral.utils.prometheus import BasePrometheusMetricsView
 from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
@@ -26,8 +25,7 @@ from .models import (BusinessUnit,
                      MetaMachine,
                      MetaBusinessUnitTag, MachineTag, Tag, Taxonomy,
                      OSXApp, OSXAppInstance)
-from .utils import (get_prometheus_inventory_metrics,
-                    BundleFilter, BundleFilterForm,
+from .utils import (BundleFilter, BundleFilterForm,
                     MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
                     MSQuery)
 
@@ -948,8 +946,3 @@ class MacOSAppView(PermissionRequiredMixin, TemplateView):
         ctx['instances'] = instance_qs.order_by('id')
         ctx['inventory'] = True
         return ctx
-
-
-class PrometheusMetricsView(BasePrometheusMetricsView):
-    def get_registry(self):
-        return get_prometheus_inventory_metrics()
