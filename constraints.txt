@@ -78,6 +78,7 @@ pyasn1-modules==0.2.8
 pycparser==2.20
 pycurl==7.43.0.2
 Pygments==2.10.0
+pylibmc==1.6.1
 pyOpenSSL==20.0.1
 pyotp==2.6.0
 pyparsing==2.4.7
