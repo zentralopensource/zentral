@@ -9,7 +9,7 @@ from defusedxml.ElementTree import fromstring, ParseError
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 import requests
-from zentral.core.events import event_from_event_d
+from zentral.core.events import event_from_event_d, event_types
 from zentral.core.stores.backends.base import BaseEventStore
 
 
@@ -45,6 +45,7 @@ class EventStore(BaseEventStore):
         self.search_timeout = int(config_d.get("search_timeout", 300))
         if self.search_url and self.authentication_token:
             self.machine_events = True
+            self.last_machine_heartbeats = True
             self.probe_events = True
 
     @cached_property
@@ -167,7 +168,7 @@ class EventStore(BaseEventStore):
                                 'Content-Type': 'application/json'})
         return session
 
-    def _build_filters(self, event_type=None, serial_number=None):
+    def _build_filters(self, event_type=None, serial_number=None, excluded_event_type=None):
         filters = []
         if self.index:
             filters.append(("index", self.index))
@@ -180,6 +181,8 @@ class EventStore(BaseEventStore):
                 filters.append(("host", serial_number))
             else:
                 filters.append((self.serial_number_field, serial_number))
+        if excluded_event_type:
+            filters.append(("sourcetype!", excluded_event_type))
         return " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in filters)
 
     def _get_search_url(self, query, from_dt, to_dt):
@@ -264,6 +267,41 @@ class EventStore(BaseEventStore):
             self._get_machine_events_query(serial_number, event_type),
             from_dt, to_dt
         )
+
+    def get_last_machine_heartbeats(self, serial_number, from_dt):
+        heartbeats = []
+        # heartbeat events
+        heartbeat_event_filters = self._build_filters("inventory_heartbeat", serial_number)
+        heartbeat_event_search = f"{heartbeat_event_filters} | stats max(_time) by inventory.source.name"
+        sid = self._post_search_job(heartbeat_event_search, from_dt, None)
+        results = self._get_search_results(sid)
+        for result in results["results"]:
+            heartbeats.append(
+                (event_types["inventory_heartbeat"],
+                 result["inventory.source.name"],
+                 [(None, datetime.utcfromtimestamp(float(result["max(_time)"])))])
+            )
+        # other events
+        other_event_filters = self._build_filters(serial_number=serial_number,
+                                                  excluded_event_type="inventory_heartbeat")
+        other_event_search = (
+            f'{other_event_filters} | rename tags{{}} AS tagvalue | where (tagvalue = "heartbeat")'
+            '| stats max(_time) by sourcetype request.user_agent'
+        )
+        sid = self._post_search_job(other_event_search, from_dt, None)
+        event_uas = {}
+        results = self._get_search_results(sid)
+        for result in results["results"]:
+            event_type_class = event_types.get(result["sourcetype"])
+            if not event_type_class:
+                logger.error("Unknown event type %s", result["sourcetype"])
+                continue
+            event_uas.setdefault(event_type_class, []).append(
+                (result["request.user_agent"], datetime.utcfromtimestamp(float(result["max(_time)"])))
+            )
+        for event_type_class, ua_max_dates in event_uas.items():
+            heartbeats.append((event_type_class, None, ua_max_dates))
+        return heartbeats
 
     # probe events
 
