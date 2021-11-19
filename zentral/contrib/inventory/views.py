@@ -447,7 +447,9 @@ class MachineHeartbeatsView(PermissionRequiredMixin, TemplateView):
                 date_class = None
                 if ua_max_dates:
                     # should always be the case
-                    all_ua_max_date = timezone.make_naive(ua_max_dates[0][1])
+                    all_ua_max_date = ua_max_dates[0][1]
+                    if timezone.is_aware(all_ua_max_date):
+                        all_ua_max_date = timezone.make_naive(all_ua_max_date)
                     if heartbeat_timeout:
                         if datetime.utcnow() - all_ua_max_date > heartbeat_timeout:
                             date_class = "danger"
