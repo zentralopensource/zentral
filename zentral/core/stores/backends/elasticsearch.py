@@ -369,7 +369,7 @@ class EventStore(BaseEventStore):
                     'aggs': {
                         'sources': {
                             'terms': {
-                                'field': 'inventory_heartbeat.source.name',
+                                'field': 'inventory.source.name',
                                 'size': 10  # TODO: HARDCODED
                             },
                             'aggs': {
