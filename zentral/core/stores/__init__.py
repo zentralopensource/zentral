@@ -19,6 +19,7 @@ class Stores:
     def __init__(self, settings):
         self.frontend_store = None
         self.stores = {}
+        first_store = None
         for store_name, store_conf in settings['stores'].items():
             store_conf = store_conf.copy()
             store_conf['store_name'] = store_name
@@ -30,12 +31,14 @@ class Stores:
                     logger.error('Multiple frontend store')
                 else:
                     self.frontend_store = store
-            if not self.frontend_store:
-                logger.error('No frontend store')
-                if self.stores:
-                    self.frontend_store = self.stores[0]
-                else:
-                    logger.error('No stores')
+            elif first_store is None:
+                first_store = store
+        if not self.frontend_store:
+            logger.error('No frontend store')
+            if first_store:
+                self.frontend_store = first_store
+            else:
+                logger.error('No stores')
 
     def __iter__(self):
         yield from self.stores.values()
