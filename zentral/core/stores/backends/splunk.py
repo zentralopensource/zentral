@@ -3,10 +3,13 @@ import json
 import logging
 import random
 import time
+import uuid
 from urllib.parse import urlencode, urljoin
+from defusedxml.ElementTree import fromstring, ParseError
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 import requests
+from zentral.core.events import event_from_event_d
 from zentral.core.stores.backends.base import BaseEventStore
 
 
@@ -35,7 +38,11 @@ class EventStore(BaseEventStore):
         self.verify_tls = config_d.get('verify_tls', True)
         self.index = config_d.get("index")
         self.source = config_d.get("source")
-        self._collector_session = None
+        # search
+        self.authentication_token = config_d.get("authentication_token")
+        self.search_url = config_d.get("search_url")
+        self.search_source = config_d.get("search_source")
+        self.search_timeout = int(config_d.get("search_timeout", 300))
 
     @cached_property
     def collector_session(self):
@@ -92,6 +99,22 @@ class EventStore(BaseEventStore):
             payload["source"] = self.source
         return payload
 
+    def _deserialize_event(self, result):
+        metadata = json.loads(result["_raw"])
+        # normalize serial number
+        if self.serial_number_field in metadata:
+            metadata["machine_serial_number"] = metadata.pop(self.serial_number_field)
+        # add created at
+        metadata["created_at"] = result["_time"]
+        # event type
+        event_type = result["sourcetype"]
+        metadata["type"] = event_type
+        # event data
+        namespace = metadata.get("namespace", event_type)
+        event_d = metadata.pop(namespace)
+        event_d["_zentral"] = metadata
+        return event_from_event_d(event_d)
+
     def store(self, event):
         payload = self._serialize_event(event)
         for i in range(self.max_retries):
@@ -131,6 +154,31 @@ class EventStore(BaseEventStore):
                     continue
             r.raise_for_status()
 
+    # event methods
+
+    @cached_property
+    def search_session(self):
+        session = requests.Session()
+        session.verify = self.verify_tls
+        session.headers.update({'Authorization': f'Bearer {self.authentication_token}',
+                                'Content-Type': 'application/json'})
+        return session
+
+    def _build_filters(self, event_type=None, serial_number=None):
+        filters = []
+        if self.index:
+            filters.append(("index", self.index))
+        if self.search_source:
+            filters.append(("source", self.search_source))
+        if event_type:
+            filters.append(("sourcetype", event_type))
+        if serial_number:
+            if not self.computer_name_as_host_sources:
+                filters.append(("host", serial_number))
+            else:
+                filters.append((self.serial_number_field, serial_number))
+        return " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in filters)
+
     def _get_search_url(self, query, from_dt, to_dt):
         kwargs = {
             "q": f"search {query}",
@@ -139,15 +187,60 @@ class EventStore(BaseEventStore):
         }
         return "{}?{}".format(self.search_app_url, urlencode(kwargs))
 
+    def _fetch_events(self, query, from_dt, to_dt, limit, cursor):
+        if cursor is None:
+            # new job
+            rsid = str(uuid.uuid4())  # set the sid, do not get a random one from splunk
+            print("QUERY", query)
+            data = {"exec_mode": "blocking",
+                    "id": rsid,
+                    "search": f"search {query}",
+                    "earliest_time": from_dt.isoformat(),
+                    "timeout": self.search_timeout}
+            if to_dt:
+                data["latest_time"]: to_dt.isoformat()
+            r = self.search_session.post(
+                urljoin(self.search_url, "/services/search/jobs"),
+                data=data
+            )
+            r.raise_for_status()
+            try:
+                response = fromstring(r.content)
+            except ParseError:
+                raise
+            sid = response.find("sid").text
+            offset = 0
+        else:
+            sid, offset = cursor.split("$")
+            offset = int(offset)
+        events = []
+        new_cursor = None
+        r = self.search_session.get(
+            urljoin(self.search_url, f"/services/search/jobs/{sid}/results"),
+            params={"offset": offset, "count": limit, "output_mode": "json"}
+        )
+        r.raise_for_status()
+        results = r.json()
+        init_offset = results["init_offset"]
+        result_count = 0
+        for result in results["results"]:
+            result_count += 1
+            events.append(self._deserialize_event(result))
+        if result_count >= limit:
+            new_offset = init_offset + result_count
+            new_cursor = f"{sid}${new_offset}"
+        return events, new_cursor
+
     # machine events
 
     def _get_machine_events_query(self, serial_number, event_type=None):
-        query_chunks = [("host", serial_number)]
-        if self.index:
-            query_chunks.append(("index", self.index))
-        if event_type:
-            query_chunks.append(("sourcetype", event_type))
-        return " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in query_chunks)
+        return self._build_filters(event_type, serial_number)
+
+    def fetch_machine_events(self, serial_number, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        return self._fetch_events(
+            self._get_machine_events_query(serial_number, event_type),
+            from_dt, to_dt, limit, cursor
+        )
 
     def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
         return self._get_search_url(
@@ -158,13 +251,14 @@ class EventStore(BaseEventStore):
     # probe events
 
     def _get_probe_events_query(self, probe, event_type=None):
-        filter_chunks = []
-        if self.index:
-            filter_chunks.append(("index", self.index))
-        if event_type:
-            filter_chunks.append(("sourcetype", event_type))
-        filter_str = " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in filter_chunks)
-        return f'{filter_str} | spath "probes{{}}.pk" | search "probes{{}}.pk"={probe.pk}'
+        filters = self._build_filters(event_type)
+        return f'{filters} | spath "probes{{}}.pk" | search "probes{{}}.pk"={probe.pk}'
+
+    def fetch_probe_events(self, probe, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        return self._fetch_events(
+            self._get_probe_events_query(probe, event_type),
+            from_dt, to_dt, limit, cursor
+        )
 
     def get_probe_events_url(self, probe, from_dt, to_dt=None, event_type=None):
         return self._get_search_url(
