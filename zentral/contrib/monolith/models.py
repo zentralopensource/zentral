@@ -126,7 +126,7 @@ class PkgInfoManager(models.Manager):
     def alles(self, **kwargs):
         query = (
             "select pn.id, pn.name, pi.id, pi.version,"
-            "json_agg(json_build_object('pk', c.id, 'name', c.name, 'priority', c.priority)),"
+            "json_agg(distinct jsonb_build_object('pk', c.id, 'name', c.name, 'priority', c.priority)),"
             "count(mi.*), sum(count(mi.*)) over (partition by pn.id) as pn_total "
             "from monolith_pkginfoname as pn "
             "join monolith_pkginfo as pi on (pi.name_id = pn.id) "
