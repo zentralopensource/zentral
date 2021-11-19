@@ -43,6 +43,9 @@ class EventStore(BaseEventStore):
         self.search_url = config_d.get("search_url")
         self.search_source = config_d.get("search_source")
         self.search_timeout = int(config_d.get("search_timeout", 300))
+        if self.search_url and self.authentication_token:
+            self.machine_events = True
+            self.probe_events = True
 
     @cached_property
     def collector_session(self):
@@ -187,40 +190,48 @@ class EventStore(BaseEventStore):
         }
         return "{}?{}".format(self.search_app_url, urlencode(kwargs))
 
+    def _post_search_job(self, search, from_dt, to_dt):
+        data = {"exec_mode": "blocking",
+                "id": str(uuid.uuid4()),
+                "search": f"search {search}",
+                "earliest_time": from_dt.isoformat(),
+                "timeout": self.search_timeout}
+        if to_dt:
+            data["latest_time"] = to_dt.isoformat()
+        r = self.search_session.post(
+            urljoin(self.search_url, "/services/search/jobs"),
+            data=data
+        )
+        r.raise_for_status()
+        try:
+            response = fromstring(r.content)
+        except ParseError:
+            raise
+        return response.find("sid").text
+
+    def _get_search_results(self, sid, offset=0, count=100000):
+        r = self.search_session.get(
+            urljoin(self.search_url, f"/services/search/jobs/{sid}/results"),
+            params={"offset": offset, "count": count, "output_mode": "json"}
+        )
+        r.raise_for_status()
+        return r.json()
+
+    def _fetch_aggregated_event_counts(self, query, from_dt, to_dt):
+        sid = self._post_search_job(f"{query} | stats count by sourcetype", from_dt, to_dt)
+        results = self._get_search_results(sid)
+        return {r["sourcetype"]: int(r["count"]) for r in results["results"]}
+
     def _fetch_events(self, query, from_dt, to_dt, limit, cursor):
         if cursor is None:
-            # new job
-            rsid = str(uuid.uuid4())  # set the sid, do not get a random one from splunk
-            print("QUERY", query)
-            data = {"exec_mode": "blocking",
-                    "id": rsid,
-                    "search": f"search {query}",
-                    "earliest_time": from_dt.isoformat(),
-                    "timeout": self.search_timeout}
-            if to_dt:
-                data["latest_time"]: to_dt.isoformat()
-            r = self.search_session.post(
-                urljoin(self.search_url, "/services/search/jobs"),
-                data=data
-            )
-            r.raise_for_status()
-            try:
-                response = fromstring(r.content)
-            except ParseError:
-                raise
-            sid = response.find("sid").text
+            sid = self._post_search_job(query, from_dt, to_dt)
             offset = 0
         else:
             sid, offset = cursor.split("$")
             offset = int(offset)
         events = []
         new_cursor = None
-        r = self.search_session.get(
-            urljoin(self.search_url, f"/services/search/jobs/{sid}/results"),
-            params={"offset": offset, "count": limit, "output_mode": "json"}
-        )
-        r.raise_for_status()
-        results = r.json()
+        results = self._get_search_results(sid, offset, limit)
         init_offset = results["init_offset"]
         result_count = 0
         for result in results["results"]:
@@ -242,6 +253,12 @@ class EventStore(BaseEventStore):
             from_dt, to_dt, limit, cursor
         )
 
+    def get_aggregated_machine_event_counts(self, serial_number, from_dt, to_dt=None):
+        return self._fetch_aggregated_event_counts(
+            self._get_machine_events_query(serial_number),
+            from_dt, to_dt
+        )
+
     def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
         return self._get_search_url(
             self._get_machine_events_query(serial_number, event_type),
@@ -253,6 +270,12 @@ class EventStore(BaseEventStore):
     def _get_probe_events_query(self, probe, event_type=None):
         filters = self._build_filters(event_type)
         return f'{filters} | spath "probes{{}}.pk" | search "probes{{}}.pk"={probe.pk}'
+
+    def get_aggregated_probe_event_counts(self, probe, from_dt, to_dt=None):
+        return self._fetch_aggregated_event_counts(
+            self._get_probe_events_query(probe),
+            from_dt, to_dt
+        )
 
     def fetch_probe_events(self, probe, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
         return self._fetch_events(
