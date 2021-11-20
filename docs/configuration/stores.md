@@ -37,7 +37,7 @@ The python module implementing the store, as a string. Currently available:
 
 **OPTIONAL**
 
-A boolean indicating if the store is the main event store to be used to fetch events in the Zentral UI. Only one store can be set as the `frontend` store, and ATM, only the `datadog` and `elasticsearch` backend support fetching events for display in the UI.
+A boolean indicating if the store is the main event store to be used to fetch events in the Zentral UI. Only one store can be set as the `frontend` store, and ATM, only the `datadog`, `elasticsearch` and `splunk` backends support fetching events for display in the UI.
 
 ### `excluded_event_types`
 
@@ -87,19 +87,13 @@ The number of events to write in a single request. Default: `1`. A value up to `
 
 **OPTIONAL**
 
-The name of the source to use in the Splunk events.
+The name of the source to use in the Splunk events. Do not use it if the source is set by the HTTP event collector.
 
 ### `index`
 
 **OPTIONAL**
 
 The name of the Splunk index.
-
-### `search_app_url`
-
-**OPTIONAL**
-
-The URL to the Splunk search app. For example: `https://splunk.example.com/en-US/app/search/search`. Empty by default. If set, links will be displayed in the Zentral UI to allow users to see the events in Splunk.
 
 ### `computer_name_as_host_sources`
 
@@ -113,6 +107,36 @@ A list of inventory source names to use to find a hostname to set as the `host` 
 
 The name of the Splunk event field to use for the machine serial number. Default: `machine_serial_number`.
 
+### `search_app_url`
+
+**OPTIONAL**
+
+The URL to the Splunk search app. For example: `https://splunk.example.com/en-US/app/search/search`. Empty by default. If set, links will be displayed in the Zentral UI to allow users to see the events in Splunk.
+
+### `search_url`
+
+**OPTIONAL**
+
+The base URL of the Splunk API server. For example: `https://splunk.example.com:8089`. If this is set, along with an `authentication_token`, the store can be used as a frontend store.
+
+### `authentication_token`
+
+**OPTIONAL**
+
+The authentication token to use with the Splunk API server. If this is set, along with a  `search_url`, the store can be used as a frontend store.
+
+### `search_source`
+
+**OPTIONAL**
+
+If set, a `source` filter will be added to the search jobs and urls. Use this for example if a single Splunk index is used for multiple Zentral instances.
+
+### `search_timeout`
+
+**OPTIONAL**
+
+In seconds. Defaults to 300s. The number of seconds to keep a search after processing has stopped. Only used if the store is configured as a frontend store.
+
 ### Full example
 
 ```json
@@ -121,13 +145,17 @@ The name of the Splunk event field to use for the machine serial number. Default
     "frontend": false,
     "hec_url": "https://splunk.example.com:8088",
     "hec_token": "{{ env:HEC_TOKEN }}",
-    "batch_size": 100,
-    "source": "Zentral",
-    "index": "zentral",
-    "search_app_url": "https://splunk.example.com/en-US/app/search/search",
     "verify_tls": true,
+    "batch_size": 100,
+    "source": "zentral.example.com",
+    "index": "zentral",
     "computer_name_as_host_sources": ["santa", "osquery"],
-    "serial_number_field": "serial_number"
+    "serial_number_field": "serial_number",
+    "search_app_url": "https://splunk.example.com/en-US/app/search/search",
+    "search_url": "https://splunk.example.com:8089",
+    "authentication_token": "{{ env:SPLUNK_AUTH_TOKEN }}",
+    "search_source": "zentral.example.com",
+    "search_timeout": 300
 }
 ```
 
