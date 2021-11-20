@@ -622,47 +622,40 @@ class EventStore(BaseEventStore):
 
     # zentral apps data
 
-    def _get_hist_query_dict(self, interval, bucket_number, tag, event_type):
-        filter_list = []
-        if tag:
-            filter_list.append({"term": {"tags": tag}})
-        if event_type:
-            if isinstance(event_type, list):
-                filter_list.append({"bool": {
-                                        "should": [
-                                            self._get_type_filter(et)
-                                            for et in event_type
-                                        ]
-                                    }})
-            else:
-                filter_list.append(self._get_type_filter(event_type))
-        interval_unit = self.INTERVAL_UNIT[interval]
-        gte_range = "now-{q}{u}/{u}".format(q=bucket_number - 1,
-                                            u=interval_unit)
-        lt_range = "now+1{u}/{u}".format(u=interval_unit)
-        filter_list.append({"range": {"created_at": {"gte": gte_range, "lt": lt_range}}})
-        return {"bool": {"filter": filter_list}}
+    def _get_hist_query_dict(self, interval, bucket_number, tag):
+        unit = self.INTERVAL_UNIT[interval]
+        gte_range = f"now-{bucket_number - 1}{unit}/{unit}"
+        lt_range = f"now+1{unit}/{unit}"
+        return {
+            "bool": {
+                "filter": [
+                    {"term": {"tags": tag}},
+                    {"range": {"created_at": {"gte": gte_range, "lt": lt_range}}}
+                ]
+            }
+        }
 
     def _get_hist_date_histogram_dict(self, interval, bucket_number, field="created_at"):
-        interval_unit = self.INTERVAL_UNIT[interval]
-        min_bound = "now-{q}{u}/{u}".format(q=bucket_number - 1,
-                                            u=interval_unit)
-        max_bound = "now/{u}".format(u=interval_unit)
+        unit = self.INTERVAL_UNIT[interval]
+        min_bound = f"now-{bucket_number - 1}{unit}/{unit}"
+        max_bound = f"now/{unit}"
         if self.version >= [7, 2]:
             interval_attr = "calendar_interval"
         else:
             interval_attr = "interval"
-        return {"field": field,
-                interval_attr: interval,
-                "min_doc_count": 0,
-                "extended_bounds": {
-                  "min": min_bound,
-                  "max": max_bound
-                }}
+        return {
+            "field": field,
+            interval_attr: interval,
+            "min_doc_count": 0,
+            "extended_bounds": {
+                "min": min_bound,
+                "max": max_bound
+            }
+        }
 
-    def get_app_hist_data(self, interval, bucket_number, tag=None, event_type=None):
+    def get_app_hist_data(self, interval, bucket_number, tag):
         self.wait_and_configure_if_necessary()
-        body = {"query": self._get_hist_query_dict(interval, bucket_number, tag, event_type),
+        body = {"query": self._get_hist_query_dict(interval, bucket_number, tag),
                 "size": 0,
                 "aggs": {
                   "buckets": {

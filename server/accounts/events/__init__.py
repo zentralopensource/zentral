@@ -8,7 +8,7 @@ from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, reg
 logger = logging.getLogger("server.realms.utils")
 
 
-ALL_EVENTS_SEARCH_DICT = {"event_type": ["zentral_login", "zentral_logout", "zentral_failed_login"]}
+ALL_EVENTS_SEARCH_DICT = {"tag": "zentral"}
 
 # events
 

@@ -43,7 +43,12 @@ class AppHistogramDataView(LoginRequiredMixin, View):
             search_dict = getattr(zentral_app.events_module, "ALL_EVENTS_SEARCH_DICT")
         except (KeyError, AttributeError):
             raise Http404
+        if set(search_dict.keys()) != {"tag"} or not isinstance(search_dict["tag"], str):
+            logger.error("Incompatible app %s all event search dict", app)
+            raise Http404
         interval = kwargs["interval"]
+        bucket_number = int(kwargs["bucket_number"])
+        app_tag = search_dict["tag"]
         try:
             date_format = self.INTERVAL_DATE_FORMAT[interval]
         except KeyError:
@@ -51,8 +56,7 @@ class AppHistogramDataView(LoginRequiredMixin, View):
         labels = []
         event_count_data = []
         unique_msn_data = []
-        for dt, event_count, unique_msn in frontend_store.get_app_hist_data(interval, int(kwargs["bucket_number"]),
-                                                                            **search_dict):
+        for dt, event_count, unique_msn in frontend_store.get_app_hist_data(interval, bucket_number, app_tag):
             labels.append(dt.strftime(date_format))
             event_count_data.append(event_count)
             unique_msn_data.append(unique_msn)
