@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import logging
 import random
@@ -8,6 +8,7 @@ from urllib.parse import urlencode, urljoin
 from defusedxml.ElementTree import fromstring, ParseError
 from django.utils.functional import cached_property
 from django.utils.text import slugify
+from django.utils.timezone import is_aware, make_naive
 import requests
 from zentral.core.events import event_from_event_d, event_types
 from zentral.core.stores.backends.base import BaseEventStore
@@ -168,7 +169,7 @@ class EventStore(BaseEventStore):
                                 'Content-Type': 'application/json'})
         return session
 
-    def _build_filters(self, event_type=None, serial_number=None, excluded_event_type=None):
+    def _build_filters(self, event_type=None, serial_number=None, excluded_event_type=None, tag=None):
         filters = []
         if self.index:
             filters.append(("index", self.index))
@@ -183,7 +184,11 @@ class EventStore(BaseEventStore):
                 filters.append((self.serial_number_field, serial_number))
         if excluded_event_type:
             filters.append(("sourcetype!", excluded_event_type))
-        return " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in filters)
+        pipeline = " ".join('{}="{}"'.format(k, v.replace('"', '\\"')) for k, v in filters)
+        if tag:
+            tag = tag.replace('"', '\\"')
+            pipeline = f'{pipeline} | rename tags{{}} AS tagvalue | where (tagvalue = "{tag}")'
+        return pipeline
 
     def _get_search_url(self, query, from_dt, to_dt):
         kwargs = {
@@ -283,11 +288,9 @@ class EventStore(BaseEventStore):
             )
         # other events
         other_event_filters = self._build_filters(serial_number=serial_number,
-                                                  excluded_event_type="inventory_heartbeat")
-        other_event_search = (
-            f'{other_event_filters} | rename tags{{}} AS tagvalue | where (tagvalue = "heartbeat")'
-            '| stats max(_time) by sourcetype request.user_agent'
-        )
+                                                  excluded_event_type="inventory_heartbeat",
+                                                  tag="heartbeat")
+        other_event_search = f'{other_event_filters} | stats max(_time) by sourcetype request.user_agent'
         sid = self._post_search_job(other_event_search, from_dt, None)
         event_uas = {}
         results = self._get_search_results(sid)
@@ -326,3 +329,38 @@ class EventStore(BaseEventStore):
             self._get_probe_events_query(probe, event_type),
             from_dt, to_dt
         )
+
+    # zentral apps data
+
+    def get_app_hist_data(self, interval, bucket_number, tag):
+        from_dt_truncation = {"minute": 0, "second": 0, "microsecond": 0}
+        if interval == "day":
+            bucket_span = "1d"
+            bucket_seconds = 24 * 3600
+            from_dt_truncation["hour"] = 0
+        elif interval == "hour":
+            bucket_span = "1h"
+            bucket_seconds = 3600
+        else:
+            logger.error("Unsupported interval %s", interval)
+            return []
+        now = datetime.utcnow()
+        from_dt = now - timedelta(seconds=bucket_seconds * bucket_number)
+        from_dt = from_dt.replace(**from_dt_truncation)
+        filters = self._build_filters(tag=tag)
+        search = f"{filters} | bucket _time span={bucket_span} | stats count dc(host) as uniq_msn by _time"
+        sid = self._post_search_job(search, from_dt, None)
+        results = self._get_search_results(sid)
+        dt_results = {}
+        for result in results["results"]:
+            dt = datetime.strptime(result["_time"], "%Y-%m-%dT%H:%M:%S.%f%z")
+            if is_aware(dt):
+                dt = make_naive(dt)
+            dt_results[dt] = (int(result["count"]), int(result["uniq_msn"]))
+        data = []
+        current_dt = from_dt
+        while current_dt < now:
+            count, uniq_msn = dt_results.get(current_dt, (0, 0))
+            data.append((current_dt, count, uniq_msn))
+            current_dt += timedelta(seconds=bucket_seconds)
+        return data[-1*bucket_number:]
