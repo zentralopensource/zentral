@@ -35,6 +35,7 @@ class EventStore(BaseEventStore):
         self.serial_number_field = config_d.get("serial_number_field", "machine_serial_number")
         if self.search_app_url:
             self.machine_events_url = True
+            self.object_events_url = True
             self.probe_events_url = True
         self.verify_tls = config_d.get('verify_tls', True)
         self.index = config_d.get("index")
@@ -45,8 +46,9 @@ class EventStore(BaseEventStore):
         self.search_source = config_d.get("search_source")
         self.search_timeout = int(config_d.get("search_timeout", 300))
         if self.search_url and self.authentication_token:
-            self.machine_events = True
             self.last_machine_heartbeats = True
+            self.machine_events = True
+            self.object_events = True
             self.probe_events = True
 
     @cached_property
@@ -305,6 +307,31 @@ class EventStore(BaseEventStore):
         for event_type_class, ua_max_dates in event_uas.items():
             heartbeats.append((event_type_class, None, ua_max_dates))
         return heartbeats
+
+    # object events
+
+    def _get_object_events_query(self, key, val, event_type=None):
+        filters = self._build_filters(event_type)
+        val = val.replace('"', '\\"')
+        return f'{filters} | spath "objects.{key}{{}}" | search "objects.{key}{{}}"="{val}"'
+
+    def fetch_object_events(self, key, val, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        return self._fetch_events(
+            self._get_object_events_query(key, val, event_type),
+            from_dt, to_dt, limit, cursor
+        )
+
+    def get_aggregated_object_event_counts(self, key, val, from_dt, to_dt=None):
+        return self._fetch_aggregated_event_counts(
+            self._get_object_events_query(key, val),
+            from_dt, to_dt
+        )
+
+    def get_object_events_url(self, key, val, from_dt, to_dt=None, event_type=None):
+        return self._get_search_url(
+            self._get_object_events_query(key, val, event_type),
+            from_dt, to_dt
+        )
 
     # probe events
 

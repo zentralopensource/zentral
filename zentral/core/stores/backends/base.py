@@ -4,6 +4,8 @@ class BaseEventStore(object):
     machine_events = False
     machine_events_url = False
     last_machine_heartbeats = False
+    object_events = False
+    object_events_url = False
     probe_events = False
     probe_events_url = False
     probe_events_aggregations = False
@@ -54,6 +56,17 @@ class BaseEventStore(object):
     def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
         return None
 
+    # object events
+
+    def fetch_object_events(self, key, val, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        return [], None
+
+    def get_aggregated_object_event_counts(self, key, val, from_dt, to_dt=None):
+        return {}
+
+    def get_object_events_url(self, key, val, from_dt, to_dt=None, event_type=None):
+        return None
+
     # probe events
 
     def fetch_probe_events(self, probe, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
@@ -81,5 +94,5 @@ class BaseEventStore(object):
 
     # zentral apps data
 
-    def get_app_hist_data(self, interval, bucket_number, tag=None, event_type=None):
+    def get_app_hist_data(self, interval, bucket_number, tag):
         return []
