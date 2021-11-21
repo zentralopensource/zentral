@@ -40,7 +40,7 @@ class MunkiEvent(BaseEvent):
     def get_linked_objects_keys(self):
         keys = {}
         event_type = self.payload.get("type")
-        if event_type == "install":
+        if event_type in ("install", "removal"):
             name = self.payload.get("name")
             if name:
                 keys["munki_pkginfo_name"] = [(name,)]
