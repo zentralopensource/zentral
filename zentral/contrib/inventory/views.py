@@ -4,7 +4,6 @@ import logging
 from math import ceil
 from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
-from django.core import signing
 from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse, reverse_lazy
 from django.http import Http404, HttpResponseRedirect
@@ -12,9 +11,9 @@ from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.conf import settings
-from zentral.core.events import event_types
 from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores import frontend_store, stores
+from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
@@ -486,7 +485,7 @@ class MachineView(PermissionRequiredMixin, TemplateView):
         context['fetch_heartbeats'] = frontend_store.last_machine_heartbeats
         context['show_events_link'] = frontend_store.machine_events
         store_links = []
-        for store in stores.iter_machine_events_url_store_for_user(self.request.user):
+        for store in stores.iter_events_url_store_for_user("machine", self.request.user):
             url = "{}?{}".format(
                 reverse("inventory:machine_events_store_redirect",
                         args=(machine.get_urlsafe_serial_number(),)),
@@ -525,161 +524,42 @@ class ArchiveMachineView(PermissionRequiredMixin, TemplateView):
         return redirect('inventory:index')
 
 
-def _clean_machine_events_fetch_kwargs(request, serial_number, default_time_range=None):
-    kwargs = {"serial_number": serial_number}
-    event_type = request.GET.get("et")
-    if event_type:
-        if event_type not in event_types:
-            raise ValueError("Unknown event type")
-        else:
-            kwargs["event_type"] = event_type
-    time_range = request.GET.get("tr")
-    if not time_range:
-        if default_time_range:
-            time_range = default_time_range
-        else:
-            raise ValueError("Missing time range")
-    kwargs["to_dt"] = None
-    if time_range == "now-24h":
-        kwargs["from_dt"] = datetime.utcnow() - timedelta(hours=24)
-    elif time_range == "now-7d":
-        kwargs["from_dt"] = datetime.utcnow() - timedelta(days=7)
-    elif time_range == "now-14d":
-        kwargs["from_dt"] = datetime.utcnow() - timedelta(days=14)
-    elif time_range == "now-30d":
-        kwargs["from_dt"] = datetime.utcnow() - timedelta(days=30)
-    else:
-        raise ValueError("Uknown time range")
-    raw_cursor = request.GET.get("rc")
-    if raw_cursor:
-        try:
-            cursor = signing.loads(raw_cursor)
-        except signing.BadSignature:
-            raise ValueError("Bad cursor")
-        else:
-            kwargs["cursor"] = cursor
-    return kwargs
-
-
-class MachineEventsView(PermissionRequiredMixin, TemplateView):
+class EventsMixin:
     permission_required = "inventory.view_machinesnapshot"
+    store_method_scope = "machine"
+
+    def get_object(self, **kwargs):
+        return MetaMachine.from_urlsafe_serial_number(kwargs['urlsafe_serial_number'])
+
+    def get_fetch_kwargs_extra(self):
+        return {"serial_number": self.object.serial_number}
+
+    def get_fetch_url(self):
+        return reverse('inventory:fetch_machine_events', args=(self.object.get_urlsafe_serial_number(),))
+
+    def get_redirect_url(self):
+        return reverse('inventory:machine_events', args=(self.object.get_urlsafe_serial_number(),))
+
+    def get_store_redirect_url(self):
+        return reverse('inventory:machine_events_store_redirect', args=(self.object.get_urlsafe_serial_number(),))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["machine"] = self.object
+        ctx["serial_number"] = self.object.serial_number
+        return ctx
+
+
+class MachineEventsView(EventsMixin, EventsView):
     template_name = "inventory/machine_events.html"
-    default_time_range = "now-7d"
-
-    def get(self, request, *args, **kwargs):
-        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs['urlsafe_serial_number'])
-        try:
-            self.fetch_kwargs = _clean_machine_events_fetch_kwargs(
-                request, self.machine.serial_number,
-                default_time_range=self.default_time_range
-            )
-        except ValueError:
-            return HttpResponseRedirect(
-                reverse('inventory:machine_events', args=(self.machine.get_urlsafe_serial_number(),))
-            )
-        self.fetch_kwargs.pop("cursor", None)
-        self.request_event_type = self.fetch_kwargs.pop("event_type", None)
-        return super().get(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["machine"] = self.machine
-        context["serial_number"] = self.machine.serial_number
-        selected_time_range = self.request.GET.get("tr", self.default_time_range)
-        context["time_range_options"] = [
-                (v, selected_time_range == v, l)
-                for v, l in (("now-24h", "Last 24h"),
-                             ("now-7d", "Last 7 days"),
-                             ("now-14d", "Last 14 days"),
-                             ("now-30d", "Last 30 days"))
-        ]
-
-        total_event_count = 0
-        event_type_options = []
-        for event_type, count in frontend_store.get_aggregated_machine_event_counts(**self.fetch_kwargs).items():
-            total_event_count += count
-            event_type_options.append(
-                (event_type,
-                 self.request_event_type == event_type,
-                 "{} ({})".format(event_type.replace('_', ' ').title(), count))
-            )
-        event_type_options.sort()
-        event_type_options.insert(
-            0,
-            ('',
-             self.request_event_type in [None, ''],
-             'All ({})'.format(total_event_count))
-        )
-        context['event_type_options'] = event_type_options
-        qd = self.request.GET.copy()
-        if "tr" not in qd:
-            qd["tr"] = self.default_time_range
-        context['fetch_url'] = "{}?{}".format(
-            reverse("inventory:fetch_machine_events", args=(self.machine.get_urlsafe_serial_number(),)),
-            qd.urlencode()
-        )
-        store_links = []
-        store_redirect_url = reverse("inventory:machine_events_store_redirect",
-                                     args=(self.machine.get_urlsafe_serial_number(),))
-        for store in stores.iter_machine_events_url_store_for_user(self.request.user):
-            if not self.request_event_type or store.is_event_type_included(self.request_event_type):
-                store_links.append((store_redirect_url, store.name))
-        context["store_links"] = store_links
-        return context
 
 
-class FetchMachineEventsView(PermissionRequiredMixin, TemplateView):
-    permission_required = "inventory.view_machinesnapshot"
-    template_name = "inventory/_machine_events.html"
-    paginate_by = 20
-
-    def get(self, request, *args, **kwargs):
-        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs['urlsafe_serial_number'])
-        try:
-            self.fetch_kwargs = _clean_machine_events_fetch_kwargs(request, self.machine.serial_number)
-        except ValueError:
-            return HttpResponseRedirect(
-                reverse('inventory:machine_events', args=(self.machine.get_urlsafe_serial_number(),))
-            )
-        self.fetch_kwargs["limit"] = self.paginate_by
-        return super().get(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["machine"] = self.machine
-        context["serial_number"] = self.machine.serial_number
-        events, next_cursor = frontend_store.fetch_machine_events(**self.fetch_kwargs)
-        context["events"] = events
-        if next_cursor:
-            qd = self.request.GET.copy()
-            qd.update({"rc": signing.dumps(next_cursor)})
-            context["fetch_url"] = "{}?{}".format(
-                reverse('inventory:fetch_machine_events', args=(self.machine.get_urlsafe_serial_number(),)),
-                qd.urlencode()
-            )
-        return context
+class FetchMachineEventsView(EventsMixin, FetchEventsView):
+    include_machine_info = False
 
 
-class MachineEventsStoreRedirectView(PermissionRequiredMixin, View):
-    permission_required = "inventory.view_machinesnapshot"
-
-    def get(self, request, *args, **kwargs):
-        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs['urlsafe_serial_number'])
-        try:
-            fetch_kwargs = _clean_machine_events_fetch_kwargs(request, self.machine.serial_number)
-        except ValueError:
-            pass
-        else:
-            event_store_name = request.GET.get("es")
-            for store in stores:
-                if store.name == event_store_name:
-                    url = store.get_machine_events_url(**fetch_kwargs)
-                    if url:
-                        return HttpResponseRedirect(url)
-                    break
-        return HttpResponseRedirect(
-            reverse('inventory:machine_events', args=(self.machine.get_urlsafe_serial_number(),))
-        )
+class MachineEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    pass
 
 
 class MachineMacOSAppInstancesView(PermissionRequiredMixin, TemplateView):

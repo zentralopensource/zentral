@@ -161,14 +161,24 @@
   </div>
 </div>
 
-{% if perms.santa.change_configuration %}
-<p>
-  <a class="btn btn-default" href="{% url 'santa:update_configuration' object.id %}">
+<div class="btn-group" role="group" style="margin:0 0 10px 0">
+  {% if perms.santa.change_configuration %}
+  <a class="btn btn-default" href="{% url 'santa:update_configuration' object.pk %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
-</p>
-{% endif %}
+  {% endif %}
+  {% if show_events_link %}
+  <a class="btn btn-default" href="{% url 'santa:configuration_events' object.pk %}">
+    <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
+  </a>
+  {% endif %}
+  {% for link, anchor_text in store_links  %}
+  <a class="btn btn-default" href="{{ link }}">
+    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
+  </a>
+  {% endfor %}
+</div>
 
 {% if perms.santa.view_enrollment %}
 <h3>{{ enrollments_count }} Enrollment{{ enrollments_count|pluralize }}</h3>

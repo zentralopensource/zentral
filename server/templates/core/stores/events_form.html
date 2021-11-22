@@ -1,0 +1,28 @@
+<form class="form-inline" method="GET" style="margin:10px 0 0 0">
+  <div class="form-group">
+    <label for="eventType">Event type</label>
+    <select class="form-control" id="eventType" name="et">
+      {% for value, selected, label in event_type_options %}
+      <option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-group">
+    <label for="timeRange">Range</label>
+    <select class="form-control" id="timeRange" name="tr">
+      {% for value, selected, label in time_range_options %}
+      <option value="{{ value }}"{% if selected %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-default">
+    <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
+    Update
+  </button>
+  {% for link, store_name in store_links %}
+  <button type="submit" name="es" value="{{ store_name }}" formaction="{{ link }}" class="btn btn-default">
+    <span class="glyphicon glyphicon-link" aria-hidden="true"></span>
+    {{ store_name }}
+  </button>
+  {% endfor %}
+</form>

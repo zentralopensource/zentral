@@ -1,5 +1,6 @@
 import json
 import logging
+from urllib.parse import urlencode
 from uuid import UUID
 import zlib
 from django.contrib.auth.mixins import PermissionRequiredMixin
@@ -18,6 +19,9 @@ from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import Certificate, File, MachineTag, MetaMachine, PrincipalUserSource
 from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_trigger_events,
                                              verify_enrollment_secret)
+from zentral.core.events.utils import encode_args
+from zentral.core.stores import frontend_store, stores
+from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.certificates import parse_dn
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .events import post_enrollment_event, process_events, post_preflight_event, post_santa_rule_update_event
@@ -101,7 +105,58 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
         ctx["enrollments"] = enrollments
         ctx["enrollments_count"] = len(enrollments)
         ctx["rules_count"] = self.object.rule_set.count()
+        ctx["show_events_link"] = frontend_store.object_events
+        store_links = []
+        for store in stores.iter_events_url_store_for_user("object", self.request.user):
+            url = "{}?{}".format(
+                reverse("santa:configuration_events_store_redirect", args=(self.object.pk,)),
+                urlencode({"es": store.name,
+                           "tr": ConfigurationEventsView.default_time_range})
+            )
+            store_links.append((url, store.name))
+        ctx["store_links"] = store_links
         return ctx
+
+
+class EventsMixin:
+    permission_required = ("santa.view_configuration",
+                           "santa.view_enrollment",
+                           "santa.view_rule",
+                           "santa.view_ruleset")
+    store_method_scope = "object"
+
+    def get_object(self, **kwargs):
+        return get_object_or_404(Configuration, pk=kwargs["pk"])
+
+    def get_fetch_kwargs_extra(self):
+        return {"key": "santa_configuration", "val": encode_args((self.object.pk,))}
+
+    def get_fetch_url(self):
+        return reverse("santa:fetch_configuration_events", args=(self.object.pk,))
+
+    def get_redirect_url(self):
+        return reverse("santa:configuration_events", args=(self.object.pk,))
+
+    def get_store_redirect_url(self):
+        return reverse("santa:configuration_events_store_redirect", args=(self.object.pk,))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["configuration"] = self.object
+        return ctx
+
+
+class ConfigurationEventsView(EventsMixin, EventsView):
+    template_name = "santa/configuration_events.html"
+
+
+class FetchConfigurationEventsView(EventsMixin, FetchEventsView):
+    pass
+
+
+class ConfigurationEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    pass
 
 
 class UpdateConfigurationView(PermissionRequiredMixin, UpdateView):

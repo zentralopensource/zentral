@@ -43,7 +43,7 @@ class Stores:
     def __iter__(self):
         yield from self.stores.values()
 
-    def _iter_events_url_store_for_user(self, key, user):
+    def iter_events_url_store_for_user(self, key, user):
         for store in self.stores.values():
             if not getattr(store, f"{key}_events_url", False):
                 # store doesn't implement this functionality
@@ -56,12 +56,6 @@ class Stores:
                     # no common groups
                     continue
             yield store
-
-    def iter_machine_events_url_store_for_user(self, user):
-        yield from self._iter_events_url_store_for_user("machine", user)
-
-    def iter_probe_events_url_store_for_user(self, user):
-        yield from self._iter_events_url_store_for_user("probe", user)
 
 
 stores = SimpleLazyObject(lambda: Stores(settings))

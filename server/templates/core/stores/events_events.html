@@ -6,6 +6,7 @@
 {% with event.metadata.request as request %}
 <tr>
   <td>
+    {% if include_machine_info %}
     {% if machine.serial_number %}
     <p>
       {% machine_type_icon  machine %}
@@ -21,6 +22,7 @@
     <p>
       {{ machine.computer_name }}
     </p>
+    {% endif %}
     {% endif %}
     <p style="white-space:nowrap">
       {{ event.get_event_type_display }}<br>

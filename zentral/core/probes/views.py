@@ -2,15 +2,14 @@ from datetime import datetime, timedelta
 import logging
 from urllib.parse import urlencode
 from django import forms
-from django.core import signing
 from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
-from zentral.core.events import event_types
 from zentral.core.stores import frontend_store, stores
+from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.charts import make_dataset
 from .feeds import FeedError, sync_feed
 from .forms import (CreateProbeForm, ProbeSearchForm,
@@ -102,7 +101,7 @@ class ProbeView(PermissionRequiredMixin, DetailView):
         store_links = []
         ctx['show_events_link'] = frontend_store.probe_events
         store_links = []
-        for store in stores.iter_probe_events_url_store_for_user(self.request.user):
+        for store in stores.iter_events_url_store_for_user("probe", self.request.user):
             url = "{}?{}".format(
                 reverse("probes:probe_events_store_redirect", args=(self.probe.pk,)),
                 urlencode({"es": store.name,
@@ -199,173 +198,52 @@ class ProbeDashboardDataView(PermissionRequiredMixin, View):
         return JsonResponse(charts)
 
 
-def _clean_probe_events_fetch_kwargs(request, probe, default_time_range=None):
-    kwargs = {"probe": probe}
-    event_type = request.GET.get("et")
-    if event_type:
-        if event_type not in event_types:
-            raise ValueError("Unknown event type")
-        else:
-            kwargs["event_type"] = event_type
-    time_range = request.GET.get("tr")
-    if not time_range:
-        if default_time_range:
-            time_range = default_time_range
-        else:
-            raise ValueError("Missing time range")
-    kwargs["to_dt"] = None
-    if time_range == "now-24h":
-        kwargs["from_dt"] = datetime.utcnow() - timedelta(hours=24)
-    elif time_range == "now-7d":
-        kwargs["from_dt"] = datetime.utcnow() - timedelta(days=7)
-    elif time_range == "now-14d":
-        kwargs["from_dt"] = datetime.utcnow() - timedelta(days=14)
-    elif time_range == "now-30d":
-        kwargs["from_dt"] = datetime.utcnow() - timedelta(days=30)
-    else:
-        raise ValueError("Uknown time range")
-    raw_cursor = request.GET.get("rc")
-    if raw_cursor:
-        try:
-            cursor = signing.loads(raw_cursor)
-        except signing.BadSignature:
-            raise ValueError("Bad cursor")
-        else:
-            kwargs["cursor"] = cursor
-    return kwargs
-
-
-class ProbeEventsView(PermissionRequiredMixin, TemplateView):
+class EventsMixin:
     permission_required = "probes.view_probesource"
-    template_name = "core/probes/probe_events.html"
-    default_time_range = "now-7d"
+    store_method_scope = "probe"
 
-    def get(self, request, *args, **kwargs):
-        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs['pk'])
-        self.probe = self.probe_source.load()
-        try:
-            self.fetch_kwargs = _clean_probe_events_fetch_kwargs(
-                request, self.probe,
-                default_time_range=self.default_time_range
-            )
-        except ValueError:
-            return HttpResponseRedirect(reverse("probes:probe_events", args=(self.probe.pk,)))
-        self.fetch_kwargs.pop("cursor", None)
-        self.request_event_type = self.fetch_kwargs.pop("event_type", None)
-        return super().get(request, *args, **kwargs)
+    def get_object(self, **kwargs):
+        return get_object_or_404(ProbeSource, pk=kwargs['pk'])
+
+    def get_fetch_kwargs_extra(self):
+        return {"probe": self.object}
+
+    def get_fetch_url(self):
+        return reverse("probes:fetch_probe_events", args=(self.object.pk,))
+
+    def get_redirect_url(self):
+        return reverse("probes:probe_events", args=(self.object.pk,))
+
+    def get_store_redirect_url(self):
+        return reverse("probes:probe_events_store_redirect", args=(self.object.pk,))
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["probes"] = True
-        ctx["probe_source"] = self.probe_source
-        ctx["probe"] = self.probe
+        ctx["probe_source"] = self.object
+        ctx["probe"] = self.object.load()
+        return ctx
 
-        # time range options
-        selected_time_range = self.request.GET.get("tr", self.default_time_range)
-        ctx["time_range_options"] = [
-            (v, selected_time_range == v, l)
-            for v, l in (("now-24h", "Last 24h"),
-                         ("now-7d", "Last 7 days"),
-                         ("now-14d", "Last 14 days"),
-                         ("now-30d", "Last 30 days"))
-        ]
 
-        # event options
-        total_event_count = 0
-        event_type_options = []
-        for event_type, count in frontend_store.get_aggregated_probe_event_counts(**self.fetch_kwargs).items():
-            total_event_count += count
-            event_type_options.append(
-                (event_type,
-                 self.request_event_type == event_type,
-                 "{} ({})".format(event_type.replace('_', ' ').title(), count))
-            )
-        event_type_options.sort()
-        event_type_options.insert(
-            0,
-            ('',
-             self.request_event_type in [None, ''],
-             'All ({})'.format(total_event_count))
-        )
-        ctx['event_type_options'] = event_type_options
+class ProbeEventsView(EventsMixin, EventsView):
+    template_name = "core/probes/probe_events.html"
 
-        # fetch URL
-        qd = self.request.GET.copy()
-        if "tr" not in qd:
-            qd["tr"] = self.default_time_range
-        ctx['fetch_url'] = "{}?{}".format(
-            reverse("probes:fetch_probe_events", args=(self.probe.pk,)),
-            qd.urlencode()
-        )
-
-        # store links
-        store_links = []
-        store_redirect_url = reverse("probes:probe_events_store_redirect", args=(self.probe.pk,))
-        for store in stores.iter_probe_events_url_store_for_user(self.request.user):
-            store_links.append((store_redirect_url, store.name))
-        ctx["store_links"] = store_links
-
-        # breadcrumbs
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
         ctx["breadcrumbs"] = [
             (reverse('probes:index'), 'Probes'),
-            (reverse('probes:probe', args=(self.probe.pk,)), self.probe.name),
+            (reverse('probes:probe', args=(self.object.pk,)), self.object.name),
             (None, "events")
         ]
-
         return ctx
 
 
-class FetchProbeEventsView(PermissionRequiredMixin, TemplateView):
-    permission_required = "probes.view_probesource"
-    template_name = "core/probes/_probe_events.html"
-    paginate_by = 20
-
-    def get(self, request, *args, **kwargs):
-        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs['pk'])
-        self.probe = self.probe_source.load()
-        try:
-            self.fetch_kwargs = _clean_probe_events_fetch_kwargs(request, self.probe)
-        except ValueError:
-            return HttpResponseRedirect(reverse("probes:probe_events", args=(self.probe.pk,)))
-        self.fetch_kwargs["limit"] = self.paginate_by
-        return super().get(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["probes"] = True
-        ctx["probe_source"] = self.probe_source
-        ctx["probe"] = self.probe
-        events, next_cursor = frontend_store.fetch_probe_events(**self.fetch_kwargs)
-        ctx["events"] = events
-        if next_cursor:
-            qd = self.request.GET.copy()
-            qd.update({"rc": signing.dumps(next_cursor)})
-            ctx["fetch_url"] = "{}?{}".format(
-                reverse('probes:fetch_probe_events', args=(self.probe.pk,)),
-                qd.urlencode()
-            )
-        return ctx
+class FetchProbeEventsView(EventsMixin, FetchEventsView):
+    pass
 
 
-class ProbeEventsStoreRedirectView(PermissionRequiredMixin, View):
-    permission_required = "probes.view_probesource"
-
-    def get(self, request, *args, **kwargs):
-        probe_source = get_object_or_404(ProbeSource, pk=kwargs['pk'])
-        probe = probe_source.load()
-        try:
-            fetch_kwargs = _clean_probe_events_fetch_kwargs(request, probe)
-        except ValueError:
-            pass
-        else:
-            event_store_name = request.GET.get("es")
-            for store in stores:
-                if store.name == event_store_name:
-                    url = store.get_probe_events_url(**fetch_kwargs)
-                    if url:
-                        return HttpResponseRedirect(url)
-                    break
-        return HttpResponseRedirect(reverse('probe:machine_events', args=(probe.pk,)))
+class ProbeEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    pass
 
 
 class UpdateProbeView(PermissionRequiredMixin, UpdateView):

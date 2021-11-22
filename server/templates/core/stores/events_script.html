@@ -1,0 +1,30 @@
+<script nonce="{{ request.csp_nonce }}">
+  function removeLoadMoreEvents() {
+    $("#loadMoreEvents").parent().parent().remove();
+  }
+
+  function setupLoadMoreEvents() {
+    $("#loadMoreEvents").click(function (event) {
+      event.preventDefault();
+      var fetchURL = $(this).attr("href");
+      loadNextEvents(fetchURL);
+    });
+  }
+
+  function loadNextEvents(fetchURL) {
+    $.ajax({
+      dataType: "html",
+      url: fetchURL,
+      success: function (data) {
+        removeLoadMoreEvents();
+        $("#events-container").append(data);
+        setupLoadMoreEvents();
+      }
+    });
+  }
+
+  $(document).ready(function () {
+    var fetchURL = $("#events-container").data("url");
+    loadNextEvents(fetchURL);
+  });
+</script>

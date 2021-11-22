@@ -2,6 +2,7 @@
 {% load base_extras incidents_extras inventory_extras %}
 
 {% block content %}
+
 <ol class="breadcrumb" style="margin-bottom:10px">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
@@ -10,83 +11,18 @@
 </ol>
 
 <div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
-<h3 style="margin:0 0 20px 0">
-  {% machine_type_icon machine %}
-  {% machine_platform_icon machine %}
-  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / Events
-</h3>
-
-<form class="form-inline" method="GET" style="margin:10px 0 0 0">
-  <div class="form-group">
-    <label for="eventType">Event type</label>
-    <select class="form-control" id="eventType" name="et">
-      {% for value, selected, label in event_type_options %}
-      <option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="form-group">
-    <label for="timeRange">Range</label>
-    <select class="form-control" id="timeRange" name="tr">
-      {% for value, selected, label in time_range_options %}
-      <option value="{{ value }}"{% if selected %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <button type="submit" class="btn btn-default">
-    <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
-    Update
-  </button>
-  {% for link, store_name in store_links %}
-  <button type="submit" name="es" value="{{ store_name }}" formaction="{{ link }}" class="btn btn-default">
-    <span class="glyphicon glyphicon-link" aria-hidden="true"></span>
-    {{ store_name }}
-  </button>
-  {% endfor %}
-</form>
+  <h3 style="margin:0 0 20px 0">
+    {% machine_type_icon machine %}
+    {% machine_platform_icon machine %}
+    {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / Events
+  </h3>
+  {% include "core/stores/events_form.html" %}
 </div>
 
-<div class="table-responsive">
-  <table class="table">
-    <thead>
-      <th>Metadata</th>
-      <th>Data</th>
-    </thead>
-    <tbody id="events-container" data-url="{{ fetch_url }}">
-    </tbody>
-  </table>
-</div>
+{% include "core/stores/events_table.html" %}
+
 {% endblock %}
 
 {% block extrajs %}
-<script nonce="{{ request.csp_nonce }}">
-  function removeLoadMoreEvents() {
-    $("#loadMoreEvents").parent().parent().remove();
-  }
-
-  function setupLoadMoreEvents() {
-    $("#loadMoreEvents").click(function (event) {
-      event.preventDefault();
-      var fetchURL = $(this).attr("href");
-      loadNextEvents(fetchURL);
-    });
-  }
-
-  function loadNextEvents(fetchURL) {
-    $.ajax({
-      dataType: "html",
-      url: fetchURL,
-      success: function (data) {
-        removeLoadMoreEvents();
-        $("#events-container").append(data);
-        setupLoadMoreEvents();
-      }
-    });
-  }
-
-  $(document).ready(function () {
-    var fetchURL = $("#events-container").data("url");
-    loadNextEvents(fetchURL);
-  });
-</script>
+{% include "core/stores/events_script.html" %}
 {% endblock %}
