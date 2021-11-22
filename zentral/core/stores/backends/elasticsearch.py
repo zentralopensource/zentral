@@ -23,6 +23,7 @@ class EventStore(BaseEventStore):
     max_batch_size = 500
     machine_events = True
     last_machine_heartbeats = True
+    object_events = True
     probe_events = True
     probe_events_aggregations = True
 
@@ -123,6 +124,7 @@ class EventStore(BaseEventStore):
                 self.kibana_discover_url = urljoin(kibana_base_url, "app/discover#/")
         if self.kibana_discover_url:
             self.machine_events_url = True
+            self.object_events_url = True
             self.probe_events_url = True
         self.kibana_index_pattern_uuid = config_d.get('kibana_index_pattern_uuid')
         self.index_settings = {
@@ -433,6 +435,38 @@ class EventStore(BaseEventStore):
     def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
         return self._build_kibana_url(
             self._get_machine_events_body(serial_number, event_type=event_type),
+            from_dt, to_dt
+        )
+
+    # object events
+
+    def _get_object_events_body(self, key, val, from_dt=None, to_dt=None, event_type=None):
+        self.wait_and_configure_if_necessary()
+        filters = [
+            {'term': {f'objects.{key}': val}},
+        ]
+        range_kwargs = {}
+        if from_dt:
+            range_kwargs["gte"] = from_dt
+        if to_dt:
+            range_kwargs["lte"] = to_dt
+        if range_kwargs:
+            filters.append({'range': {'created_at': range_kwargs}})
+        if event_type:
+            filters.append(self._get_type_filter(event_type))
+        return {'query': {'bool': {'filter': filters}}}
+
+    def fetch_object_events(self, key, val, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        body = self._get_object_events_body(key, val, from_dt, to_dt, event_type)
+        return self._fetch_events(body, limit, cursor)
+
+    def get_aggregated_object_event_counts(self, key, val, from_dt, to_dt=None):
+        body = self._get_object_events_body(key, val, from_dt, to_dt)
+        return self._get_aggregated_event_counts(body)
+
+    def get_object_events_url(self, key, val, from_dt, to_dt=None, event_type=None):
+        return self._build_kibana_url(
+            self._get_object_events_body(key, val, event_type=event_type),
             from_dt, to_dt
         )
 
