@@ -17,6 +17,13 @@ class SantaEnrollmentEvent(BaseEvent):
     event_type = "santa_enrollment"
     tags = ["santa"]
 
+    def get_linked_objects_keys(self):
+        keys = {}
+        configuration = self.payload.get("configuration")
+        if configuration:
+            keys["santa_configuration"] = [(configuration.get("pk"),)]
+        return keys
+
 
 register_event_type(SantaEnrollmentEvent)
 

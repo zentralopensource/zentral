@@ -624,8 +624,11 @@ class PreflightView(BaseSyncView):
             self.enrollment_action = 'enrollment'
 
         # post event
-        post_enrollment_event(enrolled_machine.serial_number, self.user_agent, self.ip,
-                              {'action': self.enrollment_action})
+        post_enrollment_event(
+            enrolled_machine.serial_number, self.user_agent, self.ip,
+            {'configuration': enrollment.configuration.serialize_for_event(),
+             'action': self.enrollment_action}
+        )
 
         return enrolled_machine
 

@@ -1,7 +1,8 @@
 import datetime
 from django.test import SimpleTestCase
 from zentral.contrib.santa.events import (_build_file_tree_from_santa_event, EventMetadata,
-                                          SantaEventEvent, SantaRuleSetUpdateEvent, SantaRuleUpdateEvent)
+                                          SantaEnrollmentEvent, SantaEventEvent,
+                                          SantaRuleSetUpdateEvent, SantaRuleUpdateEvent)
 
 
 class SantaEventTestCase(SimpleTestCase):
@@ -279,4 +280,15 @@ class SantaEventTestCase(SimpleTestCase):
             event.get_linked_objects_keys(),
             {"santa_configuration": [(1,), (2,)],
              "santa_ruleset": [(43,)]}
+        )
+
+    def test_enrollment_linked_objects(self):
+        event_d = {
+            "configuration": {"pk": 13, "name": "le temps des cerises"},
+            "action": "enrollment"
+        }
+        event = SantaEnrollmentEvent(EventMetadata(), event_d)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"santa_configuration": [(13,)]}
         )
