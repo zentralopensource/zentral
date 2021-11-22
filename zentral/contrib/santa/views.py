@@ -105,16 +105,17 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
         ctx["enrollments"] = enrollments
         ctx["enrollments_count"] = len(enrollments)
         ctx["rules_count"] = self.object.rule_set.count()
-        ctx["show_events_link"] = frontend_store.object_events
-        store_links = []
-        for store in stores.iter_events_url_store_for_user("object", self.request.user):
-            url = "{}?{}".format(
-                reverse("santa:configuration_events_store_redirect", args=(self.object.pk,)),
-                urlencode({"es": store.name,
-                           "tr": ConfigurationEventsView.default_time_range})
-            )
-            store_links.append((url, store.name))
-        ctx["store_links"] = store_links
+        if self.request.user.has_perms(EventsMixin.permission_required):
+            ctx["show_events_link"] = frontend_store.object_events
+            store_links = []
+            for store in stores.iter_events_url_store_for_user("object", self.request.user):
+                url = "{}?{}".format(
+                    reverse("santa:configuration_events_store_redirect", args=(self.object.pk,)),
+                    urlencode({"es": store.name,
+                               "tr": ConfigurationEventsView.default_time_range})
+                )
+                store_links.append((url, store.name))
+            ctx["store_links"] = store_links
         return ctx
 
 
