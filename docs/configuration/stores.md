@@ -65,6 +65,12 @@ A list of group names. Empty by default (i.e. all users will get the links). Can
 
 The base URL of the Splunk HTTP Event Collector. For example: `https://splunk.example.com:8088`. The path to the collector endpoint **must not** be included.
 
+### `hec_extra_headers`
+
+**OPTIONAL**
+
+A String/String dictionary of extra headers to use for the Splunk HEC requests. Empty by default. This can be used to authenticate with a proxy for example. The `Authorization` and `Content-Type` headers **cannot** be changed.
+
 ### `hec_token`
 
 **MANDATORY**
@@ -119,6 +125,12 @@ The URL to the Splunk search app. For example: `https://splunk.example.com/en-US
 
 The base URL of the Splunk API server. For example: `https://splunk.example.com:8089`. If this is set, along with an `authentication_token`, the store can be used as a frontend store.
 
+### `search_extra_headers`
+
+**OPTIONAL**
+
+A String/String dictionary of extra headers to use for the Splunk search API requests. Empty by default. This can be used to authenticate with a proxy for example. The `Authorization` and `Content-Type` headers **cannot** be changed.
+
 ### `authentication_token`
 
 **OPTIONAL**
@@ -144,6 +156,10 @@ In seconds. Defaults to 300s. The number of seconds to keep a search after proce
     "backend": "zentral.core.stores.backends.splunk",
     "frontend": false,
     "hec_url": "https://splunk.example.com:8088",
+    "hec_extra_headers": {
+      "CF-Access-Client-Id": "123",
+      "CF-Access-Client-Secret": "{{ env:SPLUNK_HEC_CF_ACCESS_CLIENT_SECRET }}"
+    },
     "hec_token": "{{ env:HEC_TOKEN }}",
     "verify_tls": true,
     "batch_size": 100,
@@ -153,6 +169,10 @@ In seconds. Defaults to 300s. The number of seconds to keep a search after proce
     "serial_number_field": "serial_number",
     "search_app_url": "https://splunk.example.com/en-US/app/search/search",
     "search_url": "https://splunk.example.com:8089",
+    "search_extra_headers": {
+      "CF-Access-Client-Id": "456",
+      "CF-Access-Client-Secret": "{{ env:SPLUNK_SEARCH_CF_ACCESS_CLIENT_SECRET }}"
+    },
     "authentication_token": "{{ env:SPLUNK_AUTH_TOKEN }}",
     "search_source": "zentral.example.com",
     "search_timeout": 300

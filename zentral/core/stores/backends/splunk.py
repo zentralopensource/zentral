@@ -23,7 +23,8 @@ class EventStore(BaseEventStore):
 
     def __init__(self, config_d):
         super().__init__(config_d)
-        self.collector_url = urljoin(config_d["hec_url"], "/services/collector/event")
+        self.hec_url = urljoin(config_d["hec_url"], "/services/collector/event")
+        self.hec_extra_headers = config_d.get("hec_extra_headers")
         self.hec_token = config_d["hec_token"]
         self.search_app_url = config_d.get("search_app_url")
         # If set, the computer name of the machine snapshots of these sources will be used
@@ -43,6 +44,7 @@ class EventStore(BaseEventStore):
         # search
         self.authentication_token = config_d.get("authentication_token")
         self.search_url = config_d.get("search_url")
+        self.search_extra_headers = config_d.get("search_extra_headers")
         self.search_source = config_d.get("search_source")
         self.search_timeout = int(config_d.get("search_timeout", 300))
         if self.search_url and self.authentication_token:
@@ -52,11 +54,18 @@ class EventStore(BaseEventStore):
             self.probe_events = True
 
     @cached_property
-    def collector_session(self):
+    def hec_session(self):
         session = requests.Session()
         session.verify = self.verify_tls
         session.headers.update({'Authorization': f'Splunk {self.hec_token}',
                                 'Content-Type': 'application/json'})
+        if self.hec_extra_headers:
+            for k, v in self.hec_extra_headers.items():
+                if k.lower() in ('authorization', 'content-type'):
+                    logger.error("Skip '%s' HEC extra header", k)
+                else:
+                    logger.debug("Set '%s' HEC extra header", k)
+                    session.headers[k] = v
         return session
 
     @staticmethod
@@ -125,7 +134,7 @@ class EventStore(BaseEventStore):
     def store(self, event):
         payload = self._serialize_event(event)
         for i in range(self.max_retries):
-            r = self.collector_session.post(self.collector_url, json=payload)
+            r = self.hec_session.post(self.hec_url, json=payload)
             if r.ok:
                 return
             if r.status_code > 500:
@@ -149,7 +158,7 @@ class EventStore(BaseEventStore):
                 data += b"\n"
             data += json.dumps(payload).encode("utf-8")
         for i in range(self.max_retries):
-            r = self.collector_session.post(self.collector_url, data=data)
+            r = self.hec_session.post(self.hec_url, data=data)
             if r.ok:
                 return event_keys
             if r.status_code > 500:
@@ -169,6 +178,13 @@ class EventStore(BaseEventStore):
         session.verify = self.verify_tls
         session.headers.update({'Authorization': f'Bearer {self.authentication_token}',
                                 'Content-Type': 'application/json'})
+        if self.search_extra_headers:
+            for k, v in self.search_extra_headers.items():
+                if k.lower() in ('authorization', 'content-type'):
+                    logger.error("Skip '%s' search extra header", k)
+                else:
+                    logger.debug("Set '%s' search extra header", k)
+                    session.headers[k] = v
         return session
 
     def _build_filters(self, event_type=None, serial_number=None, excluded_event_type=None, tag=None):
