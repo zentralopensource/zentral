@@ -3,6 +3,7 @@ import logging
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.contrib.inventory.models import File
 from zentral.contrib.santa.models import Bundle, Target
+from zentral.utils.certificates import APPLE_DEV_ID_ISSUER_CN, parse_apple_dev_id
 from zentral.utils.text import shard
 
 
@@ -52,6 +53,36 @@ class SantaEventEvent(BaseEvent):
             ctx['file_path'] = self.payload['file_path']
         return ctx
 
+    def get_linked_objects_keys(self):
+        keys = {}
+        file_sha256 = self.payload.get("file_sha256")
+        if file_sha256:
+            keys['file'] = [("sha256", file_sha256)]
+        signing_chain = self.payload.get("signing_chain")
+        if not signing_chain:
+            return keys
+        cert_sha256_list = []
+        for cert_idx, cert in enumerate(signing_chain):
+            # cert sha256
+            cert_sha256 = cert.get("sha256")
+            if cert_sha256:
+                cert_sha256_list.append(("sha256", cert_sha256))
+            # Apple Developer Team ID
+            if cert_idx == 0:
+                try:
+                    _, team_id = parse_apple_dev_id(cert["cn"])
+                except (KeyError, ValueError):
+                    continue
+                try:
+                    issuer_cn = signing_chain[cert_idx + 1]["cn"]
+                except KeyError:
+                    continue
+                if issuer_cn == APPLE_DEV_ID_ISSUER_CN:
+                    keys["apple_team_id"] = [(team_id,)]
+        if cert_sha256_list:
+            keys['certificate'] = cert_sha256_list
+        return keys
+
 
 register_event_type(SantaEventEvent)
 
@@ -68,6 +99,17 @@ class SantaRuleSetUpdateEvent(BaseEvent):
     event_type = "santa_ruleset_update"
     tags = ["santa"]
 
+    def get_linked_objects_keys(self):
+        keys = {}
+        configurations = self.payload.get("configurations")
+        if configurations:
+            for configuration in configurations:
+                keys.setdefault("santa_configuration", []).append((configuration.get("pk"),))
+        ruleset = self.payload.get("ruleset")
+        if ruleset:
+            keys["santa_ruleset"] = [(ruleset.get("pk"),)]
+        return keys
+
 
 register_event_type(SantaRuleSetUpdateEvent)
 
@@ -75,6 +117,32 @@ register_event_type(SantaRuleSetUpdateEvent)
 class SantaRuleUpdateEvent(BaseEvent):
     event_type = "santa_rule_update"
     tags = ["santa"]
+
+    def get_linked_objects_keys(self):
+        keys = {}
+        rule = self.payload.get("rule")
+        if not rule:
+            return keys
+        configuration = rule.get("configuration")
+        if configuration:
+            keys["santa_configuration"] = [(configuration.get("pk"),)]
+        ruleset = rule.get("ruleset")
+        if ruleset:
+            keys["santa_ruleset"] = [(ruleset.get("pk"),)]
+        target = rule.get("target")
+        if not target:
+            return keys
+        sha256 = target.get("sha256")
+        if not sha256:
+            return keys
+        target_type = target.get("type")
+        if target_type == Target.BINARY:
+            keys["file"] = [("sha256", sha256)]
+        elif target_type == Target.CERTIFICATE:
+            keys["certificate"] = [("sha256", sha256)]
+        elif target_type == Target.BUNDLE:
+            keys["bundle"] = [("sha256", sha256)]
+        return keys
 
 
 register_event_type(SantaRuleUpdateEvent)

@@ -100,3 +100,17 @@ def parse_text_dn(dn):
         d[current_attr].append(current_val)
         current_attr = current_val = ""
     return d
+
+
+# Apple Developer ID
+
+
+APPLE_DEV_ID_CN_RE = re.compile(r'^Developer ID Application: (?P<team_name>.+) \((?P<team_id>[0-9A-Z]+)\)$')
+APPLE_DEV_ID_ISSUER_CN = "Developer ID Certification Authority"
+
+
+def parse_apple_dev_id(cn):
+    m = APPLE_DEV_ID_CN_RE.match(cn)
+    if not m:
+        raise ValueError("Not an Apple developer ID")
+    return m.groups()

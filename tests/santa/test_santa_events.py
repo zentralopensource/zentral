@@ -1,9 +1,10 @@
 import datetime
-from django.test import TestCase
-from zentral.contrib.santa.events import _build_file_tree_from_santa_event
+from django.test import SimpleTestCase
+from zentral.contrib.santa.events import (_build_file_tree_from_santa_event, EventMetadata,
+                                          SantaEventEvent, SantaRuleSetUpdateEvent, SantaRuleUpdateEvent)
 
 
-class SantaEventTestCase(TestCase):
+class SantaEventTestCase(SimpleTestCase):
     def test_event_with_signed_bundle(self):
         event_d = {
             'current_sessions': [],
@@ -152,3 +153,130 @@ class SantaEventTestCase(TestCase):
             'signed_by': None
         }
         self.assertEqual(_build_file_tree_from_santa_event(event_d), file_d)
+
+    def test_event_linked_objects(self):
+        event_d = {
+            'current_sessions': ['personne@console', 'flaco@ttys000'],
+            'decision': 'ALLOW_UNKNOWN',
+            'executing_user': 'personne',
+            'execution_time': 1637562907.2363129,
+            'file_bundle_id': 'org.mozilla.firefox',
+            'file_bundle_name': 'Firefox',
+            'file_bundle_path': '/Applications/Firefox.app',
+            'file_bundle_version': '9421.11.3',
+            'file_bundle_version_string': '94.0.1',
+            'file_name': 'firefox',
+            'file_path': '/Applications/Firefox.app/Contents/MacOS',
+            'file_sha256': '4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57',
+            'logged_in_users': ['personne'],
+            'parent_name': 'launchd',
+            'pid': 1280,
+            'ppid': 1,
+            'quarantine_agent_bundle_id': 'com.apple.Safari',
+            'quarantine_data_url': 'https://download-installer.cdn.mozilla.net/pub/firefox/releases'
+                                   '/94.0.1/mac/de/Firefox%2094.0.1.dmg',
+            'quarantine_timestamp': 1637562799,
+            'signing_chain': [
+                {'cn': 'Developer ID Application: Mozilla Corporation (43AQ936H96)',
+                 'org': 'Mozilla Corporation',
+                 'ou': '43AQ936H96',
+                 'sha256': '96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b',
+                 'valid_from': 1494270538,
+                 'valid_until': 1652123338},
+                {'cn': 'Developer ID Certification Authority',
+                 'org': 'Apple Inc.',
+                 'ou': 'Apple Certification Authority',
+                 'sha256': '7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f',
+                 'valid_from': 1328134335,
+                 'valid_until': 1801519935},
+                {'cn': 'Apple Root CA',
+                 'org': 'Apple Inc.',
+                 'ou': 'Apple Certification Authority',
+                 'sha256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
+                 'valid_from': 1146001236,
+                 'valid_until': 2054670036}]
+        }
+        event = SantaEventEvent(EventMetadata(), event_d)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b"),
+                             ("sha256", "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"),
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
+             "apple_team_id": [("43AQ936H96",)]}
+        )
+
+    def test_binary_rule_update_linked_objects(self):
+        event_d = {
+            'result': 'updated',
+            'rule': {
+                'configuration': {'name': 'Default', 'pk': 1},
+                'custom_msg': '123',
+                'excluded_tags': [{'name': 'untag', 'pk': 1}],
+                'policy': 'BLOCKLIST',
+                'serial_numbers': ['2345', '456'],
+                'tags': [{'name': 'deuxtag', 'pk': 2}],
+                'target': {'sha256': 'e699f8aad9c46505531b174f3868ff05de5dddae5d2eef5c3da65a6bac7d2210',
+                           'type': 'BINARY'}
+            },
+            'updates': {'added': {'excluded_tags': [{'name': 'untag', 'pk': 1}],
+                                  'serial_numbers': ['456'],
+                                  'tags': [{'name': 'deuxtag', 'pk': 2}]},
+                        'removed': {'excluded_tags': [{'name': 'deuxtag', 'pk': 2}],
+                                    'tags': [{'name': 'untag', 'pk': 1}]}}
+        }
+        event = SantaRuleUpdateEvent(EventMetadata(), event_d)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"santa_configuration": [(1,)],
+             "file": [("sha256", "e699f8aad9c46505531b174f3868ff05de5dddae5d2eef5c3da65a6bac7d2210")]}
+        )
+
+    def test_certificate_rule_update_linked_objects(self):
+        event_d = {
+            'result': 'created',
+            'rule': {
+                'configuration': {'name': 'Default', 'pk': 1},
+                'ruleset': {'name': 'Default', 'pk': 42},
+                'custom_msg': '123',
+                'excluded_tags': [{'name': 'untag', 'pk': 1}],
+                'policy': 'BLOCKLIST',
+                'serial_numbers': ['2345', '456'],
+                'tags': [{'name': 'deuxtag', 'pk': 2}],
+                'target': {'sha256': 'e699f8aad9c46505531b174f3868ff05de5dddae5d2eef5c3da65a6bac7d2210',
+                           'type': 'CERTIFICATE'}
+            }
+        }
+        event = SantaRuleUpdateEvent(EventMetadata(), event_d)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"santa_configuration": [(1,)],
+             "santa_ruleset": [(42,)],
+             "certificate": [("sha256", "e699f8aad9c46505531b174f3868ff05de5dddae5d2eef5c3da65a6bac7d2210")]}
+        )
+
+    def test_ruleset_update_linked_objects(self):
+        event_d = {
+            'configurations': [
+                {'name': 'Default',
+                 'pk': 1,
+                 'rule_results': {'created': 2,
+                                  'deleted': 0,
+                                  'present': 0,
+                                  'updated': 0}},
+                {'name': 'Testing',
+                 'pk': 2,
+                 'rule_results': {'created': 2,
+                                  'deleted': 0,
+                                  'present': 0,
+                                  'updated': 0}}
+            ],
+            'result': 'created',
+            'ruleset': {'name': 'First ruleset test', 'pk': 43}
+        }
+        event = SantaRuleSetUpdateEvent(EventMetadata(), event_d)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"santa_configuration": [(1,), (2,)],
+             "santa_ruleset": [(43,)]}
+        )
