@@ -17,7 +17,6 @@ from django.db import connection, transaction
 from django.http import QueryDict
 from django.urls import reverse
 from django.utils.text import slugify
-from prometheus_client import CollectorRegistry, Gauge
 import xlsxwriter
 from zentral.core.incidents.models import OPEN_STATUSES, SEVERITY_CHOICES
 from zentral.utils.json import save_dead_letter
@@ -1328,23 +1327,6 @@ def os_version_count():
             if k != 'count' and not v:
                 d[k] = '_'
         yield d
-
-
-def get_prometheus_inventory_metrics():
-    registry = CollectorRegistry()
-    g = Gauge('zentral_inventory_osx_apps', 'Zentral inventory OSX apps',
-              ['name', 'version_str', 'source'],
-              registry=registry)
-    for r in osx_app_count():
-        count = r.pop('count')
-        g.labels(**r).set(count)
-    g = Gauge('zentral_inventory_os_versions', 'Zentral inventory OS Versions',
-              ['name', 'major', 'minor', 'patch', 'build', 'source'],
-              registry=registry)
-    for r in os_version_count():
-        count = r.pop('count')
-        g.labels(**r).set(count)
-    return registry
 
 
 def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):

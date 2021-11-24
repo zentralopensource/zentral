@@ -85,6 +85,8 @@
     },
     "zentral.contrib.nagios": {},
     "zentral.contrib.osquery": {},
-    "zentral.contrib.santa": {}
+    "zentral.contrib.santa": {
+       "metrics": true
+    }
   }
 }

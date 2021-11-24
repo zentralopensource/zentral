@@ -1,7 +1,7 @@
 import logging
 from django.http import HttpResponse, HttpResponseForbidden
 from django.views import View
-from prometheus_client import generate_latest, start_http_server, Counter, CONTENT_TYPE_LATEST
+from prometheus_client import generate_latest, start_http_server, CollectorRegistry, Counter, CONTENT_TYPE_LATEST
 from zentral.conf import settings
 
 
@@ -29,16 +29,15 @@ class PrometheusMetricsExporter:
 
 
 class BasePrometheusMetricsView(View):
-    def get_registry(self):
+    def populate_registry(self):
         pass
 
     def get(self, request, *args, **kwargs):
         bearer_token = settings['api'].get('metrics_bearer_token')
         if bearer_token and request.META.get('HTTP_AUTHORIZATION') == "Bearer {}".format(bearer_token):
-            content = ""
-            registry = self.get_registry()
-            if registry is not None:
-                content = generate_latest(registry)
+            self.registry = CollectorRegistry()
+            self.populate_registry()
+            content = generate_latest(self.registry)
             return HttpResponse(content, content_type=CONTENT_TYPE_LATEST)
         else:
             return HttpResponseForbidden()

@@ -1,8 +1,3 @@
-global:
-  scrape_interval: 30s
-  evaluation_interval: 30s
-  scrape_timeout: 10s
-
 scrape_configs:
   - job_name: 'prometheus'
     metrics_path: '/prometheus/metrics'
@@ -17,6 +12,12 @@ scrape_configs:
 
   - job_name: 'zentral_munki'
     metrics_path: '/metrics/munki/'
+    bearer_token: 'CHANGE ME!!!'
+    static_configs:
+      - targets: ['web:8000']
+
+  - job_name: 'zentral_santa'
+    metrics_path: '/metrics/santa/'
     bearer_token: 'CHANGE ME!!!'
     static_configs:
       - targets: ['web:8000']

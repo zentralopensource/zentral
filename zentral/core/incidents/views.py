@@ -4,10 +4,8 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, UpdateView
 from zentral.core.stores import frontend_store, stores
-from zentral.utils.prometheus import BasePrometheusMetricsView
 from .forms import IncidentSearchForm, UpdateIncidentForm, UpdateMachineIncidentForm
 from .models import Incident, MachineIncident
-from .utils import get_prometheus_incidents_metrics
 
 logger = logging.getLogger("zentral.core.incidents.views")
 
@@ -165,8 +163,3 @@ class UpdateMachineIncidentView(PermissionRequiredMixin, UpdateView):
         ctx["incidents"] = True
         ctx["incident"] = ctx["object"].incident
         return ctx
-
-
-class PrometheusMetricsView(BasePrometheusMetricsView):
-    def get_registry(self):
-        return get_prometheus_incidents_metrics()
