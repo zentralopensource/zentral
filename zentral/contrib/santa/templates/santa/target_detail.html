@@ -105,6 +105,21 @@
 
 <h3>{{ rule_count }} Rule{{ rule_count|pluralize }}</h3>
 
+{% if perms.santa.add_rule and add_rule_links %}
+<div class="dropdown" style="margin: 0 0 10px 0">
+  <button class="btn btn-default dropdown-toggle" type="button" id="createRule"
+          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+    Add rule to configuration
+    <span class="caret"></span>
+  </button>
+  <ul class="dropdown-menu" aria-labelledby="createRule">
+    {% for text, url in add_rule_links %}
+    <li><a href="{{ url }}">{{ text }}</a></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 {% if rule_count %}
 <table class="table">
   <thead>

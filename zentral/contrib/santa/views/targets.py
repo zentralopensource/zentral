@@ -1,10 +1,11 @@
 import logging
 import math
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.http import QueryDict
 from django.urls import reverse
 from django.views.generic import TemplateView
 from zentral.contrib.inventory.models import Certificate, File
-from zentral.contrib.santa.models import Bundle, Rule, Target
+from zentral.contrib.santa.models import Bundle, Configuration, Rule, Target
 from zentral.contrib.santa.forms import TargetSearchForm
 
 
@@ -77,9 +78,17 @@ class TargetView(PermissionRequiredMixin, TemplateView):
     permission_required = "santa.view_target"
     template_name = "santa/target_detail.html"
     target_type = None
+    add_rule_link_key = None
 
     def get_objects(self):
         return []
+
+    def get_add_rule_link_qd(self):
+        if not self.objects:
+            return
+        qd = QueryDict(mutable=True)
+        qd[self.add_rule_link_key] = self.objects[0].pk
+        return qd.urlencode()
 
     def get_rules(self):
         return (
@@ -87,21 +96,36 @@ class TargetView(PermissionRequiredMixin, TemplateView):
                         .filter(target__type=self.target_type, target__sha256=self.sha256)
         )
 
+    def get_add_rule_links(self):
+        links = []
+        query_dict = self.get_add_rule_link_qd()
+        if not query_dict:
+            return links
+        for configuration in (Configuration.objects.exclude(rule__target__type=self.target_type,
+                                                            rule__target__sha256=self.sha256)
+                                                   .order_by("name")):
+            links.append((configuration.name,
+                          reverse("santa:create_configuration_rule", args=(configuration.pk,)) + f"?{query_dict}"))
+        return links
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data()
         self.sha256 = kwargs["sha256"]
         ctx["setup"] = True
         ctx["target_type"] = self.target_type
         ctx["sha256"] = self.sha256
-        ctx["objects"] = list(self.get_objects())
-        ctx["object_count"] = len(ctx["objects"])
+        self.objects = self.get_objects()
+        ctx["objects"] = list(self.objects)
+        ctx["object_count"] = len(self.objects)
         ctx["rules"] = list(self.get_rules())
         ctx["rule_count"] = len(ctx["rules"])
+        ctx["add_rule_links"] = self.get_add_rule_links()
         return ctx
 
 
 class BinaryView(TargetView):
     target_type = Target.BINARY
+    add_rule_link_key = "bin"
 
     def get_objects(self):
         return (
@@ -114,6 +138,7 @@ class BinaryView(TargetView):
 
 class BundleView(TargetView):
     target_type = Target.BUNDLE
+    add_rule_link_key = "bun"
 
     def get_objects(self):
         return (
@@ -125,6 +150,7 @@ class BundleView(TargetView):
 
 class CertificateView(TargetView):
     target_type = Target.CERTIFICATE
+    add_rule_link_key = "cert"
 
     def get_objects(self):
         return (
