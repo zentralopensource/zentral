@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from rest_framework import status
 from rest_framework.authtoken.models import Token
 import yaml
 from accounts.models import User
@@ -485,3 +486,22 @@ class APIViewsTestCase(TestCase):
             json_response,
             {"rules": {"0": {"non_field_errors": ["Conflict between tags and excluded_tags"]}}}
         )
+
+    # targets export
+
+    def test_targets_export_unauthorized(self):
+        response = self.client.post(reverse("santa_api:targets_export"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_targets_export_permission_denied(self):
+        response = self.client.post(reverse("santa_api:targets_export"),
+                                    HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}")
+        self.assertEqual(response.status_code, 403)
+
+    def test_targets_export(self):
+        self.set_permissions("santa.view_target")
+        response = self.client.post(reverse("santa_api:targets_export"),
+                                    HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("task_id", response.data)
+        self.assertIn("task_result_url", response.data)

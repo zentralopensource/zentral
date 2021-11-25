@@ -384,10 +384,10 @@ class TargetManager(models.Manager):
             summary["total"] += target_count
         return summary
 
-    def search(self, q=None, target_type=None, offset=0, limit=10):
+    def search_query(self, q=None, target_type=None):
         if not target_type:
             target_type = None
-        kwargs = {"offset": offset, "limit": limit}
+        kwargs = {}
         if q:
             kwargs["q"] = "%{}%".format(connection.ops.prep_for_like_query(q))
             bi_where = "where upper(name) like upper(%(q)s) or upper(sha256) like upper(%(q)s)"
@@ -443,16 +443,20 @@ class TargetManager(models.Manager):
             "  where s.module='zentral.contrib.santa' and s.name = 'Santa events'"
             "  group by f.sha_256, f.signed_by_id, f.name"
             f"), targets as ({targets_query}) "
-            "select *, count(*) over() as full_count,"
+            "select target_type, sha256, object, count(*) over() as full_count,"
             "(select count(*) from santa_rule as r"
             " join santa_target as t on (r.target_id = t.id)"
             " where t.type = ts.target_type and t.sha256 = ts.sha256) as rule_count "
             "from targets as ts "
             "order by sort_str, sha256 "
-            "offset %(offset)s limit %(limit)s"
         )
+        return query, kwargs
+
+    def search(self, q=None, target_type=None, offset=0, limit=10):
+        query, kwargs = self.search_query(q, target_type)
+        kwargs.update({"offset": offset, "limit": limit})
         cursor = connection.cursor()
-        cursor.execute(query, kwargs)
+        cursor.execute(f"{query} offset %(offset)s limit %(limit)s", kwargs)
         columns = [col[0] for col in cursor.description]
         results = []
         for row in cursor.fetchall():

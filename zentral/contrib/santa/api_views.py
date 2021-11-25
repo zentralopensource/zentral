@@ -1,5 +1,9 @@
 from django.db import transaction
 from django.db.models import F
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -10,6 +14,7 @@ from zentral.utils.drf import DjangoPermissionRequired
 from .events import post_santa_ruleset_update_events
 from .models import Rule, RuleSet, Target, translate_rule_policy
 from .serializers import RuleSetUpdateSerializer, build_file_tree_from_santa_fileinfo
+from .tasks import export_targets
 
 
 class IngestFileInfo(APIView):
@@ -232,3 +237,29 @@ class RuleSetUpdate(APIView):
             lambda: post_santa_ruleset_update_events(request, ruleset_update_event, rule_update_events)
         )
         return Response(ruleset_update_event)
+
+
+class TargetsExport(APIView):
+    permission_required = "santa.view_target"
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        query = request.GET.get("q")
+        if query:
+            query = query.strip()
+        else:
+            query = None
+        target_type = request.GET.get("target_type")
+        if target_type:
+            if target_type not in (Target.BINARY, Target.BUNDLE, Target.CERTIFICATE):
+                raise ValidationError("Unknown target type")
+        else:
+            target_type = None
+        export_format = request.GET.get("export_format", "xlsx")
+        if export_format not in ("xlsx", "zip"):
+            raise ValidationError("Unknown export format")
+        filename = f"santa_targets_export_{timezone.now():%Y-%m-%d_%H-%M-%S}.{export_format}"
+        result = export_targets.apply_async((query, target_type, filename))
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)

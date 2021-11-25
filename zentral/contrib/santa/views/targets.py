@@ -1,6 +1,7 @@
 import logging
 import math
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.urls import reverse
 from django.views.generic import TemplateView
 from zentral.contrib.santa.models import Target
 from zentral.contrib.santa.forms import TargetSearchForm
@@ -45,6 +46,16 @@ class TargetsView(PermissionRequiredMixin, TemplateView):
         except IndexError:
             total = 0
         ctx["target_count"] = total
+
+        # export links
+        ctx['export_links'] = []
+        for fmt in ("xlsx", "zip"):
+            qd = self.request.GET.copy()
+            qd.pop("page", None)
+            qd["export_format"] = fmt
+            ctx['export_links'].append((
+                fmt, f'{reverse("santa_api:targets_export")}?{qd.urlencode()}'
+            ))
 
         # pagination
         ctx["page_num"] = page
