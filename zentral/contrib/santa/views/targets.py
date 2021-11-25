@@ -1,12 +1,15 @@
 import logging
 import math
+from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
-from django.http import QueryDict
 from django.urls import reverse
 from django.views.generic import TemplateView
 from zentral.contrib.inventory.models import Certificate, File
 from zentral.contrib.santa.models import Bundle, Configuration, Rule, Target
 from zentral.contrib.santa.forms import TargetSearchForm
+from zentral.core.events.utils import encode_args
+from zentral.core.stores import stores
+from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 
 
 logger = logging.getLogger('zentral.contrib.santa.views.targets')
@@ -86,9 +89,7 @@ class TargetView(PermissionRequiredMixin, TemplateView):
     def get_add_rule_link_qd(self):
         if not self.objects:
             return
-        qd = QueryDict(mutable=True)
-        qd[self.add_rule_link_key] = self.objects[0].pk
-        return qd.urlencode()
+        return urlencode({self.add_rule_link_key: self.objects[0].pk})
 
     def get_rules(self):
         return (
@@ -114,12 +115,30 @@ class TargetView(PermissionRequiredMixin, TemplateView):
         ctx["setup"] = True
         ctx["target_type"] = self.target_type
         ctx["sha256"] = self.sha256
+
+        # objects
         self.objects = self.get_objects()
         ctx["objects"] = list(self.objects)
         ctx["object_count"] = len(self.objects)
+
+        # rules
         ctx["rules"] = list(self.get_rules())
         ctx["rule_count"] = len(ctx["rules"])
         ctx["add_rule_links"] = self.get_add_rule_links()
+
+        # events
+        if self.request.user.has_perms(EventsMixin.permission_required):
+            ctx["events_url"] = reverse(f"santa:{self.target_type.lower()}_events", args=(self.sha256,))
+            store_links = []
+            for store in stores.iter_events_url_store_for_user("object", self.request.user):
+                url = "{}?{}".format(
+                    reverse(f"santa:{self.target_type.lower()}_events_store_redirect", args=(self.sha256,)),
+                    urlencode({"es": store.name,
+                               "tr": EventsView.default_time_range})
+                )
+                store_links.append((url, store.name))
+            ctx["store_links"] = store_links
+
         return ctx
 
 
@@ -157,3 +176,82 @@ class CertificateView(TargetView):
             Certificate.objects.select_related("signed_by")
                                .filter(sha_256=self.sha256)
         )
+
+
+class EventsMixin:
+    permission_required = "santa.view_target"
+    store_method_scope = "object"
+    target_type = None
+    object_key = None
+
+    def get_object(self, **kwargs):
+        self.sha256 = kwargs["sha256"]
+        return None
+
+    def get_fetch_kwargs_extra(self):
+        return {"key": self.object_key, "val": encode_args(("sha256", self.sha256))}
+
+    def get_fetch_url(self):
+        return reverse(f"santa:fetch_{self.target_type.lower()}_events", args=(self.sha256,))
+
+    def get_redirect_url(self):
+        return reverse(f"santa:{self.target_type.lower()}_events", args=(self.sha256,))
+
+    def get_store_redirect_url(self):
+        return reverse(f"santa:{self.target_type.lower()}_events_store_redirect", args=(self.sha256,))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["target_type"] = self.target_type
+        ctx["sha256"] = self.sha256
+        ctx["target_url"] = reverse(f"santa:{self.target_type.lower()}", args=(self.sha256,))
+        return ctx
+
+
+class BinaryEventsView(EventsMixin, EventsView):
+    template_name = "santa/target_events.html"
+    target_type = Target.BINARY
+    object_key = "file"
+
+
+class FetchBinaryEventsView(EventsMixin, FetchEventsView):
+    target_type = Target.BINARY
+    object_key = "file"
+
+
+class BinaryEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    target_type = Target.BINARY
+    object_key = "file"
+
+
+class BundleEventsView(EventsMixin, EventsView):
+    template_name = "santa/target_events.html"
+    target_type = Target.BUNDLE
+    object_key = "bundle"
+
+
+class FetchBundleEventsView(EventsMixin, FetchEventsView):
+    target_type = Target.BUNDLE
+    object_key = "bundle"
+
+
+class BundleEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    target_type = Target.BUNDLE
+    object_key = "bundle"
+
+
+class CertificateEventsView(EventsMixin, EventsView):
+    template_name = "santa/target_events.html"
+    target_type = Target.CERTIFICATE
+    object_key = "certificate"
+
+
+class FetchCertificateEventsView(EventsMixin, FetchEventsView):
+    target_type = Target.CERTIFICATE
+    object_key = "certificate"
+
+
+class CertificateEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    target_type = Target.CERTIFICATE
+    object_key = "certificate"

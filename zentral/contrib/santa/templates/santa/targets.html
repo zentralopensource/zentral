@@ -20,7 +20,6 @@
 
 <h3>{{ target_count }} Target{{ target_count|pluralize }}</h3>
 
-
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
     <div class="form-group">
       {{ form.q|bootstrap_inline }}
@@ -69,7 +68,7 @@
     <tr>
       <td><a href="{{ target.url }}">{{ target.target_type|title }}</a></td>
       <td>
-        <code>{{ target.sha256 }}</code>
+        <a href="{{ target.url }}"><code>{{ target.sha256 }}</code></a>
         {% if target.target_type == "BINARY" %}
         <br>{{ obj.name }}
         {% if obj.cert_sha256 %}

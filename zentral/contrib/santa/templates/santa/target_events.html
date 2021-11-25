@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li><a href="{% url 'santa:targets' %}">Targets</a></li>
+  <li><a href="{{ target_url }}">{{ target_type|title }}</a></li>
+  <li class="active">Events</a></li>
+</ol>
+
+<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
+  <h3 style="margin:-10px 0 10px 0">
+    {{ target_type|title }} - Events
+  </h3>
+  <table class="table table-condensed">
+    <tbody>
+      <tr>
+        <td>sha256</td>
+        <td><code>{{ sha256 }}</code></td>
+      </tr>
+    </tbody>
+  </table>
+  {% include "core/stores/events_form.html" %}
+</div>
+
+{% include "core/stores/events_table.html" %}
+
+{% endblock %}
+
+{% block extrajs %}
+{% include "core/stores/events_script.html" %}
+{% endblock %}

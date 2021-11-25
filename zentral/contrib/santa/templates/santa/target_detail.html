@@ -103,6 +103,21 @@
   </tbody>
 </table>
 
+{% if events_url or store_links %}
+<div class="btn-group" role="group" style="margin:0 0 10px 0">
+  {% if events_url %}
+  <a class="btn btn-default" href="{{ events_url }}">
+    <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
+  </a>
+  {% endif %}
+  {% for link, anchor_text in store_links  %}
+  <a class="btn btn-default" href="{{ link }}">
+    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
 <h3>{{ rule_count }} Rule{{ rule_count|pluralize }}</h3>
 
 {% if perms.santa.add_rule and add_rule_links %}
