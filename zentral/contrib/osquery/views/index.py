@@ -9,7 +9,6 @@ logger = logging.getLogger('zentral.contrib.osquery.views.index')
 
 
 class IndexView(LoginRequiredMixin, TemplateView):
-    model = Configuration
     template_name = "osquery/index.html"
 
     def get_context_data(self, **kwargs):
