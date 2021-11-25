@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% load base_extras bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li><a href="{% url 'santa:targets' %}">Targets</a></li>
+  <li class="active">{{ target_type|title }}</li>
+</ol>
+
+<h3>{{ target_type|title }}</h3>
+
+<table class="table table-condensed">
+  <tbody>
+    <tr>
+      <td>sha256</td>
+      <td><code>{{ sha256 }}</code></td>
+    </tr>
+    {% for obj in objects %}
+    {% if target_type == "BINARY" %}
+    <tr>
+      <td>name</td>
+      <td>{{ obj.name }}</td>
+    </tr>
+    <tr>
+      <td>path</td>
+      <td>{{ obj.path|truncatechars_middle:80 }}</td>
+    </tr>
+    {% if obj.bundle %}
+    {% with obj.bundle as bundle %}
+    <tr>
+      <td>bundle id</td>
+      <td>
+        {{ bundle.bundle_id }}
+      </td>
+    </tr>
+    <tr>
+      <td>bundle name</td>
+      <td>{{ bundle.bundle_name }}</td>
+    </tr>
+    <tr>
+      <td>bundle path</td>
+      <td>
+        {{ bundle.bundle_path|default:"-"|truncatechars_middle:80 }}
+      </td>
+    </tr>
+    <tr>
+      <td>bundle version</td>
+      <td>
+        {{ bundle.bundle_version_str|default:"-" }}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endif %}
+    <tr>
+      <td>signed by</td>
+      <td>
+        {% if obj.signed_by %}
+        <a href="{% url 'santa:certificate' obj.signed_by.sha_256 %}">
+          <code>{{ obj.signed_by.sha_256 }}</code>
+        </a>
+        <br>{{ obj.signed_by.common_name }} / {{ obj.signed_by.organizational_unit }}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    {% endif %}
+    {% if target_type == "BUNDLE" %}
+    <tr>
+      <td>id</td>
+      <td>{{ obj.bundle_id|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>name</td>
+      <td>{{ obj.name|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>version</td>
+      <td>{{ obj.version|default:"-" }} / {{ obj.version_str|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>binary count</td>
+      <td>{{ obj.binary_count }}</td>
+    </tr>
+    {% endif %}
+    {% if target_type == "CERTIFICATE" %}
+    <tr>
+      <td>cn</td>
+      <td>{{ obj.common_name }}</td>
+    </tr>
+    <tr>
+      <td>ou</td>
+      <td>{{ obj.organizational_unit }}</td>
+    </tr>
+    <tr>
+      <td>validity</td>
+      <td>{{ obj.valid_from|date:"Y-m-d" }} → {{ obj.valid_until|date:"Y-m-d" }}</td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3>{{ rule_count }} Rule{{ rule_count|pluralize }}</h3>
+
+{% if rule_count %}
+<table class="table">
+  <thead>
+    <th>Configuration</th>
+    <th>Ruleset</th>
+    <th>Policy</th>
+  </thead>
+  <tbody>
+    {% for rule in rules %}
+    <tr>
+      <td>
+        {% if perms.santa.view_rule %}
+        <a href="{{ rule.get_absolute_url }}">{{ rule.configuration }}</a>
+        {% else %}
+        {{ rule.configuration }}
+        {% endif %}
+      </td>
+      <td>{{ rule.ruleset|default:"-" }}</td>
+      <td>
+        <span class="label label-{% if rule.is_blocking_rule %}danger{% else %}success{% endif %}">
+          {{ rule.get_policy_display }}
+        </span>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

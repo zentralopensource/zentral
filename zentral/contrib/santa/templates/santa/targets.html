@@ -67,7 +67,7 @@
     {% for target in targets %}
     {% with target.object as obj %}
     <tr>
-      <td><a href="">{{ target.target_type|title }}</a></td>
+      <td><a href="{{ target.url }}">{{ target.target_type|title }}</a></td>
       <td>
         <code>{{ target.sha256 }}</code>
         {% if target.target_type == "BINARY" %}

@@ -3,6 +3,7 @@ from importlib import import_module
 import logging
 import pprint
 from django import template
+from django.template.defaultfilters import stringfilter
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
@@ -161,3 +162,17 @@ def maybetimestamp(val):
         if abs(now - dt) < timedelta(days=5*366):
             return dt
     return val
+
+
+# see https://stackoverflow.com/a/57022261
+@register.filter(is_safe=True)
+@stringfilter
+def truncatechars_middle(value, arg):
+    try:
+        ln = int(arg)
+    except ValueError:
+        return value
+    if len(value) <= ln:
+        return value
+    else:
+        return '{}[…]{}'.format(value[:ln//2], value[-((ln+1)//2):])

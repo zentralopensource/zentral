@@ -64,6 +64,9 @@ urlpatterns = [
 
     # targets
     path('targets/', views.TargetsView.as_view(), name="targets"),
+    path('targets/binaries/<str:sha256>/', views.BinaryView.as_view(), name="binary"),
+    path('targets/bundles/<str:sha256>/', views.BundleView.as_view(), name="bundle"),
+    path('targets/certificates/<str:sha256>/', views.CertificateView.as_view(), name="certificate"),
 
     # API
     path('sync/<str:enrollment_secret>/preflight/<str:machine_id>',

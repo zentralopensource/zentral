@@ -465,6 +465,8 @@ class TargetManager(models.Manager):
             for attr in ("valid_from", "valid_until"):
                 if attr in obj:
                     obj[attr] = parser.parse(obj[attr])
+            url_name = result["target_type"].lower()
+            result["url"] = reverse(f"santa:{url_name}", args=(result["sha256"],))
             results.append(result)
         return results
 
@@ -485,6 +487,9 @@ class Target(models.Model):
 
     class Meta:
         unique_together = (("type", "sha256"),)
+
+    def get_absolute_url(self):
+        return reverse(f"santa:{self.type.lower()}", args=(self.sha256,))
 
     @cached_property
     def files(self):
@@ -539,6 +544,9 @@ class Bundle(models.Model):
 
     def __str__(self):
         return f"{self.bundle_id} {self.version_str}"
+
+    def get_absolute_url(self):
+        return reverse("santa:bundle", args=(self.target.sha256,))
 
 
 class RuleSet(models.Model):
@@ -609,7 +617,7 @@ class Rule(models.Model):
         return self.policy in (self.BLOCKLIST, self.SILENT_BLOCKLIST)
 
     def get_absolute_url(self):
-        return reverse("santa:configuration_rules", args=(self.configuration_id,))
+        return reverse("santa:configuration_rules", args=(self.configuration_id,)) + f"#rule-{self.pk}"
 
     def serialize_for_event(self):
         d = {

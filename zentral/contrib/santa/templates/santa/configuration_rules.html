@@ -77,7 +77,7 @@
 
 {% for rule in page_obj %}
 {% with rule.target as target %}
-<div class="panel panel-default">
+<div class="panel panel-default" id="rule-{{ rule.pk }}">
   <table class="table table-condensed probe-panel">
     <tr>
       <td style="width:15%">Policy</td>
@@ -90,7 +90,11 @@
     <tr>
       <td>{{ target.get_type_display }}</td>
       <td>
-        {{ target.sha256 }}
+        {% if perms.santa.view_target %}
+        <a href="{{ target.get_absolute_url }}"><code>{{ target.sha256 }}</code></a>
+        {% else %}
+        <code>{{ target.sha256 }}</code>
+        {% endif %}
         {% if target.type == "BINARY" %}
         {% for file in target.files %}
         <dl class="dl-horizontal">
