@@ -4,10 +4,11 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li class="active">{{ configurations_count }} Santa configuration{{ configurations_count|pluralize }}</li>
+  <li><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="active">Configurations</li>
 </ol>
 
-<h2>{{ configurations_count }} Santa configuration{{ configurations_count|pluralize }}</h2>
+<h3>{{ configuration_count }} Configuration{{ configuration_count|pluralize }}</h3>
 
 {% if perms.santa.add_configuration %}
 <p>
@@ -19,25 +20,17 @@
   <thead>
     <tr>
       <th>Name</th>
-      {% if perms.santa.change_configuration %}
-      <th></th>
-      {% endif %}
-    </tr>
+      <th>Rules</th>
+      <th>Enrollments</th>
+      <th>Machines</th>
   </thead>
   <tbody>
-    {% for configuration in object_list %}
+    {% for configuration in configurations %}
     <tr>
-      <td>
-        <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
-      </td>
-      {% if perms.santa.change_configuration %}
-      <td>
-        <a class="btn btn-default" href="{% url 'santa:update_configuration' configuration.id %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-          Update
-        </a>
-      </td>
-      {% endif %}
+      <td><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration.name }}</a></td>
+      <td>{{ configuration.rule_count }}</td>
+      <td>{{ configuration.enrollment_count }}</td>
+      <td>{{ configuration.machine_count }}</td>
     </tr>
     {% endfor %}
   </tbody>

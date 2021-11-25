@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Santa</li>
+</ol>
+
+<div class="row">
+  <div class="col-md-12">
+    <h2>Santa</h2>
+  </div>
+  <div class="col-sm-6">
+    <canvas class="chart"
+            data-app="santa"
+            data-dataset="event_count"
+            width="200"
+            height="120"></canvas>
+  </div>
+  <div class="col-sm-6">
+    <canvas class="chart"
+            data-app="santa"
+            data-dataset="unique_msn"
+            width="200"
+            height="120"></canvas>
+  </div>
+  <div class="col-md-12">
+    {% if perms.santa.view_configuration %}
+    <h3>{{ configuration_count }} Configuration{{ configuration_count|pluralize }}</h3>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Rules</th>
+          <th>Enrollments</th>
+          <th>Machines</th>
+      </thead>
+      <tbody>
+        {% for configuration in configurations %}
+        <tr>
+          <td><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration.name }}</a></td>
+          <td>{{ configuration.rule_count }}</td>
+          <td>{{ configuration.enrollment_count }}</td>
+          <td>{{ configuration.machine_count }}</td>
+        </tr>
+        {% empty %}
+        <p>No configuration.{% if perms.santa.add_configuration %} <a href="{% url 'santa:create_configuration' %}" class="btn btn-default">Create a configuration</a>{% endif %}</p>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% if perms.santa.view_target %}
+    <h3>{{ targets.total }} Collected target{{ targets.total|pluralize }}</h3>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Count</th>
+          <th>Rules</th>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a href="{% url "santa:targets" %}?target_type=BINARY">Binary</a></td>
+          <td>{{ targets.binary.count }}</td>
+          <td>{{ targets.binary.rule_count }}</td>
+        </tr>
+        <tr>
+          <td><a href="{% url "santa:targets" %}?target_type=CERTIFICATE">Certificate</a></td>
+          <td>{{ targets.certificate.count }}</td>
+          <td>{{ targets.certificate.rule_count }}</td>
+        </tr>
+        <tr>
+          <td><a href="{% url "santa:targets" %}?target_type=BUNDLE">Bundle</a></td>
+          <td>{{ targets.bundle.count }}</td>
+          <td>{{ targets.bundle.rule_count }}</td>
+        </tr>
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function get_data_and_make_chart(url, charts) {
+    $.getJSON(url, function(data) {
+      for (var dataset in data.datasets) {
+        if (data.datasets.hasOwnProperty(dataset)) {
+          var canvas = charts[data.app][dataset];
+          var chart = new Chart(canvas, {
+            type: 'bar',
+            data: {labels: data.labels,
+                   datasets: [data.datasets[dataset]]},
+            options: {}
+          });
+        }
+      }
+    });
+  }
+
+  $(document).ready(function(){
+    var charts = {};
+    var urls = Array();
+    $(".chart").each(function(index, canvas) {
+      canvas = $(canvas);
+      var app = canvas.data('app');
+      var dataset = canvas.data('dataset');
+      if(! charts.hasOwnProperty(app)) {
+        charts[app] = {};
+        urls.push('/app/' + app + '/hist_data/day/14/');
+      }
+      charts[app][dataset] = canvas;
+    });
+    for (var idx in urls) {
+      if (urls.hasOwnProperty(idx)) {
+        get_data_and_make_chart(urls[idx], charts);
+      }
+    }
+  });
+</script>
+{% endblock %}

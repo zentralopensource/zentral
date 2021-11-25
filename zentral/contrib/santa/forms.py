@@ -372,3 +372,11 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
             transaction.on_commit(lambda: post_santa_rule_update_event(request, rule_update_data))
 
         return self.instance
+
+
+class TargetSearchForm(forms.Form):
+    q = forms.CharField(required=False,
+                        widget=forms.TextInput(attrs={"autofocus": "true",
+                                                      "size": 32,
+                                                      "placeholder": "sha256, name, …"}))
+    target_type = forms.ChoiceField(choices=(("", "----"),) + Target.TYPE_CHOICES, required=False)

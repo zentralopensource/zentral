@@ -4,7 +4,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'santa:configuration_list' %}">Santa configurations</a></li>
+  <li><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
   {% if object %}
   <li><a href="{% url 'santa:configuration' object.pk %}">{{ object }}</a></li>
   <li class="active">Update</li>

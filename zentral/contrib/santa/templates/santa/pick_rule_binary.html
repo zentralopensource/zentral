@@ -4,7 +4,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'santa:configuration_list' %}">Santa configurations</a></li>
+  <li><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
   <li><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
   <li><a href="{% url 'santa:configuration_rules' configuration.pk %}">rules</a></li>
   <li class="active">Pick Santa rule binary</li>

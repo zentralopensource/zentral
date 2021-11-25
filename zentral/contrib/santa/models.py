@@ -1,4 +1,5 @@
 import logging
+from dateutil import parser
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.contrib.postgres.fields import ArrayField
 from django.db import connection, models
@@ -13,6 +14,24 @@ logger = logging.getLogger("zentral.contrib.santa.models")
 
 
 # Configuration / Enrollment
+
+
+class ConfigurationManager(models.Manager):
+    def summary(self):
+        query = (
+            "select c.id as pk, c.name, c.created_at,"
+            "(select count(*) from santa_enrollment where configuration_id = c.id) as enrollment_count,"
+            "(select count(*) from santa_enrolledmachine as m "
+            " join santa_enrollment as e on (m.enrollment_id = e.id) "
+            " where e.configuration_id = c.id) as machine_count,"
+            "(select count(*) from santa_rule where configuration_id = c.id) as rule_count "
+            "from santa_configuration as c "
+            "order by c.name, c.created_at"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query)
+        columns = [c.name for c in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
 class Configuration(models.Model):
@@ -207,6 +226,8 @@ class Configuration(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = ConfigurationManager()
+
     def __str__(self):
         return self.name
 
@@ -318,6 +339,132 @@ class EnrolledMachine(models.Model):
 # Rules
 
 
+class TargetManager(models.Manager):
+    def summary(self):
+        query = (
+            "with collected_files as ("
+            "  select f.sha_256, f.signed_by_id, f.name"
+            "  from inventory_file as f"
+            "  join inventory_source as s on (f.source_id = s.id)"
+            "  where s.module = 'zentral.contrib.santa' and s.name = 'Santa events'"
+            "  group by f.sha_256, f.signed_by_id, f.name"
+            "), collected_certificates as ("
+            "  select distinct c.sha_256"
+            "  from inventory_certificate as c"
+            "  join collected_files as f on (c.id = f.signed_by_id)"
+            ") "
+            "select 'binary' as target_type,"
+            "count(*) as target_count,"
+            "(select count(distinct t.id)"
+            " from santa_target as t"
+            " join collected_files as f on (t.type = 'BINARY' and t.sha256=f.sha_256)"
+            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
+            "from collected_files "
+            "union "
+            "select 'certificate' as target_type,"
+            "count(*) as target_count,"
+            "(select count(distinct t.id)"
+            " from santa_target as t"
+            " join collected_certificates as c on (t.type = 'CERTIFICATE' and t.sha256=c.sha_256)"
+            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
+            "from collected_certificates "
+            "union "
+            "select 'bundle' as target_type,"
+            "count(*) as target_count,"
+            "(select count(distinct b.id)"
+            " from santa_bundle as b"
+            " join santa_rule as r on (b.target_id = r.target_id)) as rule_count "
+            "from santa_bundle"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query)
+        summary = {"total": 0}
+        for target_type, target_count, rule_count in cursor.fetchall():
+            summary[target_type.lower()] = {"count": target_count, "rule_count": rule_count}
+            summary["total"] += target_count
+        return summary
+
+    def search(self, q=None, target_type=None, offset=0, limit=10):
+        if not target_type:
+            target_type = None
+        kwargs = {"offset": offset, "limit": limit}
+        if q:
+            kwargs["q"] = "%{}%".format(connection.ops.prep_for_like_query(q))
+            bi_where = "where upper(name) like upper(%(q)s) or upper(sha256) like upper(%(q)s)"
+            ce_where = ("where upper(c.common_name) like upper(%(q)s) "
+                        "or upper(c.organizational_unit) like upper(%(q)s) "
+                        "or upper(c.sha_256) like upper(%(q)s)")
+            bu_where = "where upper(name) like upper(%(q)s) or upper(sha256) like upper(%(q)s)"
+        else:
+            bi_where = ce_where = bu_where = ""
+        targets_subqueries = {
+            "BINARY":
+                "select 'BINARY' as target_type,  f.sha256, f.name as sort_str,"
+                "jsonb_build_object("
+                " 'name', f.name,"
+                " 'cert_cn', c.common_name,"
+                " 'cert_sha256', c.sha_256,"
+                " 'cert_ou', c.organizational_unit"
+                ") as object "
+                "from collected_files as f "
+                "left join inventory_certificate as c on (f.signed_by_id = c.id) "
+                f"{bi_where}"
+                "group by target_type, f.sha256, f.name, c.common_name, c.sha_256, c.organizational_unit",
+            "CERTIFICATE":
+                "select 'CERTIFICATE' as target_type, c.sha_256 as sha256, c.common_name as sort_str,"
+                "jsonb_build_object("
+                " 'cn', c.common_name,"
+                " 'ou', c.organizational_unit,"
+                " 'valid_from', c.valid_from,"
+                " 'valid_until', c.valid_until"
+                ") as object "
+                "from inventory_certificate as c "
+                "join collected_files as f on (c.id = f.signed_by_id) "
+                f"{ce_where}"
+                "group by target_type, c.sha_256, c.common_name, c.organizational_unit, c.valid_from, c.valid_until",
+            "BUNDLE":
+                "select 'BUNDLE' as target_type, t.sha256, b.name as sort_str,"
+                "jsonb_build_object("
+                " 'name', b.name,"
+                " 'version', b.version,"
+                " 'version_str', b.version_str"
+                ") as object "
+                "from santa_bundle as b "
+                "join santa_target as t on (b.target_id = t.id) "
+                f"{bu_where}"
+        }
+        targets_query = " union ".join(v for k, v in targets_subqueries.items()
+                                       if target_type is None or k == target_type)
+        query = (
+            "with collected_files as ("
+            "  select f.sha_256 as sha256, f.signed_by_id, f.name"
+            "  from inventory_file as f"
+            "  join inventory_source as s on (f.source_id = s.id)"
+            "  where s.module='zentral.contrib.santa' and s.name = 'Santa events'"
+            "  group by f.sha_256, f.signed_by_id, f.name"
+            f"), targets as ({targets_query}) "
+            "select *, count(*) over() as full_count,"
+            "(select count(*) from santa_rule as r"
+            " join santa_target as t on (r.target_id = t.id)"
+            " where t.type = ts.target_type and t.sha256 = ts.sha256) as rule_count "
+            "from targets as ts "
+            "order by sort_str, sha256 "
+            "offset %(offset)s limit %(limit)s"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, kwargs)
+        columns = [col[0] for col in cursor.description]
+        results = []
+        for row in cursor.fetchall():
+            result = dict(zip(columns, row))
+            obj = result["object"]
+            for attr in ("valid_from", "valid_until"):
+                if attr in obj:
+                    obj[attr] = parser.parse(obj[attr])
+            results.append(result)
+        return results
+
+
 class Target(models.Model):
     BINARY = "BINARY"
     BUNDLE = "BUNDLE"
@@ -329,6 +476,8 @@ class Target(models.Model):
     )
     type = models.CharField(choices=TYPE_CHOICES, max_length=16)
     sha256 = models.CharField(max_length=64)
+
+    objects = TargetManager()
 
     class Meta:
         unique_together = (("type", "sha256"),)

@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'santa:index' %}">Santa</a></li>
+  {% if form.has_changed %}
+  <li><a href="{% url 'santa:targets' %}">Targets</a></li>
+  {% if reset_link %}
+  <li><a href="{{ reset_link }}">Search</a></li>
+  {% else %}
+  <li class="active">Search</li>
+  {% endif %}
+  {% else %}
+  <li class="active">Targets</li>
+  {% endif %}
+  <li class="active">page {{ page_num }} of {{ num_pages }}</li>
+</ol>
+
+<h3>{{ target_count }} Target{{ target_count|pluralize }}</h3>
+
+
+<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
+    <div class="form-group">
+      {{ form.q|bootstrap_inline }}
+    </div>
+    <div class="form-group">
+      {{ form.target_type.label_tag }}
+      {{ form.target_type|bootstrap_inline }}
+    </div>
+    <button type="submit" name="search" class="btn btn-default">Search</button>
+    <button type="submit" name="export" class="btn btn-default">Export</button>
+</form>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Object</th>
+      <th>Rules</th>
+  </thead>
+  <tbody>
+    {% for target in targets %}
+    {% with target.object as obj %}
+    <tr>
+      <td><a href="">{{ target.target_type|title }}</a></td>
+      <td>
+        <code>{{ target.sha256 }}</code>
+        {% if target.target_type == "BINARY" %}
+        <br>{{ obj.name }}
+        {% if obj.cert_sha256 %}
+        <br><strong>signed by:</strong> {{ obj.cert_cn }} / {{ obj.cert_ou }}
+        {% endif %}
+        {% endif %}
+        {% if target.target_type == "BUNDLE" %}
+        <br>{{ obj.name }}
+        <br>{{ obj.version|default:"-" }} / {{ obj.version_str|default:"-" }}
+        {% endif %}
+        {% if target.target_type == "CERTIFICATE" %}
+        <br>{{ obj.cn }}
+        <br>{{ obj.ou }}
+        <br>{{ obj.valid_from|date:"Y-m-d" }} → {{ obj.valid_until|date:"Y-m-d" }}
+        {% endif %}
+      </td>
+      <td>{{ target.rule_count }}</td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}
