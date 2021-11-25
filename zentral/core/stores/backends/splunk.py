@@ -84,6 +84,8 @@ class EventStore(BaseEventStore):
         if not isinstance(event, dict):
             event = event.serialize()
         payload_event = event.pop("_zentral")
+        # index is a reserved Splunk field
+        payload_event["id"] = f'{payload_event["id"]}:{payload_event.pop("index")}'
         created_at = payload_event.pop("created_at")
         event_type = payload_event.pop("type")
         namespace = payload_event.get("namespace", event_type)
@@ -117,6 +119,13 @@ class EventStore(BaseEventStore):
 
     def _deserialize_event(self, result):
         metadata = json.loads(result["_raw"])
+        # extract id and index from the id field
+        try:
+            metadata["id"], index = metadata["id"].split(":")
+            metadata["index"] = int(index)
+        except ValueError:
+            # legacy event?
+            pass
         # normalize serial number
         if self.serial_number_field in metadata:
             metadata["machine_serial_number"] = metadata.pop(self.serial_number_field)
