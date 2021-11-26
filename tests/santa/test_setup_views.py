@@ -22,8 +22,7 @@ class SantaSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.pwd = "godzillapwd"
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", cls.pwd)
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
         cls.group = Group.objects.create(name=get_random_string())
         cls.user.groups.set([cls.group])
         # file tree
@@ -93,7 +92,52 @@ class SantaSetupViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_configuration(self):
-        return Configuration.objects.create(name=get_random_string())
+        return Configuration.objects.create(name=get_random_string(), enable_sysx_cache=True)
+
+    def _force_bundle(self):
+        bundle_target = Target.objects.create(type=Target.BUNDLE, sha256=get_random_sha256())
+        return Bundle.objects.create(
+            target=bundle_target,
+            executable_rel_path=get_random_string(),
+            bundle_id=self.file.bundle.bundle_id,
+            name=self.file_bundle_name,
+            version=self.file.bundle.bundle_version,
+            version_str=self.file.bundle.bundle_version_str,
+            binary_count=1
+        )
+
+    # index
+
+    def test_index_redirect(self):
+        self._login_redirect(reverse("santa:index"))
+
+    def test_index_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:index"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_index(self):
+        configuration = self._force_configuration()
+
+        self._login("santa.view_configuration")
+        response = self.client.get(reverse("santa:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed("santa/overview.html")
+        # 1 configuration
+        self.assertContains(response, "1 Configuration")
+        self.assertContains(response, configuration.name)
+        # no perms, no targets
+        self.assertNotContains(response, "2 Collected targets")
+
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed("santa/overview.html")
+        # no perms, no configuration
+        self.assertNotContains(response, "1 Configuration")
+        self.assertNotContains(response, configuration.name)
+        # 1 binary, 1 certificate
+        self.assertContains(response, "2 Collected targets")
 
     # configurations
 
@@ -188,7 +232,8 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "santa/configuration_form.html")
         self.assertContains(response, "Santa configuration")
 
-    def create_configuration(self):
+    def test_post_create_configuration_view(self):
+        self._login("santa.add_configuration", "santa.view_configuration")
         response = self.client.post(reverse("santa:create_configuration"),
                                     {"name": get_random_string(64),
                                      "batch_size": 50,
@@ -203,11 +248,6 @@ class SantaSetupViewsTestCase(TestCase):
                                      "allow_unknown_shard": 87,
                                      }, follow=True)
         configuration = response.context["object"]
-        return response, configuration
-
-    def test_post_create_configuration_view(self):
-        self._login("santa.add_configuration", "santa.view_configuration")
-        response, configuration = self.create_configuration()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(configuration.enable_sysx_cache, True)
         self.assertEqual(configuration.full_sync_interval, 602)
@@ -253,7 +293,7 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_get_create_enrollment_view(self):
         self._login("santa.add_configuration", "santa.view_configuration")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         response = self.client.get(reverse("santa:create_enrollment", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 403)
         self._login("santa.add_configuration", "santa.view_configuration", "santa.add_enrollment")
@@ -277,7 +317,7 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_post_create_enrollment_view(self):
         self._login("santa.add_configuration", "santa.view_configuration")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         response, enrollment = self.create_enrollment(configuration, no_assertions=True)
         self.assertEqual(response.status_code, 403)
         self._login("santa.add_configuration", "santa.view_configuration", "santa.add_enrollment")
@@ -306,7 +346,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_enrollment_configuration_view(self):
         self._login("santa.add_configuration", "santa.view_configuration",
                     "santa.add_enrollment", "santa.view_enrollment")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         _, enrollment = self.create_enrollment(configuration)
         self.client.logout()
         enrollment_configuration_plist_url = reverse(
@@ -337,7 +377,7 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_configuration_rules_redirects(self):
         self._login("santa.add_configuration", "santa.view_configuration")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         self.client.logout()
         self._login_redirect(reverse("santa:configuration_rules", args=(configuration.pk,)))
         self._login_redirect(reverse("santa:create_configuration_rule", args=(configuration.pk,)))
@@ -347,7 +387,7 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_configuration_rules_permission_denied(self):
         self._login("santa.add_configuration", "santa.view_configuration")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         for view_name in ("configuration_rules", "create_configuration_rule",
                           "pick_rule_binary", "pick_rule_bundle", "pick_rule_certificate"):
             response = self.client.get(reverse(f"santa:{view_name}", args=(configuration.pk,)))
@@ -355,7 +395,7 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_create_configuration_rule(self):
         self._login("santa.add_configuration", "santa.view_configuration")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         # create
         binary_hash = get_random_sha256()
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
@@ -382,7 +422,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_create_conflict_configuration_rule(self):
         self._login("santa.add_configuration", "santa.view_configuration",
                     "santa.add_rule", "santa.view_rule")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         # create
         binary_hash = get_random_sha256()
         self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
@@ -402,7 +442,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_create_configuration_rule_scope_conflict(self):
         self._login("santa.add_configuration", "santa.view_configuration",
                     "santa.add_rule", "santa.view_rule")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         binary_hash = get_random_sha256()
         tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(3)]
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
@@ -425,7 +465,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_update_configuration_rule(self):
         self._login("santa.add_configuration", "santa.view_configuration",
                     "santa.add_rule", "santa.view_rule")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         # create
         binary_hash = get_random_sha256()
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
@@ -466,7 +506,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_update_configuration_rule_scope_conflict(self):
         self._login("santa.add_configuration", "santa.view_configuration",
                     "santa.add_rule", "santa.view_rule", "santa.change_rule")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         # create
         binary_hash = get_random_sha256()
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
@@ -496,7 +536,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_delete_configuration_rule(self):
         self._login("santa.add_configuration", "santa.view_configuration",
                     "santa.add_rule", "santa.view_rule")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         # create
         binary_hash = get_random_sha256()
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
@@ -520,7 +560,7 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_pick_rule_binary(self):
         self._login("santa.add_configuration", "santa.view_configuration")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         response = self.client.get(reverse("santa:pick_rule_binary", args=(configuration.pk,)),
                                    {"name": self.file_name})
         self.assertEqual(response.status_code, 403)
@@ -535,18 +575,8 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_pick_rule_bundle(self):
         self._login("santa.add_configuration", "santa.view_configuration")
-        _, configuration = self.create_configuration()
-        bundle_target = Target.objects.create(type=Target.BUNDLE, sha256=get_random_sha256())
-        bundle = Bundle.objects.create(
-            target=bundle_target,
-            path=get_random_string(),
-            executable_rel_path=get_random_string(),
-            bundle_id=self.file.bundle.bundle_id,
-            name=self.file_bundle_name,
-            version=self.file.bundle.bundle_version,
-            version_str=self.file.bundle.bundle_version_str,
-            binary_count=1
-        )
+        configuration = self._force_configuration()
+        bundle = self._force_bundle()
         # 403
         response = self.client.get(reverse("santa:pick_rule_bundle", args=(configuration.pk,)),
                                    {"name": self.file_bundle_name})
@@ -574,7 +604,7 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_pick_rule_certificate(self):
         self._login("santa.add_configuration", "santa.view_configuration")
-        _, configuration = self.create_configuration()
+        configuration = self._force_configuration()
         response = self.client.get(reverse("santa:pick_rule_certificate", args=(configuration.pk,)),
                                    {"query": self.file_cert_ou})
         self.assertEqual(response.status_code, 403)
