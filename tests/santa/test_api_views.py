@@ -42,10 +42,12 @@ class APIViewsTestCase(TestCase):
         else:
             self.group.permissions.clear()
 
-    def post_data(self, url, data, content_type, include_token=True):
+    def post_data(self, url, data, content_type, include_token=True, dry_run=None):
         kwargs = {"content_type": content_type}
         if include_token:
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+        if dry_run is not None:
+            url = f"{url}?{dry_run}"
         return self.client.post(url, data, **kwargs)
 
     def post_yaml_data(self, url, data, include_token=True):
@@ -53,10 +55,10 @@ class APIViewsTestCase(TestCase):
         data = yaml.dump(data)
         return self.post_data(url, data, content_type, include_token)
 
-    def post_json_data(self, url, data, include_token=True):
+    def post_json_data(self, url, data, include_token=True, dry_run=None):
         content_type = "application/json"
         data = json.dumps(data)
-        return self.post_data(url, data, content_type, include_token)
+        return self.post_data(url, data, content_type, include_token, dry_run)
 
     def test_ingest_fileinfo_unauthorized(self):
         url = reverse("santa_api:ingest_file_info")
@@ -164,32 +166,51 @@ class APIViewsTestCase(TestCase):
                  "excluded_tags": [get_random_string(32)]}
             ]
         }
+        first_result_configurations = [
+            {'name': self.configuration.name,
+             'pk': self.configuration.pk,
+             'rule_results': {'created': 1,
+                              'deleted': 0,
+                              'present': 0,
+                              'updated': 0}},
+            {'name': self.configuration2.name,
+             'pk': self.configuration2.pk,
+             'rule_results': {'created': 1,
+                              'deleted': 0,
+                              'present': 0,
+                              'updated': 0}}
+        ]
         self.assertEqual(self.configuration.rule_set.count(), 0)
         self.assertEqual(self.configuration2.rule_set.count(), 0)
-        response = self.post_json_data(url, data)
+        # dryRun, nothing changes
+        response = self.post_json_data(url, data, dry_run="dryRun")
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertTrue(json_response["dry_run"])
+        self.assertEqual(json_response["result"], "created")
+        self.assertEqual(json_response["configurations"], first_result_configurations)
+        self.assertEqual(RuleSet.objects.filter(name=data["name"]).count(), 0)
+        self.assertEqual(self.configuration.rule_set.count(), 0)
+        self.assertEqual(self.configuration2.rule_set.count(), 0)
+        # dryRun=All, nothing changes
+        response = self.post_json_data(url, data, dry_run="dryRun=All")
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertTrue(json_response["dry_run"])
+        # real fire and water run
+        response = self.post_json_data(url, data, dry_run="yolo")
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         ruleset = RuleSet.objects.get(name=data["name"])
         self.assertEqual(
             json_response,
             {'ruleset': {
-                'name': ruleset.name,
-                'pk': ruleset.pk
+                 'name': ruleset.name,
+                 'pk': ruleset.pk
              },
+             'dry_run': False,
              'result': 'created',
-             'configurations': [
-                {'name': self.configuration.name,
-                 'pk': self.configuration.pk,
-                 'rule_results': {'created': 1,
-                                  'deleted': 0,
-                                  'present': 0,
-                                  'updated': 0}},
-                {'name': self.configuration2.name,
-                 'pk': self.configuration2.pk,
-                 'rule_results': {'created': 1,
-                                  'deleted': 0,
-                                  'present': 0,
-                                  'updated': 0}}]}
+             'configurations': first_result_configurations}
         )
         self.assertEqual(self.configuration.rule_set.count(), 1)
         self.assertEqual(self.configuration2.rule_set.count(), 1)
@@ -235,6 +256,7 @@ class APIViewsTestCase(TestCase):
                 'name': ruleset.name,
                 'pk': ruleset.pk
               },
+             'dry_run': False,
              'result': 'present',
              'configurations': [
                 {'name': self.configuration.name,
@@ -271,6 +293,7 @@ class APIViewsTestCase(TestCase):
                 'name': ruleset.name,
                 'pk': ruleset.pk
              },
+             'dry_run': False,
              'result': 'present',
              'configurations': [
                 {'name': self.configuration.name,
@@ -360,6 +383,7 @@ class APIViewsTestCase(TestCase):
                 'name': ruleset2.name,
                 'pk': ruleset2.pk
              },
+             'dry_run': False,
              'result': 'created',
              'configurations': [
                 {'name': self.configuration.name,
@@ -391,6 +415,7 @@ class APIViewsTestCase(TestCase):
                 'name': ruleset2.name,
                 'pk': ruleset2.pk
              },
+             'dry_run': False,
              'result': 'present',
              'configurations': [
                 {'name': self.configuration.name,

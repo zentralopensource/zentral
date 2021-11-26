@@ -278,6 +278,8 @@ This operation is idempotent. The second time you run the command, and if the ap
 
 This endpoint is designed to help automatically maintain Zentral Santa configuration rulesets. It can be used in a CI/CD workflow.
 
+To make a dry-run request, use `?dryRun` or `?dryRun=All` as query string.
+
 #### Definition of a ruleset
 
 A ruleset is a set of rules, with a unique name, that can be applied to some Zentral configurations.
@@ -339,6 +341,7 @@ You should get a response close to this one:
         "pk": 1,
         "name": "First ruleset test"
     },
+    "dry_run": false,
     "result": "created",
     "configurations": [
         {
@@ -363,6 +366,7 @@ If you post the same file again, you will get this answer:
         "pk": 1,
         "name": "First ruleset test"
     },
+    "dry_run": false,
     "result": "present",
     "configurations": [
         {
@@ -431,6 +435,7 @@ This indicates that there is an existing rule in the configuration, on the same 
         "pk": 2,
         "name": "Second ruleset test"
     },
+    "dry_run": false,
     "result": "created",
     "configurations": [
         {
@@ -481,6 +486,7 @@ Nothing was changed:
         "pk": 2,
         "name": "Second ruleset test"
     },
+    "dry_run": false,
     "result": "present",
     "configurations": [
         {

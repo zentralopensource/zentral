@@ -74,12 +74,15 @@ class RuleSetUpdate(APIView):
     permission_classes = [IsAuthenticated, DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
+        dry_run_arg = request.GET.get("dryRun")
+        dry_run = isinstance(dry_run_arg, str) and dry_run_arg in ("", "All")
         serializer = RuleSetUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.data
         ruleset, ruleset_created = RuleSet.objects.get_or_create(name=data["name"])
         ruleset_update_event = {
             "ruleset": ruleset.serialize_for_event(),
+            "dry_run": dry_run,
             "result": "created" if ruleset_created else "present"
         }
         RuleSet.objects.select_for_update().filter(pk=ruleset.pk)
@@ -233,9 +236,13 @@ class RuleSetUpdate(APIView):
                       "updated": rules_updated,
                  }}
             )
-        transaction.on_commit(
-            lambda: post_santa_ruleset_update_events(request, ruleset_update_event, rule_update_events)
-        )
+        if dry_run:
+            post_santa_ruleset_update_events(request, ruleset_update_event, [])
+            transaction.set_rollback(True)
+        else:
+            transaction.on_commit(
+                lambda: post_santa_ruleset_update_events(request, ruleset_update_event, rule_update_events)
+            )
         return Response(ruleset_update_event)
 
 
