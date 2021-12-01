@@ -601,7 +601,6 @@ class MachineDebPackagesView(PermissionRequiredMixin, TemplateView):
 class MachineIncidentsView(PermissionRequiredMixin, TemplateView):
     permission_required = (
         "inventory.view_machinesnapshot",
-        "incidents.view_incident",
         "incidents.view_machineincident"
     )
     template_name = "inventory/machine_incidents.html"
@@ -611,7 +610,7 @@ class MachineIncidentsView(PermissionRequiredMixin, TemplateView):
         context['inventory'] = True
         context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
         context['serial_number'] = machine.serial_number
-        context['incidents'] = (MachineIncident.objects.select_related("incident__probe_source")
+        context['incidents'] = (MachineIncident.objects.select_related("incident")
                                                        .filter(serial_number=machine.serial_number))
         return context
 

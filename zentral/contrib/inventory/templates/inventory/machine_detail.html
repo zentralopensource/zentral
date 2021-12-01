@@ -383,9 +383,10 @@
   </div><!-- end col-md-6 -->
   <div class="col-md-6">
 
+    {% if perms.incidents.view_machineincident %}
     {% with machine.open_incidents as open_incidents %}
     {% if open_incidents %}
-    <h3>{{ open_incidents|length }} open incident{{ open_incidents|length|pluralize }}</h3>
+    <h3>{{ open_incidents|length }} open incident{{ open_incidents|length|pluralize }}</h3>
     <table class="table table-condensed">
       <thead>
         <th>Name</th>
@@ -397,7 +398,13 @@
         {% for machine_incident in open_incidents %}
         {% with machine_incident.incident as incident %}
         <tr>
-          <td><a href="{{ machine_incident.get_absolute_url }}">{{ incident.name }}</a></td>
+          <td>
+            {% if perms.incidents.view_incident %}
+            <a href="{{ machine_incident.get_absolute_url }}">{{ incident.name }}</a>
+            {% else %}
+            {{ incident.name }}
+            {% endif %}
+          </td>
           <td>{{ machine_incident.get_status_display }}</td>
           <td>{% incident_severity incident.severity %}</td>
           <td>{{ machine_incident.created_at }}</td>
@@ -408,6 +415,7 @@
     </table>
     {% endif %}
     {% endwith %}
+    {% endif %}
     {% if fetch_heartbeats %}
     <div id="heartbeats" data-url="{% url 'inventory:machine_heartbeats' machine.get_urlsafe_serial_number %}">Loading heartbeats…</div>
     {% endif %}

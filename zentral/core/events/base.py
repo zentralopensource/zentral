@@ -10,6 +10,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils.functional import cached_property
 from geoip2.models import City
 from zentral.contrib.inventory.models import MetaMachine
+from zentral.core.incidents.models import IncidentUpdate
 from zentral.core.probes.conf import all_probes_dict
 from zentral.core.queues import queues
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -240,9 +241,14 @@ class EventMetadata(object):
         self.observer = kwargs.pop('observer', None)
         self.request = kwargs.pop('request', None)
         self.probes = kwargs.pop('probes', [])
-        self.incidents = kwargs.pop('incidents', [])
+        self.incident_updates = kwargs.pop('incident_updates', [])
         self.tags = kwargs.pop('tags', [])
-        self.objects = {k: [decode_args(args) for args in v] for k, v in kwargs.pop('objects', {}).items()}
+        self.objects = kwargs.pop('objects', {})
+
+    def set_event(self, event):
+        self.event = weakref.proxy(event)
+        if not self._deserialized:
+            self.add_objects(event.get_linked_objects_keys())
 
     @property
     def event_type(self):
@@ -267,6 +273,8 @@ class EventMetadata(object):
         request_d = kwargs.pop('request', None)
         if request_d:
             kwargs['request'] = EventRequest.deserialize(request_d)
+        kwargs['incident_updates'] = [IncidentUpdate.deserialize(u) for u in kwargs.pop('incident_updates', [])]
+        kwargs['objects'] = {k: [decode_args(args) for args in v] for k, v in kwargs.pop('objects', {}).items()}
         return cls(**kwargs)
 
     def serialize(self, machine_metadata=True):
@@ -284,16 +292,12 @@ class EventMetadata(object):
             d['request'] = self.request.serialize()
         if self.probes:
             d['probes'] = self.probes
-        if self.incidents:
-            d['incidents'] = self.incidents
+        if self.incident_updates:
+            d['incident_updates'] = [u.serialize() for u in self.incident_updates]
         if self.machine_serial_number:
             d['machine_serial_number'] = self.machine_serial_number
-        if self._deserialized:
-            objects = self.objects
-        else:
-            objects = self.event.get_linked_objects_keys()
-        if objects:
-            d['objects'] = {k: [encode_args(args) for args in v] for k, v in objects.items()}
+        if self.objects:
+            d['objects'] = {k: [encode_args(args) for args in v] for k, v in self.objects.items()}
         if not machine_metadata or not self.machine:
             return d
         elif self.machine:
@@ -304,9 +308,25 @@ class EventMetadata(object):
 
     def add_probe(self, probe):
         self.probes.append(probe.serialize_for_event_metadata())
+        try:
+            incident_update = probe.get_matching_event_incident_update(self.event)
+        except ReferenceError:
+            # should not happen
+            logger.error("Cannot compute probe event incident update")
+            pass
+        else:
+            if incident_update is not None:
+                self.incident_updates.append(incident_update)
 
-    def add_incident(self, incident):
-        self.incidents.append(incident.serialize_for_event_metadata())
+    def add_objects(self, extra_objects):
+        for extra_obj_key, extra_obj_args_list in extra_objects.items():
+            if not extra_obj_args_list:
+                # should never happen
+                continue
+            obj_args_list = self.objects.setdefault(extra_obj_key, [])
+            for extra_obj_args in extra_obj_args_list:
+                if extra_obj_args not in obj_args_list:
+                    obj_args_list.append(extra_obj_args)
 
     def iter_loaded_probes(self):
         for serialized_probe in self.probes:
@@ -351,9 +371,9 @@ class BaseEvent(object):
             event.post()
 
     def __init__(self, metadata, payload):
-        metadata.event = weakref.proxy(self)
         self.metadata = metadata
         self.payload = payload
+        self.metadata.set_event(self)
 
     def _key(self):
         return (self.event_type, self.metadata.uuid, self.metadata.index)

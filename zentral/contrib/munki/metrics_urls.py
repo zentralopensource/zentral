@@ -3,5 +3,5 @@ from .metrics_views import MetricsView
 
 app_name = "munki_metrics"
 urlpatterns = [
-    path("", MetricsView.as_view())
+    path("", MetricsView.as_view(), name="all"),
 ]

@@ -603,57 +603,6 @@ class EventStore(BaseEventStore):
             from_dt, to_dt
         )
 
-    # incident events
-
-    def _get_incident_events_body(self, incident):
-        # see incident and machine incident serialization in zentral.core.incidents.models
-        self.wait_and_configure_if_necessary()
-        return {
-            'query': {
-                'bool': {
-                    'filter': [
-                        {'bool': {
-                            'should': [
-                                # incidents present in triggering event metadata
-                                {'term': {'incidents.pk': incident.pk}},
-                                # incident events, pk attribute
-                                {'term': {'incident.pk': incident.pk}},
-                                # machine incident events, incident.pk attribute
-                                {'term': {'machine_incident.incident.pk': incident.pk}}
-                            ]
-                        }}
-                    ]
-                }
-            }
-        }
-
-    def incident_events_count(self, incident):
-        # TODO: count could work from first fetch with elasticsearch.
-        body = self._get_incident_events_body(incident)
-        body['size'] = 0
-        body['track_total_hits'] = True
-        r = self._es.search(index=self.read_index, body=body)
-        total = r['hits']['total']
-        if isinstance(total, dict):  # ES >= 7
-            return total["value"]
-        else:
-            return total
-
-    def incident_events_fetch(self, probe, offset=0, limit=0, **search_dict):
-        # TODO: count could work from first fetch with elasticsearch.
-        body = self._get_incident_events_body(probe, **search_dict)
-        if offset:
-            body['from'] = offset
-        if limit:
-            body['size'] = limit
-        body['sort'] = [{'created_at': 'desc'}]
-        r = self._es.search(index=self.read_index, body=body)
-        for hit in r['hits']['hits']:
-            yield self._deserialize_event(hit['_type'], hit['_source'])
-
-    def get_incident_vis_url(self, incident):
-        return self._build_kibana_url(self._get_incident_events_body(incident))
-
     # zentral apps data
 
     def _get_hist_query_dict(self, interval, bucket_number, tag):

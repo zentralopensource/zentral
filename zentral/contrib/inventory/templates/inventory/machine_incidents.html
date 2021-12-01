@@ -26,7 +26,13 @@
     {% for machine_incident in incidents %}
     {% with machine_incident.incident as incident %}
     <tr>
-      <td><a href="{{ incident.get_absolute_url }}">{{ incident.name }}</a></td>
+      <td>
+        {% if perms.incidents.view_incident %}
+        <a href="{{ incident.get_absolute_url }}">{{ incident.name }}</a>
+        {% else %}
+        {{ incident.name }}
+        {% endif %}
+      </td>
       <td>{{ machine_incident.get_status_display }}</td>
       <td>{% incident_severity incident.severity %}</td>
       <td>{{ machine_incident.created_at }}</td>

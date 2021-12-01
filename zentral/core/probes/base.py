@@ -9,7 +9,8 @@ from zentral.contrib.inventory.conf import (PLATFORM_CHOICES, PLATFORM_CHOICES_D
                                             TYPE_CHOICES, TYPE_CHOICES_DICT)
 from zentral.core.actions import actions as available_actions
 from zentral.core.events import event_types
-from zentral.core.incidents.models import SEVERITY_CHOICES
+from zentral.core.incidents.models import Severity
+from .incidents import ProbeIncident
 from . import register_probe_class
 
 logger = logging.getLogger('zentral.core.probes.base')
@@ -228,7 +229,7 @@ class ActionsSerializer(serializers.DictField):
 class BaseProbeSerializer(serializers.Serializer):
     filters = FiltersSerializer(required=False)
     actions = ActionsSerializer(required=False)
-    incident_severity = serializers.ChoiceField(SEVERITY_CHOICES, allow_null=True, required=False)
+    incident_severity = serializers.ChoiceField(Severity.choices(), allow_null=True, required=False)
 
 
 class BaseProbe(object):
@@ -385,8 +386,8 @@ class BaseProbe(object):
             return False
         return True
 
-    def get_matching_event_incident_severity(self, matching_event):
-        return self.incident_severity
+    def get_matching_event_incident_update(self, matching_event):
+        return ProbeIncident.build_incident_update(self)
 
     def not_configured_actions(self):
         """return a list of available actions not configured in the probe."""
@@ -401,8 +402,10 @@ class BaseProbe(object):
         if self.incident_severity is None:
             return "Do not create incidents"
         else:
-            return dict(SEVERITY_CHOICES).get(self.incident_severity,
-                                              "Unknown severity {}".format(self.incident_severity))
+            try:
+                return str(Severity(self.incident_severity))
+            except ValueError:
+                return f"Unknown severity: {self.incident_severity}"
 
     # serialize
 

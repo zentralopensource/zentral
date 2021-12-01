@@ -1,4 +1,5 @@
 import logging
+import uuid
 from dateutil import parser
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 
@@ -54,17 +55,27 @@ register_event_type(MunkiEvent)
 
 
 def post_munki_request_event(msn, user_agent, ip, **kwargs):
-    MunkiRequestEvent.post_machine_request_payloads(msn, user_agent, ip, [kwargs])
+    metadata = EventMetadata(
+        machine_serial_number=msn,
+        request=EventRequest(user_agent, ip),
+        incident_updates=kwargs.pop("incident_updates", [])
+    )
+    event = MunkiRequestEvent(metadata, kwargs)
+    event.post()
 
 
 def post_munki_events(msn, user_agent, ip, data):
     for report in data:
         events = report.pop('events')
-        metadata = EventMetadata(machine_serial_number=msn,
-                                 request=EventRequest(user_agent, ip))
-        for index, (created_at, payload) in enumerate(events):
-            metadata.index = index
-            metadata.created_at = parser.parse(created_at)
+        event_uuid = uuid.uuid4()
+        for event_index, (created_at, payload) in enumerate(events):
+            metadata = EventMetadata(
+                uuid=event_uuid,
+                index=event_index,
+                request=EventRequest(user_agent, ip),
+                created_at=parser.parse(created_at),
+                incident_updates=payload.pop("incident_updates", []),
+            )
             payload.update(report)
             event = MunkiEvent(metadata, payload)
             event.post()

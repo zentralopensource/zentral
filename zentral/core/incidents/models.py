@@ -1,94 +1,120 @@
+from enum import Enum
 import logging
+from typing import NamedTuple
+from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.db.models import Q
 from django.urls import reverse
-from django.utils.translation import ugettext_lazy as _
+from django.utils.functional import cached_property
+from . import incident_types
 
 
 logger = logging.getLogger('zentral.core.incidents.models')
 
-# severity
-SEVERITY_CRITICAL = 300
-SEVERITY_MAJOR = 200
-SEVERITY_MINOR = 100
-SEVERITY_CHOICES = (
-    (SEVERITY_CRITICAL, _("Critical")),
-    (SEVERITY_MAJOR, _("Major")),
-    (SEVERITY_MINOR, _("Minor"))
-)
-SEVERITY_CHOICES_DICT = dict(SEVERITY_CHOICES)
 
-# status
-STATUS_OPEN = "OPEN"
-STATUS_IN_PROGRESS = "IN_PROGRESS"
-STATUS_RESOLVED = "RESOLVED"
-STATUS_CLOSED = "CLOSED"
-STATUS_REOPENED = "REOPENED"
-STATUS_CHOICES = (
-    (STATUS_OPEN, _("Open")),
-    (STATUS_IN_PROGRESS, _("In Progress")),
-    (STATUS_RESOLVED, _("Resolved")),
-    (STATUS_CLOSED, _("Closed")),
-    (STATUS_REOPENED, _("Reopened")),
-)
-STATUS_CHOICES_DICT = dict(STATUS_CHOICES)
-OPEN_STATUSES = {STATUS_OPEN, STATUS_IN_PROGRESS, STATUS_REOPENED}
-CLOSED_STATUSES = {STATUS_CLOSED, STATUS_RESOLVED}
+class Severity(Enum):
+    CRITICAL = 300
+    MAJOR = 200
+    MINOR = 100
+    NONE = 0
+
+    def __str__(self):
+        return self.name.title()
+
+    @classmethod
+    def choices(cls):
+        return tuple((i.value, str(i)) for i in cls if i != cls.NONE)
 
 
-def get_next_statuses(current_status):
-    if current_status in [STATUS_OPEN, STATUS_REOPENED]:
-        return [STATUS_IN_PROGRESS, STATUS_CLOSED, STATUS_RESOLVED]
-    elif current_status == STATUS_IN_PROGRESS:
-        return [STATUS_CLOSED, STATUS_RESOLVED]
-    elif current_status in [STATUS_CLOSED, STATUS_RESOLVED]:
-        return [STATUS_REOPENED]
+class Status(Enum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    CLOSED = "CLOSED"
+    REOPENED = "REOPENED"
+
+    def __str__(self):
+        return self.name.replace("_", " ").title()
+
+    @classmethod
+    def choices(cls):
+        return tuple((i.value, str(i)) for i in cls)
+
+    @classmethod
+    def open_values(cls):
+        return {cls.OPEN.value, cls.IN_PROGRESS.value, cls.REOPENED.value}
+
+    @classmethod
+    def closed_values(cls):
+        return {cls.CLOSED.value, cls.RESOLVED.value}
+
+    def next_statuses(self):
+        if self == Status.OPEN or self == Status.REOPENED:
+            return [Status.IN_PROGRESS, Status.CLOSED, Status.RESOLVED]
+        elif self == Status.IN_PROGRESS:
+            return [Status.CLOSED, Status.RESOLVED]
+        elif self == Status.CLOSED or self == Status.RESOLVED:
+            return [Status.REOPENED]
+
+
+class IncidentUpdate(NamedTuple):
+    incident_type: str
+    key: dict
+    severity: Severity
+
+    @classmethod
+    def deserialize(cls, incident_update_d):
+        return cls(
+            incident_type=incident_update_d["incident_type"],
+            key=incident_update_d["key"],
+            severity=Severity(incident_update_d["severity"])
+        )
+
+    def serialize(self):
+        d = self._asdict()
+        d["severity"] = d["severity"].value
+        return d
 
 
 class Incident(models.Model):
-    probe_source = models.ForeignKey("probes.ProbeSource", on_delete=models.SET_NULL, blank=True, null=True)
-    name = models.TextField()
-    description = models.TextField(blank=True)
-    severity = models.PositiveIntegerField(choices=SEVERITY_CHOICES)
-    status = models.CharField(max_length=64, choices=STATUS_CHOICES)
-    event_id = models.UUIDField()
+    incident_type = models.CharField(max_length=256)
+    key = JSONField()
+    severity = models.PositiveIntegerField(choices=Severity.choices())
+    status = models.CharField(max_length=64, choices=Status.choices())
+    status_time = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ("-created_at",)
         constraints = [
             models.UniqueConstraint(
-                name="one_open_incident_per_probe",
-                fields=["probe_source"],
-                condition=Q(status__in=OPEN_STATUSES)
-            )
+                name="one_open_incident_per_incident_type_and_key",
+                fields=["incident_type", "key"],
+                condition=Q(status__in=Status.open_values())
+            ),
         ]
+        indexes = [
+            models.Index(fields=["incident_type", "key"]),
+        ]
+        ordering = ("-created_at",)
 
     def get_absolute_url(self):
         return reverse("incidents:incident", args=(self.pk,))
 
-    def serialize_for_event_metadata(self):
-        # to be included in the triggering events metadata
-        # do not include the original event_id
+    def serialize_for_event(self):
         return {
             "pk": self.pk,
-            "probe_pk": self.probe_source.pk,
-            "name": self.name,
+            "type": self.incident_type,
+            "key": self.key,
             "severity": self.severity,
             "status": self.status,
+            "status_time": self.status_time
         }
 
-    def serialize_for_event(self):
-        # payload of the incident events
-        d = self.serialize_for_event_metadata()
-        d["event_id"] = str(self.event_id)
-        return d
-
     def get_next_statuses(self):
-        next_statuses = get_next_statuses(self.status)
-        if self.machineincident_set.filter(status__in=OPEN_STATUSES).count():
-            for status in (STATUS_CLOSED, STATUS_RESOLVED):
+        next_statuses = Status(self.status).next_statuses()
+        if self.machineincident_set.filter(status__in=Status.open_values()).count():
+            for status in (Status.CLOSED, Status.RESOLVED):
                 try:
                     next_statuses.remove(status)
                 except ValueError:
@@ -96,14 +122,25 @@ class Incident(models.Model):
         return next_statuses
 
     def get_next_status_choices(self):
-        return [(s, l) for s, l in STATUS_CHOICES if s in self.get_next_statuses()]
+        return [(s.value, str(s)) for s in self.get_next_statuses()]
+
+    @cached_property
+    def loaded_incident(self):
+        incident_cls = incident_types.get(self.incident_type)
+        if not incident_cls:
+            incident_cls = incident_types.get("base")  # always present
+        return incident_cls(self)
+
+    @cached_property
+    def name(self):
+        return self.loaded_incident.get_name()
 
 
 class MachineIncident(models.Model):
     incident = models.ForeignKey(Incident, on_delete=models.CASCADE)
     serial_number = models.TextField(db_index=True)
-    status = models.CharField(max_length=64, choices=STATUS_CHOICES)
-    event_id = models.UUIDField()
+    status = models.CharField(max_length=64, choices=Status.choices())
+    status_time = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -113,39 +150,24 @@ class MachineIncident(models.Model):
             models.UniqueConstraint(
                 name="one_open_machine_incident_per_incident",
                 fields=["incident", "serial_number"],
-                condition=Q(status__in=OPEN_STATUSES)
+                condition=Q(status__in=Status.open_values())
             )
         ]
 
     def get_absolute_url(self):
         return "{}#{}".format(reverse("incidents:incident", args=(self.incident.pk,)), self.pk)
 
-    def _serialize(self, include_event_id=True):
-        d = {
+    def serialize_for_event(self):
+        d = self.incident.serialize_for_event()
+        d["machine_incident"] = {
             "pk": self.pk,
             "status": self.status,
+            "status_time": self.status_time
         }
-        if include_event_id:
-            d["event_id"] = str(self.event_id)
-        return d
-
-    def serialize_for_event_metadata(self):
-        # to be included in the triggering events metadata
-        # serialize as an incident with an embedded machine event
-        # this way we always have an incident as the outermost object in the event metadata
-        # do not include the original event_id
-        d = self.incident.serialize_for_event_metadata()
-        d["machine_incident"] = self._serialize(include_event_id=False)
-        return d
-
-    def serialize_for_event(self):
-        # serialize as a machine incident with an embedded incident
-        d = self._serialize()
-        d["incident"] = self.incident.serialize_for_event()
         return d
 
     def get_next_statuses(self):
-        return get_next_statuses(self.status)
+        return Status(self.status).next_statuses()
 
     def get_next_status_choices(self):
-        return [(s, l) for s, l in STATUS_CHOICES if s in self.get_next_statuses()]
+        return [(s.value, str(s)) for s in self.get_next_statuses()]

@@ -2,7 +2,7 @@ from django.test import TestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.core.events import event_types
 from zentral.core.events.base import BaseEvent, EventMetadata
-from zentral.core.incidents.models import SEVERITY_CRITICAL
+from zentral.core.incidents.models import Severity
 from zentral.core.probes.base import BaseProbe, get_flattened_payload_values
 from zentral.core.probes.models import ProbeSource
 from tests.inventory.utils import MockMetaMachine
@@ -74,7 +74,7 @@ class InventoryFilterBaseProbeTestCase(TestCase):
         cls.probe_source = ProbeSource.objects.create(
             model="BaseProbe",
             name="base probe",
-            body={"incident_severity": SEVERITY_CRITICAL,
+            body={"incident_severity": Severity.CRITICAL.value,
                   "filters": {
                       "inventory": [
                           {"meta_business_unit_ids": [cls.mbu2.id,
@@ -95,7 +95,7 @@ class InventoryFilterBaseProbeTestCase(TestCase):
         self.assertEqual(self.error_probe_source.status, ProbeSource.INACTIVE)
 
     def test_incident_severity(self):
-        self.assertEqual(self.probe.incident_severity, SEVERITY_CRITICAL)
+        self.assertEqual(self.probe.incident_severity, Severity.CRITICAL.value)
 
     def test_inventory_filters(self):
         self.assertEqual(len(self.probe.inventory_filters), 2)

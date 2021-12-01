@@ -94,11 +94,15 @@ class MunkiSetupViewsTestCase(TestCase):
                                      "inventory_apps_full_info_shard": 17,
                                      "principal_user_detection_sources": "logged_in_user",
                                      "principal_user_detection_domains": "yolo.fr",
-                                     "managed_installs_sync_interval_days": 1},
+                                     "managed_installs_sync_interval_days": 1,
+                                     "auto_reinstall_incidents": "on"},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
         self.assertContains(response, name)
+        configuration = response.context["object"]
+        self.assertTrue(configuration.auto_reinstall_incidents)
+        self.assertFalse(configuration.auto_failed_install_incidents)
 
     # update configuration
 
@@ -127,7 +131,8 @@ class MunkiSetupViewsTestCase(TestCase):
                                      "inventory_apps_full_info_shard": 17,
                                      "principal_user_detection_sources": "logged_in_user",
                                      "principal_user_detection_domains": "yolo.fr",
-                                     "managed_installs_sync_interval_days": 2},
+                                     "managed_installs_sync_interval_days": 2,
+                                     "auto_failed_install_incidents": "on"},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
@@ -137,6 +142,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(configuration2.principal_user_detection_sources, ["logged_in_user"])
         self.assertEqual(configuration2.principal_user_detection_domains, ["yolo.fr"])
         self.assertEqual(configuration2.managed_installs_sync_interval_days, 2)
+        self.assertTrue(configuration2.auto_failed_install_incidents)
 
     # create enrollment
 

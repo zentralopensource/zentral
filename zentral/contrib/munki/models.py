@@ -45,6 +45,18 @@ class Configuration(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(90)],
         default=7
     )
+    auto_reinstall_incidents = models.BooleanField(
+        "Auto reinstall incidents",
+        default=False,
+        help_text="Enable automatic management of incidents, "
+                  "if package reinstalls are detected"
+    )
+    auto_failed_install_incidents = models.BooleanField(
+        "Auto failed install incidents",
+        default=False,
+        help_text="Enable automatic management of incidents, "
+                  "if package failed installs are detected"
+    )
 
     version = models.PositiveIntegerField(editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -100,12 +112,19 @@ class MunkiState(models.Model):
     last_seen = models.DateTimeField(auto_now=True)
 
 
+# managed install
+
+
 class ManagedInstall(models.Model):
     machine_serial_number = models.TextField(db_index=True)
-    pkg_info_name = models.TextField(db_index=True)
-    pkg_info_display_name = models.TextField()
-    pkg_info_version = models.TextField()
+    name = models.TextField(db_index=True)
+    display_name = models.TextField()
+    installed_version = models.TextField(null=True)
     installed_at = models.DateTimeField(null=True)
+    reinstall = models.BooleanField(default=False)
+    failed_version = models.TextField(null=True)
+    failed_at = models.DateTimeField(null=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (("machine_serial_number", "pkg_info_name"),)
+        unique_together = (("machine_serial_number", "name"),)

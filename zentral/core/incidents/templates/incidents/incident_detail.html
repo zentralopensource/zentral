@@ -18,35 +18,22 @@
   <dt>Updated at</dz>
   <dd>{{ incident.updated_at }}</dt>
 </dl>
+
 <div class="btn-group" role="group" style="margin:0 0 10px 0">
-  {% if perms.probes.view_probesource %}
-  <a class="btn btn-default" {% if object.probe_source %}href="{{ object.probe_source.get_absolute_url }}"{% else %}href="#" disabled{% endif %}>
-    Probe
-  </a>
-  {% endif %}
+  {% if show_events_link %}
   <a class="btn btn-default" href="{% url 'incidents:incident_events' object.pk %}">
     <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
   </a>
-  {% for store_name, store_url in store_links %}
-  <a class="btn btn-default" href="{{ store_url }}" target="_blank">
-    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}
+  {% endif %}
+  {% for link, anchor_text in store_links %}
+  <a class="btn btn-default" href="{{ link }}">
+    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
   </a>
   {% endfor %}
   {% if perms.incidents.change_incident %}
-  <div class="btn-group">
-    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-      Action <span class="caret"></span>
-    </button>
-    <ul class="dropdown-menu">
-      {% if object.get_next_statuses %}
-      <li>
-        <a href="{% url 'incidents:update_incident' object.pk %}">Update</a>
-      </li>
-      {% else %}
-      <li class="disabled"><a href="#">Update</a></li>
-      {% endif %}
-    </ul>
-  </div>
+  <a class="btn btn-default{% if not object.get_next_statuses %} disabled{% endif %}" href="{% url 'incidents:update_incident' object.pk %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Change status
+  </a>
   {% endif %}
 </div>
 

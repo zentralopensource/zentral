@@ -1,9 +1,13 @@
 import logging
+from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, UpdateView
+from zentral.core.events.utils import encode_args
 from zentral.core.stores import frontend_store, stores
+from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from .forms import IncidentSearchForm, UpdateIncidentForm, UpdateMachineIncidentForm
 from .models import Incident, MachineIncident
 
@@ -63,12 +67,17 @@ class IncidentView(PermissionRequiredMixin, DetailView):
         ctx["incidents"] = True
         ctx["machine_incidents"] = ctx["object"].machineincident_set.all()
         ctx["machine_incidents_count"] = ctx["machine_incidents"].count()
-        ctx["store_links"] = []
-        for store in stores:
-            url = store.get_incident_vis_url(ctx["object"])
-            if url:
-                ctx["store_links"].append((store.name, url))
-        ctx["store_links"].sort()
+        if self.request.user.has_perms(EventsMixin.permission_required):
+            ctx["show_events_link"] = frontend_store.object_events
+            store_links = []
+            for store in stores.iter_events_url_store_for_user("object", self.request.user):
+                url = "{}?{}".format(
+                    reverse("incidents:incident_events_store_redirect", args=(self.object.pk,)),
+                    urlencode({"es": store.name,
+                               "tr": IncidentEventsView.default_time_range})
+                )
+                store_links.append((url, store.name))
+            ctx["store_links"] = store_links
         return ctx
 
 
@@ -77,80 +86,20 @@ class UpdateIncidentView(PermissionRequiredMixin, UpdateView):
     form_class = UpdateIncidentForm
     model = Incident
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request"] = self.request
+        return kwargs
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["incidents"] = True
         return ctx
 
-
-class IncidentEventSet(object):
-    def __init__(self, incident):
-        self.incident = incident
-        self.store = frontend_store
-        self._count = None
-
-    def count(self):
-        if self._count is None:
-            self._count = self.store.incident_events_count(self.incident)
-        return self._count
-
-    def __len__(self):
-        return self.count()
-
-    def __getitem__(self, k):
-        if isinstance(k, slice):
-            start = int(k.start or 0)
-            stop = int(k.stop or start + 1)
-        else:
-            start = k
-            stop = k + 1
-        return self.store.incident_events_fetch(self.incident, start, stop - start)
-
-
-class IncidentEventsView(PermissionRequiredMixin, ListView):
-    permission_required = "incidents.view_incident"
-    template_name = "incidents/incident_events.html"
-    paginate_by = 10
-
-    def get(self, request, *args, **kwargs):
-        self.incident = get_object_or_404(Incident, pk=kwargs["pk"])
-        return super().get(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["incidents"] = True
-        ctx["incident"] = self.incident
-        # pagination
-        page = ctx['page_obj']
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
-        bc = [(reverse('incidents:index'), 'Incidents'),
-              (reverse('incidents:incident', args=(self.incident.pk,)), self.incident.name)]
-        if page.number > 1:
-            qd = self.request.GET.copy()
-            qd.pop("page", None)
-            reset_link = "?{}".format(qd.urlencode())
-        else:
-            reset_link = None
-        paginator = page.paginator
-        if paginator.count:
-            count = paginator.count
-            pluralize = min(1, count - 1) * 's'
-            bc.extend([(reset_link, '{} event{}'.format(count, pluralize)),
-                       (None, "page {} of {}".format(page.number, paginator.num_pages))])
-        else:
-            bc.append((None, "no events"))
-        ctx['breadcrumbs'] = bc
-        return ctx
-
-    def get_queryset(self):
-        return IncidentEventSet(self.incident)
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        transaction.on_commit(lambda: form.post_event())
+        return response
 
 
 class UpdateMachineIncidentView(PermissionRequiredMixin, UpdateView):
@@ -158,8 +107,59 @@ class UpdateMachineIncidentView(PermissionRequiredMixin, UpdateView):
     form_class = UpdateMachineIncidentForm
     model = MachineIncident
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request"] = self.request
+        return kwargs
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["incidents"] = True
         ctx["incident"] = ctx["object"].incident
         return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        transaction.on_commit(lambda: form.post_event())
+        return response
+
+
+# events
+
+
+class EventsMixin:
+    permission_required = "incidents.view_incident"
+    store_method_scope = "object"
+
+    def get_object(self, **kwargs):
+        return get_object_or_404(Incident, pk=kwargs["pk"])
+
+    def get_fetch_kwargs_extra(self):
+        return {"key": "incident", "val": encode_args((self.object.pk,))}
+
+    def get_fetch_url(self):
+        return reverse("incidents:fetch_incident_events", args=(self.object.pk,))
+
+    def get_redirect_url(self):
+        return reverse("incidents:incident_events", args=(self.object.pk,))
+
+    def get_store_redirect_url(self):
+        return reverse("incidents:incident_events_store_redirect", args=(self.object.pk,))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["incidents"] = True
+        ctx["incident"] = self.object
+        return ctx
+
+
+class IncidentEventsView(EventsMixin, EventsView):
+    template_name = "incidents/incident_events.html"
+
+
+class FetchIncidentEventsView(EventsMixin, FetchEventsView):
+    pass
+
+
+class IncidentEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    pass

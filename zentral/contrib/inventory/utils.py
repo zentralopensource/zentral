@@ -18,7 +18,7 @@ from django.http import QueryDict
 from django.urls import reverse
 from django.utils.text import slugify
 import xlsxwriter
-from zentral.core.incidents.models import OPEN_STATUSES, SEVERITY_CHOICES
+from zentral.core.incidents.models import Severity, Status
 from zentral.utils.json import save_dead_letter
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      post_inventory_events)
@@ -798,7 +798,7 @@ class IncidentSeverityFilter(BaseMSFilter):
     query_kwarg = "mis"
     expression = "mis.max_incident_severity as max_incident_severity"
     grouping_set = ("mis.max_incident_severity",)
-    severities_dict = dict(SEVERITY_CHOICES)
+    severities_dict = dict(Severity.choices())
 
     def joins(self):
         yield (
@@ -809,7 +809,7 @@ class IncidentSeverityFilter(BaseMSFilter):
             "where i.status in ({}) "
             "group by mi.serial_number"
             ") as mis on (mis.serial_number = ms.serial_number)"
-        ).format(",".join("'{}'".format(s) for s in OPEN_STATUSES))
+        ).format(",".join("'{}'".format(s) for s in Status.open_values()))
 
     def wheres(self):
         if self.value:

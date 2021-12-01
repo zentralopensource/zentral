@@ -19,7 +19,7 @@ from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
 from zentral.conf import settings
-from zentral.core.incidents.models import MachineIncident, OPEN_STATUSES
+from zentral.core.incidents.models import MachineIncident, Status
 from zentral.utils.model_extras import find_all_related_objects
 from zentral.utils.mt_models import AbstractMTObject, prepare_commit_tree, MTObjectManager, MTOError
 from .conf import (has_deb_packages,
@@ -975,13 +975,13 @@ class MetaMachine:
 
     def max_incident_severity(self):
         return (MachineIncident.objects.select_related("incident")
-                                       .filter(serial_number=self.serial_number, status__in=OPEN_STATUSES)
+                                       .filter(serial_number=self.serial_number, status__in=Status.open_values())
                                        .aggregate(max_incident_severity=Max("incident__severity"))
                 )["max_incident_severity"]
 
     def open_incidents(self):
-        return list(MachineIncident.objects.select_related("incident__probe_source")
-                                           .filter(serial_number=self.serial_number, status__in=OPEN_STATUSES))
+        return list(MachineIncident.objects.select_related("incident")
+                                           .filter(serial_number=self.serial_number, status__in=Status.open_values()))
 
     def archive(self):
         CurrentMachineSnapshot.objects.filter(serial_number=self.serial_number).delete()

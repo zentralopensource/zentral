@@ -1,7 +1,7 @@
 import logging
-import uuid
 from zentral.core.events import register_event_type
-from zentral.core.events.base import BaseEvent, EventMetadata
+from zentral.core.events.base import BaseEvent
+
 
 logger = logging.getLogger('zentral.contrib.incidents.events')
 
@@ -9,33 +9,51 @@ logger = logging.getLogger('zentral.contrib.incidents.events')
 ALL_EVENTS_SEARCH_DICT = {"tag": "incident"}
 
 
-class IncidentEvent(BaseEvent):
-    event_type = 'incident'
+class BaseIncidentEvent(BaseEvent):
+    namespace = 'incident'
     tags = ["incident"]
 
+    def get_linked_objects_keys(self):
+        keys = {}
+        pk = self.payload.get("pk")
+        if pk:
+            keys["incident"] = [(pk,)]
+        machine_incident_pk = self.payload.get("machine_incident", {}).get("pk")
+        if machine_incident_pk:
+            keys["machine_incident"] = [(machine_incident_pk,)]
+        return keys
 
-register_event_type(IncidentEvent)
+
+class IncidentCreatedEvent(BaseIncidentEvent):
+    event_type = 'incident_created'
 
 
-class MachineIncidentEvent(BaseEvent):
-    event_type = 'machine_incident'
-    tags = ["incident"]
+register_event_type(IncidentCreatedEvent)
 
 
-register_event_type(MachineIncidentEvent)
+class IncidentSeverityUpdatedEvent(BaseIncidentEvent):
+    event_type = 'incident_severity_updated'
 
 
-def build_incident_events(incident_event_payloads, machine_serial_number=None, request=None):
-    incident_events_uuid = uuid.uuid4()
-    for incident_event_index, incident_event_payload in enumerate(incident_event_payloads):
-        if "incident" in incident_event_payload:
-            incident_event_cls = MachineIncidentEvent
-        else:
-            incident_event_cls = IncidentEvent
-        incident_event_metadata = EventMetadata(
-                uuid=incident_events_uuid,
-                index=incident_event_index,
-                machine_serial_number=machine_serial_number,
-                request=request,
-        )
-        yield incident_event_cls(incident_event_metadata, incident_event_payload)
+register_event_type(IncidentSeverityUpdatedEvent)
+
+
+class IncidentStatusUpdatedEvent(BaseIncidentEvent):
+    event_type = 'incident_status_updated'
+
+
+register_event_type(IncidentStatusUpdatedEvent)
+
+
+class MachineIncidentCreatedEvent(BaseIncidentEvent):
+    event_type = 'machine_incident_created'
+
+
+register_event_type(MachineIncidentCreatedEvent)
+
+
+class MachineIncidentStatusUpdatedEvent(BaseIncidentEvent):
+    event_type = 'machine_incident_status_updated'
+
+
+register_event_type(MachineIncidentStatusUpdatedEvent)

@@ -1,7 +1,6 @@
 from django import forms
 from django.db.models import Q
-from .events import build_incident_events
-from .models import Incident, MachineIncident, SEVERITY_CHOICES, STATUS_CHOICES
+from .models import Incident, MachineIncident, Severity, Status
 from .utils import update_incident_status, update_machine_incident_status
 
 
@@ -13,13 +12,13 @@ class IncidentSearchForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        severity_choices_dict = dict(SEVERITY_CHOICES)
+        severity_choices_dict = dict(Severity.choices())
         self.fields["severity"].choices = [("", "----")]
         for severity in sorted(Incident.objects.values_list("severity", flat=True).distinct().order_by("severity")):
             self.fields["severity"].choices.append(
                 (str(severity), severity_choices_dict.get(severity, str(severity)))
             )
-        status_choices_dict = dict(STATUS_CHOICES)
+        status_choices_dict = dict(Status.choices())
         self.fields["status"].choices = [("", "----")]
         for status in Incident.objects.values_list("status", flat=True).distinct().order_by("status"):
             self.fields["status"].choices.append(
@@ -61,15 +60,19 @@ class UpdateIncidentForm(forms.ModelForm):
         fields = ("status",)
 
     def __init__(self, *args, **kwargs):
+        self.request = kwargs.pop("request")
         super().__init__(*args, **kwargs)
         self.fields["status"].choices = self.instance.get_next_status_choices()
 
     def save(self, *args, **kwargs):
-        incident, incident_event_payloads = update_incident_status(self.instance,
-                                                                   self.cleaned_data.get("status"))
-        for event in build_incident_events(incident_event_payloads):
-            event.post()
+        incident, self.event = update_incident_status(self.instance,
+                                                      Status(self.cleaned_data.get("status")),
+                                                      self.request)
         return incident
+
+    def post_event(self):
+        if self.event:
+            self.event.post()
 
 
 class UpdateMachineIncidentForm(forms.ModelForm):
@@ -78,12 +81,16 @@ class UpdateMachineIncidentForm(forms.ModelForm):
         fields = ("status",)
 
     def __init__(self, *args, **kwargs):
+        self.request = kwargs.pop("request")
         super().__init__(*args, **kwargs)
         self.fields["status"].choices = self.instance.get_next_status_choices()
 
     def save(self, *args, **kwargs):
-        machine_incident, incident_event_payloads = update_machine_incident_status(self.instance,
-                                                                                   self.cleaned_data.get("status"))
-        for event in build_incident_events(incident_event_payloads, machine_incident.serial_number):
-            event.post()
+        machine_incident, self.event = update_machine_incident_status(self.instance,
+                                                                      Status(self.cleaned_data.get("status")),
+                                                                      self.request)
         return machine_incident
+
+    def post_event(self):
+        if self.event:
+            self.event.post()

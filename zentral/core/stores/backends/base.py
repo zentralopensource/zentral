@@ -81,17 +81,6 @@ class BaseEventStore(object):
     def get_probe_events_url(self, probe, from_dt, to_dt=None, event_type=None):
         return None
 
-    # incident events
-
-    def incident_events_fetch(self, incident, offset=0, limit=0):
-        return []
-
-    def incident_events_count(self, incident):
-        return 0
-
-    def get_incident_vis_url(self, incident):
-        return None
-
     # zentral apps data
 
     def get_app_hist_data(self, interval, bucket_number, tag):

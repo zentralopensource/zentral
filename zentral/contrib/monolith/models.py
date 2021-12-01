@@ -133,7 +133,7 @@ class PkgInfoManager(models.Manager):
             "join monolith_pkginfo_catalogs as pc on (pc.pkginfo_id = pi.id) "
             "join monolith_catalog as c on (c.id = pc.catalog_id) "
             "left join munki_managedinstall as mi on "
-            "(pn.name = mi.pkg_info_name and pi.version = mi.pkg_info_version) "
+            "(pn.name = mi.name and pi.version = mi.installed_version) "
             "where pi.archived_at is null "
         )
         params = []

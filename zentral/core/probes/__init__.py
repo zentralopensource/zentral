@@ -1,6 +1,10 @@
 import logging
 from zentral.core.exceptions import ImproperlyConfigured
 
+
+default_app_config = "zentral.core.probes.apps.ZentralProbesAppConfig"
+
+
 logger = logging.getLogger('zentral.core.probes')
 
 

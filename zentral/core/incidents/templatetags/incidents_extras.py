@@ -1,8 +1,9 @@
 from django import template
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
-from zentral.core.incidents.models import SEVERITY_CHOICES
+from zentral.core.incidents.models import Severity
 from zentral.utils.color import text_color_for_background_color
+
 
 register = template.Library()
 
@@ -17,14 +18,17 @@ def incident_severity(severity, default=""):
         100: "ffff00",
     }
     color = color_dict.get(severity, "000000")
-    style = {'background-color': "#%s" % color,
-             'color': "#%s" % text_color_for_background_color(color)}
+    style = {'background-color': "#" + color,
+             'color': "#" + text_color_for_background_color(color)}
     if color.upper() in ["FFFFFF", "FFF"]:
         style['border'] = '1px solid grey'
-    style_str = ";".join(["%s:%s" % (key, val) for key, val in style.items()])
+    style_str = ";".join([f"{key}:{val}" for key, val in style.items()])
+    try:
+        severity_display = escape(str(Severity(severity)))
+    except ValueError:
+        severity_display = escape(str(severity))
     return mark_safe(
-        '<span class="label" style="%s">%s&nbsp;<i class="fas fa-skull-crossbones"></i></span>' % (
-            style_str,
-            escape(dict(SEVERITY_CHOICES).get(severity, str(severity)))
-        )
+        f'<span class="label" style="{style_str}">'
+        f'{severity_display}&nbsp;<i class="fas fa-skull-crossbones"></i>'
+        '</span>'
     )

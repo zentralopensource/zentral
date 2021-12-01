@@ -5,8 +5,6 @@ from dateutil import parser
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
-from django.db import transaction
-from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.crypto import get_random_string
@@ -22,10 +20,10 @@ from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, UpdateInstallProbeForm
-from .models import (Configuration, EnrolledMachine, Enrollment, ManagedInstall, MunkiState,
+from .models import (Configuration, EnrolledMachine, Enrollment, MunkiState,
                      PrincipalUserDetectionSource)
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
-from .utils import prepare_ms_tree_certificates
+from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
 
 logger = logging.getLogger('zentral.contrib.munki.views')
 
@@ -318,16 +316,14 @@ class JobDetailsView(BaseView):
 
 
 class PostJobView(BaseView):
-    @transaction.non_atomic_requests
     def do_post(self, data):
+        # lock enrolled machine
+        EnrolledMachine.objects.select_for_update().get(serial_number=self.machine_serial_number)
+
         # commit machine snapshot
         ms_tree = data['machine_snapshot']
         ms_tree['source'] = {'module': 'zentral.contrib.munki',
                              'name': 'Munki'}
-        machine = ms_tree.pop('machine', None)
-        if machine:
-            # TODO deprecated
-            ms_tree['serial_number'] = machine['serial_number']
         ms_tree['reference'] = ms_tree['serial_number']
         ms_tree['public_ip_address'] = self.ip
         if self.business_unit:
@@ -337,7 +333,7 @@ class PostJobView(BaseView):
         if not ms:
             raise RuntimeError("Could not commit machine snapshot")
 
-        # reports
+        # prepare reports
         reports = []
         report_count = event_count = 0
         for r in data.pop('reports'):
@@ -350,105 +346,40 @@ class PostJobView(BaseView):
             ))
         reports.sort()
 
-        # managed installs
+        munki_request_event_kwargs = {
+            "request_type": "postflight",
+            "enrollment": {"pk": self.enrollment.pk},
+            "report_count": report_count,
+            "event_count": event_count,
+        }
+
+        # update machine managed installs
         managed_installs = data.get("managed_installs")
         if managed_installs is not None:
-            stored_managed_installs_qs = (
-                ManagedInstall.objects.select_for_update()
-                                      .filter(machine_serial_number=self.machine_serial_number)
+            # update managed installs using the complete list
+            incident_updates = apply_managed_installs(
+                self.machine_serial_number, managed_installs,
+                self.enrollment.configuration
             )
-            # build dict with currently stored managed installs
-            stored_managed_installs = {}
-            for stored_managed_install in stored_managed_installs_qs:
-                stored_managed_installs[stored_managed_install.pkg_info_name] = stored_managed_install
-            # create or update existing managed installs
-            for pkg_info_name, pkg_info_version, pkg_info_display_name, installed_at in managed_installs:
-                if isinstance(installed_at, str):
-                    installed_at = parser.parse(installed_at)
-                    if is_aware(installed_at):
-                        installed_at = make_naive(installed_at)
-                try:
-                    stored_managed_install = stored_managed_installs.pop(pkg_info_name)
-                except KeyError:
-                    # create new managed install for this pkg info
-                    ManagedInstall.objects.create(
-                        machine_serial_number=self.machine_serial_number,
-                        pkg_info_name=pkg_info_name,
-                        pkg_info_display_name=pkg_info_display_name,
-                        pkg_info_version=pkg_info_version,
-                        installed_at=installed_at
-                    )
-                else:
-                    # eventually update the existing managed install
-                    update = False
-                    if pkg_info_version != stored_managed_install.pkg_info_version:
-                        stored_managed_install.pkg_info_version = pkg_info_version
-                        stored_managed_install.installed_at = installed_at
-                        update = True
-                    elif (
-                        installed_at is not None
-                        and (
-                            stored_managed_install.installed_at is None
-                            or stored_managed_install.installed_at < installed_at
-                        )
-                    ):
-                        stored_managed_install.installed_at = installed_at
-                        update = True
-                    if pkg_info_display_name != stored_managed_install.pkg_info_display_name:
-                        stored_managed_install.pkg_info_display_name = pkg_info_display_name
-                        update = True
-                    if update:
-                        stored_managed_install.save()
-            # delete not found stored managed installs
-            if stored_managed_installs:
-                stored_managed_installs_qs.filter(pkg_info_name__in=stored_managed_installs.keys()).delete()
+            # incident updates are attached to the munki request event
+            if incident_updates:
+                munki_request_event_kwargs["incident_updates"] = incident_updates
         else:
             # update managed installs using the install and removal events in the reports
             for _, _, report in reports:
                 for created_at, event in report.get("events", []):
-                    event_type = event.get("type")
-                    if event_type not in ("install", "removal"):
-                        continue
+                    # time
                     event_time = parser.parse(created_at)
                     if is_aware(event_time):
                         event_time = make_naive(event_time)
-                    pkg_info_name = event.get("name")
-                    if event_type == "install":
-                        mi_defaults = {"pkg_info_version": event.get("version"),
-                                       "pkg_info_display_name": event.get("display_name"),
-                                       "installed_at": event_time}
-                        mi, created = ManagedInstall.objects.get_or_create(
-                            machine_serial_number=self.machine_serial_number,
-                            pkg_info_name=pkg_info_name,
-                            defaults=mi_defaults
-                        )
-                        if not created and (mi.installed_at is None or mi.installed_at < event_time):
-                            for k, v in mi_defaults.items():
-                                setattr(mi, k, v)
-                            mi.save()
-                    elif event_type == "removal":
-                        ManagedInstall.objects.filter(
-                            Q(installed_at__isnull=True) | Q(installed_at__lt=event_time),
-                            machine_serial_number=self.machine_serial_number,
-                            pkg_info_name=pkg_info_name,
-                        ).delete()
+                    for incident_update in update_managed_install_with_event(
+                        self.machine_serial_number, event, event_time,
+                        self.enrollment.configuration
+                    ):
+                        # incident updates are attached to each munki event
+                        event.setdefault("incident_updates", []).append(incident_update)
 
-        # events
-        post_munki_request_event(
-            self.machine_serial_number,
-            self.user_agent, self.ip,
-            request_type="postflight",
-            enrollment={"pk": self.enrollment.pk},
-            report_count=report_count,
-            event_count=event_count
-        )
-
-        post_munki_events(self.machine_serial_number,
-                          self.user_agent,
-                          self.ip,
-                          (r for _, _, r in reports))
-
-        # MunkiState
+        # update machine munki state
         update_dict = {'user_agent': self.user_agent,
                        'ip': self.ip}
         if managed_installs is not None:
@@ -460,7 +391,20 @@ class PostJobView(BaseView):
                                 'run_type': report['run_type'],
                                 'start_time': start_time,
                                 'end_time': end_time})
-        with transaction.atomic():
-            MunkiState.objects.update_or_create(machine_serial_number=self.machine_serial_number,
-                                                defaults=update_dict)
+        MunkiState.objects.update_or_create(machine_serial_number=self.machine_serial_number,
+                                            defaults=update_dict)
+
+        # events
+        post_munki_request_event(
+            self.machine_serial_number,
+            self.user_agent, self.ip,
+            **munki_request_event_kwargs
+        )
+
+        post_munki_events(
+            self.machine_serial_number,
+            self.user_agent, self.ip,
+            (r for _, _, r in reports)
+        )
+
         return {}

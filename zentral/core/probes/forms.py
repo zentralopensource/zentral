@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.conf import PLATFORM_CHOICES, TYPE_CHOICES
-from zentral.core.incidents.models import SEVERITY_CHOICES
+from zentral.core.incidents.models import Severity
 from zentral.core.probes.base import PayloadFilter
 from zentral.utils.forms import CommaSeparatedQuotedStringField
 from .base import BaseProbe
@@ -204,7 +204,7 @@ class CreateProbeForm(BaseCreateProbeForm, MetadataFilterForm):
         return {"filters": {"metadata": [self.get_serialized_filter()]}}
 
 
-PROBE_SEVERITY_CHOICES = [('', 'Do not create incidents')] + sorted(SEVERITY_CHOICES)
+PROBE_SEVERITY_CHOICES = [('', 'Do not create incidents')] + sorted(Severity.choices())
 
 
 class UpdateProbeForm(forms.ModelForm):
