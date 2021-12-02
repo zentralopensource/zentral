@@ -46,6 +46,9 @@
     }
   },
   "apps": {
+    "zentral.core.incidents": {
+      "metrics": true
+    },
     "zentral.contrib.inventory": {
       "metrics": true,
       "clients": [
@@ -86,7 +89,7 @@
     "zentral.contrib.nagios": {},
     "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {
-       "metrics": true
+      "metrics": true
     }
   }
 }

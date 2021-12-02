@@ -10,31 +10,38 @@ logger = logging.getLogger("zentral.core.incidents.metrics_views")
 
 class MetricsView(BasePrometheusMetricsView):
     def populate_registry(self):
-        g = Gauge('zentral_incidents', 'Zentral incidents',
-                  ['type', 'severity', 'status', 'opened'],
-                  registry=self.registry)
+        ig = Gauge(
+            'zentral_incidents', 'Zentral incidents',
+            ['type', 'severity', 'status'],
+            registry=self.registry
+        )
+        mig = Gauge(
+            'zentral_machine_incidents', 'Zentral machine incidents',
+            ['type', 'severity', 'status'],
+            registry=self.registry
+        )
         query = (
-            "select count(*), "
-            "i.incident_type as type, i.severity, "
-            "mi.status, (CASE WHEN mi.status in ('CLOSED', 'RESOLVED') THEN FALSE ELSE TRUE END) as opened "
+            "select count(distinct i.id) as incident_count,"
+            "count(*) as machine_count,"
+            "i.incident_type as type, i.severity, mi.status "
             "from incidents_incident as i "
             "join incidents_machineincident as mi on (mi.incident_id = i.id) "
-            "group by i.incident_type, i.severity, mi.status, opened "
-            "order by i.incident_type, mi.status;"
+            "group by i.incident_type, i.severity, mi.status"
         )
         cursor = connection.cursor()
         cursor.execute(query)
         columns = [col[0] for col in cursor.description]
         for row in cursor.fetchall():
             d = dict(zip(columns, row))
+            incident_count = d.pop('incident_count')
+            machine_count = d.pop('machine_count')
             try:
-                d["severity"] = str(Severity(d.pop("severity")))
+                d["severity"] = Severity(d.pop("severity")).name.lower()
             except ValueError:
-                d["severity"] = "Unknown"
+                d["severity"] = "-"
             try:
-                d["status"] = str(Status(d.pop("status")))
+                d["status"] = Status(d.pop("status")).name.lower()
             except ValueError:
-                d["status"] = "Unknown"
-            d["opened"] = 'Y' if d["opened"] else 'N'
-            count = d.pop('count')
-            g.labels(**d).set(count)
+                d["status"] = "-"
+            ig.labels(**d).set(incident_count)
+            mig.labels(**d).set(machine_count)
