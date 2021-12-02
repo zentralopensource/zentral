@@ -48,14 +48,12 @@ class Configuration(models.Model):
     auto_reinstall_incidents = models.BooleanField(
         "Auto reinstall incidents",
         default=False,
-        help_text="Enable automatic management of incidents, "
-                  "if package reinstalls are detected"
+        help_text="Enable automatic package reinstall incidents"
     )
     auto_failed_install_incidents = models.BooleanField(
         "Auto failed install incidents",
         default=False,
-        help_text="Enable automatic management of incidents, "
-                  "if package failed installs are detected"
+        help_text="Enable automatic package failed install incidents"
     )
 
     version = models.PositiveIntegerField(editable=False)

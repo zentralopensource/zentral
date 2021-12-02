@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             name='auto_failed_install_incidents',
             field=models.BooleanField(
                 default=False,
-                help_text='Enable automatic management of incidents, if package failed installs are detected',
+                help_text='Enable automatic package failed install incidents',
                 verbose_name='Auto failed install incidents'
             ),
         ),
@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
             name='auto_reinstall_incidents',
             field=models.BooleanField(
                 default=False,
-                help_text='Enable automatic management of incidents, if package reinstalls are detected',
+                help_text='Enable automatic package reinstall incidents',
                 verbose_name='Auto reinstall incidents'
             ),
         ),
