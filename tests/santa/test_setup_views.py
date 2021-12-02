@@ -122,7 +122,7 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.view_configuration")
         response = self.client.get(reverse("santa:index"))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed("santa/overview.html")
+        self.assertTemplateUsed(response, "santa/index.html")
         # 1 configuration
         self.assertContains(response, "1 Configuration")
         self.assertContains(response, configuration.name)
@@ -132,7 +132,7 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:index"))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed("santa/overview.html")
+        self.assertTemplateUsed(response, "santa/index.html")
         # no perms, no configuration
         self.assertNotContains(response, "1 Configuration")
         self.assertNotContains(response, configuration.name)
@@ -160,7 +160,7 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.view_configuration")
         response = self.client.get(configuration.get_absolute_url())
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed("santa/configuration_details.html")
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertNotContains(response, reverse("santa:configuration_events",
                                                  args=(configuration.pk,)))
         self.assertNotContains(response, reverse("santa:configuration_events_store_redirect",
@@ -174,7 +174,7 @@ class SantaSetupViewsTestCase(TestCase):
                     "santa.view_ruleset")
         response = self.client.get(configuration.get_absolute_url())
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed("santa/configuration_details.html")
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertContains(response, reverse("santa:configuration_events",
                                               args=(configuration.pk,)))
 
@@ -198,7 +198,7 @@ class SantaSetupViewsTestCase(TestCase):
                     "santa.view_ruleset")
         response = self.client.get(reverse("santa:configuration_events", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed("santa/configuration_events.html")
+        self.assertTemplateUsed(response, "santa/configuration_events.html")
 
     def test_fetch_configuration_events_redirect(self):
         configuration = self._force_configuration()
@@ -220,7 +220,7 @@ class SantaSetupViewsTestCase(TestCase):
                     "santa.view_ruleset")
         response = self.client.get(reverse("santa:fetch_configuration_events", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed("cores/stores/events_events.html")
+        self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_get_create_configuration_view(self):
         self._login()

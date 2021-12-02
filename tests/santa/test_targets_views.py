@@ -209,7 +209,7 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:fetch_binary_events", args=(self.file_sha256,)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed("cores/stores/events_events.html")
+        self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_binary_target_store_redirect_login_redirect(self):
         self._login_redirect(reverse("santa:binary_events_store_redirect", args=(self.file_sha256,)))
@@ -299,7 +299,7 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:fetch_bundle_events", args=(bundle.target.sha256,)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed("cores/stores/events_events.html")
+        self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_bundle_target_store_redirect_login_redirect(self):
         bundle = self._force_bundle()
@@ -382,7 +382,7 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:fetch_certificate_events", args=(self.file_cert_sha256,)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed("cores/stores/events_events.html")
+        self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_certificate_target_store_redirect_login_redirect(self):
         self._login_redirect(reverse("santa:certificate_events_store_redirect", args=(self.file_cert_sha256,)))
