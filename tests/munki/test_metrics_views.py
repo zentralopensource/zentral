@@ -7,7 +7,7 @@ from zentral.contrib.munki.models import ManagedInstall
 from zentral.conf import settings
 
 
-class SantaMetricsViewsTestCase(TestCase):
+class MunkiMetricsViewsTestCase(TestCase):
     # utility methods
 
     def _force_managed_install(self, failed=False, count=1, reinstall=False):
