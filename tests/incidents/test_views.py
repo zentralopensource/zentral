@@ -1,6 +1,7 @@
 from datetime import datetime
 from functools import reduce
 import operator
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
@@ -190,7 +191,9 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:fetch_incident_events", args=(incident.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_fetch_incident_events(self):
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    def test_fetch_incident_events(self, fetch_object_events):
+        fetch_object_events.return_value = ([], None)
         incident = self._force_incident()
         self._login("incidents.view_incident")
         response = self.client.get(reverse("incidents:fetch_incident_events", args=(incident.pk,)))
