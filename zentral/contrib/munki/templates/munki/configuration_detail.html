@@ -32,6 +32,14 @@
       <td>Managed installs sync interval</td>
       <td>{{ object.managed_installs_sync_interval_days }} day{{ object.managed_installs_sync_interval_days|pluralize }}</td>
     </tr>
+    <tr>
+      <td>Auto reinstall incidents</td>
+      <td>{{ object.auto_reinstall_incidents|yesno }}</td>
+    </tr>
+    <tr>
+      <td>Auto failed install incidents</td>
+      <td>{{ object.auto_failed_install_incidents|yesno }}</td>
+    </tr>
   </tbody>
 </table>
 
