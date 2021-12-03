@@ -72,6 +72,7 @@ def post_munki_events(msn, user_agent, ip, data):
             metadata = EventMetadata(
                 uuid=event_uuid,
                 index=event_index,
+                machine_serial_number=msn,
                 request=EventRequest(user_agent, ip),
                 created_at=parser.parse(created_at),
                 incident_updates=payload.pop("incident_updates", []),

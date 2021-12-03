@@ -163,6 +163,11 @@ class MunkiAPIViewsTestCase(TestCase):
         # check computer name
         self.assertEqual(ms.system_info.computer_name, computer_name)
 
+        # check all events linked to machine
+        for call_args in post_event.call_args_list:
+            event = call_args.args[0]
+            self.assertEqual(event.metadata.machine_serial_number, enrolled_machine.serial_number)
+
         # check last event is munki event with incident update for the failed install
         last_event = post_event.call_args.args[0]
         self.assertIsInstance(last_event, MunkiEvent)
