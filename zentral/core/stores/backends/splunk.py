@@ -162,7 +162,8 @@ class EventStore(BaseEventStore):
         data = b""
         for event in events:
             payload = self._serialize_event(event)
-            event_keys.append((payload["event"]["id"], payload["event"]["index"]))
+            event_id, event_index = payload["event"]["id"].split(":")
+            event_keys.append((event_id, int(event_index)))
             if data:
                 data += b"\n"
             data += json.dumps(payload).encode("utf-8")
