@@ -290,7 +290,7 @@ def apply_managed_installs(serial_number, managed_installs, configuration):
             ManagedInstall.objects.create(
                 machine_serial_number=serial_number,
                 name=name,
-                display_name=display_name,
+                display_name=display_name or name,
                 installed_version=version,
                 installed_at=installed_at
             )
@@ -303,13 +303,12 @@ def apply_managed_installs(serial_number, managed_installs, configuration):
                 # stalled update, nothing to do
                 continue
 
-            # eventually update the existing managed install
-            update = False
+            # mi installed at is None or < installed at, we can update
+            mi.installed_at = installed_at
 
-            if mi.display_name != display_name:
+            if isinstance(display_name, str) and mi.display_name != display_name:
                 # update display name
                 mi.display_name = display_name
-                update = True
 
             if mi.failed_at is not None and mi.failed_at < installed_at:
                 # clear failed install
@@ -328,24 +327,16 @@ def apply_managed_installs(serial_number, managed_installs, configuration):
                         yield MunkiReinstallIncident.build_incident_update(
                             mi.name, mi.installed_version, Severity.NONE
                         )
-
                 mi.installed_version = version
-                mi.installed_at = installed_at
-                update = True
             else:
-                if mi.installed_at is None:
-                    mi.installed_at = installed_at
-                    update = True
-                elif not mi.reinstall:
+                if not mi.reinstall:
                     # set reinstall flag
                     mi.reinstall = True
                     if configuration.auto_reinstall_incidents:
                         yield MunkiReinstallIncident.build_incident_update(
                             mi.name, mi.installed_version
                         )
-                    update = True
-            if update:
-                mi.save()
+            mi.save()
 
     # delete not found stored managed installs
     for mi in existing_managed_installs.values():

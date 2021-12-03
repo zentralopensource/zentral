@@ -3,7 +3,7 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase
 from zentral.contrib.munki.incidents import MunkiFailedInstallIncident, MunkiReinstallIncident
 from zentral.contrib.munki.models import Configuration, ManagedInstall
-from zentral.contrib.munki.utils import update_managed_install_with_event
+from zentral.contrib.munki.utils import apply_managed_installs, update_managed_install_with_event
 from zentral.core.incidents.models import Severity
 
 
@@ -33,6 +33,7 @@ class MunkiSetupViewsTestCase(TestCase):
         return self._build_event(**kwargs)
 
     def _assert_mi_equal(self, mi_left, mi_right, **new_values):
+        debug = new_values.pop("debug", False)
         for attr in ("pk",
                      "name",
                      "display_name",
@@ -45,7 +46,11 @@ class MunkiSetupViewsTestCase(TestCase):
                 mi_right_value = new_values[attr]
             else:
                 mi_right_value = getattr(mi_right, attr)
+            if debug:
+                print("==?", getattr(mi_left, attr), mi_right_value)
             self.assertEqual(getattr(mi_left, attr), mi_right_value)
+        if debug:
+            input("?")
 
     # new - failed install
 
@@ -916,3 +921,749 @@ class MunkiSetupViewsTestCase(TestCase):
             failed_at=None,
             reinstall=True,  # set during the update
         )
+
+    # apply_managed_installs
+
+    def test_a_m_i_one_install_no_existing_mi_no_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported intall
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = None
+        installed_at = "2019-12-03T09:49:11+00:00"
+
+        # no existing mi
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 0)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident updates
+        self.assertEqual(len(incident_updates), 0)
+
+        # new mi
+        self.assertEqual(mi_qs.count(), 1)
+        mi = mi_qs.first()
+        self.assertEqual(mi.name, name)
+        self.assertEqual(mi.display_name, name)  # display name is None, so name is used instead
+        self.assertEqual(mi.installed_at, datetime(2019, 12, 3, 9, 49, 11))
+        self.assertEqual(mi.installed_version, version)
+        self.assertIsNone(mi.failed_at)
+        self.assertIsNone(mi.failed_version)
+        self.assertFalse(mi.reinstall)
+
+    def test_a_m_i_one_install_existing_mi_installed_at_null_no_update_no_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = None
+        installed_at = None  # None here prevent the update
+
+        # existing mi
+        mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+            failed_version=None,
+            failed_at=None,
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident updates
+        self.assertEqual(len(incident_updates), 0)
+
+        # existing mi not updated
+        self.assertEqual(mi_qs.count(), 1)
+        self._assert_mi_equal(mi_qs.first(), mi)
+
+    def test_a_m_i_one_install_existing_mi_installed_at_older_no_update_no_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = None
+        installed_at = datetime(1871, 3, 18)  # older than the existing one. no update
+
+        # existing mi
+        mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime.utcnow(),
+            failed_version=None,
+            failed_at=None,
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident updates
+        self.assertEqual(len(incident_updates), 0)
+
+        # existing mi not updated
+        self.assertEqual(mi_qs.count(), 1)
+        self._assert_mi_equal(mi_qs.first(), mi)
+
+    def test_a_m_i_one_install_existing_mi_update_no_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = datetime.utcnow()
+
+        # existing mi
+        mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+            failed_version=None,
+            failed_at=None,
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident updates
+        self.assertEqual(len(incident_updates), 0)
+
+        # existing mi updated
+        self.assertEqual(mi_qs.count(), 1)
+        self._assert_mi_equal(
+            mi_qs.first(), mi,
+            display_name=display_name,
+            installed_version=version,
+            installed_at=installed_at,
+        )
+
+    def test_a_m_i_one_install_existing_clear_failed_install_mi_update_no_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=False,  # blocks the incident update
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = datetime.utcnow()
+
+        # existing mi, with failed install
+        mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+            failed_version=get_random_string(),
+            failed_at=datetime(1968, 5, 13),
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident updates
+        self.assertEqual(len(incident_updates), 0)
+
+        # existing mi updated
+        self.assertEqual(mi_qs.count(), 1)
+        self._assert_mi_equal(
+            mi_qs.first(), mi,
+            display_name=display_name,
+            installed_version=version,
+            installed_at=installed_at,
+            failed_version=None,  # cleared
+            failed_at=None,  # cleared
+        )
+
+    def test_a_m_i_one_install_existing_clear_failed_install_mi_update_one_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = datetime.utcnow()
+
+        # existing mi, with failed install
+        mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+            failed_version=get_random_string(),
+            failed_at=datetime(1968, 5, 13),
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # one incident updates
+        self.assertEqual(len(incident_updates), 1)
+        incident_update = incident_updates[0]
+        self.assertEqual(incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(incident_update.key, {"munki_pkginfo_name": name,
+                                               "munki_pkginfo_version": mi.failed_version})
+        self.assertEqual(incident_update.severity, Severity.NONE)
+
+        # existing mi updated
+        self.assertEqual(mi_qs.count(), 1)
+        self._assert_mi_equal(
+            mi_qs.first(), mi,
+            display_name=display_name,
+            installed_version=version,
+            installed_at=installed_at,
+            failed_version=None,  # cleared
+            failed_at=None,  # cleared
+        )
+
+    def test_a_m_i_reinstall_mi_update_no_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=False,  # blocks the incident update
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = datetime.utcnow()
+
+        # existing mi, with failed install
+        mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=version,
+            installed_at=datetime(1871, 3, 18),
+            failed_version=None,
+            failed_at=None,
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident updates
+        self.assertEqual(len(incident_updates), 0)
+
+        # existing mi updated
+        self.assertEqual(mi_qs.count(), 1)
+        self._assert_mi_equal(
+            mi_qs.first(), mi,
+            display_name=display_name,
+            installed_at=installed_at,
+            reinstall=True,
+        )
+
+    def test_a_m_i_reinstall_on_reinstall_mi_update_no_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = datetime.utcnow()
+
+        # existing mi, with failed install
+        mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=version,
+            installed_at=datetime(1871, 3, 18),
+            failed_version=None,
+            failed_at=None,
+            reinstall=True,  # already a reinstall, no incident update
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident updates
+        self.assertEqual(len(incident_updates), 0)
+
+        # existing mi updated
+        self.assertEqual(mi_qs.count(), 1)
+        self._assert_mi_equal(
+            mi_qs.first(), mi,
+            display_name=display_name,
+            installed_at=installed_at,
+        )
+
+    def test_a_m_i_reinstall_mi_update_reinstall_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=False,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = datetime.utcnow()
+
+        # existing mi, with failed install
+        mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=version,
+            installed_at=datetime(1871, 3, 18),
+            failed_version=None,
+            failed_at=None,
+            reinstall=False,  # not a reinstall, will trigger an incident update
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # one incident update
+        self.assertEqual(len(incident_updates), 1)
+        incident_update = incident_updates[0]
+        self.assertEqual(incident_update.incident_type, MunkiReinstallIncident.incident_type)
+        self.assertEqual(incident_update.key, {"munki_pkginfo_name": name,
+                                               "munki_pkginfo_version": version})
+        self.assertEqual(incident_update.severity, MunkiReinstallIncident.severity)
+
+        # existing mi updated
+        self.assertEqual(mi_qs.count(), 1)
+        self._assert_mi_equal(
+            mi_qs.first(), mi,
+            display_name=display_name,
+            installed_at=installed_at,
+            reinstall=True,
+        )
+
+    def test_a_m_i_one_install_clear_reinstall_no_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=False,  # will block the clear reinstall event
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = datetime.utcnow()
+
+        # existing mi
+        mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+            reinstall=True,  # will be cleared by new install
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident updates, because of the configuration
+        self.assertEqual(len(incident_updates), 0)
+
+        # existing mi updated
+        self.assertEqual(mi_qs.count(), 1)
+        self._assert_mi_equal(
+            mi_qs.first(), mi,
+            display_name=display_name,
+            installed_version=version,
+            installed_at=installed_at,
+            reinstall=False,  # cleared by the more recent install of another version
+        )
+
+    def test_a_m_i_one_install_clear_reinstall_one_incident_update(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=False,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = datetime.utcnow()
+
+        # existing mi
+        mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+            reinstall=True,  # will be cleared by new install
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=name)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # one incident update
+        self.assertEqual(len(incident_updates), 1)
+        incident_update = incident_updates[0]
+        self.assertEqual(incident_update.incident_type, MunkiReinstallIncident.incident_type)
+        self.assertEqual(incident_update.key, {"munki_pkginfo_name": name,
+                                               "munki_pkginfo_version": mi.installed_version})
+        self.assertEqual(incident_update.severity, Severity.NONE)
+
+        # existing mi updated
+        self.assertEqual(mi_qs.count(), 1)
+        self._assert_mi_equal(
+            mi_qs.first(), mi,
+            display_name=display_name,
+            installed_version=version,
+            installed_at=installed_at,
+            reinstall=False,  # cleared by the more recent install of another version
+        )
+
+    def test_a_m_i_one_install_delete_other_install_no_incident_updates(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = "2019-12-03T09:49:11+00:00"
+
+        # existing mi, without reinstall, without failed install
+        old_mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=get_random_string(),
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident update
+        self.assertEqual(len(incident_updates), 0)
+
+        # new mi, old mi deleted
+        self.assertEqual(mi_qs.count(), 1)
+        mi = mi_qs.first()
+        self.assertNotEqual(mi.pk, old_mi.pk)
+        self.assertEqual(mi.name, name)
+        self.assertEqual(mi.display_name, display_name)
+        self.assertEqual(mi.installed_at, datetime(2019, 12, 3, 9, 49, 11))
+        self.assertEqual(mi.installed_version, version)
+        self.assertIsNone(mi.failed_at)
+        self.assertIsNone(mi.failed_version)
+        self.assertFalse(mi.reinstall)
+
+    def test_a_m_i_one_install_delete_other_with_failed_at_no_incident_update(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=False,  # will block the incident update
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = "2019-12-03T09:49:11+00:00"
+
+        # existing mi, without reinstall, with failed install
+        old_mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=get_random_string(),
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+            failed_version=get_random_string(),  # should trigger an incident update, but blocked by config
+            failed_at=datetime(1968, 5, 13),  # should trigger an incident update, but blocked by config
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident update
+        self.assertEqual(len(incident_updates), 0)
+
+        # new mi, old mi deleted
+        self.assertEqual(mi_qs.count(), 1)
+        mi = mi_qs.first()
+        self.assertNotEqual(mi.pk, old_mi.pk)
+        self.assertEqual(mi.name, name)
+        self.assertEqual(mi.display_name, display_name)
+        self.assertEqual(mi.installed_at, datetime(2019, 12, 3, 9, 49, 11))
+        self.assertEqual(mi.installed_version, version)
+        self.assertIsNone(mi.failed_at)
+        self.assertIsNone(mi.failed_version)
+        self.assertFalse(mi.reinstall)
+
+    def test_a_m_i_one_install_delete_other_with_failed_at_one_incident_update(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=False,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = "2019-12-03T09:49:11+00:00"
+
+        # existing mi, without reinstall, with failed install
+        old_mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=get_random_string(),
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+            failed_version=get_random_string(),  # will trigger an incident update
+            failed_at=datetime(1968, 5, 13),  # will trigger an incident update
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # one incident update
+        self.assertEqual(len(incident_updates), 1)
+        incident_update = incident_updates[0]
+        self.assertEqual(incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(incident_update.key, {"munki_pkginfo_name": old_mi.name,
+                                               "munki_pkginfo_version": old_mi.failed_version})
+        self.assertEqual(incident_update.severity, Severity.NONE)
+
+        # new mi, old mi deleted
+        self.assertEqual(mi_qs.count(), 1)
+        mi = mi_qs.first()
+        self.assertNotEqual(mi.pk, old_mi.pk)
+        self.assertEqual(mi.name, name)
+        self.assertEqual(mi.display_name, display_name)
+        self.assertEqual(mi.installed_at, datetime(2019, 12, 3, 9, 49, 11))
+        self.assertEqual(mi.installed_version, version)
+        self.assertIsNone(mi.failed_at)
+        self.assertIsNone(mi.failed_version)
+        self.assertFalse(mi.reinstall)
+
+    def test_a_m_i_one_install_delete_other_with_reinstall_no_incident_update(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=True,
+            auto_reinstall_incidents=False,  # will block the incident update
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = "2019-12-03T09:49:11+00:00"
+
+        # existing mi, without reinstall, with failed install
+        old_mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=get_random_string(),
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+            reinstall=True,  # should trigger an incident update, but blocked by config
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident update
+        self.assertEqual(len(incident_updates), 0)
+
+        # new mi, old mi deleted
+        self.assertEqual(mi_qs.count(), 1)
+        mi = mi_qs.first()
+        self.assertNotEqual(mi.pk, old_mi.pk)
+        self.assertEqual(mi.name, name)
+        self.assertEqual(mi.display_name, display_name)
+        self.assertEqual(mi.installed_at, datetime(2019, 12, 3, 9, 49, 11))
+        self.assertEqual(mi.installed_version, version)
+        self.assertIsNone(mi.failed_at)
+        self.assertIsNone(mi.failed_version)
+        self.assertFalse(mi.reinstall)
+
+    def test_a_m_i_one_install_delete_other_with_reinstall_one_incident_update(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=False,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = "2019-12-03T09:49:11+00:00"
+
+        # existing mi, without reinstall, with failed install
+        old_mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=get_random_string(),
+            display_name=get_random_string(),
+            installed_version=get_random_string(),
+            installed_at=datetime(1871, 3, 18),
+            reinstall=True,  # will trigger an incident update
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # one incident update
+        self.assertEqual(len(incident_updates), 1)
+        incident_update = incident_updates[0]
+        self.assertEqual(incident_update.incident_type, MunkiReinstallIncident.incident_type)
+        self.assertEqual(incident_update.key, {"munki_pkginfo_name": old_mi.name,
+                                               "munki_pkginfo_version": old_mi.installed_version})
+        self.assertEqual(incident_update.severity, Severity.NONE)
+
+        # new mi, old mi deleted
+        self.assertEqual(mi_qs.count(), 1)
+        mi = mi_qs.first()
+        self.assertNotEqual(mi.pk, old_mi.pk)
+        self.assertEqual(mi.name, name)
+        self.assertEqual(mi.display_name, display_name)
+        self.assertEqual(mi.installed_at, datetime(2019, 12, 3, 9, 49, 11))
+        self.assertEqual(mi.installed_version, version)
+        self.assertIsNone(mi.failed_at)
+        self.assertIsNone(mi.failed_version)
+        self.assertFalse(mi.reinstall)
