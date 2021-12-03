@@ -86,7 +86,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False
         )
-        event = self._build_install_event(failed=True)
+        event = self._build_install_event(display_name=None, failed=True)
         event_time = datetime.utcnow()
         serial_number = get_random_string()
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
@@ -106,7 +106,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(mi_qs.count(), 1)
         mi = mi_qs.first()
         self.assertEqual(mi.name, event["name"])
-        self.assertEqual(mi.display_name, event["display_name"])
+        self.assertEqual(mi.display_name, event["name"])  # display name is None, so name is used instead
         self.assertIsNone(mi.installed_version)
         self.assertIsNone(mi.installed_at)
         self.assertEqual(mi.failed_version, event["version"])
@@ -533,7 +533,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False
         )
-        event = self._build_install_event(failed=True)
+        event = self._build_install_event(display_name=None, failed=True)
         event_time = datetime.utcnow()
         serial_number = get_random_string()
         mi = ManagedInstall.objects.create(
@@ -566,7 +566,6 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(mi_qs.count(), 1)
         self._assert_mi_equal(
             mi_qs.first(), mi,
-            display_name=event["display_name"],
             failed_at=event_time,
             failed_version=event["version"],
         )
@@ -811,12 +810,13 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True
         )
-        event = self._build_install_event()
+        event = self._build_install_event(display_name=None)
         event_time = datetime.utcnow()
         serial_number = get_random_string()
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
             name=event["name"],
+            display_name=get_random_string(),
             failed_version=get_random_string(),  # previously failed version
             failed_at=datetime(1871, 3, 18),
         )
@@ -832,7 +832,6 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(mi_qs.count(), 1)
         self._assert_mi_equal(
             mi_qs.first(), mi,
-            display_name=event["display_name"],
             installed_version=event["version"],
             installed_at=event_time,
             failed_version=None,

@@ -90,7 +90,7 @@ def create_managed_install_with_failed_install(
         machine_serial_number=serial_number,
         name=name,
         defaults={
-            "display_name": display_name,
+            "display_name": display_name or name,
             "failed_at": event_time,
             "failed_version": version
         }
@@ -107,7 +107,11 @@ def create_managed_install_with_successful_install(
     ManagedInstall.objects.get_or_create(
         machine_serial_number=serial_number,
         name=name,
-        defaults={"display_name": display_name, "installed_at": event_time, "installed_version": version}
+        defaults={
+            "display_name": display_name or name,
+            "installed_at": event_time,
+            "installed_version": version
+        }
     )
 
 
@@ -148,9 +152,10 @@ def update_managed_install_with_failed_install(
             yield MunkiFailedInstallIncident.build_incident_update(
                 mi.name, mi.failed_version, Severity.NONE
             )
-        mi.display_name = display_name
         mi.failed_at = event_time
         mi.failed_version = version
+        if isinstance(display_name, str) and mi.display_name != display_name:
+            mi.display_name = display_name
         mi.save()
         if auto_failed_install_incidents:
             yield MunkiFailedInstallIncident.build_incident_update(
@@ -168,7 +173,7 @@ def update_managed_install_with_successful_install(
 ):
     updated = False
 
-    if mi.display_name != display_name:
+    if isinstance(display_name, str) and mi.display_name != display_name:
         mi.display_name = display_name
         updated = True
 
@@ -219,7 +224,7 @@ def update_managed_install_with_event(serial_number, event, event_time, configur
     if event_type not in ("install", "removal"):
         return
     name = event["name"]
-    display_name = event["display_name"]
+    display_name = event.get("display_name")
     version = event["version"]
     failed = int(event["status"]) != 0
 
