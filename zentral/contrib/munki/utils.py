@@ -225,17 +225,19 @@ def update_managed_install_with_event(serial_number, event, event_time, configur
         return
     name = event["name"]
     display_name = event.get("display_name")
-    version = event["version"]
-    failed = int(event["status"]) != 0
+    failed = int(event.get("status", "-1")) != 0
 
     try:
         mi = ManagedInstall.objects.get(machine_serial_number=serial_number, name=name)
     except ManagedInstall.DoesNotExist:
-        # create
+        # removal
         if event_type == "removal":
             # nothing to do
             return
-        elif failed:
+
+        # install
+        version = event["version"]
+        if failed:
             yield from create_managed_install_with_failed_install(
                 serial_number, name, display_name, version, event_time,
                 configuration.auto_failed_install_incidents
@@ -253,6 +255,7 @@ def update_managed_install_with_event(serial_number, event, event_time, configur
             # stalled event, nothing to update
             return
 
+        # removal
         if event_type == "removal":
             if not failed:
                 yield from delete_managed_install_with_successful_removal(
@@ -260,7 +263,11 @@ def update_managed_install_with_event(serial_number, event, event_time, configur
                     configuration.auto_failed_install_incidents,
                     configuration.auto_reinstall_incidents
                 )
-        elif failed:
+            return
+
+        # install
+        version = event["version"]
+        if failed:
             yield from update_managed_install_with_failed_install(
                 mi, version, display_name, event_time,
                 configuration.auto_failed_install_incidents

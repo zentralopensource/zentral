@@ -30,7 +30,9 @@ class MunkiSetupViewsTestCase(TestCase):
 
     def _build_removal_event(self, **kwargs):
         kwargs["type"] = "removal"
-        return self._build_event(**kwargs)
+        event = self._build_event(**kwargs)
+        event.pop("version")
+        return event
 
     def _assert_mi_equal(self, mi_left, mi_right, **new_values):
         debug = new_values.pop("debug", False)
@@ -167,7 +169,7 @@ class MunkiSetupViewsTestCase(TestCase):
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
             name=event["name"],
-            installed_version=event["version"],
+            installed_version=get_random_string(),
             installed_at=datetime.utcnow()
         )
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
@@ -190,7 +192,7 @@ class MunkiSetupViewsTestCase(TestCase):
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
             name=event["name"],
-            failed_version=event["version"],
+            failed_version=get_random_string(),
             failed_at=datetime.utcnow()
         )
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
@@ -264,7 +266,7 @@ class MunkiSetupViewsTestCase(TestCase):
         ManagedInstall.objects.create(
             machine_serial_number=serial_number,
             name=event["name"],
-            installed_version=event["version"],
+            installed_version=get_random_string(),
             installed_at=datetime(1871, 3, 18),
             failed_version=get_random_string(),
             failed_at=datetime(1871, 3, 18),  # would trigger incident update if auto_failed_install_incidents
@@ -293,7 +295,7 @@ class MunkiSetupViewsTestCase(TestCase):
         ManagedInstall.objects.create(
             machine_serial_number=serial_number,
             name=event["name"],
-            installed_version=event["version"],
+            installed_version=get_random_string(),
             installed_at=datetime(1871, 3, 18),
             failed_version=failed_version,
             failed_at=datetime(1871, 3, 18),  # will trigger incident update
@@ -324,10 +326,10 @@ class MunkiSetupViewsTestCase(TestCase):
         event_time = datetime.utcnow()
         serial_number = get_random_string()
         failed_version = get_random_string()
-        ManagedInstall.objects.create(
+        mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
             name=event["name"],
-            installed_version=event["version"],
+            installed_version=get_random_string(),
             installed_at=datetime(1871, 3, 18),
             failed_version=failed_version,
             failed_at=datetime(1871, 3, 18),  # would trigger incident update if auto_failed_install_incidents
@@ -345,7 +347,7 @@ class MunkiSetupViewsTestCase(TestCase):
         incident_update = incident_updates[0]
         self.assertEqual(incident_update.incident_type, MunkiReinstallIncident.incident_type)
         self.assertEqual(incident_update.key, {"munki_pkginfo_name": event["name"],
-                                               "munki_pkginfo_version": event["version"]})
+                                               "munki_pkginfo_version": mi.installed_version})
         self.assertEqual(incident_update.severity, Severity.NONE)
         self.assertEqual(mi_qs.count(), 0)
 
@@ -355,10 +357,10 @@ class MunkiSetupViewsTestCase(TestCase):
         event_time = datetime.utcnow()
         serial_number = get_random_string()
         failed_version = get_random_string()
-        ManagedInstall.objects.create(
+        mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
             name=event["name"],
-            installed_version=event["version"],
+            installed_version=get_random_string(),
             installed_at=datetime(1871, 3, 18),
             failed_version=failed_version,
             failed_at=datetime(1871, 3, 18),  # will trigger incident update
@@ -381,7 +383,7 @@ class MunkiSetupViewsTestCase(TestCase):
         reinstall_incident_update = incident_updates[1]
         self.assertEqual(reinstall_incident_update.incident_type, MunkiReinstallIncident.incident_type)
         self.assertEqual(reinstall_incident_update.key, {"munki_pkginfo_name": event["name"],
-                                                         "munki_pkginfo_version": event["version"]})
+                                                         "munki_pkginfo_version": mi.installed_version})
         self.assertEqual(reinstall_incident_update.severity, Severity.NONE)
         self.assertEqual(mi_qs.count(), 0)
 
@@ -394,7 +396,7 @@ class MunkiSetupViewsTestCase(TestCase):
         ManagedInstall.objects.create(
             machine_serial_number=serial_number,
             name=event["name"],
-            installed_version=event["version"],
+            installed_version=get_random_string(),
             installed_at=None,  # block incident update
             failed_version=failed_version,
             failed_at=None,  # block incident update
@@ -421,7 +423,7 @@ class MunkiSetupViewsTestCase(TestCase):
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
             name=event["name"],
-            installed_version=event["version"],
+            installed_version=get_random_string(),
             installed_at=datetime(1871, 3, 18)
         )
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
@@ -446,7 +448,7 @@ class MunkiSetupViewsTestCase(TestCase):
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
             name=event["name"],
-            failed_version=event["version"],
+            failed_version=get_random_string(),
             installed_at=datetime.utcnow()
         )
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
