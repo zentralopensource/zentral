@@ -1,7 +1,7 @@
 from datetime import datetime
 from django.utils.crypto import get_random_string
 from django.test import TestCase
-from zentral.contrib.munki.incidents import MunkiFailedInstallIncident, MunkiReinstallIncident
+from zentral.contrib.munki.incidents import MunkiInstallFailedIncident, MunkiReinstallIncident
 from zentral.contrib.munki.models import Configuration, ManagedInstall
 from zentral.contrib.munki.utils import apply_managed_installs, update_managed_install_with_event
 from zentral.core.incidents.models import Severity
@@ -101,10 +101,10 @@ class MunkiSetupViewsTestCase(TestCase):
         ))
         self.assertEqual(len(incident_updates), 1)
         incident_update = incident_updates[0]
-        self.assertEqual(incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(incident_update.incident_type, MunkiInstallFailedIncident.incident_type)
         self.assertEqual(incident_update.key, {"munki_pkginfo_name": event["name"],
                                                "munki_pkginfo_version": event["version"]})
-        self.assertEqual(incident_update.severity, MunkiFailedInstallIncident.severity)
+        self.assertEqual(incident_update.severity, MunkiInstallFailedIncident.severity)
         self.assertEqual(mi_qs.count(), 1)
         mi = mi_qs.first()
         self.assertEqual(mi.name, event["name"])
@@ -311,7 +311,7 @@ class MunkiSetupViewsTestCase(TestCase):
         ))
         self.assertEqual(len(incident_updates), 1)
         incident_update = incident_updates[0]
-        self.assertEqual(incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(incident_update.incident_type, MunkiInstallFailedIncident.incident_type)
         self.assertEqual(incident_update.key, {"munki_pkginfo_name": event["name"],
                                                "munki_pkginfo_version": failed_version})
         self.assertEqual(incident_update.severity, Severity.NONE)
@@ -376,7 +376,7 @@ class MunkiSetupViewsTestCase(TestCase):
         ))
         self.assertEqual(len(incident_updates), 2)
         failed_install_incident_update = incident_updates[0]
-        self.assertEqual(failed_install_incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(failed_install_incident_update.incident_type, MunkiInstallFailedIncident.incident_type)
         self.assertEqual(failed_install_incident_update.key, {"munki_pkginfo_name": event["name"],
                                                               "munki_pkginfo_version": failed_version})
         self.assertEqual(failed_install_incident_update.severity, Severity.NONE)
@@ -518,10 +518,10 @@ class MunkiSetupViewsTestCase(TestCase):
         ))
         self.assertEqual(len(incident_updates), 1)
         incident_update = incident_updates[0]
-        self.assertEqual(incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(incident_update.incident_type, MunkiInstallFailedIncident.incident_type)
         self.assertEqual(incident_update.key, {"munki_pkginfo_name": event["name"],
                                                "munki_pkginfo_version": event["version"]})
-        self.assertEqual(incident_update.severity, MunkiFailedInstallIncident.severity)
+        self.assertEqual(incident_update.severity, MunkiInstallFailedIncident.severity)
         self.assertEqual(mi_qs.count(), 1)
         self._assert_mi_equal(
             mi_qs.first(), mi,
@@ -556,15 +556,15 @@ class MunkiSetupViewsTestCase(TestCase):
         ))
         self.assertEqual(len(incident_updates), 2)
         previous_incident_update = incident_updates[0]
-        self.assertEqual(previous_incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(previous_incident_update.incident_type, MunkiInstallFailedIncident.incident_type)
         self.assertEqual(previous_incident_update.key, {"munki_pkginfo_name": event["name"],
                                                         "munki_pkginfo_version": mi.failed_version})
         self.assertEqual(previous_incident_update.severity, Severity.NONE)
         incident_update = incident_updates[1]
-        self.assertEqual(incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(incident_update.incident_type, MunkiInstallFailedIncident.incident_type)
         self.assertEqual(incident_update.key, {"munki_pkginfo_name": event["name"],
                                                "munki_pkginfo_version": event["version"]})
-        self.assertEqual(incident_update.severity, MunkiFailedInstallIncident.severity)
+        self.assertEqual(incident_update.severity, MunkiInstallFailedIncident.severity)
         self.assertEqual(mi_qs.count(), 1)
         self._assert_mi_equal(
             mi_qs.first(), mi,
@@ -864,7 +864,7 @@ class MunkiSetupViewsTestCase(TestCase):
         ))
         self.assertEqual(len(incident_updates), 1)
         incident_update = incident_updates[0]
-        self.assertEqual(incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(incident_update.incident_type, MunkiInstallFailedIncident.incident_type)
         self.assertEqual(incident_update.key, {"munki_pkginfo_name": event["name"],
                                                "munki_pkginfo_version": mi.failed_version})
         self.assertEqual(incident_update.severity, Severity.NONE)
@@ -909,7 +909,7 @@ class MunkiSetupViewsTestCase(TestCase):
                                                          "munki_pkginfo_version": event["version"]})
         self.assertEqual(reinstall_incident_update.severity, MunkiReinstallIncident.severity)
         failed_install_incident_update = incident_updates[1]
-        self.assertEqual(failed_install_incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(failed_install_incident_update.incident_type, MunkiInstallFailedIncident.incident_type)
         self.assertEqual(failed_install_incident_update.key, {"munki_pkginfo_name": event["name"],
                                                               "munki_pkginfo_version": mi.failed_version})
         self.assertEqual(failed_install_incident_update.severity, Severity.NONE)
@@ -1171,7 +1171,7 @@ class MunkiSetupViewsTestCase(TestCase):
         # one incident updates
         self.assertEqual(len(incident_updates), 1)
         incident_update = incident_updates[0]
-        self.assertEqual(incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(incident_update.incident_type, MunkiInstallFailedIncident.incident_type)
         self.assertEqual(incident_update.key, {"munki_pkginfo_name": name,
                                                "munki_pkginfo_version": mi.failed_version})
         self.assertEqual(incident_update.severity, Severity.NONE)
@@ -1553,7 +1553,7 @@ class MunkiSetupViewsTestCase(TestCase):
         # one incident update
         self.assertEqual(len(incident_updates), 1)
         incident_update = incident_updates[0]
-        self.assertEqual(incident_update.incident_type, MunkiFailedInstallIncident.incident_type)
+        self.assertEqual(incident_update.incident_type, MunkiInstallFailedIncident.incident_type)
         self.assertEqual(incident_update.key, {"munki_pkginfo_name": old_mi.name,
                                                "munki_pkginfo_version": old_mi.failed_version})
         self.assertEqual(incident_update.severity, Severity.NONE)

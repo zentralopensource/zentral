@@ -44,16 +44,16 @@ class BaseMunkiIncident(BaseIncident):
                    ("monolith.view_pkginfoname",), pkg_infos)
 
 
-class MunkiFailedInstallIncident(BaseMunkiIncident):
-    incident_type = "munki_failed_install"
+class MunkiInstallFailedIncident(BaseMunkiIncident):
+    incident_type = "munki_install_failed"
 
     def get_name(self):
         name = self.key.get("munki_pkginfo_name", "???")
         version = self.key.get("munki_pkginfo_version", "???")
-        return f"Munki pkg {name}/{version} failed install"
+        return f"Munki pkg {name}/{version} install failed"
 
 
-register_incident_class(MunkiFailedInstallIncident)
+register_incident_class(MunkiInstallFailedIncident)
 
 
 class MunkiReinstallIncident(BaseMunkiIncident):

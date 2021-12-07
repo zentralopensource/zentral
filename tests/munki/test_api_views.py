@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
 from zentral.contrib.munki.events import MunkiEvent
-from zentral.contrib.munki.incidents import IncidentUpdate, MunkiFailedInstallIncident
+from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIncident
 from zentral.contrib.munki.models import Configuration, EnrolledMachine, Enrollment, ManagedInstall
 
 
@@ -176,10 +176,10 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(
             incident_update,
             IncidentUpdate(
-                "munki_failed_install",
+                "munki_install_failed",
                 {"munki_pkginfo_name": "YoloApp",
                  "munki_pkginfo_version": "1.2.3"},
-                MunkiFailedInstallIncident.severity
+                MunkiInstallFailedIncident.severity
             )
         )
 

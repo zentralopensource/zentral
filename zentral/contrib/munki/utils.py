@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import ExtensionOID, NameOID
 from dateutil import parser
 from django.utils.timezone import is_aware, make_naive
-from .incidents import MunkiFailedInstallIncident, MunkiReinstallIncident, Severity
+from .incidents import MunkiInstallFailedIncident, MunkiReinstallIncident, Severity
 from .models import ManagedInstall
 
 
@@ -96,7 +96,7 @@ def create_managed_install_with_failed_install(
         }
     )
     if created and auto_failed_install_incidents:
-        yield MunkiFailedInstallIncident.build_incident_update(mi.name, mi.failed_version)
+        yield MunkiInstallFailedIncident.build_incident_update(mi.name, mi.failed_version)
 
 
 def create_managed_install_with_successful_install(
@@ -126,7 +126,7 @@ def delete_managed_install_with_successful_removal(
         and mi.failed_at is not None
         and mi.failed_at < event_time
     ):
-        yield MunkiFailedInstallIncident.build_incident_update(
+        yield MunkiInstallFailedIncident.build_incident_update(
             mi.name, mi.failed_version, Severity.NONE
         )
     if (
@@ -149,7 +149,7 @@ def update_managed_install_with_failed_install(
 ):
     if mi.failed_at is None or mi.failed_at < event_time:
         if auto_failed_install_incidents and mi.failed_at is not None and mi.failed_version != version:
-            yield MunkiFailedInstallIncident.build_incident_update(
+            yield MunkiInstallFailedIncident.build_incident_update(
                 mi.name, mi.failed_version, Severity.NONE
             )
         mi.failed_at = event_time
@@ -158,7 +158,7 @@ def update_managed_install_with_failed_install(
             mi.display_name = display_name
         mi.save()
         if auto_failed_install_incidents:
-            yield MunkiFailedInstallIncident.build_incident_update(
+            yield MunkiInstallFailedIncident.build_incident_update(
                 mi.name, mi.failed_version
             )
 
@@ -207,7 +207,7 @@ def update_managed_install_with_successful_install(
     if mi.failed_at is not None and mi.failed_at < event_time:
         # clear failed install
         if auto_failed_install_incidents:
-            yield MunkiFailedInstallIncident.build_incident_update(
+            yield MunkiInstallFailedIncident.build_incident_update(
                 mi.name, mi.failed_version, Severity.NONE
             )
         mi.failed_at = None
@@ -325,7 +325,7 @@ def apply_managed_installs(serial_number, managed_installs, configuration):
             if mi.failed_at is not None and mi.failed_at < installed_at:
                 # clear failed install
                 if configuration.auto_failed_install_incidents:
-                    yield MunkiFailedInstallIncident.build_incident_update(
+                    yield MunkiInstallFailedIncident.build_incident_update(
                         mi.name, mi.failed_version, Severity.NONE
                     )
                 mi.failed_at = None
@@ -353,7 +353,7 @@ def apply_managed_installs(serial_number, managed_installs, configuration):
     # delete not found stored managed installs
     for mi in existing_managed_installs.values():
         if mi.failed_at is not None and configuration.auto_failed_install_incidents:
-            yield MunkiFailedInstallIncident.build_incident_update(
+            yield MunkiInstallFailedIncident.build_incident_update(
                 mi.name, mi.failed_version, Severity.NONE
             )
         if mi.reinstall and configuration.auto_reinstall_incidents:
