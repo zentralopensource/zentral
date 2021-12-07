@@ -7,8 +7,8 @@ from django.db import migrations, models
 def set_incident_defaults(apps, schema_editor):
     Incident = apps.get_model("incidents", "Incident")
     for incident in Incident.objects.all():
-        incident.type = "probe"
-        incident.key = {"pk": incident.probe_source_id or 0},
+        incident.incident_type = "probe"
+        incident.key = {"probe_pk": incident.probe_source_id or 0}
         incident.status_time = incident.updated_at
         incident.save()
     MachineIncident = apps.get_model("incidents", "MachineIncident")
