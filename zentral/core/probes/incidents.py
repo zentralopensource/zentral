@@ -31,12 +31,20 @@ class ProbeIncident(BaseIncident):
             pk = int(self.key["probe_pk"])
         except (KeyError, ValueError):
             logger.error("Wrong probe incident key %s", self.key)
-            return ProbeSource.objects.none()
-        return ProbeSource.objects.filter(pk=pk)
+            return []
+        else:
+            return list(ProbeSource.objects.filter(pk=pk))
+
+    def get_objects_for_display(self):
+        probe_sources = self.get_objects()
+        if probe_sources:
+            yield ("Probe{}".format("" if len(probe_sources) == 1 else "s"),
+                   ("probes.view_probesource",), probe_sources)
 
     def get_name(self):
-        probe_source = self.get_objects().first()
-        if probe_source is None:
+        try:
+            probe_source = self.get_objects()[0]
+        except IndexError:
             return "Unknown probe incident"
         else:
             return probe_source.name

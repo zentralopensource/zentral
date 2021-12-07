@@ -65,8 +65,18 @@ class IncidentView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["incidents"] = True
+
+        ctx["objects"] = []
+        for title, permissions, objects in self.object.loaded_incident.get_objects_for_display():
+            if self.request.user.has_perms(permissions):
+                obj_iter = ((obj.get_absolute_url(), obj) for obj in objects)
+            else:
+                obj_iter = ((None, obj) for obj in objects)
+            ctx["objects"].append((title, obj_iter))
+
         ctx["machine_incidents"] = ctx["object"].machineincident_set.all()
         ctx["machine_incidents_count"] = ctx["machine_incidents"].count()
+
         if self.request.user.has_perms(EventsMixin.permission_required):
             ctx["show_events_link"] = frontend_store.object_events
             store_links = []

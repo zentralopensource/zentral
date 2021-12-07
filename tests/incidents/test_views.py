@@ -120,6 +120,22 @@ class InventoryViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "incidents/incident_detail.html")
         self.assertContains(response, "Change status")
 
+    def test_incident_detail_no_perms_no_object_link(self):
+        incident = self._force_incident()
+        self._login("incidents.view_incident")
+        response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Probe")
+        self.assertNotContains(response, self.probe_source.get_absolute_url())
+
+    def test_incident_detail_perms_object_link(self):
+        incident = self._force_incident()
+        self._login("incidents.view_incident", "probes.view_probesource")
+        response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Probe")
+        self.assertContains(response, self.probe_source.get_absolute_url())
+
     # update incident
 
     def test_update_incident_redirect(self):

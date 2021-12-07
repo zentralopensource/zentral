@@ -9,14 +9,43 @@
 </ol>
 
 <h2>Incident <em>{{ incident.name }}</em></h2>
-<p>{% incident_severity incident.severity %}</p>
+
+<table class="table table-condensed">
+  <tbody>
+    <tr>
+      <td style="width:20vw">Severity</td>
+      <td>{% incident_severity incident.severity %}</td>
+    </tr>
+    <tr>
+      <td>Status</td>
+      <td>{{ incident.get_status_display }}</td>
+    </tr>
+    {% for section, objects in objects %}
+    <tr>
+      <td>{{ section }}</td>
+      <td>
+        <ul class="list-unstyled">
+          {% for link, obj in objects %}
+          <li>
+            {% if link %}
+            <a href="{{ link }}">{{ obj }}</a>
+            {% else %}
+            {{ obj }}
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
 <dl>
-  <dt>Status</dt>
-  <dd>{{ incident.get_status_display }}</dd>
-  <dt>Created at</dt>
-  <dd>{{ incident.created_at }}</dd>
-  <dt>Updated at</dz>
-  <dd>{{ incident.updated_at }}</dt>
+  <dt class="small" style="opacity:0.5">Created at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+  <dt class="small" style="opacity:0.5">Updated at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
 </dl>
 
 <div class="btn-group" role="group" style="margin:0 0 10px 0">

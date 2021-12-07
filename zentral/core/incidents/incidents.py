@@ -17,13 +17,16 @@ class BaseIncident:
         else:
             return Incident.objects.none()
 
-    def get_objects(self, key):
-        return []
-
     def __init__(self, incident):
         self.incident = incident
         self.key = incident.key
         self.pk = incident.pk
+
+    def get_objects(self, key):
+        return []
+
+    def get_objects_for_display(self):
+        return []
 
     def get_name(self):
         return f"{self.incident_type} incident #{self.incident.pk}"

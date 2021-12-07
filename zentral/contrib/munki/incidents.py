@@ -34,7 +34,14 @@ class BaseMunkiIncident(BaseIncident):
             from zentral.contrib.monolith.models import PkgInfo
         except ModuleNotFoundError:
             return []
-        return PkgInfo.objects.filter(name__name=name, version=version)
+        else:
+            return list(PkgInfo.objects.filter(name__name=name, version=version))
+
+    def get_objects_for_display(self):
+        pkg_infos = self.get_objects()
+        if pkg_infos:
+            yield ("PkgInfo{}".format("" if len(pkg_infos) == 1 else "s"),
+                   ("monolith.view_pkginfoname",), pkg_infos)
 
 
 class MunkiFailedInstallIncident(BaseMunkiIncident):
