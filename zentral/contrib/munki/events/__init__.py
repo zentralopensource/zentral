@@ -26,13 +26,12 @@ class MunkiRequestEvent(BaseEvent):
 register_event_type(MunkiRequestEvent)
 
 
-class MunkiEvent(BaseEvent):
-    event_type = "munki_event"
+class BaseMunkiEvent(BaseEvent):
     tags = ["munki"]
+    namespace = "munki_event"
     payload_aggregations = [
         ("munki_version", {"type": "terms", "bucket_number": 10, "label": "Munki versions"}),
         ("run_type", {"type": "terms", "bucket_number": 10, "label": "Run types"}),
-        ("type", {"type": "terms", "bucket_number": 10, "label": "Types"}),
         ("name", {"type": "table", "bucket_number": 50, "label": "Bundles",
                   "columns": [("name", "Name"),
                               ("version", "Version str.")]}),
@@ -51,7 +50,56 @@ class MunkiEvent(BaseEvent):
         return keys
 
 
-register_event_type(MunkiEvent)
+class MunkiStartEvent(BaseMunkiEvent):
+    event_type = "munki_start"
+
+
+register_event_type(MunkiStartEvent)
+
+
+class MunkiWarningEvent(BaseMunkiEvent):
+    event_type = "munki_warning"
+
+
+register_event_type(MunkiWarningEvent)
+
+
+class MunkiErrorEvent(BaseMunkiEvent):
+    event_type = "munki_error"
+
+
+register_event_type(MunkiErrorEvent)
+
+
+class MunkiInstallEvent(BaseMunkiEvent):
+    event_type = "munki_install"
+
+
+register_event_type(MunkiInstallEvent)
+
+
+class MunkiInstallFailedEvent(BaseMunkiEvent):
+    event_type = "munki_install_failed"
+
+
+register_event_type(MunkiInstallFailedEvent)
+
+
+class MunkiRemovalEvent(BaseMunkiEvent):
+    event_type = "munki_removal"
+
+
+register_event_type(MunkiRemovalEvent)
+
+
+class MunkiRemovalFailedEvent(BaseMunkiEvent):
+    event_type = "munki_removal_failed"
+
+
+register_event_type(MunkiRemovalFailedEvent)
+
+
+# utils
 
 
 def post_munki_request_event(msn, user_agent, ip, **kwargs):
@@ -69,6 +117,33 @@ def post_munki_events(msn, user_agent, ip, data):
         events = report.pop('events')
         event_uuid = uuid.uuid4()
         for event_index, (created_at, payload) in enumerate(events):
+            # event type
+            try:
+                failed = int(payload["status"]) != 0
+            except (KeyError, ValueError):
+                failed = True
+            payload_type = payload.get("type")
+            if payload_type == "install":
+                if failed:
+                    event_cls = MunkiInstallFailedEvent
+                else:
+                    event_cls = MunkiInstallEvent
+            elif payload_type == "removal":
+                if failed:
+                    event_cls = MunkiRemovalFailedEvent
+                else:
+                    event_cls = MunkiRemovalEvent
+            elif payload_type == "warning":
+                event_cls = MunkiWarningEvent
+            elif payload_type == "error":
+                event_cls = MunkiErrorEvent
+            elif payload_type == "start":
+                event_cls = MunkiStartEvent
+            else:
+                logger.error("Unknown munki event payload type %s", payload_type)
+                continue
+
+            # build event
             metadata = EventMetadata(
                 uuid=event_uuid,
                 index=event_index,
@@ -78,7 +153,7 @@ def post_munki_events(msn, user_agent, ip, data):
                 incident_updates=payload.pop("incident_updates", []),
             )
             payload.update(report)
-            event = MunkiEvent(metadata, payload)
+            event = event_cls(metadata, payload)
             event.post()
 
 

@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
-from zentral.contrib.munki.events import MunkiEvent
+from zentral.contrib.munki.events import MunkiInstallFailedEvent
 from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIncident
 from zentral.contrib.munki.models import Configuration, EnrolledMachine, Enrollment, ManagedInstall
 
@@ -170,7 +170,7 @@ class MunkiAPIViewsTestCase(TestCase):
 
         # check last event is munki event with incident update for the failed install
         last_event = post_event.call_args.args[0]
-        self.assertIsInstance(last_event, MunkiEvent)
+        self.assertIsInstance(last_event, MunkiInstallFailedEvent)
         self.assertEqual(len(last_event.metadata.incident_updates), 1)
         incident_update = last_event.metadata.incident_updates[0]
         self.assertEqual(
