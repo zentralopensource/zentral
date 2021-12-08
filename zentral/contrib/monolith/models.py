@@ -124,53 +124,60 @@ class PkgInfoName(models.Model):
 
 class PkgInfoManager(models.Manager):
     def alles(self, **kwargs):
-        query = (
-            "select pn.id, pn.name, pi.id, pi.version,"
-            "json_agg(distinct jsonb_build_object('pk', c.id, 'name', c.name, 'priority', c.priority)),"
+        params = []
+        # first we aggregate the package info, with the munki managed installs
+        aggregated_pi_query = (
+            "select pn.id as pn_pk, pn.name, pi.id as pi_pk, pi.version,"
             "count(mi.*), sum(count(mi.*)) over (partition by pn.id) as pn_total "
             "from monolith_pkginfoname as pn "
             "join monolith_pkginfo as pi on (pi.name_id = pn.id) "
-            "join monolith_pkginfo_catalogs as pc on (pc.pkginfo_id = pi.id) "
-            "join monolith_catalog as c on (c.id = pc.catalog_id) "
             "left join munki_managedinstall as mi on "
             "(pn.name = mi.name and pi.version = mi.installed_version) "
-            "where pi.archived_at is null "
+            "where pi.archived_at is null"
         )
-        params = []
         name = kwargs.get("name")
         if name:
             params.append("%{}%".format(connection.ops.prep_for_like_query(name)))
-            query = f"{query} and UPPER(pn.name) LIKE UPPER(%s) "
+            aggregated_pi_query += " and UPPER(pn.name) LIKE UPPER(%s)"
         name_id = kwargs.get("name_id")
         if name_id:
             params.append(name_id)
-            query = f"{query} and pn.id = %s"
+            aggregated_pi_query += " and pn.id = %s"
+        aggregated_pi_query += " group by pn.id, pn.name, pi.id, pi.version"
+
+        # then we build the full query
+        # join and aggregate the catalogs, compte the percentages
+        query = (
+            f"with aggregated_pi as ({aggregated_pi_query}) "
+            "select api.*,"
+            "case when pn_total=0 then null else 100.0 * count / pn_total end as percent,"
+            "json_agg(distinct jsonb_build_object('pk', c.id, 'name', c.name, 'priority', c.priority)) as catalogs "
+            "from aggregated_pi as api "
+            "join monolith_pkginfo_catalogs as pc on (pc.pkginfo_id = api.pi_pk) "
+            "join monolith_catalog as c on (c.id = pc.catalog_id) "
+            "where c.archived_at is null "
+        )
         catalog = kwargs.get("catalog")
         if catalog:
             params.append(catalog.id)
-            query = f"{query} and c.id = %s "
-        query = (
-          f"{query} and c.archived_at is null "
-          "group by pn.id, pn.name, pi.id, pi.version "
-          "order by pn.name, pn.id, pi.version, pi.id"
+            query += " and c.id = %s"
+        query += (
+            " group by api.pn_pk, api.name, api.pi_pk, api.version, api.count, api.pn_total "
+            "order by api.name, api.pn_pk, api.pi_pk"
         )
-        query = (
-            f"with pkginfos as ({query}) "
-            "select *,"
-            "case when pn_total=0 then null else 100.0 * count / pn_total end as percent "
-            "from pkginfos"
-        )
+
+        # run the query and organize the results
         cursor = connection.cursor()
         cursor.execute(query, params)
-        current_pn = current_pn_id = None
+        current_pn = current_pn_pk = None
         name_c = info_c = 0
         pkg_name_list = []
-        for pn_id, pn_name, pi_pk, version, catalogs, count, pn_total, percent in cursor.fetchall():
+        for pn_pk, pn_name, pi_pk, version, count, pn_total, percent, catalogs in cursor.fetchall():
             info_c += 1
             pi = {'pk': pi_pk,
                   'version': version,
                   'catalogs': sorted(catalogs, key=lambda c: (c["priority"], c["name"])),
-                  'count': count,
+                  'count': int(count),
                   'percent': percent}
             pi['version_sort'] = []
             for version_elm in version.split("."):
@@ -179,15 +186,15 @@ class PkgInfoManager(models.Manager):
                 except ValueError:
                     pass
                 pi['version_sort'].append(version_elm)
-            if pn_id != current_pn_id:
+            if pn_pk != current_pn_pk:
                 if current_pn is not None:
                     current_pn['pkg_infos'].sort(key=lambda pi: pi["version_sort"], reverse=True)
                     pkg_name_list.append(current_pn)
                     name_c += 1
-                current_pn_id = pn_id
-                current_pn = {'id': pn_id,
+                current_pn_pk = pn_pk
+                current_pn = {'id': pn_pk,
                               'name': pn_name,
-                              'count': pn_total,
+                              'count': int(pn_total),
                               'pkg_infos': []}
             current_pn['pkg_infos'].append(pi)
         if current_pn:
