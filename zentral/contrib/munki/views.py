@@ -356,6 +356,8 @@ class PostJobView(BaseView):
         # update machine managed installs
         managed_installs = data.get("managed_installs")
         if managed_installs is not None:
+            munki_request_event_kwargs["managed_installs"] = True
+            munki_request_event_kwargs["managed_install_count"] = len(managed_installs)
             # update managed installs using the complete list
             incident_updates = apply_managed_installs(
                 self.machine_serial_number, managed_installs,
@@ -365,6 +367,7 @@ class PostJobView(BaseView):
             if incident_updates:
                 munki_request_event_kwargs["incident_updates"] = incident_updates
         else:
+            munki_request_event_kwargs["managed_installs"] = False
             # update managed installs using the install and removal events in the reports
             for _, _, report in reports:
                 for created_at, event in report.get("events", []):
