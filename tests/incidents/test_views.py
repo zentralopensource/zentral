@@ -136,6 +136,36 @@ class InventoryViewsTestCase(TestCase):
         self.assertContains(response, "Probe")
         self.assertContains(response, self.probe_source.get_absolute_url())
 
+    def test_incident_detail_machine_incidents(self):
+        incident = self._force_incident()
+        for i in range(23):
+            self._force_machine_incident(incident)
+        self._login("incidents.view_incident", "incidents.view_machineincident")
+        response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "23 machine incidents")
+        self.assertContains(response, "page 1 of 2")
+
+    def test_incident_detail_machine_incidents_second_page(self):
+        incident = self._force_incident()
+        for i in range(23):
+            self._force_machine_incident(incident)
+        self._login("incidents.view_incident", "incidents.view_machineincident")
+        response = self.client.get(reverse("incidents:incident", args=(incident.pk,)) + "?page=2")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "23 machine incidents")
+        self.assertContains(response, "page 2 of 2")
+
+    def test_incident_detail_no_perm_no_machine_incidents(self):
+        incident = self._force_incident()
+        for i in range(23):
+            self._force_machine_incident(incident)
+        self._login("incidents.view_incident")
+        response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "23 machine incidents")
+        self.assertNotContains(response, "page 1 of 2")
+
     # update incident
 
     def test_update_incident_redirect(self):

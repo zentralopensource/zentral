@@ -5,7 +5,14 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'incidents:index' %}">Incidents</a>
+  {% if reset_link %}
+  <li><a href="{{ reset_link }}">{{ object.name }}</a></li>
+  {% else %}
   <li class="active">{{ object.name }}</li>
+  {% endif %}
+  {% if perms.incidents.view_machineincident and paginator.count and paginator.num_pages > 1 %}
+  <li class="active">page {{ page.number }} of {{ paginator.num_pages }}</li>
+  {% endif %}
 </ol>
 
 <h2>Incident <em>{{ incident.name }}</em></h2>
@@ -66,8 +73,22 @@
   {% endif %}
 </div>
 
-{% if perms.incidents.view_machineincident and machine_incidents_count %}
-<h3>{{ machine_incidents_count }} machine incident{{ machine_incidents_count|pluralize }}</h3>
+{% if perms.incidents.view_machineincident and paginator.count %}
+<h3>{{ paginator.count }} machine incident{{ paginator.count|pluralize }}</h3>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
 <table class="table table-condensed">
   <thead>
     <th>Serial number</th>
@@ -94,7 +115,7 @@
       {% if perms.incidents.change_machineincident %}
       <td>
         <a href="{% url 'incidents:update_machine_incident' object.pk machine_incident.pk %}" class="btn btn-default">
-          Update
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Change status
         </a>
       </td>
       {% endif %}
@@ -102,6 +123,20 @@
     {% endfor %}
   </tbody>
 </table>
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
 {% endif %}
 
 {% endblock %}

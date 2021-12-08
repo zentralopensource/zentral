@@ -1,7 +1,9 @@
 import logging
 from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.core.paginator import InvalidPage, Paginator
 from django.db import transaction
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, UpdateView
@@ -61,6 +63,7 @@ class IndexView(PermissionRequiredMixin, ListView):
 class IncidentView(PermissionRequiredMixin, DetailView):
     permission_required = "incidents.view_incident"
     model = Incident
+    paginate_by = 20
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -74,9 +77,31 @@ class IncidentView(PermissionRequiredMixin, DetailView):
                 obj_iter = ((None, obj) for obj in objects)
             ctx["objects"].append((title, obj_iter))
 
-        ctx["machine_incidents"] = ctx["object"].machineincident_set.all()
-        ctx["machine_incidents_count"] = ctx["machine_incidents"].count()
+        # machine incidents
+        try:
+            page_number = int(self.request.GET.get("page") or 1)
+        except ValueError:
+            raise Http404("Invalid page number")
+        if page_number != max(1, page_number):
+            page_number = 1
+        ctx["paginator"] = paginator = Paginator(self.object.machineincident_set.all(), self.paginate_by)
+        try:
+            ctx["page"] = page = paginator.page(page_number)
+        except InvalidPage:
+            raise Http404("Invalid page number")
+        ctx["machine_incidents"] = page.object_list
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd["page"] = page.previous_page_number()
+            ctx["previous_url"] = "?" + qd.urlencode()
+            qd.pop("page")
+            ctx["reset_link"] = "?" + qd.urlencode()
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd["page"] = page.next_page_number()
+            ctx["next_url"] = "?" + qd.urlencode()
 
+        # events links
         if self.request.user.has_perms(EventsMixin.permission_required):
             ctx["show_events_link"] = frontend_store.object_events
             store_links = []
