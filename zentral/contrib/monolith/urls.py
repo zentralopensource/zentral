@@ -9,6 +9,15 @@ urlpatterns = [
          views.UpdatePkgInfoCatalogView.as_view(),
          name='update_pkg_info_catalog'),
     path('pkg_info_names/<int:pk>/', views.PkgInfoNameView.as_view(), name='pkg_info_name'),
+    path('pkg_info_names/<int:pk>/events/',
+         views.PkgInfoNameEventsView.as_view(),
+         name='pkg_info_name_events'),
+    path('pkg_info_names/<int:pk>/events/fetch/',
+         views.FetchPkgInfoNameEventsView.as_view(),
+         name='fetch_pkg_info_name_events'),
+    path('pkg_info_names/<int:pk>/events/store_redirect/',
+         views.PkgInfoNameEventsStoreRedirectView.as_view(),
+         name='pkg_info_name_events_store_redirect'),
 
     # PPDs
     path('ppds/', views.PPDsView.as_view(), name='ppds'),

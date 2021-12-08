@@ -1,15 +1,19 @@
+from datetime import datetime
 from functools import reduce
 import operator
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.monolith.models import Manifest
+from zentral.contrib.monolith.models import Catalog, Manifest, PkgInfo, PkgInfoName
+from zentral.contrib.munki.models import ManagedInstall
 
 
+@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class MonolithSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -22,6 +26,20 @@ class MonolithSetupViewsTestCase(TestCase):
         cls.mbu.create_enrollment_business_unit()
         # manifest
         cls.manifest = Manifest.objects.create(meta_business_unit=cls.mbu, name=get_random_string())
+        # catalog
+        cls.catalog_1 = Catalog.objects.create(name=get_random_string(13), priority=10)
+        # pkginfo name
+        cls.pkginfo_name_1 = PkgInfoName.objects.create(name="aaaa first name")
+        # pkginfo
+        cls.pkginfo_1_1 = PkgInfo.objects.create(name=cls.pkginfo_name_1, version="1.0", data={})
+        cls.pkginfo_1_1.catalogs.set([cls.catalog_1])
+        # simulate 1 install of 1v1
+        ManagedInstall.objects.create(
+            machine_serial_number=get_random_string(),
+            name=cls.pkginfo_name_1.name,
+            installed_version=cls.pkginfo_1_1.version,
+            installed_at=datetime.utcnow()
+        )
 
     # utility methods
 
@@ -58,6 +76,76 @@ class MonolithSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("monolith:pkg_infos"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/pkg_info_list.html")
+        self.assertContains(response, self.pkginfo_name_1.name)
+
+    # pkg info name
+
+    def test_pkg_info_name_login_redirect(self):
+        self._login_redirect(reverse("monolith:pkg_info_name", args=(self.pkginfo_name_1.pk,)))
+
+    def test_pkg_info_name_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("monolith:pkg_info_name", args=(self.pkginfo_name_1.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_pkg_info_name(self):
+        self._login("monolith.view_pkginfoname", "monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_info_name", args=(self.pkginfo_name_1.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/pkg_info_name.html")
+        self.assertContains(response, self.pkginfo_name_1.name)
+
+    def test_pkg_info_name_events_login_redirect(self):
+        self._login_redirect(reverse("monolith:pkg_info_name_events", args=(self.pkginfo_name_1.pk,)))
+
+    def test_pkg_info_name_fetch_events_login_redirect(self):
+        self._login_redirect(reverse("monolith:fetch_pkg_info_name_events", args=(self.pkginfo_name_1.pk,)))
+
+    def test_pkg_info_name_events_store_redirect_login_redirect(self):
+        self._login_redirect(reverse("monolith:pkg_info_name_events_store_redirect", args=(self.pkginfo_name_1.pk,)))
+
+    def test_pkg_info_name_events_permission_denied(self):
+        self._login("monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_info_name_events",
+                                   args=(self.pkginfo_name_1.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_pkg_info_name_fetch_events_permission_denied(self):
+        self._login("monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:fetch_pkg_info_name_events",
+                                   args=(self.pkginfo_name_1.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_pkg_info_name_events_store_redirect_permission_denied(self):
+        self._login("monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_info_name_events_store_redirect",
+                                   args=(self.pkginfo_name_1.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    def test_pkg_info_name_events(self, get_aggregated_object_event_counts):
+        get_aggregated_object_event_counts.return_value = {}
+        self._login("monolith.view_pkginfo", "monolith.view_pkginfoname")
+        response = self.client.get(reverse("monolith:pkg_info_name_events",
+                                   args=(self.pkginfo_name_1.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/pkg_info_name_events.html")
+
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    def test_pkg_info_name_fetch_events(self, fetch_object_events):
+        fetch_object_events.return_value = ([], None)
+        self._login("monolith.view_pkginfo", "monolith.view_pkginfoname")
+        response = self.client.get(reverse("monolith:fetch_pkg_info_name_events",
+                                   args=(self.pkginfo_name_1.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/stores/events_events.html")
+
+    def test_pkg_info_name_events_store_redirect(self):
+        self._login("monolith.view_pkginfo", "monolith.view_pkginfoname")
+        response = self.client.get(reverse("monolith:pkg_info_name_events_store_redirect",
+                                   args=(self.pkginfo_name_1.pk,)))
+        # dev store cannot redirect
+        self.assertRedirects(response, reverse("monolith:pkg_info_name_events", args=(self.pkginfo_name_1.pk,)))
 
     # PPDs
 

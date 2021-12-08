@@ -1,6 +1,7 @@
 from itertools import chain
 import logging
 import random
+from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
@@ -19,6 +20,9 @@ from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFai
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import verify_enrollment_secret
+from zentral.core.events.utils import encode_args
+from zentral.core.stores import frontend_store, stores
+from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.storage import file_storage_has_signed_urls
 from .conf import monolith_conf
@@ -131,6 +135,18 @@ class PkgInfoNameView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         pkg_info_name = ctx["object"]
+        # events
+        if self.request.user.has_perms(EventsMixin.permission_required):
+            ctx["show_events_link"] = frontend_store.object_events
+            store_links = []
+            for store in stores.iter_events_url_store_for_user("object", self.request.user):
+                url = "{}?{}".format(
+                    reverse("monolith:pkg_info_name_events_store_redirect", args=(self.object.pk,)),
+                    urlencode({"es": store.name,
+                               "tr": PkgInfoNameEventsView.default_time_range})
+                )
+                store_links.append((url, store.name))
+            ctx["store_links"] = store_links
         # sub manifests
         sub_manifests = []
         for smpi in pkg_info_name.submanifestpkginfo_set.select_related("sub_manifest").order_by("sub_manifest__name"):
@@ -147,6 +163,44 @@ class PkgInfoNameView(PermissionRequiredMixin, DetailView):
         # to display update catalog links or not
         ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
         return ctx
+
+
+class EventsMixin:
+    permission_required = ("monolith.view_pkginfo", "monolith.view_pkginfoname")
+    store_method_scope = "object"
+
+    def get_object(self, **kwargs):
+        return get_object_or_404(PkgInfoName, pk=kwargs["pk"])
+
+    def get_fetch_kwargs_extra(self):
+        return {"key": "munki_pkginfo_name", "val": encode_args((self.object.name,))}
+
+    def get_fetch_url(self):
+        return reverse("monolith:fetch_pkg_info_name_events", args=(self.object.pk,))
+
+    def get_redirect_url(self):
+        return reverse("monolith:pkg_info_name_events", args=(self.object.pk,))
+
+    def get_store_redirect_url(self):
+        return reverse("monolith:pkg_info_name_events_store_redirect", args=(self.object.pk,))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["monolith"] = True
+        ctx["object"] = self.object
+        return ctx
+
+
+class PkgInfoNameEventsView(EventsMixin, EventsView):
+    template_name = "monolith/pkg_info_name_events.html"
+
+
+class FetchPkgInfoNameEventsView(EventsMixin, FetchEventsView):
+    pass
+
+
+class PkgInfoNameEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    pass
 
 
 # PPDs
