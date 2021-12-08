@@ -245,6 +245,14 @@ if "AWS_STORAGE_BUCKET_NAME" in django_zentral_settings:
 log_formatter = django_zentral_settings.get("LOG_FORMATTER")
 if log_formatter:
     log_formatter_dict = {'()': log_formatter}
+    # this log formatter option can be used for example to configure the JSON output
+    # the warnings are not formatted, and can cause some parsing issues
+    # → disable all warnings when not in DEBUG mode
+    if not DEBUG:
+        import sys
+        if not sys.warnoptions:
+            import warnings
+            warnings.simplefilter("ignore")
 else:
     log_asctime = django_zentral_settings.get("LOG_ASCTIME", True)
     log_formatter_dict = {
