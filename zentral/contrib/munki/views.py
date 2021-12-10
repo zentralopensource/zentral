@@ -318,7 +318,7 @@ class JobDetailsView(BaseView):
 class PostJobView(BaseView):
     def do_post(self, data):
         # lock enrolled machine
-        EnrolledMachine.objects.select_for_update().get(serial_number=self.machine_serial_number)
+        EnrolledMachine.objects.select_for_update().filter(serial_number=self.machine_serial_number)
 
         # commit machine snapshot
         ms_tree = data['machine_snapshot']
