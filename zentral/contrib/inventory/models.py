@@ -468,6 +468,26 @@ class PrincipalUser(AbstractMTObject):
     display_name = models.TextField(blank=True, null=True)
 
 
+class Payload(AbstractMTObject):
+    uuid = models.TextField()
+    identifier = models.TextField(blank=True, null=True)
+    display_name = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    type = models.TextField(blank=True, null=True)
+
+
+class Profile(AbstractMTObject):
+    uuid = models.TextField(db_index=True)
+    identifier = models.TextField(blank=True, null=True)
+    display_name = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    organization = models.TextField(blank=True, null=True)
+    removal_disallowed = models.BooleanField(blank=True, null=True)
+    verified = models.BooleanField(blank=True, null=True)
+    install_date = models.DateTimeField(blank=True, null=True)
+    payloads = models.ManyToManyField(Payload)
+
+
 class MachineSnapshotManager(MTObjectManager):
     def current(self):
         return (self.select_related('business_unit__meta_business_unit',
@@ -506,6 +526,7 @@ class MachineSnapshot(AbstractMTObject):
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
     deb_packages = models.ManyToManyField(DebPackage)
     program_instances = models.ManyToManyField(ProgramInstance)
+    profiles = models.ManyToManyField(Profile)
     teamviewer = models.ForeignKey(TeamViewer, on_delete=models.PROTECT, blank=True, null=True)
     puppet_node = models.ForeignKey(PuppetNode, on_delete=models.PROTECT, blank=True, null=True)
     principal_user = models.ForeignKey(PrincipalUser, on_delete=models.PROTECT, blank=True, null=True)
@@ -543,6 +564,9 @@ class MachineSnapshot(AbstractMTObject):
 
     def ordered_deb_packages(self):
         return self.deb_packages.all().order_by('name', 'version', 'pk')
+
+    def ordered_profiles(self):
+        return self.profiles.all().order_by('identifier', 'uuid', 'pk')
 
     @cached_property
     def last_commit(self):
@@ -899,6 +923,9 @@ class MetaMachine:
 
     def snapshots_with_deb_packages(self):
         return list(ms for ms in self.snapshots if ms.deb_packages.count())
+
+    def snapshots_with_profiles(self):
+        return list(ms for ms in self.snapshots if ms.profiles.count())
 
     # Inventory tags
 

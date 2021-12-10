@@ -54,6 +54,11 @@
         <i class="fab fa-linux" aria-hidden="true"></i> deb packages
       </a>
       {% endif %}
+      {% if machine.snapshots_with_profiles %}
+      <a class="btn btn-default" href="{% url 'inventory:machine_profiles' machine.get_urlsafe_serial_number %}">
+        <span class="glyphicon glyphicon-cog" aria-hidden="true"></span> profiles
+      </a>
+      {% endif %}
       {% if can_manage_tags or can_archive_machine %}
       <div class="btn-group">
         <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">

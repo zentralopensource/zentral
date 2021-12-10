@@ -1355,7 +1355,8 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                           'links',
                           'network_interfaces',
                           'osx_app_instances',
-                          'program_instances'):
+                          'program_instances',
+                          'profiles'):
         m2m_diff = diff.get(m2m_diff_attr, {})
         if not m2m_diff:
             continue

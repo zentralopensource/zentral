@@ -78,7 +78,16 @@ ORPHANS = (
     # OSXApp
     ("inventory_osxapp", "id",
      (("app_id", "inventory_osxappinstance"),
-      ("bundle_id", "inventory_file")))
+      ("bundle_id", "inventory_file"))),
+    # ProfilePayload for profiles not linked to machine snapshots
+    ("inventory_profile_payloads", "profile_id",
+     (("profile_id", "inventory_machinesnapshot_profiles"),)),
+    # Payload not linked to profiles
+    ("inventory_payload", "id",
+     (("payload_id", "inventory_profile_payloads"),)),
+    # Profile not linked to machine snapshots
+    ("inventory_profile", "id",
+     (("profile_id", "inventory_machinesnapshot_profiles"),)),
 )
 
 

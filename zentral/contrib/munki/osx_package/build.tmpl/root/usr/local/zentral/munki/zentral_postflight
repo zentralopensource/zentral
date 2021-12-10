@@ -17,7 +17,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.9"
+USER_AGENT = "Zentral/munkipostflight 0.10"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -70,6 +70,50 @@ def get_osx_app_instances(full_info=False):
             apps.append({'app': ztl_app_d,
                          'bundle_path': app_d['path']})
     return apps
+
+
+# Profiles
+
+
+def iter_profiles():
+    cp = subprocess.run(["/usr/bin/profiles", "-C", "-o", "stdout-xml"], capture_output=True)
+    if cp.returncode != 0:
+        print("Could not get the profiles")
+        return
+    response = plistlib.loads(cp.stdout)
+    for profile_item in response.get("_computerlevel", []):
+        profile = {
+            "uuid": profile_item["ProfileUUID"],
+            "removal_disallowed": profile_item.get("ProfileRemovalDisallowed") == "true",
+            "verified": profile_item.get("ProfileVerificationState") == "verified",
+            "payloads": []
+        }
+        try:
+            # unaware datetime for the inventory
+            profile["install_date"] = datetime.strptime(
+                profile_item["ProfileInstallDate"].rsplit(" ", 1)[0],
+                "%Y-%m-%d %H:%M:%S"
+            )
+        except (KeyError, ValueError):
+            print("Could not parse profile install date")
+        for profile_attr, opt_attr in (("identifier", "ProfileIdentifier"),
+                                       ("display_name", "ProfileDisplayName"),
+                                       ("description", "ProfileDescription"),
+                                       ("organization", "ProfileOrganization")):
+            if opt_attr in profile_item:
+                profile[profile_attr] = profile_item.get(opt_attr)
+        for payload_item in profile_item.get("ProfileItems", []):
+            payload = {
+                "uuid": payload_item["PayloadUUID"]
+            }
+            for payload_attr, opt_attr in (("identifier", "PayloadIdentifier"),
+                                           ("display_name", "PayloadDisplayName"),
+                                           ("description", "PayloadDescription"),
+                                           ("type", "PayloadType")):
+                if opt_attr in payload_item:
+                    payload[payload_attr] = payload_item.get(opt_attr)
+            profile["payloads"].append(payload)
+        yield profile
 
 
 # Munki run reports
@@ -576,6 +620,7 @@ def get_machine_snapshot():
     spr = SystemProfilerReport()
     machine_snapshot = spr.get_machine_snapshot()
     machine_snapshot['pem_certificates'] = list(iter_filtered_certs())
+    machine_snapshot['profiles'] = list(iter_profiles())
     return machine_snapshot
 
 

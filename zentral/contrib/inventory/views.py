@@ -558,44 +558,41 @@ class FetchMachineEventsView(EventsMixin, FetchEventsView):
     include_machine_info = False
 
 
+# machine extras
+
+
 class MachineEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     pass
 
 
-class MachineMacOSAppInstancesView(PermissionRequiredMixin, TemplateView):
+class MachineExtrasView(PermissionRequiredMixin, TemplateView):
     permission_required = "inventory.view_machinesnapshot"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['inventory'] = True
+        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
+        context['serial_number'] = machine.serial_number
+        return context
+
+
+class MachineMacOSAppInstancesView(MachineExtrasView):
     template_name = "inventory/machine_macos_app_instances.html"
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['inventory'] = True
-        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
-        context['serial_number'] = machine.serial_number
-        return context
 
-
-class MachineProgramInstancesView(PermissionRequiredMixin, TemplateView):
-    permission_required = "inventory.view_machinesnapshot"
+class MachineProgramInstancesView(MachineExtrasView):
     template_name = "inventory/machine_program_instances.html"
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['inventory'] = True
-        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
-        context['serial_number'] = machine.serial_number
-        return context
 
-
-class MachineDebPackagesView(PermissionRequiredMixin, TemplateView):
-    permission_required = "inventory.view_machinesnapshot"
+class MachineDebPackagesView(MachineExtrasView):
     template_name = "inventory/machine_deb_packages.html"
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['inventory'] = True
-        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
-        context['serial_number'] = machine.serial_number
-        return context
+
+class MachineProfilesView(MachineExtrasView):
+    template_name = "inventory/machine_profiles.html"
+
+
+# machine incidents
 
 
 class MachineIncidentsView(PermissionRequiredMixin, TemplateView):
