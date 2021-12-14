@@ -92,6 +92,15 @@ class InventoryViewsTestCase(TestCase):
         self.assertContains(response, "1 Incident")
         self.assertContains(response, self.probe_source.name)
 
+    def test_index_search(self):
+        self._force_incident()
+        self._login('incidents.view_incident')
+        response = self.client.get(reverse("incidents:index") + "?q=" + self.probe_source.name)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "incidents/index.html")
+        self.assertContains(response, "1 Incident")
+        self.assertContains(response, self.probe_source.name)
+
     # detail
 
     def test_incident_detail_redirect(self):

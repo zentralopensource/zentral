@@ -38,10 +38,8 @@ class IncidentSearchForm(forms.Form):
         q = cleaned_data.get("q")
         if q:
             qs = qs.filter(Q(name__icontains=q)
-                           | Q(description__icontains=q)
-                           | Q(probe_source__name__icontains=q)
-                           | Q(probe_source__description__icontains=q)
-                           | Q(probe_source__body__icontains=q))
+                           | Q(incident_type__icontains=q)
+                           | Q(key__icontains=q))
         severity = cleaned_data.get("severity")
         if severity:
             qs = qs.filter(severity=severity)

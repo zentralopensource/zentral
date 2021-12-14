@@ -80,6 +80,7 @@ class Incident(models.Model):
     incident_type = models.CharField(max_length=256)
     key = JSONField()
     severity = models.PositiveIntegerField(choices=Severity.choices())
+    name = models.TextField()
     status = models.CharField(max_length=64, choices=Status.choices())
     status_time = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -131,9 +132,10 @@ class Incident(models.Model):
             incident_cls = incident_types.get("base")  # always present
         return incident_cls(self)
 
-    @cached_property
-    def name(self):
-        return self.loaded_incident.get_name()
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            self.name = self.loaded_incident.get_name()
+        return super().save(*args, **kwargs)
 
 
 class MachineIncident(models.Model):
