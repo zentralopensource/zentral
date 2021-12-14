@@ -16,7 +16,7 @@
 </h2>
 
 <p>
-  <input class="form-control" type="text" id="search-input" autofocus="" placeholder="UUID" style="max-width:30vw">
+  <input class="form-control" type="text" id="search-input" autofocus="" placeholder="UUID, Display name, Organization, Payload type" style="max-width:30vw">
 </p>
 
 {% if machine.snapshots_with_profiles %}
@@ -24,7 +24,7 @@
   {% for ms in machine.snapshots_with_profiles %}
   <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
     <a href="#" data-tabclass="mstab" data-tabid="ms-{{ ms.id }}">
-      {{ ms.source.name }}
+      {{ ms.source.name }} (<span id="profile-count-{{ ms.id }}">{{ ms.ordered_profiles.count }}</span>)
     </a>
   </li>
   {% endfor %}
@@ -32,31 +32,30 @@
 
 {% for ms in machine.snapshots_with_profiles %}
 <div class="table-reponsive mstab" id="ms-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
-  <table class="table table-condensed table-filtered">
+  <table class="table table-condensed table-filtered" data-count-id="profile-count-{{ ms.id }}">
     <thead>
       <tr>
-        <th>UUID</th>
         <th>Details</th>
         <th>Payloads</th>
+        <th>UUID</th>
       </tr>
     </thead>
     <tbody>
       {% for profile in ms.ordered_profiles %}
       <tr>
-        <td class="search-cell"><code>{{ profile.uuid }}</code></td>
         <td>
           <dl>
+            {% if profile.display_name %}
+            <dt>Display name</dt>
+            <dd class="search-field">{{ profile.display_name }}</dd>
+            {% endif %}
             {% if profile.identifier %}
             <dt>Identifier</dt>
             <dd><code>{{ profile.identifier }}</code></dd>
             {% endif %}
-            {% if profile.display_name %}
-            <dt>Display name</dt>
-            <dd>{{ profile.display_name }}</dd>
-            {% endif %}
             {% if profile.organization %}
             <dt>Organization</dt>
-            <dd>{{ profile.organization }}</dd>
+            <dd class="search-field">{{ profile.organization }}</dd>
             {% endif %}
             {% if profile.description %}
             <dt>Description</dt>
@@ -75,10 +74,11 @@
         <td>
           <ul>
             {% for payload in profile.payloads.all %}
-            <li>{{ payload.type }}</li>
+            <li class="search-field">{{ payload.type }}</li>
             {% endfor %}
           </ul>
         </td>
+        <td><code class="search-field">{{ profile.uuid }}</code></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -117,12 +117,13 @@
     var filter, tr, td, i, txtValue, lineMatched;
     filter = $input.val().toUpperCase();
     tables.forEach(function(table) {
+      var count = 0;
       tr = table.getElementsByTagName("tr");
       for (i = 1; i < tr.length; i++) {
         lineMatched = false;
-        td = tr[i].getElementsByClassName("search-cell");
-        for (j=0; j < td.length; j++) {
-          txtValue = td[j].textContent || td[j].innerText;
+        sf = tr[i].getElementsByClassName("search-field");
+        for (j=0; j < sf.length; j++) {
+          txtValue = sf[j].textContent || sf[j].innerText;
           if (txtValue.toUpperCase().indexOf(filter) > -1) {
             tr[i].style.display = "";
             lineMatched = true;
@@ -131,8 +132,11 @@
         }
         if (lineMatched === false) {
             tr[i].style.display = "none";
+        } else {
+            count++;
         }
       }
+      document.getElementById(table.dataset["countId"]).innerHTML = count
     });
   }
 
