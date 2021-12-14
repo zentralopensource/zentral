@@ -1668,3 +1668,49 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertIsNone(mi.failed_at)
         self.assertIsNone(mi.failed_version)
         self.assertFalse(mi.reinstall)
+
+    def test_a_m_i_one_install_no_installed_at_no_reinstall(self):
+        configuration = self._force_configuration(
+            auto_failed_install_incidents=False,
+            auto_reinstall_incidents=True,
+        )
+
+        # reported install
+        serial_number = get_random_string()
+        name = get_random_string()
+        version = get_random_string()
+        display_name = get_random_string()
+        installed_at = "2019-12-03T09:49:11+00:00"
+
+        # existing mi, same version, not installed at
+        old_mi = ManagedInstall.objects.create(
+            machine_serial_number=serial_number,
+            name=name,
+            display_name=get_random_string(),
+            installed_version=version,
+            installed_at=None
+        )
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number)
+        self.assertEqual(mi_qs.count(), 1)
+
+        # do apply
+        incident_updates = list(apply_managed_installs(
+            serial_number,
+            [(name, version, display_name, installed_at)],
+            configuration
+        ))
+
+        # no incident update
+        self.assertEqual(len(incident_updates), 0)
+
+        # updated mi with installed at
+        self.assertEqual(mi_qs.count(), 1)
+        mi = mi_qs.first()
+        self.assertEqual(mi.pk, old_mi.pk)
+        self.assertEqual(mi.name, name)
+        self.assertEqual(mi.display_name, display_name)
+        self.assertEqual(mi.installed_at, datetime(2019, 12, 3, 9, 49, 11))
+        self.assertEqual(mi.installed_version, version)
+        self.assertIsNone(mi.failed_at)
+        self.assertIsNone(mi.failed_version)
+        self.assertFalse(mi.reinstall)

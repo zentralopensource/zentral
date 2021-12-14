@@ -311,12 +311,9 @@ def apply_managed_installs(serial_number, managed_installs, configuration):
                 # we cannot do an update
                 continue
 
-            if mi.installed_at is not None and mi.installed_at > installed_at:
+            if mi.installed_at is not None and mi.installed_at >= installed_at:
                 # stalled update, nothing to do
                 continue
-
-            # mi installed at is None or < installed at, we can update
-            mi.installed_at = installed_at
 
             if isinstance(display_name, str) and mi.display_name != display_name:
                 # update display name
@@ -341,13 +338,17 @@ def apply_managed_installs(serial_number, managed_installs, configuration):
                         )
                 mi.installed_version = version
             else:
-                if not mi.reinstall:
+                if mi.installed_at is not None and not mi.reinstall:
                     # set reinstall flag
                     mi.reinstall = True
                     if configuration.auto_reinstall_incidents:
                         yield MunkiReinstallIncident.build_incident_update(
                             mi.name, mi.installed_version
                         )
+
+            # mi installed at is None or < installed at, we can update
+            mi.installed_at = installed_at
+
             mi.save()
 
     # delete not found stored managed installs
