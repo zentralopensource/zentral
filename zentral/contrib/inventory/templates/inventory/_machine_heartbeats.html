@@ -3,8 +3,8 @@
 <table class="table table-condensed">
   <thead>
     <th>Event</th>
-    <th>User agent</th>
     <th>Last seen</th>
+    <th>User agent</th>
   </thead>
   <tbody>
     {% for event_class_display, inventory_source_name, ua_max_dates, cell_class in heartbeats %}
@@ -15,8 +15,8 @@
         {{ event_class_display }}{% if inventory_source_name %} - {{ inventory_source_name }}{% endif %}
       </td>
       {% endif %}
-      <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua|default:"-" }}</td>
       <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua_max_date }}</td>
+      <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua|default:"-" }}</td>
     </tr>
     {% endfor %}
     {% endfor %}
