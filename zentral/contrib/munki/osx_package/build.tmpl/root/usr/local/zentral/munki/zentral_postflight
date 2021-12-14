@@ -181,6 +181,10 @@ class ManagedInstallReport(object):
                     item_to_remove["display_name"],
                     None
                 )
+        # update with the successful removals
+        for removal_result in self.data.get('RemovalResults', []):
+            if removal_result["status"] == 0:
+                managed_installs.pop(removal_result["name"], None)
         # update with the successful installs
         for install_result in self.data.get('InstallResults', []):
             if install_result["status"] == 0:
@@ -189,10 +193,6 @@ class ManagedInstallReport(object):
                     install_result["display_name"],
                     install_result["time"]
                 )
-        # update with the successful removals
-        for removal_result in self.data.get('RemovalResults', []):
-            if removal_result["status"] == 0:
-                managed_installs.pop(removal_result["name"], None)
         return managed_installs
 
     def updated_managed_installs(self, from_managed_installs):
