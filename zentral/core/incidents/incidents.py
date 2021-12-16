@@ -29,7 +29,7 @@ class BaseIncident:
         return []
 
     def get_name(self):
-        return f"{self.incident_type} incident #{self.incident.pk}"
+        return f"{self.incident_type} incident {self.incident.pk or '∅'}"
 
 
 register_incident_class(BaseIncident)

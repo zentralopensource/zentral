@@ -295,7 +295,9 @@ class JobDetailsView(BaseView):
 
         # add tags
         # TODO better cache for the machine tags
-        response_d["tags"] = MetaMachine(self.machine_serial_number).tag_names()
+        m = MetaMachine(self.machine_serial_number)
+        response_d["incidents"] = [mi.incident.name for mi in m.open_incidents()]
+        response_d["tags"] = m.tag_names()
 
         # last seen sha1sum
         # last managed installs sync

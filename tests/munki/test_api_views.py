@@ -9,6 +9,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, 
 from zentral.contrib.munki.events import MunkiInstallFailedEvent
 from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIncident
 from zentral.contrib.munki.models import Configuration, EnrolledMachine, Enrollment, ManagedInstall
+from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -113,7 +114,36 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         expected_response = {
             "apps_full_info_shard": self.configuration.inventory_apps_full_info_shard,
-            "tags": []
+            "incidents": [],
+            "tags": [],
+        }
+        self.assertEqual(expected_response, response.json())
+
+    def test_job_details_with_open_incident(self):
+        enrolled_machine = self._make_enrolled_machine()
+        # one open, one closed incident
+        for status in (Status.OPEN, Status.CLOSED):
+            i = Incident.objects.create(
+                incident_type=get_random_string(),
+                key={"un": get_random_string()},
+                status=status.value,
+                status_time=datetime.utcnow(),
+                severity=Severity.MAJOR.value
+            )
+            MachineIncident.objects.create(
+                incident=i,
+                serial_number=enrolled_machine.serial_number,
+                status=status.value,
+                status_time=datetime.utcnow()
+            )
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+        expected_response = {
+            "apps_full_info_shard": self.configuration.inventory_apps_full_info_shard,
+            "incidents": ['base incident ∅'],
+            "tags": [],
         }
         self.assertEqual(expected_response, response.json())
 
@@ -202,6 +232,7 @@ class MunkiAPIViewsTestCase(TestCase):
             response.json(),
             {"apps_full_info_shard": self.configuration.inventory_apps_full_info_shard,
              "managed_installs": True,
+             "incidents": [],
              "tags": [tag_name],
              "last_seen_sha1sum": report_sha1sum}
         )

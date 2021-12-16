@@ -12,7 +12,7 @@ import subprocess
 import urllib.request
 import zlib
 
-USER_AGENT = "Zentral/munkipreflight 0.8"
+USER_AGENT = "Zentral/munkipreflight 0.10"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -102,6 +102,7 @@ def update_facts(job_details):
         print("Could not read", facts_path, str(e))
         return
     facts["zentral_tags"] = job_details.get("tags", [])
+    facts["zentral_incidents"] = job_details.get("incidents", [])
     try:
         with open(facts_path, "wb") as f:
             plistlib.dump(facts, f)
