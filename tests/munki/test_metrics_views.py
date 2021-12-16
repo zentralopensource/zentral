@@ -39,9 +39,35 @@ class MunkiMetricsViewsTestCase(TestCase):
         response = self._make_authenticated_request()
         self.assertEqual(response.status_code, 200)
 
+    def test_active_machines(self):
+        for age in (2, 22, 31):
+            ms = MunkiState.objects.create(machine_serial_number=get_random_string())
+            MunkiState.objects.filter(pk=ms.pk).update(last_seen=datetime.utcnow() - timedelta(days=age))
+        response = self._make_authenticated_request()
+        self.assertEqual(response.status_code, 200)
+        for family in text_string_to_metric_families(response.content.decode("utf-8")):
+            if family.name != "zentral_munki_active_machines_bucket":
+                continue
+            else:
+                self.assertEqual(len(family.samples), 7)
+                for sample in family.samples:
+                    le = sample.labels["le"]
+                    if le == "1":
+                        self.assertEqual(sample.value, 0)
+                    elif le in ("7", "14"):
+                        self.assertEqual(sample.value, 1)
+                    elif le == "30":
+                        self.assertEqual(sample.value, 2)
+                    else:
+                        self.assertEqual(sample.value, 3)
+                break
+        else:
+            raise AssertionError("could not find expected metric family")
+
     def test_installed_pkginfos(self):
         mi = self._force_managed_install(age_days=22)
         response = self._make_authenticated_request()
+        self.assertEqual(response.status_code, 200)
         for family in text_string_to_metric_families(response.content.decode("utf-8")):
             if family.name != "zentral_munki_installed_pkginfos_bucket":
                 continue
@@ -58,11 +84,11 @@ class MunkiMetricsViewsTestCase(TestCase):
                 break
         else:
             raise AssertionError("could not find expected metric family")
-        self.assertEqual(response.status_code, 200)
 
     def test_failed_pkginfos(self):
         mi = self._force_managed_install(failed=True)
         response = self._make_authenticated_request()
+        self.assertEqual(response.status_code, 200)
         for family in text_string_to_metric_families(response.content.decode("utf-8")):
             if family.name != "zentral_munki_failed_pkginfos":
                 continue
@@ -75,4 +101,3 @@ class MunkiMetricsViewsTestCase(TestCase):
                 break
         else:
             raise AssertionError("could not find expected metric family")
-        self.assertEqual(response.status_code, 200)
