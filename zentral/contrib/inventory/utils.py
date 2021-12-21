@@ -20,6 +20,7 @@ from django.utils.text import slugify
 import xlsxwriter
 from zentral.core.incidents.models import Severity, Status
 from zentral.utils.json import save_dead_letter
+from .compliance_checks import jmespath_checks_cache
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      post_inventory_events)
 from .exceptions import EnrollmentSecretVerificationFailed
@@ -1395,9 +1396,13 @@ def commit_machine_snapshot_and_trigger_events(tree):
         logger.exception("Could not commit machine snapshot")
         save_dead_letter(tree, "machine snapshot commit error")
     else:
+        # inventory events
         if machine_snapshot_commit:
             post_inventory_events(machine_snapshot_commit.serial_number,
                                   inventory_events_from_machine_snapshot_commit(machine_snapshot_commit))
+        # compliance checks
+        for compliance_check_event in jmespath_checks_cache.process_tree(tree):
+            compliance_check_event.post()
         return machine_snapshot
 
 

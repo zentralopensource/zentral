@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.functional import cached_property
-from . import incident_types
+from . import incident_class_from_type
 
 
 logger = logging.getLogger('zentral.core.incidents.models')
@@ -127,10 +127,8 @@ class Incident(models.Model):
 
     @cached_property
     def loaded_incident(self):
-        incident_cls = incident_types.get(self.incident_type)
-        if not incident_cls:
-            incident_cls = incident_types.get("base")  # always present
-        return incident_cls(self)
+        cls = incident_class_from_type(self.incident_type)
+        return cls(self)
 
     def save(self, *args, **kwargs):
         if not self.pk:

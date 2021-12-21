@@ -387,6 +387,33 @@
     {% endfor %}{% comment %}end for loop on machine snapshots{% endcomment %}
   </div><!-- end col-md-6 -->
   <div class="col-md-6">
+    {% if perms.compliance_checks.view_machinestatus %}
+    <h3>{{ compliance_check_statuses|length }} Compliance check{{ compliance_check_statuses|length|pluralize }}</h3>
+    {% if compliance_check_statuses %}
+    <table class="table table-condensed">
+      <thead>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Time</th>
+      </thead>
+      <tbody>
+        {% for cc_url, cc_name, status, status_time in compliance_check_statuses %}
+        <tr>
+          <td>
+            {% if cc_url %}
+            <a href="{{ cc_url }}">{{ cc_name }}</a>
+            {% else %}
+            {{ cc_name }}
+            {% endif %}
+          </td>
+          <td class="{{ status.display_class }}">{{ status }}</td>
+          <td>{{ status_time|default:"-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% endif %}
 
     {% if perms.incidents.view_machineincident %}
     {% with machine.open_incidents as open_incidents %}

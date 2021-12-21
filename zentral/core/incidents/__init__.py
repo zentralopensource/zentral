@@ -22,7 +22,7 @@ def register_incident_class(incident_cls):
     incident_types[incident_type] = incident_cls
 
 
-def incident_cls_from_type(incident_type):
+def incident_class_from_type(incident_type):
     try:
         return incident_types[incident_type]
     except KeyError:

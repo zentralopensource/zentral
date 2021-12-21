@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Compliance checks</li>
+</ol>
+
+<h2>{{ paginator.count }} Compliance check{{ paginator.count|pluralize }}</h2>
+
+{% if perms.inventory.add_jmespathcheck %}
+<a href="{% url 'inventory:create_compliance_check' %}" class="btn btn-default">Create</a>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Source</th>
+    <th>Tags</th>
+  </thead>
+  <tbody>
+    {% for obj in object_list %}
+    {% with obj.compliance_check as cc %}
+    <tr>
+      <td>
+        <a href="{{ obj.get_absolute_url }}">{{ cc.name }}</a>
+      </td>
+      <td>{{ obj.source_name }}</td>
+      <td>
+        {% for tag in obj.tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

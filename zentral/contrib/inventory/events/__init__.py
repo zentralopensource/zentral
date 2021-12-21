@@ -9,13 +9,6 @@ logger = logging.getLogger('zentral.contrib.inventory.events')
 ALL_EVENTS_SEARCH_DICT = {"tag": "machine"}
 
 
-class EnrollmentSecretVerificationEvent(BaseEvent):
-    event_type = 'enrollment_secret_verification'
-
-
-register_event_type(EnrollmentSecretVerificationEvent)
-
-
 # Inventory update events
 
 
@@ -76,6 +69,16 @@ def post_inventory_events(msn, events):
         event.post()
 
 
+# enrollment secret
+
+
+class EnrollmentSecretVerificationEvent(BaseEvent):
+    event_type = 'enrollment_secret_verification'
+
+
+register_event_type(EnrollmentSecretVerificationEvent)
+
+
 def post_enrollment_secret_verification_failure(model,
                                                 user_agent, public_ip_address, serial_number,
                                                 err_msg, enrollment_secret):
@@ -102,3 +105,76 @@ def post_enrollment_secret_verification_success(request, model):
     payload.update(obj.serialize_for_event())
     event = event_cls(metadata, payload)
     event.post()
+
+
+# compliance checks
+
+
+class JMESPathCheckBaseEvent(BaseEvent):
+    namespace = 'compliance_check'
+    tags = ['compliance_check', 'inventory_jmespath_check']
+
+    @classmethod
+    def build_from_request_and_object(cls, request, jmespath_check):
+        payload = jmespath_check.compliance_check.serialize_for_event()
+        payload["inventory_jmespath_check"] = jmespath_check.serialize_for_event()
+        return cls(EventMetadata(request=EventRequest.build_from_request(request)), payload)
+
+    def get_linked_objects_keys(self):
+        keys = {}
+        pk = self.payload.get("pk")
+        if pk:
+            keys["compliance_check"] = [(pk,)]
+        jmespath_check_pk = self.payload.get("inventory_jmespath_check", {}).get("pk")
+        if jmespath_check_pk:
+            keys["inventory_jmespath_check"] = [(jmespath_check_pk,)]
+        return keys
+
+
+class JMESPathCheckCreated(JMESPathCheckBaseEvent):
+    event_type = 'inventory_jmespath_check_created'
+
+
+register_event_type(JMESPathCheckCreated)
+
+
+class JMESPathCheckUpdated(JMESPathCheckBaseEvent):
+    event_type = 'inventory_jmespath_check_updated'
+
+
+register_event_type(JMESPathCheckUpdated)
+
+
+class JMESPathCheckDeleted(JMESPathCheckBaseEvent):
+    event_type = 'inventory_jmespath_check_deleted'
+
+
+register_event_type(JMESPathCheckDeleted)
+
+
+class JMESPathCheckStatusUpdated(BaseEvent):
+    event_type = 'inventory_jmespath_check_status_updated'
+    namespace = 'compliance_check'
+    tags = ['compliance_check', 'inventory_jmespath_check', 'compliance_check_status']
+
+    @classmethod
+    def build_from_object_serial_number_and_statuses(cls, jmespath_check, serial_number, status, previous_status):
+        payload = jmespath_check.compliance_check.serialize_for_event()
+        payload["inventory_jmespath_check"] = jmespath_check.serialize_for_event()
+        payload["status"] = status.name
+        if previous_status is not None:
+            payload["previous_status"] = previous_status.name
+        return cls(EventMetadata(machine_serial_number=serial_number), payload)
+
+    def get_linked_objects_keys(self):
+        keys = {}
+        pk = self.payload.get("pk")
+        if pk:
+            keys["compliance_check"] = [(pk,)]
+        jmespath_check_pk = self.payload.get("inventory_jmespath_check", {}).get("pk")
+        if jmespath_check_pk:
+            keys["inventory_jmespath_check"] = [(jmespath_check_pk,)]
+        return keys
+
+
+register_event_type(JMESPathCheckStatusUpdated)

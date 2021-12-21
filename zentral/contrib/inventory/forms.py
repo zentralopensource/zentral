@@ -3,10 +3,12 @@ from django.core.exceptions import ValidationError
 from django.db import connection
 from django.http import QueryDict
 from django.utils.text import slugify
+import jmespath
 from .models import (EnrollmentSecret,
                      MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
-                     Source, Tag)
+                     Source, Tag,
+                     JMESPathCheck)
 
 
 class MachineGroupSearchForm(forms.Form):
@@ -355,3 +357,22 @@ class EnrollmentSecretForm(forms.ModelForm):
         if commit:
             enrollment_secret.save()
         return enrollment_secret
+
+
+# jmespath check
+
+
+class JMESPathCheckForm(forms.ModelForm):
+    class Meta:
+        model = JMESPathCheck
+        fields = ("source_name", "tags", "jmespath_expression")
+        widgets = {"source_name": forms.TextInput}
+
+    def clean_jmespath_expression(self):
+        exp = self.cleaned_data.get("jmespath_expression")
+        if exp:
+            try:
+                jmespath.compile(exp)
+            except Exception:
+                raise ValidationError("Invalid JMESPath expression")
+        return exp

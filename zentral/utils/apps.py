@@ -12,6 +12,7 @@ class ZentralAppConfig(AppConfig):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.compliance_checks_module = None
         self.events_module = None
         self.events_templates_dir = None
         self.incidents_module = None
@@ -21,6 +22,7 @@ class ZentralAppConfig(AppConfig):
         """
         To run some extra code when Django starts
         """
+        self.import_compliance_checks()
         self.import_events()
         self.import_incidents()
         self.import_probes()
@@ -33,6 +35,9 @@ class ZentralAppConfig(AppConfig):
         else:
             logger.debug("App %s: %s submodule imported", self.name, submodule_name)
             setattr(self, f"{submodule_name}_module", submodule)
+
+    def import_compliance_checks(self):
+        self._import_submodule("compliance_checks")
 
     def import_events(self):
         self._import_submodule("events")

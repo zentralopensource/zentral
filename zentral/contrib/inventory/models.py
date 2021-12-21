@@ -19,6 +19,7 @@ from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.translation import ugettext_lazy as _
 from zentral.conf import settings
+from zentral.core.compliance_checks.utils import get_machine_compliance_check_statuses
 from zentral.core.incidents.models import MachineIncident, Status
 from zentral.utils.model_extras import find_all_related_objects
 from zentral.utils.mt_models import AbstractMTObject, prepare_commit_tree, MTObjectManager, MTOError
@@ -1010,6 +1011,9 @@ class MetaMachine:
         return list(MachineIncident.objects.select_related("incident")
                                            .filter(serial_number=self.serial_number, status__in=Status.open_values()))
 
+    def compliance_check_statuses(self):
+        return get_machine_compliance_check_statuses(self.serial_number, self.tags)
+
     def archive(self):
         CurrentMachineSnapshot.objects.filter(serial_number=self.serial_number).delete()
 
@@ -1508,3 +1512,32 @@ class File(AbstractMTObject):
     signed_by = models.ForeignKey(Certificate, on_delete=models.PROTECT, blank=True, null=True)
 
     objects = FileManager()
+
+
+# compliance checks
+
+
+class JMESPathCheck(models.Model):
+    compliance_check = models.OneToOneField(
+        "compliance_checks.ComplianceCheck",
+        on_delete=models.CASCADE,
+        related_name="jmespath_check",
+        editable=False,
+    )
+    source_name = models.TextField()
+    tags = models.ManyToManyField(Tag, blank=True)
+    jmespath_expression = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def get_absolute_url(self):
+        return reverse("inventory:compliance_check", args=(self.pk,))
+
+    def serialize_for_event(self):
+        return {
+            "pk": self.pk,
+            "source_name": self.source_name,
+            "tags": sorted(str(tag) for tag in self.tags.select_related("taxonomy", "meta_business_unit").all()),
+            "jmespath_expression": self.jmespath_expression,
+        }

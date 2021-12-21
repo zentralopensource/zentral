@@ -8,6 +8,7 @@ class ZentralInventoryAppConfig(ZentralAppConfig):
         "bunsinessunit",
         "debpackage",
         "file",
+        "jmespathcheck",
         "link",
         "machinegroup",
         "machinesnapshot",

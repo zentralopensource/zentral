@@ -16,6 +16,7 @@ geoip2
 gunicorn
 httpx[http2]                    # MDM (apns)
 ipython
+jmespath                        # inventory compliance checks
 jinja2                          # events templates
 kombu<5                         # events queues
 pip

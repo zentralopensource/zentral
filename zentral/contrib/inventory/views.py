@@ -3,27 +3,37 @@ from importlib import import_module
 import logging
 from math import ceil
 from urllib.parse import urlencode
+from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
+from django.db.models import F
 from django.urls import reverse, reverse_lazy
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
-from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.conf import settings
+from zentral.core.compliance_checks import compliance_check_class_from_model
+from zentral.core.compliance_checks.forms import ComplianceCheckForm
+from zentral.core.events.utils import encode_args
 from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
+from .compliance_checks import InventoryJMESPathCheck
+from .events import JMESPathCheckCreated, JMESPathCheckUpdated, JMESPathCheckDeleted
 from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
                     CreateTagForm, UpdateTagForm,
-                    MacOSAppSearchForm)
+                    MacOSAppSearchForm,
+                    JMESPathCheckForm)
 from .models import (BusinessUnit,
                      MetaBusinessUnit, MachineGroup,
                      MetaMachine,
                      MetaBusinessUnitTag, MachineTag, Tag, Taxonomy,
-                     OSXApp, OSXAppInstance)
+                     OSXApp, OSXAppInstance,
+                     JMESPathCheck)
 from .utils import (BundleFilter, BundleFilterForm,
                     MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
                     MSQuery)
@@ -472,6 +482,9 @@ class MachineView(PermissionRequiredMixin, TemplateView):
         context = super(MachineView, self).get_context_data(**kwargs)
         context['inventory'] = True
         context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
+        context['serial_number'] = machine.serial_number
+
+        # machine snapshots
         context['machine_snapshots'] = []
         for source_display, source, ms in sorted(((ms.source.get_display_name(), ms.source, ms)
                                                   for ms in machine.snapshots),
@@ -481,8 +494,22 @@ class MachineView(PermissionRequiredMixin, TemplateView):
         machine_snapshots_count = len(context['machine_snapshots'])
         if machine_snapshots_count:
             context['max_source_tab_with'] = 100 // machine_snapshots_count
-        context['serial_number'] = machine.serial_number
+
+        # heartbeats?
         context['fetch_heartbeats'] = frontend_store.last_machine_heartbeats
+
+        # compliance checks
+        compliance_check_statuses = []
+        if self.request.user.has_perm("compliance_checks.view_machinestatus"):
+            for cc_model, cc_pk, cc_name, status, status_time in machine.compliance_check_statuses():
+                cc_url = None
+                cc_cls = compliance_check_class_from_model(cc_model)
+                if self.request.user.has_perms(cc_cls.required_view_permissions):
+                    cc_url = reverse("compliance_checks:redirect", args=(cc_pk,))
+                compliance_check_statuses.append((cc_url, cc_name, status, status_time))
+        context["compliance_check_statuses"] = compliance_check_statuses
+
+        # event links
         context['show_events_link'] = frontend_store.machine_events
         store_links = []
         for store in stores.iter_events_url_store_for_user("machine", self.request.user):
@@ -494,6 +521,8 @@ class MachineView(PermissionRequiredMixin, TemplateView):
             )
             store_links.append((url, store.name))
         context["store_links"] = store_links
+
+        # other actions
         context["can_manage_tags"] = self.request.user.has_perms((
             "inventory.view_machinetag",
             "inventory.add_machinetag",
@@ -502,6 +531,7 @@ class MachineView(PermissionRequiredMixin, TemplateView):
             "inventory.add_tag",
         ))
         context["can_archive_machine"] = self.request.user.has_perm("inventory.change_machinesnapshot")
+
         return context
 
 
@@ -524,7 +554,7 @@ class ArchiveMachineView(PermissionRequiredMixin, TemplateView):
         return redirect('inventory:index')
 
 
-class EventsMixin:
+class MachineEventsMixin:
     permission_required = "inventory.view_machinesnapshot"
     store_method_scope = "machine"
 
@@ -550,19 +580,19 @@ class EventsMixin:
         return ctx
 
 
-class MachineEventsView(EventsMixin, EventsView):
+class MachineEventsView(MachineEventsMixin, EventsView):
     template_name = "inventory/machine_events.html"
 
 
-class FetchMachineEventsView(EventsMixin, FetchEventsView):
+class FetchMachineEventsView(MachineEventsMixin, FetchEventsView):
     include_machine_info = False
 
 
-# machine extras
-
-
-class MachineEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+class MachineEventsStoreRedirectView(MachineEventsMixin, EventsStoreRedirectView):
     pass
+
+
+# machine extras
 
 
 class MachineExtrasView(PermissionRequiredMixin, TemplateView):
@@ -656,6 +686,222 @@ class RemoveMachineTagView(PermissionRequiredMixin, View):
         MachineTag.objects.filter(tag__id=kwargs['tag_id'],
                                   serial_number=machine.serial_number).delete()
         return HttpResponseRedirect(reverse('inventory:machine_tags', args=(machine.get_urlsafe_serial_number(),)))
+
+
+# compliance checks
+
+
+class ComplianceChecksView(PermissionRequiredMixin, ListView):
+    permission_required = "inventory.view_jmespathcheck"
+    template_name = "inventory/compliancecheck_list.html"
+    model = JMESPathCheck
+
+
+class CreateComplianceCheckView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.add_jmespathcheck"
+    template_name = "inventory/compliancecheck_form.html"
+
+    def get_forms(self):
+        compliance_check_form_kwargs = {
+            "prefix": "ccf",
+            "model": InventoryJMESPathCheck.get_model()
+        }
+        jmespath_check_form_kwargs = {
+            "prefix": "jcf"
+        }
+        if self.request.method == "POST":
+            compliance_check_form_kwargs["data"] = self.request.POST
+            jmespath_check_form_kwargs["data"] = self.request.POST
+        return (
+            ComplianceCheckForm(**compliance_check_form_kwargs),
+            JMESPathCheckForm(**jmespath_check_form_kwargs)
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        if "compliance_check_form" not in kwargs and "jmespath_check_form" not in kwargs:
+            ctx["compliance_check_form"], ctx["jmespath_check_form"] = self.get_forms()
+        return ctx
+
+    def forms_invalid(self, compliance_check_form, jmespath_check_form):
+        return self.render_to_response(
+            self.get_context_data(compliance_check_form=compliance_check_form,
+                                  jmespath_check_form=jmespath_check_form)
+        )
+
+    def forms_valid(self, compliance_check_form, jmespath_check_form):
+        compliance_check = compliance_check_form.save(commit=False)
+        compliance_check.model = InventoryJMESPathCheck.get_model()
+        compliance_check.save()
+        jmespath_check = jmespath_check_form.save(commit=False)
+        jmespath_check.compliance_check = compliance_check
+        jmespath_check.save()
+        jmespath_check_form.save_m2m()
+        event = JMESPathCheckCreated.build_from_request_and_object(self.request, jmespath_check)
+        transaction.on_commit(lambda: event.post())
+        return redirect(jmespath_check)
+
+    def post(self, request, *args, **kwargs):
+        compliance_check_form, jmespath_check_form = self.get_forms()
+        if compliance_check_form.is_valid() and jmespath_check_form.is_valid():
+            return self.forms_valid(compliance_check_form, jmespath_check_form)
+        else:
+            return self.forms_invalid(compliance_check_form, jmespath_check_form)
+
+
+class ComplianceCheckView(PermissionRequiredMixin, DetailView):
+    permission_required = "inventory.view_jmespathcheck"
+    template_name = "inventory/compliancecheck_detail.html"
+    model = JMESPathCheck
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data()
+        ctx["compliance_check"] = self.object.compliance_check
+        if self.request.user.has_perms(ComplianceCheckEventsMixin.permission_required):
+            ctx["show_events_link"] = frontend_store.object_events
+            store_links = []
+            for store in stores.iter_events_url_store_for_user("object", self.request.user):
+                url = "{}?{}".format(
+                    reverse("santa:configuration_events_store_redirect", args=(self.object.pk,)),
+                    urlencode({"es": store.name,
+                               "tr": ComplianceCheckEventsView.default_time_range})
+                )
+                store_links.append((url, store.name))
+            ctx["store_links"] = store_links
+        return ctx
+
+
+class UpdateComplianceCheckView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.change_jmespathcheck"
+    template_name = "inventory/compliancecheck_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.object = get_object_or_404(
+            JMESPathCheck.objects.select_related("compliance_check").all(),
+            pk=kwargs["pk"]
+        )
+        self.compliance_check = self.object.compliance_check
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_forms(self):
+        compliance_check_form_kwargs = {
+            "prefix": "ccf",
+            "instance": self.compliance_check,
+            "model": InventoryJMESPathCheck.get_model()
+        }
+        jmespath_check_form_kwargs = {
+            "prefix": "jcf",
+            "instance": self.object,
+        }
+        if self.request.method == "POST":
+            compliance_check_form_kwargs["data"] = self.request.POST
+            jmespath_check_form_kwargs["data"] = self.request.POST
+        return (
+            ComplianceCheckForm(**compliance_check_form_kwargs),
+            JMESPathCheckForm(**jmespath_check_form_kwargs)
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        if "compliance_check_form" not in kwargs and "jmespath_check_form" not in kwargs:
+            ctx["compliance_check_form"], ctx["jmespath_check_form"] = self.get_forms()
+        ctx["object"] = self.object
+        ctx["compliance_check"] = self.compliance_check
+        return ctx
+
+    def forms_invalid(self, compliance_check_form, jmespath_check_form):
+        return self.render_to_response(
+            self.get_context_data(compliance_check_form=compliance_check_form,
+                                  jmespath_check_form=jmespath_check_form)
+        )
+
+    def forms_valid(self, compliance_check_form, jmespath_check_form):
+        compliance_check = compliance_check_form.save(commit=False)
+        compliance_check.model = InventoryJMESPathCheck.get_model()
+        if jmespath_check_form.has_changed():
+            compliance_check.version = F("version") + 1
+        compliance_check.save()
+        jmespath_check = jmespath_check_form.save(commit=False)
+        jmespath_check.compliance_check = compliance_check
+        jmespath_check.save()
+        jmespath_check_form.save_m2m()
+        if compliance_check_form.has_changed() or jmespath_check_form.has_changed():
+            jmespath_check.refresh_from_db()  # get version number
+            event = JMESPathCheckUpdated.build_from_request_and_object(self.request, jmespath_check)
+            transaction.on_commit(lambda: event.post())
+        return redirect(jmespath_check)
+
+    def post(self, request, *args, **kwargs):
+        compliance_check_form, jmespath_check_form = self.get_forms()
+        if compliance_check_form.is_valid() and jmespath_check_form.is_valid():
+            return self.forms_valid(compliance_check_form, jmespath_check_form)
+        else:
+            return self.forms_invalid(compliance_check_form, jmespath_check_form)
+
+
+class DeleteComplianceCheckView(PermissionRequiredMixin, DeleteView):
+    permission_required = "inventory.delete_jmespathcheck"
+    template_name = "inventory/compliancecheck_confirm_delete.html"
+    model = JMESPathCheck
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["compliance_check"] = self.object.compliance_check
+        return ctx
+
+    def delete(self, request, *args, **kwargs):
+        jmespath_check = self.get_object()
+        name = jmespath_check.compliance_check.name
+        event = JMESPathCheckDeleted.build_from_request_and_object(self.request, jmespath_check)
+        jmespath_check.compliance_check.delete()
+        messages.info(request, f'Compliance check "{name}" deleted')
+        transaction.on_commit(lambda: event.post())
+        return redirect("inventory:compliance_checks")
+
+
+class ComplianceCheckEventsMixin:
+    permission_required = ("inventory.view_jmespathcheck",)
+    store_method_scope = "object"
+
+    def get_object(self, **kwargs):
+        return get_object_or_404(
+            JMESPathCheck.objects.select_related("compliance_check").all(),
+            pk=kwargs["pk"]
+        )
+
+    def get_fetch_kwargs_extra(self):
+        return {"key": "inventory_jmespath_check", "val": encode_args((self.object.pk,))}
+
+    def get_fetch_url(self):
+        return reverse("inventory:fetch_compliance_check_events", args=(self.object.pk,))
+
+    def get_redirect_url(self):
+        return reverse("inventory:compliance_check_events", args=(self.object.pk,))
+
+    def get_store_redirect_url(self):
+        return reverse("inventory:compliance_check_events_store_redirect", args=(self.object.pk,))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["setup"] = True
+        ctx["jmespath_check"] = self.object
+        ctx["compliance_check"] = self.object.compliance_check
+        return ctx
+
+
+class ComplianceCheckEventsView(ComplianceCheckEventsMixin, EventsView):
+    template_name = "inventory/compliancecheck_events.html"
+
+
+class FetchComplianceCheckEventsView(ComplianceCheckEventsMixin, FetchEventsView):
+    pass
+
+
+class ComplianceCheckEventsStoreRedirectView(ComplianceCheckEventsMixin, EventsStoreRedirectView):
+    pass
+
+
+# tags
 
 
 TAG_COLOR_PRESETS = {
