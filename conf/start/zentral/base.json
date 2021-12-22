@@ -46,6 +46,9 @@
     }
   },
   "apps": {
+    "zentral.core.compliance_checks": {
+      "metrics": true
+    },
     "zentral.core.incidents": {
       "metrics": true
     },
