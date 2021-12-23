@@ -80,6 +80,18 @@
         <label for="id_principal_user_name" class="sr-only">Principal user</label>
         <input type="text" id="id_principal_user_name" value="{{ msquery.query_dict.pu }}" name="pu" class="form-control" placeholder="principal user" autocomplete="off">
       </div>
+      <div class="form-group">
+        <label for="id_last_seen" class="sr-only">Last seen</label>
+        <select id="id_last_seen" name="ls" class="form-control">
+          <option value="">Last seen</option>
+          <option value="1d"{% if msquery.query_dict.ls == '1d' %} selected{% endif %}>24 hours</option>
+          <option value="7d"{% if msquery.query_dict.ls == '7d' %} selected{% endif %}>7 days</option>
+          <option value="14d"{% if msquery.query_dict.ls == '14d' %} selected{% endif %}>14 days</option>
+          <option value="30d"{% if msquery.query_dict.ls == '30d' %} selected{% endif %}>30 days</option>
+          <option value="45d"{% if msquery.query_dict.ls == '45d' %} selected{% endif %}>45 days</option>
+          <option value="90d"{% if msquery.query_dict.ls == '90d' %} selected{% endif %}>90 days</option>
+        </select>
+      </div>
       <button class="btn btn-success" type="button" data-toggle="modal" data-target="#add-filter"
                                       aria-expanded="false" aria-controls="add-filter">
         <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
@@ -191,6 +203,9 @@
       <td>{{ machine_snapshot.os_version.display_name }}</td>
       <td>
         {{ machine_snapshot.source.display_name }}
+      </td>
+      <td>
+        {{ machine_snapshot.last_seen }}
       </td>
     </tr>
     {% endfor %}

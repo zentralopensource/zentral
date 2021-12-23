@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 import ipaddress
 from itertools import chain
 import json
@@ -10,6 +10,7 @@ import re
 import tempfile
 import urllib.parse
 import zipfile
+from dateutil import parser
 from django import forms
 from django.core.files.storage import default_storage
 from django.core.serializers.json import DjangoJSONEncoder
@@ -735,6 +736,40 @@ class PrincipalUserNameFilter(BaseMSFilter):
                 record.setdefault("principal_user", {})[attr] = val
 
 
+class LastSeenFilter(BaseMSFilter):
+    query_kwarg = "ls"
+    non_grouping_expression = "lsmsc.last_seen"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.value and self.value.endswith("d"):
+            days = int(self.value.replace("d", ""))
+            self.value = datetime.utcnow() - timedelta(days=days)
+
+    def joins(self):
+        yield ("join "
+               "(select machine_snapshot_id, max(last_seen) as last_seen"
+               " from inventory_machinesnapshotcommit"
+               " group by machine_snapshot_id) as lsmsc "
+               "on (ms.id = lsmsc.machine_snapshot_id)")
+
+    def wheres(self):
+        if self.value:
+            yield "lsmsc.last_seen > %s"
+
+    def where_args(self):
+        if self.value:
+            yield self.value
+
+    def process_fetched_record(self, record, for_filtering):
+        val = record.pop("last_seen", None)
+        if val:
+            try:
+                record["last_seen"] = parser.parse(val)
+            except Exception:
+                pass
+
+
 class HardwareModelFilter(BaseMSFilter):
     title = "Hardware models"
     optional = True
@@ -856,6 +891,7 @@ class MSQuery:
         SerialNumberFilter,
         ComputerNameFilter,
         PrincipalUserNameFilter,
+        LastSeenFilter,
     ]
 
     def __init__(self, query_dict=None):
@@ -1160,7 +1196,8 @@ class MSQuery:
             "OS",
             "Principal user principal name",
             "Principal user display name",
-            "tags"
+            "Tags",
+            "Last seen"
         ]
         row_idx = 0
         rows = []
@@ -1204,6 +1241,7 @@ class MSQuery:
                 row.append(
                     "|".join(dn for dn in (t.get("display_name") for t in machine_snapshot.get("tags", [])) if dn)
                 )
+                row.append(machine_snapshot.get("last_seen"))
                 if include_max_incident_severity:
                     mis = machine_snapshot.get("max_incident_severity", {})
                     row.extend([mis.get("value") or "",
@@ -1230,7 +1268,11 @@ class MSQuery:
             yield f.title, ["Value", "Count", "%"], rows
 
     def export_xlsx(self, f_obj):
-        workbook = xlsxwriter.Workbook(f_obj)
+        workbook = xlsxwriter.Workbook(
+            f_obj,
+            {'default_date_format': 'yyyy-mm-dd hh:mm:ss',
+             'remove_timezone': True}
+        )
         # machines
         for title, headers, rows in self.export_sheets_data():
             ws = workbook.add_worksheet(title)
@@ -1244,6 +1286,8 @@ class MSQuery:
                 for value in row:
                     if isinstance(value, (int, float)):
                         ws.write_number(row_idx, col_idx, value)
+                    elif isinstance(value, datetime):
+                        ws.write_datetime(row_idx, col_idx, value)
                     else:
                         if not isinstance(value, str):
                             value = str(value)
