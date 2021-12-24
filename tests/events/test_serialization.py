@@ -44,7 +44,7 @@ class EventSerializationTestCase(TestCase):
             "serial_number": "0123456789",
             "os_version": {'name': 'OS X', 'major': 10, 'minor': 11, 'patch': 1},
         }
-        _, cls.ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        _, cls.ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
 
     def test_event_without_msn(self):
         event = make_event(with_msn=False)

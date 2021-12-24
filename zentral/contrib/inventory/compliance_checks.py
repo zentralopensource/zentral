@@ -70,7 +70,7 @@ class JMESPathChecksCache:
             self._load()
             return self._source_checks.get(source_name.lower(), [])
 
-    def process_tree(self, tree):
+    def process_tree(self, tree, last_seen):
         serial_number = tree["serial_number"]
         machine_tag_set = None
         compliance_check_statuses = []
@@ -97,14 +97,14 @@ class JMESPathChecksCache:
                     status = Status.FAILED
                 else:
                     logger.warning("JMESPath check %s result is not a boolean", jmespath_check.pk)
-            compliance_check_statuses.append((jmespath_check.compliance_check, status))
+            compliance_check_statuses.append((jmespath_check.compliance_check, status, last_seen))
         if not compliance_check_statuses:
             # nothing to update, no events
             return
         status_updates = update_machine_statuses(serial_number, compliance_check_statuses)
         for compliance_check_pk, status_value, previous_status_value in status_updates:
             if status_value == previous_status_value:
-                # no update, no event
+                # status not updated, no event
                 continue
             yield JMESPathCheckStatusUpdated.build_from_object_serial_number_and_statuses(
                 self._checks[compliance_check_pk],

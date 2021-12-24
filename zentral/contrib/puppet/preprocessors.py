@@ -37,7 +37,7 @@ class ReportEventPreprocessor(object):
     def update_machine(self, machine_d):
         logger.info("Update machine %s %s", machine_d["source"], machine_d["reference"])
         try:
-            msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
+            msc, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
         except Exception:
             logger.exception("Could not commit machine snapshot")
         else:

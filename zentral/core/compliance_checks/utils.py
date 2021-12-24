@@ -1,3 +1,4 @@
+from datetime import datetime
 from django.db import connection
 import psycopg2.extras
 from . import compliance_check_classes
@@ -12,16 +13,21 @@ def update_machine_statuses(serial_number, compliance_check_statuses):
         'values %s '
         'on conflict ("compliance_check_id", "serial_number") do update '
         'set compliance_check_version = excluded.compliance_check_version,'
-        'status = excluded.status, status_time = now(),'
+        'status = excluded.status, status_time = excluded.status_time,'
         'previous_status = compliance_checks_machinestatus.status '
+        'where excluded.status_time > compliance_checks_machinestatus.status_time '
         'returning compliance_check_id, status, previous_status'
     )
     with connection.cursor() as cursor:
+        now = datetime.utcnow()  # default status time
         result = psycopg2.extras.execute_values(
             cursor, query,
-            ((compliance_check.pk, compliance_check.version, serial_number, status.value)
-             for compliance_check, status in compliance_check_statuses),
-            template="(%s, %s, %s, %s, now())",
+            ((compliance_check.pk,
+              compliance_check.version,
+              serial_number,
+              status.value,
+              status_time or now)
+             for compliance_check, status, status_time in compliance_check_statuses),
             fetch=True
         )
         return result

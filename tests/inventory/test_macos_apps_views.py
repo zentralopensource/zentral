@@ -72,7 +72,7 @@ class MacOSAppsViewsTestCase(TestCase):
                  }}
             ]
         }
-        _, cls.ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        _, cls.ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         cls.osx_app_instance = cls.ms.osx_app_instances.all()[0]
         cls.osx_app = cls.osx_app_instance.app
 

@@ -29,7 +29,7 @@ class PrometheusViewsTestCase(TestCase):
                  'bundle_path': "/Applications/Baller.app"}
             ]
         }
-        _, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        _, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         source_id = ms.source.pk
         response = self.client.get(reverse("inventory_metrics:all"),
                                    HTTP_AUTHORIZATION="Bearer CHANGE ME!!!")

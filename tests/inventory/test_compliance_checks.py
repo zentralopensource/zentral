@@ -1,3 +1,4 @@
+from datetime import datetime
 import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -39,7 +40,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         tree = self._build_tree(source_name, profile_uuid)
         jmespath_check = self._force_compliance_check(get_random_string(), profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
-        events = list(jmespath_checks_cache.process_tree(tree))
+        events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 0)
         self.assertEqual(MachineStatus.objects.filter(compliance_check=jmespath_check.compliance_check).count(), 0)
 
@@ -50,7 +51,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         tree = self._build_tree(source_name, profile_uuid, serial_number)
         jmespath_check = self._force_compliance_check(source_name, profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
-        events = list(jmespath_checks_cache.process_tree(tree))
+        events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 1)
         event = events[0]
         self.assertIsInstance(event, JMESPathCheckStatusUpdated)
@@ -68,7 +69,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         tree = self._build_tree(source_name, profile_uuid, serial_number)
         jmespath_check = self._force_compliance_check(source_name, str(uuid.uuid4()))
         jmespath_checks_cache._last_fetched_time = None  # force refresh
-        events = list(jmespath_checks_cache.process_tree(tree))
+        events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 1)
         event = events[0]
         self.assertIsInstance(event, JMESPathCheckStatusUpdated)
@@ -87,7 +88,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         # the following jmespath_expression does not return a boolean, but a list → UNKNOWN
         jmespath_check = self._force_compliance_check(source_name, profile_uuid, jmespath_expression="profiles")
         jmespath_checks_cache._last_fetched_time = None  # force refresh
-        events = list(jmespath_checks_cache.process_tree(tree))
+        events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 1)
         event = events[0]
         self.assertIsInstance(event, JMESPathCheckStatusUpdated)
@@ -107,7 +108,7 @@ class InventoryComplianceChecksTestCase(TestCase):
                 "profiles": 12345}  # will trigger a jmespath error
         jmespath_check = self._force_compliance_check(source_name, profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
-        events = list(jmespath_checks_cache.process_tree(tree))
+        events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 1)
         event = events[0]
         self.assertIsInstance(event, JMESPathCheckStatusUpdated)
@@ -125,11 +126,11 @@ class InventoryComplianceChecksTestCase(TestCase):
         tree = self._build_tree(source_name, profile_uuid, serial_number)
         jmespath_check = self._force_compliance_check(source_name, profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
-        events0 = list(jmespath_checks_cache.process_tree(tree))
+        events0 = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events0), 1)
         event = events0[0]
         self.assertIsInstance(event, JMESPathCheckStatusUpdated)
-        events1 = list(jmespath_checks_cache.process_tree(tree))  # use the cache
+        events1 = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))  # use the cache
         self.assertEqual(len(events1), 0)  # second time, no event
         ms_qs = MachineStatus.objects.filter(compliance_check=jmespath_check.compliance_check)
         self.assertEqual(ms_qs.count(), 1)
@@ -154,7 +155,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         jmespath_check_non_matching_tags = self._force_compliance_check(source_name, profile_uuid,
                                                                         tags=non_matching_tags)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
-        events = list(jmespath_checks_cache.process_tree(tree))
+        events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         # two status update events for the 2 matching checks
         self.assertEqual(len(events), 2)
         for event in events:

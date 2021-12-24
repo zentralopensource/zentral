@@ -82,7 +82,7 @@ class WebhookEventPreprocessor(object):
                 return
             try:
                 with transaction.atomic():
-                    msc, ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
+                    msc, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
             except Exception:
                 logger.exception("Could not commit machine snapshot")
             else:

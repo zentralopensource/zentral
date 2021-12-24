@@ -616,7 +616,7 @@ class MachineSnapshotCommitManager(models.Manager):
                 CurrentMachineSnapshot.objects.update_or_create(serial_number=serial_number,
                                                                 source=source,
                                                                 defaults={'machine_snapshot': machine_snapshot})
-                return new_msc, machine_snapshot
+                return new_msc, machine_snapshot, last_seen
         except IntegrityError:
             msc = MachineSnapshotCommit.objects.get(serial_number=serial_number,
                                                     source=source,
@@ -624,7 +624,7 @@ class MachineSnapshotCommitManager(models.Manager):
             if msc.machine_snapshot == machine_snapshot:
                 logger.warning("MachineSnapshotCommit race with same snapshot for "
                                "source {} and serial_number {}".format(source, serial_number))
-                return None, machine_snapshot
+                return None, machine_snapshot, msc.last_seen
             else:
                 raise MTOError("MachineSnapshotCommit race for "
                                "source {} and serial_number {}".format(source, serial_number))

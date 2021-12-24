@@ -1438,17 +1438,16 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
 
 def commit_machine_snapshot_and_trigger_events(tree):
     try:
-        machine_snapshot_commit, machine_snapshot = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        msc, machine_snapshot, last_seen = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
     except Exception:
         logger.exception("Could not commit machine snapshot")
         save_dead_letter(tree, "machine snapshot commit error")
     else:
         # inventory events
-        if machine_snapshot_commit:
-            post_inventory_events(machine_snapshot_commit.serial_number,
-                                  inventory_events_from_machine_snapshot_commit(machine_snapshot_commit))
+        if msc:
+            post_inventory_events(msc.serial_number, inventory_events_from_machine_snapshot_commit(msc))
         # compliance checks
-        for compliance_check_event in jmespath_checks_cache.process_tree(tree):
+        for compliance_check_event in jmespath_checks_cache.process_tree(tree, last_seen):
             compliance_check_event.post()
         return machine_snapshot
 

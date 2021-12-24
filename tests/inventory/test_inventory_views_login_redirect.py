@@ -35,7 +35,7 @@ class InventoryLoginRedirectTestCase(TestCase):
                  'bundle_path': "/Applications/Baller.app"}
             ]
         }
-        _, cls.ms = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        _, cls.ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         cls.group_id = cls.ms.groups.all()[0].pk
         cls.bu_id = cls.ms.business_unit.pk
         cls.mbu_id = cls.ms.business_unit.meta_business_unit.pk
