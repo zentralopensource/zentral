@@ -77,6 +77,14 @@ class Query(models.Model):
 
     version = models.PositiveIntegerField(default=1, editable=False)
 
+    compliance_check = models.OneToOneField(
+        "compliance_checks.ComplianceCheck",
+        on_delete=models.SET_NULL,
+        related_name="query",
+        editable=False,
+        null=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -113,6 +121,11 @@ class Query(models.Model):
         if self.value:
             d["value"] = self.value
         return d
+
+    def delete(self, *args, **kwargs):
+        if self.compliance_check:
+            self.compliance_check.delete()
+        return super().delete(*args, **kwargs)
 
 
 class Pack(models.Model):
@@ -169,14 +182,20 @@ class Pack(models.Model):
         return d
 
 
+def parse_pack_query_configuration_key(key):
+    try:
+        _, pack_pk, _, query_pk, query_version = key.split(Pack.DELIMITER)
+        pack_pk = int(pack_pk)
+        query_pk = int(query_pk)
+        query_version = int(query_version)
+    except (AttributeError, ValueError):
+        raise ValueError("Not an osquery pack query configuration key")
+    return pack_pk, query_pk, query_version
+
+
 class PackQueryManager(models.Manager):
     def get_with_config_key(self, key):
-        try:
-            _, pack_pk, _, query_pk, _ = key.split(Pack.DELIMITER)
-            pack_pk = int(pack_pk)
-            query_pk = int(query_pk)
-        except (AttributeError, ValueError):
-            raise ValueError("Not an osquery pack query configuration key")
+        pack_pk, query_pk, _ = parse_pack_query_configuration_key(key)
         return self.get(pack__pk=pack_pk, query__pk=query_pk)
 
 

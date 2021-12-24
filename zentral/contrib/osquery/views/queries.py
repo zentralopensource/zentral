@@ -51,7 +51,9 @@ class CreateQueryView(PermissionRequiredMixin, CreateView):
 
 class QueryView(PermissionRequiredMixin, DetailView):
     permission_required = "osquery.view_query"
-    model = Query
+
+    def get_queryset(self):
+        return Query.objects.select_related("compliance_check").prefetch_related("packquery__pack")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

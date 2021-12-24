@@ -1,8 +1,9 @@
 from datetime import datetime
 import logging
+import uuid
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
-from zentral.core.queues import queues
-from zentral.contrib.osquery.models import Pack
+from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
+from zentral.contrib.osquery.models import parse_pack_query_configuration_key, Pack, PackQuery
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
 
@@ -53,29 +54,24 @@ class OsqueryResultEvent(OsqueryEvent):
             ctx['action'] = self.payload['action']
         if 'columns' in self.payload:
             ctx['columns'] = self.payload['columns']
-        query_name = self.payload.get("name")
-        if query_name:
-            try:
-                ctx['query'] = probe.scheduled_queries[query_name]
-            except AttributeError:
-                # not a OsqueryResultProbe
-                pass
-            except KeyError:
-                logger.warning("Unknown query %s", query_name)
-                pass
         return ctx
+
+    def parse_result_name(self):
+        name = self.payload.get("name")
+        if not name:
+            raise ValueError("result query name not found")
+        expected_prefix = "pack" + Pack.DELIMITER
+        if not name.startswith(expected_prefix):
+            raise ValueError("result query name doesn't start with expected prefix")
+        configuration_key = name[len(expected_prefix):]
+        return parse_pack_query_configuration_key(configuration_key)
 
     def get_linked_objects_keys(self):
         keys = {}
         try:
-            prefix, _, pack_pk, _, query_pk, _ = self.payload["name"].split(Pack.DELIMITER)
-            pack_pk = int(pack_pk)
-            query_pk = int(query_pk)
-        except (AttributeError, KeyError, ValueError):
-            logger.warning("Could not parse osquery result name")
-            return keys
-        if prefix != "pack":
-            logger.warning("Unknown result name prefix")
+            pack_pk, query_pk, _ = self.parse_result_name()
+        except ValueError as e:
+            logger.warning(str(e))
             return keys
         keys["osquery_pack"] = [(pack_pk,)]
         keys["osquery_query"] = [(query_pk,)]
@@ -83,17 +79,6 @@ class OsqueryResultEvent(OsqueryEvent):
 
 
 register_event_type(OsqueryResultEvent)
-
-
-class OsqueryDistributedQueryResultEvent(OsqueryEvent):
-    event_type = "osquery_distributed_query_result"
-    payload_aggregations = [
-        ("empty", {"type": "terms", "bucket_number": 2, "label": "Empty?"}),
-        ("error", {"type": "terms", "bucket_number": 2, "label": "Error?"}),
-    ]
-
-
-register_event_type(OsqueryDistributedQueryResultEvent)
 
 
 class OsqueryFileCarvingEvent(OsqueryEvent):
@@ -127,6 +112,55 @@ class OsqueryPackQueryUpdateEvent(OsqueryEvent):
 register_event_type(OsqueryPackQueryUpdateEvent)
 
 
+class OsqueryCheckStatusUpdated(BaseEvent):
+    event_type = 'osquery_check_status_updated'
+    namespace = 'compliance_check'
+    tags = ['compliance_check', 'osquery_check', 'compliance_check_status']
+
+    @classmethod
+    def build_from_query_serial_number_and_statuses(
+        cls,
+        query, distributed_query_pk,
+        serial_number,
+        status, status_time,
+        previous_status
+    ):
+        payload = query.compliance_check.serialize_for_event()
+        payload["osquery_query"] = {"pk": query.pk}
+        if distributed_query_pk:
+            payload["osquery_run"] = {"pk": distributed_query_pk}
+        else:
+            try:
+                pack = query.packquery.pack
+            except PackQuery.DoesNotExist:
+                pass
+            else:
+                payload["osquery_pack"] = {"pk": pack.pk, "name": pack.name}
+        payload["status"] = status.name
+        if previous_status is not None:
+            payload["previous_status"] = previous_status.name
+        return cls(EventMetadata(machine_serial_number=serial_number, created_at=status_time), payload)
+
+    def get_linked_objects_keys(self):
+        keys = {}
+        pk = self.payload.get("pk")
+        if pk:
+            keys["compliance_check"] = [(pk,)]
+        query_pk = self.payload.get("osquery_query", {}).get("pk")
+        if query_pk:
+            keys["osquery_query"] = [(query_pk,)]
+        distributed_query_pk = self.payload.get("osquery_run", {}).get("pk")
+        if distributed_query_pk:
+            keys["osquery_run"] = [(distributed_query_pk,)]
+        pack_pk = self.payload.get("osquery_pack", {}).get("pk")
+        if pack_pk:
+            keys["osquery_pack"] = [(pack_pk,)]
+        return keys
+
+
+register_event_type(OsqueryCheckStatusUpdated)
+
+
 # Utility functions used by the osquery API views
 
 
@@ -143,37 +177,68 @@ def post_request_event(msn, user_agent, ip, request_type, enrollment):
     OsqueryRequestEvent.post_machine_request_payloads(msn, user_agent, ip, [data])
 
 
-def post_distributed_query_result(msn, user_agent, ip, payloads):
-    OsqueryDistributedQueryResultEvent.post_machine_request_payloads(msn, user_agent, ip, payloads)
-
-
 def post_file_carve_events(msn, user_agent, ip, payloads):
     OsqueryFileCarvingEvent.post_machine_request_payloads(msn, user_agent, ip, payloads)
 
 
-def post_finished_file_carve_session(session_id):
-    queues.post_raw_event("osquery_finished_file_carve_session",
-                          {"session_id": session_id})
-
-
-def _get_osquery_log_record_created_at(payload):
+def _get_record_created_at(payload):
     return datetime.utcfromtimestamp(float(payload.pop('unixTime')))
 
 
-def _post_events_from_osquery_log(msn, user_agent, ip, event_cls, records):
+def _iter_cleaned_up_records(records):
     for record in records:
         for k in ("decorations", "numerics", "calendarTime", "hostIdentifier"):
             if k in record:
                 del record[k]
-    event_cls.post_machine_request_payloads(msn, user_agent, ip, records, _get_osquery_log_record_created_at)
+        yield record
 
 
-def post_results(msn, user_agent, ip, results):
-    _post_events_from_osquery_log(msn, user_agent, ip, OsqueryResultEvent, results)
+def _post_events(msn, user_agent, ip, event_cls, records):
+    event_cls.post_machine_request_payloads(
+        msn, user_agent, ip,
+        _iter_cleaned_up_records(records),
+        _get_record_created_at
+    )
 
 
 def post_status_logs(msn, user_agent, ip, logs):
-    _post_events_from_osquery_log(msn, user_agent, ip, OsqueryStatusEvent, logs)
+    OsqueryStatusEvent.post_machine_request_payloads(
+        msn, user_agent, ip,
+        _iter_cleaned_up_records(logs),
+        _get_record_created_at
+    )
+
+
+def post_results(msn, user_agent, ip, results):
+    event_uuid = uuid.uuid4()
+    if user_agent or ip:
+        request = EventRequest(user_agent, ip)
+    else:
+        request = None
+    cc_status_agg = ComplianceCheckStatusAggregator(msn)
+    for index, result in enumerate(_iter_cleaned_up_records(results)):
+        try:
+            event_time = _get_record_created_at(result)
+        except Exception:
+            logger.exception("Could not extract osquery result time")
+            event_time = None
+        metadata = EventMetadata(uuid=event_uuid, index=index,
+                                 machine_serial_number=msn,
+                                 request=request,
+                                 created_at=event_time)
+        event = OsqueryResultEvent(metadata, result)
+        event.post()
+        snapshot = event.payload.get("snapshot")
+        if snapshot is None:
+            # no snapshot, cannot be a compliance check
+            continue
+        try:
+            _, query_pk, query_version = event.parse_result_name()
+        except ValueError as e:
+            logger.warning(str(e))
+            continue
+        cc_status_agg.add_result(query_pk, query_version, event_time, snapshot)
+    cc_status_agg.commit_and_post_events()
 
 
 # Utility function for the audit trail

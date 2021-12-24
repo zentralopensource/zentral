@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from django import forms
 from django.db.models import Count, F, Q
 from django.utils.text import slugify
+from .compliance_checks import sync_query_compliance_check
 from .models import (AutomaticTableConstruction, Configuration, ConfigurationPack,
                      DistributedQuery, Enrollment, FileCategory, Pack, PackQuery, Platform, Query)
 from .releases import get_osquery_versions
@@ -216,6 +217,10 @@ class PackQueryForm(forms.ModelForm):
             self.fields["query"].widget = forms.HiddenInput()
             self.pack = self.instance.pack
             self.fields["query"].queryset = Query.objects.filter(pk=self.instance.query.pk)
+            if self.instance.query and self.instance.query.compliance_check:
+                # force snapshot mode
+                self.fields["log_removed_actions"].disabled = True
+                self.fields["snapshot_mode"].disabled = True
         else:
             self.fields["query"].queryset = (Query.objects.filter(packquery__isnull=True)
                                                           .order_by("name", "pk"))
@@ -229,11 +234,20 @@ class PackQueryForm(forms.ModelForm):
         query = self.cleaned_data.get("query")
         if query:
             self.instance.slug = slugify(query.name)
+            if query.compliance_check and not self.cleaned_data.get("snapshot_mode"):
+                self.add_error("snapshot_mode", "A compliance check query can only be scheduled in 'snapshot' mode.")
 
 
 # Query
 
 class QueryForm(forms.ModelForm):
+    compliance_check = forms.BooleanField(required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["compliance_check"].initial = self.instance.compliance_check is not None
+
     class Meta:
         model = Query
         fields = "__all__"
@@ -248,6 +262,30 @@ class QueryForm(forms.ModelForm):
                 self.instance.version = F("version") + 1
         return sql
 
+    def clean(self):
+        if self.cleaned_data.get("compliance_check"):
+            sql = self.cleaned_data.get("sql")
+            if sql and "ztl_status" not in sql:
+                self.add_error(
+                    "compliance_check",
+                    "The query doesn't contain the 'ztl_status' keyword"
+                )
+            try:
+                pack_query = self.instance.packquery
+            except PackQuery.DoesNotExist:
+                pass
+            else:
+                if not pack_query.snapshot_mode:
+                    self.add_error(
+                        "compliance_check",
+                        f"This query is scheduled in 'diff' mode in the {pack_query.pack} pack"
+                    )
+
+    def save(self, *args, **kwargs):
+        query = super().save(*args, **kwargs)
+        sync_query_compliance_check(query, self.cleaned_data.get("compliance_check"))
+        return query
+
 
 class QuerySearchForm(forms.Form):
     q = forms.CharField(
@@ -257,10 +295,12 @@ class QuerySearchForm(forms.Form):
                                       "placeholder": "Query name, pack name, SQL, …"})
     )
     pack = forms.ModelChoiceField(queryset=Pack.objects.all(), required=False)
+    compliance_check = forms.BooleanField(label="Only compliance checks", required=False)
 
     def get_queryset(self):
         qs = (
             Query.objects
+                 .select_related("compliance_check")
                  .prefetch_related("packquery__pack")
                  .annotate(distributed_query_count=Count("distributedquery"))
                  .order_by("name", "pk")
@@ -277,4 +317,6 @@ class QuerySearchForm(forms.Form):
             )
         if pack:
             qs = qs.filter(packquery__pack=pack)
+        if self.cleaned_data.get("compliance_check"):
+            qs = qs.filter(compliance_check__isnull=False)
         return qs

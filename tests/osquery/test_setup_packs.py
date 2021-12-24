@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from accounts.models import User
+from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
 
 
@@ -40,11 +41,17 @@ class OsquerySetupPacksViewsTestCase(TestCase):
     def _force_pack(self):
         return Pack.objects.create(name=get_random_string())
 
-    def _force_query(self, force_pack=False):
-        query = Query.objects.create(name=get_random_string(), sql="select 1 from processes;")
+    def _force_query(self, force_pack=False, force_compliance_check=False):
+        if force_compliance_check:
+            sql = "select 'OK' as ztl_status;"
+        else:
+            sql = "select 1 from processes;"
+        query = Query.objects.create(name=get_random_string(), sql=sql)
         if force_pack:
             pack = self._force_pack()
-            PackQuery.objects.create(pack=pack, query=query, interval=12983)
+            PackQuery.objects.create(pack=pack, query=query, interval=12983,
+                                     log_removed_actions=False, snapshot_mode=force_compliance_check)
+        sync_query_compliance_check(query, force_compliance_check)
         return query
 
     # create pack
@@ -209,6 +216,20 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         self.assertEqual(response.context["pack"], pack)
         self.assertContains(response, query.name)
 
+    def test_add_pack_query_mode_error(self):
+        pack = self._force_pack()
+        query = self._force_query()
+        self._login("osquery.add_packquery", "osquery.view_pack", "osquery.view_packquery")
+        response = self.client.post(reverse("osquery:add_pack_query", args=(pack.pk,)),
+                                    {"query": query.pk, "interval": 3456,
+                                     "log_removed_actions": "on", "snapshot_mode": "on"}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/packquery_form.html")
+        self.assertFormError(response, "form", "log_removed_actions",
+                             "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
+        self.assertFormError(response, "form", "snapshot_mode",
+                             "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
+
     def test_add_pack_query_post(self):
         pack = self._force_pack()
         query = self._force_query()
@@ -220,6 +241,33 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         self.assertEqual(response.context["object"], pack)
         self.assertContains(response, query.name)
         self.assertContains(response, "3456s")
+        self.assertNotContains(response, "Compliance check")
+
+    def test_add_pack_query_with_compliance_check_error(self):
+        pack = self._force_pack()
+        query = self._force_query(force_compliance_check=True)
+        self._login("osquery.add_packquery", "osquery.view_pack", "osquery.view_packquery")
+        response = self.client.post(reverse("osquery:add_pack_query", args=(pack.pk,)),
+                                    {"query": query.pk, "interval": 3456,
+                                     "log_removed_actions": "on"}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/packquery_form.html")
+        self.assertFormError(response, "form", "snapshot_mode",
+                             "A compliance check query can only be scheduled in 'snapshot' mode.")
+
+    def test_add_pack_query_with_compliance_check(self):
+        pack = self._force_pack()
+        query = self._force_query(force_compliance_check=True)
+        self._login("osquery.add_packquery", "osquery.view_pack", "osquery.view_packquery")
+        response = self.client.post(reverse("osquery:add_pack_query", args=(pack.pk,)),
+                                    {"query": query.pk, "interval": 3456,
+                                     "snapshot_mode": "on"}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/pack_detail.html")
+        self.assertEqual(response.context["object"], pack)
+        self.assertContains(response, query.name)
+        self.assertContains(response, "3456s")
+        self.assertContains(response, "Compliance check")
 
     # update pack query
 
@@ -245,6 +293,20 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         self.assertEqual(response.context["pack"], pack_query.pack)
         self.assertContains(response, pack_query.interval)
 
+    def test_update_pack_query_mode_error(self):
+        query = self._force_query(force_pack=True)
+        pack_query = query.packquery
+        self._login("osquery.change_packquery")
+        response = self.client.post(reverse("osquery:update_pack_query", args=(pack_query.pack.pk, pack_query.pk)),
+                                    {"query": query.pk, "interval": 12345,
+                                     "log_removed_actions": "on", "snapshot_mode": "on"}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/packquery_form.html")
+        self.assertFormError(response, "form", "log_removed_actions",
+                             "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
+        self.assertFormError(response, "form", "snapshot_mode",
+                             "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
+
     def test_update_pack_query_post(self):
         query = self._force_query(force_pack=True)
         pack_query = query.packquery
@@ -256,6 +318,19 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         self.assertEqual(response.context["object"], pack_query.pack)
         self.assertContains(response, query.name)
         self.assertContains(response, "12345s")
+
+    def test_update_pack_query_with_compliance_check(self):
+        query = self._force_query(force_pack=True, force_compliance_check=True)
+        pack_query = query.packquery
+        self._login("osquery.change_packquery", "osquery.view_pack", "osquery.view_packquery")
+        # log_removed_actions and snapshot_mode fields are disabled
+        response = self.client.post(reverse("osquery:update_pack_query", args=(pack_query.pack.pk, pack_query.pk)),
+                                    {"query": query.pk, "interval": 123456}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/pack_detail.html")
+        self.assertEqual(response.context["object"], pack_query.pack)
+        self.assertContains(response, query.name)
+        self.assertContains(response, "123456s")
 
     # delete pack query
 

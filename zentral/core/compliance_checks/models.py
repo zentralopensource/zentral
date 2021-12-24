@@ -46,6 +46,11 @@ class Status(Enum):
         else:
             return self.name.title()
 
+    def __lt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value < other.value
+        return NotImplemented
+
     def display_class(self):
         if self == self.OK:
             return "success"

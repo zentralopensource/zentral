@@ -1,4 +1,5 @@
 from base64 import b64decode
+from datetime import datetime
 from gzip import GzipFile
 from itertools import chain, islice
 import json
@@ -14,6 +15,7 @@ from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFai
 from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine, MachineTag
 from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_trigger_events,
                                              verify_enrollment_secret)
+from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
 from zentral.contrib.osquery.conf import build_osquery_conf, INVENTORY_QUERY_NAME
 from zentral.contrib.osquery.events import (post_enrollment_event,
                                             post_file_carve_events,
@@ -313,8 +315,9 @@ class DistributedWriteView(BaseNodeView):
         if not dqm_pk_set:
             return {}
         dqm_cache = {str(dqm.pk): dqm
-                     for dqm in DistributedQueryMachine.objects.select_related("distributed_query")
-                                                               .filter(pk__in=dqm_pk_set)}
+                     for dqm in DistributedQueryMachine.objects
+                                                       .select_related("distributed_query__query__compliance_check")
+                                                       .filter(pk__in=dqm_pk_set)}
 
         # update distributed query machines
         for dqm_pk, dqm in dqm_cache.items():
@@ -341,6 +344,23 @@ class DistributedWriteView(BaseNodeView):
             if not batch:
                 break
             DistributedQueryResult.objects.bulk_create(batch, self.batch_size)
+
+        # process compliance checks
+        cc_status_agg = ComplianceCheckStatusAggregator(self.machine.serial_number)
+        status_time = datetime.utcnow()  # TODO: how to get a better time? add ztl_status_time = now() to the query?
+        for dqm_pk, dqm in dqm_cache.items():
+            distributed_query = dqm.distributed_query
+            query = distributed_query.query
+            if not query or not query.compliance_check:
+                continue
+            cc_status_agg.add_result(
+                query.pk,
+                distributed_query.query_version,
+                status_time,
+                results.get(dqm_pk, []),
+                distributed_query.pk
+            )
+        cc_status_agg.commit_and_post_events()
 
         return {}
 

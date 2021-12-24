@@ -51,6 +51,10 @@
         <td>{% if pack_query %}<a href="{{ pack_query.get_absolute_url }}">{{ pack_query.pack }}</a>{% else %}-{% endif %}</td>
       </tr>
       {% endif %}
+      <tr>
+        <td>Compliance check</td>
+        <td>{% if object.compliance_check %}yes{% else %}no{% endif %}</td>
+      </tr>
       </tbody>
     </table>
 

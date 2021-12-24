@@ -46,7 +46,7 @@ class PackView(PermissionRequiredMixin, DetailView):
         )
         ctx["configuration_pack_count"] = ctx["configuration_packs"].count()
         ctx["pack_queries"] = (
-            self.object.packquery_set.select_related("query")
+            self.object.packquery_set.select_related("query__compliance_check")
                                      .annotate(filecarvingsession_count=Count("filecarvingsession"))
                                      .order_by("query__name", "slug", "pk")
         )
