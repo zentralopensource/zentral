@@ -576,7 +576,9 @@ class BundleFilter(BaseMSFilter):
             osx_app["display_name"] = self.display_name(osx_app)
             if osx_app not in osx_apps:
                 osx_apps.append(osx_app)
-        osx_apps.sort(key=lambda app: (app.get("bundle_version"), app.get("bundle_version_str"), app.get("id")))
+        osx_apps.sort(key=lambda app: (app.get("bundle_version") or "",
+                                       app.get("bundle_version_str") or "",
+                                       app.get("id")))
         if not for_filtering:
             # TODO: verify no conflict
             record.setdefault("osx_apps", OrderedDict())[self.title] = osx_apps
