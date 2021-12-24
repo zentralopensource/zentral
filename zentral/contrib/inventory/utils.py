@@ -983,7 +983,7 @@ class MSQuery:
         qd["sf"] = self.serialize_filters(include_hidden=True)
         for f in self.filters:
             if f.value is not None:
-                qd[f.serialize()] = f.value
+                qd[f.get_query_kwarg()] = f.value
         return qd
 
     def get_urlencoded_canonical_query_dict(self):
