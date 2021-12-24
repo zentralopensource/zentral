@@ -742,9 +742,10 @@ class LastSeenFilter(BaseMSFilter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.value and self.value.endswith("d"):
-            days = int(self.value.replace("d", ""))
-            self.value = datetime.utcnow() - timedelta(days=days)
+        try:
+            self.days = max(1, int(self.value.replace("d", "")))
+        except Exception:
+            self.days = None
 
     def joins(self):
         yield ("join "
@@ -754,12 +755,12 @@ class LastSeenFilter(BaseMSFilter):
                "on (ms.id = lsmsc.machine_snapshot_id)")
 
     def wheres(self):
-        if self.value:
+        if self.days:
             yield "lsmsc.last_seen > %s"
 
     def where_args(self):
-        if self.value:
-            yield self.value
+        if self.days:
+            yield datetime.utcnow() - timedelta(days=self.days)
 
     def process_fetched_record(self, record, for_filtering):
         val = record.pop("last_seen", None)
