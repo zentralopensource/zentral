@@ -66,11 +66,18 @@ class OsqueryQuerySerializer(serializers.Serializer):
     denylist = serializers.BooleanField(default=True, required=False)
     description = serializers.CharField(allow_blank=True, required=False)
     value = serializers.CharField(allow_blank=False, required=False)
+    compliance_check = serializers.BooleanField(default=False, required=False)
 
     def validate(self, data):
         snapshot = data.get("snapshot", False)
         if snapshot and data.get("removed"):
             raise serializers.ValidationError('{"action": "removed"} results are not available in "snapshot" mode')
+        if data.get("compliance_check"):
+            if not snapshot:
+                raise serializers.ValidationError('{"compliance_check": true} only available in "snapshot" mode')
+            sql = data.get("query")
+            if sql is not None and 'ztl_status' not in sql:
+                raise serializers.ValidationError('{"compliance_check": true} only if query contains "ztl_status"')
         return data
 
 
@@ -109,6 +116,7 @@ class OsqueryPackSerializer(serializers.Serializer):
                 "platforms": query_data.get("platform", pack_platforms),
                 "minimum_osquery_version": query_data.get("version", pack_minimum_osquery_version),
                 "description": query_data.get("description", ""),
-                "value": query_data.get("value", "")
+                "value": query_data.get("value", ""),
+                "compliance_check": query_data.get("compliance_check") or False
             }
             yield query_slug, pack_query_defaults, query_defaults

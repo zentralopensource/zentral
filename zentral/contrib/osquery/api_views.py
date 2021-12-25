@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
+from .compliance_checks import sync_query_compliance_check
 from .events import post_osquery_pack_update_events
 from .models import Configuration, Enrollment, Pack, PackQuery, Query
 from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryPackSerializer
@@ -143,6 +144,7 @@ class PackView(APIView):
         found_query_slugs = []
         for query_slug, pack_query_defaults, query_defaults in serializer.iter_query_defaults(slug):
             found_query_slugs.append(query_slug)
+            compliance_check = query_defaults.pop("compliance_check")
             try:
                 pack_query = pack.packquery_set.select_related("query").get(slug=query_slug)
             except PackQuery.DoesNotExist:
@@ -164,6 +166,10 @@ class PackView(APIView):
                         query.save()
                         if query_sql_updated:
                             query.refresh_from_db()
+
+                # create, update or delete compliance check
+                sync_query_compliance_check(query, compliance_check)
+
                 # create pack query
                 pack_query = PackQuery.objects.create(pack=pack, query=query, **pack_query_defaults)
                 pack_queries_created += 1
@@ -212,7 +218,10 @@ class PackView(APIView):
                 if query_sql_updated:
                     query.refresh_from_db()
 
-            if pack_query_updated or query_updated:
+            # create, update or delete compliance check
+            cc_created, cc_updated, cc_deleted = sync_query_compliance_check(query, compliance_check)
+
+            if pack_query_updated or query_updated or cc_created or cc_updated or cc_deleted:
                 pack_queries_updated += 1
                 pack_query_update_events.append({
                     "pack_query": pack_query.serialize_for_event(),

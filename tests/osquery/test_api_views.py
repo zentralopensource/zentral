@@ -192,6 +192,49 @@ class APIViewsTestCase(TestCase):
             }}
         )
 
+    def test_put_diff_query_with_compliance_check(self):
+        self.set_pack_endpoint_put_permissions()
+        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        response = self.put_json_data(
+            url,
+            {"queries": {"first_query": {"query": "select 'OK' as ztl_status",
+                                         "interval": 10,
+                                         "removed": True,
+                                         "snapshot": False,
+                                         "compliance_check": True}}},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'queries': {
+                'first_query': {
+                    'non_field_errors': [
+                        '{"compliance_check": true} only available in "snapshot" mode']
+                }
+            }}
+        )
+
+    def test_put_query_with_compliance_check_without_ztl_status(self):
+        self.set_pack_endpoint_put_permissions()
+        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        response = self.put_json_data(
+            url,
+            {"queries": {"first_query": {"query": "select * from users",
+                                         "interval": 10,
+                                         "snapshot": True,
+                                         "compliance_check": True}}},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'queries': {
+                'first_query': {
+                    'non_field_errors': [
+                        '{"compliance_check": true} only if query contains "ztl_status"']
+                }
+            }}
+        )
+
     def test_put_invalid_version_query(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(),))
@@ -301,12 +344,13 @@ class APIViewsTestCase(TestCase):
                     "value": "Artifact used by this malware"
                 },
                 "Snapshot1": {
-                    "query": "select * from users;",
+                    "query": "select 'OK' as ztl_status;",
                     "platform": "darwin",
                     "interval": 7200,
                     "snapshot": True,
                     "denylist": False,
                     "shard": 97,
+                    "compliance_check": True
                 }
             }
         }
@@ -324,14 +368,18 @@ class APIViewsTestCase(TestCase):
             if pack_query.slug == "Leverage-A_1":
                 self.assertEqual(query.platforms, ["posix"])
                 self.assertEqual(query.minimum_osquery_version, "1.4.9")
+                self.assertIsNone(query.compliance_check)
             elif pack_query.slug == "Leverage-A_2":
                 self.assertEqual(query.platforms, ["posix"])
                 self.assertEqual(query.minimum_osquery_version, "1.4.5")
+                self.assertIsNone(query.compliance_check)
             elif pack_query.slug == "Snapshot1":
                 self.assertEqual(query.platforms, ["darwin"])
                 self.assertEqual(query.minimum_osquery_version, "1.2.3")
+                self.assertEqual(query.compliance_check.name, query.name)
+                self.assertEqual(query.compliance_check.version, query.version)
             else:
-                raise ValueError("Unknown plack slug")
+                raise AssertionError("Unknown plack slug")
 
         # update pack
         pack["name"] = "YOLO"
@@ -363,9 +411,10 @@ class APIViewsTestCase(TestCase):
         pack_query.refresh_from_db()
         self.assertEqual(pack_query.interval, 6789)
         self.assertEqual(pack_query.query.version, 1)
+        self.assertEqual(pack_query.query.compliance_check.version, 1)
 
         # update query
-        pack["queries"]["Snapshot1"]["query"] = "select 1 from users;"
+        pack["queries"]["Snapshot1"]["query"] = "select 'FAILED' as ztl_status;"
         response = self.put_json_data(url, pack)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -375,8 +424,9 @@ class APIViewsTestCase(TestCase):
              'query_results': {'created': 0, 'deleted': 0, 'present': 2, 'updated': 1}}
         )
         pack_query.refresh_from_db()
-        self.assertEqual(pack_query.query.sql, "select 1 from users;")
+        self.assertEqual(pack_query.query.sql, "select 'FAILED' as ztl_status;")
         self.assertEqual(pack_query.query.version, 2)
+        self.assertEqual(pack_query.query.compliance_check.version, 2)
 
         # delete pack query
         snapshot_1 = pack["queries"].pop("Snapshot1")
@@ -394,7 +444,7 @@ class APIViewsTestCase(TestCase):
             query.packquery
 
         # re-add pack query with updated query
-        snapshot_1["query"] = "select * from users"
+        snapshot_1["query"] = "select 'OK' as ztl_status"
         pack["queries"]["Snapshot1"] = snapshot_1
         response = self.put_json_data(url, pack)
         self.assertEqual(response.status_code, 200)
@@ -406,8 +456,9 @@ class APIViewsTestCase(TestCase):
         )
         query.refresh_from_db()
         self.assertEqual(query.packquery.slug, "Snapshot1")
-        self.assertEqual(query.sql, "select * from users")
+        self.assertEqual(query.sql, "select 'OK' as ztl_status")
         self.assertEqual(query.version, 3)
+        self.assertEqual(query.compliance_check.version, 3)
 
     def test_put_pack_osquery_conf(self):
         self.set_pack_endpoint_put_permissions()
