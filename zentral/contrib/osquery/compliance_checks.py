@@ -13,18 +13,13 @@ logger = logging.getLogger("zentral.contrib.osquery.compliance_checks")
 
 class OsqueryCheck(BaseComplianceCheck):
     model_display = "Osquery check"
-    required_view_permissions = ("osquery.view_pack", "osquery.view_packquery")
+    required_view_permissions = ("osquery.view_query",)
     scoped_cc_query = (
         "select cc.model, cc.id, cc.name, cc.version "
         "from compliance_checks_compliancecheck as cc "
         "join osquery_query as q on (q.compliance_check_id = cc.id) "
-        "join osquery_packquery as pq on (pq.query_id = q.id) "
-        "join osquery_configurationpack as cp on (cp.pack_id = pq.pack_id) "
-        "left join osquery_configurationpack_tags as cpt on (cpt.configurationpack_id = cp.id) "
-        "join osquery_enrollment as e on (e.configuration_id = cp.configuration_id) "
-        "join osquery_enrolledmachine as em on (em.enrollment_id = e.id) "
-        "where cpt.tag_id is null or cpt.tag_id = any (%(tag_ids)s) "
-        "and em.serial_number = %(serial_number)s"
+        "join compliance_checks_machinestatus as ms on (ms.compliance_check_id = cc.id) "
+        "where ms.serial_number = %(serial_number)s"
     )
 
     @cached_property

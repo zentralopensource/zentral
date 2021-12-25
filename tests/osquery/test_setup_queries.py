@@ -6,9 +6,9 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import User
-from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
+from zentral.core.compliance_checks.models import ComplianceCheck
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')

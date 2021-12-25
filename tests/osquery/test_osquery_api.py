@@ -5,7 +5,6 @@ from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
-from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
@@ -14,6 +13,7 @@ from zentral.contrib.osquery.models import (Configuration,
                                             DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
                                             EnrolledMachine, Enrollment,
                                             Query, Pack, PackQuery)
+from zentral.core.compliance_checks.models import MachineStatus, Status
 
 
 INVENTORY_QUERY_SNAPSHOT = [
