@@ -22,7 +22,13 @@ class InventoryJMESPathCheck(BaseComplianceCheck):
         "from compliance_checks_compliancecheck as cc "
         "join inventory_jmespathcheck as jc on (jc.compliance_check_id = cc.id) "
         "left join inventory_jmespathcheck_tags as jct on (jct.jmespathcheck_id = jc.id) "
-        "where jct.tag_id is null or jct.tag_id = any (%(tag_ids)s)"
+        "where (jct.tag_id is null or jct.tag_id = any (%(tag_ids)s)) "
+        "and lower(jc.source_name) in ("
+        " select distinct lower(s.name)"
+        " from inventory_source as s"
+        " join inventory_currentmachinesnapshot as cms on (cms.source_id = s.id)"
+        " where cms.serial_number = %(serial_number)s"
+        ")"
     )
 
     @cached_property

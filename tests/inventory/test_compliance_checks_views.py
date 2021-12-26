@@ -24,8 +24,9 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         cls.user.groups.set([cls.group])
         # machine
         cls.serial_number = "0123456789"
+        cls.source_name = get_random_string() + "z"
         MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
-            "source": {"module": "tests.zentral.io", "name": "Zentral Tests"},
+            "source": {"module": "tests.zentral.io", "name": cls.source_name.upper()},
             "serial_number": cls.serial_number,
             "os_version": {'name': 'OS X', 'major': 10, 'minor': 11, 'patch': 1},
             "osx_app_instances": [
@@ -70,7 +71,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         )
         jmespath_check = JMESPathCheck.objects.create(
             compliance_check=cc,
-            source_name=source_name or get_random_string(),
+            source_name=source_name or self.source_name,
             jmespath_expression=jmespath_expression
         )
         if tags is not None:
@@ -386,6 +387,37 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
         self.assertContains(response, "0 Compliance checks")
+
+    def test_machine_source_mismatch_no_compliance_checks_in_scope(self):
+        self._login(
+            'compliance_checks.view_machinestatus',
+            'inventory.view_machinesnapshot',
+            'inventory.view_jmespathcheck'
+        )
+        self._force_jmespath_check(source_name=get_random_string())
+        response = self.client.get(self.machine.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/machine_detail.html")
+        self.assertContains(response, "0 Compliance checks")
+
+    def test_machine_source_match_one_compliance_checks_in_scope(self):
+        self._login(
+            'compliance_checks.view_machinestatus',
+            'inventory.view_machinesnapshot',
+            'inventory.view_jmespathcheck'
+        )
+        cc = self._force_jmespath_check()  # cls.source_name by default, test is case incensitive
+        response = self.client.get(self.machine.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/machine_detail.html")
+        self.assertContains(response, "1 Compliance check")
+        self.assertContains(response, cc.compliance_check.name)
+        cc_redirect_link = reverse("compliance_checks:redirect", args=(cc.compliance_check.pk,))
+        compliance_check_statuses = response.context["compliance_check_statuses"]
+        self.assertEqual(len(compliance_check_statuses), 1)
+        self.assertEqual(compliance_check_statuses[0][0], cc_redirect_link)
+        self.assertEqual(compliance_check_statuses[0][1], cc.compliance_check.name)
+        self.assertEqual(compliance_check_statuses[0][2], Status.PENDING)
 
     def test_machine_no_tags_compliance_checks_one_in_scope_one_out_of_scope_pending_with_link(self):
         self._login(
