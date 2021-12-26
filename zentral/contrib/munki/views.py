@@ -18,6 +18,7 @@ from zentral.core.events.base import post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
+from zentral.utils.json import remove_null_character
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, UpdateInstallProbeForm
 from .models import (Configuration, EnrolledMachine, Enrollment, MunkiState,
@@ -292,6 +293,8 @@ class JobDetailsView(BaseView):
             principal_user_detection["sources"] = configuration.principal_user_detection_sources
             if configuration.principal_user_detection_domains:
                 principal_user_detection["domains"] = configuration.principal_user_detection_domains
+        if configuration.collected_condition_keys:
+            response_d["collected_condition_keys"] = configuration.collected_condition_keys
 
         # add tags
         # TODO better cache for the machine tags
@@ -331,6 +334,9 @@ class PostJobView(BaseView):
         if self.business_unit:
             ms_tree['business_unit'] = self.business_unit.serialize()
         prepare_ms_tree_certificates(ms_tree)
+        extra_facts = ms_tree.pop("extra_facts", None)
+        if isinstance(extra_facts, dict):
+            ms_tree["extra_facts"] = remove_null_character(extra_facts)
         ms = commit_machine_snapshot_and_trigger_events(ms_tree)
         if not ms:
             raise RuntimeError("Could not commit machine snapshot")

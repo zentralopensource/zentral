@@ -305,7 +305,7 @@ class NetworkInterface(AbstractMTObject):
 
     def get_mac_organization(self):
         mac = self.mac.replace(":", "").upper()
-        assignments = [mac[:l] for l in (9, 7, 6)]
+        assignments = [mac[:length] for length in (9, 7, 6)]
         found_assignments = list(MACAddressBlockAssignment.objects.select_related("organization")
                                  .filter(assignment__in=assignments))
         if not found_assignments:
@@ -533,6 +533,7 @@ class MachineSnapshot(AbstractMTObject):
     principal_user = models.ForeignKey(PrincipalUser, on_delete=models.PROTECT, blank=True, null=True)
     certificates = models.ManyToManyField(Certificate)
     public_ip_address = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
+    extra_facts = JSONField(blank=True, null=True)
 
     objects = MachineSnapshotManager()
 

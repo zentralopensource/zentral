@@ -70,13 +70,29 @@ def prepare_commit_tree(tree):
                 v = v['mt_hash']
             elif isinstance(v, list):
                 hash_list = []
-                for subtree in v:
-                    prepare_commit_tree(subtree)
-                    subtree_mt_hash = subtree['mt_hash']
-                    if subtree_mt_hash in hash_list:
-                        raise MTOError("Duplicated subtree in key {}".format(k))
+                for item_idx, item in enumerate(v):
+                    if isinstance(item, dict):
+                        prepare_commit_tree(item)
+                        subtree_mt_hash = item['mt_hash']
+                        if subtree_mt_hash in hash_list:
+                            raise MTOError("Duplicated subtree in key {}".format(k))
+                        else:
+                            hash_list.append(subtree_mt_hash)
                     else:
-                        hash_list.append(subtree_mt_hash)
+                        if isinstance(item, int):
+                            item_to_hash = "i∅" + str(item)
+                        elif isinstance(item, float):
+                            item_to_hash = "f∅" + str(item)
+                        elif isinstance(item, datetime):
+                            if is_aware(item):
+                                item = make_naive(item)
+                            item_to_hash = "d∅" + item.isoformat()
+                        elif isinstance(item, str):
+                            item_to_hash = "s∅" + item
+                        else:
+                            raise MTOError("Unsupported list item type")
+                        item_to_hash = str(item_idx) + item_to_hash  # order is important
+                        hash_list.append(hashlib.sha1(item_to_hash.encode('utf-8')).hexdigest())
                 v = hash_list
             elif isinstance(v, datetime) and is_aware(v):
                 tree[k] = v = make_naive(v)
@@ -85,6 +101,8 @@ def prepare_commit_tree(tree):
 
 
 def cleanup_commit_tree(tree):
+    if not isinstance(tree, dict):
+        return
     tree.pop('mt_hash', None)
     for k, v in tree.items():
         if isinstance(v, dict):
@@ -123,11 +141,11 @@ class MTObjectManager(models.Manager):
                         setattr(obj, k, fk_obj)
                 elif isinstance(v, list):
                     f = obj.get_mt_field(k, many_to_many=True)
-                    l = []
+                    ol = []
                     for sv in v:
                         m2m_obj, _ = f.related_model.objects.commit(sv)
-                        l.append(m2m_obj)
-                    m2m_fields.append((k, l))
+                        ol.append(m2m_obj)
+                    m2m_fields.append((k, ol))
                 else:
                     obj.get_mt_field(k)
                     setattr(obj, k, v)
@@ -163,10 +181,10 @@ class AbstractMTObject(models.Model):
 
     @cached_property
     def mt_excluded_field_set(self):
-        l = ['id', 'mt_hash', 'mt_created_at']
+        efs = {'id', 'mt_hash', 'mt_created_at'}
         if self.mt_excluded_fields:
-            l.extend(self.mt_excluded_fields)
-        return set(l)
+            efs.update(self.mt_excluded_fields)
+        return efs
 
     def get_mt_field(self, name, many_to_one=None, many_to_many=None):
         if name in self.mt_excluded_field_set:

@@ -17,7 +17,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.10"
+USER_AGENT = "Zentral/munkipostflight 0.11"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -220,9 +220,24 @@ class ManagedInstallReport(object):
                     pass
         return managed_installs
 
+    def get_conditions(self):
+        conditions = self.data.get('Conditions')
+        if not isinstance(conditions, dict):
+            conditions = {}
+        return conditions
+
+    def get_extra_facts(self, keys):
+        conditions = self.get_conditions()
+        extra_facts = {}
+        for key in keys:
+            val = conditions.get(key)
+            if val is not None:
+                extra_facts[key] = val
+        return extra_facts
+
     def serialize(self):
         d = {'basename': self.basename,
-             'conditions': self.data.get('Conditions', {}),
+             'conditions': self.get_conditions(),
              'sha1sum': self.sha1sum,
              'run_type': self.data['RunType'],
              'start_time': self.start_time,
@@ -233,7 +248,7 @@ class ManagedInstallReport(object):
         return d
 
 
-def iter_manage_install_reports(reverse=True):
+def iter_manage_install_report_paths(reverse=True):
     last_report = os.path.join(MANAGED_INSTALLS_DIR, 'ManagedInstallReport.plist')
     if reverse and os.path.exists(last_report):
         yield last_report
@@ -244,14 +259,18 @@ def iter_manage_install_reports(reverse=True):
         yield last_report
 
 
+def iter_manage_install_reports(reverse=True):
+    for report_path in iter_manage_install_report_paths(reverse):
+        mir = ManagedInstallReport(report_path)
+        if mir.end_time:
+            yield mir
+
+
 def build_reports_payload(last_seen=None):
     """ Unpacks ManagedInstallReport generator object, initializes MIR objects,
     skips if already processed or not finished, otherwise serializes & returns payload"""
     payload = []
-    for filepath in iter_manage_install_reports():
-        mir = ManagedInstallReport(filepath)
-        if not mir.end_time:
-            continue
+    for mir in iter_manage_install_reports():
         if last_seen is not None and mir.sha1sum == last_seen:
             break
         payload.append(mir.serialize())
@@ -263,10 +282,7 @@ def build_reports_payload(last_seen=None):
 
 def build_managed_installs_payload():
     managed_installs = {}
-    for filepath in iter_manage_install_reports(reverse=False):
-        mir = ManagedInstallReport(filepath)
-        if not mir.end_time:
-            continue
+    for mir in iter_manage_install_reports(reverse=False):
         managed_installs = mir.updated_managed_installs(managed_installs)
     return sorted((n, v, dn, t) for n, (v, dn, t) in managed_installs.items())
 
@@ -698,6 +714,14 @@ if __name__ == '__main__':
     principal_user = get_principal_user(principal_user_detection)
     if principal_user:
         machine_snapshot['principal_user'] = principal_user
+    collected_condition_keys = job_details.get('collected_condition_keys')
+    if collected_condition_keys and isinstance(collected_condition_keys, list):
+        try:
+            latest_mir = next(iter_manage_install_reports())
+        except StopIteration:
+            pass
+        else:
+            machine_snapshot['extra_facts'] = latest_mir.get_extra_facts(collected_condition_keys)
 
     data = {'machine_snapshot': machine_snapshot}
 

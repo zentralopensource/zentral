@@ -360,6 +360,13 @@
       {% endif %}
       {% endwith %}
 
+      {% if ms.extra_facts %}
+      <h3>Extra facts</h4>
+      <dl class="dl-horizontal">
+        {{ ms.extra_facts|extra_facts }}
+      </dl>
+      {% endif %}
+
       {% for source_subview in source_subviews %}
       {{ source_subview.render }}
       {% endfor %}

@@ -29,6 +29,10 @@
       <td>{{ object.principal_user_detection_domains|join:", "|default:"-" }}</td>
     </tr>
     <tr>
+      <td>Collected condition key{{ object.collected_condition_keys|length|pluralize }}</td>
+      <td>{{ object.collected_condition_keys|join:", "|default:"-" }}</td>
+    </tr>
+    <tr>
       <td>Managed installs sync interval</td>
       <td>{{ object.managed_installs_sync_interval_days }} day{{ object.managed_installs_sync_interval_days|pluralize }}</td>
     </tr>

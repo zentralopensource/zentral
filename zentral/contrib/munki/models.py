@@ -40,6 +40,12 @@ class Configuration(models.Model):
         blank=True,
         default=list
     )
+    collected_condition_keys = ArrayField(
+        models.CharField(max_length=128),
+        blank=True,
+        default=list,
+        help_text="List of Munki condition keys to collect as machine extra facts"
+    )
     managed_installs_sync_interval_days = models.IntegerField(
         "Managed installs sync interval in days",
         validators=[MinValueValidator(1), MaxValueValidator(90)],

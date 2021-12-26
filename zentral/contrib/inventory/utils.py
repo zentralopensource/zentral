@@ -1418,7 +1418,8 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                  'system_info',
                  'teamviewer',
                  'puppet_node',
-                 'principal_user'):
+                 'principal_user',
+                 'extra_facts'):
         fk_diff = diff.get(attr, {})
         if not fk_diff:
             continue

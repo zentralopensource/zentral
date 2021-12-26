@@ -1,7 +1,8 @@
 import re
 from django import template
+from django.template.defaultfilters import unordered_list
 from django.urls import reverse
-from django.utils.html import escape
+from django.utils.html import escape, conditional_escape
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from zentral.contrib.inventory.conf import IOS, IPADOS, LINUX, MACOS, TVOS, TYPE_CHOICES_DICT, WINDOWS
@@ -81,3 +82,24 @@ def sha_256_link(sha_256):
 @register.simple_tag
 def machine_url(serial_number):
     return reverse("inventory:machine", args=(MetaMachine(serial_number).get_urlsafe_serial_number(),))
+
+
+@register.filter(needs_autoescape=True)
+def extra_facts(extra_facts, autoescape=True):
+    if autoescape:
+        esc = conditional_escape
+    else:
+        def esc(x):
+            return x
+    if not extra_facts or not isinstance(extra_facts, dict):
+        return mark_safe("")
+    data = ""
+    for key in sorted(extra_facts.keys()):
+        data += "<dt>{}</dt>\n".format(esc(key))
+        val = extra_facts[key]
+        if isinstance(val, list):
+            val_data = "<ul>\n{}</ul>\n".format(unordered_list(val, autoescape=autoescape))
+        else:
+            val_data = esc(val)
+        data += "<dd>\n{}\n</dd>\n".format(val_data)
+    return mark_safe(data)

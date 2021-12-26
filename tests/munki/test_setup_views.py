@@ -89,11 +89,13 @@ class MunkiSetupViewsTestCase(TestCase):
     def test_create_configuration_post(self):
         self._login("munki.add_configuration", "munki.view_configuration")
         name = get_random_string()
+        collected_condition_keys = sorted(get_random_string() for _ in range(3))
         response = self.client.post(reverse("munki:create_configuration"),
                                     {"name": name,
                                      "inventory_apps_full_info_shard": 17,
                                      "principal_user_detection_sources": "logged_in_user",
                                      "principal_user_detection_domains": "yolo.fr",
+                                     "collected_condition_keys": " ,  ".join(collected_condition_keys),
                                      "managed_installs_sync_interval_days": 1,
                                      "auto_reinstall_incidents": "on"},
                                     follow=True)
@@ -103,6 +105,9 @@ class MunkiSetupViewsTestCase(TestCase):
         configuration = response.context["object"]
         self.assertTrue(configuration.auto_reinstall_incidents)
         self.assertFalse(configuration.auto_failed_install_incidents)
+        self.assertEqual(sorted(configuration.collected_condition_keys), collected_condition_keys)
+        for condition_key in collected_condition_keys:
+            self.assertContains(response, condition_key)
 
     # update configuration
 
@@ -126,11 +131,13 @@ class MunkiSetupViewsTestCase(TestCase):
     def test_update_configuration_post(self):
         configuration = self._force_configuration()
         self._login("munki.change_configuration", "munki.view_configuration")
+        collected_condition_keys = sorted(get_random_string() for _ in range(3))
         response = self.client.post(reverse("munki:update_configuration", args=(configuration.pk,)),
                                     {"name": configuration.name,
                                      "inventory_apps_full_info_shard": 17,
                                      "principal_user_detection_sources": "logged_in_user",
                                      "principal_user_detection_domains": "yolo.fr",
+                                     "collected_condition_keys": ",".join(collected_condition_keys),
                                      "managed_installs_sync_interval_days": 2,
                                      "auto_failed_install_incidents": "on"},
                                     follow=True)
@@ -143,6 +150,9 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(configuration2.principal_user_detection_domains, ["yolo.fr"])
         self.assertEqual(configuration2.managed_installs_sync_interval_days, 2)
         self.assertTrue(configuration2.auto_failed_install_incidents)
+        self.assertEqual(sorted(configuration2.collected_condition_keys), collected_condition_keys)
+        for condition_key in collected_condition_keys:
+            self.assertContains(response, condition_key)
 
     # create enrollment
 

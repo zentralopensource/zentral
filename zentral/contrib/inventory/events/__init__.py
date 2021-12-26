@@ -44,7 +44,8 @@ for attr in ('link',
              'teamviewer',
              'puppet_node',
              'principal_user',
-             'certificate'):
+             'certificate',
+             'extra_facts'):
     for action in ("add", "remove"):
         event_type = f"{action}_machine_{attr}"
         event_class_name = "".join(s.title() for s in event_type.split('_'))

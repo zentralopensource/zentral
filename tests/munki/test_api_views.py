@@ -119,6 +119,22 @@ class MunkiAPIViewsTestCase(TestCase):
         }
         self.assertEqual(expected_response, response.json())
 
+    def test_job_details_with_collected_condition_keys(self):
+        enrolled_machine = self._make_enrolled_machine()
+        self.configuration.collected_condition_keys = ["un"]
+        self.configuration.save()
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+        expected_response = {
+            "apps_full_info_shard": self.configuration.inventory_apps_full_info_shard,
+            "collected_condition_keys": ["un"],
+            "incidents": [],
+            "tags": [],
+        }
+        self.assertEqual(expected_response, response.json())
+
     def test_job_details_with_open_incident(self):
         enrolled_machine = self._make_enrolled_machine()
         # one open, one closed incident
@@ -170,7 +186,9 @@ class MunkiAPIViewsTestCase(TestCase):
         # post job with failed install
         response = self._post_as_json(reverse("munki:post_job"),
                                       {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
-                                                            "system_info": {"computer_name": computer_name}},
+                                                            "system_info": {"computer_name": computer_name},
+                                                            "extra_facts": {"yolo": "\u0000fomo",
+                                                                            "un": None}},
                                        "reports": [{"start_time": "2018-01-01 00:00:00 +0000",
                                                     "end_time": "2018-01-01 00:01:00 +0000",
                                                     "basename": "report2018",
@@ -192,6 +210,9 @@ class MunkiAPIViewsTestCase(TestCase):
 
         # check computer name
         self.assertEqual(ms.system_info.computer_name, computer_name)
+
+        # check extra facts
+        self.assertEqual(ms.extra_facts, {"yolo": "fomo"})
 
         # check all events linked to machine
         for call_args in post_event.call_args_list:

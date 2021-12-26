@@ -61,6 +61,10 @@ class MachineSnapshotTestCase(TestCase):
             "reference": "bulle 1",
             "source": copy.deepcopy(cls.source)
         }
+        cls.extra_facts = {"un": ["1", 2, 3.4],
+                           "deux": 2,
+                           "trois": {"trois": 3},
+                           "4": [1, 3, 2, 5]}
         cls.business_unit, _ = BusinessUnit.objects.commit(cls.business_unit_tree)
         cls.meta_business_unit = cls.business_unit.meta_business_unit
         cls.machine_snapshot = {'source': copy.deepcopy(cls.source),
@@ -81,6 +85,12 @@ class MachineSnapshotTestCase(TestCase):
                                  'serial_number': cls.serial_number,
                                  'os_version': cls.os_version,
                                  'osx_app_instances': [cls.osx_app_instance, cls.osx_app_instance2]}
+        cls.machine_snapshot4 = {'source': copy.deepcopy(cls.source),
+                                 'business_unit': cls.business_unit_tree,
+                                 'serial_number': cls.serial_number,
+                                 'os_version': cls.os_version,
+                                 'osx_app_instances': [cls.osx_app_instance],
+                                 'extra_facts': cls.extra_facts}
 
     def test_machine_snapshot_commit_create(self):
         tree = copy.deepcopy(self.machine_snapshot)
@@ -119,9 +129,13 @@ class MachineSnapshotTestCase(TestCase):
     def test_machine_snapshot_commit_update(self):
         tree = copy.deepcopy(self.machine_snapshot)
         msc1, ms1, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        ms1.refresh_from_db()
+        self.assertEqual(ms1.hash(), ms1.mt_hash)
         self.assertIsInstance(msc1, MachineSnapshotCommit)
         tree = copy.deepcopy(self.machine_snapshot2)
         msc2, ms2, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        ms2.refresh_from_db()
+        self.assertEqual(ms2.hash(), ms2.mt_hash)
         self.assertIsInstance(msc2, MachineSnapshotCommit)
         self.assertEqual(msc2.parent, msc1)
         self.assertEqual(CurrentMachineSnapshot.objects.all().count(), 1)
@@ -158,6 +172,8 @@ class MachineSnapshotTestCase(TestCase):
         )
         tree = copy.deepcopy(self.machine_snapshot3)
         msc3, ms3, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        ms3.refresh_from_db()
+        self.assertEqual(ms3.hash(), ms3.mt_hash)
         self.assertEqual(msc3.parent, msc2)
         self.assertEqual(CurrentMachineSnapshot.objects.all().count(), 1)
         cms = CurrentMachineSnapshot.objects.get(serial_number=self.serial_number, source=ms3.source)
@@ -183,12 +199,34 @@ class MachineSnapshotTestCase(TestCase):
               {'osx_app_instance': osx_app_instance2_diff, "source": self.source}),
              ('inventory_heartbeat', msc4.last_seen, {'source': self.source})]
         )
+        ms4.refresh_from_db()
+        self.assertEqual(ms4.hash(), ms4.mt_hash)
         self.assertEqual(ms4, ms2)
         self.assertEqual(msc4.parent, msc3)
         self.assertEqual(msc4.machine_snapshot, ms2)
         self.assertEqual(CurrentMachineSnapshot.objects.all().count(), 1)
         cms = CurrentMachineSnapshot.objects.get(serial_number=self.serial_number, source=ms4.source)
         self.assertEqual(cms.machine_snapshot, ms2)
+        tree = copy.deepcopy(self.machine_snapshot4)
+        msc5, ms5, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        self.assertEqual(
+            list(inventory_events_from_machine_snapshot_commit(msc5)),
+            [('add_machine_extra_facts', None,
+              {'extra_facts': self.extra_facts, "source": self.source}),
+             ('inventory_heartbeat', msc5.last_seen, {"source": self.source})]
+        )
+        self.assertEqual(ms5.extra_facts, self.extra_facts)
+        ms5.refresh_from_db()
+        self.assertEqual(ms5.hash(), ms5.mt_hash)
+        self.assertEqual(msc5.parent, msc4)
+        tree = copy.deepcopy(self.machine_snapshot4)
+        msc6, ms6, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        ms6.refresh_from_db()
+        self.assertEqual(ms6.hash(), ms6.mt_hash)
+        self.assertEqual(list(inventory_events_from_machine_snapshot_commit(msc6)),
+                         [('inventory_heartbeat', msc6.last_seen, {"source": self.source})])
+        self.assertEqual(msc6.parent, msc5)
+        self.assertEqual(ms6, ms5)
 
     def test_duplicated_subtrees(self):
         tree = copy.deepcopy(self.machine_snapshot3)
