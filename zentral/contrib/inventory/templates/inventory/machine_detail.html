@@ -84,17 +84,18 @@
 
 <div class="row">
   <div class="col-md-6">
-    <ul class="nav nav-tabs">
+    <ul class="nav nav-tabs" role="tablist">
       {% for source_display, ms, source_subviews in machine_snapshots %}
       <li role="presentation"{% if forloop.first %} class="active"{% endif %} style="max-width:{{ max_source_tab_with }}%">
-        <a href="#" data-tabclass="detailstab" data-tabid="details-{{ ms.id }}" style="overflow:hidden;text-overflow: ellipsis">
+        <a href="#ms-{{ ms.id }}" data-source="{{ ms.source.name }}" role="tab" data-toggle="tab" style="overflow:hidden;text-overflow: ellipsis">
           {{ source_display }}
         </a>
       </li>
       {% endfor %}
     </ul>
+    <div class="tab-content">
     {% for source_display, ms, source_subviews in machine_snapshots %}
-    <div class="detailstab" id="details-{{ ms.id }}"{% if not forloop.first %}style="display:none;"{% endif %}>
+    <div role="tabpanel" class="tab-pane{% if forloop.first %} active{% endif %}" id="ms-{{ ms.id }}">
       {% if ms.business_unit %}
       <h3>Business unit</h3>
         <dl class="dl-horizontal">
@@ -392,6 +393,7 @@
       </dl>
     </div><!-- end details tab -->
     {% endfor %}{% comment %}end for loop on machine snapshots{% endcomment %}
+    </div><!-- end tab-content -->
   </div><!-- end col-md-6 -->
   <div class="col-md-6">
     {% if perms.compliance_checks.view_machinestatus %}
@@ -464,21 +466,65 @@
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  function switchTabs(link) {
-    var tabclass = link.data('tabclass'),
-        tabid = link.data('tabid');
-    $("." + tabclass).hide();
-    $("#" + tabid).show();
-    link.parent().siblings().removeClass('active');
-    link.parent().addClass('active');
+  function setSourceCookie(source) {
+    const encodedSource = encodeURIComponent(source);
+    document.cookie = `last_inventory_source=${encodedSource};path=/;samesite=strict;secure;max-age=1296000`;
+  }
+
+  function getSourceCookieValue() {
+    const kv = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('last_inventory_source='));
+    if (typeof kv === 'string') {
+      return decodeURIComponent(kv.split("=")[1]);
+    }
+  }
+
+  function showTabWithHash() {
+    if (window.location.hash.startsWith("#src-")) {
+      const hashSrc = window.location.hash.replace("#src-", "");
+      const res = $(`a[data-source="${hashSrc}"]`).tab("show");
+      return res.length > 0;
+    }
+    return false;
+  }
+
+  function showTabWithCookie() {
+    const cookieSrc = getSourceCookieValue();
+    if (typeof cookieSrc === 'string') {
+      const res = $(`a[data-source="${cookieSrc}"]`).tab("show");
+      if (res.length > 0) {
+        updateHash(cookieSrc);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function showFirstTab() {
+    const source = $('a[data-toggle="tab"]').first().tab("show").data("source");
+    updateHash(source);
+  }
+
+  function updateHash(source) {
+    history.replaceState(null, source, location.pathname + "#src-" + source);
   }
 
   $(document).ready(function(){
-    $("li[role=presentation] a").click(function(event){
+    $('a[data-toggle="tab"]').click(function(event){
       event.preventDefault();
-      switchTabs($(this));
+      $(this).tab('show');
+    }).on('shown.bs.tab', function (e) {
+      const source = e.target.dataset.source;
+      setSourceCookie(source);
+      updateHash(source);
     });
     $("#heartbeats").load($("#heartbeats").data("url"));
+    if (!showTabWithHash()) {
+      if (!showTabWithCookie()) {
+        showFirstTab();
+      }
+    }
   });
 </script>
 {% endblock %}
