@@ -486,9 +486,23 @@ class MachineView(PermissionRequiredMixin, TemplateView):
 
         # machine snapshots
         context['machine_snapshots'] = []
+
+        try:
+            tab_order = [str(s).lower() for s in settings["apps"]["zentral.contrib.inventory"].get("tab_order", [])]
+        except Exception:
+            tab_order = []
+
+        def ms_sort_key(t):
+            source_display_name, source, _ = t
+            try:
+                tab_idx = tab_order.index(source.name.lower())
+            except ValueError:
+                tab_idx = 999
+            return (tab_idx, source_display_name.lower())
+
         for source_display, source, ms in sorted(((ms.source.get_display_name(), ms.source, ms)
                                                   for ms in machine.snapshots),
-                                                 key=lambda t: t[0].lower()):
+                                                 key=ms_sort_key):
             source_subview = _get_source_machine_subview(source, machine.serial_number, self.request.user)
             context['machine_snapshots'].append((source_display, ms, source_subview))
         machine_snapshots_count = len(context['machine_snapshots'])
