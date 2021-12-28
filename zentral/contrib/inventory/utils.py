@@ -19,6 +19,7 @@ from django.http import QueryDict
 from django.urls import reverse
 from django.utils.text import slugify
 import xlsxwriter
+from zentral.core.compliance_checks.models import ComplianceCheck, Status as ComplianceCheckStatus
 from zentral.core.incidents.models import Severity, Status
 from zentral.utils.json import save_dead_letter
 from .compliance_checks import jmespath_checks_cache
@@ -878,6 +879,115 @@ class IncidentSeverityFilter(BaseMSFilter):
                                                "keyword": "No incidents"}
 
 
+class ComplianceStatusFilter(BaseMSFilter):
+    title = "Compliance status"
+    optional = True
+    query_kwarg = "cs"
+    expression = "cs.max_compliance_check_status"
+    grouping_set = ("cs.max_compliance_check_status",)
+    statuses_dict = dict(ComplianceCheckStatus.choices())
+
+    def joins(self):
+        yield (
+            "left join ("
+            "select serial_number as serial_number, max(status) as max_compliance_check_status "
+            "from compliance_checks_machinestatus as ms "
+            "join compliance_checks_compliancecheck as cc on (cc.id = ms.compliance_check_id) "
+            "where ms.compliance_check_version = cc.version "
+            "group by serial_number"
+            ") as cs on (cs.serial_number = ms.serial_number)"
+        )
+
+    def wheres(self):
+        if self.value is not None:
+            if self.value != self.none_value:
+                yield "cs.max_compliance_check_status = %s"
+            else:
+                yield "cs.max_compliance_check_status is null"
+
+    def where_args(self):
+        if self.value is not None and self.value != self.none_value:
+            yield self.value
+
+    def label_for_grouping_value(self, grouping_value):
+        if grouping_value is None:
+            return self.none_value
+        else:
+            return self.statuses_dict.get(grouping_value, str(grouping_value))
+
+    def process_fetched_record(self, record, for_filtering):
+        max_status = record.pop("max_compliance_check_status", None)
+        if max_status is None:
+            max_status = -1
+            keyword = "NULL"
+        else:
+            keyword = self.statuses_dict.get(max_status, str(max_status))
+        record["max_compliance_check_status"] = {"value": max_status, "keyword": keyword}
+
+
+class ComplianceCheckStatusFilter(BaseMSFilter):
+    optional = True
+    statuses_dict = dict(ComplianceCheckStatus.choices())
+
+    def __init__(self, *args, **kwargs):
+        self.compliance_check = ComplianceCheck.objects.get(pk=kwargs.pop("compliance_check_pk"))
+        self.title = self.compliance_check.name
+        super().__init__(*args, **kwargs)
+        self.expression = f"ccs{self.idx}.max_compliance_check_status as ccs{self.idx}_max_compliance_check_status"
+        self.grouping_set = (
+            f"ccs{self.idx}.max_compliance_check_status",
+            f"ccs{self.idx}_max_compliance_check_status"
+        )
+
+    def joins(self):
+        yield (
+            "left join ("
+            "select serial_number as serial_number, max(status) as max_compliance_check_status "
+            "from compliance_checks_machinestatus as ms "
+            "left join compliance_checks_compliancecheck as cc on (cc.id = ms.compliance_check_id) "
+            "where compliance_check_id = %s and ms.compliance_check_version = cc.version "
+            "group by serial_number"
+            f") as ccs{self.idx} on (ccs{self.idx}.serial_number = ms.serial_number)",
+            [self.compliance_check.pk]
+        )
+
+    def wheres(self):
+        if self.value is not None:
+            if self.value != self.none_value:
+                yield f"ccs{self.idx}.max_compliance_check_status = %s"
+            else:
+                yield f"ccs{self.idx}.max_compliance_check_status is null"
+
+    def where_args(self):
+        if self.value is not None and self.value != self.none_value:
+            yield self.value
+
+    def get_query_kwarg(self):
+        return f"ccs.{self.compliance_check.pk}"
+
+    def serialize(self):
+        return f"ccs.{self.compliance_check.pk}"
+
+    def label_for_grouping_value(self, grouping_value):
+        if grouping_value is None:
+            return self.none_value
+        else:
+            return self.statuses_dict.get(grouping_value, str(grouping_value))
+
+    def process_fetched_record(self, record, for_filtering):
+        max_status = record.pop(f"ccs{self.idx}_max_compliance_check_status", None)
+        if max_status is None:
+            max_status = -1
+            keyword = "NULL"
+        else:
+            keyword = self.statuses_dict.get(max_status, str(max_status))
+        # important to always add a dict, even if max status is None,
+        # because of the dynamic columns in the exports
+        record.setdefault("compliance_checks", OrderedDict())[self.title] = {
+            "value": max_status, "keyword": keyword
+        }
+
+
 class MSQuery:
     paginate_by = 50
     itersize = 1000
@@ -895,6 +1005,9 @@ class MSQuery:
         ComputerNameFilter,
         PrincipalUserNameFilter,
         LastSeenFilter,
+    ]
+    extra_filters = [
+        ComplianceStatusFilter,
     ]
 
     def __init__(self, query_dict=None):
@@ -940,6 +1053,9 @@ class MSQuery:
         for filter_class in self.default_filters:
             if default or not filter_class.optional or filter_class.query_kwarg in serialized_filters:
                 self.add_filter(filter_class)
+        for filter_class in self.extra_filters:
+            if filter_class.query_kwarg in serialized_filters:
+                self.add_filter(filter_class)
         for serialized_filter in serialized_filters:
             if serialized_filter.startswith("a."):
                 attr, value = re.sub(r"^a\.", "", serialized_filter).split(".", 1)
@@ -947,6 +1063,13 @@ class MSQuery:
                     self.add_filter(BundleFilter, bundle_name=value)
                 elif attr == "i":
                     self.add_filter(BundleFilter, bundle_id=value)
+            elif serialized_filter.startswith("ccs."):
+                try:
+                    cc_pk = int(serialized_filter[4:])
+                except ValueError:
+                    self._redirect = True
+                else:
+                    self.add_filter(ComplianceCheckStatusFilter, compliance_check_pk=cc_pk)
 
     def serialize_filters(self, filter_to_add=None, filter_to_remove=None, include_hidden=False):
         return "-".join(f.serialize() for f in chain(self.filters, [filter_to_add])
@@ -992,7 +1115,7 @@ class MSQuery:
     def available_filters(self):
         links = []
         idx = len(self.filters)
-        for filter_class in self.default_filters:
+        for filter_class in chain(self.default_filters, self.extra_filters):
             for f in self.filters:
                 if isinstance(f, filter_class):
                     break
@@ -1204,16 +1327,22 @@ class MSQuery:
         ]
         row_idx = 0
         rows = []
-        include_max_incident_severity = False
+        include_max_incident_severity = include_max_compliance_check_status = False
         for serial_number, machine_snapshots in self.fetch(paginate=False):
             for machine_snapshot in machine_snapshots:
                 if row_idx == 0:
                     if "max_incident_severity" in machine_snapshot:
                         include_max_incident_severity = True
                         headers.extend(["Max incident severity", "Max incident severity display"])
+                    if "max_compliance_check_status" in machine_snapshot:
+                        include_max_compliance_check_status = True
+                        headers.extend(["Max compliance check status", "Max compliance check status display"])
                     for app_title in machine_snapshot.get("osx_apps", {}):
                         for suffix in ("min", "max"):
                             headers.append("{} {}".format(app_title, suffix))
+                    for compliance_check_name in machine_snapshot.get("compliance_checks", {}):
+                        for suffix in ("- status", "- status display"):
+                            headers.append(f"{compliance_check_name} {suffix}")
                 row_idx += 1
                 system_info = machine_snapshot.get("system_info", {})
                 meta_business_unit = machine_snapshot.get("meta_business_unit", {})
@@ -1247,15 +1376,19 @@ class MSQuery:
                 row.append(machine_snapshot.get("last_seen"))
                 if include_max_incident_severity:
                     mis = machine_snapshot.get("max_incident_severity", {})
-                    row.extend([mis.get("value") or "",
-                                mis.get("keyword") or ""])
-                for _, app_versions in machine_snapshot.get("osx_apps", {}).items():
+                    row.extend([mis.get("value") or "", mis.get("keyword") or ""])
+                if include_max_compliance_check_status:
+                    mccs = machine_snapshot.get("max_compliance_check_status", {})
+                    row.extend([mccs.get("value"), mccs.get("keyword") or ""])
+                for app_versions in machine_snapshot.get("osx_apps", {}).values():
                     if app_versions:
                         min_app_version = app_versions[0]["display_name"]
                         max_app_version = app_versions[-1]["display_name"]
                     else:
                         min_app_version = max_app_version = ""
                     row.extend([min_app_version, max_app_version])
+                for cc_status in machine_snapshot.get("compliance_checks", {}).values():
+                    row.extend([cc_status["value"], cc_status["keyword"]])
                 rows.append(row)
         yield title, headers, rows
 
@@ -1312,12 +1445,16 @@ class MSQuery:
 
 
 class BundleFilterForm(forms.Form):
-    bundle_id = forms.CharField(label="Bundle id", required=False,
+    bundle_id = forms.CharField(label="Bundle ID", required=False,
                                 widget=forms.TextInput(attrs={"class": "form-control",
-                                                              "placeholder": "Bundle id"}))
+                                                              "placeholder": "Bundle ID"}))
     bundle_name = forms.CharField(label="Bundle name", required=False,
                                   widget=forms.TextInput(attrs={"class": "form-control",
                                                                 "placeholder": "Bundle name"}))
+
+    def __init__(self, *args, **kwargs):
+        self.msquery = kwargs.pop("msquery")
+        super().__init__(*args, **kwargs)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -1327,6 +1464,32 @@ class BundleFilterForm(forms.Form):
             raise forms.ValidationError("Bundle id and bundle name cannot be both specified.")
         elif not bundle_name and not bundle_id:
             raise forms.ValidationError("Choose a bundle id or a bundle name.")
+        if bundle_name:
+            if any(isinstance(f, BundleFilter) and f.bundle_name == bundle_name
+                   for f in self.msquery.filters):
+                raise forms.ValidationError("A filter for this bundle name already exists")
+        elif bundle_id:
+            if any(isinstance(f, BundleFilter) and f.bundle_id == bundle_id
+                   for f in self.msquery.filters):
+                raise forms.ValidationError("A filter for this bundle ID already exists")
+
+
+class ComplianceCheckStatusFilterForm(forms.Form):
+    compliance_check = forms.ModelChoiceField(queryset=ComplianceCheck.objects.all(),
+                                              widget=forms.Select(attrs={'class': 'form-control'}))
+
+    def __init__(self, *args, **kwargs):
+        self.msquery = kwargs.pop("msquery")
+        super().__init__(*args, **kwargs)
+        compliance_check_pk_list = []
+        for f in self.msquery.filters:
+            if isinstance(f, ComplianceCheckStatusFilter):
+                compliance_check_pk_list.append(f.compliance_check.pk)
+        queryset = self.fields["compliance_check"].queryset
+        if compliance_check_pk_list:
+            queryset = queryset.exclude(pk__in=compliance_check_pk_list)
+        self.fields["compliance_check"].queryset = queryset
+        self.disabled = queryset.count() == 0
 
 
 def osx_app_count():

@@ -19,6 +19,9 @@ class ComplianceCheck(models.Model):
     class Meta:
         unique_together = (("model", "name"),)
 
+    def __str__(self):
+        return self.name
+
     def serialize_for_event(self):
         return {
             "pk": self.pk,

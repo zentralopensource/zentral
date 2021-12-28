@@ -26,7 +26,7 @@
   </div>
 </div>
 
-<div class="modal{% if form.errors %} modal-with-errors{% endif %}" id="add-filter" tabindex="-1" role="dialog" aria-labelledby="add-filter">
+<div class="modal{% if bundle_filter_form.errors or compliance_check_status_filter_form.errors %} modal-with-errors{% endif %}" id="add-filter" tabindex="-1" role="dialog" aria-labelledby="add-filter">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
       <div class="modal-header">
@@ -42,20 +42,36 @@
           </a>
           {% endfor %}
         </div>
-        <form method="POST" class="form-inline" style="margin: 0">{% csrf_token %}
+        <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
           <div class="form-group">
-            <label for="id_bundle_id" class="sr-only">App</label>
-            {{ form.bundle_id }}
-            {{ form.bundle_name }}
-            <button type="submit" class="btn btn-primary">
+            <label for="id_{{ bundle_filter_form.prefix }}-bundle_id" class="sr-only">Bundle ID</label>
+            {{ bundle_filter_form.bundle_id }}
+            <label for="id_{{ bundle_filter_form.prefix }}-bundle_name" class="sr-only">Bundle name</label>
+            {{ bundle_filter_form.bundle_name }}
+            <button name="filter_type" value="bundle" type="submit" class="btn btn-primary">
               <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
               App
             </button>
-            {% for error in form.non_field_errors %}
+            {% for error in bundle_filter_form.non_field_errors %}
             <p class="text-danger">{{ error }}</p>
             {% endfor %}
           </div>
         </form>
+        {% if not compliance_check_status_filter_form.disabled %}
+        <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
+          <div class="form-group">
+            <label for="id_{{ compliance_check_status_filter_form.prefix }}-compliance_check" class="sr-only">Compliance check</label>
+            {{ compliance_check_status_filter_form.compliance_check }}
+            <button type="submit" name="filter_type" value="compliance_check_status" class="btn btn-primary">
+              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+              Compliance check
+            </button>
+            {% for error in compliance_check_status_filter_form.non_field_errors %}
+            <p class="text-danger">{{ error }}</p>
+            {% endfor %}
+          </div>
+        </form>
+        {% endif %}
       </div>
     </div>
   </div>
