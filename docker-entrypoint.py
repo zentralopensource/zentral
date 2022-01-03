@@ -13,14 +13,34 @@ except NotImplementedError:
     warnings.warn('No secure pseudo random number generator available.')
 
 
+def wait_for_db(env):
+    i = 0
+    while True:
+        try:
+            subprocess.run(['python', 'server/manage.py', 'shell', '-c',
+                            'import django;django.db.connection.ensure_connection()'],
+                           stderr=subprocess.DEVNULL,
+                           stdout=subprocess.DEVNULL,
+                           check=True,
+                           env=env)
+        except subprocess.CalledProcessError:
+            retry_delay = min(20, (i + 1)) * random.uniform(0.8, 1.2)
+            warnings.warn(f"Cannot connect to DB! Sleep {retry_delay:.1f}s…")
+            time.sleep(retry_delay)
+            i += 1
+        else:
+            break
+    print("DB connection OK")
+
+
 def wait_for_db_migration():
     i = 0
     while True:
         try:
-            subprocess.check_call(['python', 'server/manage.py', 'migrate', '--noinput'])
+            subprocess.run(['python', 'server/manage.py', 'migrate', '--noinput'], check=True)
         except subprocess.CalledProcessError:
             retry_delay = min(20, (i + 1)) * random.uniform(0.8, 1.2)
-            warnings.warn("Can't migrate DB! Sleep {:.1f}s…".format(retry_delay))
+            warnings.warn(f"Can't migrate DB! Sleep {retry_delay:.1f}s…")
             time.sleep(retry_delay)
             i += 1
         else:
@@ -29,7 +49,7 @@ def wait_for_db_migration():
 
 
 def django_collectstatic():
-    subprocess.check_call(['python', 'server/manage.py', 'collectstatic', '-v0', '--noinput'])
+    subprocess.run(['python', 'server/manage.py', 'collectstatic', '-v0', '--noinput'], check=True)
 
 
 def create_zentral_superuser():
@@ -70,7 +90,8 @@ KNOWN_COMMANDS = {
 }
 
 KNOWN_COMMANDS_EXTRA_ENV = {
-    "tests": {"ZENTRAL_PROBES_SYNC": "0"}
+    "tests": {"ZENTRAL_PROBES_SYNC": "0",
+              "ZENTRAL_CONF_DIR": "/zentral/tests/conf"}
 }
 
 KNOWN_COMMANDS_CHDIR = {
@@ -93,12 +114,14 @@ if __name__ == '__main__':
     if args:
         filename = args[0]
         args.extend(sys.argv[2:])
-        wait_for_db_migration()
+        env.update(KNOWN_COMMANDS_EXTRA_ENV.get(cmd, {}))
         if cmd != "tests":
+            wait_for_db_migration()
             create_zentral_superuser()
+        else:
+            wait_for_db(env)
         if cmd in KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC:
             django_collectstatic()
-        env.update(KNOWN_COMMANDS_EXTRA_ENV.get(cmd, {}))
         wd = KNOWN_COMMANDS_CHDIR.get(cmd)
         if wd:
             os.chdir(wd)

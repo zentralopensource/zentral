@@ -13,7 +13,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.monolith.models import CacheServer, Manifest
 
 
-class APIViewsTestCase(TestCase):
+class MonolithAPIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # service account

@@ -13,7 +13,7 @@ def sorted_objects(object_list):
     return sorted(object_list, key=lambda o: o.pk)
 
 
-class MonolithSetupViewsTestCase(TestCase):
+class MonolithModelsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(13))

@@ -1,0 +1,116 @@
+{
+  "api": {
+    "tls_hostname": "https://zentral",
+    "tls_fullchain": "{{ file:/zentral/conf/start/docker/tls/zentral_fullchain.crt }}",
+    "tls_privkey": "{{ file:/zentral/conf/start/docker/tls/zentral.key }}",
+    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
+    "metrics_bearer_token": "CHANGE ME!!!"
+  },
+  "extra_links": [
+    {"anchor_text": "Prometheus",
+     "url": "https://zentral/prometheus/"}
+  ],
+  "django": {
+    "SECRET_KEY": "DJANGO SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
+    "DEBUG": true,
+    "ALLOWED_HOSTS": [
+      "zentral",
+      "web"
+    ],
+    "MEDIA_ROOT": "/var/zentral",
+    "POSTGRES_HOST": "{{ env:POSTGRES_HOST }}",
+    "POSTGRES_PASSWORD": "{{ env:POSTGRES_PASSWORD }}"
+  },
+  "queues": {
+    "backend": "zentral.core.queues.backends.kombu",
+    "backend_url": "amqp://guest:guest@rabbitmq:5672//"
+  },
+  "stores": {
+    "elasticsearch": {
+      "frontend": true,
+      "backend": "zentral.core.stores.backends.elasticsearch",
+      "hosts": [
+        "http://elastic:9200"
+      ],
+      "index": "zentral-events"
+    }
+  },
+  "processor_workers": {
+    "number": 1,
+    "prometheus_server_base_port": "8100"
+  },
+  "actions": {
+    "debug": {
+      "backend": "zentral.core.actions.backends.json_file",
+      "local_dir": "/tmp/zentral_notifications/"
+    }
+  },
+  "apps": {
+    "zentral.core.compliance_checks": {
+      "metrics": true
+    },
+    "zentral.core.incidents": {
+      "metrics": true
+    },
+    "zentral.contrib.inventory": {
+      "metrics": true,
+      "clients": [
+        {
+          "backend": "zentral.contrib.inventory.clients.dummy"
+        }
+      ],
+      "exporters": [
+        {
+          "backend": "zentral.contrib.inventory.exporters.es_machine_snapshots",
+          "es_hosts": [
+            "http://elastic:9200"
+          ],
+          "bundle_ids": [
+            "org.mozilla.firefox"
+          ]
+        },
+        {
+          "backend": "zentral.contrib.inventory.exporters.es_aggregations",
+          "es_hosts": [
+            "http://elastic:9200"
+          ],
+          "bundle_ids": [
+            "org.mozilla.firefox"
+          ]
+        }
+      ]
+    },
+    "zentral.contrib.jamf": {},
+    "zentral.contrib.simplemdm": {},
+    "zentral.contrib.munki": {
+      "metrics": true,
+      "principal_user_detection": {
+        "sources": ["company_portal", "google_chrome", "logged_in_user"],
+        "domains": ["zentral.pro"]
+      }
+    },
+    "zentral.contrib.monolith": {
+      "metrics": true,
+      "enrollment_package_builders": {
+        "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
+          "requires": ["munkitools_core"],
+          "optional": false
+        },
+        "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
+          "requires": ["osquery"],
+          "optional": true
+        }
+      },
+      "munki_repository": {
+        "manual_catalog_management": false,
+        "backend": "zentral.contrib.monolith.repository_backends.local",
+        "root": "/zentral/tests/monolith/repository"
+      }
+    },
+    "zentral.contrib.nagios": {},
+    "zentral.contrib.osquery": {},
+    "zentral.contrib.santa": {
+      "metrics": true
+    }
+  }
+}
