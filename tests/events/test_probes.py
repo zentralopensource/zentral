@@ -52,8 +52,16 @@ class EventDeserializationTestCase(TestCase):
             body={"filters": {"metadata": [{"event_types": ["inventory_heartbeat"]}]},
                   "incident_severity": Severity.CRITICAL.value},
         )
+        cls.probe_source_for_incident_with_incident = ProbeSource.objects.create(
+            model="BaseProbe",
+            name=get_random_string(),
+            status=ProbeSource.ACTIVE,
+            body={"filters": {"metadata": [{"event_types": ["incident_created"]}]},
+                  "incident_severity": Severity.CRITICAL.value},  # only for the tests! Not useful at all!
+        )
         cls.probe = cls.probe_source.load()
         cls.probe_with_incident = cls.probe_source_with_incident.load()
+        cls.probe_for_incident_with_incident = cls.probe_source_for_incident_with_incident.load()
         all_probes.clear()
 
     def test_event_from_event_d(self):
@@ -149,6 +157,36 @@ class EventDeserializationTestCase(TestCase):
         self.assertEqual(list(updated_event.metadata.iter_loaded_probes()), [self.probe_with_incident])
         self.assertEqual(updated_event.metadata.incident_updates, expected_incident_updates)
 
+    def test_event_probes_with_probe_incident_without_incident_updates(self):
+        event = event_from_event_d(serialized_event)
+        if self.probe_with_incident.test_event(event):
+            event.metadata.add_probe(self.probe_with_incident, with_incident_updates=False)
+
+        expected_serialized_probes = [{"pk": self.probe_with_incident.pk, "name": self.probe_with_incident.name}]
+        expected_incident_updates = [
+            IncidentUpdate(
+                "munki_reinstall",
+                {"munki_pkginfo_name": "SuperApp", "munki_pkginfo_version": "0.1.0"},
+                Severity.CRITICAL
+            )
+        ]
+        self.assertEqual(event.metadata.probes, expected_serialized_probes)
+        self.assertEqual(event.metadata.incident_updates, expected_incident_updates)
+
+        serialized_updated_event = event.serialize()
+        self.assertEqual(serialized_updated_event["_zentral"]["probes"], expected_serialized_probes)
+        self.assertEqual(
+            serialized_updated_event["_zentral"]["incident_updates"],
+            [{"incident_type": "munki_reinstall",
+              "key": {"munki_pkginfo_name": "SuperApp",
+                      "munki_pkginfo_version": "0.1.0"},
+              "severity": 300}]
+        )
+
+        updated_event = event_from_event_d(serialized_updated_event)
+        self.assertEqual(list(updated_event.metadata.iter_loaded_probes()), [self.probe_with_incident])
+        self.assertEqual(updated_event.metadata.incident_updates, expected_incident_updates)
+
     def test_enrich_event(self):
         events = list(enrich_event(serialized_event))
         self.assertEqual(len(events), 5)
@@ -184,6 +222,8 @@ class EventDeserializationTestCase(TestCase):
         self.assertEqual(event2.payload["type"], probe_incident_type)
         self.assertEqual(event2.payload["key"], probe_incident_key)
         self.assertEqual(event2.payload["pk"], probe_incident.pk)
+        self.assertEqual(event2.metadata.probes,
+                         [self.probe_for_incident_with_incident.serialize_for_event_metadata()])
 
         event3 = events[3]
         self.assertEqual(event3.metadata.event_type, "machine_incident_created")

@@ -306,8 +306,10 @@ class EventMetadata(object):
                 d['machine'] = machine_d
         return d
 
-    def add_probe(self, probe):
+    def add_probe(self, probe, with_incident_updates=True):
         self.probes.append(probe.serialize_for_event_metadata())
+        if not with_incident_updates:
+            return
         try:
             incident_update = probe.get_matching_event_incident_update(self.event)
         except ReferenceError:

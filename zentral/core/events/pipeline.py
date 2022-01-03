@@ -43,7 +43,10 @@ def enrich_event(event):
         event.metadata.add_probe(probe)
 
     # incident status updates
-    yield from apply_incident_updates(event)
+    for incident_event in apply_incident_updates(event):
+        for probe in all_probes.event_filtered(incident_event):
+            incident_event.metadata.add_probe(probe, with_incident_updates=False)
+        yield incident_event
 
     yield event
 
