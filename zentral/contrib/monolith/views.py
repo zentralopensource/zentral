@@ -1,5 +1,6 @@
 from itertools import chain
 import logging
+import plistlib
 import random
 from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
@@ -25,6 +26,7 @@ from zentral.core.stores import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.storage import file_storage_has_signed_urls
+from zentral.utils.text import shard as compute_shard
 from .conf import monolith_conf
 from .events import (post_monolith_enrollment_event,
                      post_monolith_munki_request, post_monolith_repository_updates)
@@ -1394,12 +1396,30 @@ class MRCatalogView(MRNameView):
     def do_get(self, model, key, cache_key, event_payload):
         if model == "manifest_catalog" and key == self.manifest.pk:
             catalog_data = cache.get(cache_key)
-            if catalog_data is None:
-                catalog_data = self.manifest.serialize_catalog(self.tags)
+            if not isinstance(catalog_data, list):
+                catalog_data = self.manifest.build_catalog(self.tags)
                 cache.set(cache_key, catalog_data, timeout=None)
             else:
                 event_payload["cache"]["hit"] = True
-            return HttpResponse(catalog_data, content_type="application/xml")
+
+            # apply the shards
+            filtered_catalog_data = []
+            for pkginfo in catalog_data:
+                try:
+                    shard = int(pkginfo.get("zentral_monolith_shard", 100))
+                except (TypeError, ValueError):
+                    logger.error("Invalid shard value")
+                    shard = 100
+                if shard < 1 or shard > 100:
+                    logger.error("Shard value out of bounds")
+                    shard = 100
+                if (
+                    shard == 100 or
+                    compute_shard(pkginfo["name"] + pkginfo["version"] + self.machine_serial_number) < shard
+                ):
+                    filtered_catalog_data.append(pkginfo)
+
+            return HttpResponse(plistlib.dumps(filtered_catalog_data), content_type="application/xml")
 
 
 class MRManifestView(MRNameView):

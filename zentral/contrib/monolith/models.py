@@ -84,9 +84,6 @@ class Catalog(models.Model):
     def __str__(self):
         return self.name
 
-    def get_munki_name(self):
-        return build_munki_name("catalog", self.id, self.name)
-
     def get_absolute_url(self):
         return reverse("monolith:catalog", args=(self.pk,))
 
@@ -663,7 +660,7 @@ class Manifest(models.Model):
     def get_catalog_munki_name(self):
         return build_munki_name("manifest_catalog", self.pk, self.name)
 
-    def serialize_catalog(self, tags=None):
+    def build_catalog(self, tags=None):
         pkginfo_list = []
 
         # the repository catalogs pkginfos
@@ -696,7 +693,7 @@ class Manifest(models.Model):
         for printer in self.printer_set.all():
             pkginfo_list.append(printer.pkg_info)
 
-        return plistlib.dumps(pkginfo_list)
+        return pkginfo_list
 
     # the manifest
 
