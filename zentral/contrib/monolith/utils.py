@@ -27,8 +27,7 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
         '    if filename.startswith("{}") and not filename.startswith("{}"):\n'
         '        os.unlink(os.path.join(RECEIPTS_DIR, filename))\n'
     ).format(builder.base_package_identifier, builder.package_identifier)
-    return {'autoremove': True,
-            'description': '{} package'.format(builder.name),
+    return {'description': '{} package'.format(builder.name),
             'display_name': builder.name,
             'installed_size': installed_size,
             'installer_item_hash': installer_item_hash,
