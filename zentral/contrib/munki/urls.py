@@ -13,8 +13,6 @@ urlpatterns = [
     # enrollment
     path('configurations/<int:pk>/enrollments/create/',
          views.CreateEnrollmentView.as_view(), name='create_enrollment'),
-    path('configurations/<int:configuration_pk>/enrollments/<int:pk>/package/',
-         views.EnrollmentPackageView.as_view(), name='enrollment_package'),
 
     # install probe
     path('install_probes/create/',

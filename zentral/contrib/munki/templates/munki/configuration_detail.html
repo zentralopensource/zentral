@@ -125,7 +125,7 @@
         <a class="btn btn-default download-tool"
            aria-label="Download macOS enrollment package"
            title="macOS enrollment package"
-           href="{% url 'munki:enrollment_package' enrollment.configuration.pk enrollment.pk %}">
+           href="{% url 'munki_api:enrollment_package' enrollment.pk %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
           <i class="fab fa-apple" aria-hidden="true"></i>
         </a>

@@ -21,9 +21,8 @@ from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, UpdateInstallProbeForm
-from .models import (Configuration, EnrolledMachine, Enrollment, MunkiState,
+from .models import (Configuration, EnrolledMachine, MunkiState,
                      PrincipalUserDetectionSource)
-from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
 
 logger = logging.getLogger('zentral.contrib.munki.views')
@@ -129,15 +128,6 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
             return self.forms_valid(secret_form, enrollment_form)
         else:
             return self.forms_invalid(secret_form, enrollment_form)
-
-
-class EnrollmentPackageView(PermissionRequiredMixin, View):
-    permission_required = "munki.view_enrollment"
-
-    def get(self, request, *args, **kwargs):
-        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
-        builder = MunkiZentralEnrollPkgBuilder(enrollment)
-        return builder.build_and_make_response()
 
 
 # install probe
