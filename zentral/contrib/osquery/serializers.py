@@ -19,20 +19,32 @@ class EnrollmentSerializer(serializers.ModelSerializer):
     secret = EnrollmentSecretSerializer(many=False)
     enrolled_machines_count = serializers.SerializerMethodField()
     package_download_url = serializers.SerializerMethodField()
+    script_download_url = serializers.SerializerMethodField()
+    powershell_script_download_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Enrollment
         # TODO: distributor, maybe with a link ?
         fields = ("id", "configuration",
                   "osquery_release", "secret", "version",
-                  "enrolled_machines_count", "package_download_url")
+                  "enrolled_machines_count",
+                  "package_download_url", "powershell_script_download_url", "script_download_url")
 
     def get_enrolled_machines_count(self, obj):
         return obj.enrolledmachine_set.count()
 
-    def get_package_download_url(self, obj):
-        path = reverse("osquery_api:enrollment_package", args=(obj.pk,))
+    def get_artifact_download_url(self, view_name, obj):
+        path = reverse(f"osquery_api:{view_name}", args=(obj.pk,))
         return f'https://{settings["api"]["fqdn"]}{path}'
+
+    def get_package_download_url(self, obj):
+        return self.get_artifact_download_url("enrollment_package", obj)
+
+    def get_powershell_script_download_url(self, obj):
+        return self.get_artifact_download_url("enrollment_powershell_script", obj)
+
+    def get_script_download_url(self, obj):
+        return self.get_artifact_download_url("enrollment_script", obj)
 
     def create(self, validated_data):
         secret_data = validated_data.pop('secret')

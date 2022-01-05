@@ -18,7 +18,9 @@ from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionReq
 from .compliance_checks import sync_query_compliance_check
 from .events import post_osquery_pack_update_events
 from .models import Configuration, Enrollment, Pack, PackQuery, Query
+from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
+from .powershell_script.builder import OsqueryZentralEnrollPowershellScriptBuilder
 from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryPackSerializer
 from .tasks import export_distributed_query_results
 
@@ -73,14 +75,39 @@ class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
             return super().perform_destroy(instance)
 
 
-class EnrollmentPackage(APIView):
+class EnrollmentArtifact(APIView):
+    """
+    base enrollment artifact class. To be subclassed.
+    """
     permission_required = "osquery.view_enrollment"
     permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    builder_class = None
 
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=self.kwargs["pk"])
-        builder = OsqueryZentralEnrollPkgBuilder(enrollment)
+        builder = self.builder_class(enrollment)
         return builder.build_and_make_response()
+
+
+class EnrollmentPackage(EnrollmentArtifact):
+    """
+    Download macOS enrollment package
+    """
+    builder_class = OsqueryZentralEnrollPkgBuilder
+
+
+class EnrollmentPowershellScript(EnrollmentArtifact):
+    """
+    Download enrollment powershell script
+    """
+    builder_class = OsqueryZentralEnrollPowershellScriptBuilder
+
+
+class EnrollmentScript(EnrollmentArtifact):
+    """
+    Download enrollment bash script
+    """
+    builder_class = OsqueryZentralEnrollScriptBuilder
 
 
 # Standard Osquery packs

@@ -191,21 +191,21 @@
         <a class="btn btn-default download-tool"
            aria-label="Download macOS enrollment package"
            title="macOS enrollment package"
-           href="{% url 'osquery:enrollment_package' enrollment.configuration.id enrollment.id %}">
+           href="{% url 'osquery_api:enrollment_package' enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
           <i class="fab fa-apple" aria-hidden="true"></i>
         </a>
         <a class="btn btn-default download-tool"
            aria-label="Download Linux enrollment script"
            title="Linux enrollment script"
-           href="{% url 'osquery:enrollment_script' enrollment.configuration.id enrollment.id %}">
+           href="{% url 'osquery_api:enrollment_script' enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
           <i class="fab fa-linux" aria-hidden="true"></i>
         </a>
         <a class="btn btn-default download-tool"
            aria-label="Download powershell enrollment script"
            title="Powershell enrollment script"
-           href="{% url 'osquery:enrollment_powershell_script' enrollment.configuration.id enrollment.id %}">
+           href="{% url 'osquery_api:enrollment_powershell_script' enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
           <i class="fab fa-windows" aria-hidden="true"></i>
         </a>

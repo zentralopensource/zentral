@@ -74,15 +74,6 @@ urlpatterns = [
     path('configurations/<int:pk>/enrollments/create/',
          views.CreateEnrollmentView.as_view(),
          name='create_enrollment'),
-    path('configurations/<int:configuration_pk>/enrollments/<int:pk>/package/',
-         views.EnrollmentPackageView.as_view(),
-         name='enrollment_package'),
-    path('configurations/<int:configuration_pk>)/enrollments/<int:pk>/script/',
-         views.EnrollmentScriptView.as_view(),
-         name='enrollment_script'),
-    path('configurations/<int:configuration_pk>/enrollments/<int:pk>/powershell_script/',
-         views.EnrollmentPowershellScriptView.as_view(),
-         name='enrollment_powershell_script'),
 
     # osquery API
     path('enroll', csrf_exempt(views.EnrollView.as_view()), name='enroll'),

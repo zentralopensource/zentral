@@ -5,7 +5,6 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.utils.http import http_date
 from django.test import TestCase, override_settings
 from accounts.models import User
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
@@ -90,74 +89,5 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase):
         self.assertEqual(enrollment.version, 1)
         self.assertContains(response, enrollment.secret.meta_business_unit.name)
         for view_name in ("enrollment_package", "enrollment_script", "enrollment_powershell_script"):
-            self.assertContains(response, reverse(f"osquery:{view_name}", args=(configuration.pk, enrollment.pk)))
+            self.assertContains(response, reverse(f"osquery_api:{view_name}", args=(enrollment.pk,)))
         get_osquery_versions.assert_called_once_with()
-
-    # enrollment package
-
-    def test_enrollment_package_redirect(self):
-        enrollment = self._force_enrollment()
-        self._login_redirect(reverse("osquery:enrollment_package", args=(enrollment.configuration.pk, enrollment.pk)))
-
-    def test_enrollment_package_permission_denied(self):
-        enrollment = self._force_enrollment()
-        self._login()
-        response = self.client.get(reverse("osquery:enrollment_package",
-                                           args=(enrollment.configuration.pk, enrollment.pk)))
-        self.assertEqual(response.status_code, 403)
-
-    def test_enrollment_package(self):
-        enrollment = self._force_enrollment()
-        self._login("osquery.view_enrollment")
-        response = self.client.get(reverse("osquery:enrollment_package",
-                                           args=(enrollment.configuration.pk, enrollment.pk)))
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], "application/octet-stream")
-        self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_osquery_enroll.pkg"')
-        self.assertEqual(response['Last-Modified'], http_date(enrollment.updated_at.timestamp()))
-        self.assertEqual(response['ETag'], f'W/"osquery.enrollment-{enrollment.pk}-1"')
-
-    # enrollment script
-
-    def test_enrollment_script_redirect(self):
-        enrollment = self._force_enrollment()
-        self._login_redirect(reverse("osquery:enrollment_script", args=(enrollment.configuration.pk, enrollment.pk)))
-
-    def test_enrollment_script_permission_denied(self):
-        enrollment = self._force_enrollment()
-        self._login()
-        response = self.client.get(reverse("osquery:enrollment_script",
-                                           args=(enrollment.configuration.pk, enrollment.pk)))
-        self.assertEqual(response.status_code, 403)
-
-    def test_enrollment_script(self):
-        enrollment = self._force_enrollment()
-        self._login("osquery.view_enrollment")
-        response = self.client.get(reverse("osquery:enrollment_script",
-                                           args=(enrollment.configuration.pk, enrollment.pk)))
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], "text/x-shellscript")
-        self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_osquery_setup.sh"')
-
-    # enrollment powershell script
-
-    def test_enrollment_powershell_script_redirect(self):
-        enrollment = self._force_enrollment()
-        self._login_redirect(reverse("osquery:enrollment_powershell_script",
-                                     args=(enrollment.configuration.pk, enrollment.pk)))
-
-    def test_enrollment_powershell_script_permission_denied(self):
-        enrollment = self._force_enrollment()
-        self._login()
-        response = self.client.get(reverse("osquery:enrollment_powershell_script",
-                                           args=(enrollment.configuration.pk, enrollment.pk)))
-        self.assertEqual(response.status_code, 403)
-
-    def test_enrollment_powershell_script(self):
-        enrollment = self._force_enrollment()
-        self._login("osquery.view_enrollment")
-        response = self.client.get(reverse("osquery:enrollment_powershell_script",
-                                           args=(enrollment.configuration.pk, enrollment.pk)))
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], "text/plain")
-        self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_osquery_setup.ps1"')

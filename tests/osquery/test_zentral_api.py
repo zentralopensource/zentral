@@ -159,7 +159,11 @@ class OsqueryAPITests(APITestCase):
                  'quota': None,
                  'request_count': 0
              },
-             'version': 1}
+             'version': 1,
+             'package_download_url': f'https://zentral/api/osquery/enrollments/{enrollment2.pk}/package/',
+             'powershell_script_download_url': 'https://zentral/api/osquery/'
+                                               f'enrollments/{enrollment2.pk}/powershell_script/',
+             'script_download_url': f'https://zentral/api/osquery/enrollments/{enrollment2.pk}/script/'},
         )
 
     def test_update_enrollment(self):
@@ -230,6 +234,10 @@ class OsqueryAPITests(APITestCase):
                  'quota': None,
                  'request_count': 0
              },
-             'version': 1},
+             'version': 1,
+             'package_download_url': f'https://zentral/api/osquery/enrollments/{enrollment5.pk}/package/',
+             'powershell_script_download_url': 'https://zentral/api/osquery/'
+                                               f'enrollments/{enrollment5.pk}/powershell_script/',
+             'script_download_url': f'https://zentral/api/osquery/enrollments/{enrollment5.pk}/script/'},
             response.data
         )
