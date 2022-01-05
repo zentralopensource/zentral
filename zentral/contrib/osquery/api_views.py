@@ -5,6 +5,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import F
 from django_filters import rest_framework as filters
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import ParseError, ValidationError
@@ -17,6 +18,7 @@ from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionReq
 from .compliance_checks import sync_query_compliance_check
 from .events import post_osquery_pack_update_events
 from .models import Configuration, Enrollment, Pack, PackQuery, Query
+from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryPackSerializer
 from .tasks import export_distributed_query_results
 
@@ -69,6 +71,16 @@ class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
             raise ValidationError('This enrollment cannot be deleted')
         else:
             return super().perform_destroy(instance)
+
+
+class EnrollmentPackage(APIView):
+    permission_required = "osquery.view_enrollment"
+    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+
+    def get(self, request, *args, **kwargs):
+        enrollment = get_object_or_404(Enrollment, pk=self.kwargs["pk"])
+        builder = OsqueryZentralEnrollPkgBuilder(enrollment)
+        return builder.build_and_make_response()
 
 
 # Standard Osquery packs

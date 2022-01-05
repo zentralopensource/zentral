@@ -1,4 +1,6 @@
+from django.urls import reverse
 from rest_framework import serializers
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .models import Configuration, Enrollment, Pack, Platform
@@ -16,14 +18,21 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 class EnrollmentSerializer(serializers.ModelSerializer):
     secret = EnrollmentSecretSerializer(many=False)
     enrolled_machines_count = serializers.SerializerMethodField()
+    package_download_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Enrollment
         # TODO: distributor, maybe with a link ?
-        fields = ("id", "configuration", "enrolled_machines_count", "osquery_release", "secret", "version")
+        fields = ("id", "configuration",
+                  "osquery_release", "secret", "version",
+                  "enrolled_machines_count", "package_download_url")
 
     def get_enrolled_machines_count(self, obj):
         return obj.enrolledmachine_set.count()
+
+    def get_package_download_url(self, obj):
+        path = reverse("osquery_api:enrollment_package", args=(obj.pk,))
+        return f'https://{settings["api"]["fqdn"]}{path}'
 
     def create(self, validated_data):
         secret_data = validated_data.pop('secret')

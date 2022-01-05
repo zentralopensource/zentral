@@ -6,10 +6,12 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from django.utils.http import http_date
 from django.test import TestCase
 from rest_framework.authtoken.models import Token
 from accounts.models import User
-from zentral.contrib.osquery.models import DistributedQuery, Pack, PackQuery, Query
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query
 
 
 class APIViewsTestCase(TestCase):
@@ -23,6 +25,16 @@ class APIViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string())
         cls.service_account.groups.set([cls.group])
         Token.objects.get_or_create(user=cls.service_account)
+        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string())
+        cls.mbu.create_enrollment_business_unit()
+
+    def force_configuration(self):
+        return Configuration.objects.create(name=get_random_string())
+
+    def force_enrollment(self):
+        configuration = self.force_configuration()
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
+        return Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
 
     def set_permissions(self, *permissions):
         if permissions:
@@ -53,6 +65,12 @@ class APIViewsTestCase(TestCase):
             "osquery.delete_packquery",
         )
 
+    def get(self, url, include_token=True):
+        kwargs = {}
+        if include_token:
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+        return self.client.get(url, **kwargs)
+
     def post(self, url, include_token=True):
         kwargs = {}
         if include_token:
@@ -79,54 +97,85 @@ class APIViewsTestCase(TestCase):
     # list configurations
 
     def test_get_configurations_unauthorized(self):
-        response = self.client.get(reverse("osquery_api:configurations"))
+        response = self.get(reverse("osquery_api:configurations"), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_configurations_permission_denied(self):
-        response = self.client.get(
-            reverse("osquery_api:configurations"),
-            HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}"
-        )
+        response = self.get(reverse("osquery_api:configurations"))
         self.assertEqual(response.status_code, 403)
 
     # get configuration
 
     def test_get_configuration_unauthorized(self):
-        response = self.client.get(reverse("osquery_api:configuration", args=(1213028133,)))
+        response = self.get(reverse("osquery_api:configuration", args=(1213028133,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_configuration_permission_denied(self):
-        response = self.client.get(
-            reverse("osquery_api:configuration", args=(1213028133,)),
-            HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}"
-        )
+        response = self.get(reverse("osquery_api:configuration", args=(1213028133,)))
         self.assertEqual(response.status_code, 403)
 
     # list enrollments
 
     def test_get_enrollments_unauthorized(self):
-        response = self.client.get(reverse("osquery_api:enrollments"))
+        response = self.get(reverse("osquery_api:enrollments"), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_enrollments_permission_denied(self):
-        response = self.client.get(
-            reverse("osquery_api:enrollments"),
-            HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}"
-        )
+        response = self.get(reverse("osquery_api:enrollments"))
         self.assertEqual(response.status_code, 403)
 
-    # get enrollement
+    # get enrollment
 
     def test_get_enrollment_unauthorized(self):
-        response = self.client.get(reverse("osquery_api:enrollment", args=(1213028133,)))
+        response = self.get(reverse("osquery_api:enrollment", args=(1213028133,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_enrollment_permission_denied(self):
-        response = self.client.get(
-            reverse("osquery_api:enrollment", args=(1213028133,)),
-            HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}"
-        )
+        response = self.get(reverse("osquery_api:enrollment", args=(1213028133,)))
         self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollment_not_found(self):
+        self.set_permissions("osquery.view_enrollment")
+        response = self.get(reverse("osquery_api:enrollment", args=(1213028133,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_enrollment(self):
+        self.set_permissions("osquery.view_enrollment")
+        enrollment = self.force_enrollment()
+        response = self.get(reverse("osquery_api:enrollment", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        response_j = response.json()
+        self.assertEqual(response_j["id"], enrollment.pk)
+        self.assertEqual(response_j["package_download_url"],
+                         f"https://zentral/api/osquery/enrollments/{enrollment.pk}/package/")
+
+    # get enrollment package
+
+    def test_get_enrollment_package_unauthorized(self):
+        enrollment = self.force_enrollment()
+        response = self.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollment_package_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollment_package_not_found(self):
+        self.force_enrollment()
+        self.set_permissions("osquery.view_enrollment")
+        response = self.get(reverse("osquery_api:enrollment_package", args=(1213028133,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_enrollment_package(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("osquery.view_enrollment")
+        response = self.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], "application/octet-stream")
+        self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_osquery_enroll.pkg"')
+        self.assertEqual(response['Last-Modified'], http_date(enrollment.updated_at.timestamp()))
+        self.assertEqual(response['ETag'], f'W/"osquery.enrollment-{enrollment.pk}-1"')
 
     # put pack
 
