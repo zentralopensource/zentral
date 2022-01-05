@@ -11,6 +11,7 @@ from django.test import TestCase
 from rest_framework.authtoken.models import Token
 from accounts.models import User
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query
 
 
@@ -71,14 +72,23 @@ class APIViewsTestCase(TestCase):
         self.set_permissions(*permissions)
         self.client.force_login(self.user)
 
-    def get(self, url, include_token=True):
+    def get(self, url, data=None, include_token=True):
         kwargs = {}
+        if data is not None:
+            kwargs["data"] = data
         if include_token:
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
         return self.client.get(url, **kwargs)
 
     def post(self, url, include_token=True):
         kwargs = {}
+        if include_token:
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+        return self.client.post(url, **kwargs)
+
+    def post_json_data(self, url, data, include_token=True):
+        kwargs = {'content_type': 'application/json',
+                  'data': data}
         if include_token:
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
         return self.client.post(url, **kwargs)
@@ -110,15 +120,101 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:configurations"))
         self.assertEqual(response.status_code, 403)
 
+    def test_get_configurations(self):
+        config = self.force_configuration()
+        self.set_permissions("osquery.view_configuration")
+        response = self.get(reverse('osquery_api:configurations'), data={"name": config.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data,
+                         [{"id": config.pk,
+                           "name": config.name,
+                           'description': "",
+                           "inventory": True,
+                           "inventory_apps": False,
+                           "inventory_interval": 86400,
+                           "options": {},
+                           "created_at": config.created_at.isoformat(),
+                           "updated_at": config.updated_at.isoformat()
+                           }])
+
     # get configuration
 
     def test_get_configuration_unauthorized(self):
-        response = self.get(reverse("osquery_api:configuration", args=(1213028133,)), include_token=False)
+        configuration = self.force_configuration()
+        response = self.get(reverse("osquery_api:configuration", args=(configuration.pk,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_configuration_permission_denied(self):
-        response = self.get(reverse("osquery_api:configuration", args=(1213028133,)))
+        configuration = self.force_configuration()
+        response = self.get(reverse("osquery_api:configuration", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 403)
+
+    def test_get_configuration(self):
+        configuration = self.force_configuration()
+        self.set_permissions("osquery.view_configuration")
+        response = self.get(reverse('osquery_api:configuration', args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertDictEqual(
+            response.json(),
+            {'id': configuration.pk,
+             'name': configuration.name,
+             'description': "",
+             "inventory": True,
+             "inventory_apps": False,
+             "inventory_interval": 86400,
+             "options": {},
+             "created_at": configuration.created_at.isoformat(),
+             "updated_at": configuration.updated_at.isoformat()}
+        )
+
+    # create configuration
+
+    def test_create_configuration(self):
+        self.set_permissions("osquery.add_configuration")
+        response = self.post_json_data(reverse('osquery_api:configurations'), {'name': 'Configuration0'})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Configuration.objects.filter(name='Configuration0').count(), 1)
+        configuration = Configuration.objects.get(name="Configuration0")
+        self.assertEqual(configuration.name, 'Configuration0')
+
+    # update configuration
+
+    def test_update_configuration(self):
+        config = self.force_configuration()
+        new_name = get_random_string()
+        data = {'name': new_name}
+        self.set_permissions("osquery.change_configuration")
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(config.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        config.refresh_from_db()
+        self.assertEqual(config.name, new_name)
+
+    def test_update_configuration_name_exists(self):
+        config0 = self.force_configuration()
+        config1 = self.force_configuration()
+        data = {'name': config0.name}
+        self.set_permissions("osquery.change_configuration")
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(config1.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        response_j = response.json()
+        self.assertEqual(response_j["name"][0], "configuration with this name already exists.")
+
+    # delete configuration
+
+    def test_delete_configuration(self):
+        config = self.force_configuration()
+        self.set_permissions("osquery.delete_configuration")
+        response = self.delete(reverse('osquery_api:configuration', args=(config.pk,)))
+        self.assertEqual(response.status_code, 204)
+
+    def test_delete_configuration_error(self):
+        config = self.force_configuration()
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
+        Enrollment.objects.create(configuration=config, secret=enrollment_secret)
+        self.set_permissions("osquery.delete_configuration")
+        response = self.delete(reverse('osquery_api:configuration', args=(config.pk,)))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), ["This configuration cannot be deleted"])
 
     # list enrollments
 
@@ -129,6 +225,34 @@ class APIViewsTestCase(TestCase):
     def test_get_enrollments_permission_denied(self):
         response = self.get(reverse("osquery_api:enrollments"))
         self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollments(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("osquery.view_enrollment")
+        response = self.get(reverse('osquery_api:enrollments'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            {'id': enrollment.pk,
+             'configuration': enrollment.configuration.pk,
+             'enrolled_machines_count': 0,
+             'osquery_release': '',
+             'secret': {
+                 'id': enrollment.secret.pk,
+                 'secret': enrollment.secret.secret,
+                 'meta_business_unit': self.mbu.pk,
+                 'tags': [],
+                 'serial_numbers': None,
+                 'udids': None,
+                 'quota': None,
+                 'request_count': 0
+             },
+             'version': 1,
+             'package_download_url': f'https://zentral/api/osquery/enrollments/{enrollment.pk}/package/',
+             'powershell_script_download_url': 'https://zentral/api/osquery/'
+                                               f'enrollments/{enrollment.pk}/powershell_script/',
+             'script_download_url': f'https://zentral/api/osquery/enrollments/{enrollment.pk}/script/'},
+            response.json()
+        )
 
     # get enrollment
 
@@ -150,14 +274,28 @@ class APIViewsTestCase(TestCase):
         enrollment = self.force_enrollment()
         response = self.get(reverse("osquery_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
-        response_j = response.json()
-        self.assertEqual(response_j["id"], enrollment.pk)
-        self.assertEqual(response_j["package_download_url"],
-                         f"https://zentral/api/osquery/enrollments/{enrollment.pk}/package/")
-        self.assertEqual(response_j["powershell_script_download_url"],
-                         f"https://zentral/api/osquery/enrollments/{enrollment.pk}/powershell_script/")
-        self.assertEqual(response_j["script_download_url"],
-                         f"https://zentral/api/osquery/enrollments/{enrollment.pk}/script/")
+        self.assertEqual(
+            response.json(),
+            {'id': enrollment.pk,
+             'configuration': enrollment.configuration.pk,
+             'enrolled_machines_count': 0,
+             'osquery_release': '',
+             'secret': {
+                 'id': enrollment.secret.pk,
+                 'secret': enrollment.secret.secret,
+                 'meta_business_unit': self.mbu.pk,
+                 'tags': [],
+                 'serial_numbers': None,
+                 'udids': None,
+                 'quota': None,
+                 'request_count': 0
+             },
+             'version': 1,
+             'package_download_url': f'https://zentral/api/osquery/enrollments/{enrollment.pk}/package/',
+             'powershell_script_download_url': 'https://zentral/api/osquery/'
+                                               f'enrollments/{enrollment.pk}/powershell_script/',
+             'script_download_url': f'https://zentral/api/osquery/enrollments/{enrollment.pk}/script/'},
+        )
 
     # get enrollment package
 
@@ -283,6 +421,57 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "text/x-shellscript")
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_osquery_setup.sh"')
+
+    # create enrollment
+
+    def test_create_enrollment(self):
+        config = self.force_configuration()
+        self.set_permissions("osquery.add_enrollment")
+        response = self.post_json_data(
+            reverse('osquery_api:enrollments'),
+            {'configuration': config.pk,
+             'secret': {"meta_business_unit": self.mbu.pk}}
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Enrollment.objects.filter(configuration__name=config.name).count(), 1)
+        enrollment = Enrollment.objects.get(configuration__name=config.name)
+        self.assertEqual(enrollment.secret.meta_business_unit, self.mbu)
+
+    # update enrollment
+
+    def test_update_enrollment(self):
+        enrollment = self.force_enrollment()
+        enrollment_secret = enrollment.secret
+        self.assertEqual(enrollment.osquery_release, "")
+        self.assertEqual(enrollment.secret.quota, None)
+        self.assertEqual(enrollment.secret.serial_numbers, None)
+        new_osquery_release = get_random_string(12)
+        secret_data = EnrollmentSecretSerializer(enrollment_secret).data
+        secret_data["id"] = 233333  # to check that there is no enrollment secret creation
+        secret_data["quota"] = 23
+        secret_data["request_count"] = 2331983  # to check that it cannot be updated
+        serial_numbers = [get_random_string(12) for i in range(13)]
+        secret_data["serial_numbers"] = serial_numbers
+        data = {"configuration": enrollment.configuration.pk,
+                "osquery_release": new_osquery_release,
+                "secret": secret_data}
+        self.set_permissions("osquery.change_enrollment")
+        response = self.put_json_data(reverse('osquery_api:enrollment', args=(enrollment.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.osquery_release, new_osquery_release)
+        self.assertEqual(enrollment.secret, enrollment_secret)
+        self.assertEqual(enrollment.secret.quota, 23)
+        self.assertEqual(enrollment.secret.request_count, 0)
+        self.assertEqual(enrollment.secret.serial_numbers, serial_numbers)
+
+    # delete enrollment
+
+    def test_delete_enrollment(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("osquery.delete_enrollment")
+        response = self.delete(reverse('osquery_api:enrollment', args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 204)
 
     # put pack
 
