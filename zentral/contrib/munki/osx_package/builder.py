@@ -1,4 +1,5 @@
 import os
+import plistlib
 from django.urls import reverse
 from zentral.contrib.munki.forms import EnrollmentForm
 from zentral.utils.osx_package import EnrollmentPackageBuilder
@@ -32,3 +33,9 @@ class MunkiZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
             ("%HAS_DISTRIBUTOR%", "YES" if self.build_kwargs.get("has_distributor") else "NO"),
         ])
         self.replace_in_file(postinstall_script, replacements)
+
+        # add enrollment info plist
+        with open(self.get_root_path("usr/local/zentral/munki/enrollment.plist"), "wb") as f:
+            plistlib.dump({"enrollment": {"id": self.enrollment.pk,
+                                          "version": self.enrollment.version},
+                           "fqdn": tls_hostname}, f)

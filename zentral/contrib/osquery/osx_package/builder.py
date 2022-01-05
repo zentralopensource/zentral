@@ -1,4 +1,5 @@
 import os
+import plistlib
 from zentral.utils.osx_package import EnrollmentPackageBuilder
 from zentral.contrib.osquery.forms import EnrollmentForm
 from zentral.contrib.osquery.releases import get_osquery_local_asset
@@ -35,7 +36,8 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
                              (("%ENROLL_SECRET_SECRET%", self.build_kwargs["enrollment_secret_secret"]),))
 
         # tls_hostname in postinstall
-        hostname_replacement = (("%TLS_HOSTNAME%", self.get_tls_hostname()),)
+        tls_hostname = self.get_tls_hostname()
+        hostname_replacement = (("%TLS_HOSTNAME%", tls_hostname),)
         self.replace_in_file(self.get_build_path("scripts", "postinstall"), hostname_replacement)
 
         # Extra flags
@@ -48,3 +50,9 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
 
         self.replace_in_file(self.get_root_path("usr/local/zentral/osquery/flagfile.txt"),
                              (("%EXTRA_FLAGS%", "\n".join(extra_flags)),))
+
+        # add enrollment info plist
+        with open(self.get_root_path("usr/local/zentral/osquery/enrollment.plist"), "wb") as f:
+            plistlib.dump({"enrollment": {"id": self.enrollment.pk,
+                                          "version": self.enrollment.version},
+                           "fqdn": tls_hostname}, f)

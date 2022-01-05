@@ -7,7 +7,6 @@ import shutil
 import stat
 from subprocess import check_call, check_output
 import tempfile
-from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
 from django.http import HttpResponse
 from zentral.conf import settings
@@ -223,11 +222,10 @@ class ProductArchiveBuilder(BasePackageBuilder):
 
 def get_tls_hostname(for_client_cert_auth=False):
     if for_client_cert_auth:
-        key = "tls_hostname_for_client_cert_auth"
+        key = "fqdn_mtls"
     else:
-        key = "tls_hostname"
-    tls_hostname_p = urlparse(settings['api'][key])
-    return tls_hostname_p.netloc
+        key = "fqdn"
+    return settings['api'][key]
 
 
 def distribute_tls_server_certs():
@@ -421,6 +419,8 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
 
 class EnrollmentPackageBuilder(PackageBuilder):
     def __init__(self, enrollment, version=None, **extra_build_kwargs):
+        self.enrollment = enrollment
+
         # build kwargs
         build_kwargs = {"version": "{}.0".format(version or enrollment.version),
                         "package_identifier_suffix": "pk-{}".format(enrollment.pk),
