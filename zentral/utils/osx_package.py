@@ -1,3 +1,4 @@
+from datetime import datetime
 from importlib import import_module
 from itertools import chain
 import logging
@@ -9,6 +10,8 @@ from subprocess import check_call, check_output
 import tempfile
 import xml.etree.ElementTree as ET
 from django.http import HttpResponse
+from django.utils import timezone
+from django.utils.http import http_date, quote_etag
 from zentral.conf import settings
 
 logger = logging.getLogger("zentral.utils.osx_package")
@@ -324,6 +327,12 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
     def get_extra_packages(self):
         return []
 
+    def get_etag(self):
+        return None
+
+    def get_last_modified_dt(self):
+        return None
+
     def build(self):
         # prepare package content
         self.extra_build_steps()
@@ -356,6 +365,14 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         response = HttpResponse(content, "application/octet-stream")
         response['Content-Length'] = len(content)
         response['Content-Disposition'] = 'attachment; filename="{}"'.format(package_name)
+        etag = self.get_etag()
+        if etag:
+            response['ETag'] = quote_etag(etag)
+        last_modified_dt = self.get_last_modified_dt()
+        if last_modified_dt and isinstance(last_modified_dt, datetime):
+            if not timezone.is_aware(last_modified_dt):
+                last_modified_dt = timezone.make_aware(last_modified_dt, timezone.utc)
+            response['Last-Modified'] = http_date(last_modified_dt.timestamp())
         return response
 
     # build tools
@@ -432,6 +449,13 @@ class EnrollmentPackageBuilder(PackageBuilder):
         business_unit = enrollment.secret.get_api_enrollment_business_unit()
 
         return super().__init__(business_unit, **build_kwargs)
+
+    def get_last_modified_dt(self):
+        return self.enrollment.updated_at
+
+    def get_etag(self):
+        e = self.enrollment
+        return f'W/"{e._meta.app_label}.{e._meta.model_name}-{e.pk}-{e.version}"'
 
 
 def get_package_builders():

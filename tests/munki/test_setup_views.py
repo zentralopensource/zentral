@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from django.utils.http import http_date
 from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.munki.models import Configuration, Enrollment
@@ -208,3 +209,5 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_munki_enroll.pkg"')
+        self.assertEqual(response['Last-Modified'], http_date(enrollment.updated_at.timestamp()))
+        self.assertEqual(response['ETag'], f'W/"munki.enrollment-{enrollment.pk}-1"')
