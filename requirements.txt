@@ -2,7 +2,7 @@
 
 asn1crypto                      # MDM, mTLS, SCEP
 boto3                           # conf, monolith, events (kinesis, sns/sqs)
-celery<4.5
+celery<5.3
 django-celery-results==1.2.1
 cryptography                    # MDM, monolith (cloudfront), munki
 defusedxml
