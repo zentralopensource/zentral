@@ -35,4 +35,4 @@ class EnrollmentPackage(APIView):
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=self.kwargs["pk"])
         builder = MunkiZentralEnrollPkgBuilder(enrollment)
-        return builder.build_and_make_response()
+        return builder.get_conditional_response(self.request)

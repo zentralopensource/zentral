@@ -9,9 +9,9 @@ import stat
 from subprocess import check_call, check_output
 import tempfile
 import xml.etree.ElementTree as ET
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseNotModified
 from django.utils import timezone
-from django.utils.http import http_date, quote_etag
+from django.utils.http import http_date, parse_etags, parse_http_date_safe, quote_etag
 from zentral.conf import settings
 
 logger = logging.getLogger("zentral.utils.osx_package")
@@ -359,12 +359,7 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
 
         return builder.package_name, builder.pkg_refs, builder._build_pkg()
 
-    def build_and_make_response(self):
-        package_name, _, content = self.build()
-        # TODO: memory
-        response = HttpResponse(content, "application/octet-stream")
-        response['Content-Length'] = len(content)
-        response['Content-Disposition'] = 'attachment; filename="{}"'.format(package_name)
+    def _add_conditional_request_headers(self, response):
         etag = self.get_etag()
         if etag:
             response['ETag'] = quote_etag(etag)
@@ -373,7 +368,39 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             if not timezone.is_aware(last_modified_dt):
                 last_modified_dt = timezone.make_aware(last_modified_dt, timezone.utc)
             response['Last-Modified'] = http_date(last_modified_dt.timestamp())
+
+    def build_and_make_response(self):
+        package_name, _, content = self.build()
+        # TODO: memory
+        response = HttpResponse(content, "application/octet-stream")
+        response['Content-Length'] = len(content)
+        response['Content-Disposition'] = 'attachment; filename="{}"'.format(package_name)
+        self._add_conditional_request_headers(response)
         return response
+
+    def make_not_modified_response(self):
+        response = HttpResponseNotModified()
+        self._add_conditional_request_headers(response)
+        return response
+
+    def get_conditional_response(self, request):
+        # etag
+        etag = self.get_etag()
+        if_none_match_etags = set(etag.strip("W/") for etag in parse_etags(request.META.get('HTTP_IF_NONE_MATCH', '')))
+        if etag and etag.strip("W/") in if_none_match_etags:
+            return self.make_not_modified_response()
+        # last modified
+        last_modified_dt = self.get_last_modified_dt()
+        if_modified_since = request.META.get('HTTP_IF_MODIFIED_SINCE')
+        if_modified_since = if_modified_since and parse_http_date_safe(if_modified_since)
+        if (
+            not if_none_match_etags and
+            isinstance(last_modified_dt, datetime) and
+            if_modified_since and
+            int(last_modified_dt.timestamp()) <= if_modified_since
+        ):
+            return self.make_not_modified_response()
+        return self.build_and_make_response()
 
     # build tools
 

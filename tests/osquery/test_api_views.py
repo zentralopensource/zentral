@@ -10,6 +10,7 @@ from django.utils.http import http_date
 from django.test import TestCase
 from rest_framework.authtoken.models import Token
 from accounts.models import User
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query
@@ -231,6 +232,7 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("osquery.view_enrollment")
         response = self.get(reverse('osquery_api:enrollments'))
         self.assertEqual(response.status_code, 200)
+        fqdn = settings["api"]["fqdn"]
         self.assertIn(
             {'id': enrollment.pk,
              'configuration': enrollment.configuration.pk,
@@ -247,10 +249,10 @@ class APIViewsTestCase(TestCase):
                  'request_count': 0
              },
              'version': 1,
-             'package_download_url': f'https://zentral/api/osquery/enrollments/{enrollment.pk}/package/',
-             'powershell_script_download_url': 'https://zentral/api/osquery/'
+             'package_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/package/',
+             'powershell_script_download_url': f'https://{fqdn}/api/osquery/'
                                                f'enrollments/{enrollment.pk}/powershell_script/',
-             'script_download_url': f'https://zentral/api/osquery/enrollments/{enrollment.pk}/script/'},
+             'script_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/script/'},
             response.json()
         )
 
@@ -274,6 +276,7 @@ class APIViewsTestCase(TestCase):
         enrollment = self.force_enrollment()
         response = self.get(reverse("osquery_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
+        fqdn = settings["api"]["fqdn"]
         self.assertEqual(
             response.json(),
             {'id': enrollment.pk,
@@ -291,10 +294,10 @@ class APIViewsTestCase(TestCase):
                  'request_count': 0
              },
              'version': 1,
-             'package_download_url': f'https://zentral/api/osquery/enrollments/{enrollment.pk}/package/',
-             'powershell_script_download_url': 'https://zentral/api/osquery/'
+             'package_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/package/',
+             'powershell_script_download_url': f'https://{fqdn}/api/osquery/'
                                                f'enrollments/{enrollment.pk}/powershell_script/',
-             'script_download_url': f'https://zentral/api/osquery/enrollments/{enrollment.pk}/script/'},
+             'script_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/script/'},
         )
 
     # get enrollment package
@@ -340,6 +343,62 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_osquery_enroll.pkg"')
         self.assertEqual(response['Last-Modified'], http_date(enrollment.updated_at.timestamp()))
         self.assertEqual(response['ETag'], f'W/"osquery.enrollment-{enrollment.pk}-1"')
+
+    def test_get_enrollment_package_user_not_modified_etag_header(self):
+        enrollment = self.force_enrollment()
+        etag = f'W/"osquery.enrollment-{enrollment.pk}-1"'
+        last_modified = http_date(enrollment.updated_at.timestamp())
+        req_headers = {"HTTP_IF_NONE_MATCH": etag}
+        self.login("osquery.view_enrollment")
+        response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
+        self.assertEqual(response.status_code, 304)
+        self.assertEqual(response['Last-Modified'], last_modified)
+        self.assertEqual(response['ETag'], etag)
+
+    def test_get_enrollment_package_user_not_modified_if_modified_since_header(self):
+        enrollment = self.force_enrollment()
+        etag = f'W/"osquery.enrollment-{enrollment.pk}-1"'
+        last_modified = http_date(enrollment.updated_at.timestamp())
+        req_headers = {"HTTP_IF_MODIFIED_SINCE": http_date(enrollment.updated_at.timestamp())}
+        self.login("osquery.view_enrollment")
+        response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
+        self.assertEqual(response.status_code, 304)
+        self.assertEqual(response['Last-Modified'], last_modified)
+        self.assertEqual(response['ETag'], etag)
+
+    def test_get_enrollment_package_user_not_modified_both_headers(self):
+        enrollment = self.force_enrollment()
+        etag = f'W/"osquery.enrollment-{enrollment.pk}-1"'
+        last_modified = http_date(enrollment.updated_at.timestamp())
+        req_headers = {"HTTP_IF_NONE_MATCH": etag,
+                       "HTTP_IF_MODIFIED_SINCE": http_date(enrollment.updated_at.timestamp())}
+        self.login("osquery.view_enrollment")
+        response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
+        self.assertEqual(response.status_code, 304)
+        self.assertEqual(response['Last-Modified'], last_modified)
+        self.assertEqual(response['ETag'], etag)
+
+    def test_get_enrollment_package_user_etag_mismatch(self):
+        enrollment = self.force_enrollment()
+        etag = f'W/"osquery.enrollment-{enrollment.pk}-1"'
+        last_modified = http_date(enrollment.updated_at.timestamp())
+        req_headers = {"HTTP_IF_NONE_MATCH": "YOLO"}
+        self.login("osquery.view_enrollment")
+        response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Last-Modified'], last_modified)
+        self.assertEqual(response['ETag'], etag)
+
+    def test_get_enrollment_package_user_if_modified_since_too_old(self):
+        enrollment = self.force_enrollment()
+        etag = f'W/"osquery.enrollment-{enrollment.pk}-1"'
+        last_modified = http_date(enrollment.updated_at.timestamp())
+        req_headers = {"HTTP_IF_MODIFIED_SINCE": http_date(datetime(2001, 1, 1).timestamp())}
+        self.login("osquery.view_enrollment")
+        response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Last-Modified'], last_modified)
+        self.assertEqual(response['ETag'], etag)
 
     # get enrollment powershell script
 

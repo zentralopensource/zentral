@@ -80,13 +80,13 @@ class EnrollmentArtifact(APIView):
     base enrollment artifact class. To be subclassed.
     """
     permission_required = "osquery.view_enrollment"
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
     builder_class = None
 
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=self.kwargs["pk"])
-        builder = self.builder_class(enrollment)
-        return builder.build_and_make_response()
+        self.builder = self.builder_class(enrollment)
+        return self.do_get()
 
 
 class EnrollmentPackage(EnrollmentArtifact):
@@ -95,6 +95,9 @@ class EnrollmentPackage(EnrollmentArtifact):
     """
     builder_class = OsqueryZentralEnrollPkgBuilder
 
+    def do_get(self):
+        return self.builder.get_conditional_response(self.request)
+
 
 class EnrollmentPowershellScript(EnrollmentArtifact):
     """
@@ -102,12 +105,18 @@ class EnrollmentPowershellScript(EnrollmentArtifact):
     """
     builder_class = OsqueryZentralEnrollPowershellScriptBuilder
 
+    def do_get(self):
+        return self.builder.build_and_make_response()
+
 
 class EnrollmentScript(EnrollmentArtifact):
     """
     Download enrollment bash script
     """
     builder_class = OsqueryZentralEnrollScriptBuilder
+
+    def do_get(self):
+        return self.builder.build_and_make_response()
 
 
 # Standard Osquery packs

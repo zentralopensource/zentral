@@ -1,3 +1,4 @@
+from datetime import datetime
 from functools import reduce
 import operator
 from django.contrib.auth.models import Group, Permission
@@ -8,6 +9,7 @@ from django.utils.http import http_date
 from django.test import TestCase
 from rest_framework.authtoken.models import Token
 from accounts.models import User
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.munki.models import Configuration, Enrollment
 
@@ -76,6 +78,7 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("munki.view_enrollment")
         response = self.get(reverse('munki_api:enrollments'))
         self.assertEqual(response.status_code, 200)
+        fqdn = settings["api"]["fqdn"]
         self.assertIn(
             {'id': enrollment.pk,
              'configuration': enrollment.configuration.pk,
@@ -91,7 +94,7 @@ class APIViewsTestCase(TestCase):
                  'request_count': 0
              },
              'version': 1,
-             'package_download_url': f'https://zentral/api/munki/enrollments/{enrollment.pk}/package/'},
+             'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/'},
             response.json()
         )
 
@@ -117,6 +120,7 @@ class APIViewsTestCase(TestCase):
         enrollment = self.force_enrollment()
         response = self.get(reverse("munki_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
+        fqdn = settings["api"]["fqdn"]
         self.assertEqual(
             response.json(),
             {'id': enrollment.pk,
@@ -133,7 +137,7 @@ class APIViewsTestCase(TestCase):
                  'request_count': 0
              },
              'version': 1,
-             'package_download_url': f'https://zentral/api/munki/enrollments/{enrollment.pk}/package/'},
+             'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/'},
         )
 
     # get enrollment package
@@ -179,3 +183,59 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_munki_enroll.pkg"')
         self.assertEqual(response['Last-Modified'], http_date(enrollment.updated_at.timestamp()))
         self.assertEqual(response['ETag'], f'W/"munki.enrollment-{enrollment.pk}-1"')
+
+    def test_get_enrollment_package_user_not_modified_etag_header(self):
+        enrollment = self.force_enrollment()
+        etag = f'W/"munki.enrollment-{enrollment.pk}-1"'
+        last_modified = http_date(enrollment.updated_at.timestamp())
+        req_headers = {"HTTP_IF_NONE_MATCH": etag}
+        self.login("munki.view_enrollment")
+        response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
+        self.assertEqual(response.status_code, 304)
+        self.assertEqual(response['Last-Modified'], last_modified)
+        self.assertEqual(response['ETag'], etag)
+
+    def test_get_enrollment_package_user_not_modified_if_modified_since_header(self):
+        enrollment = self.force_enrollment()
+        etag = f'W/"munki.enrollment-{enrollment.pk}-1"'
+        last_modified = http_date(enrollment.updated_at.timestamp())
+        req_headers = {"HTTP_IF_MODIFIED_SINCE": http_date(enrollment.updated_at.timestamp())}
+        self.login("munki.view_enrollment")
+        response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
+        self.assertEqual(response.status_code, 304)
+        self.assertEqual(response['Last-Modified'], last_modified)
+        self.assertEqual(response['ETag'], etag)
+
+    def test_get_enrollment_package_user_not_modified_both_headers(self):
+        enrollment = self.force_enrollment()
+        etag = f'W/"munki.enrollment-{enrollment.pk}-1"'
+        last_modified = http_date(enrollment.updated_at.timestamp())
+        req_headers = {"HTTP_IF_NONE_MATCH": etag,
+                       "HTTP_IF_MODIFIED_SINCE": http_date(enrollment.updated_at.timestamp())}
+        self.login("munki.view_enrollment")
+        response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
+        self.assertEqual(response.status_code, 304)
+        self.assertEqual(response['Last-Modified'], last_modified)
+        self.assertEqual(response['ETag'], etag)
+
+    def test_get_enrollment_package_user_etag_mismatch(self):
+        enrollment = self.force_enrollment()
+        etag = f'W/"munki.enrollment-{enrollment.pk}-1"'
+        last_modified = http_date(enrollment.updated_at.timestamp())
+        req_headers = {"HTTP_IF_NONE_MATCH": "YOLO"}
+        self.login("munki.view_enrollment")
+        response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Last-Modified'], last_modified)
+        self.assertEqual(response['ETag'], etag)
+
+    def test_get_enrollment_package_user_if_modified_since_too_old(self):
+        enrollment = self.force_enrollment()
+        etag = f'W/"munki.enrollment-{enrollment.pk}-1"'
+        last_modified = http_date(enrollment.updated_at.timestamp())
+        req_headers = {"HTTP_IF_MODIFIED_SINCE": http_date(datetime(2001, 1, 1).timestamp())}
+        self.login("munki.view_enrollment")
+        response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Last-Modified'], last_modified)
+        self.assertEqual(response['ETag'], etag)
