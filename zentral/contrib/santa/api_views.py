@@ -5,7 +5,6 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
@@ -20,7 +19,7 @@ from .tasks import export_targets
 class IngestFileInfo(APIView):
     parser_classes = [JSONParser]
     permission_required = "inventory.add_file"
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         data = request.data
@@ -71,7 +70,7 @@ class RuleSetUpdate(APIView):
     parser_classes = [JSONParser, YAMLParser]
     permission_required = ("santa.add_ruleset", "santa.change_ruleset",
                            "santa.add_rule", "santa.change_rule", "santa.delete_rule")
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         dry_run_arg = request.GET.get("dryRun")
@@ -248,7 +247,7 @@ class RuleSetUpdate(APIView):
 
 class TargetsExport(APIView):
     permission_required = "santa.view_target"
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         query = request.GET.get("q")

@@ -1,7 +1,6 @@
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer
 from rest_framework.views import APIView
@@ -19,7 +18,7 @@ class SyncRepository(APIView):
         "monolith.view_pkginfo", "monolith.add_pkginfo", "monolith.change_pkginfo",
         "monolith.change_manifest"
     )
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         post_monolith_sync_catalogs_request(request)
@@ -36,7 +35,7 @@ class CacheServerSerializer(ModelSerializer):
 class UpdateCacheServer(APIView):
     parser_classes = [JSONParser]
     permission_required = ("monolith.change_manifest", "monolith.add_cacheserver", "monolith.change_cacheserver")
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         manifest = get_object_or_404(Manifest, pk=kwargs["pk"])

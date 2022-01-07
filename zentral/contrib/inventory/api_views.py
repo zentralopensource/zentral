@@ -4,7 +4,6 @@ from django.utils import timezone
 from django_filters import rest_framework as filters
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
@@ -25,7 +24,7 @@ from .utils import MSQuery
 class UpdateMachineTags(APIView):
     permission_required = ("inventory.add_tag", "inventory.add_taxonomy",
                            "inventory.add_machinetag", "inventory.delete_machinetag")
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def _prepare_taxonomies_and_tags(self):
         self.tags_to_set = []
@@ -103,7 +102,7 @@ class UpdateMachineTags(APIView):
 
 class MachinesExport(APIView):
     permission_required = "inventory.view_machinesnapshot"
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         export_format = request.GET.get("export_format", "xlsx")
@@ -119,7 +118,7 @@ class MachinesExport(APIView):
 
 class MacOSAppsExport(APIView):
     permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         export_format = request.data.pop("export_format", "xlsx")
@@ -140,7 +139,7 @@ class MacOSAppsExport(APIView):
 
 class MachineMacOSAppInstancesExport(APIView):
     permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
@@ -152,7 +151,7 @@ class MachineMacOSAppInstancesExport(APIView):
 
 class MachineDebPackagesExport(APIView):
     permission_required = "inventory.view_debpackage"
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
@@ -164,7 +163,7 @@ class MachineDebPackagesExport(APIView):
 
 class MachineProgramInstancesExport(APIView):
     permission_required = ("inventory.view_program", "inventory.view_programinstance")
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
@@ -176,7 +175,7 @@ class MachineProgramInstancesExport(APIView):
 
 class MachineSnapshotsExport(APIView):
     permission_required = ("inventory.view_machinesnapshot",)
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')

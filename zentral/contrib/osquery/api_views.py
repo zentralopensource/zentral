@@ -10,7 +10,6 @@ from django.urls import reverse
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import ParseError, ValidationError
 from rest_framework.parsers import BaseParser, JSONParser
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
@@ -352,7 +351,7 @@ class PackView(APIView):
 
 class ExportDistributedQueryResults(APIView):
     permission_required = ("osquery.view_distributedqueryresult",)
-    permission_classes = [IsAuthenticated, DjangoPermissionRequired]
+    permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         export_format = request.GET.get("export_format", "csv")
