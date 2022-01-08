@@ -1404,18 +1404,34 @@ class MRCatalogView(MRNameView):
 
             # apply the shards
             filtered_catalog_data = []
+            tag_names = [t.name for t in self.tags]
             for pkginfo in catalog_data:
-                try:
-                    shard = int(pkginfo.get("zentral_monolith_shard", 100))
-                except (TypeError, ValueError):
-                    logger.error("Invalid shard value")
-                    shard = 100
-                if shard < 1 or shard > 100:
-                    logger.error("Shard value out of bounds")
-                    shard = 100
+                shard = 100
+                modulo = 100
+                zentral_monolith = pkginfo.get("zentral_monolith")
+                if zentral_monolith:
+                    excluded_tag_names = zentral_monolith.get("excluded_tags")
+                    if excluded_tag_names and any(etn in tag_names for etn in excluded_tag_names):
+                        # one excluded tag match, skip
+                        continue
+                    # not excluded, evaluate the shard
+                    shards = zentral_monolith.get("shards")
+                    if shards:
+                        modulo = shards.get("modulo", 100)
+                        shard = default = shards.get("default", modulo)
+                        tag_shards = shards.get("tags")
+                        if tag_shards:
+                            try:
+                                shard = max(tag_shards[tn] for tn in tag_names if tn in tag_shards)
+                            except ValueError:
+                                # no tag match
+                                shard = default
                 if (
-                    shard == 100 or
-                    compute_shard(pkginfo["name"] + pkginfo["version"] + self.machine_serial_number) < shard
+                    shard >= modulo or
+                    compute_shard(
+                        pkginfo["name"] + pkginfo["version"] + self.machine_serial_number,
+                        modulo=modulo
+                    ) < shard
                 ):
                     filtered_catalog_data.append(pkginfo)
 

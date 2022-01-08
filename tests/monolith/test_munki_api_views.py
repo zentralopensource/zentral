@@ -4,7 +4,7 @@ import uuid
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.models import (Catalog, Enrollment,
                                              Manifest, ManifestCatalog, ManifestSubManifest,
                                              PkgInfo, PkgInfoName,
@@ -77,16 +77,26 @@ class MonolithAPIViewsTestCase(TestCase):
 
     # utility methods
 
-    def _make_munki_request(self, url, serial_number=None, authenticated=True):
+    def _make_munki_request(self, url, serial_number=None, authenticated=True, tags=None):
+        if not serial_number:
+            serial_number = get_random_string()
+        if tags:
+            MachineTag.objects.bulk_create([
+                MachineTag(serial_number=serial_number, tag=tag)
+                for tag, _ in (
+                    Tag.objects.get_or_create(name=tag_name)
+                    for tag_name in tags
+                )
+            ])
         kwargs = {
-            "HTTP_X_ZENTRAL_SERIAL_NUMBER": serial_number or get_random_string(),
+            "HTTP_X_ZENTRAL_SERIAL_NUMBER": serial_number,
             "HTTP_X_ZENTRAL_UUID": str(uuid.uuid4()),
         }
         if authenticated:
             kwargs["HTTP_AUTHORIZATION"] = f"Bearer {self.enrollment.secret.secret}"
         return self.client.get(url, **kwargs)
 
-    def _force_pkg_info(self, name=None, version=None, shard=None, catalog=None, sub_manifest=None):
+    def _force_pkg_info(self, name=None, version=None, catalog=None, sub_manifest=None, zentral_monolith=None):
         if catalog is None:
             catalog = Catalog.objects.create(name=get_random_string())
         ManifestCatalog.objects.create(manifest=self.manifest, catalog=catalog)
@@ -99,8 +109,8 @@ class MonolithAPIViewsTestCase(TestCase):
         data["version"] = version
         data["installs"][0]["CFBundleShortVersionString"] = version
         data["receipts"][0]["version"] = version
-        if shard:
-            data["zentral_monolith_shard"] = shard
+        if zentral_monolith:
+            data["zentral_monolith"] = zentral_monolith
         pkg_info_name, _ = PkgInfoName.objects.get_or_create(name=name)
         pkg_info = PkgInfo.objects.create(
             name=pkg_info_name,
@@ -135,7 +145,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(cat_pkg_info["name"], pkg_info.name.name)
         self.assertEqual(cat_pkg_info["version"], pkg_info.version)
 
-    def test_get_catalog_two_pkg_info_no_shards(self):
+    def test_get_catalog_two_pkgsinfo_no_shards(self):
         pkg_info1, catalog, sub_manifest = self._force_pkg_info()
         pkg_info2, _, _ = self._force_pkg_info(
             name=pkg_info1.name.name,
@@ -144,61 +154,147 @@ class MonolithAPIViewsTestCase(TestCase):
             sub_manifest=sub_manifest
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),))
+            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            tags=[get_random_string() for _ in range(2)]
         )
         self.assertEqual(response.status_code, 200)
         catalog = plistlib.loads(response.content)
         self.assertEqual(len(catalog), 2)
 
-    def test_get_catalog_two_pkg_info_one_shard_filtered_out(self):
+    def test_get_catalog_two_pkgsinfo_default_shard_filtered_out(self):
         pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
         pkg_info2, _, _ = self._force_pkg_info(
             name=pkg_info1.name.name,
             version="1.2.4",
             catalog=catalog,
             sub_manifest=sub_manifest,
-            shard=50,  # with NAME + VERSION + SN → 59, no included
+            zentral_monolith={
+                "excluded_tags": ["EXCL1", "EXCL2"],
+                "shards": {"default": 50,  # with NAME + VERSION + SN → 59, no included
+                           "tags": {"UN": 100, "DEUX": 100}}  # ignored
+            }
         )
         response = self._make_munki_request(
             reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
-            serial_number="12345678"
+            serial_number="12345678",
+            tags=[get_random_string() for _ in range(2)]
         )
         self.assertEqual(response.status_code, 200)
         catalog = plistlib.loads(response.content)
         self.assertEqual(len(catalog), 1)
-        self.assertTrue(all(p.get("zentral_monolith_shard") is None for p in catalog))
+        self.assertTrue(all(p.get("zentral_monolith") is None for p in catalog))
         self.assertEqual(catalog[0]["version"], "1.2.3")
 
-    def test_get_catalog_two_pkg_info_one_shard_included(self):
+    def test_get_catalog_two_pkgsinfo_default_shard_included(self):
         pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
         pkg_info2, _, _ = self._force_pkg_info(
             name=pkg_info1.name.name,
             version="1.2.4",
             catalog=catalog,
             sub_manifest=sub_manifest,
-            shard=60,  # with NAME + VERSION + SN → 59, included
+            zentral_monolith={
+                "excluded_tags": ["EXCL1", "EXCL2"],
+                "shards": {"default": 60,  # with NAME + VERSION + SN → 59, included
+                           "tags": {"UN": 0, "DEUX": 0}}  # ignored
+            }
         )
         response = self._make_munki_request(
             reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
-            serial_number="12345678"
+            serial_number="12345678",
+            tags=[get_random_string() for _ in range(2)]
         )
         self.assertEqual(response.status_code, 200)
         catalog = plistlib.loads(response.content)
         self.assertEqual(len(catalog), 2)
 
-    def test_get_catalog_two_pkg_info_one_out_of_bounds_shard_included(self):
+    def test_get_catalog_two_pkgsinfo_default_shard_out_of_bounds_excluded(self):
         pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
         pkg_info2, _, _ = self._force_pkg_info(
             name=pkg_info1.name.name,
             version="1.2.4",
             catalog=catalog,
             sub_manifest=sub_manifest,
-            shard=-17,  # out of bounds, included
+            zentral_monolith={
+                "excluded_tags": ["EXCL1", "EXCL2"],
+                "shards": {"default": -17}  # out of bounds, excluded
+            }
         )
         response = self._make_munki_request(
             reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
-            serial_number="12345678"
+            tags=[get_random_string() for _ in range(2)]
+        )
+        self.assertEqual(response.status_code, 200)
+        catalog = plistlib.loads(response.content)
+        self.assertEqual(len(catalog), 1)
+        self.assertTrue(all(p.get("zentral_monolith") is None for p in catalog))
+        self.assertEqual(catalog[0]["version"], "1.2.3")
+
+    def test_get_catalog_two_pkgsinfo_tag_shard_included(self):
+        pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
+        pkg_info2, _, _ = self._force_pkg_info(
+            name=pkg_info1.name.name,
+            version="1.2.4",
+            catalog=catalog,
+            sub_manifest=sub_manifest,
+            zentral_monolith={
+                "excluded_tags": ["EXCL1", "EXCL2"],
+                "shards": {"default": 0,  # will be ignored, because of the tag priority
+                           "tags": {"INCL1": 60,  # with NAME + VERSION + SN → 59, included
+                                    "INCL2": 0}}  # ignored, because the highest shard value will be used
+            }
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            serial_number="12345678",
+            tags=["INCL1", "INCL2"]
         )
         self.assertEqual(response.status_code, 200)
         catalog = plistlib.loads(response.content)
         self.assertEqual(len(catalog), 2)
+
+    def test_get_catalog_two_pkgsinfo_tag_shard_excluded(self):
+        pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
+        pkg_info2, _, _ = self._force_pkg_info(
+            name=pkg_info1.name.name,
+            version="1.2.4",
+            catalog=catalog,
+            sub_manifest=sub_manifest,
+            zentral_monolith={
+                "excluded_tags": ["EXCL1", "EXCL2"],
+                "shards": {"default": 100,  # will be ignored, because of the tag priority
+                           "tags": {"INCL1": 50}}  # with NAME + VERSION + SN → 59, excluded
+            }
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            serial_number="12345678",
+            tags=["INCL1", "INCL2"]
+        )
+        self.assertEqual(response.status_code, 200)
+        catalog = plistlib.loads(response.content)
+        self.assertEqual(len(catalog), 1)
+        self.assertTrue(all(p.get("zentral_monolith") is None for p in catalog))
+        self.assertEqual(catalog[0]["version"], "1.2.3")
+
+    def test_get_catalog_two_pkgsinfo_excluded_tag(self):
+        pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
+        pkg_info2, _, _ = self._force_pkg_info(
+            name=pkg_info1.name.name,
+            version="1.2.4",
+            catalog=catalog,
+            sub_manifest=sub_manifest,
+            zentral_monolith={
+                "excluded_tags": ["EXCL1", "EXCL2"],
+                "shards": {"default": 16, "modulo": 16, "tags": {"INCL1": 16, "INCL2": 16}}  # ignored
+            }
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            serial_number="12345678",
+            tags=["EXCL1", "INCL1", "INCL2"]
+        )
+        self.assertEqual(response.status_code, 200)
+        catalog = plistlib.loads(response.content)
+        self.assertEqual(len(catalog), 1)
+        self.assertTrue(all(p.get("zentral_monolith") is None for p in catalog))
+        self.assertEqual(catalog[0]["version"], "1.2.3")
