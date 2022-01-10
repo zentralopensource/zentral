@@ -1,14 +1,14 @@
 aiohttp==3.7.3
-amqp==2.6.1
+amqp==5.0.9
 asn1crypto==1.4.0
 async-timeout==3.0.1
 attrs==20.3.0
 backcall==0.2.0
-billiard==3.6.3.0
+billiard==3.6.4.0
 boto3==1.18.41
 botocore==1.21.41
 cachetools==4.2.1
-celery==4.4.7
+celery==5.2.3
 certifi==2020.12.5
 cffi==1.14.5
 chardet==3.0.4
@@ -19,7 +19,7 @@ decorator==4.4.2
 defusedxml==0.7.1
 Django==2.2.24
 django-bootstrap-form==3.4
-django-celery-results==1.2.1
+django-celery-results==2.2.0
 django-filter==2.4.0
 django-redis==5.0.0
 django-storages==1.11.1
@@ -55,7 +55,7 @@ jedi==0.18.0
 Jinja2==3.0.1
 jmespath==0.10.0
 josepy==1.9.0
-kombu==4.6.11
+kombu==5.2.3
 libcst==0.3.17
 MarkupSafe==2.0.1
 matplotlib-inline==0.1.3
@@ -76,7 +76,7 @@ ptyprocess==0.7.0
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
 pycparser==2.20
-pycurl==7.43.0.2
+pycurl==7.44.1
 Pygments==2.10.0
 pylibmc==1.6.1
 pyOpenSSL==20.0.1
@@ -86,7 +86,7 @@ pysaml2==7.0.1
 python-dateutil==2.8.2
 python-ldap==3.3.1
 python-u2flib-server==5.0.1
-pytz==2021.1
+pytz==2021.3
 PyYAML==5.4.1
 redis==3.5.3
 requests==2.26.0
@@ -102,8 +102,8 @@ tqdm==4.62.2
 traitlets==5.0.5
 typing-extensions==3.7.4.3
 typing-inspect==0.6.0
-urllib3==1.26.3
-vine==1.3.0
+urllib3==1.26.8
+vine==5.0.0
 wcwidth==0.2.5
 XlsxWriter==3.0.1
 xmlschema==1.5.1

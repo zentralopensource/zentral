@@ -2,8 +2,8 @@
 
 asn1crypto                      # MDM, mTLS, SCEP
 boto3                           # conf, monolith, events (kinesis, sns/sqs)
-celery<4.5
-django-celery-results==1.2.1
+celery<6
+django-celery-results==2.2.0
 cryptography                    # MDM, monolith (cloudfront), munki
 defusedxml
 django-bootstrap-form
@@ -18,7 +18,7 @@ httpx[http2]                    # MDM (apns)
 ipython
 jmespath                        # inventory compliance checks
 jinja2                          # events templates
-kombu<5                         # events queues
+kombu<6                         # events queues
 pip
 prometheus_client               # publish prometheus metrics
 psycopg2
