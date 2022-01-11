@@ -33,6 +33,8 @@ class EventStore(BaseEventStore):
             slugify(src)
             for src in config_d.get("computer_name_as_host_sources", [])
         ]
+        # Extra custom field to copy the host metadata field to.
+        self.custom_host_field = config_d.get("custom_host_field")
         self.serial_number_field = config_d.get("serial_number_field", "machine_serial_number")
         if self.search_app_url:
             self.machine_events_url = True
@@ -105,6 +107,8 @@ class EventStore(BaseEventStore):
             observer = payload_event.get("observer", {}).get("hostname")
             if observer:
                 host = observer
+        if self.custom_host_field:
+            payload_event[self.custom_host_field] = host
         payload = {
             "host": host,
             "sourcetype": event_type,
@@ -129,6 +133,9 @@ class EventStore(BaseEventStore):
         # normalize serial number
         if self.serial_number_field in metadata:
             metadata["machine_serial_number"] = metadata.pop(self.serial_number_field)
+        # drop custom host field
+        if self.custom_host_field:
+            metadata.pop(self.custom_host_field, None)
         # add created at
         metadata["created_at"] = result["_time"]
         # event type

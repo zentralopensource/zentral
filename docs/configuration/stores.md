@@ -113,6 +113,12 @@ A list of inventory source names to use to find a hostname to set as the `host` 
 
 The name of the Splunk event field to use for the machine serial number. Default: `machine_serial_number`.
 
+### `custom_host_field`
+
+**OPTIONAL**
+
+If set, the event metadata host field value will be copied to this event field.
+
 ### `search_app_url`
 
 **OPTIONAL**

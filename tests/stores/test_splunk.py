@@ -58,3 +58,24 @@ class TestSplunkStore(SimpleTestCase):
         self.assertEqual(event.metadata.index, 42)
         self.assertEqual(event.metadata.namespace, "zentral")
         self.assertEqual(event.payload["user"], {"username": "YONpsAgaKguu"})
+
+    def test_custom_host_field_serialization(self):
+        event = self.build_login_event()
+        self.store.custom_host_field = "computername"
+        serialized_event = self.store._serialize_event(event)
+        self.assertEqual(serialized_event["event"]["computername"], "Zentral")
+        self.store.custom_host_field = None
+
+    def test_custom_host_field_deserialization(self):
+        serialized_event = {
+            "_raw": '{"id": "f83b54ef-d3de-42c9-ae61-76669dcac0a9:17", '
+                    '"namespace": "zentral", "tags": ["zentral"], '
+                    '"computername": "Zentral", '
+                    '"zentral": {"user": {"username": "YONpsAgaKguu"}}}',
+            "_time": "2010-07-18T19:19:30.000+00:00",
+            "sourcetype": "zentral_login",
+        }
+        self.store.custom_host_field = "computername"
+        event = self.store._deserialize_event(serialized_event)
+        self.assertEqual(event.metadata.uuid, uuid.UUID("f83b54ef-d3de-42c9-ae61-76669dcac0a9"))
+        self.store.custom_host_field = None
