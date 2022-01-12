@@ -19,20 +19,21 @@ from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
-from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine, Tag
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.core.events.utils import encode_args
 from zentral.core.stores import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.storage import file_storage_has_signed_urls
-from zentral.utils.text import shard as compute_shard
+from zentral.utils.text import get_version_sort_key, shard as compute_shard
 from .conf import monolith_conf
 from .events import (post_monolith_enrollment_event,
                      post_monolith_munki_request, post_monolith_repository_updates)
 from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
+                    ManifestMachineSearchForm,
                     EnrollmentForm,
                     ManifestForm, ManifestPrinterForm, ManifestSearchForm,
                     PkgInfoSearchForm,
@@ -46,7 +47,9 @@ from .models import (MunkiNameError, parse_munki_name,
                      Printer, PrinterPPD,
                      Condition,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
-from .utils import build_configuration_plist, build_configuration_profile
+from .utils import (build_configuration_plist, build_configuration_profile,
+                    filter_catalog_data, filter_sub_manifest_data,
+                    test_monolith_object_inclusion, test_pkginfo_catalog_inclusion)
 
 
 logger = logging.getLogger('zentral.contrib.monolith.views')
@@ -75,8 +78,11 @@ class InventoryMachineSubview:
         em = self.enrolled_machine
         ctx = {"enrolled_machine": em,
                "err_message": self.err_message}
-        if em and self.user.has_perm("monolith.view_manifest"):
-            ctx["manifest"] = em.enrollment.manifest
+        if em and self.user.has_perms(ManifestMachineInfoView.permission_required):
+            manifest = em.enrollment.manifest
+            ctx["manifest"] = manifest
+            ctx["url"] = (reverse("monolith:manifest_machine_info", args=(manifest.pk,))
+                          + "?serial_number=" + em.serial_number)
         return render_to_string(self.template_name, ctx)
 
 
@@ -576,7 +582,7 @@ class SubManifestAddPkgInfoView(PermissionRequiredMixin, FormView):
 class UpdateSubManifestPkgInfoView(PermissionRequiredMixin, UpdateView):
     permission_required = "monolith.change_submanifestpkginfo"
     model = SubManifestPkgInfo
-    fields = ("key", "condition", "featured_item")
+    form_class = SubManifestPkgInfoForm
     template_name = "monolith/edit_sub_manifest_pkg_info.html"
 
     def get_context_data(self, **kwargs):
@@ -910,6 +916,158 @@ class ManifestEnrollmentConfigurationProfileView(PermissionRequiredMixin, View):
         response = HttpResponse(content, "application/x-plist")
         response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
         return response
+
+
+# manifest machine info
+
+
+class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
+    permission_required = ("monolith.view_manifest", "monolith.view_pkginfo")
+    template_name = "monolith/machine_info.html"
+
+    def get_context_data(self, **kwargs):
+        manifest = get_object_or_404(Manifest, pk=kwargs["pk"])
+        ctx = super().get_context_data(**kwargs)
+        ctx["manifest"] = manifest
+        form = ManifestMachineSearchForm(self.request.GET, manifest=manifest)
+        form.is_valid()
+        ctx["form"] = form
+        packages = {}
+        enrolled_machine = form.get_enrolled_machine()
+        if enrolled_machine:
+            ctx["enrolled_machine"] = enrolled_machine
+            machine = MetaMachine(enrolled_machine.serial_number)
+            ctx["machine"] = machine
+            tag_names = [t.name for t in machine.tags]
+            seen_tag_names = set([])
+
+            # managed installs
+            managed_installs = {}
+            try:
+                from zentral.contrib.munki.models import ManagedInstall
+            except Exception:
+                pass
+            else:
+                for managed_install in ManagedInstall.objects.filter(machine_serial_number=machine.serial_number):
+                    name = managed_install.name
+                    if managed_install.installed_version:
+                        key = (name, managed_install.installed_version)
+                        if managed_install.reinstall:
+                            managed_installs[key] = "reinstalled"
+                        else:
+                            managed_installs[key] = "installed"
+                    if managed_install.failed_version:
+                        managed_installs[(name, managed_install.failed_version)] = "failed"
+
+            # catalog
+            pkgsinfo = []
+            for pkginfo in manifest.build_catalog(machine.tags):
+                shard_repr = default_shard_repr = excluded_tag_names = tag_shards = None
+                options = pkginfo.get("zentral_monolith")
+                if options:
+                    excluded_tag_names = options.get("excluded_tags")
+                    if excluded_tag_names:
+                        seen_tag_names.update(excluded_tag_names)
+                    shards = options.get("shards")
+                    if shards:
+                        modulo = shards.get("modulo", 100)
+                        default_shard_repr = "{}/{}".format(shards.get("default", 100), modulo)
+                        tag_shards = shards.get("tags")
+                        if tag_shards:
+                            seen_tag_names.update(tag_shards.keys())
+                        shard_repr = str(compute_shard(pkginfo["name"] + pkginfo["version"] + machine.serial_number,
+                                                       modulo=modulo))
+                pkgsinfo.append(
+                    (pkginfo,
+                     managed_installs.get((pkginfo["name"], pkginfo["version"])),
+                     excluded_tag_names,
+                     shard_repr,
+                     default_shard_repr,
+                     tag_shards,
+                     test_pkginfo_catalog_inclusion(pkginfo, machine.serial_number, tag_names))
+                )
+            pkgsinfo.sort(key=lambda t: get_version_sort_key(t[0]["version"]), reverse=True)
+
+            # sub manifests
+            sub_manifest_objects = {}
+            for sub_manifest in manifest.sub_manifests(machine.tags):
+                for _, key_d in sub_manifest.pkg_info_dict()['keys'].items():
+                    for _, smo in key_d['key_list']:
+                        name = smo.get_name()
+                        shard_repr = default_shard_repr = excluded_tag_names = tag_shards = None
+                        options = getattr(smo, "options", None)
+                        if options:
+                            excluded_tag_names = options.get("excluded_tags")
+                            if excluded_tag_names:
+                                seen_tag_names.update(excluded_tag_names)
+                            shards = options.get("shards")
+                            if shards:
+                                modulo = shards.get("modulo", 100)
+                                default_shard_repr = "{}/{}".format(shards.get("default", 100), modulo)
+                                tag_shards = shards.get("tags")
+                                if tag_shards:
+                                    seen_tag_names.update(tag_shards.keys())
+                                shard_repr = str(compute_shard(name + machine.serial_number, modulo=modulo))
+                        sub_manifest_objects.setdefault(sub_manifest, []).append(
+                            (name,
+                             excluded_tag_names,
+                             shard_repr,
+                             default_shard_repr,
+                             tag_shards,
+                             test_monolith_object_inclusion(name, options, machine.serial_number, tag_names))
+                        )
+
+            seen_tags = {t.name: t for t in Tag.objects.select_related("taxonomy").filter(name__in=seen_tag_names)}
+
+            for pkginfo, status, excluded_tag_names, shard_repr, default_shard_repr, tag_shards, included in pkgsinfo:
+                # rehydrate excluded tags using seen tags
+                excluded_tags = []
+                if excluded_tag_names:
+                    for excluded_tag_name in excluded_tag_names:
+                        try:
+                            excluded_tags.append(seen_tags[excluded_tag_name])
+                        except KeyError:
+                            logger.warning("Unknown excluded tag name")
+                # rehydrate tag shards using seen tags
+                prepared_tag_shards = []
+                if tag_shards:
+                    for tag_name in sorted(tag_shards.keys()):
+                        try:
+                            prepared_tag_shards.append((seen_tags[tag_name], tag_shards[tag_name]))
+                        except KeyError:
+                            logger.warning("Unknown tag shard name")
+                # add pkginfo to packages
+                package_dict = packages.setdefault(pkginfo["name"], {})
+                package_dict.setdefault("pkgsinfo", []).append(
+                    (pkginfo, status, excluded_tags, shard_repr, default_shard_repr, prepared_tag_shards, included)
+                )
+
+            for sub_manifest, smo_list in sub_manifest_objects.items():
+                for name, excluded_tag_names, shard_repr, default_shard_repr, tag_shards, included in smo_list:
+                    # rehydrate excluded tags using seen tags
+                    excluded_tags = []
+                    if excluded_tag_names:
+                        for excluded_tag_name in excluded_tag_names:
+                            try:
+                                excluded_tags.append(seen_tags[excluded_tag_name])
+                            except KeyError:
+                                logger.warning("Unknown excluded tag name")
+                    # rehydrate tag shards using seen tags
+                    prepared_tag_shards = []
+                    if tag_shards:
+                        for tag_name in sorted(tag_shards.keys()):
+                            try:
+                                prepared_tag_shards.append((seen_tags[tag_name], tag_shards[tag_name]))
+                            except KeyError:
+                                logger.warning("Unknown tag shard name")
+                    # add sub manifest to packages
+                    package_dict = packages.setdefault(name, {})
+                    package_dict.setdefault("sub_manifests", []).append(
+                        (sub_manifest, excluded_tags, shard_repr, default_shard_repr, prepared_tag_shards, included)
+                    )
+
+        ctx["packages"] = [(name, packages[name]) for name in sorted(packages.keys(), key=lambda n: n.lower())]
+        return ctx
 
 
 # manifest catalogs
@@ -1401,41 +1559,16 @@ class MRCatalogView(MRNameView):
                 cache.set(cache_key, catalog_data, timeout=None)
             else:
                 event_payload["cache"]["hit"] = True
-
-            # apply the shards
-            filtered_catalog_data = []
-            tag_names = [t.name for t in self.tags]
-            for pkginfo in catalog_data:
-                shard = 100
-                modulo = 100
-                zentral_monolith = pkginfo.get("zentral_monolith")
-                if zentral_monolith:
-                    excluded_tag_names = zentral_monolith.get("excluded_tags")
-                    if excluded_tag_names and any(etn in tag_names for etn in excluded_tag_names):
-                        # one excluded tag match, skip
-                        continue
-                    # not excluded, evaluate the shard
-                    shards = zentral_monolith.get("shards")
-                    if shards:
-                        modulo = shards.get("modulo", 100)
-                        shard = default = shards.get("default", modulo)
-                        tag_shards = shards.get("tags")
-                        if tag_shards:
-                            try:
-                                shard = max(tag_shards[tn] for tn in tag_names if tn in tag_shards)
-                            except ValueError:
-                                # no tag match
-                                shard = default
-                if (
-                    shard >= modulo or
-                    compute_shard(
-                        pkginfo["name"] + pkginfo["version"] + self.machine_serial_number,
-                        modulo=modulo
-                    ) < shard
-                ):
-                    filtered_catalog_data.append(pkginfo)
-
-            return HttpResponse(plistlib.dumps(filtered_catalog_data), content_type="application/xml")
+            return HttpResponse(
+                plistlib.dumps(
+                    filter_catalog_data(
+                        catalog_data,
+                        self.machine_serial_number,
+                        [t.name for t in self.tags]
+                    )
+                ),
+                content_type="application/xml"
+            )
 
 
 class MRManifestView(MRNameView):
@@ -1463,20 +1596,31 @@ class MRManifestView(MRNameView):
             sm_id = key
             event_payload["sub_manifest"] = {"id": sm_id}
             sub_manifest_name = None
+            sub_manifest_data = None
             try:
-                sub_manifest_name, manifest_data = cache.get(cache_key)
-            except TypeError:
+                sub_manifest_name, sub_manifest_data = cache.get(cache_key)
+                if not isinstance(sub_manifest_data, dict):  # TODO remove, needed for sm pkg options migration
+                    raise ValueError
+            except (TypeError, ValueError):
                 # verify machine access to sub manifest and respond
                 sub_manifest = self.manifest.sub_manifest(sm_id, self.tags)
                 if sub_manifest:
                     sub_manifest_name = sub_manifest.name
-                    manifest_data = sub_manifest.serialize()
-                # set the cache value, even if sub_manifest_name and manifest_data are None
-                cache.set(cache_key, (sub_manifest_name, manifest_data), timeout=None)
+                    sub_manifest_data = sub_manifest.serialize()
+                # set the cache value, even if sub_manifest_name and sub_manifest_data are None
+                cache.set(cache_key, (sub_manifest_name, sub_manifest_data), timeout=None)
             else:
                 event_payload["cache"]["hit"] = True
             if sub_manifest_name:
                 event_payload["sub_manifest"]["name"] = sub_manifest_name
+            if sub_manifest_data is not None:
+                manifest_data = plistlib.dumps(
+                    filter_sub_manifest_data(
+                        sub_manifest_data,
+                        self.machine_serial_number,
+                        [t.name for t in self.tags]
+                    )
+                )
         if manifest_data:
             return HttpResponse(manifest_data, content_type="application/xml")
 

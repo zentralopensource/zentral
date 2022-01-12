@@ -96,7 +96,15 @@ class MonolithAPIViewsTestCase(TestCase):
             kwargs["HTTP_AUTHORIZATION"] = f"Bearer {self.enrollment.secret.secret}"
         return self.client.get(url, **kwargs)
 
-    def _force_pkg_info(self, name=None, version=None, catalog=None, sub_manifest=None, zentral_monolith=None):
+    def _force_pkg_info(
+        self,
+        name=None,
+        version=None,
+        catalog=None,
+        sub_manifest=None,
+        zentral_monolith=None,
+        smpi_options=None
+    ):
         if catalog is None:
             catalog = Catalog.objects.create(name=get_random_string())
         ManifestCatalog.objects.create(manifest=self.manifest, catalog=catalog)
@@ -120,10 +128,13 @@ class MonolithAPIViewsTestCase(TestCase):
         pkg_info.catalogs.set([catalog])
         if sub_manifest is None:
             sub_manifest, _ = SubManifest.objects.get_or_create(name=get_random_string())
+        if smpi_options is None:
+            smpi_options = {}
         SubManifestPkgInfo.objects.get_or_create(
             sub_manifest=sub_manifest,
             pkg_info_name=pkg_info_name,
-            defaults={"key": "managed_installs"}
+            defaults={"key": "managed_installs",
+                      "options": smpi_options}
         )
         ManifestSubManifest.objects.get_or_create(
             manifest=self.manifest,
@@ -298,3 +309,114 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(len(catalog), 1)
         self.assertTrue(all(p.get("zentral_monolith") is None for p in catalog))
         self.assertEqual(catalog[0]["version"], "1.2.3")
+
+    # manifest
+
+    def test_manifest(self):
+        _, catalog, sub_manifest = self._force_pkg_info(
+            name="ceci_n_est_pas_un_nom_aussi"
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_manifest", args=("12345678",)),
+        )
+        self.assertEqual(response.status_code, 200)
+        serialized_manifest = plistlib.loads(response.content)
+        manifest = sub_manifest.manifestsubmanifest_set.first().manifest
+        self.assertEqual(
+            serialized_manifest,
+            {'catalogs': [f"manifest-catalog.{manifest.pk}.{manifest.name}"],
+             'included_manifests': [sub_manifest.get_munki_name()],
+             'managed_installs': []}
+        )
+
+    # sub manifests
+
+    def test_sub_manifest_no_options_included(self):
+        _, _, sub_manifest = self._force_pkg_info(
+            name="ceci_n_est_pas_un_nom_aussi"
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'managed_installs': ['ceci_n_est_pas_un_nom_aussi'], 'managed_uninstalls': []}
+        )
+
+    def test_sub_manifest_default_shard_included(self):
+        _, _, sub_manifest = self._force_pkg_info(
+            name="deuxième nom",
+            smpi_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                          "shards": {"default": 100, "tags": {"INCL1": 100, "INCL2": 100}}}
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'managed_installs': ['deuxième nom'], 'managed_uninstalls': []}
+        )
+
+    def test_sub_manifest_one_excluded_tag(self):
+        _, catalog, sub_manifest = self._force_pkg_info(name="premier nom")
+        self._force_pkg_info(
+            name="deuxième nom",
+            catalog=catalog,
+            sub_manifest=sub_manifest,
+            smpi_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                          "shards": {"default": 100, "tags": {"INCL1": 100, "INCL2": 100}}}
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+            tags=["EXCL1"]
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'managed_installs': ['premier nom'], 'managed_uninstalls': []}
+        )
+
+    def test_sub_manifest_one_tag_shard_excluded(self):
+        _, catalog, sub_manifest = self._force_pkg_info(name="premier nom")
+        self._force_pkg_info(
+            name="deuxième nom",
+            catalog=catalog,
+            sub_manifest=sub_manifest,
+            smpi_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                          "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 76}}}  # NAME + SN → 77
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+            tags=["INCL2"]
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'managed_installs': ['premier nom'], 'managed_uninstalls': []}
+        )
+
+    def test_sub_manifest_one_tag_shard_included(self):
+        _, _, sub_manifest = self._force_pkg_info(
+            name="deuxième nom",
+            smpi_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                          "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 78}}}  # NAME + SN → 77
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+            tags=["INCL2"]
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'managed_installs': ['deuxième nom'], 'managed_uninstalls': []}
+        )

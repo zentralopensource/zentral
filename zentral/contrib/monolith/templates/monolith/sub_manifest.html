@@ -71,19 +71,26 @@
 </div>
 {% endif %}
 
-{% for key_display, key_list in keys %}
-<h4>{{ key_display }}</h4>
 <table class="table">
   <thead>
     <th>Name</th>
     <th>Type</th>
+    <th>Feat.</th>
     <th>Condition</th>
-    <th>Featured?</th>
+    <th>Excl. tags</th>
+    <th>Def. shard</th>
+    <th>Tag shards</th>
     <th></th>
   </thead>
+{% for key_display, key_list in keys %}
+  <tr>
+    <td colspan="8">
+      <h4>{{ key_display }}</h4>
+    </td>
+  </tr>
   {% for name, smo in key_list %}
   <tr{% if smo.type and smo.trashed_at %} class="warning"{% endif %}>
-    <td class="col-md-4">
+    <td>
       {% if smo.pkg_info_name %}
       {% if perms.monolith.view_pkginfoname %}
       <a name="smp_{{ smo.pk }}" href="{% url 'monolith:pkg_info_name' smo.pkg_info_name.id %}">{{ name }}</a>
@@ -107,11 +114,14 @@
       {% endif %}
     </td>
     {% if smo.type %}
-    <td class="col-md-2">{{ smo.get_type_display }}</td>
+    <td>{{ smo.get_type_display }}</td>
     {% else %}
-    <td class="col-md-2">repository package</td>
+    <td>rep. pkg</td>
     {% endif %}
-    <td class="col-md-3">
+    <td>
+      {{ smo.featured_item|yesno:"★,-" }}
+    </td>
+    <td>
       {% if smo.condition %}
       {% if perms.monolith.view_condition %}
       <a href="{{ smo.condition.get_absolute_url }}"
@@ -124,11 +134,36 @@
       -
       {% endif %}
     </td>
-    <td class="col-md-1">
-      {{ smo.featured_item|yesno:"★,-" }}
+    <td>
+      {% if not smo.type %}
+        {% for tag in smo.excluded_tags %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      {% else %}
+      {% endif %}
+    </td>
+    <td>
+      {% if not smo.type %}
+        {{ smo.default_shard }}/{{ smo.shard_modulo }}
+      {% endif %}
+    </td>
+    <td>
+      {% if not smo.type %}
+        {% if smo.tag_shards %}
+        <table>
+        {% for tag, shard in smo.tag_shards %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag %}</td><td>{{ shard }}</td></tr>
+        {% endfor %}
+        </table>
+        {% else %}
+        -
+        {% endif %}
+      {% endif %}
     </td>
     {% if smo.type %}
-    <td class="col-md-2">
+    <td>
       {% if smo.trashed_at %}
         {% if perms.monolith.delete_submanifestattachment %}
         <a class="btn btn-danger" href="{% url 'monolith:purge_sub_manifest_attachment' smo.id %}">
@@ -151,7 +186,7 @@
       {% endif %}
     </td>
     {% else %}
-    <td class="col-md-2">
+    <td>
       {% if perms.monolith.change_submanifestpkginfo %}
       <a class="btn btn-default" href="{% url 'monolith:update_sub_manifest_pkg_info' object.id smo.id %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
@@ -166,8 +201,8 @@
     {% endif %}
   </tr>
   {% endfor %}
-</table>
 {% endfor %}
+</table>
 
 {% if perms.monolith.view_manifest %}
 <h3>Included in {{ manifests|length }} manifest{{ manifests|length|pluralize }}</h3>

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load bootstrap inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -16,6 +16,34 @@
 <h3>{% if object %}Update{% else %}Add{% endif %} PkgInfo</h3>
 <form method="POST" class="form">{% csrf_token %}
   {{ form|bootstrap }}
+  <div class="form-group">
+    <label class="control-label">Tag shards</label>
+    <div>
+      <select id="add-tag-shard-sel">
+        {% for tag, active, shard in form.tag_shards %}
+        <option id="add-tag-shard-opt-{{ tag.pk }}" value="{{ tag.pk }}"{% if active %} disabled{% endif %}>{{ tag.name  }}</option>
+        {% endfor %}
+      </select>
+      <button id="add-tag-shard" data-tag-pk="{{ tag.pk }}" type="button" class="btn btn-primary btn-xs">
+        Add
+      </button>
+    </div>
+    <table>
+      {% for tag, active, shard in form.tag_shards %}
+      <tr id="tag-shard-{{ tag.pk }}"{% if not active %} style="display:none;"{% endif %}>
+        <td>{% inventory_tag tag %}</td>
+        <td style="padding:5px">
+          <input type="number" class="form-control hide-if-not-install" name="tag-shard-{{ tag.pk }}" value="{{ shard }}" min="0", max="1000"{% if not active %} disabled{% endif %}>
+        </td>
+        <td>
+          <button type="button" data-tag-pk="{{ tag.pk }}" class="btn btn-danger del-tag-shard">
+            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
   {% if object %}
   <div class="form-group">
     <label class="control-label">Pkg info name</label>
@@ -25,4 +53,35 @@
   <a href="{{ sub_manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
   <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Add{% endif %}</button>
 </form>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function toggleOptionalFields(val) {
+    var toggle = val === "managed_installs" || val === "optional_installs";
+    $(".hide-if-not-install").parents(".form-group").toggle(toggle);
+  }
+
+  $(document).ready(function () {
+    $("#add-tag-shard").click(function(event){
+      event.preventDefault();
+      var tagId = parseInt($("#add-tag-shard-sel").val(), 10);
+      $("#tag-shard-" + tagId).show();
+      $('input[name="tag-shard-' + tagId + '"]').prop("disabled", false);
+      $("#add-tag-shard-opt-" + tagId).prop("disabled", true);
+    });
+    $(".del-tag-shard").click(function(event){
+      event.preventDefault();
+      var btn = $(this);
+      var tagId = parseInt(btn.data("tag-pk"), 10);
+      $("#tag-shard-" + tagId).hide();
+      $('input[name="tag-shard-' + tagId + '"]').prop("disabled", true);
+      $("#add-tag-shard-opt-" + tagId).prop("disabled", false);
+    });
+    $('select[name="key"]').change(function(event){
+      toggleOptionalFields($(this).val());
+    });
+    toggleOptionalFields($('select[name="key"]').val());
+  });
+</script>
 {% endblock %}

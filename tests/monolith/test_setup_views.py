@@ -8,8 +8,9 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import User
-from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.monolith.models import Catalog, Manifest, PkgInfo, PkgInfoName
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.monolith.models import (Catalog, Enrollment, EnrolledMachine,
+                                             Manifest, ManifestCatalog, PkgInfo, PkgInfoName)
 from zentral.contrib.munki.models import ManagedInstall
 
 
@@ -28,14 +29,25 @@ class MonolithSetupViewsTestCase(TestCase):
         cls.manifest = Manifest.objects.create(meta_business_unit=cls.mbu, name=get_random_string())
         # catalog
         cls.catalog_1 = Catalog.objects.create(name=get_random_string(13), priority=10)
+        # manifest catalog
+        ManifestCatalog.objects.create(manifest=cls.manifest, catalog=cls.catalog_1)
         # pkginfo name
         cls.pkginfo_name_1 = PkgInfoName.objects.create(name="aaaa first name")
         # pkginfo
-        cls.pkginfo_1_1 = PkgInfo.objects.create(name=cls.pkginfo_name_1, version="1.0", data={})
+        cls.pkginfo_1_1 = PkgInfo.objects.create(name=cls.pkginfo_name_1, version="1.0",
+                                                 data={"name": cls.pkginfo_name_1.name,
+                                                       "version": "1.0"})
         cls.pkginfo_1_1.catalogs.set([cls.catalog_1])
+        # enrollment
+        cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.mbu)
+        cls.enrollment = Enrollment.objects.create(secret=cls.enrollment_secret, manifest=cls.manifest)
+        # enrolled machine
+        cls.serial_number = get_random_string()
+        cls.enrolled_machine = EnrolledMachine.objects.create(enrollment=cls.enrollment,
+                                                              serial_number=cls.serial_number)
         # simulate 1 install of 1v1
         ManagedInstall.objects.create(
-            machine_serial_number=get_random_string(),
+            machine_serial_number=cls.serial_number,
             name=cls.pkginfo_name_1.name,
             installed_version=cls.pkginfo_1_1.version,
             installed_at=datetime.utcnow()
@@ -268,3 +280,34 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest.html")
         self.assertEqual(response.context["object"], self.manifest)
+
+    # manifest machine info
+
+    def test_manifest_machine_info_redirect(self):
+        self._login_redirect(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,))
+                             + "?serial_number=" + self.serial_number)
+
+    def test_manifest_machine_info_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,))
+                                   + "?serial_number=" + self.serial_number)
+        self.assertEqual(response.status_code, 403)
+
+    def test_manifest_machine_info(self):
+        self._login("monolith.view_manifest", "monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,))
+                                   + "?serial_number=" + self.serial_number)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/machine_info.html")
+        self.assertEqual(response.context["machine"].serial_number, self.serial_number)
+        self.assertEqual(
+            response.context["packages"],
+            [('aaaa first name',
+              {'pkgsinfo': [({'name': 'aaaa first name', 'version': '1.0'},
+                             'installed',
+                             [],
+                             None,
+                             None,
+                             [],
+                             True)]})]
+        )

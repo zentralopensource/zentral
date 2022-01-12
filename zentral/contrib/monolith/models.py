@@ -17,6 +17,7 @@ from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.conf import settings
 from zentral.contrib.inventory.models import BaseEnrollment, MetaBusinessUnit, Tag
+from zentral.utils.text import get_version_sort_key
 from .conf import monolith_conf
 from .utils import build_manifest_enrollment_package, make_printer_package_info
 
@@ -173,16 +174,10 @@ class PkgInfoManager(models.Manager):
             info_c += 1
             pi = {'pk': pi_pk,
                   'version': version,
+                  'version_sort': get_version_sort_key(version),
                   'catalogs': sorted(catalogs, key=lambda c: (c["priority"], c["name"])),
                   'count': int(count),
                   'percent': percent}
-            pi['version_sort'] = []
-            for version_elm in version.split("."):
-                try:
-                    version_elm = "{:016d}".format(int(version_elm))
-                except ValueError:
-                    pass
-                pi['version_sort'].append(version_elm)
             if pn_pk != current_pn_pk:
                 if current_pn is not None:
                     current_pn['pkg_infos'].sort(key=lambda pi: pi["version_sort"], reverse=True)
@@ -316,7 +311,15 @@ class SubManifest(models.Model):
                 else:
                     condition = None
                 name = smo.get_name()
-                condition_d.setdefault(condition, {}).setdefault(key, []).append(name)
+                if isinstance(smo, SubManifestPkgInfo):
+                    options = smo.options
+                else:
+                    options = None
+                if key in ('managed_installs', 'optional_installs'):
+                    val = (name, options)
+                else:
+                    val = name
+                condition_d.setdefault(condition, {}).setdefault(key, []).append(val)
                 if key != "managed_uninstalls" and smo.featured_item:
                     featured_items.add(name)
                 if isinstance(smo, SubManifestAttachment):
@@ -333,7 +336,7 @@ class SubManifest(models.Model):
         # force uninstall on the not included attachments
         qs = SubManifestAttachment.objects.filter(sub_manifest=self).exclude(name__in=included_sma_names)
         data.setdefault('managed_uninstalls', []).extend({sma.get_name() for sma in qs})
-        return plistlib.dumps(data)
+        return data
 
     def can_be_deleted(self):
         return self.manifestsubmanifest_set.all().count() == 0
@@ -375,6 +378,7 @@ class SubManifestPkgInfo(models.Model):
     pkg_info_name = models.ForeignKey(PkgInfoName, on_delete=models.PROTECT)
     featured_item = models.BooleanField(default=False)
     condition = models.ForeignKey(Condition, on_delete=models.PROTECT, null=True, blank=True)
+    options = JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -387,6 +391,35 @@ class SubManifestPkgInfo(models.Model):
 
     def get_name(self):
         return self.pkg_info_name.name
+
+    # options
+
+    @cached_property
+    def excluded_tags(self):
+        excluded_tag_names = self.options.get("excluded_tags")
+        if not excluded_tag_names:
+            return []
+        return Tag.objects.select_related("meta_business_unit", "taxonomy").filter(name__in=excluded_tag_names)
+
+    @cached_property
+    def tag_shards(self):
+        tag_shards = self.options.get("shards", {}).get("tags")
+        if not tag_shards:
+            return {}
+        tags = (
+            Tag.objects.select_related("meta_business_unit", "taxonomy")
+                       .filter(name__in=tag_shards.keys())
+                       .order_by("name")
+        )
+        return [(tag, tag_shards[tag.name]) for tag in tags]
+
+    @property
+    def default_shard(self):
+        return self.options.get("shards", {}).get("default", 100)
+
+    @property
+    def shard_modulo(self):
+        return self.options.get("shards", {}).get("modulo", 100)
 
 
 def attachment_path(instance, filename):

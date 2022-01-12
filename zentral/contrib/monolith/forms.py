@@ -4,7 +4,7 @@ from django.db.models import F, Max, Q
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from .attachments import MobileconfigFile, PackageFile
 from .exceptions import AttachmentError
-from .models import (Catalog, Enrollment,
+from .models import (Catalog, EnrolledMachine, Enrollment,
                      Manifest, ManifestCatalog, ManifestSubManifest,
                      Printer, PrinterPPD,
                      PkgInfoName, SubManifest,
@@ -48,6 +48,24 @@ class ManifestSearchForm(forms.Form):
         return qs
 
 
+class ManifestMachineSearchForm(forms.Form):
+    serial_number = forms.CharField(
+        label="Serial number", required=False,
+        widget=forms.TextInput(attrs={"autofocus": "true", "size": 32, "placeholder": "Serial number"})
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.manifest = kwargs.pop("manifest")
+        super().__init__(*args, **kwargs)
+
+    def get_enrolled_machine(self):
+        try:
+            return EnrolledMachine.objects.get(enrollment__manifest=self.manifest,
+                                               serial_number=self.cleaned_data["serial_number"])
+        except EnrolledMachine.DoesNotExist:
+            return None
+
+
 class SubManifestSearchForm(forms.Form):
     keywords = forms.CharField(label="Keywords", required=False,
                                widget=forms.TextInput(attrs={"placeholder": "Keywords…"}))
@@ -87,14 +105,78 @@ class SubManifestForm(forms.ModelForm):
 
 
 class SubManifestPkgInfoForm(forms.ModelForm):
+    excluded_tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.all(), required=False,
+                                                   widget=forms.SelectMultiple(attrs={"class": "hide-if-not-install"}))
+    default_shard = forms.IntegerField(min_value=0, max_value=1000, required=False, initial=100,
+                                       widget=forms.TextInput(attrs={"class": "hide-if-not-install"}))
+    shard_modulo = forms.IntegerField(min_value=1, max_value=1000, required=False, initial=100,
+                                      widget=forms.TextInput(attrs={"class": "hide-if-not-install"}))
+
     def __init__(self, *args, **kwargs):
-        self.sub_manifest = kwargs.pop('sub_manifest')
+        self.sub_manifest = kwargs.pop('sub_manifest', None)
         super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.sub_manifest = self.instance.sub_manifest
+
+        # pin qs
         pin_qs = PkgInfoName.objects.distinct().filter(pkginfo__id__isnull=False,
                                                        pkginfo__archived_at__isnull=True,
-                                                       pkginfo__update_for=None).exclude(
-            submanifestpkginfo__sub_manifest=self.sub_manifest)
+                                                       pkginfo__update_for=None)
+        if not self.instance.pk:
+            pin_qs = pin_qs.exclude(submanifestpkginfo__sub_manifest=self.sub_manifest)
         self.fields['pkg_info_name'].queryset = pin_qs
+
+        if self.instance.pk:
+            self.fields["excluded_tags"].initial = [tag.pk for tag in self.instance.excluded_tags]
+            self.fields["default_shard"].initial = self.instance.default_shard
+            self.fields["shard_modulo"].initial = self.instance.shard_modulo
+            self.fields["pkg_info_name"].widget = forms.HiddenInput()
+
+        # tag qs
+        tag_qs = Tag.objects.select_related("meta_business_unit", "taxonomy").all()
+        if self.sub_manifest.meta_business_unit:
+            tag_qs = tag_qs.filter(
+                Q(meta_business_unit__isnull=True) | Q(meta_business_unit=self.sub_manifest.meta_business_unit)
+            )
+        self.fields['excluded_tags'].queryset = tag_qs
+
+        # tags shards
+        self.tag_shards = []
+        existing_tag_shard_dict = {}
+        if self.instance.pk:
+            existing_tag_shard_dict = dict(self.instance.tag_shards)
+        for tag in tag_qs:
+            self.tag_shards.append(
+                (tag, tag in existing_tag_shard_dict, existing_tag_shard_dict.get(tag, 100))
+            )
+        self.tag_shards.sort(key=lambda t: t[0].name.lower())
+
+    def clean(self):
+        super().clean()
+        default_shard = self.cleaned_data.get("default_shard")
+        shard_modulo = self.cleaned_data.get("shard_modulo")
+        if default_shard and shard_modulo and shard_modulo < default_shard:
+            self.add_error("default_shard", "Must be less than or equal to the shard modulo")
+        # options
+        options = {}
+        if self.cleaned_data.get("key") in ("managed_installs", "optional_installs"):
+            excluded_tags = self.cleaned_data.get("excluded_tags")
+            if excluded_tags:
+                options["excluded_tags"] = [tag.name for tag in excluded_tags]
+            if default_shard is not None:
+                options.setdefault("shards", {})["default"] = default_shard
+            if shard_modulo is not None:
+                options.setdefault("shards", {})["modulo"] = shard_modulo
+            tag_shards = {}
+            for tag, _, _ in self.tag_shards:
+                try:
+                    shard = int(self.data[f"tag-shard-{tag.pk}"])
+                except Exception:
+                    continue
+                tag_shards[tag.name] = shard
+            if tag_shards:
+                options.setdefault("shards", {})["tags"] = tag_shards
+        self.instance.options = options
 
     class Meta:
         model = SubManifestPkgInfo

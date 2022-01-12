@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
+  <li class="active">Machine info</li>
+</ol>
+
+<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
+  <div class="form-group">
+    {{ form.serial_number|bootstrap_inline }}
+  </div>
+  <button type="submit" class="btn btn-default">Search</button>
+</form>
+
+{% if machine %}
+
+<dl>
+  <dt>Name</dt>
+  <dd>{{ machine.computer_name|default:"-" }}</dd>
+  <dt>Tags</dt>
+  <dd>
+    {% for tag in machine.tags %}
+    {% inventory_tag tag %}
+    {% empty %}
+    -
+    {% endfor %}
+  </dd>
+</dl>
+
+<h3>{{ packages|length }} Package{{ pkgsinfo|length|pluralize }}</h3>
+
+<table class="table">
+  <thead>
+    <th></th>
+    <th>Excl. tags</th>
+    <th>Shard</th>
+    <th>Default shard</th>
+    <th>Tag shards</th>
+  </thead>
+  <tbody>
+    {% for package_name, package_data in packages %}
+    <tr>
+      <td colspan="5"><h4>{{ package_name }}</h4></td>
+    </tr>
+    {% if package_data.sub_manifests %}
+    <tr>
+      <th colspan="5">Sub manifest</th>
+    </tr>
+    {% for sub_manifest, excluded_tags, shard_repr, default_shard_repr, tag_shards, included in package_data.sub_manifests %}
+    <tr{% if not included %} class="danger"{% endif %}>
+      <td>{{ sub_manifest }}</td>
+      <td>
+        {% for tag in excluded_tags %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+      <td>{{ shard_repr|default:"-" }}</td>
+      <td>{{ default_shard_repr|default:"-" }}</td>
+      <td>
+        {% if tag_shards %}
+        <table>
+        {% for tag, shard in tag_shards %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag %}</td><td>{{ shard }}</td></tr>
+        {% endfor %}
+        </table>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    {% endif %}
+    {% if package_data.pkgsinfo %}
+    <tr>
+      <th colspan="5">Version</th>
+    </tr>
+    {% for pkginfo, status, excluded_tags, shard_repr, default_shard_repr, tag_shards, included in package_data.pkgsinfo %}
+    <tr{% if not included %} class="danger"{% endif %}>
+      <td>
+        {{ pkginfo.version }}
+        {% if status == "installed" %}<span class="label label-success">installed</span>{% endif %}
+        {% if status == "reinstalled" %}<span class="label label-warning">reinstalled</span>{% endif %}
+        {% if status == "failed" %}<span class="label label-danger">failed</span>{% endif %}
+      </td>
+      <td>
+        {% for tag in excluded_tags %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+      <td>{{ shard_repr|default:"-" }}</td>
+      <td>{{ default_shard_repr|default:"-" }}</td>
+      <td>
+        {% if tag_shards %}
+        <table>
+        {% for tag, shard in tag_shards %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag %}</td><td>{{ shard }}</td></tr>
+        {% endfor %}
+        </table>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

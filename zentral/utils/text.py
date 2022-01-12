@@ -36,3 +36,14 @@ def shard(key, salt="", modulo=100):
     if not isinstance(salt, str):
         salt = str(salt)
     return int(md5((key + salt).encode("utf-8")).hexdigest(), 16) % modulo
+
+
+def get_version_sort_key(version):
+    sort_key = []
+    for version_elm in version.split("."):
+        try:
+            version_elm = "{:016d}".format(int(version_elm))
+        except ValueError:
+            pass
+        sort_key.append(version_elm)
+    return sort_key

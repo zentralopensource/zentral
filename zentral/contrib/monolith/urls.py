@@ -81,6 +81,9 @@ urlpatterns = [
          views.ManifestEnrollmentConfigurationProfileView.as_view(format="configuration_profile"),
          name="manifest_enrollment_configuration_profile"),
 
+    # manifest machine info
+    path('manifests/<int:pk>/machine_info/', views.ManifestMachineInfoView.as_view(), name='manifest_machine_info'),
+
     # manifest catalogs
     path('manifests/<int:pk>/catalogs/add/',
          views.AddManifestCatalogView.as_view(), name='add_manifest_catalog'),
