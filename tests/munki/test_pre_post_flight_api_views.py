@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
-from zentral.contrib.munki.events import MunkiInstallFailedEvent
+from zentral.contrib.munki.events import MunkiInstallEvent, MunkiInstallFailedEvent
 from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIncident
 from zentral.contrib.munki.models import Configuration, EnrolledMachine, Enrollment, ManagedInstall
 from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
@@ -189,6 +189,7 @@ class MunkiAPIViewsTestCase(TestCase):
                                                             "system_info": {"computer_name": computer_name},
                                                             "extra_facts": {"yolo": "\u0000fomo",
                                                                             "un": None}},
+                                       "last_seen_report_found": True,
                                        "reports": [{"start_time": "2018-01-01 00:00:00 +0000",
                                                     "end_time": "2018-01-01 00:01:00 +0000",
                                                     "basename": "report2018",
@@ -257,3 +258,96 @@ class MunkiAPIViewsTestCase(TestCase):
              "tags": [tag_name],
              "last_seen_sha1sum": report_sha1sum}
         )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_job_with_wipe(self, post_event):
+        tag_name = get_random_string()
+        enrolled_machine = self._make_enrolled_machine(tag_name=tag_name)
+        computer_name = get_random_string(45)
+
+        # no managed installs for the machine
+        mi_qs = ManagedInstall.objects.filter(machine_serial_number=enrolled_machine.serial_number)
+        self.assertEqual(mi_qs.count(), 0)
+
+        # post job with OK install
+        response = self._post_as_json(reverse("munki:post_job"),
+                                      {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
+                                                            "system_info": {"computer_name": computer_name},
+                                                            "extra_facts": {"yolo": "\u0000fomo",
+                                                                            "un": None}},
+                                       "last_seen_report_found": True,
+                                       "reports": [{"start_time": "2018-01-01 00:00:00 +0000",
+                                                    "end_time": "2018-01-01 00:01:00 +0000",
+                                                    "basename": "report2018",
+                                                    "run_type": "auto",
+                                                    "sha1sum": 40 * "0",
+                                                    "events": [("2021-11-15T14:47:37Z",
+                                                                {"name": "YoloApp",
+                                                                 "display_name": "Yolo App",
+                                                                 "version": "1.2.3",
+                                                                 "status": 0,
+                                                                 "type": "install"})]}]},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+
+        # check reference = serial number
+        ms = MachineSnapshot.objects.current().get(serial_number=enrolled_machine.serial_number)
+        ms2 = MachineSnapshot.objects.current().get(reference=enrolled_machine.serial_number)
+        self.assertEqual(ms, ms2)
+
+        # check computer name
+        self.assertEqual(ms.system_info.computer_name, computer_name)
+
+        # check extra facts
+        self.assertEqual(ms.extra_facts, {"yolo": "fomo"})
+
+        # check all events linked to machine
+        for call_args in post_event.call_args_list:
+            event = call_args.args[0]
+            self.assertEqual(event.metadata.machine_serial_number, enrolled_machine.serial_number)
+
+        # check last event is munki event without incident updates
+        last_event = post_event.call_args.args[0]
+        self.assertIsInstance(last_event, MunkiInstallEvent)
+        self.assertEqual(len(last_event.metadata.incident_updates), 0)
+
+        # check managed installs
+        self.assertEqual(mi_qs.count(), 1)
+        mi = mi_qs.first()
+        self.assertEqual(mi.name, "YoloApp")
+        self.assertEqual(mi.installed_version, "1.2.3")
+        self.assertEqual(mi.installed_at, datetime(2021, 11, 15, 14, 47, 37))
+        self.assertFalse(mi.reinstall)
+        self.assertIsNone(mi.failed_at)
+        self.assertIsNone(mi.failed_version)
+
+        # post job with OK install, 1 hour later, but last seen report not found
+        response = self._post_as_json(reverse("munki:post_job"),
+                                      {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
+                                                            "system_info": {"computer_name": computer_name},
+                                                            "extra_facts": {"yolo": "\u0000fomo",
+                                                                            "un": None}},
+                                       "last_seen_report_found": False,
+                                       "reports": [{"start_time": "2018-01-01 00:00:00 +0000",
+                                                    "end_time": "2018-01-01 00:01:00 +0000",
+                                                    "basename": "report2018",
+                                                    "run_type": "auto",
+                                                    "sha1sum": 40 * "0",
+                                                    "events": [("2021-11-15T15:47:37Z",
+                                                                {"name": "YoloApp",
+                                                                 "display_name": "Yolo App",
+                                                                 "version": "1.2.3",
+                                                                 "status": 0,
+                                                                 "type": "install"})]}]},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+
+        # check managed installs
+        self.assertEqual(mi_qs.count(), 1)
+        mi = mi_qs.first()
+        self.assertEqual(mi.name, "YoloApp")
+        self.assertEqual(mi.installed_version, "1.2.3")
+        self.assertEqual(mi.installed_at, datetime(2021, 11, 15, 15, 47, 37))  # new install 1 hour later
+        self.assertFalse(mi.reinstall)  # no reinstall, even if same PkgInfo, because last seen report found false
+        self.assertIsNone(mi.failed_at)
+        self.assertIsNone(mi.failed_version)

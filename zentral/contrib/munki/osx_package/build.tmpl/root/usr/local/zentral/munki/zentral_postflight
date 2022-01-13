@@ -17,7 +17,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.11"
+USER_AGENT = "Zentral/munkipostflight 0.12"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -270,14 +270,16 @@ def build_reports_payload(last_seen=None):
     """ Unpacks ManagedInstallReport generator object, initializes MIR objects,
     skips if already processed or not finished, otherwise serializes & returns payload"""
     payload = []
+    last_seen_report_found = False
     for mir in iter_manage_install_reports():
         if last_seen is not None and mir.sha1sum == last_seen:
+            last_seen_report_found = True
             break
         payload.append(mir.serialize())
         # stop after one report the first time
         if last_seen is None:
             break
-    return payload
+    return payload, last_seen_report_found
 
 
 def build_managed_installs_payload():
@@ -727,9 +729,9 @@ if __name__ == '__main__':
 
     # add the new reports
     last_seen_sha1sum = job_details.get('last_seen_sha1sum')
-    data['reports'] = build_reports_payload(last_seen_sha1sum)
-    # add the managed installs if requested
-    if job_details.get('managed_installs', True):
+    data['reports'], data['last_seen_report_found'] = build_reports_payload(last_seen_sha1sum)
+    # add the managed installs if requested or last seen report not found
+    if job_details.get('managed_installs', True) or not data['last_seen_report_found']:
         data['managed_installs'] = build_managed_installs_payload()
 
     # post the payload to zentral

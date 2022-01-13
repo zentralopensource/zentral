@@ -21,7 +21,7 @@ from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, UpdateInstallProbeForm
-from .models import (Configuration, EnrolledMachine, Enrollment, MunkiState,
+from .models import (Configuration, EnrolledMachine, Enrollment, ManagedInstall, MunkiState,
                      PrincipalUserDetectionSource)
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
 
@@ -355,6 +355,12 @@ class PostJobView(BaseView):
         if not ms:
             raise RuntimeError("Could not commit machine snapshot")
 
+        # delete all managed installs if last seen report not found
+        # which is a good indicator that the machine has been wiped
+        last_seen_report_found = data.get("last_seen_report_found")
+        if last_seen_report_found is not None and not last_seen_report_found:
+            ManagedInstall.objects.filter(machine_serial_number=self.machine_serial_number).delete()
+
         # prepare reports
         reports = []
         report_count = event_count = 0
@@ -374,6 +380,8 @@ class PostJobView(BaseView):
             "report_count": report_count,
             "event_count": event_count,
         }
+        if last_seen_report_found is not None:
+            munki_request_event_kwargs["last_seen_report_found"] = last_seen_report_found
 
         # update machine managed installs
         managed_installs = data.get("managed_installs")
