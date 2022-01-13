@@ -91,3 +91,37 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase):
         for view_name in ("enrollment_package", "enrollment_script", "enrollment_powershell_script"):
             self.assertContains(response, reverse(f"osquery_api:{view_name}", args=(enrollment.pk,)))
         get_osquery_versions.assert_called_once_with()
+
+    # bump enrollment version
+
+    def test_bump_enrollment_version_redirect(self):
+        enrollment = self._force_enrollment()
+        self._login_redirect(reverse("osquery:bump_enrollment_version",
+                                     args=(enrollment.configuration.pk, enrollment.pk)))
+
+    def test_bump_enrollment_version_permission_denied(self):
+        enrollment = self._force_enrollment()
+        self._login()
+        response = self.client.get(reverse("osquery:bump_enrollment_version",
+                                           args=(enrollment.configuration.pk, enrollment.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_bump_enrollment_version_get(self):
+        enrollment = self._force_enrollment()
+        self._login("osquery.change_enrollment")
+        response = self.client.get(reverse("osquery:bump_enrollment_version",
+                                           args=(enrollment.configuration.pk, enrollment.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/enrollment_confirm_version_bump.html")
+
+    def test_bump_enrollment_version_post(self):
+        enrollment = self._force_enrollment()
+        version = enrollment.version
+        self._login("osquery.change_enrollment", "osquery.view_configuration")
+        response = self.client.post(reverse("osquery:bump_enrollment_version",
+                                            args=(enrollment.configuration.pk, enrollment.pk)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/configuration_detail.html")
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.version, version + 1)

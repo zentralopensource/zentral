@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import TemplateView
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.osquery.forms import EnrollmentForm
-from zentral.contrib.osquery.models import Configuration
+from zentral.contrib.osquery.models import Configuration, Enrollment
 
 
 logger = logging.getLogger('zentral.contrib.osquery.views.enrollments')
@@ -55,3 +55,27 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
             return self.forms_valid(secret_form, enrollment_form)
         else:
             return self.forms_invalid(secret_form, enrollment_form)
+
+
+class EnrollmentBumpVersionView(PermissionRequiredMixin, TemplateView):
+    permission_required = "osquery.change_enrollment"
+    template_name = "osquery/enrollment_confirm_version_bump.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.enrollment = get_object_or_404(
+            Enrollment,
+            pk=kwargs["pk"],
+            configuration__pk=kwargs["configuration_pk"],
+            distributor_content_type__isnull=True,
+            distributor_pk__isnull=True,
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["enrollment"] = self.enrollment
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        self.enrollment.save()  # will bump the version
+        return redirect(self.enrollment)

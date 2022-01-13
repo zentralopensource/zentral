@@ -187,7 +187,16 @@
         {% endif %}
       </td>
       <td>
-        {% if not distributor and not secret.is_used_up %}
+        {% if secret.is_used_up %}
+        <span class="text-danger">Enrollment used up.</span>
+        {% else %}
+        {% if not distributor %}
+        {% if perms.osquery.change_enrollment %}
+        <a class="btn btn-default"
+           href="{% url 'osquery:bump_enrollment_version' configuration.pk enrollment.pk %}">
+          <span class="glyphicon glyphicon-thumbs-up"></span>
+        </a>
+        {% endif %}
         <a class="btn btn-default download-tool"
            aria-label="Download macOS enrollment package"
            title="macOS enrollment package"
@@ -209,8 +218,7 @@
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
           <i class="fab fa-windows" aria-hidden="true"></i>
         </a>
-        {% elif secret.is_used_up %}
-        <span class="text-danger">Enrollment used up.</span>
+        {% endif %}
         {% endif %}
       </td>
     </tr>

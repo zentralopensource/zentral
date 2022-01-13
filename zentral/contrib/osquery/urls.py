@@ -74,6 +74,9 @@ urlpatterns = [
     path('configurations/<int:pk>/enrollments/create/',
          views.CreateEnrollmentView.as_view(),
          name='create_enrollment'),
+    path('configurations/<int:configuration_pk>/enrollments/<int:pk>/bump_version/',
+         views.EnrollmentBumpVersionView.as_view(),
+         name='bump_enrollment_version'),
 
     # osquery API
     path('enroll', csrf_exempt(views.EnrollView.as_view()), name='enroll'),
