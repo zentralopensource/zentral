@@ -186,3 +186,37 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(enrollment.configuration, configuration)
         self.assertEqual(enrollment.secret.meta_business_unit, self.mbu)
         self.assertContains(response, enrollment.secret.meta_business_unit.name)
+
+    # bump enrollment version
+
+    def test_bump_enrollment_version_redirect(self):
+        enrollment = self._force_enrollment()
+        self._login_redirect(reverse("munki:bump_enrollment_version",
+                                     args=(enrollment.configuration.pk, enrollment.pk)))
+
+    def test_bump_enrollment_version_permission_denied(self):
+        enrollment = self._force_enrollment()
+        self._login()
+        response = self.client.get(reverse("munki:bump_enrollment_version",
+                                           args=(enrollment.configuration.pk, enrollment.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_bump_enrollment_version_get(self):
+        enrollment = self._force_enrollment()
+        self._login("munki.change_enrollment")
+        response = self.client.get(reverse("munki:bump_enrollment_version",
+                                           args=(enrollment.configuration.pk, enrollment.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/enrollment_confirm_version_bump.html")
+
+    def test_bump_enrollment_version_post(self):
+        enrollment = self._force_enrollment()
+        version = enrollment.version
+        self._login("munki.change_enrollment", "munki.view_configuration")
+        response = self.client.post(reverse("munki:bump_enrollment_version",
+                                            args=(enrollment.configuration.pk, enrollment.pk)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/configuration_detail.html")
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.version, version + 1)

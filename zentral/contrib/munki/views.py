@@ -21,7 +21,7 @@ from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, UpdateInstallProbeForm
-from .models import (Configuration, EnrolledMachine, MunkiState,
+from .models import (Configuration, EnrolledMachine, Enrollment, MunkiState,
                      PrincipalUserDetectionSource)
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
 
@@ -128,6 +128,30 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
             return self.forms_valid(secret_form, enrollment_form)
         else:
             return self.forms_invalid(secret_form, enrollment_form)
+
+
+class EnrollmentBumpVersionView(PermissionRequiredMixin, TemplateView):
+    permission_required = "munki.change_enrollment"
+    template_name = "munki/enrollment_confirm_version_bump.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.enrollment = get_object_or_404(
+            Enrollment,
+            pk=kwargs["pk"],
+            configuration__pk=kwargs["configuration_pk"],
+            distributor_content_type__isnull=True,
+            distributor_pk__isnull=True,
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["enrollment"] = self.enrollment
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        self.enrollment.save()  # will bump the version
+        return redirect(self.enrollment)
 
 
 # install probe
