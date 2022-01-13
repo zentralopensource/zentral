@@ -9,18 +9,12 @@
   <li class="active">Machine info</li>
 </ol>
 
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-  <div class="form-group">
-    {{ form.serial_number|bootstrap_inline }}
-  </div>
-  <button type="submit" class="btn btn-default">Search</button>
-</form>
-
 {% if machine %}
-
 <dl>
   <dt>Name</dt>
   <dd>{{ machine.computer_name|default:"-" }}</dd>
+  <dt>Serial number</dt>
+  <dd>{{ machine.serial_number }}</dd>
   <dt>Tags</dt>
   <dd>
     {% for tag in machine.tags %}
@@ -32,27 +26,52 @@
 </dl>
 
 <h3>{{ packages|length }} Package{{ pkgsinfo|length|pluralize }}</h3>
+<p><input class="form-control" size="32" id="search-pkg-name" placeholder="Search package name" autofocus style="max-width:20vw"></p>
 
 <table class="table">
-  <thead>
-    <th></th>
-    <th>Excl. tags</th>
-    <th>Shard</th>
-    <th>Default shard</th>
-    <th>Tag shards</th>
   </thead>
   <tbody>
     {% for package_name, package_data in packages %}
-    <tr>
-      <td colspan="5"><h4>{{ package_name }}</h4></td>
+    <tr data-pkg-name="{{ package_name }}">
+      <td colspan="6"><h4 style="margin:30px 0 5px 0" class="pkg-name">{{ package_name }}</h4></td>
     </tr>
+    {% if package_data.manifest %}
+    <tr data-pkg-name="{{ package_name }}">
+      <th></th>
+      <th>Key</th>
+      <th>Excl. tags</th>
+      <th>Shard</th>
+      <th>Default shard</th>
+      <th>Tag shards</th>
+    </tr>
+    <tr data-pkg-name="{{ package_name }}">
+      <td>Manifest</th>
+      <td>{{ package_data.manifest }}</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+    </tr>
+    {% endif %}
     {% if package_data.sub_manifests %}
-    <tr>
-      <th colspan="5">Sub manifest</th>
+    <tr data-pkg-name="{{ package_name }}">
+      <th>Sub manifest</th>
+      <th>Key</th>
+      <th>Excl. tags</th>
+      <th>Shard</th>
+      <th>Default shard</th>
+      <th>Tag shards</th>
     </tr>
-    {% for sub_manifest, excluded_tags, shard_repr, default_shard_repr, tag_shards, included in package_data.sub_manifests %}
-    <tr{% if not included %} class="danger"{% endif %}>
-      <td>{{ sub_manifest }}</td>
+    {% for sub_manifest, key, excluded_tags, shard_repr, default_shard_repr, tag_shards, included in package_data.sub_manifests %}
+    <tr data-pkg-name="{{ package_name }}"{% if not included %} class="danger"{% endif %}>
+      <td>
+        {% if perms.monolith.view_submanifest %}
+        <a href="{{ sub_manifest.get_absolute_url }}">{{ sub_manifest }}</a>
+        {% else %}
+        {{ sub_manifest }}
+        {% endif %}
+      </td>
+      <td>{{ key }}</td>
       <td>
         {% for tag in excluded_tags %}
         {% inventory_tag tag %}
@@ -77,16 +96,24 @@
     {% endfor %}
     {% endif %}
     {% if package_data.pkgsinfo %}
-    <tr>
-      <th colspan="5">Version</th>
+    <tr data-pkg-name="{{ package_name }}">
+      <th>Version</th>
+      <th>Status</th>
+      <th>Excl. tags</th>
+      <th>Shard</th>
+      <th>Default shard</th>
+      <th>Tag shards</th>
     </tr>
     {% for pkginfo, status, excluded_tags, shard_repr, default_shard_repr, tag_shards, included in package_data.pkgsinfo %}
-    <tr{% if not included %} class="danger"{% endif %}>
+    <tr data-pkg-name="{{ package_name }}"{% if not included %} class="danger"{% endif %}>
       <td>
         {{ pkginfo.version }}
+      </td>
+      <td>
         {% if status == "installed" %}<span class="label label-success">installed</span>{% endif %}
         {% if status == "reinstalled" %}<span class="label label-warning">reinstalled</span>{% endif %}
         {% if status == "failed" %}<span class="label label-danger">failed</span>{% endif %}
+        {% if not status %}-{% endif %}
       </td>
       <td>
         {% for tag in excluded_tags %}
@@ -115,4 +142,29 @@
   </tbody>
 </table>
 {% endif %}
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function filterTable(pkgNameElms, filter) {
+    filter = filter.toUpperCase();
+    pkgNameElms.forEach(function(elm) {
+      const pkgName = elm.textContent;
+      let display = "none";
+      if (pkgName.toUpperCase().indexOf(filter) > -1) {
+        display = ""
+      }
+      document.querySelectorAll(`tr[data-pkg-name="` + pkgName + `"]`).forEach(function(tr) {
+        tr.style.display = display;
+      });
+    });
+  }
+
+  $(document).ready(function(){
+    var pkgNames = document.querySelectorAll(".pkg-name");
+    $("#search-pkg-name").keyup(function (event) {
+      filterTable(pkgNames, $(this).val());
+    });
+  });
+</script>
 {% endblock %}

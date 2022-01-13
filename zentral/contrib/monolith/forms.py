@@ -4,7 +4,7 @@ from django.db.models import F, Max, Q
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from .attachments import MobileconfigFile, PackageFile
 from .exceptions import AttachmentError
-from .models import (Catalog, EnrolledMachine, Enrollment,
+from .models import (Catalog, Enrollment,
                      Manifest, ManifestCatalog, ManifestSubManifest,
                      Printer, PrinterPPD,
                      PkgInfoName, SubManifest,
@@ -46,24 +46,6 @@ class ManifestSearchForm(forms.Form):
         if name:
             qs = qs.filter(Q(name__icontains=name) | Q(meta_business_unit__name__icontains=name))
         return qs
-
-
-class ManifestMachineSearchForm(forms.Form):
-    serial_number = forms.CharField(
-        label="Serial number", required=False,
-        widget=forms.TextInput(attrs={"autofocus": "true", "size": 32, "placeholder": "Serial number"})
-    )
-
-    def __init__(self, *args, **kwargs):
-        self.manifest = kwargs.pop("manifest")
-        super().__init__(*args, **kwargs)
-
-    def get_enrolled_machine(self):
-        try:
-            return EnrolledMachine.objects.get(enrollment__manifest=self.manifest,
-                                               serial_number=self.cleaned_data["serial_number"])
-        except EnrolledMachine.DoesNotExist:
-            return None
 
 
 class SubManifestSearchForm(forms.Form):

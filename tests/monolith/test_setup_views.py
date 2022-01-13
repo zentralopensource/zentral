@@ -293,6 +293,11 @@ class MonolithSetupViewsTestCase(TestCase):
                                    + "?serial_number=" + self.serial_number)
         self.assertEqual(response.status_code, 403)
 
+    def test_manifest_machine_info_not_found(self):
+        self._login("monolith.view_manifest", "monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,)))
+        self.assertEqual(response.status_code, 404)
+
     def test_manifest_machine_info(self):
         self._login("monolith.view_manifest", "monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,))

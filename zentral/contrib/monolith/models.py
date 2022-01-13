@@ -300,7 +300,7 @@ class SubManifest(models.Model):
     def get_munki_name(self):
         return build_munki_name("sub_manifest", self.id, self.name)
 
-    def serialize(self):
+    def build(self):
         condition_d = {}
         featured_items = set()
         included_sma_names = set()
@@ -730,7 +730,7 @@ class Manifest(models.Model):
 
     # the manifest
 
-    def serialize(self, tags):
+    def build(self, tags):
         data = {'catalogs': [self.get_catalog_munki_name()],
                 'included_manifests': []}
 
@@ -756,8 +756,10 @@ class Manifest(models.Model):
         # include only the matching active printers as managed installs
         for printer in self.printers(tags):
             data.setdefault("managed_installs", []).append(printer.get_pkg_info_name())
+        return data
 
-        return plistlib.dumps(data)
+    def serialize(self, tags):
+        return plistlib.dumps(self.build(tags))
 
 
 class ManifestCatalog(models.Model):

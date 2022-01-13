@@ -33,7 +33,6 @@ from .events import (post_monolith_enrollment_event,
 from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
-                    ManifestMachineSearchForm,
                     EnrollmentForm,
                     ManifestForm, ManifestPrinterForm, ManifestSearchForm,
                     PkgInfoSearchForm,
@@ -929,11 +928,15 @@ class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
         manifest = get_object_or_404(Manifest, pk=kwargs["pk"])
         ctx = super().get_context_data(**kwargs)
         ctx["manifest"] = manifest
-        form = ManifestMachineSearchForm(self.request.GET, manifest=manifest)
-        form.is_valid()
-        ctx["form"] = form
         packages = {}
-        enrolled_machine = form.get_enrolled_machine()
+        enrolled_machine = None
+        serial_number = self.request.GET.get("serial_number")
+        if not isinstance(serial_number, str):
+            raise Http404
+        try:
+            enrolled_machine = EnrolledMachine.objects.get(enrollment__manifest=manifest, serial_number=serial_number)
+        except EnrolledMachine.DoesNotExist:
+            pass
         if enrolled_machine:
             ctx["enrolled_machine"] = enrolled_machine
             machine = MetaMachine(enrolled_machine.serial_number)
@@ -975,8 +978,9 @@ class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
                         tag_shards = shards.get("tags")
                         if tag_shards:
                             seen_tag_names.update(tag_shards.keys())
+                        # modulo + 1 for display, because modulo N is not included until shard N + 1
                         shard_repr = str(compute_shard(pkginfo["name"] + pkginfo["version"] + machine.serial_number,
-                                                       modulo=modulo))
+                                                       modulo=modulo) + 1)
                 pkgsinfo.append(
                     (pkginfo,
                      managed_installs.get((pkginfo["name"], pkginfo["version"])),
@@ -991,7 +995,7 @@ class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
             # sub manifests
             sub_manifest_objects = {}
             for sub_manifest in manifest.sub_manifests(machine.tags):
-                for _, key_d in sub_manifest.pkg_info_dict()['keys'].items():
+                for key, key_d in sub_manifest.pkg_info_dict()['keys'].items():
                     for _, smo in key_d['key_list']:
                         name = smo.get_name()
                         shard_repr = default_shard_repr = excluded_tag_names = tag_shards = None
@@ -1007,9 +1011,11 @@ class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
                                 tag_shards = shards.get("tags")
                                 if tag_shards:
                                     seen_tag_names.update(tag_shards.keys())
-                                shard_repr = str(compute_shard(name + machine.serial_number, modulo=modulo))
+                                # modulo + 1 for display, because modulo N is not included until shard N + 1
+                                shard_repr = str(compute_shard(name + machine.serial_number, modulo=modulo) + 1)
                         sub_manifest_objects.setdefault(sub_manifest, []).append(
                             (name,
+                             key.replace("_", " "),
                              excluded_tag_names,
                              shard_repr,
                              default_shard_repr,
@@ -1043,7 +1049,7 @@ class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
                 )
 
             for sub_manifest, smo_list in sub_manifest_objects.items():
-                for name, excluded_tag_names, shard_repr, default_shard_repr, tag_shards, included in smo_list:
+                for name, key, excluded_tag_names, shard_repr, default_shard_repr, tag_shards, included in smo_list:
                     # rehydrate excluded tags using seen tags
                     excluded_tags = []
                     if excluded_tag_names:
@@ -1063,8 +1069,20 @@ class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
                     # add sub manifest to packages
                     package_dict = packages.setdefault(name, {})
                     package_dict.setdefault("sub_manifests", []).append(
-                        (sub_manifest, excluded_tags, shard_repr, default_shard_repr, prepared_tag_shards, included)
+                        (sub_manifest,
+                         key,
+                         excluded_tags,
+                         shard_repr,
+                         default_shard_repr,
+                         prepared_tag_shards,
+                         included)
                     )
+
+            # root keys
+            manifest_data = manifest.build(machine.tags)
+            for key, _ in SUB_MANIFEST_PKG_INFO_KEY_CHOICES:
+                for name in manifest_data.get(key, []):
+                    packages.setdefault(name, {})["manifest"] = key.replace("_", " ")
 
         ctx["packages"] = [(name, packages[name]) for name in sorted(packages.keys(), key=lambda n: n.lower())]
         return ctx
@@ -1606,7 +1624,7 @@ class MRManifestView(MRNameView):
                 sub_manifest = self.manifest.sub_manifest(sm_id, self.tags)
                 if sub_manifest:
                     sub_manifest_name = sub_manifest.name
-                    sub_manifest_data = sub_manifest.serialize()
+                    sub_manifest_data = sub_manifest.build()
                 # set the cache value, even if sub_manifest_name and sub_manifest_data are None
                 cache.set(cache_key, (sub_manifest_name, sub_manifest_data), timeout=None)
             else:
