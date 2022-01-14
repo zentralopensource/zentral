@@ -38,12 +38,29 @@ class MonolithModelsTestCase(TestCase):
         cls.mep_2 = ManifestEnrollmentPackage.objects.create(manifest=cls.manifest, builder=cls.builder)
         cls.mep_2.tags.set([cls.tag_1, cls.tag_2])
         cls.pkginfo_name_1 = PkgInfoName.objects.create(name="aaaa first name")
-        cls.pkginfo_1_1 = PkgInfo.objects.create(name=cls.pkginfo_name_1, version="1.0", data={})
+        cls.pkginfo_1_1 = PkgInfo.objects.create(name=cls.pkginfo_name_1, version="1.0",
+                                                 data={"name": cls.pkginfo_name_1.name,
+                                                       "version": "1.0",
+                                                       "zentral_monolith": {
+                                                           "shards": {"modulo": 17}
+                                                        }})
         cls.pkginfo_1_1.catalogs.set([cls.catalog_1, cls.catalog_2])
-        cls.pkginfo_1_2 = PkgInfo.objects.create(name=cls.pkginfo_name_1, version="2.0", data={})
+        cls.pkginfo_1_2 = PkgInfo.objects.create(name=cls.pkginfo_name_1, version="2.0",
+                                                 data={"name": cls.pkginfo_name_1.name,
+                                                       "version": "2.0",
+                                                       "zentral_monolith": {
+                                                           "excluded_tags": [cls.tag_1.name],
+                                                           "shards": {
+                                                               "default": 0,
+                                                               "modulo": 16,
+                                                               "tags": {cls.tag_2.name: 12}
+                                                            }
+                                                        }})
         cls.pkginfo_1_2.catalogs.set([cls.catalog_2])
         cls.pkginfo_name_2 = PkgInfoName.objects.create(name="bbbb second name")
-        cls.pkginfo_2_1 = PkgInfo.objects.create(name=cls.pkginfo_name_2, version="1.0", data={})
+        cls.pkginfo_2_1 = PkgInfo.objects.create(name=cls.pkginfo_name_2, version="1.0",
+                                                 data={"name": cls.pkginfo_name_2.name,
+                                                       "version": "1.0"})
         cls.pkginfo_2_1.catalogs.set([cls.catalog_1, cls.catalog_2])
         # simulate 1 install of 1v1 and 3 installs of 1v2, 1 install of 2v1
         ManagedInstall.objects.create(
@@ -131,20 +148,34 @@ class MonolithModelsTestCase(TestCase):
 
         pkg_name_r_1 = pkg_name_list[0]
         self.assertEqual(len(pkg_name_r_1["pkg_infos"]), 2)
+        self.assertEqual(pkg_name_r_1["name"], "aaaa first name")
         for pkg_info_r in pkg_name_r_1["pkg_infos"]:
+            options = pkg_info_r["options"]
             if pkg_info_r["version"] == "1.0":
+                self.assertNotIn("excluded_tags", options)
+                shards = options["shards"]
+                self.assertEqual(shards["default"], 17)
+                self.assertEqual(shards["modulo"], 17)
+                self.assertNotIn("tags", shards)
                 self.assertEqual(len(pkg_info_r["catalogs"]), 2)
                 self.assertEqual(pkg_info_r["count"], 1)
                 self.assertEqual(pkg_info_r["percent"], 25)
             else:
+                self.assertEqual(options["excluded_tags"], [self.tag_1])
+                shards = options["shards"]
+                self.assertEqual(shards["default"], 0)
+                self.assertEqual(shards["modulo"], 16)
+                self.assertEqual(shards["tags"], [(self.tag_2, 12)])
                 self.assertEqual(len(pkg_info_r["catalogs"]), 1)
                 self.assertEqual(pkg_info_r["count"], 3)
                 self.assertEqual(pkg_info_r["percent"], 75)
         self.assertEqual(pkg_name_r_1["count"], 4)
 
         pkg_name_r_2 = pkg_name_list[1]
+        self.assertEqual(pkg_name_r_2["name"], "bbbb second name")
         self.assertEqual(len(pkg_name_r_2["pkg_infos"]), 1)
         for pkg_info_r in pkg_name_r_2["pkg_infos"]:
+            self.assertNotIn("options", pkg_info_r)
             self.assertEqual(len(pkg_info_r["catalogs"]), 2)
             self.assertEqual(pkg_info_r["count"], 1)
             self.assertEqual(pkg_info_r["percent"], 100)

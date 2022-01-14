@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load bootstrap inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -57,6 +57,9 @@
     <tr>
       <th>Version</th>
       <th>Catalogs</th>
+      <th>Excl. tags</th>
+      <th>Def. shard</th>
+      <th>Tag shards</th>
       <th>Installs</th>
       {% if manual_catalog_management %}
       <th></th>
@@ -72,6 +75,33 @@
       <td>
         {% for catalog in pkg_info.catalogs %}{% if perms.monolith.view_catalog %}<a href="{% url 'monolith:catalog' catalog.pk %}">{{ catalog.name }}</a>{% else %}{{ catalog.name }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}
       </td>
+      {% if pkg_info.options %}
+      <td>
+        {% for tag in pkg_info.options.excluded_tags %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+      <td>
+        {{ pkg_info.options.shards.default }}/{{ pkg_info.options.shards.modulo }}
+      </td>
+      <td>
+        {% if pkg_info.options.shards.tags %}
+        <table>
+        {% for tag, shard in pkg_info.options.shards.tags %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag %}</td><td>{{ shard }}</td></tr>
+        {% endfor %}
+        </table>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      {% else %}
+      <td>-</td>
+      <td>-</td>
+      <td>-</td>
+      {% endif %}
       <td>{{ pkg_info.count }}{% if pkg_info.percent %} - {{ pkg_info.percent|floatformat }}%{% endif %}</td>
       {% if manual_catalog_management and perms.monolith.change_pkginfo %}
       <td>

@@ -125,7 +125,7 @@ class PkgInfoManager(models.Manager):
         params = []
         # first we aggregate the package info, with the munki managed installs
         aggregated_pi_query = (
-            "select pn.id as pn_pk, pn.name, pi.id as pi_pk, pi.version,"
+            "select pn.id as pn_pk, pn.name, pi.id as pi_pk, pi.version, pi.data -> 'zentral_monolith' as pi_opts,"
             "count(mi.*), sum(count(mi.*)) over (partition by pn.id) as pn_total "
             "from monolith_pkginfoname as pn "
             "join monolith_pkginfo as pi on (pi.name_id = pn.id) "
@@ -141,7 +141,7 @@ class PkgInfoManager(models.Manager):
         if name_id:
             params.append(name_id)
             aggregated_pi_query += " and pn.id = %s"
-        aggregated_pi_query += " group by pn.id, pn.name, pi.id, pi.version"
+        aggregated_pi_query += " group by pn.id, pn.name, pi.id, pi.version, pi.data"
 
         # then we build the full query
         # join and aggregate the catalogs, compte the percentages
@@ -160,7 +160,7 @@ class PkgInfoManager(models.Manager):
             params.append(catalog.id)
             query += " and c.id = %s"
         query += (
-            " group by api.pn_pk, api.name, api.pi_pk, api.version, api.count, api.pn_total "
+            " group by api.pn_pk, api.name, api.pi_pk, api.version, api.pi_opts, api.count, api.pn_total "
             "order by api.name, api.pn_pk, api.pi_pk"
         )
 
@@ -170,7 +170,9 @@ class PkgInfoManager(models.Manager):
         current_pn = current_pn_pk = None
         name_c = info_c = 0
         pkg_name_list = []
-        for pn_pk, pn_name, pi_pk, version, count, pn_total, percent, catalogs in cursor.fetchall():
+        seen_tag_names = set([])
+        pi_opts_with_tags = []
+        for pn_pk, pn_name, pi_pk, version, pi_opts, count, pn_total, percent, catalogs in cursor.fetchall():
             info_c += 1
             pi = {'pk': pi_pk,
                   'version': version,
@@ -178,6 +180,19 @@ class PkgInfoManager(models.Manager):
                   'catalogs': sorted(catalogs, key=lambda c: (c["priority"], c["name"])),
                   'count': int(count),
                   'percent': percent}
+            if pi_opts:
+                pi['options'] = pi_opts
+                excluded_tags = pi_opts.get("excluded_tags")
+                shards = pi_opts.setdefault("shards", {})
+                modulo = shards.setdefault("modulo", 100)
+                shards.setdefault("default", modulo)
+                tag_shards = shards.get("tags")
+                if isinstance(excluded_tags, list) or isinstance(tag_shards, dict):
+                    if excluded_tags:
+                        seen_tag_names.update(excluded_tags)
+                    if tag_shards:
+                        seen_tag_names.update(tag_shards.keys())
+                    pi_opts_with_tags.append(pi_opts)
             if pn_pk != current_pn_pk:
                 if current_pn is not None:
                     current_pn['pkg_infos'].sort(key=lambda pi: pi["version_sort"], reverse=True)
@@ -193,6 +208,28 @@ class PkgInfoManager(models.Manager):
             current_pn['pkg_infos'].sort(key=lambda pi: pi["version_sort"], reverse=True)
             pkg_name_list.append(current_pn)
             name_c += 1
+        if seen_tag_names:
+            # rehydrate the tags
+            seen_tags = {
+                tag.name: tag
+                for tag in Tag.objects.select_related("meta_business_unit", "taxonomy").filter(name__in=seen_tag_names)
+            }
+            for pi_opts in pi_opts_with_tags:
+                excluded_tags = pi_opts.pop("excluded_tags", None)
+                if isinstance(excluded_tags, list):
+                    pi_opts["excluded_tags"] = [
+                        seen_tags[tag_name]
+                        for tag_name in sorted(excluded_tags)
+                        if tag_name in seen_tags
+                    ]
+                shards = pi_opts["shards"]
+                tag_shards = shards.pop("tags", None)
+                if isinstance(tag_shards, dict):
+                    pi_opts["shards"]["tags"] = [
+                        (seen_tags[tag_name], shard)
+                        for tag_name, shard in sorted(tag_shards.items(), key=lambda t:t[0].lower())
+                        if tag_name in seen_tags
+                    ]
         return name_c, info_c, pkg_name_list
 
 
