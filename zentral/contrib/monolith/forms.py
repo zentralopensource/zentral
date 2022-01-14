@@ -162,7 +162,7 @@ class SubManifestPkgInfoForm(forms.ModelForm):
 
     class Meta:
         model = SubManifestPkgInfo
-        fields = ('key', 'condition', 'featured_item', 'pkg_info_name')
+        fields = ('pkg_info_name', 'key', 'condition', 'featured_item')
 
 
 class SubManifestAttachmentForm(forms.ModelForm):
