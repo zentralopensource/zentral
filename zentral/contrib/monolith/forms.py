@@ -155,6 +155,8 @@ class SubManifestPkgInfoForm(forms.ModelForm):
                     shard = int(self.data[f"tag-shard-{tag.pk}"])
                 except Exception:
                     continue
+                if isinstance(shard_modulo, int):
+                    shard = min(shard, shard_modulo)
                 tag_shards[tag.name] = shard
             if tag_shards:
                 options.setdefault("shards", {})["tags"] = tag_shards
