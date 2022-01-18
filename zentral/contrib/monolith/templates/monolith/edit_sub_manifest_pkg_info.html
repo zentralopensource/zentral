@@ -67,7 +67,12 @@
       event.preventDefault();
       var tagId = parseInt($("#add-tag-shard-sel").val(), 10);
       $("#tag-shard-" + tagId).show();
-      $('input[name="tag-shard-' + tagId + '"]').prop("disabled", false);
+      var inputElm = $('input[name="tag-shard-' + tagId + '"]');
+      inputElm.prop("disabled", false)
+      var shardModulo = parseInt($('input[name="shard_modulo"]').val(), 10);
+      if (!isNaN(shardModulo)) {
+          inputElm.val(shardModulo);
+      }
       $("#add-tag-shard-opt-" + tagId).prop("disabled", true);
     });
     $(".del-tag-shard").click(function(event){

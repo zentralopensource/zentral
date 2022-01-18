@@ -129,7 +129,7 @@ class SubManifestPkgInfoForm(forms.ModelForm):
             existing_tag_shard_dict = dict(self.instance.tag_shards)
         for tag in tag_qs:
             self.tag_shards.append(
-                (tag, tag in existing_tag_shard_dict, existing_tag_shard_dict.get(tag, 100))
+                (tag, tag in existing_tag_shard_dict, existing_tag_shard_dict.get(tag, self.instance.shard_modulo))
             )
         self.tag_shards.sort(key=lambda t: t[0].name.lower())
 
