@@ -63,6 +63,71 @@ class APIViewsTestCase(TestCase):
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
         return self.client.get(url, **kwargs)
 
+    # list configurations
+
+    def test_get_configurations_unauthorized(self):
+        response = self.get(reverse("munki_api:configurations"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_configurations_permission_denied(self):
+        response = self.get(reverse("munki_api:configurations"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_configurations(self):
+        configuration = self.force_configuration()
+        self.set_permissions("munki.view_configuration")
+        response = self.get(reverse("munki_api:configurations"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            {'auto_failed_install_incidents': False,
+             'auto_reinstall_incidents': False,
+             'collected_condition_keys': [],
+             'created_at': configuration.created_at.isoformat(),
+             'description': '',
+             'id': configuration.pk,
+             'inventory_apps_full_info_shard': 100,
+             'managed_installs_sync_interval_days': 7,
+             'name': configuration.name,
+             'principal_user_detection_domains': [],
+             'principal_user_detection_sources': [],
+             'updated_at': configuration.updated_at.isoformat(),
+             'version': 0},
+            response.json()
+        )
+
+    # get configuration
+
+    def test_get_configuration_unauthorized(self):
+        configuration = self.force_configuration()
+        response = self.get(reverse("munki_api:configuration", args=(configuration.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_configuration_permission_denied(self):
+        configuration = self.force_configuration()
+        response = self.get(reverse("munki_api:configuration", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_configuration(self):
+        configuration = self.force_configuration()
+        self.set_permissions("munki.view_configuration")
+        response = self.get(reverse("munki_api:configuration", args=(configuration.pk,)))
+        self.assertEqual(
+            {'auto_failed_install_incidents': False,
+             'auto_reinstall_incidents': False,
+             'collected_condition_keys': [],
+             'created_at': configuration.created_at.isoformat(),
+             'description': '',
+             'id': configuration.pk,
+             'inventory_apps_full_info_shard': 100,
+             'managed_installs_sync_interval_days': 7,
+             'name': configuration.name,
+             'principal_user_detection_domains': [],
+             'principal_user_detection_sources': [],
+             'updated_at': configuration.updated_at.isoformat(),
+             'version': 0},
+            response.json()
+        )
+
     # list enrollments
 
     def test_get_enrollments_unauthorized(self):
@@ -94,7 +159,9 @@ class APIViewsTestCase(TestCase):
                  'request_count': 0
              },
              'version': 1,
-             'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/'},
+             'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/',
+             'created_at': enrollment.created_at.isoformat(),
+             'updated_at': enrollment.updated_at.isoformat()},
             response.json()
         )
 
@@ -137,7 +204,9 @@ class APIViewsTestCase(TestCase):
                  'request_count': 0
              },
              'version': 1,
-             'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/'},
+             'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/',
+             'created_at': enrollment.created_at.isoformat(),
+             'updated_at': enrollment.updated_at.isoformat()},
         )
 
     # get enrollment package
