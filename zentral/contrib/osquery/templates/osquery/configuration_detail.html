@@ -201,6 +201,12 @@
           <span class="glyphicon glyphicon-thumbs-up"></span>
         </a>
         {% endif %}
+        {% if perms.osquery.delete_enrollment %}
+        <a class="btn btn-danger"
+           href="{% url 'osquery:delete_enrollment' configuration.pk enrollment.pk %}">
+          <span class="glyphicon glyphicon-trash"></span>
+        </a>
+        {% endif %}
         <a class="btn btn-default download-tool"
            aria-label="Download macOS enrollment package"
            title="macOS enrollment package"

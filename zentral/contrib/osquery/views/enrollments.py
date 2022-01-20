@@ -1,7 +1,7 @@
 import logging
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
-from django.views.generic import TemplateView
+from django.views.generic import DeleteView, TemplateView
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.osquery.forms import EnrollmentForm
 from zentral.contrib.osquery.models import Configuration, Enrollment
@@ -55,6 +55,25 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
             return self.forms_valid(secret_form, enrollment_form)
         else:
             return self.forms_invalid(secret_form, enrollment_form)
+
+
+class DeleteEnrollmentView(PermissionRequiredMixin, DeleteView):
+    permission_required = "osquery.delete_enrollment"
+
+    def get_queryset(self):
+        return (Enrollment.objects.select_related("configuration")
+                                  .filter(configuration__pk=self.kwargs["configuration_pk"],
+                                          distributor_content_type__isnull=True,
+                                          distributor_pk__isnull=True))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["configuration"] = self.object.configuration
+        ctx["enrolled_machine_count"] = self.object.enrolledmachine_set.count()
+        return ctx
+
+    def get_success_url(self):
+        return self.object.configuration.get_absolute_url()
 
 
 class EnrollmentBumpVersionView(PermissionRequiredMixin, TemplateView):
