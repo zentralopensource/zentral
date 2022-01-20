@@ -11,15 +11,15 @@ ZENTRAL_API_HEADERS = {
 
 
 def parse(data):
-    d = {}
+    
     yolo = csr.CertificationRequest.load(data)
     info = yolo["certification_request_info"]
 
     # subject
     subject = info["subject"]
-    for rdn_idx, rdn in enumerate(subject.chosen):
-        for type_val_idx, type_val in enumerate(rdn):
-            d[type_val["type"].native] = type_val['value'].native
+    d = {type_val['type'].native: type_val['value'].native 
+            for (rdn_idx, rdn) in enumerate(subject.chosen) 
+                for (type_val_idx, type_val) in enumerate(rdn)}
 
     # attributes
     for attribute in info["attributes"]:
