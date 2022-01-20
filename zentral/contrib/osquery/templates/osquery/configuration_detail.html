@@ -24,6 +24,10 @@
         <td>{{ object.name }}</td>
       </tr>
       <tr>
+        <td>Description</td>
+        <td>{{ object.description|default:"-"|linebreaksbr }}</td>
+      </tr>
+      <tr>
         <td>Inventory</td>
         <td>{{ object.inventory|yesno }}</td>
       </tr>

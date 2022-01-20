@@ -72,14 +72,19 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
     def test_create_configuration_post(self):
         self._login("osquery.add_configuration", "osquery.view_configuration")
         configuration_name = get_random_string(64)
+        configuration_description = get_random_string()
         response = self.client.post(reverse("osquery:create_configuration"),
-                                    {"name": configuration_name, "inventory_interval": 86321},
+                                    {"name": configuration_name,
+                                     "description": configuration_description,
+                                     "inventory_interval": 86321},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/configuration_detail.html")
         self.assertContains(response, configuration_name)
+        self.assertContains(response, configuration_description)
         configuration = response.context["object"]
         self.assertEqual(configuration.name, configuration_name)
+        self.assertEqual(configuration.description, configuration_description)
         self.assertEqual(configuration.inventory_interval, 86321)
         self.assertEqual(configuration.options, {})
 
