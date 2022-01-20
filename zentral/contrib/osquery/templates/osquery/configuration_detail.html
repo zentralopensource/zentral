@@ -154,6 +154,7 @@
 {% if enrollments %}
 <table class="table">
   <thead>
+    <th>ID</th>
     <th>Business unit</th>
     <th>Tags</th>
     <th>Created at</th>
@@ -168,6 +169,7 @@
     {% with enrollment.secret as secret %}
     {% with enrollment.distributor as distributor %}
     <tr>
+      <td>{{ enrollment.pk }}</td>
       <td><a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a></td>
       <td>
         {% for tag in secret.tags.all %}

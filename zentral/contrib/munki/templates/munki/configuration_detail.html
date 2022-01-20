@@ -85,6 +85,7 @@
 {% if enrollments %}
 <table class="table">
   <thead>
+    <th>ID</th>
     <th>Business unit</th>
     <th>Tags</th>
     <th>Created at</th>
@@ -97,6 +98,7 @@
     {% for enrollment, distributor, distributor_link in enrollments %}
     {% with enrollment.secret as secret %}
     <tr id="enrollment-{{ enrollment.pk }}">
+      <td>{{ enrollment.pk }}</td>
       <td>
         {% if perms.inventory.view_metabusinessunit %}
         <a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a>
