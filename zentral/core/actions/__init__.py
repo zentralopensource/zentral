@@ -1,6 +1,7 @@
 from importlib import import_module
 from zentral.conf import settings
 
+
 __all__ = ['actions']
 
 
@@ -18,5 +19,6 @@ def get_actions(settings):
         action_class = get_action_class(action_conf.pop('backend'))
         actions[action_name] = action_class(action_conf)
     return actions
+
 
 actions = get_actions(settings)

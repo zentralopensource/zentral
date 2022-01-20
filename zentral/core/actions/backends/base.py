@@ -1,5 +1,4 @@
 from django import forms
-from zentral.conf import contact_groups
 
 
 class BaseActionForm(forms.Form):
@@ -40,12 +39,3 @@ class BaseAction(object):
                 val = ', '.join([str(v) for v in val])
             pacd[key.replace("_", " ")] = val
         return pacd
-
-
-class ContactGroupForm(BaseActionForm):
-    groups = forms.MultipleChoiceField(choices=[], required=True,
-                                       help_text="Select one or more configured contact groups")
-
-    def __init__(self, *args, **kwargs):
-        super(ContactGroupForm, self).__init__(*args, **kwargs)
-        self.fields['groups'].choices = [(g, g) for g in contact_groups]

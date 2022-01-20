@@ -9,7 +9,7 @@ from zentral.core.exceptions import ImproperlyConfigured
 from .config import ConfigDict, ResolverMethodProxy
 
 
-__all__ = ['contact_groups', 'settings', 'user_templates_dir']
+__all__ = ['settings', 'user_templates_dir']
 
 
 logger = logging.getLogger("zentral.conf")
@@ -154,13 +154,3 @@ def get_user_templates_dir():
 
 
 user_templates_dir = get_user_templates_dir()
-
-
-#
-# Contact groups
-#
-# TODO: deprecated, replace with something better
-#
-
-
-contact_groups = {}

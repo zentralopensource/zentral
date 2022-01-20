@@ -1,7 +1,6 @@
 {% extends "base_body.txt" %}
 
 {% block extra %}
-username: *{{ payload.user.username }}*
 {% if metadata.request %}
 {{ metadata.request }}
 {% endif %}
