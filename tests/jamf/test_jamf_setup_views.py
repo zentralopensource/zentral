@@ -1,5 +1,6 @@
 from functools import reduce
 import operator
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase, override_settings
@@ -8,6 +9,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import Taxonomy
 from zentral.contrib.jamf.models import JamfInstance, TagConfig
+from zentral.contrib.jamf.api_client import APIClientError
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -130,8 +132,31 @@ class JamfSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("jamf:delete_jamf_instance", args=(jamf_instance.pk,)))
         self.assertContains(response, "Delete jamf instance")
 
-    # TODO: def test_delete_jamf_instance_post(self):
-    # PB: API calls!
+    @patch("zentral.contrib.jamf.api_client.APIClient.cleanup")
+    def test_delete_jamf_instance_post_cleanup_ok(self, cleanup):
+        cleanup.return_value = None
+        jamf_instance = self._force_jamf_instance()
+        self._login("jamf.delete_jamfinstance", "jamf.view_jamfinstance")
+        response = self.client.post(reverse("jamf:delete_jamf_instance", args=(jamf_instance.pk,)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        cleanup.assert_called_once_with()
+        self.assertTemplateUsed(response, "jamf/jamfinstance_list.html")
+        self.assertContains(response, "Removed webhooks configuration on")
+        self.assertEqual(JamfInstance.objects.filter(pk=jamf_instance.pk).count(), 0)
+
+    @patch("zentral.contrib.jamf.api_client.APIClient.cleanup")
+    def test_delete_jamf_instance_post_failed_cleanup(self, cleanup):
+        cleanup.side_effect = APIClientError("Boom!")
+        jamf_instance = self._force_jamf_instance()
+        self._login("jamf.delete_jamfinstance", "jamf.view_jamfinstance")
+        response = self.client.post(reverse("jamf:delete_jamf_instance", args=(jamf_instance.pk,)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        cleanup.assert_called_once_with()
+        self.assertTemplateUsed(response, "jamf/jamfinstance_list.html")
+        self.assertContains(response, "Could not remove webhooks configuration on")
+        self.assertEqual(JamfInstance.objects.filter(pk=jamf_instance.pk).count(), 0)
 
     # setup jamf instance
 
