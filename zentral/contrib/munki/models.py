@@ -26,6 +26,7 @@ class PrincipalUserDetectionSource(enum.Enum):
 
 class Configuration(models.Model):
     name = models.CharField(max_length=255, unique=True)
+    description = models.TextField(blank=True)
     inventory_apps_full_info_shard = models.IntegerField(
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         default=100

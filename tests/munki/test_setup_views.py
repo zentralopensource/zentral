@@ -89,9 +89,11 @@ class MunkiSetupViewsTestCase(TestCase):
     def test_create_configuration_post(self):
         self._login("munki.add_configuration", "munki.view_configuration")
         name = get_random_string()
+        description = get_random_string()
         collected_condition_keys = sorted(get_random_string() for _ in range(3))
         response = self.client.post(reverse("munki:create_configuration"),
                                     {"name": name,
+                                     "description": description,
                                      "inventory_apps_full_info_shard": 17,
                                      "principal_user_detection_sources": "logged_in_user",
                                      "principal_user_detection_domains": "yolo.fr",
@@ -102,7 +104,10 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
         self.assertContains(response, name)
+        self.assertContains(response, description)
         configuration = response.context["object"]
+        self.assertEqual(configuration.name, name)
+        self.assertEqual(configuration.description, description)
         self.assertTrue(configuration.auto_reinstall_incidents)
         self.assertFalse(configuration.auto_failed_install_incidents)
         self.assertEqual(sorted(configuration.collected_condition_keys), collected_condition_keys)
