@@ -2,6 +2,7 @@ from functools import reduce
 import json
 import operator
 from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
@@ -225,3 +226,48 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.version, version + 1)
+
+    # delete enrollment
+
+    def test_delete_enrollment_redirect(self):
+        enrollment = self._force_enrollment()
+        self._login_redirect(reverse("munki:delete_enrollment",
+                                     args=(enrollment.configuration.pk, enrollment.pk)))
+
+    def test_delete_enrollment_permission_denied(self):
+        enrollment = self._force_enrollment()
+        self._login()
+        response = self.client.get(reverse("munki:delete_enrollment",
+                                           args=(enrollment.configuration.pk, enrollment.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_enrollment_get(self):
+        enrollment = self._force_enrollment()
+        self._login("munki.delete_enrollment")
+        response = self.client.get(reverse("munki:delete_enrollment",
+                                           args=(enrollment.configuration.pk, enrollment.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/enrollment_confirm_delete.html")
+
+    def test_delete_enrollment_post(self):
+        enrollment = self._force_enrollment()
+        self._login("munki.delete_enrollment", "munki.view_configuration")
+        response = self.client.post(reverse("munki:delete_enrollment",
+                                            args=(enrollment.configuration.pk, enrollment.pk)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/configuration_detail.html")
+        ctx_configuration = response.context["configuration"]
+        self.assertEqual(ctx_configuration, enrollment.configuration)
+        self.assertEqual(ctx_configuration.enrollment_set.filter(pk=enrollment.pk).count(), 0)
+
+    def test_delete_enrollment_distributor_404(self):
+        enrollment = self._force_enrollment()
+        enrollment.distributor_content_type = ContentType.objects.get(app_label="monolith",
+                                                                      model="manifestenrollmentpackage")
+        enrollment.distributor_pk = 1  # invalid, only for this test, not the reason for the 404!
+        super(Enrollment, enrollment).save()  # to avoid calling the distributor callback
+        self._login("munki.delete_enrollment")
+        response = self.client.get(reverse("munki:delete_enrollment", args=(enrollment.configuration.pk,
+                                                                            enrollment.pk)))
+        self.assertEqual(response.status_code, 404)

@@ -9,7 +9,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
-from django.views.generic import CreateView, DetailView, FormView, ListView, TemplateView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MachineTag, MetaMachine
@@ -128,6 +128,25 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
             return self.forms_valid(secret_form, enrollment_form)
         else:
             return self.forms_invalid(secret_form, enrollment_form)
+
+
+class DeleteEnrollmentView(PermissionRequiredMixin, DeleteView):
+    permission_required = "munki.delete_enrollment"
+
+    def get_queryset(self):
+        return (Enrollment.objects.select_related("configuration")
+                                  .filter(configuration__pk=self.kwargs["configuration_pk"],
+                                          distributor_content_type__isnull=True,
+                                          distributor_pk__isnull=True))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["configuration"] = self.object.configuration
+        ctx["enrolled_machine_count"] = self.object.enrolledmachine_set.count()
+        return ctx
+
+    def get_success_url(self):
+        return self.object.configuration.get_absolute_url()
 
 
 class EnrollmentBumpVersionView(PermissionRequiredMixin, TemplateView):

@@ -13,6 +13,9 @@ urlpatterns = [
     # enrollment
     path('configurations/<int:pk>/enrollments/create/',
          views.CreateEnrollmentView.as_view(), name='create_enrollment'),
+    path('configurations/<int:configuration_pk>/enrollments/<int:pk>/delete/',
+         views.DeleteEnrollmentView.as_view(),
+         name='delete_enrollment'),
     path('configurations/<int:configuration_pk>/enrollments/<int:pk>/bump_version/',
          views.EnrollmentBumpVersionView.as_view(),
          name='bump_enrollment_version'),

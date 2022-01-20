@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'munki:configurations' %}">Munki configurations</a></li>
+  <li><a href="{{ enrollment.configuration.get_absolute_url }}">{{ enrollment.configuration }}</a></li>
+  <li class="active">Delete enrollment</li>
+</ol>
+
+<h2>Delete enrollment</h2>
+
+<form method="POST" class="form">{% csrf_token %}
+  <p>Do you really want to delete this Munki enrollment?</p>
+  {% if enrolled_machine_count %}
+  <p>{{ enrolled_machine_count }} enrolled machine{{ enrolled_machine_count|pluralize }} will no longer be able to connect.</p>
+  <p>Please ensure you do not re-use any packages previously associated with this specific enrollment.</p>
+  {% endif %}
+  <p>
+    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endblock %}
