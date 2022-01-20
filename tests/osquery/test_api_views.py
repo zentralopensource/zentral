@@ -252,7 +252,9 @@ class APIViewsTestCase(TestCase):
              'package_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/package/',
              'powershell_script_download_url': f'https://{fqdn}/api/osquery/'
                                                f'enrollments/{enrollment.pk}/powershell_script/',
-             'script_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/script/'},
+             'script_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/script/',
+             'created_at': enrollment.created_at.isoformat(),
+             'updated_at': enrollment.updated_at.isoformat()},
             response.json()
         )
 
@@ -297,7 +299,9 @@ class APIViewsTestCase(TestCase):
              'package_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/package/',
              'powershell_script_download_url': f'https://{fqdn}/api/osquery/'
                                                f'enrollments/{enrollment.pk}/powershell_script/',
-             'script_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/script/'},
+             'script_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/script/',
+             'created_at': enrollment.created_at.isoformat(),
+             'updated_at': enrollment.updated_at.isoformat()},
         )
 
     # get enrollment package

@@ -28,7 +28,8 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         fields = ("id", "configuration",
                   "osquery_release", "secret", "version",
                   "enrolled_machines_count",
-                  "package_download_url", "powershell_script_download_url", "script_download_url")
+                  "package_download_url", "powershell_script_download_url", "script_download_url",
+                  "created_at", "updated_at")
 
     def get_enrolled_machines_count(self, obj):
         return obj.enrolledmachine_set.count()
