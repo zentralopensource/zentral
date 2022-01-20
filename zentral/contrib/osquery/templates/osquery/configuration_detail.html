@@ -170,7 +170,13 @@
     {% with enrollment.distributor as distributor %}
     <tr>
       <td>{{ enrollment.pk }}</td>
-      <td><a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a></td>
+      <td>
+        {% if perms.inventory.view_metabusinessunit %}
+        <a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a>
+        {% else %}
+        {{ secret.meta_business_unit|default:"-" }}
+        {% endif %}
+      </td>
       <td>
         {% for tag in secret.tags.all %}
         {% inventory_tag tag %}
