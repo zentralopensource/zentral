@@ -51,7 +51,7 @@ class JamfInstance(models.Model):
     def save(self, *args, **kwargs):
         if not self.id:
             self.version = 0
-        else:
+        elif kwargs.pop("bump_version", True):
             self.version = F("version") + 1
         super().save(*args, **kwargs)
 
