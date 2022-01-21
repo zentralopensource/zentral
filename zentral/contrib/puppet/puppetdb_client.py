@@ -3,8 +3,10 @@ from dateutil import parser
 from itertools import chain
 from urllib.parse import urlencode
 import requests
+from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util import Retry
 from zentral.utils.dict import get_nested_val
+from zentral.utils.ssl import create_client_ssl_context
 
 
 logger = logging.getLogger('zentral.contrib.puppet.puppetdb_client')
@@ -13,6 +15,22 @@ logger = logging.getLogger('zentral.contrib.puppet.puppetdb_client')
 class PuppetDBError(Exception):
     def __init__(self, message):
         self.message = message
+
+
+class CustomHTTPAdapter(HTTPAdapter):
+    def __init__(self, certdata, keydata, keydata_password, cadata):
+        self.ssl_context = create_client_ssl_context(certdata, keydata, keydata_password, cadata)
+        super().__init__(
+            max_retries=Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+        )
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["ssl_context"] = self.ssl_context
+        return super().init_poolmanager(*args, **kwargs)
+
+    def proxy_manager_for(self, *args, **kwargs):
+        kwargs["ssl_context"] = self.ssl_context
+        return super().proxy_manager_for(*args, **kwargs)
 
 
 class PuppetDBClient(object):
@@ -24,7 +42,7 @@ class PuppetDBClient(object):
 
         # prepare requests session with connection settings
         self.puppetdb_url = config_d["puppetdb_url"]
-        self.api_base_url = '{}/pdb/query/v4'.format(self.puppetdb_url)
+        self.api_base_url = f'{self.puppetdb_url}/pdb/query/v4'
         self.puppetdb_timeout = config_d.get('puppetdb_timeout', 10)
         self.session = requests.Session()
         # headers
@@ -34,23 +52,12 @@ class PuppetDBClient(object):
             'accept': 'application/json',
             'accept-charset': 'utf-8'
         })
-        # ca
-        puppetdb_ca = config_d.get("puppetdb_ca")
-        if puppetdb_ca:
-            self.session.verify = puppetdb_ca
-        # client cert
-        cert = config_d.get("puppetdb_cert")
-        key = config_d.get("puppetdb_key")
-        if cert and key:
-            self.session.cert = (cert, key)
-        elif cert or key:
-            raise PuppetDBError("Incomplete puppetDB configuration")
-        # max retries
-        max_retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
-        self.session.mount(
-            self.api_base_url,
-            requests.adapters.HTTPAdapter(max_retries=max_retries)
-        )
+        # tls
+        certdata = config_d.get("puppetdb_cert")
+        keydata = config_d.get("puppetdb_key")
+        keydata_password = config_d.get("puppetdb_key_password")
+        cadata = config_d.get("puppetdb_ca")
+        self.session.mount(self.api_base_url, CustomHTTPAdapter(certdata, keydata, keydata_password, cadata))
 
     def get_source_d(self):
         return {"module": "zentral.contrib.puppet",
@@ -63,22 +70,22 @@ class PuppetDBClient(object):
         try:
             r = self.session.get(url, timeout=self.puppetdb_timeout)
         except requests.exceptions.RequestException as e:
-            raise PuppetDBError("Node '{}': PuppetDB API error: {}".format(certname, e))
+            raise PuppetDBError(f"Node '{certname}': PuppetDB API error: {e}")
         if r.status_code != requests.codes.ok:
-            raise PuppetDBError("Node '{}': PuppetDB API HTTP response status code {}".format(certname, r.status_code))
+            raise PuppetDBError(f"Node '{certname}': PuppetDB API HTTP response status code {r.status_code}")
         try:
             inventory_d = r.json()[0]
         except IndexError:
-            raise PuppetDBError("Node '{}': empty response".format(certname))
+            raise PuppetDBError(f"Node '{certname}': empty response")
         if inventory_d.get("certname") != certname:
-            raise PuppetDBError("Node '{}': certname not in JSON response".format(certname))
+            raise PuppetDBError(f"Node '{certname}': certname not in JSON response")
         return inventory_d
 
     def machine_links_from_certname(self, certname):
         links = []
         if self.puppetboard_url:
             links.append({"anchor_text": "Puppetboard",
-                          "url": "{}/node/{}".format(self.puppetboard_url, certname)})
+                          "url": f"{self.puppetboard_url}/node/{certname}"})
         return links
 
     def get_machine_d(self, certname):
@@ -198,7 +205,7 @@ class PuppetDBClient(object):
         processor_models = set(processors.get("models", []))
         if processor_models:
             if len(processor_models) > 1:
-                logger.warning("Node {}: more than 1 processor model".format(certname))
+                logger.warning(f"Node {certname}: more than 1 processor model")
             system_info["cpu_brand"] = processor_models.pop()
 
         # system info > physical memory
@@ -217,7 +224,7 @@ class PuppetDBClient(object):
             # serial number
             serial_number = system_profiler.get('serial_number')
             if not serial_number:
-                raise PuppetDBError("Node '{}', Darwin: no system_profiler>serial_number".format(certname))
+                raise PuppetDBError(f"Node '{certname}', Darwin: no system_profiler>serial_number")
             ct['serial_number'] = serial_number
 
             # OS version
@@ -240,7 +247,7 @@ class PuppetDBClient(object):
             try:
                 ct["serial_number"] = facts["dmi"]["product"]["uuid"]
             except KeyError:
-                raise PuppetDBError("Node '{}', Linux: no dmi>product>uuid".format(certname))
+                raise PuppetDBError(f"Node '{certname}', Linux: no dmi>product>uuid")
 
             # OS version
             os_version = dict(zip(('major', 'minor', 'patch'),
@@ -252,7 +259,7 @@ class PuppetDBClient(object):
             system_info['computer_name'] = facts['hostname']
 
         else:
-            raise PuppetDBError("Node '{}': unknown kernel {}".format(certname, kernel))
+            raise PuppetDBError(f"Node '{certname}': unknown kernel {kernel}")
 
         if system_info:
             ct["system_info"] = system_info
