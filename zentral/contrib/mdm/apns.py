@@ -1,9 +1,9 @@
 import logging
 import random
-from tempfile import NamedTemporaryFile
 import time
 import httpx
 from zentral.core.events.base import EventMetadata
+from zentral.utils.ssl import create_client_ssl_context
 from .events import MDMDeviceNotificationEvent
 
 
@@ -17,20 +17,16 @@ class APNSClient(object):
 
     def __init__(self, push_certificate):
         self.push_certificate = push_certificate
-        # We have to materialize the certificate
-        # Python SSL contexts cannot load cert and key from memory
-        # TODO update when the Python API is available
-        with NamedTemporaryFile() as tmp_cert_file:
-            tmp_cert_file.write(self.push_certificate.certificate.tobytes())
-            tmp_cert_file.flush()
-            with NamedTemporaryFile() as tmp_key_file:
-                tmp_key_file.write(self.push_certificate.private_key.tobytes())
-                tmp_key_file.flush()
-                self.client = httpx.Client(base_url=self.apns_production_base_url,
-                                           http2=True,
-                                           verify=True,
-                                           cert=(tmp_cert_file.name, tmp_key_file.name),
-                                           timeout=self.timeout)
+        ssl_context = create_client_ssl_context(
+            self.push_certificate.certificate.tobytes(),
+            self.push_certificate.private_key.tobytes()
+        )
+        self.client = httpx.Client(
+            base_url=self.apns_production_base_url,
+            http2=True,
+            verify=ssl_context,
+            timeout=self.timeout
+        )
 
     def _send_notification(self, enrolled_device, target, priority, expiration_seconds):
         logger.debug("APNS notify device %s, target %s", enrolled_device, target)
