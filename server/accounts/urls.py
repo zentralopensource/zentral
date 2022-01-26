@@ -44,12 +44,12 @@ urlpatterns = [
          name="delete_totp"),
     path('verify_totp/', views.VerifyTOTPView.as_view(),
          name='verify_totp'),
-    path('settings/verification_devices/register_u2f_device/', views.RegisterU2FDeviceView.as_view(),
-         name="register_u2f_device"),
-    path('settings/verification_devices/u2f/<int:pk>/delete/', views.DeleteU2FDeviceView.as_view(),
-         name="delete_u2f_device"),
-    path(r'verify_u2f/', views.VerifyU2FView.as_view(),
-         name='verify_u2f'),
+    path('settings/verification_devices/register_webauthn_device/', views.RegisterWebAuthnDeviceView.as_view(),
+         name="register_webauthn_device"),
+    path('settings/verification_devices/webauthn/<int:pk>/delete/', views.DeleteWebAuthnDeviceView.as_view(),
+         name="delete_webauthn_device"),
+    path(r'verify_webauthn/', views.VerifyWebAuthnView.as_view(),
+         name='verify_webauthn'),
 ]
 
 setup_menu_cfg = {

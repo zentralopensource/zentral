@@ -27,7 +27,6 @@ pyopenssl                       # MDM
 pyotp                           # Auth / 2nd factor
 pysaml2                         # Auth / SAML
 python-dateutil
-python-u2flib-server            # Auth / U2F
 pyyaml
 requests
 requests_oauthlib               # MDM DEP
@@ -37,3 +36,4 @@ tqdm
 XlsxWriter
 josepy                          # Auth / OpenID Connect
 python-ldap                     # Auth / LDAP
+webauthn                        # Auth / WebAuthn

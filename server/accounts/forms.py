@@ -1,4 +1,6 @@
 import functools
+import json
+import logging
 import operator
 from urllib.parse import urlparse
 from django import forms
@@ -11,10 +13,15 @@ from django.db.models import Q
 from django.utils.crypto import get_random_string
 from django.utils.translation import ugettext_lazy as _
 import pyotp
-from u2flib_server.u2f import begin_authentication, complete_authentication
-from .models import User, UserTOTP, UserU2F
+from webauthn import generate_authentication_options, options_to_json, verify_authentication_response
+from webauthn.helpers.structs import AuthenticationCredential, PublicKeyCredentialDescriptor
+from .models import User, UserTOTP, UserWebAuthn
 from zentral.conf import settings as zentral_settings
 from zentral.conf.config import ConfigList
+from zentral.utils.base64 import trimmed_urlsafe_b64decode
+
+
+logger = logging.getLogger("zentral.accounts.forms")
 
 
 class ZentralAuthenticationForm(AuthenticationForm):
@@ -217,9 +224,19 @@ class BaseVerifyForm(forms.Form):
         super().__init__(*args, **kwargs)
 
     def get_alternative_verification_links(self):
-        return set((vd.get_verification_url(), "Use a {} device".format(vd.TYPE))
-                   for vd in self.user.get_prioritized_verification_devices(self.user_agent)
-                   if vd.TYPE != self.device_type)
+        links = set([])
+        for vd in self.user.get_prioritized_verification_devices(self.user_agent):
+            if vd.TYPE == self.device_type:
+                continue
+            url = vd.get_verification_url()
+            if vd.TYPE == UserTOTP.TYPE:
+                anchor_text = "Enter two-factor authentication code"
+            elif vd.TYPE == UserWebAuthn.TYPE:
+                anchor_text = "Use a security key"
+            else:
+                anchor_text = f"Use a {vd.TYPE} device"
+            links.add((url, anchor_text))
+        return links
 
 
 class VerifyTOTPForm(BaseVerifyForm):
@@ -238,25 +255,68 @@ class VerifyTOTPForm(BaseVerifyForm):
         return cleaned_data
 
 
-class VerifyU2FForm(BaseVerifyForm):
-    device_type = UserU2F.TYPE
+class VerifyWebAuthnForm(BaseVerifyForm):
+    device_type = UserWebAuthn.TYPE
     token_response = forms.CharField(required=True)
 
-    def set_u2f_challenge(self):
-        user_devices = [ud.device for ud in self.user.useru2f_set.all()]
-        if user_devices:
-            authentication_request = begin_authentication(zentral_settings["api"]["tls_hostname"], user_devices)
-            u2f_challenge = self.session["u2f_challenge"] = dict(authentication_request)
-            return u2f_challenge
+    def set_challenge(self):
+        credentials = []
+        appid = None
+        for user_device in self.user.userwebauthn_set.all():
+            credentials.append(PublicKeyCredentialDescriptor(id=user_device.get_key_handle_bytes()))
+            device_appid = user_device.get_appid()
+            if device_appid:
+                appid = device_appid
+        if credentials:
+            authentication_options = json.loads(
+                options_to_json(
+                    generate_authentication_options(
+                        rp_id=zentral_settings["api"]["fqdn"],
+                        allow_credentials=credentials,
+                    )
+                )
+            )
+            if appid:
+                authentication_options["extensions"] = {"appid": appid}
+            challenge = self.session["webauthn_challenge"] = dict(authentication_options)
+            return challenge
 
     def clean(self):
         cleaned_data = super().clean()
-        u2f_challenge = self.session["u2f_challenge"]
-        token_response = cleaned_data["token_response"]
-        device, _, _ = complete_authentication(u2f_challenge, token_response,
-                                               [zentral_settings["api"]["tls_hostname"]])
-        if not device:
-            raise forms.ValidationError("Could not complete the U2F authentication")
+        webauthn_challenge = self.session["webauthn_challenge"]
+        try:
+            credential = AuthenticationCredential.parse_raw(cleaned_data["token_response"])
+        except Exception:
+            msg = "Invalid token response"
+            logger.exception(msg)
+            raise forms.ValidationError(msg)
+        try:
+            device = self.user.userwebauthn_set.select_for_update().get(key_handle=credential.id)
+        except UserWebAuthn.DoesNotExist:
+            logger.error(f"Could not find WebAuthn device {credential.id} for user {self.user.pk}")
+            raise forms.ValidationError("Unknown security key")
+        appid = device.get_appid()
+        if appid:
+            # legacy U2F registration
+            expected_rp_id = appid
+        else:
+            expected_rp_id = webauthn_challenge["rpId"]
+        try:
+            verification = verify_authentication_response(
+                credential=credential,
+                expected_challenge=trimmed_urlsafe_b64decode(webauthn_challenge["challenge"]),
+                expected_rp_id=expected_rp_id,
+                expected_origin=zentral_settings["api"]["tls_hostname"],
+                credential_public_key=device.public_key.tobytes(),
+                credential_current_sign_count=device.sign_count,
+                require_user_verification=False,
+            )
+        except Exception:
+            msg = "Authentication error"
+            logger.exception(msg)
+            raise forms.ValidationError(msg)
+        device.sign_count = verification.new_sign_count
+        device.save()
         return cleaned_data
 
 
@@ -276,12 +336,11 @@ class CheckPasswordForm(forms.Form):
         return cleaned_data
 
 
-class RegisterU2FDeviceForm(forms.Form):
+class RegisterWebAuthnDeviceForm(forms.Form):
     token_response = forms.CharField(required=True,
                                      widget=forms.HiddenInput)
     name = forms.CharField(max_length=256, required=True,
-                           widget=forms.TextInput(attrs={'autofocus': ''}),
-                           help_text="Enter a name and touch your U2F device.")
+                           widget=forms.TextInput(attrs={'autofocus': ''}))
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user")
@@ -289,6 +348,6 @@ class RegisterU2FDeviceForm(forms.Form):
 
     def clean_name(self):
         name = self.cleaned_data.get("name")
-        if name and UserU2F.objects.filter(user=self.user, name=name).count():
-            raise forms.ValidationError("A U2F device with this name is already registered with your account")
+        if name and UserWebAuthn.objects.filter(user=self.user, name=name).count():
+            raise forms.ValidationError("A security key with this name is already registered with your account")
         return name

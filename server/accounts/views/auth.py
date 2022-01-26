@@ -1,4 +1,3 @@
-import json
 import logging
 import uuid
 from django.conf import settings
@@ -15,7 +14,7 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic import FormView, View
 from accounts.events import post_failed_verification_event
-from accounts.forms import VerifyTOTPForm, VerifyU2FForm, ZentralAuthenticationForm
+from accounts.forms import VerifyTOTPForm, VerifyWebAuthnForm, ZentralAuthenticationForm
 from realms.models import Realm
 from zentral.conf import settings as zentral_settings
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -114,15 +113,13 @@ class VerifyTOTPView(VerificationMixin, FormView):
     form_class = VerifyTOTPForm
 
 
-class VerifyU2FView(VerificationMixin, FormView):
-    template_name = "accounts/verify_u2f.html"
-    form_class = VerifyU2FForm
+class VerifyWebAuthnView(VerificationMixin, FormView):
+    template_name = "accounts/verify_webauthn.html"
+    form_class = VerifyWebAuthnForm
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data()
-        ctx["u2f_challenge_json"] = VerifyU2FForm(session=self.request.session).set_u2f_challenge()
-        if "u2f_challenge" in self.request.session:
-            ctx["u2f_challenge_json"] = json.dumps(self.request.session["u2f_challenge"])
+        ctx["webauthn_challenge"] = VerifyWebAuthnForm(session=self.request.session).set_challenge()
         return ctx
 
 

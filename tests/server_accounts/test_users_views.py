@@ -1,4 +1,6 @@
+import base64
 from functools import reduce
+import json
 import operator
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
@@ -7,7 +9,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 import pyotp
 from rest_framework.authtoken.models import Token
-from accounts.models import User
+from accounts.models import User, UserTOTP, UserWebAuthn
 from zentral.conf import ConfigDict, settings
 
 
@@ -16,9 +18,10 @@ class AccountUsersViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # ui user
+        cls.ui_user_pwd = get_random_string()
         cls.ui_user = User.objects.create_user(get_random_string(),
                                                "{}@zentral.io".format(get_random_string()),
-                                               get_random_string(),
+                                               cls.ui_user_pwd,
                                                is_superuser=False)
         # group
         cls.ui_group = Group.objects.create(name=get_random_string())
@@ -65,47 +68,97 @@ class AccountUsersViewsTestCase(TestCase):
             self.ui_group.permissions.clear()
         self.client.force_login(self.ui_user)
 
-    # permissions denied
+    # simple login
 
-    def test_user_list_redirect(self):
-        self.login_redirect("users")
-        self.login()
-        self.permission_denied("users")
-        self.login("accounts.change_user")
-        self.permission_denied("users")
+    def test_simple_login_ok(self):
+        response = self.client.post(reverse("login"),
+                                    {"username": self.ui_user.username, "password": self.ui_user_pwd},
+                                    follow=True)
+        self.assertTemplateUsed(response, "base/index.html")
+        self.assertTrue(response.context["request"].user.is_authenticated)
+        self.assertEqual(response.context["request"].user, self.ui_user)
 
-    def test_user_invite_redirect(self):
-        self.login_redirect("invite_user")
-        self.login()
-        self.permission_denied("invite_user")
-        self.login("accounts.view_user")
-        self.permission_denied("invite_user")
+    def test_simple_login_wrong_password(self):
+        response = self.client.post(reverse("login"),
+                                    {"username": self.ui_user.username, "password": self.ui_user_pwd + "0"},
+                                    follow=True)
+        self.assertTemplateUsed(response, "registration/login.html")
+        self.assertFalse(response.context["request"].user.is_authenticated)
+        self.assertContains(response, "Please enter a correct username and password.")
 
-    def test_user_update_redirect(self):
-        self.login_redirect("update_user", self.user.id)
-        self.login()
-        self.permission_denied("update_user", self.superuser.id)
-        self.login("accounts.add_user")
-        self.permission_denied("update_user", self.superuser.id)
+    # login + totp
 
-    def test_user_delete_redirect(self):
-        self.login_redirect("delete_user", self.user.id)
-        self.login()
-        self.permission_denied("delete_user", self.user.id)
-        self.login("accounts.add_user")
-        self.permission_denied("delete_user", self.user.id)
+    def test_login_totp_not_ok(self):
+        UserTOTP.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            secret=pyotp.random_base32(),
+        )
+        response = self.client.post(reverse("login"),
+                                    {"username": self.ui_user.username, "password": self.ui_user_pwd},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/verify_totp.html")
+        self.assertFalse(response.context["request"].user.is_authenticated)
+        response = self.client.post(reverse("accounts:verify_totp"),
+                                    {"verification_code": pyotp.totp.TOTP(pyotp.random_base32()).now()},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/verify_totp.html")
+        self.assertFalse(response.context["request"].user.is_authenticated)
+        self.assertFormError(response, "form", "verification_code", "Invalid code")
 
-    def test_create_service_account_redirect(self):
-        self.login_redirect("create_service_account")
-        self.login()
-        self.permission_denied("create_service_account")
-        self.login("accounts.add_user")
-        self.permission_denied("create_service_account")
+    def test_login_totp_ok(self):
+        user_totp = UserTOTP.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            secret=pyotp.random_base32(),
+        )
+        response = self.client.post(reverse("login"),
+                                    {"username": self.ui_user.username, "password": self.ui_user_pwd},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/verify_totp.html")
+        self.assertFalse(response.context["request"].user.is_authenticated)
+        response = self.client.post(reverse("accounts:verify_totp"),
+                                    {"verification_code": pyotp.totp.TOTP(user_totp.secret).now()},
+                                    follow=True)
+        self.assertTemplateUsed(response, "base/index.html")
+        self.assertTrue(response.context["request"].user.is_authenticated)
+        self.assertEqual(response.context["request"].user, self.ui_user)
 
-    def test_create_api_token_redirect(self):
-        self.login_redirect("create_user_api_token", self.user.id)
+    # login + webauthn
+
+    def test_login_webauthn_not_ok(self):
+        UserWebAuthn.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            rp_id=settings["api"]["fqdn"],
+            key_handle="syGQPDZRUYdb4m3rdWeyPaIMYlbmydGp1TP_33vE_lqJ3PHNyTd0iKsnKr5WjnCcBzcesZrDEfB_RBLFzU3k4w",
+            public_key=base64.urlsafe_b64decode(
+                "pQECAyYgASFYIEhW1CRfuNlIN6XTPKw0RbvzeaIlRMrDwwep-uq_-3"
+                "WQIlgg1FZwd_RZRsqS_qgKCDvcVh7ScoKNo3w5h5fv3ihUSww="
+            ),
+            sign_count=0,
+            transports=[],
+        )
+        response = self.client.post(reverse("login"),
+                                    {"username": self.ui_user.username, "password": self.ui_user_pwd},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/verify_webauthn.html")
+        self.assertFalse(response.context["request"].user.is_authenticated)
+        response = self.client.post(reverse("accounts:verify_webauthn"),
+                                    {"token_response": json.dumps({})},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/verify_webauthn.html")
+        self.assertFalse(response.context["request"].user.is_authenticated)
+        self.assertNotContains(response, "alert-danger")
 
     # user list
+
+    def test_user_list_login_redirect(self):
+        self.login_redirect("users")
+
+    def test_user_list_permission_denied(self):
+        self.login()
+        self.permission_denied("users")
 
     def test_user_list_ok(self):
         self.login("accounts.view_user")
@@ -132,7 +185,26 @@ class AccountUsersViewsTestCase(TestCase):
             self.assertContains(response, text)
         self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
 
+    # profile
+
+    def test_profile_login_redirect(self):
+        self.login_redirect("profile")
+
+    def test_profile(self):
+        self.login()
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertTemplateUsed(response, "accounts/profile.html")
+        self.assertNotContains(response, self.user.username)
+        self.assertContains(response, self.ui_user.username)
+
     # invite
+
+    def test_user_invite_login_redirect(self):
+        self.login_redirect("invite_user")
+
+    def test_user_invite_permission_denied(self):
+        self.login("accounts.view_user")
+        self.permission_denied("invite_user")
 
     def test_user_invite_get(self):
         self.login("accounts.add_user")
@@ -187,6 +259,13 @@ class AccountUsersViewsTestCase(TestCase):
 
     # create service account
 
+    def test_create_service_account_login_redirect(self):
+        self.login_redirect("create_service_account")
+
+    def test_create_service_account_permission_denied(self):
+        self.login("accounts.add_user")
+        self.permission_denied("create_service_account")
+
     def test_create_service_account(self):
         self.login("accounts.add_user", "accounts.view_user", "authtoken.add_token")
         username = get_random_string()
@@ -201,6 +280,13 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertContains(response, token.key)
 
     # update
+
+    def test_user_update_login_redirect(self):
+        self.login_redirect("update_user", self.user.id)
+
+    def test_user_update_permission_denied(self):
+        self.login("accounts.add_user")
+        self.permission_denied("update_user", self.superuser.id)
 
     def test_user_update_404(self):
         self.login("accounts.change_user")
@@ -251,6 +337,13 @@ class AccountUsersViewsTestCase(TestCase):
 
     # delete
 
+    def test_user_delete_login_redirect(self):
+        self.login_redirect("delete_user", self.user.id)
+
+    def test_user_delete_permission_denied(self):
+        self.login("accounts.add_user")
+        self.permission_denied("delete_user", self.user.id)
+
     def test_user_delete_404(self):
         self.login("accounts.delete_user")
         response = self.client.post(reverse("accounts:delete_user", args=(0,)))
@@ -270,7 +363,10 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "accounts/user_list.html")
         self.assertContains(response, "3 User")
 
-    # token
+    # create API token
+
+    def test_create_api_token_login_redirect(self):
+        self.login_redirect("create_user_api_token", self.user.id)
 
     def test_create_api_token_not_self(self):
         self.login()
@@ -318,6 +414,8 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertNotContains(response, "Settings")
         self.assertContains(response, "Users")
 
+    # delete API token
+
     def test_delete_api_token_not_self(self):
         self.login()
         # ui_user != user → 403
@@ -357,10 +455,17 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertEqual(response.context["object"], service_account)
         self.assertEqual(Token.objects.filter(user=service_account).count(), 0)
 
-    # totp
+    # verification devices list
 
-    def test_add_totp_redirect(self):
+    def test_verification_devices_login_redirect(self):
+        self.login_redirect("verification_devices")
+
+    # add TOTP device
+
+    def test_add_totp_login_redirect(self):
         self.login_redirect("add_totp")
+
+    def test_add_totp_get(self):
         self.login()
         response = self.client.get(reverse("accounts:add_totp"))
         self.assertTemplateUsed(response, "accounts/add_totp.html")
@@ -390,3 +495,169 @@ class AccountUsersViewsTestCase(TestCase):
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/user_verification_devices.html")
         self.assertContains(response, name)
+
+    # delete TOTP device
+
+    def test_delete_totp_login_redirect(self):
+        user_totp = UserTOTP.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            secret=pyotp.random_base32(),
+        )
+        self.login_redirect("delete_totp", user_totp.pk)
+
+    def test_delete_totp_404(self):
+        self.login()
+        response = self.client.get(reverse("accounts:delete_totp", args=(0,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_totp_wrong_user_404(self):
+        user_totp = UserTOTP.objects.create(
+            user=self.user,  # not ui_user
+            name=get_random_string(),
+            secret=pyotp.random_base32(),
+        )
+        self.login()
+        response = self.client.get(reverse("accounts:delete_totp", args=(user_totp.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_totp_get(self):
+        user_totp = UserTOTP.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            secret=pyotp.random_base32(),
+        )
+        self.login()
+        response = self.client.get(reverse("accounts:delete_totp", args=(user_totp.pk,)))
+        self.assertTemplateUsed(response, "accounts/delete_verification_device.html")
+        self.assertContains(response, user_totp.name)
+
+    def test_delete_totp_wrong_password(self):
+        user_totp = UserTOTP.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            secret=pyotp.random_base32(),
+        )
+        self.login()
+        response = self.client.post(reverse("accounts:delete_totp", args=(user_totp.pk,)),
+                                    {"password": self.ui_user_pwd + "1"},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/delete_verification_device.html")
+        self.assertContains(response, "Your password was entered incorrectly")
+
+    def test_delete_totp_post(self):
+        user_totp = UserTOTP.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            secret=pyotp.random_base32(),
+        )
+        self.login()
+        response = self.client.post(reverse("accounts:delete_totp", args=(user_totp.pk,)),
+                                    {"password": self.ui_user_pwd},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/user_verification_devices.html")
+        self.assertEqual(UserTOTP.objects.filter(pk=user_totp.pk).count(), 0)
+        self.assertNotContains(response, user_totp.name)
+
+    # add WebAuthn device
+
+    def test_register_webauthn_login_redirect(self):
+        self.login_redirect("register_webauthn_device")
+
+    def test_register_webauthn_get(self):
+        self.login()
+        response = self.client.get(reverse("accounts:register_webauthn_device"))
+        self.assertTemplateUsed(response, "accounts/register_webauthn_device.html")
+        self.assertNotContains(response, "alert-danger")
+
+    def test_register_webauthn_validation_error(self):
+        self.login()
+        response = self.client.get(reverse("accounts:register_webauthn_device"))
+        response = self.client.post(reverse("accounts:register_webauthn_device"),
+                                    {"name": get_random_string(),
+                                     "token_response": json.dumps({})})
+        self.assertTemplateUsed(response, "accounts/register_webauthn_device.html")
+        self.assertContains(response, "alert-danger")
+
+    # delete WebAuthn device
+
+    def test_delete_webauthn_device_login_redirect(self):
+        user_webauthn = UserWebAuthn.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            rp_id=settings["api"]["fqdn"],
+            key_handle=get_random_string(length=86, allowed_chars="s9xL"),
+            public_key=b"123",
+            sign_count=0,
+            transports=[],
+        )
+        self.login_redirect("delete_webauthn_device", user_webauthn.pk)
+
+    def test_delete_webauthn_device_404(self):
+        self.login()
+        response = self.client.get(reverse("accounts:delete_webauthn_device", args=(0,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_webauthn_device_wrong_user_404(self):
+        user_webauthn = UserWebAuthn.objects.create(
+            user=self.user,
+            name=get_random_string(),
+            rp_id=settings["api"]["fqdn"],
+            key_handle=get_random_string(length=86, allowed_chars="s9xL"),
+            public_key=b"123",
+            sign_count=0,
+            transports=[],
+        )
+        self.login()
+        response = self.client.get(reverse("accounts:delete_webauthn_device", args=(user_webauthn.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_webauthn_device_get(self):
+        user_webauthn = UserWebAuthn.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            rp_id=settings["api"]["fqdn"],
+            key_handle=get_random_string(length=86, allowed_chars="s9xL"),
+            public_key=b"123",
+            sign_count=0,
+            transports=[],
+        )
+        self.login()
+        response = self.client.get(reverse("accounts:delete_webauthn_device", args=(user_webauthn.pk,)))
+        self.assertTemplateUsed(response, "accounts/delete_verification_device.html")
+        self.assertContains(response, user_webauthn.name)
+
+    def test_delete_webauthn_device_wrong_password(self):
+        user_webauthn = UserWebAuthn.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            rp_id=settings["api"]["fqdn"],
+            key_handle=get_random_string(length=86, allowed_chars="s9xL"),
+            public_key=b"123",
+            sign_count=0,
+            transports=[],
+        )
+        self.login()
+        response = self.client.post(reverse("accounts:delete_webauthn_device", args=(user_webauthn.pk,)),
+                                    {"password": self.ui_user_pwd + "1"},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/delete_verification_device.html")
+        self.assertContains(response, "Your password was entered incorrectly")
+
+    def test_delete_webauthn_device_post(self):
+        user_webauthn = UserWebAuthn.objects.create(
+            user=self.ui_user,
+            name=get_random_string(),
+            rp_id=settings["api"]["fqdn"],
+            key_handle=get_random_string(length=86, allowed_chars="s9xL"),
+            public_key=b"123",
+            sign_count=0,
+            transports=[],
+        )
+        self.login()
+        response = self.client.post(reverse("accounts:delete_webauthn_device", args=(user_webauthn.pk,)),
+                                    {"password": self.ui_user_pwd},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/user_verification_devices.html")
+        self.assertEqual(UserWebAuthn.objects.filter(pk=user_webauthn.pk).count(), 0)
+        self.assertNotContains(response, user_webauthn.name)

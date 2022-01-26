@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% load bootstrap staticfiles %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-4 col-md-offset-4">
+    <form id="form" action="{% url 'accounts:verify_webauthn' %}" class="panel panel-default" method="POST">{% csrf_token %}
+      <input type="hidden" id="token_response" name="token_response">
+      <div class="panel-heading">
+        <h3 class="panel-title">
+          Two-factor authentication - Security key
+        </h3>
+      </div>
+      <div class="panel-body">
+        <p id="message">When you are ready to authenticate, press the button below.</p>
+      </div>
+      <div id="footer" class="panel-footer btn-group btn-group-justified" role="group" aria-label="retry security key verification">
+        <div class="btn-group" role="group">
+          <a id="start" class="btn btn-success">Use security key</a>
+        </div>
+        <div class="btn-group" role="group" style="display:none;">
+          <a id="message_retry" class="btn btn-primary">Retry</a>
+        </div>
+      </div>
+    </form>
+    {% for link, anchor_text in form.get_alternative_verification_links %}
+    <p><a href="{{ link }}"><u>{{ anchor_text }}</u></a></p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+{% if webauthn_challenge  %}
+{{ webauthn_challenge|json_script:"webauthn-challenge" }}
+<script nonce="{{ request.csp_nonce }}">
+  function ab2str(buf) {
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\//g, '_').replace(/\+/g, '-').replace(/=*$/, '');
+  }
+
+  function str2ab(enc) {
+    var str = atob(enc.replace(/_/g, '/').replace(/-/g, '+'));
+    var buf = new ArrayBuffer(str.length);
+    var bufView = new Uint8Array(buf);
+    for (var i=0, strLen=str.length; i < strLen; i++) {
+      bufView[i] = str.charCodeAt(i);
+    }
+    return buf;
+  }
+
+  function getRequest() {
+    var request = JSON.parse(document.getElementById("webauthn-challenge").textContent);
+    request.challenge = str2ab(request.challenge);
+    for (var i = 0; i < request.allowCredentials.length; i++) {
+      request.allowCredentials[i].id = str2ab(request.allowCredentials[i].id);
+    }
+    return request;
+  }
+
+  function show_message (message, retry) {
+    $("#footer").toggle(retry);
+    $("#message_retry").parent().toggle(retry);
+    $("#message").text(message);
+  }
+
+  function sign () {
+    show_message("Waiting for security key…", false);
+    navigator.credentials.get({
+      publicKey: getRequest()
+    }).then((credential) => {
+      var r = credential.response;
+      var data = {
+        id: ab2str(credential.rawId),
+        rawId: ab2str(credential.rawId),
+        response: {
+          authenticatorData: ab2str(r.authenticatorData),
+          clientDataJSON: ab2str(r.clientDataJSON),
+          signature: ab2str(r.signature),
+        }
+      };
+      show_message("OK", false);
+      document.getElementById('token_response').value = JSON.stringify(data);
+      document.forms[0].submit();
+    }, (reason) => {
+      show_message("Authentication error: " + reason, true);
+    });
+  }
+
+  $(document).ready(function(){
+    var request = getRequest();
+    if (request.allowCredentials.length > 0) {
+      $("#start").click(function (event) {
+        $(this).parent().hide();
+        sign();
+      });
+      $("#message_retry").click(function (event) {
+        event.preventDefault();
+        sign();
+      });
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

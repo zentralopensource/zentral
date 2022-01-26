@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load bootstrap staticfiles %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  <li><a href="{% url 'accounts:verification_devices' %}">Verification devices</a></li>
+  <li class="active">Register security key</li>
+</ol>
+
+<h3>Register new security key</h3>
+
+<form id="form" class="form" method="POST">{% csrf_token %}
+  {{ form.name|bootstrap }}
+  {{ form.token_response }}
+</form>
+<p>
+  <a class="btn btn-default" href="{% url 'accounts:verification_devices' %}">Cancel</a>
+  <button id="main-btn" type="button" class="btn btn-primary">Add</button>
+</p>
+<p class="text-muted" id="message" style="display:none;">Waiting for device…</p>
+{% endblock %}
+
+{% block extrajs %}
+{{ webauthn_challenge|json_script:"webauthn-challenge" }}
+<script nonce="{{ request.csp_nonce }}">
+  function ab2str(buf) {
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\//g, '_').replace(/\+/g, '-').replace(/=*$/, '');
+  }
+
+  function str2ab(enc) {
+    var str = atob(enc.replace(/_/g, '/').replace(/-/g, '+'));
+    var buf = new ArrayBuffer(str.length);
+    var bufView = new Uint8Array(buf);
+    for (var i=0, strLen=str.length; i < strLen; i++) {
+      bufView[i] = str.charCodeAt(i);
+    }
+    return buf;
+  }
+
+  function getRequest() {
+    var request = JSON.parse(document.getElementById("webauthn-challenge").textContent);
+    request.challenge = str2ab(request.challenge);
+    for (var i = 0; i < request.excludeCredentials.length; i++) {
+      request.excludeCredentials[i].id = str2ab(request.excludeCredentials[i].id);
+    }
+    request.user.id = str2ab(request.user.id);
+    return request;
+  }
+
+  function show_message (message, retry) {
+    $("#message").text(message).show();
+    if (retry) {
+      $("#main-btn").text("Retry").parent().show();
+    } else {
+      $("#main-btn").parent().hide();
+    }
+  }
+
+  function register () {
+    show_message("Waiting for security key…", false);
+    navigator.credentials.create({
+      publicKey: getRequest()
+    }).then((credential) => {
+      var r = credential.response;
+      var data = {
+        id: credential.id,
+        rawId: credential.id,
+        type: credential.type,
+        response: {
+          attestationObject: ab2str(r.attestationObject),
+          clientDataJSON: ab2str(r.clientDataJSON)
+        }
+      };
+      if ("getTransports" in r) {
+        data.transports = r.getTransports();
+      }
+      document.getElementById('id_token_response').value = JSON.stringify(data);
+      document.forms[0].submit();
+      show_message("OK", false);
+    }, (reason) => {
+      show_message("Authentication error: " + reason, true);
+    });
+  }
+
+  $(document).ready(function(){
+    $("#main-btn").click(function (event) {
+      event.preventDefault();
+      var name_input = document.getElementById('id_name');
+      if (name_input.value.length <= 0) {
+        show_message("Missing device name.", true);
+        name_input.focus();
+      } else {
+        register();
+      }
+    });
+  });
+</script>
+{% endblock %}

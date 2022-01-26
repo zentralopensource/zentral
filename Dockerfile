@@ -18,7 +18,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
 # xar to build the packages
             libbz2-dev \
-# extra dependencies for python crypto / u2f
+# extra dependencies for python crypto / WebAuthn
             libssl-dev \
             libffi-dev \
             python3-dev \
@@ -124,7 +124,7 @@ RUN apt-get update && \
             xmlsec1 \
 # libpq5 for psycopg2
             libpq5 \
-# extra dependencies for python crypto / u2f
+# extra dependencies for python crypto / WebAuthn
             libssl1.1 \
             libffi6 \
 # dep for python-ldap

@@ -1,12 +1,14 @@
+import enum
 from itertools import chain
 from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
-from django.contrib.postgres.fields import JSONField
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 import pyotp
+from zentral.utils.base64 import trimmed_urlsafe_b64decode
 
 
 class UserManager(DjangoUserManager):
@@ -85,7 +87,7 @@ class User(AbstractUser):
     @cached_property
     def _all_verification_devices(self):
         return list(chain(self.usertotp_set.all(),
-                          self.useru2f_set.all()))
+                          self.userwebauthn_set.all()))
 
     def get_verification_devices(self):
         return sorted(self._all_verification_devices,
@@ -154,20 +156,43 @@ class UserTOTP(UserVerificationDevice):
         return True
 
 
-class UserU2F(UserVerificationDevice):
-    TYPE = "U2F"
+class WebAuthnTransport(enum.Enum):
+    USB = "usb"
+    NFC = "nfc"
+    BLE = "ble"
+    INTERNAL = "internal"
+
+    @classmethod
+    def choices(cls):
+        return tuple((i.value, i.value) for i in cls)
+
+
+class UserWebAuthn(UserVerificationDevice):
+    TYPE = "WebAuthn"
     PRIORITY = 100
-    delete_url_name = "accounts:delete_u2f_device"
-    device = JSONField()
+    delete_url_name = "accounts:delete_webauthn_device"
+    key_handle = models.TextField()
+    public_key = models.BinaryField()
+    rp_id = models.TextField()
+    transports = ArrayField(models.CharField(max_length=8, choices=WebAuthnTransport.choices()))
+    sign_count = models.PositiveIntegerField()
 
     class Meta:
-        unique_together = (("user", "device"), ("user", "name"))
+        unique_together = (("user", "key_handle"), ("user", "name"))
+
+    def get_type_for_display(self):
+        return "Security key"
 
     def get_verification_url(self):
-        return reverse("accounts:verify_u2f")
+        return reverse("accounts:verify_webauthn")
 
     def test_user_agent(self, user_agent):
-        if user_agent:
-            user_agent = user_agent.lower()
-            return 'safari' not in user_agent or 'chrome' in user_agent
-        return False
+        return True
+
+    def get_key_handle_bytes(self):
+        return trimmed_urlsafe_b64decode(self.key_handle)
+
+    def get_appid(self):
+        if self.rp_id.startswith("https://"):
+            # legacy U2F registration
+            return self.rp_id

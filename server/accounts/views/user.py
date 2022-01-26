@@ -1,3 +1,4 @@
+from base64 import urlsafe_b64encode
 import json
 import logging
 from django.contrib import messages
@@ -5,11 +6,13 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import DetailView, FormView, TemplateView
-from u2flib_server.u2f import begin_registration, complete_registration
+from webauthn import generate_registration_options, options_to_json, verify_registration_response
+from webauthn.helpers.structs import PublicKeyCredentialDescriptor, RegistrationCredential
 from accounts.events import post_verification_device_event
-from accounts.forms import AddTOTPForm, CheckPasswordForm, RegisterU2FDeviceForm
-from accounts.models import UserTOTP, UserU2F
+from accounts.forms import AddTOTPForm, CheckPasswordForm, RegisterWebAuthnDeviceForm
+from accounts.models import UserTOTP, UserWebAuthn
 from zentral.conf import settings as zentral_settings
+from zentral.utils.base64 import trimmed_urlsafe_b64decode
 
 
 logger = logging.getLogger("zentral.accounts.views.user")
@@ -53,11 +56,11 @@ class DeleteVerificationDeviceView(LoginRequiredMixin, FormView):
     form_class = CheckPasswordForm
     success_url = reverse_lazy("accounts:verification_devices")
 
-    def dispatch(self, request, *args, **kwargs):
-        self.device = get_object_or_404(self.model, user=request.user, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
+    def get_device(self):
+        self.device = get_object_or_404(self.model, user=self.request.user, pk=self.kwargs["pk"])
 
     def get_context_data(self, **kwargs):
+        self.get_device()
         ctx = super().get_context_data(**kwargs)
         ctx["object"] = self.device
         return ctx
@@ -68,6 +71,7 @@ class DeleteVerificationDeviceView(LoginRequiredMixin, FormView):
         return kwargs
 
     def form_valid(self, form):
+        self.get_device()
         post_verification_device_event(self.request, self.request.user, "delete", self.device)
         self.device.delete()
         return super().form_valid(form)
@@ -77,15 +81,27 @@ class DeleteTOTPView(DeleteVerificationDeviceView):
     model = UserTOTP
 
 
-class RegisterU2FDeviceView(LoginRequiredMixin, FormView):
-    template_name = "accounts/register_u2f_device.html"
-    form_class = RegisterU2FDeviceForm
+class RegisterWebAuthnDeviceView(LoginRequiredMixin, FormView):
+    template_name = "accounts/register_webauthn_device.html"
+    form_class = RegisterWebAuthnDeviceForm
     success_url = reverse_lazy("accounts:verification_devices")
 
     def get(self, request, *args, **kwargs):
-        user_devices = [ud.device for ud in request.user.useru2f_set.all()]
-        register_request = begin_registration(zentral_settings["api"]["tls_hostname"], user_devices)
-        self.request.session["u2f_challenge"] = dict(register_request)
+        credentials = []
+        for user_device in request.user.userwebauthn_set.all():
+            credentials.append(PublicKeyCredentialDescriptor(id=user_device.get_key_handle_bytes()))
+        registration_options = json.loads(
+            options_to_json(
+                generate_registration_options(
+                    rp_id=zentral_settings["api"]["fqdn"],
+                    rp_name="Zentral",
+                    exclude_credentials=credentials,
+                    user_id=str(request.user.pk),
+                    user_name=request.user.username,
+                )
+            )
+        )
+        request.session["webauthn_challenge"] = registration_options
         return super().get(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -95,21 +111,38 @@ class RegisterU2FDeviceView(LoginRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data()
-        ctx["u2f_challenge_json"] = json.dumps(self.request.session["u2f_challenge"])
+        ctx["webauthn_challenge"] = self.request.session["webauthn_challenge"]
         return ctx
 
     def form_valid(self, form):
-        token_response = form.cleaned_data["token_response"]
-        u2f_challenge = self.request.session["u2f_challenge"]
-        device, _ = complete_registration(u2f_challenge, token_response,
-                                          [zentral_settings["api"]["tls_hostname"]])
-        user_u2f = UserU2F.objects.create(user=self.request.user,
-                                          name=form.cleaned_data["name"],
-                                          device=device)
-        post_verification_device_event(self.request, self.request.user, "create", user_u2f)
-        messages.info(self.request, "U2F device registered")
+        webauthn_challenge = self.request.session["webauthn_challenge"]
+        try:
+            credential = RegistrationCredential.parse_raw(form.cleaned_data["token_response"])
+            verification = verify_registration_response(
+                credential=credential,
+                expected_challenge=trimmed_urlsafe_b64decode(webauthn_challenge["challenge"]),
+                expected_origin=zentral_settings["api"]["tls_hostname"],
+                expected_rp_id=zentral_settings["api"]["fqdn"],
+                require_user_verification=False
+            )
+        except Exception:
+            logger.exception("Could not verify registration")
+            messages.error(self.request, "Authentication error")
+            return self.form_invalid(form)
+        transports = json.loads(form.cleaned_data["token_response"]).get("transports", [])
+        user_device = UserWebAuthn.objects.create(
+            user=self.request.user,
+            name=form.cleaned_data["name"],
+            key_handle=urlsafe_b64encode(verification.credential_id).decode("ascii").rstrip("="),
+            public_key=verification.credential_public_key,
+            rp_id=zentral_settings["api"]["fqdn"],
+            transports=transports,
+            sign_count=verification.sign_count
+        )
+        post_verification_device_event(self.request, self.request.user, "create", user_device)
+        messages.info(self.request, "Security key registered")
         return super().form_valid(form)
 
 
-class DeleteU2FDeviceView(DeleteVerificationDeviceView):
-    model = UserU2F
+class DeleteWebAuthnDeviceView(DeleteVerificationDeviceView):
+    model = UserWebAuthn
