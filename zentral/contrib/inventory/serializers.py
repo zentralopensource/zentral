@@ -26,6 +26,17 @@ class MachineTagsUpdateSerializer(serializers.Serializer):
     principal_users = MachineTagsUpdatePrincipalUsers()
 
 
+# Archive or prune machines
+
+
+class MachineSerialNumbersSerializer(serializers.Serializer):
+    serial_numbers = serializers.ListField(
+        child=serializers.CharField(min_length=1),
+        min_length=1,
+        max_length=1000
+    )
+
+
 # Standard model serializers
 
 

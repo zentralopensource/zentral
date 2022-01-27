@@ -8,7 +8,8 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 from accounts.models import User
-from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
+from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineSnapshot,
+                                              MachineSnapshotCommit, MetaBusinessUnit, Tag)
 
 
 class InventoryAPITests(APITestCase):
@@ -27,6 +28,8 @@ class InventoryAPITests(APITestCase):
         super().setUp()
         self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.token.key)
 
+    # utils
+
     def _set_permissions(self, *permissions):
         if permissions:
             permission_filter = reduce(operator.or_, (
@@ -39,6 +42,108 @@ class InventoryAPITests(APITestCase):
             self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
         else:
             self.group.permissions.clear()
+
+    def commit_machine_snapshot(self, serial_number=None):
+        if serial_number is None:
+            serial_number = get_random_string()
+        source = {"module": "tests.zentral.io", "name": "Zentral Tests"}
+        tree = {
+            "source": source,
+            "business_unit": {"name": "yo bu",
+                              "reference": "bu1",
+                              "source": source,
+                              "links": [{"anchor_text": "bu link",
+                                         "url": "http://bu-link.de"}]},
+            "groups": [{"name": "yo grp",
+                        "reference": "grp1",
+                        "source": source,
+                        "links": [{"anchor_text": "group link",
+                                   "url": "http://group-link.de"}]}],
+            "serial_number": serial_number,
+            "os_version": {'name': 'OS X', 'major': 10, 'minor': 11, 'patch': 1},
+            "osx_app_instances": [
+                {'app': {'bundle_id': 'io.zentral.baller',
+                         'bundle_name': 'Baller.app',
+                         'bundle_version': '123',
+                         'bundle_version_str': '1.2.3'},
+                 'bundle_path': "/Applications/Baller.app"}
+            ]
+        }
+        MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        return serial_number
+
+    # archive machines
+
+    def test_archive_machines_unauthorized(self):
+        response = self.client.post(reverse('inventory_api:archive_machines'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_archive_machines_wrong_permissions(self):
+        self._set_permissions("inventory.view_machinesnapshot")
+        response = self.client.post(reverse('inventory_api:archive_machines'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_archive_machines_bad_request(self):
+        self._set_permissions("inventory.change_machinesnapshot")
+        response = self.client.post(reverse('inventory_api:archive_machines'),
+                                    {"yolo": "fomo"}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_archive_machines(self):
+        serial_number = self.commit_machine_snapshot()
+        serial_number2 = self.commit_machine_snapshot()
+        self._set_permissions("inventory.change_machinesnapshot")
+        response = self.client.post(reverse('inventory_api:archive_machines'),
+                                    {"serial_numbers": [serial_number]}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data,
+                         {"current_machine_snapshots": 1})
+        self.assertEqual(
+            CurrentMachineSnapshot.objects.filter(serial_number__in=[serial_number, serial_number2]).count(),
+            1
+        )
+
+    # prune machines
+
+    def test_prune_machines_unauthorized(self):
+        response = self.client.post(reverse('inventory_api:prune_machines'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_prune_machines_wrong_permissions(self):
+        self._set_permissions("inventory.change_machinesnapshot")
+        response = self.client.post(reverse('inventory_api:prune_machines'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_prune_machines_bad_request(self):
+        self._set_permissions("inventory.delete_machinesnapshot")
+        response = self.client.post(reverse('inventory_api:prune_machines'),
+                                    {"yolo": "fomo"}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_prune_machines(self):
+        serial_number = self.commit_machine_snapshot()
+        self.commit_machine_snapshot(serial_number)
+        serial_number2 = self.commit_machine_snapshot()
+        self._set_permissions("inventory.delete_machinesnapshot")
+        response = self.client.post(reverse('inventory_api:prune_machines'),
+                                    {"serial_numbers": [serial_number]}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data,
+                         {"current_machine_snapshots": 1,
+                          "machine_snapshot_commits": 2,
+                          "machine_snapshots": 1})
+        self.assertEqual(
+            CurrentMachineSnapshot.objects.filter(serial_number__in=[serial_number, serial_number2]).count(),
+            1
+        )
+        self.assertEqual(
+            MachineSnapshot.objects.filter(serial_number__in=[serial_number, serial_number2]).count(),
+            1
+        )
+        self.assertEqual(
+            MachineSnapshotCommit.objects.filter(serial_number__in=[serial_number, serial_number2]).count(),
+            1
+        )
 
     # machines export
 

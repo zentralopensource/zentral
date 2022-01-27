@@ -8,8 +8,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .forms import MacOSAppSearchForm
-from .models import MachineTag, MetaBusinessUnit, Tag, Taxonomy
-from .serializers import MachineTagsUpdateSerializer, MetaBusinessUnitSerializer, TagSerializer
+from .models import CurrentMachineSnapshot, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag, Taxonomy
+from .serializers import (MachineSerialNumbersSerializer,
+                          MachineTagsUpdateSerializer,
+                          MetaBusinessUnitSerializer,
+                          TagSerializer)
 from .tasks import (export_inventory, export_macos_apps,
                     export_machine_macos_app_instances,
                     export_machine_program_instances,
@@ -95,6 +98,36 @@ class UpdateMachineTags(APIView):
         return Response({"machines": {"found": found_machines},
                          "tags": {"added": total_added,
                                   "removed": total_removed}})
+
+
+# Archive or prune machines
+
+
+class ArchiveMachines(APIView):
+    permission_required = "inventory.change_machinesnapshot"
+    permission_classes = [DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        serializer = MachineSerialNumbersSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        count, _ = CurrentMachineSnapshot.objects.filter(serial_number__in=serializer.data["serial_numbers"]).delete()
+        return Response({"current_machine_snapshots": count})
+
+
+class PruneMachines(APIView):
+    permission_required = "inventory.delete_machinesnapshot"
+    permission_classes = [DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        serializer = MachineSerialNumbersSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        _, result = MachineSnapshot.objects.filter(serial_number__in=serializer.data["serial_numbers"]).delete()
+        response = {}
+        for model_name, response_attr in (("CurrentMachineSnapshot", "current_machine_snapshots"),
+                                          ("MachineSnapshotCommit", "machine_snapshot_commits"),
+                                          ("MachineSnapshot", "machine_snapshots")):
+            response[response_attr] = result.get(f"inventory.{model_name}", 0)
+        return Response(response)
 
 
 # Machine and apps reports
