@@ -21,6 +21,7 @@ nav:
 - Apps:
   - Inventory: apps/inventory.md
   - Monolith: apps/monolith.md
+  - Munki: apps/munki.md
   - Osquery: apps/osquery.md
   - Santa: apps/santa.md
 - Deployment:
