@@ -6,6 +6,46 @@ The Zentral Inventory app is mandatory in a Zentral deployment. It is used to st
 
 A `zentral.contrib.inventory` subsection must be present in the `apps` section in [the configuration](/configuration).
 
+### `metrics`
+
+**OPTIONAL**
+
+This boolean is used to toggle the inventory metrics endpoint. `false` by default.
+
+### `metrics_options`
+
+**OPTIONAL**
+
+A dictionary to configure the available inventory metrics. Only configured metrics will be published. Empty by default.
+
+Four different metric families are available: `osx_apps`, `deb_packages`, `programs`, and `os_versions`. To publish a metric family, the corresponding configuration dictionary must be set in the `metrics_options` section. For each metric family, a mandatory `sources` attribute must be set, to filter the inventory sources. A mandatory `bundle_ids` attribute (array of strings) must be set in the `osx_apps` metric family configuration to filter the published bundle metrics. For the `deb_packages` and `programs` metric families, a `names` attribute (array of strings) must be set, respectively to the list of Debian package names or Windows program names to include in the metrics.
+
+Example:
+
+```json
+{
+  "metrics": true,
+  "metrics_options": {
+    "osx_apps": {
+      "sources": ["Munki", "osquery"],
+      "bundle_ids": ["org.mozilla.firefox", "us.zoom.xos"]
+    },
+    "deb_packages": {
+      "sources": ["osquery"],
+      "names": ["firefox", "falcon-sensor"]
+    },
+    "programs": {
+      "sources": ["osquery"],
+      "names": ["Firefox", "Zoom"]
+    },
+    "os_versions": {
+      "sources": ["Munki", "osquery"]
+    }
+  }
+}
+```
+
+
 ### `event_serialization`
 
 **OPTIONAL**
