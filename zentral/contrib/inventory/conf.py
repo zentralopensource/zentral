@@ -83,6 +83,8 @@ def platform_with_os_name(os_name):
         return TVOS
     elif "windows" in os_name:
         return WINDOWS
+    elif "android" in os_name:
+        return ANDROID
     else:
         for distro in ('centos', 'fedora', 'redhat', 'rehl',
                        'debian', 'ubuntu',

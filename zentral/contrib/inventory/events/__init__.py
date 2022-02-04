@@ -59,15 +59,14 @@ for attr in ('link',
         register_event_type(event_class)
 
 
-def post_inventory_events(msn, events):
+def iter_inventory_events(msn, events):
     event_uuid = uuid.uuid4()
     for index, (event_type, created_at, data) in enumerate(events):
         event_cls = event_cls_from_type(event_type)
         metadata = EventMetadata(machine_serial_number=msn,
                                  uuid=event_uuid, index=index,
                                  created_at=created_at)
-        event = event_cls(metadata, data)
-        event.post()
+        yield event_cls(metadata, data)
 
 
 # enrollment secret

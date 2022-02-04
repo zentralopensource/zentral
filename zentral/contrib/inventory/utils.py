@@ -24,7 +24,7 @@ from zentral.core.incidents.models import Severity, Status
 from zentral.utils.json import save_dead_letter
 from .compliance_checks import jmespath_checks_cache
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
-                     post_inventory_events)
+                     iter_inventory_events)
 from .exceptions import EnrollmentSecretVerificationFailed
 from .models import EnrollmentSecret, MachineSnapshotCommit, MetaMachine
 
@@ -1664,11 +1664,25 @@ def commit_machine_snapshot_and_trigger_events(tree):
     else:
         # inventory events
         if msc:
-            post_inventory_events(msc.serial_number, inventory_events_from_machine_snapshot_commit(msc))
+            for event in iter_inventory_events(msc.serial_number, inventory_events_from_machine_snapshot_commit(msc)):
+                event.post()
         # compliance checks
-        for compliance_check_event in jmespath_checks_cache.process_tree(tree, last_seen):
-            compliance_check_event.post()
+        for event in jmespath_checks_cache.process_tree(tree, last_seen):
+            event.post()
         return machine_snapshot
+
+
+def commit_machine_snapshot_and_yield_events(tree):
+    try:
+        msc, _, last_seen = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+    except Exception:
+        logger.exception("Could not commit machine snapshot")
+    else:
+        # inventory events
+        if msc:
+            yield from iter_inventory_events(msc.serial_number, inventory_events_from_machine_snapshot_commit(msc))
+        # compliance checks
+        yield from jmespath_checks_cache.process_tree(tree, last_seen)
 
 
 def verify_enrollment_secret(model, secret,
