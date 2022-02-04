@@ -1,3 +1,9 @@
+## 2021.3 (Upcoming)
+
+#### 🧨 Python compatibility change
+
+Zentral support for python 3.6 dropped. Zentral supports python 3.7, 3.8, 3.9.
+
 ## 2021.2 (October 1, 2021)
 
 ### Features
