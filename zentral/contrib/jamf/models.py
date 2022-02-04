@@ -84,7 +84,8 @@ class JamfInstance(models.Model):
     def observer_dict(self):
         return {"hostname": self.host,
                 "vendor": "Jamf",
-                "type": "Jamf Pro",
+                "product": "Jamf Pro",
+                "type": "MDM",
                 "content_type": "jamf.jamfinstance",
                 "pk": self.pk}
 

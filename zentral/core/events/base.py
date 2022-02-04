@@ -35,21 +35,23 @@ def render_notification_part(ctx, event_type, part):
 
 
 class EventObserver(object):
-    def __init__(self, hostname, vendor, type, content_type, pk):
+    def __init__(self, hostname, vendor, product, type, content_type, pk):
         self.hostname = hostname
         self.vendor = vendor
+        self.product = product
         self.type = type
         self.content_type = content_type
         self.pk = pk
 
     @classmethod
     def deserialize(cls, observer_d):
-        kwargs = {k: observer_d.get(k) for k in ("hostname", "vendor", "type", "content_type", "pk")}
+        kwargs = {k: observer_d.get(k) for k in ("hostname", "vendor", "product", "type", "content_type", "pk")}
         return cls(**kwargs)
 
     def serialize(self):
         d = {k: v for k, v in (("hostname", self.hostname),
                                ("vendor", self.vendor),
+                               ("product", self.product),
                                ("type", self.type),
                                ("content_type", self.content_type),
                                ("pk", self.pk)) if v}
