@@ -13,11 +13,13 @@
       <li role="separator" class="divider"></li>
       {% endif %}
       {% endfor %}
-      {% if request.zentral_deployment %}
+      {% if request.zentral_deployment.items_for_display %}
       <li role="separator" class="divider"></li>
       <li id="deployment-info-header">Deployment</li>
-      {% for k, v in request.zentral_deployment.items %}
-      <li id="deployment-info"><span class="deployment-info-attr">{% if k == "instance_id" %}instance{% else %}{% if k == "setup_at" %}setup{% else %}{% if k == "image_id" %}image{% else %}{{ k }}{% endif %}{% endif %}{% endif %}</span><br>{{ v }}</li>
+      {% for k, v in request.zentral_deployment.items_for_display %}
+      <li id="deployment-info">
+        <span class="deployment-info-attr">{{ k }}</span><br>{{ v }}
+      </li>
       {% endfor %}
       {% endif %}
     </ul>
