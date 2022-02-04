@@ -118,6 +118,7 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(CurrentMachineSnapshot.objects.all().count(), 1)
         cms = CurrentMachineSnapshot.objects.get(serial_number=self.serial_number, source=ms.source)
         self.assertEqual(cms.machine_snapshot, ms)
+        self.assertEqual(cms.last_seen, msc2.last_seen)
 
     def test_machine_snapshot_commit_source_error(self):
         tree = copy.deepcopy(self.machine_snapshot_source_error)

@@ -616,7 +616,8 @@ class MachineSnapshotCommitManager(models.Manager):
                                                                    system_uptime=system_uptime)
                 CurrentMachineSnapshot.objects.update_or_create(serial_number=serial_number,
                                                                 source=source,
-                                                                defaults={'machine_snapshot': machine_snapshot})
+                                                                defaults={'machine_snapshot': machine_snapshot,
+                                                                          'last_seen': last_seen})
                 return new_msc, machine_snapshot, last_seen
         except IntegrityError:
             msc = MachineSnapshotCommit.objects.get(serial_number=serial_number,
@@ -666,6 +667,7 @@ class CurrentMachineSnapshot(models.Model):
     serial_number = models.TextField(db_index=True)
     source = models.ForeignKey(Source, on_delete=models.CASCADE)
     machine_snapshot = models.ForeignKey(MachineSnapshot, on_delete=models.CASCADE)
+    last_seen = models.DateTimeField()
 
     class Meta:
         unique_together = ('serial_number', 'source')
