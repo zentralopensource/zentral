@@ -669,6 +669,14 @@ class MachineDebPackagesView(MachineExtrasView):
     template_name = "inventory/machine_deb_packages.html"
 
 
+class MachineAndroidAppsView(MachineExtrasView):
+    template_name = "inventory/machine_android_apps.html"
+
+
+class MachineIOSAppsView(MachineExtrasView):
+    template_name = "inventory/machine_ios_apps.html"
+
+
 class MachineProfilesView(MachineExtrasView):
     template_name = "inventory/machine_profiles.html"
 

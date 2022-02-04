@@ -415,6 +415,29 @@ class ProgramInstance(AbstractMTObject):
     install_date = models.DateTimeField(blank=True, null=True)
 
 
+# see https://developers.google.com/android/management/reference/rest/v1/enterprises.devices#ApplicationReport
+class AndroidApp(AbstractMTObject):
+    display_name = models.TextField()
+    version_name = models.TextField()
+    version_code = models.IntegerField(blank=True, null=True)
+    package_name = models.TextField(blank=True, null=True)
+    installer_package_name = models.TextField(blank=True, null=True)
+
+
+# see https://developer.apple.com/documentation/devicemanagement/installedapplicationlistresponse/installedapplicationlistitem  # NOQA
+class IOSApp(AbstractMTObject):
+    name = models.TextField()
+    version = models.TextField()
+    ad_hoc_signed = models.BooleanField(blank=True, null=True)
+    app_store_vendable = models.BooleanField(blank=True, null=True)
+    beta_app = models.BooleanField(blank=True, null=True)
+    bundle_size = models.BigIntegerField(blank=True, null=True)
+    device_based_vpp = models.BooleanField(blank=True, null=True)
+    identifier = models.TextField(blank=True, null=True)
+    is_validated = models.BooleanField(blank=True, null=True)
+    short_version = models.TextField(blank=True, null=True)
+
+
 class TeamViewer(AbstractMTObject):
     teamviewer_id = models.TextField(blank=False, null=False)
     release = models.TextField(blank=True, null=True)
@@ -450,11 +473,13 @@ class PuppetNode(AbstractMTObject):
 class PrincipalUserSource(AbstractMTObject):
     COMPANY_PORTAL = "COMPANY_PORTAL"
     GOOGLE_CHROME = "GOOGLE_CHROME"
+    INVENTORY = "INVENTORY"
     LOGGED_IN_USER = "LOGGED_IN_USER"
     SANTA_MACHINE_OWNER = "SANTA_MACHINE_OWNER"
     TYPE_CHOICES = (
         (COMPANY_PORTAL, "Company portal"),
         (GOOGLE_CHROME, "Google Chrome"),
+        (INVENTORY, "Inventory"),
         (LOGGED_IN_USER, "Logged-in user"),
         (SANTA_MACHINE_OWNER, "Santa machine owner"),
     )
@@ -524,8 +549,10 @@ class MachineSnapshot(AbstractMTObject):
     type = models.CharField(max_length=32, blank=True, null=True, choices=TYPE_CHOICES)
     disks = models.ManyToManyField(Disk)
     network_interfaces = models.ManyToManyField(NetworkInterface)
-    osx_app_instances = models.ManyToManyField(OSXAppInstance)
+    android_apps = models.ManyToManyField(AndroidApp)
     deb_packages = models.ManyToManyField(DebPackage)
+    ios_apps = models.ManyToManyField(IOSApp)
+    osx_app_instances = models.ManyToManyField(OSXAppInstance)
     program_instances = models.ManyToManyField(ProgramInstance)
     profiles = models.ManyToManyField(Profile)
     teamviewer = models.ForeignKey(TeamViewer, on_delete=models.PROTECT, blank=True, null=True)
@@ -554,6 +581,15 @@ class MachineSnapshot(AbstractMTObject):
                 ll.append((url, link.anchor_text))
             yield group, ll
 
+    def ordered_android_apps(self):
+        return self.android_apps.all().order_by('display_name', 'version_name', 'pk')
+
+    def ordered_deb_packages(self):
+        return self.deb_packages.all().order_by('name', 'version', 'pk')
+
+    def ordered_ios_apps(self):
+        return self.ios_apps.all().order_by('name', 'version', 'pk')
+
     def ordered_osx_app_instances(self):
         return self.osx_app_instances.select_related('app').all().order_by('app__bundle_name',
                                                                            'app__bundle_version_str',
@@ -563,9 +599,6 @@ class MachineSnapshot(AbstractMTObject):
         return self.program_instances.select_related('program').all().order_by('program__name',
                                                                                'program__version',
                                                                                'install_location')
-
-    def ordered_deb_packages(self):
-        return self.deb_packages.all().order_by('name', 'version', 'pk')
 
     def ordered_profiles(self):
         return self.profiles.all().order_by('identifier', 'uuid', 'pk')
@@ -919,17 +952,23 @@ class MetaMachine:
 
     # Filtered snapshots
 
-    def snapshots_with_osx_app_instances(self):
-        return list(ms for ms in self.snapshots if ms.osx_app_instances.count())
-
-    def snapshots_with_program_instances(self):
-        return list(ms for ms in self.snapshots if ms.program_instances.count())
+    def snapshots_with_android_apps(self):
+        return list(ms for ms in self.snapshots if ms.android_apps.count())
 
     def snapshots_with_deb_packages(self):
         return list(ms for ms in self.snapshots if ms.deb_packages.count())
 
+    def snapshots_with_ios_apps(self):
+        return list(ms for ms in self.snapshots if ms.ios_apps.count())
+
+    def snapshots_with_osx_app_instances(self):
+        return list(ms for ms in self.snapshots if ms.osx_app_instances.count())
+
     def snapshots_with_profiles(self):
         return list(ms for ms in self.snapshots if ms.profiles.count())
+
+    def snapshots_with_program_instances(self):
+        return list(ms for ms in self.snapshots if ms.program_instances.count())
 
     # Inventory tags
 

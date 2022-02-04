@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% load base_extras inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+  <li><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
+  <li class="active">iOS apps</li>
+</ol>
+
+<h2>
+  {% machine_type_icon machine %}
+  {% machine_platform_icon machine %}
+  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / iOS apps
+</h2>
+
+<p>
+  <input class="form-control" type="text" id="search-input" autofocus="" placeholder="Search name, identifier" style="max-width:30vw">
+</p>
+
+{% if machine.snapshots_with_ios_apps %}
+<ul class="nav nav-tabs">
+  {% for ms in machine.snapshots_with_ios_apps %}
+  <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
+    <a href="#" data-tabclass="mstab" data-tabid="ms-{{ ms.id }}">
+      {{ ms.source.name }}
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% for ms in machine.snapshots_with_ios_apps %}
+<div class="table-reponsive mstab" id="ms-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
+  <table class="table table-condensed table-filtered">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Identifier</th>
+        <th>Version</th>
+        <th>Beta?</th>
+        <th>App Store?</th>
+        <th>Device VPP?</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ios_app in ms.ordered_ios_apps %}
+      <tr>
+        <td class="search-cell">{{ ios_app.name|default:"-" }}</td>
+        <td class="search-cell">{{ ios_app.identifier|default:"-" }}</td>
+        <td>{{ ios_app.version|default:"-" }}</td>
+        <td>{{ ios_app.beta|default:"-" }}</td>
+        <td>{{ ios_app.app_store_vendable|default:"-" }}</td>
+        <td>{{ ios_app.device_based_vpp|default:"-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <dl class="dl-horizontal">
+    <dt class="small" style="opacity:0.5">last change</dt>
+    <dd class="small" style="opacity:0.5">
+      {% if ms.public_ip_address %}{{ ms.public_ip_address }} - {% endif %}
+      {{ ms.mt_created_at|date:'r'|default:'-' }}
+    </dd>
+    {% if ms.last_commit.last_seen %}
+    <dt class="small" style="opacity:0.5">last seen</dt>
+    <dd class="small" style="opacity:0.5">
+      {{ ms.last_commit.last_seen|date:'r' }}
+    </dd>
+    {% endif %}
+  </dl>
+</div><!-- snapshot apps tab end -->
+{% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function switchTabs(link) {
+    var tabclass = link.data('tabclass'),
+        tabid = link.data('tabid');
+    $("." + tabclass).hide();
+    $("#" + tabid).show();
+    link.parent().siblings().removeClass('active');
+    link.parent().addClass('active');
+  }
+
+  function filterTables(tables, $input) {
+    var filter, tr, td, i, txtValue, lineMatched;
+    filter = $input.val().toUpperCase();
+    tables.forEach(function(table) {
+      tr = table.getElementsByTagName("tr");
+      for (i = 1; i < tr.length; i++) {
+        lineMatched = false;
+        td = tr[i].getElementsByClassName("search-cell");
+        for (j=0; j < td.length; j++) {
+          txtValue = td[j].textContent || td[j].innerText;
+          if (txtValue.toUpperCase().indexOf(filter) > -1) {
+            tr[i].style.display = "";
+            lineMatched = true;
+            break
+          }
+        }
+        if (lineMatched === false) {
+            tr[i].style.display = "none";
+        }
+      }
+    });
+  }
+
+  $(document).ready(function(){
+    $("li[role=presentation] a").click(function(event){
+      event.preventDefault();
+      switchTabs($(this));
+    });
+    var tables = document.querySelectorAll(".table-filtered");
+    $("#search-input").keyup(function (event) {
+      filterTables(tables, $(this));
+    });
+  });
+</script>
+{% endblock %}

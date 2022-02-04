@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils.html import escape, conditional_escape
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
-from zentral.contrib.inventory.conf import IOS, IPADOS, LINUX, MACOS, TVOS, TYPE_CHOICES_DICT, WINDOWS
+from zentral.contrib.inventory.conf import ANDROID, IOS, IPADOS, LINUX, MACOS, TVOS, TYPE_CHOICES_DICT, WINDOWS
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.color import text_color_for_background_color
 
@@ -58,6 +58,8 @@ def base_machine_platform_icon(machine_platform):
         icon = "linux"
     elif machine_platform == WINDOWS:
         icon = "windows"
+    elif machine_platform == ANDROID:
+        icon = "android"
     if icon:
         return mark_safe('<i class="fab fa-{}" aria-hidden="true"></i>'.format(icon))
     return ""

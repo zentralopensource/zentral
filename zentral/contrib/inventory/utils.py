@@ -1614,10 +1614,12 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                machine_snapshot_commit.last_seen,
                {'source': source})
         return
-    for m2m_diff_attr in ('certificates',
+    for m2m_diff_attr in ('android_apps',
+                          'certificates',
                           'deb_packages',
                           'disks',
                           'groups',
+                          'ios_apps',
                           'links',
                           'network_interfaces',
                           'osx_app_instances',

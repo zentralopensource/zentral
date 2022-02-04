@@ -44,6 +44,16 @@
         <i class="fab fa-apple" aria-hidden="true"></i> apps
       </a>
       {% endif %}
+      {% if machine.snapshots_with_ios_apps %}
+      <a class="btn btn-default" href="{% url 'inventory:machine_ios_apps' machine.get_urlsafe_serial_number %}">
+        <i class="fab fa-apple" aria-hidden="true"></i> apps
+      </a>
+      {% endif %}
+      {% if machine.snapshots_with_android_apps %}
+      <a class="btn btn-default" href="{% url 'inventory:machine_android_apps' machine.get_urlsafe_serial_number %}">
+        <i class="fab fa-android" aria-hidden="true"></i> apps
+      </a>
+      {% endif %}
       {% if machine.snapshots_with_program_instances %}
       <a class="btn btn-default" href="{% url 'inventory:machine_program_instances' machine.get_urlsafe_serial_number %}">
         <i class="fab fa-windows" aria-hidden="true"></i> programs
