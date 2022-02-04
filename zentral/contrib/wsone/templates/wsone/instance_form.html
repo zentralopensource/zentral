@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'wsone:index' %}">Workspace ONE</a></li>
+  <li><a href="{% url 'wsone:instances' %}">Instances</a></li>
+  {% if object %}
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="active">Update</li>
+  {% else %}
+  <li class="active">Create</li>
+  {% endif %}
+</ol>
+
+<h2>{% if object %}Update Workspace ONE instance {{ object }}{% else %}Create Workspace ONE instance{% endif %}</h2>
+
+<form method="POST">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    {% if object %}
+    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    {% else %}
+    <a href="{% url 'wsone:instances' %}" class="btn btn-default">Cancel</a>
+    {% endif %}
+    <button class="btn btn-primary">Save</button>
+  </p>
+</form>
+{% endblock %}

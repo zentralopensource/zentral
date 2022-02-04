@@ -24,6 +24,7 @@ nav:
   - Munki: apps/munki.md
   - Osquery: apps/osquery.md
   - Santa: apps/santa.md
+  - Workspace One: apps/wsone.md
 - Deployment:
   - Intro: deployment/index.md
   - Docker: deployment/docker-compose.md
