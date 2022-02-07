@@ -1494,15 +1494,25 @@ class ComplianceCheckStatusFilterForm(forms.Form):
 
 def osx_app_count(source_names, bundle_ids):
     query = (
-        "select a.bundle_name as name, a.bundle_version_str as version,"
+        "with active_machines as ("
+        "  select machine_snapshot_id, source_id, date_part('days', now() - last_seen) as age"
+        "  from inventory_currentmachinesnapshot"
+        ") select a.bundle_name as name, a.bundle_version_str as version,"
         "s.id as source_id, s.name as source_name,"
-        "foo.count "
+        'foo."1", foo."7", foo."14", foo."30", foo."45", foo."90", foo."+Inf" '
         "from ("
-        "select ai.app_id, cms.source_id, count(*) as count "
+        "select ai.app_id, am.source_id, "
+        'count(*) filter (where age < 1) as "1",'
+        'count(*) filter (where age < 7) as "7",'
+        'count(*) filter (where age < 14) as "14",'
+        'count(*) filter (where age < 30) as "30",'
+        'count(*) filter (where age < 45) as "45",'
+        'count(*) filter (where age < 90) as "90",'
+        'count(*) as "+Inf" '
         "from inventory_osxappinstance as ai "
         "join inventory_machinesnapshot_osx_app_instances as msai on (msai.osxappinstance_id = ai.id) "
-        "join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = msai.machinesnapshot_id) "
-        "group by ai.app_id, cms.source_id"
+        "join active_machines as am on (am.machine_snapshot_id = msai.machinesnapshot_id) "
+        "group by ai.app_id, am.source_id"
         ") as foo "
         "join inventory_osxapp as a on (foo.app_id = a.id) "
         "join inventory_source as s on (foo.source_id = s.id) "
@@ -1522,15 +1532,25 @@ def osx_app_count(source_names, bundle_ids):
 
 def program_count(source_names, program_names):
     query = (
-        "select p.name, p.version,"
+        "with active_machines as ("
+        "  select machine_snapshot_id, source_id, date_part('days', now() - last_seen) as age"
+        "  from inventory_currentmachinesnapshot"
+        ") select p.name, p.version,"
         "s.id as source_id, s.name as source_name,"
-        "foo.count "
+        'foo."1", foo."7", foo."14", foo."30", foo."45", foo."90", foo."+Inf" '
         "from ("
-        "select pi.program_id, cms.source_id, count(*) as count "
+        "select pi.program_id, am.source_id, "
+        'count(*) filter (where age < 1) as "1",'
+        'count(*) filter (where age < 7) as "7",'
+        'count(*) filter (where age < 14) as "14",'
+        'count(*) filter (where age < 30) as "30",'
+        'count(*) filter (where age < 45) as "45",'
+        'count(*) filter (where age < 90) as "90",'
+        'count(*) as "+Inf" '
         "from inventory_programinstance as pi "
         "join inventory_machinesnapshot_program_instances as mspi on (mspi.programinstance_id = pi.id) "
-        "join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = mspi.machinesnapshot_id) "
-        "group by pi.program_id, cms.source_id"
+        "join active_machines as am on (am.machine_snapshot_id = mspi.machinesnapshot_id) "
+        "group by pi.program_id, am.source_id"
         ") as foo "
         "join inventory_program as p on (foo.program_id = p.id) "
         "join inventory_source as s on (foo.source_id = s.id) "
@@ -1548,15 +1568,57 @@ def program_count(source_names, program_names):
         yield d
 
 
+def android_app_count(source_names, names):
+    query = (
+        "with active_machines as ("
+        "  select machine_snapshot_id, source_id, date_part('days', now() - last_seen) as age"
+        "  from inventory_currentmachinesnapshot"
+        ") select a.display_name as name, a.version_name as version,"
+        "s.id as source_id, s.name as source_name,"
+        'count(*) filter (where age < 1) as "1",'
+        'count(*) filter (where age < 7) as "7",'
+        'count(*) filter (where age < 14) as "14",'
+        'count(*) filter (where age < 30) as "30",'
+        'count(*) filter (where age < 45) as "45",'
+        'count(*) filter (where age < 90) as "90",'
+        'count(*) as "+Inf" '
+        "from inventory_androidapp as a "
+        "join inventory_machinesnapshot_android_apps as msaa on (msaa.androidapp_id = a.id) "
+        "join active_machines as am on (am.machine_snapshot_id = msaa.machinesnapshot_id) "
+        "join inventory_source as s on (am.source_id = s.id) "
+        "where LOWER(s.name) in %s and a.display_name in %s "
+        "group by a.display_name, a.version_name, s.id, s.name"
+    )
+    cursor = connection.cursor()
+    cursor.execute(query, [tuple(n.lower() for n in source_names),
+                           tuple(n for n in names)])
+    columns = [col.name for col in cursor.description]
+    for row in cursor.fetchall():
+        d = dict(zip(columns, row))
+        for k, v in d.items():
+            if v is None:
+                d[k] = '_'
+        yield d
+
+
 def deb_package_count(source_names, package_names):
     query = (
-        "select d.name, d.version,"
+        "with active_machines as ("
+        "  select machine_snapshot_id, source_id, date_part('days', now() - last_seen) as age"
+        "  from inventory_currentmachinesnapshot"
+        ") select d.name, d.version,"
         "s.id as source_id, s.name as source_name,"
-        "count(*) as count "
+        'count(*) filter (where age < 1) as "1",'
+        'count(*) filter (where age < 7) as "7",'
+        'count(*) filter (where age < 14) as "14",'
+        'count(*) filter (where age < 30) as "30",'
+        'count(*) filter (where age < 45) as "45",'
+        'count(*) filter (where age < 90) as "90",'
+        'count(*) as "+Inf" '
         "from inventory_debpackage as d "
         "join inventory_machinesnapshot_deb_packages as msdp on (msdp.debpackage_id = d.id) "
-        "join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = msdp.machinesnapshot_id) "
-        "join inventory_source as s on (cms.source_id = s.id) "
+        "join active_machines as am on (am.machine_snapshot_id = msdp.machinesnapshot_id) "
+        "join inventory_source as s on (am.source_id = s.id) "
         "where LOWER(s.name) in %s and d.name in %s "
         "group by d.name, d.version, s.id, s.name"
     )
@@ -1572,15 +1634,57 @@ def deb_package_count(source_names, package_names):
         yield d
 
 
+def ios_app_count(source_names, names):
+    query = (
+        "with active_machines as ("
+        "  select machine_snapshot_id, source_id, date_part('days', now() - last_seen) as age"
+        "  from inventory_currentmachinesnapshot"
+        ") select a.name, a.version,"
+        "s.id as source_id, s.name as source_name,"
+        'count(*) filter (where age < 1) as "1",'
+        'count(*) filter (where age < 7) as "7",'
+        'count(*) filter (where age < 14) as "14",'
+        'count(*) filter (where age < 30) as "30",'
+        'count(*) filter (where age < 45) as "45",'
+        'count(*) filter (where age < 90) as "90",'
+        'count(*) as "+Inf" '
+        "from inventory_iosapp as a "
+        "join inventory_machinesnapshot_ios_apps as msia on (msia.iosapp_id = a.id) "
+        "join active_machines as am on (am.machine_snapshot_id = msia.machinesnapshot_id) "
+        "join inventory_source as s on (am.source_id = s.id) "
+        "where LOWER(s.name) in %s and a.name in %s "
+        "group by a.name, a.version, s.id, s.name"
+    )
+    cursor = connection.cursor()
+    cursor.execute(query, [tuple(n.lower() for n in source_names),
+                           tuple(n for n in names)])
+    columns = [col.name for col in cursor.description]
+    for row in cursor.fetchall():
+        d = dict(zip(columns, row))
+        for k, v in d.items():
+            if v is None:
+                d[k] = '_'
+        yield d
+
+
 def os_version_count(source_names):
     query = (
-        "select o.name, o.major, o.minor, o.patch, o.build,"
+        "with active_machines as ("
+        "  select machine_snapshot_id, source_id, date_part('days', now() - last_seen) as age"
+        "  from inventory_currentmachinesnapshot"
+        ") select o.name, o.major, o.minor, o.patch, o.build,"
         "s.id as source_id, s.name as source_name,"
-        "count(*) as count "
+        'count(*) filter (where age < 1) as "1",'
+        'count(*) filter (where age < 7) as "7",'
+        'count(*) filter (where age < 14) as "14",'
+        'count(*) filter (where age < 30) as "30",'
+        'count(*) filter (where age < 45) as "45",'
+        'count(*) filter (where age < 90) as "90",'
+        'count(*) as "+Inf" '
         "from inventory_osversion as o "
         "join inventory_machinesnapshot as ms on (ms.os_version_id = o.id) "
-        "join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id) "
-        "join inventory_source as s on (cms.source_id = s.id) "
+        "join active_machines as am on (am.machine_snapshot_id = ms.id) "
+        "join inventory_source as s on (am.source_id = s.id) "
         "where LOWER(s.name) in %s "
         "group by o.name, o.major, o.minor, o.patch, o.build, s.id, s.name"
     )
