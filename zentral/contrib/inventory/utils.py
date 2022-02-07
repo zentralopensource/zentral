@@ -1893,9 +1893,59 @@ def _export_machine_csv_zip(query, source_name, basename, window_size=5000):
     }
 
 
+def export_machine_android_apps(source_name=None):
+    query = (
+        "select cms.serial_number, s.module as source_module, s.name as source_name, cms.last_seen,"
+        "aa.display_name, aa.version_name, aa.version_code, aa.package_name, aa.installer_package_name "
+        "from inventory_currentmachinesnapshot as cms "
+        "join inventory_machinesnapshot as ms on ms.id = cms.machine_snapshot_id "
+        "join inventory_source as s on ms.source_id = s.id "
+        "join inventory_machinesnapshot_android_apps as msaa on (msaa.machinesnapshot_id = ms.id) "
+        "join inventory_androidapp as aa on (aa.id = msaa.androidapp_id) "
+    )
+    if source_name:
+        query += "where UPPER(s.name) = %s "
+    query += "order by s.name, cms.serial_number, aa.display_name, aa.version_name, aa.id;"
+    return _export_machine_csv_zip(query, source_name, "inventory_machine_android_apps_export")
+
+
+def export_machine_deb_packages(source_name=None):
+    query = (
+        "select cms.serial_number, s.module as source_module, s.name as source_name, cms.last_seen,"
+        "dp.name, dp.version, dp.source, dp.size, dp.arch,"
+        "dp.revision, dp.status, dp.maintainer, dp.section, dp.priority "
+        "from inventory_currentmachinesnapshot as cms "
+        "join inventory_machinesnapshot as ms on ms.id = cms.machine_snapshot_id "
+        "join inventory_source as s on ms.source_id = s.id "
+        "join inventory_machinesnapshot_deb_packages as msdp on (msdp.machinesnapshot_id = ms.id) "
+        "join inventory_debpackage as dp on (dp.id = msdp.debpackage_id) "
+    )
+    if source_name:
+        query += "where UPPER(s.name) = %s "
+    query += "order by s.name, cms.serial_number, dp.name, dp.version, dp.revision, dp.id;"
+    return _export_machine_csv_zip(query, source_name, "inventory_machine_deb_packages_export")
+
+
+def export_machine_ios_apps(source_name=None):
+    query = (
+        "select cms.serial_number, s.module as source_module, s.name as source_name, cms.last_seen,"
+        "ia.name, ia.version, ia.ad_hoc_signed, ia.app_store_vendable, ia.beta_app,"
+        "ia.bundle_size, ia.device_based_vpp, ia.identifier, ia.is_validated, ia.short_version "
+        "from inventory_currentmachinesnapshot as cms "
+        "join inventory_machinesnapshot as ms on ms.id = cms.machine_snapshot_id "
+        "join inventory_source as s on ms.source_id = s.id "
+        "join inventory_machinesnapshot_ios_apps as msia on (msia.machinesnapshot_id = ms.id) "
+        "join inventory_iosapp as ia on (ia.id = msia.iosapp_id) "
+    )
+    if source_name:
+        query += "where UPPER(s.name) = %s "
+    query += "order by s.name, cms.serial_number, ia.name, ia.version, ia.id;"
+    return _export_machine_csv_zip(query, source_name, "inventory_machine_ios_apps_export")
+
+
 def export_machine_macos_app_instances(source_name=None):
     query = (
-        "select cms.serial_number, s.module as source_module, s.name as source_name,"
+        "select cms.serial_number, s.module as source_module, s.name as source_name, cms.last_seen,"
         "oa.bundle_id, oa.bundle_name, oa.bundle_display_name, oa.bundle_version, oa.bundle_version_str,"
         "oai.bundle_path, oai.path "
         "from inventory_currentmachinesnapshot as cms "
@@ -1915,7 +1965,7 @@ def export_machine_macos_app_instances(source_name=None):
 
 def export_machine_program_instances(source_name=None):
     query = (
-        "select cms.serial_number, s.module as source_module, s.name as source_name,"
+        "select cms.serial_number, s.module as source_module, s.name as source_name, cms.last_seen,"
         "p.name, p.version, p.language, p.publisher, p.identifying_number,"
         "pi.install_location, pi.install_source, pi.uninstall_string, pi.install_date "
         "from inventory_currentmachinesnapshot as cms "
@@ -1929,23 +1979,6 @@ def export_machine_program_instances(source_name=None):
         query += "where UPPER(s.name) = %s "
     query += "order by s.name, cms.serial_number, p.name, p.version, p.identifying_number, p.id;"
     return _export_machine_csv_zip(query, source_name, "inventory_machine_program_instances_export")
-
-
-def export_machine_deb_packages(source_name=None):
-    query = (
-        "select cms.serial_number, s.module as source_module, s.name as source_name,"
-        "dp.name, dp.version, dp.source, dp.size, dp.arch,"
-        "dp.revision, dp.status, dp.maintainer, dp.section, dp.priority "
-        "from inventory_currentmachinesnapshot as cms "
-        "join inventory_machinesnapshot as ms on ms.id = cms.machine_snapshot_id "
-        "join inventory_source as s on ms.source_id = s.id "
-        "join inventory_machinesnapshot_deb_packages as msdp on (msdp.machinesnapshot_id = ms.id) "
-        "join inventory_debpackage as dp on (dp.id = msdp.debpackage_id) "
-    )
-    if source_name:
-        query += "where UPPER(s.name) = %s "
-    query += "order by s.name, cms.serial_number, dp.name, dp.version, dp.revision, dp.id;"
-    return _export_machine_csv_zip(query, source_name, "inventory_machine_deb_packages_export")
 
 
 def export_machine_snapshots(source_name=None, window_size=5000):

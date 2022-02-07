@@ -7,8 +7,10 @@ import xlsxwriter
 from .forms import MacOSAppSearchForm
 from .utils import (MSQuery,
                     export_machine_macos_app_instances as do_export_machine_macos_app_instances,
-                    export_machine_program_instances as do_export_machine_program_instances,
+                    export_machine_android_apps as do_export_machine_android_apps,
                     export_machine_deb_packages as do_export_machine_deb_packages,
+                    export_machine_ios_apps as do_export_machine_ios_apps,
+                    export_machine_program_instances as do_export_machine_program_instances,
                     export_machine_snapshots as do_export_machine_snapshots)
 
 
@@ -97,13 +99,23 @@ def export_machine_macos_app_instances(source_name=None):
 
 
 @shared_task
-def export_machine_program_instances(source_name=None):
-    return do_export_machine_program_instances(source_name=source_name)
+def export_machine_android_apps(source_name=None):
+    return do_export_machine_android_apps(source_name=source_name)
 
 
 @shared_task
 def export_machine_deb_packages(source_name=None):
     return do_export_machine_deb_packages(source_name=source_name)
+
+
+@shared_task
+def export_machine_ios_apps(source_name=None):
+    return do_export_machine_ios_apps(source_name=source_name)
+
+
+@shared_task
+def export_machine_program_instances(source_name=None):
+    return do_export_machine_program_instances(source_name=source_name)
 
 
 @shared_task

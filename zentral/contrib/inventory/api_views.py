@@ -15,8 +15,10 @@ from .serializers import (MachineSerialNumbersSerializer,
                           TagSerializer)
 from .tasks import (export_inventory, export_macos_apps,
                     export_machine_macos_app_instances,
-                    export_machine_program_instances,
+                    export_machine_android_apps,
                     export_machine_deb_packages,
+                    export_machine_ios_apps,
+                    export_machine_program_instances,
                     export_machine_snapshots)
 from .utils import MSQuery
 
@@ -170,13 +172,13 @@ class MacOSAppsExport(APIView):
 # Machine apps, debs and programs exports (ZIPPED CSV files)
 
 
-class MachineMacOSAppInstancesExport(APIView):
-    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
+class MachineAndroidAppsExport(APIView):
+    permission_required = "inventory.view_androidapp"
     permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
-        result = export_machine_macos_app_instances.apply_async(kwargs={"source_name": source_name})
+        result = export_machine_android_apps.apply_async(kwargs={"source_name": source_name})
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
@@ -189,6 +191,30 @@ class MachineDebPackagesExport(APIView):
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
         result = export_machine_deb_packages.apply_async(kwargs={"source_name": source_name})
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)
+
+
+class MachineIOSAppsExport(APIView):
+    permission_required = "inventory.view_iosapp"
+    permission_classes = [DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        source_name = request.query_params.get('source_name')
+        result = export_machine_ios_apps.apply_async(kwargs={"source_name": source_name})
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)
+
+
+class MachineMacOSAppInstancesExport(APIView):
+    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
+    permission_classes = [DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        source_name = request.query_params.get('source_name')
+        result = export_machine_macos_app_instances.apply_async(kwargs={"source_name": source_name})
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
