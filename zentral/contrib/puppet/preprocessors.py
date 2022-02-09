@@ -1,10 +1,8 @@
 import logging
-import uuid
+from django.db import transaction
 import yaml
-from zentral.contrib.inventory.models import MachineSnapshotCommit
-from zentral.contrib.inventory.utils import inventory_events_from_machine_snapshot_commit
+from zentral.contrib.inventory.utils import commit_machine_snapshot_and_yield_events
 from zentral.core.events import event_cls_from_type
-from zentral.core.events.base import EventMetadata
 from .puppetdb_client import PuppetDBClient
 
 
@@ -36,21 +34,8 @@ class ReportEventPreprocessor(object):
 
     def update_machine(self, machine_d):
         logger.info("Update machine %s %s", machine_d["source"], machine_d["reference"])
-        try:
-            msc, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(machine_d)
-        except Exception:
-            logger.exception("Could not commit machine snapshot")
-        else:
-            if msc:
-                event_uuid = uuid.uuid4()
-                for idx, (event_type, created_at, payload) in enumerate(
-                        inventory_events_from_machine_snapshot_commit(msc)):
-                    event_cls = event_cls_from_type(event_type)
-                    metadata = EventMetadata(machine_serial_number=ms.serial_number,
-                                             uuid=event_uuid, index=idx,
-                                             created_at=created_at)
-                    event = event_cls(metadata, payload)
-                    yield event
+        with transaction.atomic():
+            yield from commit_machine_snapshot_and_yield_events(machine_d)
 
     def process_raw_event(self, raw_event):
         instance_d = raw_event["puppet_instance"]
