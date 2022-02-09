@@ -9,6 +9,7 @@ from django.utils.functional import cached_property
 import requests
 from requests.packages.urllib3.util import Retry
 from zentral.conf import settings
+from zentral.contrib.inventory.conf import macos_version_from_build
 from zentral.contrib.inventory.utils import clean_ip_address
 from zentral.utils.text import shard
 from .events import JAMF_EVENTS
@@ -253,12 +254,22 @@ class APIClient(object):
             ct['groups'] = groups
 
         hardware = computer['hardware']
+
         # os version
-        os_version = dict(zip(('major', 'minor', 'patch'),
-                              (int(s) for s in hardware['os_version'].split('.'))))
-        os_version.update({'name': hardware['os_name'],
-                           'build': hardware['os_build']})
-        ct['os_version'] = os_version
+        os_version = None
+        try:
+            os_version = dict(zip(('major', 'minor', 'patch'),
+                                  (int(s) for s in hardware['os_version'].split('.'))))
+        except ValueError:
+            try:
+                os_version = macos_version_from_build(hardware["os_build"])
+            except ValueError:
+                pass
+        else:
+            os_version.update({'name': hardware['os_name'],
+                               'build': hardware['os_build']})
+        if os_version:
+            ct['os_version'] = os_version
 
         # system info
         system_info = {'computer_name': computer['general']['name'],
@@ -397,11 +408,15 @@ class APIClient(object):
             mdt['groups'] = groups
 
         # os version
-        os_version = dict(zip(('major', 'minor', 'patch'),
-                              (int(s) for s in general['os_version'].split('.'))))
-        os_version.update({'name': general['os_type'],
-                           'build': general['os_build']})
-        mdt['os_version'] = os_version
+        try:
+            os_version = dict(zip(('major', 'minor', 'patch'),
+                                  (int(s) for s in general['os_version'].split('.'))))
+        except ValueError:
+            pass
+        else:
+            os_version.update({'name': general['os_type'],
+                               'build': general['os_build']})
+            mdt['os_version'] = os_version
 
         # system info
         system_info = {'computer_name': general['name'],
