@@ -3,6 +3,7 @@ from django.db import transaction
 import yaml
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_yield_events
 from zentral.core.events import event_cls_from_type
+from .conf import puppet_conf
 from .puppetdb_client import PuppetDBClient
 
 
@@ -24,12 +25,12 @@ class ReportEventPreprocessor(object):
         self.clients = {}
         yaml.add_multi_constructor("!ruby/object:Puppet", default_constructor)
 
-    def get_client(self, instance_d):
-        key = instance_d["puppetdb_url"]
-        client = self.clients.get(key)
+    def get_client(self, puppetdb_url):
+        client = self.clients.get(puppetdb_url)
         if not client:
-            client = PuppetDBClient(instance_d)
-            self.clients[key] = client
+            instance = puppet_conf.instances[puppetdb_url]
+            client = PuppetDBClient(instance)
+            self.clients[puppetdb_url] = client
         return client
 
     def update_machine(self, machine_d):
@@ -38,8 +39,8 @@ class ReportEventPreprocessor(object):
             yield from commit_machine_snapshot_and_yield_events(machine_d)
 
     def process_raw_event(self, raw_event):
-        instance_d = raw_event["puppet_instance"]
-        client = self.get_client(instance_d)
+        puppetdb_url = raw_event["puppetdb_url"]
+        client = self.get_client(puppetdb_url)
 
         event_type = raw_event["event_type"]
 
