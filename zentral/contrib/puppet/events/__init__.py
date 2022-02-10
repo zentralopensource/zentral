@@ -21,6 +21,6 @@ def post_puppet_report(instance, user_agent, ip, report):
     raw_event = {"request": {"user_agent": user_agent,
                              "ip": ip},
                  "event_type": PuppetReportEvent.event_type,
-                 "puppet_instance": instance,
+                 "puppetdb_url": instance["puppetdb_url"],
                  "puppet_report": report}
     queues.post_raw_event("puppet_reports", raw_event)
