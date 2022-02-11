@@ -245,9 +245,12 @@ class PuppetDBClient(object):
         elif kernel == "Linux":
             # serial number
             try:
-                ct["serial_number"] = facts["dmi"]["product"]["uuid"]
+                ct["serial_number"] = facts["serialnumber"]
             except KeyError:
-                raise PuppetDBError(f"Node '{certname}', Linux: no dmi>product>uuid")
+                try:
+                    ct["serial_number"] = facts["dmi"]["product"]["uuid"]
+                except KeyError:
+                    raise PuppetDBError(f"Node '{certname}', Linux: no dmi>product>uuid")
 
             # OS version
             os_version = dict(zip(('major', 'minor', 'patch'),
