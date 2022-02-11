@@ -1,4 +1,5 @@
 import logging
+from dateutil import parser
 from django.db import transaction
 import yaml
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_yield_events
@@ -15,7 +16,10 @@ def default_constructor(loader, tag_suffix, node):
 
 
 def get_report_created_at(report):
-    return report.pop("time", None)
+    try:
+        return parser.parse(report["time"])
+    except (KeyError, ValueError, TypeError):
+        pass
 
 
 class ReportEventPreprocessor(object):
@@ -45,12 +49,17 @@ class ReportEventPreprocessor(object):
         event_type = raw_event["event_type"]
 
         try:
-            puppet_report = yaml.load(raw_event["puppet_report"])
+            puppet_report = yaml.safe_load(raw_event["puppet_report"])
         except Exception:
-            logger.exception("Could not read puppet report")
+            logger.exception("Could not parse puppet report")
             return
 
-        certname = puppet_report["host"]
+        try:
+            certname = puppet_report["host"]
+        except (TypeError, KeyError):
+            logger.exception("Could not get host from puppet report")
+            return
+
         try:
             machine_d = client.get_machine_d(certname)
         except Exception:
