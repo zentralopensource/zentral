@@ -49,7 +49,7 @@ class ReportEventPreprocessor(object):
         event_type = raw_event["event_type"]
 
         try:
-            puppet_report = yaml.safe_load(raw_event["puppet_report"])
+            puppet_report = yaml.load(raw_event["puppet_report"])
         except Exception:
             logger.exception("Could not parse puppet report")
             return
