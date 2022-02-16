@@ -42,9 +42,15 @@ ORPHANS = (
     # OSVersion
     ("inventory_osversion", "id",
      (("os_version_id", "inventory_machinesnapshot"),)),
+    # AndroidApp
+    ("inventory_androidapp", "id",
+     (("androidapp_id", "inventory_machinesnapshot_android_apps"),)),
     # DebPackage
     ("inventory_debpackage", "id",
      (("debpackage_id", "inventory_machinesnapshot_deb_packages"),)),
+    # IOSApp
+    ("inventory_iosapp", "id",
+     (("iosapp_id", "inventory_machinesnapshot_ios_apps"),)),
     # ProgramInstance
     ("inventory_programinstance", "id",
      (("programinstance_id", "inventory_machinesnapshot_program_instances"),)),
