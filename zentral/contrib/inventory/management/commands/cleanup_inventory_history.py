@@ -1,7 +1,7 @@
 from datetime import timedelta
 import logging
 from django.core.management.base import BaseCommand
-from django.db import connection, transaction
+from django.db import connection
 from django.utils import timezone
 from zentral.conf import settings
 
@@ -125,9 +125,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         self.set_options(**kwargs)
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                self.cleanup_inventory_history(cursor)
+        with connection.cursor() as cursor:
+            self.cleanup_inventory_history(cursor)
 
     def cleanup_inventory_history(self, cursor):
         if not self.quiet:
@@ -138,12 +137,15 @@ class Command(BaseCommand):
             print("machine snapshot commits", cursor.rowcount)
 
         # orphans
-        for table_name, attribute, links in ORPHANS:
+        for table, attr, links in ORPHANS:
             wheres = []
-            for fk_attribute, fk_table in links:
-                wheres.append("{} NOT IN (SELECT DISTINCT {} FROM {} WHERE {} IS NOT NULL)".format(
-                              attribute, fk_attribute, fk_table, fk_attribute))
-            query = "DELETE FROM {} WHERE {}".format(table_name, " AND ".join(wheres))
-            cursor.execute(query)
+            for idx, (fk_attr, fk_table) in enumerate(links):
+                # we use an alias for the fk_table to avoid collision with the table
+                # inventory_certificate references inventory_certificate for example
+                wheres.append(
+                    f"NOT EXISTS (SELECT 1 FROM {fk_table} fkt{idx} WHERE {table}.{attr} = fkt{idx}.{fk_attr})"
+                )
+            wheres = " AND ".join(wheres)
+            cursor.execute(f"DELETE FROM {table} WHERE {wheres}")
             if not self.quiet:
-                print(table_name, cursor.rowcount)
+                print(table, cursor.rowcount)
