@@ -109,6 +109,23 @@
     },
     "zentral.contrib.nagios": {},
     "zentral.contrib.osquery": {},
+    "zentral.contrib.puppet": {
+      "instances": [
+        {
+          "puppetdb_url": "http://puppetdb:8080",
+          "puppetboard_url": "https://puppetboard.local",
+          "business_unit_fact_key": "my_custom_fact_customer",
+          "group_fact_keys": [
+            "my_custom_fact_site_id",
+            "my_custom_fact_customer_environment"
+          ],
+          "extra_fact_keys": [
+            "os.hardware",
+            "kernel"
+          ]
+        }
+      ]
+    },
     "zentral.contrib.santa": {
       "metrics": true
     },

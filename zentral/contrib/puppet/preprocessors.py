@@ -1,7 +1,6 @@
 import logging
 from dateutil import parser
 from django.db import transaction
-import yaml
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_yield_events
 from zentral.core.events import event_cls_from_type
 from .conf import puppet_conf
@@ -27,7 +26,6 @@ class ReportEventPreprocessor(object):
 
     def __init__(self):
         self.clients = {}
-        yaml.add_multi_constructor("!ruby/object:Puppet", default_constructor)
 
     def get_client(self, puppetdb_url):
         client = self.clients.get(puppetdb_url)
@@ -48,12 +46,7 @@ class ReportEventPreprocessor(object):
 
         event_type = raw_event["event_type"]
 
-        try:
-            puppet_report = yaml.load(raw_event["puppet_report"])
-        except Exception:
-            logger.exception("Could not parse puppet report")
-            return
-
+        puppet_report = raw_event["puppet_report"]
         try:
             certname = puppet_report["host"]
         except (TypeError, KeyError):
@@ -71,10 +64,6 @@ class ReportEventPreprocessor(object):
         yield from self.update_machine(machine_d)
 
         # yield puppet event
-
-        puppet_report.pop("logs")
-        puppet_report.pop("metrics")
-        puppet_report.pop("resource_statuses")
 
         event_cls = event_cls_from_type(event_type)
         yield from event_cls.build_from_machine_request_payloads(

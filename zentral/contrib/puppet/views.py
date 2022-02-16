@@ -1,5 +1,7 @@
+import json
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django.views.generic import TemplateView, View
 from zentral.utils.api_views import APIAuthError
@@ -41,9 +43,17 @@ class PostReportView(View):
             return HttpResponseForbidden("Forbidden")
         except KeyError:
             return HttpResponseNotFound("Unknown puppet instance")
+
+        try:
+            report = json.load(request)
+        except Exception:
+            raise SuspiciousOperation("Could not parse report")
+
+        # trim the report
+        report.pop("logs", None)
+        report.pop("metrics", None)
+        report.pop("resource_statuses", None)
+
         user_agent, ip = user_agent_and_ip_address_from_request(request)
-        if not request.encoding or request.encoding.lower() != "utf-8":
-            return HttpResponse("Unsupported encoding", status=415)
-        payload = request.body.decode(request.encoding)
-        post_puppet_report(instance, user_agent, ip, payload)
+        post_puppet_report(instance, user_agent, ip, report)
         return HttpResponse("OK")
