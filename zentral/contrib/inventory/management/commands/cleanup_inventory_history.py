@@ -1,7 +1,8 @@
 from datetime import timedelta
 import logging
+import time
 from django.core.management.base import BaseCommand
-from django.db import connection
+from django.db import connection, IntegrityError
 from django.utils import timezone
 from zentral.conf import settings
 
@@ -146,6 +147,24 @@ class Command(BaseCommand):
                     f"NOT EXISTS (SELECT 1 FROM {fk_table} fkt{idx} WHERE {table}.{attr} = fkt{idx}.{fk_attr})"
                 )
             wheres = " AND ".join(wheres)
-            cursor.execute(f"DELETE FROM {table} WHERE {wheres}")
-            if not self.quiet:
-                print(table, cursor.rowcount)
+            query = f"DELETE FROM {table} WHERE {wheres}"
+
+            deleted_rowcount = None
+            # 3 attempts. Things could be added in the linked table while we are deleting.
+            # TODO: better?
+            for i in range(3):
+                if i:
+                    print(f"Retry in {i}s…")
+                    time.sleep(i)
+                try:
+                    cursor.execute(query)
+                except IntegrityError:
+                    print(f"Could not purge table {table} because of an integrity error")
+                else:
+                    deleted_rowcount = cursor.rowcount
+                    break
+
+            if deleted_rowcount is None:
+                print(f"Table {table} not purged!")
+            elif not self.quiet:
+                print(table, deleted_rowcount)
