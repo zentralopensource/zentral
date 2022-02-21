@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.urlpatterns import format_suffix_patterns
 from .api_views import (ArchiveMachines,
+                        CleanupInventory,
                         MachinesExport, MacOSAppsExport,
                         MachineMacOSAppInstancesExport,
                         MachineAndroidAppsExport,
@@ -45,6 +46,9 @@ urlpatterns = [
     path('machines/export_snapshots/',
          MachineSnapshotsExport.as_view(),
          name="machine_snapshots_export"),
+
+    # cleanup
+    path('cleanup/', CleanupInventory.as_view(), name="cleanup"),
 
     # standard DRF views
     path('meta_business_units/', MetaBusinessUnitList.as_view(), name="meta_business_units"),

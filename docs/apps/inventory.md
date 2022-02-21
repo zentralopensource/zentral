@@ -74,6 +74,34 @@ This boolean is used to toggle the inclusion of the principal user in the event 
 
 ## HTTP API
 
+### `/api/inventory/cleanup/`
+
+* method: POST
+* required permissions:
+	* `inventory.delete_machinesnapshot`
+* optional parameter:
+	* `days`: The number of days (`1` → `3660`) of history to keep. Defaults to `30` or the value of `snapshot_retention_days` in the inventory app config.
+
+Use this endpoint to trigger an inventory history cleanup.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/inventory/cleanup/\
+  |python -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd4",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd4/"
+}
+```
+
 ### `/api/inventory/machines/archive/`
 
 * method: POST

@@ -4,16 +4,20 @@ from django.utils import timezone
 from django_filters import rest_framework as filters
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from zentral.core.events.base import EventRequest
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .forms import MacOSAppSearchForm
 from .models import CurrentMachineSnapshot, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag, Taxonomy
-from .serializers import (MachineSerialNumbersSerializer,
+from .serializers import (CleanupInventorySerializer,
+                          MachineSerialNumbersSerializer,
                           MachineTagsUpdateSerializer,
                           MetaBusinessUnitSerializer,
                           TagSerializer)
-from .tasks import (export_inventory, export_macos_apps,
+from .tasks import (cleanup_inventory,
+                    export_inventory, export_macos_apps,
                     export_machine_macos_app_instances,
                     export_machine_android_apps,
                     export_machine_deb_packages,
@@ -242,6 +246,29 @@ class MachineSnapshotsExport(APIView):
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
+
+
+# Cleanup
+
+
+class CleanupInventory(APIView):
+    """
+    Start inventory cleanup task
+    """
+    permission_required = ("inventory.delete_machinesnapshot",)
+    permission_classes = [DjangoPermissionRequired]
+    parser_classes = [FormParser, JSONParser, MultiPartParser]
+
+    def post(self, request, *args, **kwargs):
+        serializer = CleanupInventorySerializer(data=request.data)
+        if serializer.is_valid():
+            event_request = EventRequest.build_from_request(request)
+            result = cleanup_inventory.apply_async((serializer.data["days"], event_request.serialize(),))
+            return Response({"task_id": result.id,
+                             "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                            status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # Standard DRF views

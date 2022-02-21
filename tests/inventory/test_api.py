@@ -249,6 +249,25 @@ class InventoryAPITests(APITestCase):
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
 
+    # cleanup
+
+    def test_cleanup_unauthorized(self):
+        response = self.client.post(reverse('inventory_api:cleanup'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_cleanup_bad_request(self):
+        self._set_permissions("inventory.delete_machinesnapshot")
+        response = self.client.post(reverse('inventory_api:cleanup'), {"days": 7000})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"days": ["Ensure this value is less than or equal to 3660."]})
+
+    def test_cleanup(self):
+        self._set_permissions("inventory.delete_machinesnapshot")
+        response = self.client.post(reverse('inventory_api:cleanup'), {"days": 70})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("task_id", response.data)
+        self.assertIn("task_result_url", response.data)
+
     # create meta business unit
 
     def test_create_meta_business_unit_unauthorized(self):

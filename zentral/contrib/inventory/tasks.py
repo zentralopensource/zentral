@@ -2,8 +2,11 @@ import csv
 import os
 from celery import shared_task
 from django.core.files.storage import default_storage
+from django.db import connection
 from django.http import QueryDict
 import xlsxwriter
+from .cleanup import cleanup_inventory as do_cleanup_inventory, get_min_date
+from .events import post_cleanup_finished_event, post_cleanup_started_event
 from .forms import MacOSAppSearchForm
 from .utils import (MSQuery,
                     export_machine_macos_app_instances as do_export_machine_macos_app_instances,
@@ -12,6 +15,24 @@ from .utils import (MSQuery,
                     export_machine_ios_apps as do_export_machine_ios_apps,
                     export_machine_program_instances as do_export_machine_program_instances,
                     export_machine_snapshots as do_export_machine_snapshots)
+
+
+@shared_task
+def cleanup_inventory(days, serialized_event_request):
+    min_date = get_min_date(days)
+    payload = {"days": days, "min_date": min_date}
+    post_cleanup_started_event(payload, serialized_event_request)
+
+    payload["tables"] = {}
+
+    def result_callback(key, val):
+        payload["tables"][key] = val
+
+    with connection.cursor() as cursor:
+        payload["duration"] = do_cleanup_inventory(cursor, result_callback, min_date)
+
+    post_cleanup_finished_event(payload, serialized_event_request)
+    return payload
 
 
 @shared_task

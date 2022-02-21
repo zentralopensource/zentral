@@ -180,3 +180,39 @@ class JMESPathCheckStatusUpdated(BaseEvent):
 
 
 register_event_type(JMESPathCheckStatusUpdated)
+
+
+# cleanup
+
+
+class BaseInventoryCleanupEvent(BaseEvent):
+    namespace = "inventory"
+    tags = ["inventory", "inventory_cleanup", "zentral"]
+
+
+class InventoryCleanupStarted(BaseInventoryCleanupEvent):
+    event_type = "inventory_cleanup_started"
+
+
+register_event_type(InventoryCleanupStarted)
+
+
+def post_cleanup_started_event(payload, serialized_event_request):
+    request = EventRequest.deserialize(serialized_event_request)
+    metadata = EventMetadata(request=request)
+    event = InventoryCleanupStarted(metadata, {"cleanup": payload})
+    event.post()
+
+
+class InventoryCleanupFinished(BaseInventoryCleanupEvent):
+    event_type = "inventory_cleanup_finished"
+
+
+register_event_type(InventoryCleanupFinished)
+
+
+def post_cleanup_finished_event(payload, serialized_event_request):
+    request = EventRequest.deserialize(serialized_event_request)
+    metadata = EventMetadata(request=request)
+    event = InventoryCleanupFinished(metadata, {"cleanup": payload})
+    event.post()

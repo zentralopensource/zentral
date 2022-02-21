@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from .cleanup import get_default_snapshot_retention_days
 from .models import EnrollmentSecret, MetaBusinessUnit, Tag
 
 
@@ -35,6 +36,13 @@ class MachineSerialNumbersSerializer(serializers.Serializer):
         min_length=1,
         max_length=1000
     )
+
+
+# Cleanup inventory
+
+
+class CleanupInventorySerializer(serializers.Serializer):
+    days = serializers.IntegerField(min_value=1, max_value=3660, default=get_default_snapshot_retention_days)
 
 
 # Standard model serializers
