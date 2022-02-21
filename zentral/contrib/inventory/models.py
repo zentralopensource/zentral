@@ -1567,6 +1567,12 @@ class JMESPathCheck(models.Model):
         editable=False,
     )
     source_name = models.TextField()
+    platforms = ArrayField(
+        models.CharField(max_length=32, choices=PLATFORM_CHOICES),
+        blank=True,
+        default=list,
+        help_text="Restrict this check to some platforms"
+    )
     tags = models.ManyToManyField(Tag, blank=True)
     jmespath_expression = models.TextField()
 
@@ -1575,6 +1581,9 @@ class JMESPathCheck(models.Model):
 
     def get_absolute_url(self):
         return reverse("inventory:compliance_check", args=(self.pk,))
+
+    def get_platforms_display(self):
+        return ", ".join(sorted(PLATFORM_CHOICES_DICT.get(p) for p in self.platforms))
 
     def serialize_for_event(self):
         return {

@@ -60,7 +60,14 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _force_jmespath_check(self, source_name=None, profile_uuid=None, jmespath_expression=None, tags=None):
+    def _force_jmespath_check(
+        self,
+        source_name=None,
+        profile_uuid=None,
+        jmespath_expression=None,
+        tags=None,
+        platforms=None
+    ):
         if profile_uuid is None:
             profile_uuid = str(uuid.uuid4())
         if jmespath_expression is None:
@@ -69,9 +76,12 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             name=get_random_string(),
             model=InventoryJMESPathCheck.get_model(),
         )
+        if platforms is None:
+            platforms = ["MACOS"]
         jmespath_check = JMESPathCheck.objects.create(
             compliance_check=cc,
             source_name=source_name or self.source_name,
+            platforms=platforms,
             jmespath_expression=jmespath_expression
         )
         if tags is not None:
@@ -130,11 +140,14 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
                                     {"ccf-name": name,
                                      "ccf-description": get_random_string(),
                                      "jcf-source_name": get_random_string(),
+                                     "jcf-platforms": ["MACOS"],
                                      "jcf-jmespath_expression": "contains(profiles[*].uuid, `yolo`)"},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_detail.html")
         self.assertContains(response, name)
+        jmespath_check = response.context["object"]
+        self.assertEqual(jmespath_check.platforms, ["MACOS"])
 
     def test_create_compliance_check_post_name_collision(self):
         cc = self._force_jmespath_check()
@@ -143,6 +156,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
                                     {"ccf-name": cc.compliance_check.name,
                                      "ccf-description": get_random_string(),
                                      "jcf-source_name": get_random_string(),
+                                     "jcf-platforms": ["MACOS"],
                                      "jcf-jmespath_expression": "contains(profiles[*].uuid, `yolo`)"},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -155,6 +169,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
                                     {"ccf-name": get_random_string(),
                                      "ccf-description": get_random_string(),
                                      "jcf-source_name": get_random_string(),
+                                     "jcf-platforms": ["MACOS"],
                                      "jcf-jmespath_expression": "contains("},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -271,12 +286,15 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
                                     {"ccf-name": name,
                                      "ccf-description": cc.compliance_check.description,
                                      "jcf-source_name": cc.source_name,
+                                     "jcf-platforms": cc.platforms,
+                                     "initial-jcf-platforms": cc.platforms,  # required for has_changed() to work!
                                      "jcf-jmespath_expression": cc.jmespath_expression},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_detail.html")
         self.assertNotContains(response, cc.compliance_check.name)
         self.assertContains(response, name)
+        cc.refresh_from_db()
         cc.compliance_check.refresh_from_db()
         self.assertEqual(cc.compliance_check.name, name)
         self.assertEqual(cc.compliance_check.version, old_version)  # only the name changed → same version
@@ -290,6 +308,8 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
                                     {"ccf-name": cc.compliance_check.name,
                                      "ccf-description": cc.compliance_check.description,
                                      "jcf-source_name": source_name,
+                                     "jcf-platforms": ["IPADOS", "MACOS"],
+                                     "initial-jcf-platforms": cc.platforms,  # required for has_changed() to work!
                                      "jcf-jmespath_expression": cc.jmespath_expression},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -299,7 +319,9 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         cc.refresh_from_db()
         self.assertEqual(cc.source_name, source_name)
         cc.compliance_check.refresh_from_db()
-        self.assertEqual(cc.compliance_check.version, old_version + 1)  # source name changed → version updated
+        # source name and platforms changed → version updated
+        self.assertEqual(cc.compliance_check.version, old_version + 1)
+        self.assertEqual(sorted(cc.platforms), ["IPADOS", "MACOS"])
 
     def test_update_compliance_check_post_name_collision(self):
         cc0 = self._force_jmespath_check()
@@ -395,6 +417,18 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             'inventory.view_jmespathcheck'
         )
         self._force_jmespath_check(source_name=get_random_string())
+        response = self.client.get(self.machine.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/machine_detail.html")
+        self.assertContains(response, "0 Compliance checks")
+
+    def test_machine_source_match_platform_missmatch_no_compliance_checks_in_scope(self):
+        self._login(
+            'compliance_checks.view_machinestatus',
+            'inventory.view_machinesnapshot',
+            'inventory.view_jmespathcheck'
+        )
+        self._force_jmespath_check(platforms=["IPADOS"])
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")

@@ -4,6 +4,7 @@ from django.db import connection
 from django.http import QueryDict
 from django.utils.text import slugify
 import jmespath
+from .conf import PLATFORM_CHOICES
 from .models import (EnrollmentSecret,
                      MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
@@ -362,11 +363,29 @@ class EnrollmentSecretForm(forms.ModelForm):
 # jmespath check
 
 
+class PlatformsWidget(forms.CheckboxSelectMultiple):
+    def __init__(self, attrs=None, choices=()):
+        super().__init__(attrs, choices=PLATFORM_CHOICES)
+
+    def format_value(self, value):
+        if isinstance(value, str) and value:
+            value = [v.strip() for v in value.split(",")]
+        return super().format_value(value)
+
+
 class JMESPathCheckForm(forms.ModelForm):
     class Meta:
         model = JMESPathCheck
-        fields = ("source_name", "tags", "jmespath_expression")
-        widgets = {"source_name": forms.TextInput}
+        fields = ("source_name", "platforms", "tags", "jmespath_expression")
+        widgets = {"source_name": forms.TextInput,
+                   "platforms": PlatformsWidget}
+
+    def clean_platforms(self):
+        platforms = self.cleaned_data.get("platforms")
+        if platforms is not None:
+            if len(platforms) < 1:
+                raise ValidationError("At least one platform must be selected")
+        return platforms
 
     def clean_jmespath_expression(self):
         exp = self.cleaned_data.get("jmespath_expression")

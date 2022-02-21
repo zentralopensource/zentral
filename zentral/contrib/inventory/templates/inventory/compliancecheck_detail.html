@@ -29,6 +29,10 @@
       <td>{{ object.source_name }}</td>
     </tr>
     <tr>
+      <td>Platform{{ object.platforms|length|pluralize }}</td>
+      <td>{{ object.get_platforms_display }}</td>
+    </tr>
+    <tr>
       <td>Tags</td>
       <td>
         {% for tag in object.tags.all %}

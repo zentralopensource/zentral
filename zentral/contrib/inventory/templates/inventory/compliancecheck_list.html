@@ -17,6 +17,7 @@
   <thead>
     <th>Name</th>
     <th>Source</th>
+    <th>Platforms</th>
     <th>Tags</th>
   </thead>
   <tbody>
@@ -27,6 +28,7 @@
         <a href="{{ obj.get_absolute_url }}">{{ cc.name }}</a>
       </td>
       <td>{{ obj.source_name }}</td>
+      <td>{{ obj.get_platforms_display }}</td>
       <td>
         {% for tag in obj.tags.all %}
         {% inventory_tag tag %}

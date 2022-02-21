@@ -28,6 +28,10 @@ class InventoryJMESPathCheck(BaseComplianceCheck):
         " from inventory_source as s"
         " join inventory_currentmachinesnapshot as cms on (cms.source_id = s.id)"
         " where cms.serial_number = %(serial_number)s"
+        ") and jc.platforms && array("
+        " select platform from inventory_machinesnapshot as ms"
+        " join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)"
+        " where cms.serial_number = %(serial_number)s"
         ")"
     )
 
@@ -50,7 +54,7 @@ class JMESPathChecksCache:
     ttl = 300  # cache ttl in seconds
 
     def __init__(self):
-        self._source_checks = {}
+        self._source_platform_checks = {}
         self._checks = {}
         self._last_fetched_time = None
         self._lock = threading.Lock()
@@ -58,29 +62,39 @@ class JMESPathChecksCache:
     def _load(self):
         if self._last_fetched_time is not None and (time.monotonic() - self._last_fetched_time) < self.ttl:
             return
-        self._source_checks = {}
+        self._source_platform_checks = {}
         self._checks = {}
         for jmespath_check in (JMESPathCheck.objects.select_related("compliance_check")
                                                     .prefetch_related("tags")
                                                     .all()):
-            self._source_checks.setdefault(jmespath_check.source_name.lower(), []).append(
-                (set(tag.id for tag in jmespath_check.tags.all()),
-                 jmespath.compile(jmespath_check.jmespath_expression),
-                 jmespath_check)
-            )
+            source_name = jmespath_check.source_name.lower()
+            tags_set = frozenset(tag.id for tag in jmespath_check.tags.all())
+            compiled_jmespath_expression = jmespath.compile(jmespath_check.jmespath_expression)
+            for platform in jmespath_check.platforms:
+                self._source_platform_checks.setdefault((source_name, platform), []).append(
+                    (tags_set, compiled_jmespath_expression, jmespath_check)
+                )
             self._checks[jmespath_check.compliance_check.pk] = jmespath_check
         self._last_fetched_time = time.monotonic()
 
-    def _get_source_checks(self, source_name):
+    def _get_source_platform_checks(self, source_name, platform):
         with self._lock:
             self._load()
-            return self._source_checks.get(source_name.lower(), [])
+            return self._source_platform_checks.get((source_name.lower(), platform), [])
 
     def process_tree(self, tree, last_seen):
-        serial_number = tree["serial_number"]
         machine_tag_set = None
         compliance_check_statuses = []
-        for check_tag_set, jmespath_parsed_expr, jmespath_check in self._get_source_checks(tree["source"]["name"]):
+        serial_number = tree["serial_number"]
+        source_name = tree["source"]["name"]
+        platform = tree.get("platform")
+        if not platform:
+            logger.warning("Cannot process %s %s tree: missing platform", source_name, serial_number)
+            return
+        for check_tag_set, jmespath_parsed_expr, jmespath_check in self._get_source_platform_checks(
+            source_name,
+            platform
+        ):
             if check_tag_set:
                 if machine_tag_set is None:
                     # TODO cache?
