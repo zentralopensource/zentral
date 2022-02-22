@@ -21,7 +21,7 @@ from .utils import (MSQuery,
 def cleanup_inventory(days, serialized_event_request):
     min_date = get_min_date(days)
     payload = {"days": days, "min_date": min_date}
-    post_cleanup_started_event(payload, serialized_event_request)
+    post_cleanup_started_event(payload.copy(), serialized_event_request)
 
     payload["tables"] = {}
 
