@@ -65,6 +65,12 @@
     Update
   </a>
   {% endif %}
+  {% if devtool_link %}
+  <a href="{{ devtool_link }}" class="btn btn-default">
+    <span class="glyphicon glyphicon-wrench" aria-hidden="true"></span>
+    DevTool
+  </a>
+  {% endif %}
   {% if perms.inventory.delete_jmespathcheck %}
   <a href="{% url 'inventory:delete_compliance_check' object.pk %}" class="btn btn-danger">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>

@@ -10,7 +10,7 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import User
 from zentral.contrib.inventory.compliance_checks import InventoryJMESPathCheck
-from zentral.contrib.inventory.models import JMESPathCheck, MachineSnapshotCommit, MachineTag, MetaMachine, Tag
+from zentral.contrib.inventory.models import JMESPathCheck, MachineSnapshotCommit, MachineTag, MetaMachine, Source, Tag
 from zentral.core.compliance_checks.models import ComplianceCheck, MachineStatus, Status
 
 
@@ -37,6 +37,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
                  'bundle_path': "/Applications/Baller.app"}
             ]
         })
+        cls.source = Source.objects.get(name=cls.source_name.upper())
         cls.machine = MetaMachine(cls.serial_number)
         cls.url_msn = cls.machine.get_urlsafe_serial_number()
 
@@ -132,6 +133,22 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_form.html")
         self.assertContains(response, "Create compliance check")
+
+    def test_create_compliance_check_devtool_pre_fill(self):
+        self._login("inventory.add_jmespathcheck")
+        source_name = get_random_string()
+        jmespath_expression = "os_version.major > `11`"
+        response = self.client.get(
+            reverse("inventory:create_compliance_check"),
+            {"source_name": source_name,
+             "jmespath_expression": jmespath_expression}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/compliancecheck_form.html")
+        self.assertContains(response, "Create compliance check")
+        form = response.context["jmespath_check_form"]
+        self.assertEqual(form.initial["source_name"], source_name)
+        self.assertEqual(form.initial["jmespath_expression"], jmespath_expression)
 
     def test_create_compliance_check_post(self):
         self._login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
@@ -368,6 +385,111 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertNotContains(response, reverse('inventory:compliance_check', args=(cc_pk,)))
         self.assertContains(response, cc0.compliance_check.name)
         self.assertContains(response, reverse('inventory:compliance_check', args=(cc0.pk,)))
+
+    # devtool
+
+    def test_compliance_check_devtool_redirect(self):
+        self._login_redirect(reverse("inventory:compliance_check_devtool"))
+
+    def test_compliance_check_devtool_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("inventory:compliance_check_devtool"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_compliance_check_devtool_no_create(self):
+        self._login('inventory.view_machinesnapshot')
+        response = self.client.get(reverse("inventory:compliance_check_devtool"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
+        self.assertNotContains(response, "Create")
+
+    def test_compliance_check_devtool_with_create(self):
+        self._login('inventory.view_machinesnapshot', 'inventory.add_jmespathcheck')
+        response = self.client.get(reverse("inventory:compliance_check_devtool"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
+        self.assertContains(response, "Create")
+
+    def test_compliance_check_devtool_invalid_jmespath(self):
+        self._login('inventory.view_machinesnapshot')
+        response = self.client.post(
+            reverse("inventory:compliance_check_devtool"),
+            {"source": self.source.pk,
+             "serial_number": self.serial_number,
+             "jmespath_expression": "os_version.major >>>"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
+        self.assertFormError(
+            response, "form",
+            "jmespath_expression", "Invalid JMESPath expression"
+        )
+        self.assertEqual(response.context["tree"]["serial_number"], self.serial_number)
+        self.assertIsNone(response.context.get("result"))
+
+    def test_compliance_check_devtool_machine_not_found(self):
+        self._login('inventory.view_machinesnapshot')
+        response = self.client.post(
+            reverse("inventory:compliance_check_devtool"),
+            {"source": self.source.pk,
+             "serial_number": get_random_string(),
+             "jmespath_expression": "os_version.major > `11`"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
+        self.assertFormError(
+            response, "form",
+            "serial_number", "Current machine with this serial number for this source not found"
+        )
+        self.assertIsNone(response.context.get("tree"))
+        self.assertIsNone(response.context.get("result"))
+
+    def test_compliance_check_devtool_not_a_bool(self):
+        self._login('inventory.view_machinesnapshot')
+        response = self.client.post(
+            reverse("inventory:compliance_check_devtool"),
+            {"source": self.source.pk,
+             "serial_number": self.serial_number,
+             "jmespath_expression": "os_version.major"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
+        self.assertFormError(
+            response, "form",
+            "jmespath_expression", "Result is not a boolean"
+        )
+        self.assertEqual(response.context["tree"]["serial_number"], self.serial_number)
+        self.assertEqual(response.context["result"],  10)
+
+    def test_compliance_check_devtool_test(self):
+        self._login('inventory.view_machinesnapshot')
+        response = self.client.post(
+            reverse("inventory:compliance_check_devtool"),
+            {"source": self.source.pk,
+             "serial_number": self.serial_number,
+             "jmespath_expression": "os_version.major > `9`"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
+        self.assertEqual(response.context["form"].errors, {})
+        self.assertEqual(response.context["tree"]["serial_number"], self.serial_number)
+        self.assertEqual(response.context["result"],  True)
+
+    def test_compliance_check_devtool_create(self):
+        self._login('inventory.view_machinesnapshot', 'inventory.add_jmespathcheck')
+        response = self.client.post(
+            reverse("inventory:compliance_check_devtool"),
+            {"action": "create",
+             "source": self.source.pk,
+             "serial_number": self.serial_number,
+             "jmespath_expression": "os_version.major > `9`"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/compliancecheck_form.html")
+        form = response.context["jmespath_check_form"]
+        self.assertEqual(form.initial["source_name"], self.source.name)
+        self.assertEqual(form.initial["jmespath_expression"], "os_version.major > `9`")
 
     # machine
 

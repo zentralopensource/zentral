@@ -5,7 +5,8 @@ from django.http import QueryDict
 from django.utils.text import slugify
 import jmespath
 from .conf import PLATFORM_CHOICES
-from .models import (EnrollmentSecret,
+from .models import (CurrentMachineSnapshot,
+                     EnrollmentSecret,
                      MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
                      Source, Tag,
@@ -395,3 +396,43 @@ class JMESPathCheckForm(forms.ModelForm):
             except Exception:
                 raise ValidationError("Invalid JMESPath expression")
         return exp
+
+
+class JMESPathCheckDevToolForm(forms.Form):
+    source = forms.ModelChoiceField(queryset=Source.objects.all())
+    serial_number = forms.CharField(min_length=3, max_length=256)
+    jmespath_expression = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+
+    def clean_jmespath_expression(self):
+        exp = self.cleaned_data.get("jmespath_expression")
+        if exp:
+            try:
+                self.cleaned_data["compiled_jmespath"] = jmespath.compile(exp)
+            except Exception:
+                raise ValidationError("Invalid JMESPath expression")
+        return exp
+
+    def clean(self):
+        cleaned_data = super().clean()
+        serial_number = cleaned_data.get("serial_number")
+        source = cleaned_data.get("source")
+        if serial_number and source:
+            try:
+                cms = (
+                    CurrentMachineSnapshot.objects.select_related("machine_snapshot")
+                                                  .get(serial_number=serial_number, source=source)
+                )
+            except CurrentMachineSnapshot.DoesNotExist:
+                self.add_error("serial_number", "Current machine with this serial number for this source not found")
+            else:
+                cleaned_data["tree"] = cms.machine_snapshot.serialize()
+                compiled_jmespath = cleaned_data.get("compiled_jmespath")
+                if compiled_jmespath:
+                    try:
+                        cleaned_data["result"] = compiled_jmespath.search(cleaned_data["tree"])
+                    except Exception:
+                        self.add_error("jmespath_expression", "Evaluation error")
+                    else:
+                        if not isinstance(cleaned_data["result"], bool):
+                            self.add_error("jmespath_expression", "Result is not a boolean")
+        return cleaned_data

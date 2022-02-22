@@ -9,9 +9,14 @@
 
 <h2>{{ paginator.count }} Compliance check{{ paginator.count|pluralize }}</h2>
 
-{% if perms.inventory.add_jmespathcheck %}
-<a href="{% url 'inventory:create_compliance_check' %}" class="btn btn-default">Create</a>
-{% endif %}
+<p>
+  {% if perms.inventory.add_jmespathcheck %}
+  <a href="{% url 'inventory:create_compliance_check' %}" class="btn btn-default">Create</a>
+  {% endif %}
+  {% if perms.inventory.view_machinesnapshot %}
+  <a href="{% url 'inventory:compliance_check_devtool' %}" class="btn btn-default">DevTool</a>
+  {% endif %}
+</p>
 
 <table class="table">
   <thead>

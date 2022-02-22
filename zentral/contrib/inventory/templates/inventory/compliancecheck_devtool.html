@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% load base_extras bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'inventory:compliance_checks' %}">Compliance checks</a></li>
+  <li class="active">DevTool</li>
+</ol>
+
+<h2>Compliance checks DevTool</h2>
+
+<form id="test-form" method="post" class="form">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    <button class="btn btn-primary" type="submit" name="action" value="test">Test</button>
+    {% if perms.inventory.add_jmespathcheck %}
+    <button class="btn btn-success" type="submit" name="action" value="create">Create</button>
+    {% endif %}
+  </p>
+</form>
+
+{% if form.has_changed %}
+<h4>Result</h4>
+{% if result != None %}{{ result|pythonprettyprint }}{% else %}<p>-</p>{% endif %}
+
+<h4>Machine snapshot</h4>
+{% if tree != None %}{{ tree|pythonprettyprint }}{% else %}<p>-</p>{% endif %}
+{% endif %}
+{% endblock %}

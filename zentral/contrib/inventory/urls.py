@@ -89,6 +89,7 @@ urlpatterns = [
     path('compliance_checks/<int:pk>/events/store_redirect/',
          views.ComplianceCheckEventsStoreRedirectView.as_view(),
          name='compliance_check_events_store_redirect'),
+    path('compliance_checks/devtool/', views.ComplianceCheckDevToolView.as_view(), name='compliance_check_devtool'),
 
     # tags
     path('tags/', views.TagsView.as_view(), name='tags'),

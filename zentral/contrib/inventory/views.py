@@ -27,7 +27,7 @@ from .forms import (MetaBusinessUnitForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
                     CreateTagForm, UpdateTagForm,
                     MacOSAppSearchForm,
-                    JMESPathCheckForm)
+                    JMESPathCheckForm, JMESPathCheckDevToolForm, Source)
 from .models import (BusinessUnit,
                      MetaBusinessUnit, MachineGroup,
                      MetaMachine,
@@ -768,6 +768,11 @@ class CreateComplianceCheckView(PermissionRequiredMixin, TemplateView):
         jmespath_check_form_kwargs = {
             "prefix": "jcf"
         }
+        # pre-fill fields from devtool
+        for field_name in ("source_name", "jmespath_expression"):
+            value = self.request.GET.get(field_name)
+            if value:
+                jmespath_check_form_kwargs.setdefault("initial", {})[field_name] = value
         if self.request.method == "POST":
             compliance_check_form_kwargs["data"] = self.request.POST
             jmespath_check_form_kwargs["data"] = self.request.POST
@@ -816,6 +821,12 @@ class ComplianceCheckView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data()
         ctx["compliance_check"] = self.object.compliance_check
+        if self.request.user.has_perm("inventory.view_machinesnapshot"):
+            ctx["devtool_link"] = "{}?{}".format(
+                reverse("inventory:compliance_check_devtool"),
+                urlencode({"source_name": self.object.source_name,
+                           "jmespath_expression": self.object.jmespath_expression})
+            )
         if self.request.user.has_perms(ComplianceCheckEventsMixin.permission_required):
             ctx["show_events_link"] = frontend_store.object_events
             store_links = []
@@ -958,6 +969,43 @@ class FetchComplianceCheckEventsView(ComplianceCheckEventsMixin, FetchEventsView
 
 class ComplianceCheckEventsStoreRedirectView(ComplianceCheckEventsMixin, EventsStoreRedirectView):
     pass
+
+
+class ComplianceCheckDevToolView(PermissionRequiredMixin, FormView):
+    permission_required = "inventory.view_machinesnapshot"
+    template_name = "inventory/compliancecheck_devtool.html"
+    form_class = JMESPathCheckDevToolForm
+
+    def render_test(self, form):
+        tree = form.cleaned_data.get("tree")
+        result = form.cleaned_data.get("result")
+        return self.render_to_response(self.get_context_data(form=form, tree=tree, result=result))
+
+    def get_initial(self):
+        # pre-fill fields from compliance check
+        initial = {}
+        source_name = self.request.GET.get("source_name")
+        if source_name:
+            source = Source.objects.filter(name__iexact=source_name).order_by("pk").first()
+            if source:
+                initial["source"] = source
+        jmespath_expression = self.request.GET.get("jmespath_expression")
+        if jmespath_expression:
+            initial["jmespath_expression"] = jmespath_expression
+        return initial
+
+    def form_invalid(self, form):
+        return self.render_test(form)
+
+    def form_valid(self, form):
+        if self.request.POST.get("action") == "create":
+            return HttpResponseRedirect("{}?{}".format(
+                reverse("inventory:create_compliance_check"),
+                urlencode({"source_name": form.cleaned_data["source"].name,
+                           "jmespath_expression": form.cleaned_data["jmespath_expression"]})
+            ))
+        else:
+            return self.render_test(form)
 
 
 # tags
