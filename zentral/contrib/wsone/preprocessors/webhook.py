@@ -41,6 +41,7 @@ class WebhookEventPreprocessor(object):
         logger.info("Update machine %s %s", client.host, device_id)
         ms_tree = client.get_machine_snapshot_tree(device_id)
         if not ms_tree:
+            logger.error("Could not get machine %s %s snapshot tree", client.host, device_id)
             return
         with transaction.atomic():
             yield from commit_machine_snapshot_and_yield_events(ms_tree)

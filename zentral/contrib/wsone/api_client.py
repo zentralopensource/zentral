@@ -188,8 +188,8 @@ class Client:
             version = 1
         else:
             version = 4
-        device = self.make_request(f"mdm/devices/{device_id}", version=version)
-        if not self.is_excluded_device(device):
+        device = self.make_request(f"mdm/devices/{device_id}", version=version, ignore_status_code=404)
+        if device and not self.is_excluded_device(device):
             return device
 
     def iter_device_apps(self, device_uuid):
