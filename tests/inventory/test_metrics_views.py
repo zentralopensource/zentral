@@ -106,9 +106,11 @@ class PrometheusViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         seen = False
         for family in text_string_to_metric_families(response.content.decode('utf-8')):
+            if family.name == "zentral_inventory_active_machines_bucket":
+                continue
             self.assertEqual(len(family.samples), 7)
             for sample in family.samples:
-                self.assertEqual(sample.name, "zentral_inventory_osx_apps")
+                self.assertEqual(sample.name, "zentral_inventory_osx_apps_bucket")
                 le = sample.labels["le"]
                 self.assertEqual(sample.labels,
                                  {'name': 'Baller',
@@ -136,9 +138,11 @@ class PrometheusViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         seen = False
         for family in text_string_to_metric_families(response.content.decode('utf-8')):
+            if family.name == "zentral_inventory_active_machines_bucket":
+                continue
             self.assertEqual(len(family.samples), 7)
             for sample in family.samples:
-                self.assertEqual(sample.name, "zentral_inventory_android_apps")
+                self.assertEqual(sample.name, "zentral_inventory_android_apps_bucket")
                 le = sample.labels["le"]
                 self.assertEqual(sample.labels,
                                  {'name': 'AndroidApp1',
@@ -166,9 +170,11 @@ class PrometheusViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         seen = False
         for family in text_string_to_metric_families(response.content.decode('utf-8')):
+            if family.name == "zentral_inventory_active_machines_bucket":
+                continue
             self.assertEqual(len(family.samples), 7)
             for sample in family.samples:
-                self.assertEqual(sample.name, "zentral_inventory_ios_apps")
+                self.assertEqual(sample.name, "zentral_inventory_ios_apps_bucket")
                 le = sample.labels["le"]
                 self.assertEqual(sample.labels,
                                  {'name': '3Password',
@@ -196,9 +202,11 @@ class PrometheusViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         seen = False
         for family in text_string_to_metric_families(response.content.decode('utf-8')):
+            if family.name == "zentral_inventory_active_machines_bucket":
+                continue
             self.assertEqual(len(family.samples), 7)
             for sample in family.samples:
-                self.assertEqual(sample.name, "zentral_inventory_deb_packages")
+                self.assertEqual(sample.name, "zentral_inventory_deb_packages_bucket")
                 le = sample.labels["le"]
                 self.assertEqual(sample.labels,
                                  {'name': 'deb_package_2',
@@ -226,9 +234,11 @@ class PrometheusViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         seen = False
         for family in text_string_to_metric_families(response.content.decode('utf-8')):
+            if family.name == "zentral_inventory_active_machines_bucket":
+                continue
             self.assertEqual(len(family.samples), 7)
             for sample in family.samples:
-                self.assertEqual(sample.name, "zentral_inventory_programs")
+                self.assertEqual(sample.name, "zentral_inventory_programs_bucket")
                 le = sample.labels["le"]
                 self.assertEqual(sample.labels,
                                  {'name': 'program_1',
@@ -256,9 +266,11 @@ class PrometheusViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         seen = False
         for family in text_string_to_metric_families(response.content.decode('utf-8')):
+            if family.name == "zentral_inventory_active_machines_bucket":
+                continue
             self.assertEqual(len(family.samples), 7)
             for sample in family.samples:
-                self.assertEqual(sample.name, "zentral_inventory_os_versions")
+                self.assertEqual(sample.name, "zentral_inventory_os_versions_bucket")
                 le = sample.labels["le"]
                 self.assertEqual(sample.labels,
                                  {'build': '_',
@@ -267,6 +279,36 @@ class PrometheusViewsTestCase(TestCase):
                                   'name': 'OS X',
                                   'patch': '_',
                                   'source_name': self.ms2.source.name,
+                                  'source_id': str(self.ms2.source.pk),
+                                  'le': le})
+                if le in ("1", "7"):  # source 2 is 13 days old
+                    self.assertEqual(sample.value, 0)
+                else:
+                    self.assertEqual(sample.value, 1)
+            self.assertFalse(seen)  # only os versions
+            seen = True
+        self.assertTrue(seen)
+        if old_config:
+            settings._collection["apps"]["zentral.contrib.inventory"]["metrics_options"] = old_config
+
+    def test_prometheus_metrics_active_machines(self):
+        old_config = settings._collection["apps"]["zentral.contrib.inventory"].pop("metrics_options", None)
+        settings._collection["apps"]["zentral.contrib.inventory"]["metrics_options"] = ConfigDict({
+            "os_versions": {"sources": ["zentral tests2"]}
+        })
+        response = self.client.get(reverse("inventory_metrics:all"),
+                                   HTTP_AUTHORIZATION="Bearer CHANGE ME!!!")
+        self.assertEqual(response.status_code, 200)
+        seen = False
+        for family in text_string_to_metric_families(response.content.decode('utf-8')):
+            if family.name != "zentral_inventory_active_machines_bucket":
+                continue
+            self.assertEqual(len(family.samples), 7)
+            for sample in family.samples:
+                self.assertEqual(sample.name, "zentral_inventory_active_machines_bucket")
+                le = sample.labels["le"]
+                self.assertEqual(sample.labels,
+                                 {'source_name': self.ms2.source.name,
                                   'source_id': str(self.ms2.source.pk),
                                   'le': le})
                 if le in ("1", "7"):  # source 2 is 13 days old

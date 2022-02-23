@@ -1,7 +1,8 @@
 from prometheus_client import Gauge
 from zentral.utils.prometheus import BasePrometheusMetricsView
 from zentral.conf import settings
-from .utils import android_app_count, deb_package_count, ios_app_count, osx_app_count, os_version_count, program_count
+from .utils import (active_machines_by_source_count, android_app_count, deb_package_count, ios_app_count,
+                    osx_app_count, os_version_count, program_count)
 
 
 class MetricsView(BasePrometheusMetricsView):
@@ -11,7 +12,8 @@ class MetricsView(BasePrometheusMetricsView):
         names = options.get("names")
         if not sources or not names:
             return
-        g = Gauge('zentral_inventory_android_apps',  'Zentral inventory Android apps',
+        self.all_source_names.update(sources)
+        g = Gauge('zentral_inventory_android_apps_bucket',  'Zentral inventory Android apps',
                   ['name', 'version', 'source_name', 'source_id', 'le'],
                   registry=self.registry)
         for r in android_app_count(sources, names):
@@ -25,7 +27,8 @@ class MetricsView(BasePrometheusMetricsView):
         names = options.get("names")
         if not sources or not names:
             return
-        g = Gauge('zentral_inventory_deb_packages',  'Zentral inventory Debian packages',
+        self.all_source_names.update(sources)
+        g = Gauge('zentral_inventory_deb_packages_bucket',  'Zentral inventory Debian packages',
                   ['name', 'version', 'source_name', 'source_id', 'le'],
                   registry=self.registry)
         for r in deb_package_count(sources, names):
@@ -39,7 +42,8 @@ class MetricsView(BasePrometheusMetricsView):
         names = options.get("names")
         if not sources or not names:
             return
-        g = Gauge('zentral_inventory_ios_apps',  'Zentral inventory iOS apps',
+        self.all_source_names.update(sources)
+        g = Gauge('zentral_inventory_ios_apps_bucket',  'Zentral inventory iOS apps',
                   ['name', 'version', 'source_name', 'source_id', 'le'],
                   registry=self.registry)
         for r in ios_app_count(sources, names):
@@ -52,7 +56,8 @@ class MetricsView(BasePrometheusMetricsView):
         sources = options.get("sources")
         if not sources:
             return
-        g = Gauge('zentral_inventory_os_versions', 'Zentral inventory OS Versions',
+        self.all_source_names.update(sources)
+        g = Gauge('zentral_inventory_os_versions_bucket', 'Zentral inventory OS Versions',
                   ['name', 'major', 'minor', 'patch', 'build', 'source_id',  'source_name', 'le'],
                   registry=self.registry)
         for r in os_version_count(sources):
@@ -66,7 +71,8 @@ class MetricsView(BasePrometheusMetricsView):
         bundle_ids = options.get("bundle_ids")
         if not sources or not bundle_ids:
             return
-        g = Gauge('zentral_inventory_osx_apps',  'Zentral inventory OSX apps',
+        self.all_source_names.update(sources)
+        g = Gauge('zentral_inventory_osx_apps_bucket',  'Zentral inventory OSX apps',
                   ['name', 'version', 'source_name', 'source_id', 'le'],
                   registry=self.registry)
         for r in osx_app_count(sources, bundle_ids):
@@ -80,7 +86,8 @@ class MetricsView(BasePrometheusMetricsView):
         names = options.get("names")
         if not sources or not names:
             return
-        g = Gauge('zentral_inventory_programs',  'Zentral inventory programs',
+        self.all_source_names.update(sources)
+        g = Gauge('zentral_inventory_programs_bucket',  'Zentral inventory programs',
                   ['name', 'version', 'source_name', 'source_id', 'le'],
                   registry=self.registry)
         for r in program_count(sources, names):
@@ -88,11 +95,22 @@ class MetricsView(BasePrometheusMetricsView):
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 
+    def add_active_machines(self):
+        g = Gauge('zentral_inventory_active_machines_bucket', 'Zentral inventory active machines',
+                  ['source_id', 'source_name', 'le'],
+                  registry=self.registry)
+        for r in active_machines_by_source_count(self.all_source_names):
+            labels = {k: r[k] for k in ('source_name', 'source_id')}
+            for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
+                g.labels(le=le, **labels).set(r[le])
+
     def populate_registry(self):
         self.metrics_options = settings["apps"]["zentral.contrib.inventory"].get("metrics_options", {})
+        self.all_source_names = set([])
         self.add_android_apps()
         self.add_deb_packages()
         self.add_ios_apps()
         self.add_os_versions()
         self.add_osx_apps()
         self.add_programs()
+        self.add_active_machines()
