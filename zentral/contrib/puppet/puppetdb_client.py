@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util import Retry
+from base.utils import deployment_info
 from zentral.utils.dict import get_nested_val
 from zentral.utils.ssl import create_client_ssl_context
 
@@ -18,7 +19,8 @@ class PuppetDBError(Exception):
 
 
 class CustomHTTPAdapter(HTTPAdapter):
-    def __init__(self, certdata, keydata, keydata_password, cadata):
+    def __init__(self, timeout, certdata, keydata, keydata_password, cadata):
+        self.timeout = timeout
         self.ssl_context = create_client_ssl_context(certdata, keydata, keydata_password, cadata)
         super().__init__(
             max_retries=Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
@@ -32,43 +34,79 @@ class CustomHTTPAdapter(HTTPAdapter):
         kwargs["ssl_context"] = self.ssl_context
         return super().proxy_manager_for(*args, **kwargs)
 
+    def send(self, request, **kwargs):
+        timeout = kwargs.get("timeout")
+        if timeout is None:
+            kwargs["timeout"] = self.timeout
+        return super().send(request, **kwargs)
+
 
 class PuppetDBClient(object):
-    def __init__(self, config_d):
-        self.business_unit_fact_key = config_d.get('business_unit_fact_key')
-        self.group_fact_keys = config_d.get('group_fact_keys') or []
-        self.extra_fact_keys = config_d.get('extra_fact_keys') or []
-        self.puppetboard_url = config_d.get('puppetboard_url')
-
-        # prepare requests session with connection settings
-        self.puppetdb_url = config_d["puppetdb_url"]
-        self.api_base_url = f'{self.puppetdb_url}/pdb/query/v4'
-        self.puppetdb_timeout = config_d.get('puppetdb_timeout', 10)
+    def __init__(
+        self, business_unit, url,
+        group_fact_keys, extra_fact_keys, puppetboard_url,
+        deb_packages_shard, programs_shard
+    ):
+        self.business_unit = business_unit
+        self.url = url
+        self.api_base_url = f'{url}/pdb/query/v4'
+        # facts
+        self.group_fact_keys = group_fact_keys
+        self.extra_fact_keys = extra_fact_keys
+        self.puppetboard_url = puppetboard_url
+        # packages
+        self.deb_packages_shard = deb_packages_shard
+        self.programs_shard = programs_shard
+        # requests session
         self.session = requests.Session()
-        # headers
-        self.session.headers.update({
-            'user-agent': 'zentral/0.0.1',
-            'content-type': 'application/json',
-            'accept': 'application/json',
-            'accept-charset': 'utf-8'
-        })
-        # tls
-        certdata = config_d.get("puppetdb_cert")
-        keydata = config_d.get("puppetdb_key")
-        keydata_password = config_d.get("puppetdb_key_password")
-        cadata = config_d.get("puppetdb_ca")
-        self.session.mount(self.api_base_url, CustomHTTPAdapter(certdata, keydata, keydata_password, cadata))
+        self.session.headers["User-Agent"] = deployment_info.user_agent
+
+    def configure_rbac_auth(self, timeout, rbac_token, ca_chain):
+        self.session.headers["X-Authentication"] = rbac_token
+        self.session.mount(self.api_base_url, CustomHTTPAdapter(timeout, None, None, None, ca_chain))
+
+    def configure_client_cert_auth(self, timeout, cert, key, ca_chain):
+        self.session.mount(self.api_base_url, CustomHTTPAdapter(timeout, cert, key, None, ca_chain))
+
+    @classmethod
+    def from_instance(cls, instance):
+        client = cls(
+            instance.business_unit,
+            instance.url,
+            instance.group_fact_keys,
+            instance.extra_fact_keys,
+            instance.puppetboard_url,
+            instance.deb_packages_shard,
+            instance.programs_shard
+        )
+        if instance.cert:
+            client.configure_client_cert_auth(
+                instance.timeout,
+                instance.cert,
+                instance.get_key(),
+                instance.ca_chain
+            )
+        else:
+            client.configure_rbac_auth(
+                instance.timeout,
+                instance.get_rbac_token(),
+                instance.ca_chain
+            )
+        return client
+
+    def get_business_unit_d(self):
+        return self.business_unit.serialize()
 
     def get_source_d(self):
         return {"module": "zentral.contrib.puppet",
                 "name": "puppet",
-                "config": {"url": self.puppetdb_url}}
+                "config": {"url": self.url}}
 
     def get_inventory_d(self, certname):
         url = "{}/inventory?{}".format(self.api_base_url,
                                        urlencode({"query": '["=", "certname", "{}"]'.format(certname)}))
         try:
-            r = self.session.get(url, timeout=self.puppetdb_timeout)
+            r = self.session.get(url)
         except requests.exceptions.RequestException as e:
             raise PuppetDBError(f"Node '{certname}': PuppetDB API error: {e}")
         if r.status_code != requests.codes.ok:
@@ -93,7 +131,8 @@ class PuppetDBClient(object):
         # source, reference, last_seen
         ct = {'source': self.get_source_d(),
               'reference': certname,
-              'last_seen': parser.parse(inventory_d['timestamp'])}
+              'last_seen': parser.parse(inventory_d['timestamp']),
+              'business_unit': self.get_business_unit_d()}
 
         # links
         links = self.machine_links_from_certname(certname)
@@ -150,14 +189,6 @@ class PuppetDBClient(object):
 
         if puppet_node:
             ct['puppet_node'] = puppet_node
-
-        # business unit from puppet fact
-        if self.business_unit_fact_key:
-            business_unit_name = get_nested_val(facts, self.business_unit_fact_key)
-            if business_unit_name:
-                ct['business_unit'] = {'source': self.get_source_d(),
-                                       'reference': business_unit_name,
-                                       'name': business_unit_name}
 
         # groups from puppet facts
         groups = []

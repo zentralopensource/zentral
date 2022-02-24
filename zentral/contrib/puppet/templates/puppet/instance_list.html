@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'puppet:index' %}">Puppet</a></li>
+  <li class="active">Instance{{ instance_count|pluralize }}</li>
+</ol>
+
+<h2>{{ instance_count }} Puppet instance{{ instance_count|pluralize }}</h2>
+
+{% if perms.puppet.add_instance %}
+<p>
+  <a href="{% url 'puppet:create_instance' %}" class="btn btn-default">Create</a>
+</p>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Host</th>
+      <th>Business unit</th>
+      {% if perms.puppet.change_instance %}
+      <th></th>
+      {% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for instance in object_list %}
+    <tr>
+      <td><a href="{{ instance.get_absolute_url }}">{{ instance.hostname }}</a></td>
+      <td>
+        {{ instance.business_unit }}
+      </td>
+      {% if perms.puppet.change_instance %}
+      <td>
+        <a href="{% url 'puppet:update_instance' instance.pk %}" class="btn btn-default">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Update
+        </a>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

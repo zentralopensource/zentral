@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'puppet:index' %}">Puppet</a></li>
+  <li><a href="{% url 'puppet:instances' %}">Instances</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h2>Puppet instance <i>{{ object }}</i></h2>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th style="width:20vw">Attribute</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Business unit</td>
+      <td>
+        {% if perms.inventory.view_metabusinessunit %}
+        <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.pk %}">
+          {{ object.business_unit }}
+        </a>
+        {% else %}
+        {{ object.business_unit }}
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>URL</td>
+      <td><a href="{{ object.url }}">{{ object.url }}</a></td>
+    </tr>
+    <tr>
+      <td colspan="2"><h5>API authentication</h5></td>
+    </tr>
+    {% if object.cert %}
+    <tr>
+      <td>Client certificate</td>
+      <td>
+        <dl>
+          {% for key, val in object.get_cert_infos.items %}
+          <dt>{{ key }}</dt>
+          <dd>{{ val }}</dd>
+          {% endfor %}
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td>PE RBAC token</td>
+      <td>
+        <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+        <span hidden>{{ object.get_rbac_token }}</span>
+      </td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td colspan="2"><h5>Report processor</h5></td>
+    </tr>
+    <tr>
+      <td>URL</td>
+      <td>{{ object.get_post_report_full_url }}</td>
+    </tr>
+    <tr>
+      <td>Token</td>
+      <td>
+        <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+        <span hidden>{{ object.get_report_processor_token }}</span>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2"><h5>Options</h5></td>
+    </tr>
+    <tr>
+      <td>Requests timeout</td>
+      <td>{{ object.timeout }}s</td>
+    </tr>
+    <tr>
+      <td>Group fact keys</td>
+      <td>{{ object.group_fact_keys|join:", "|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>Extra fact keys</td>
+      <td>{{ object.extra_fact_keys|join:", "|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>PuppetBoard URL</td>
+      <td>
+        {% if object.puppetboard_url %}
+        <a href="{{ object.puppetboard_url }}">{{ object.puppetboard_url }}</a>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>Debian packages shard</td>
+      <td>{{ object.deb_packages_shard }}%</td>
+    </tr>
+    <tr>
+      <td>Windows programs shard</td>
+      <td>{{ object.programs_shard }}%</td>
+    </tr>
+  </tbody>
+</table>
+
+<dl>
+  <dt class="small" style="opacity:0.5">Version</dt>
+  <dd class="small" style="opacity:0.5">{{ object.version }}</dd>
+  <dt class="small" style="opacity:0.5">Created at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.created_at }}</dd>
+  <dt class="small" style="opacity:0.5">Updated at</dt>
+  <dd class="small" style="opacity:0.5">{{ object.updated_at }}</dd>
+</dl>
+
+<div class="btn-group" role="group">
+  {% if perms.puppet.change_instance %}
+  <a href="{% url 'puppet:update_instance' object.pk %}" class="btn btn-default">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Update
+  </a>
+  {% endif %}
+  {% if perms.puppet.delete_instance %}
+  <a href="{% url 'puppet:delete_instance' object.pk %}" class="btn btn-danger">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span> Delete
+  </a>
+  {% endif %}
+  {% if show_events_link %}
+  <a class="btn btn-default" href="{% url 'puppet:instance_events' object.pk %}">
+    <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
+  </a>
+  {% endif %}
+  {% for link, anchor_text in store_links  %}
+  <a class="btn btn-default" href="{{ link }}">
+    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  var openEyes = document.querySelectorAll(".glyphicon-eye-open");
+  openEyes.forEach(function(openEye) {
+    openEye.addEventListener("click", function(event) {
+      var valueSpan = openEye.nextElementSibling;
+      if (valueSpan.hidden) {
+        valueSpan.hidden = false;
+        openEye.classList.remove("glyphicon-eye-open");
+        openEye.classList.add("glyphicon-eye-close");
+      } else {
+        valueSpan.hidden = true;
+        openEye.classList.remove("glyphicon-eye-close");
+        openEye.classList.add("glyphicon-eye-open");
+      }
+    });
+  });
+</script>
+{% endblock %}
