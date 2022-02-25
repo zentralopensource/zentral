@@ -1696,15 +1696,16 @@ def os_version_count(source_names):
         yield d
 
 
-def active_machines_by_source_count(source_names):
+def active_machines_count(source_names):
     query = (
         "with all_active_machines as ("
-        "  select s.id as source_id, s.name as source_name,"
+        "  select ms.platform, s.id as source_id, s.name as source_name,"
         "  date_part('days', now() - cms.last_seen) as age"
         "  from inventory_currentmachinesnapshot as cms"
+        "  join inventory_machinesnapshot as ms on (cms.machine_snapshot_id = ms.id)"
         "  join inventory_source as s on (s.id = cms.source_id)"
         "  where LOWER(s.name) in %s"
-        ") select source_id, source_name,"
+        ") select platform, source_id, source_name,"
         'count(*) filter (where age < 1) as "1",'
         'count(*) filter (where age < 7) as "7",'
         'count(*) filter (where age < 14) as "14",'
@@ -1713,7 +1714,7 @@ def active_machines_by_source_count(source_names):
         'count(*) filter (where age < 90) as "90",'
         'count(*) as "+Inf" '
         "from all_active_machines "
-        "group by source_id, source_name"
+        "group by platform, source_id, source_name"
     )
     cursor = connection.cursor()
     cursor.execute(query, [tuple(n.lower() for n in source_names)])

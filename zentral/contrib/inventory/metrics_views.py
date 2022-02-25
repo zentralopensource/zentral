@@ -1,7 +1,7 @@
 from prometheus_client import Gauge
 from zentral.utils.prometheus import BasePrometheusMetricsView
 from zentral.conf import settings
-from .utils import (active_machines_by_source_count, android_app_count, deb_package_count, ios_app_count,
+from .utils import (active_machines_count, android_app_count, deb_package_count, ios_app_count,
                     osx_app_count, os_version_count, program_count)
 
 
@@ -97,10 +97,10 @@ class MetricsView(BasePrometheusMetricsView):
 
     def add_active_machines(self):
         g = Gauge('zentral_inventory_active_machines_bucket', 'Zentral inventory active machines',
-                  ['source_id', 'source_name', 'le'],
+                  ['platform', 'source_id', 'source_name', 'le'],
                   registry=self.registry)
-        for r in active_machines_by_source_count(self.all_source_names):
-            labels = {k: r[k] for k in ('source_name', 'source_id')}
+        for r in active_machines_count(self.all_source_names):
+            labels = {k: r[k] for k in ('platform', 'source_name', 'source_id')}
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 

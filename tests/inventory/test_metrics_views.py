@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.test import TestCase
 from prometheus_client.parser import text_string_to_metric_families
 from zentral.conf import ConfigDict, settings
+from zentral.contrib.inventory.conf import MACOS
 from zentral.contrib.inventory.models import MachineSnapshotCommit
 
 
@@ -308,7 +309,8 @@ class PrometheusViewsTestCase(TestCase):
                 self.assertEqual(sample.name, "zentral_inventory_active_machines_bucket")
                 le = sample.labels["le"]
                 self.assertEqual(sample.labels,
-                                 {'source_name': self.ms2.source.name,
+                                 {'platform': MACOS,
+                                  'source_name': self.ms2.source.name,
                                   'source_id': str(self.ms2.source.pk),
                                   'le': le})
                 if le in ("1", "7"):  # source 2 is 13 days old
