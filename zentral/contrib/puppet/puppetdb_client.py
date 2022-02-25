@@ -1,13 +1,13 @@
 import logging
 from dateutil import parser
 from itertools import chain
-from urllib.parse import urlencode
 import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util import Retry
 from base.utils import deployment_info
 from zentral.utils.dict import get_nested_val
 from zentral.utils.ssl import create_client_ssl_context
+from zentral.utils.text import shard
 
 
 logger = logging.getLogger('zentral.contrib.puppet.puppetdb_client')
@@ -49,7 +49,6 @@ class PuppetDBClient(object):
     ):
         self.business_unit = business_unit
         self.url = url
-        self.api_base_url = f'{url}/pdb/query/v4'
         # facts
         self.group_fact_keys = group_fact_keys
         self.extra_fact_keys = extra_fact_keys
@@ -63,10 +62,10 @@ class PuppetDBClient(object):
 
     def configure_rbac_auth(self, timeout, rbac_token, ca_chain):
         self.session.headers["X-Authentication"] = rbac_token
-        self.session.mount(self.api_base_url, CustomHTTPAdapter(timeout, None, None, None, ca_chain))
+        self.session.mount(self.url, CustomHTTPAdapter(timeout, None, None, None, ca_chain))
 
     def configure_client_cert_auth(self, timeout, cert, key, ca_chain):
-        self.session.mount(self.api_base_url, CustomHTTPAdapter(timeout, cert, key, None, ca_chain))
+        self.session.mount(self.url, CustomHTTPAdapter(timeout, cert, key, None, ca_chain))
 
     @classmethod
     def from_instance(cls, instance):
@@ -102,22 +101,47 @@ class PuppetDBClient(object):
                 "name": "puppet",
                 "config": {"url": self.url}}
 
-    def get_inventory_d(self, certname):
-        url = "{}/inventory?{}".format(self.api_base_url,
-                                       urlencode({"query": '["=", "certname", "{}"]'.format(certname)}))
+    def make_request(self, path, certname):
         try:
-            r = self.session.get(url)
+            r = self.session.get(
+                f"{self.url}/pdb/query/v4{path}",
+                params={"query": f'["=", "certname", {certname}]'}
+            )
         except requests.exceptions.RequestException as e:
-            raise PuppetDBError(f"Node '{certname}': PuppetDB API error: {e}")
+            raise PuppetDBError(f"Node '{certname}' {path}: PuppetDB API error: {e}")
         if r.status_code != requests.codes.ok:
-            raise PuppetDBError(f"Node '{certname}': PuppetDB API HTTP response status code {r.status_code}")
+            raise PuppetDBError(f"Node '{certname}' {path}: PuppetDB API HTTP response status code {r.status_code}")
+        return r.json()
+
+    def get_inventory_d(self, certname):
+        resp_json = self.make_request("/inventory", certname)
         try:
-            inventory_d = r.json()[0]
+            inventory_d = resp_json[0]
         except IndexError:
             raise PuppetDBError(f"Node '{certname}': empty response")
         if inventory_d.get("certname") != certname:
             raise PuppetDBError(f"Node '{certname}': certname not in JSON response")
         return inventory_d
+
+    def iter_certname_packages(self, certname):
+        resp_json = self.make_request("/packages", certname)
+        if not resp_json:
+            logger.warning("Node '%s': no packages found", certname)
+            return
+        for package in resp_json:
+            name = package.get("package_name")
+            if not name:
+                logger.warning("Node '%s': missing package name", certname)
+                continue
+            version = package.get("version")
+            if not version:
+                logger.warning("Node '%s': missing package version", certname)
+                continue
+            provider = package.get("provider")
+            if not provider:
+                logger.warning("Node '%s': missing package provider", certname)
+                continue
+            yield name, version, provider
 
     def machine_links_from_certname(self, certname):
         links = []
@@ -125,6 +149,34 @@ class PuppetDBClient(object):
             links.append({"anchor_text": "Puppetboard",
                           "url": f"{self.puppetboard_url}/node/{certname}"})
         return links
+
+    def add_ct_packages(self, ct, certname):
+        serial_number = ct.get("serial_number")
+        include_deb_packages = (
+            self.deb_packages_shard == 100
+            or (self.deb_packages_shard
+                and serial_number
+                and shard(serial_number, "puppet_deb_packages") < self.deb_packages_shard)
+        )
+        include_programs = (
+            self.programs_shard == 100
+            or (self.programs_shard
+                and serial_number
+                and shard(serial_number, "puppet_programs") < self.programs_shard)
+        )
+        if not include_deb_packages and not include_programs:
+            return
+        for name, version, provider in self.iter_certname_packages(certname):
+            if provider == "apt" and include_deb_packages:
+                deb_package = {"name": name, "version": version}
+                deb_packages = ct.setdefault("deb_packages", [])
+                if deb_package not in deb_packages:
+                    deb_packages.append(deb_package)
+            elif provider == "windows" and include_programs:
+                program_instance = {"program": {"name": name, "version": version}}
+                program_instances = ct.setdefault("program_instances", [])
+                if program_instance not in program_instances:
+                    program_instances.append(program_instance)
 
     def get_machine_d(self, certname):
         inventory_d = self.get_inventory_d(certname)
@@ -297,5 +349,7 @@ class PuppetDBClient(object):
 
         if system_info:
             ct["system_info"] = system_info
+
+        self.add_ct_packages(ct, certname)
 
         return ct
