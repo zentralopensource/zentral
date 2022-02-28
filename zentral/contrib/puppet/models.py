@@ -2,8 +2,6 @@ import hmac
 import hashlib
 import logging
 from urllib.parse import urlparse
-from cryptography import x509
-from cryptography.x509.oid import NameOID
 from django.contrib.postgres.fields import ArrayField
 from django.core.cache import cache
 from django.core.validators import MaxValueValidator, MinLengthValidator, MinValueValidator
@@ -14,6 +12,7 @@ from django.urls import reverse
 from django.utils.crypto import constant_time_compare
 from zentral.conf import settings
 from zentral.core.secret_engines import decrypt_str, encrypt_str, rewrap
+from zentral.utils.certificates import iter_cert_trees
 
 
 logger = logging.getLogger("zentral.contrib.puppet.models")
@@ -100,19 +99,14 @@ class Instance(models.Model):
         return {"hostname": self.hostname,
                 "pk": self.pk}
 
-    # cert info
+    # certificates info
 
-    def get_cert_infos(self):
-        infos = {}
-        try:
-            loaded_cert = x509.load_pem_x509_certificate(self.cert.encode("ascii"))
-        except Exception:
-            pass
-        else:
-            infos["CN"] = ", ".join(o.value for o in loaded_cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME))
-            infos["Not valid before"] = loaded_cert.not_valid_before
-            infos["Not valid after"] = loaded_cert.not_valid_after
-        return infos
+    def iter_ca_chain_cert_trees(self):
+        yield from iter_cert_trees(self.ca_chain)
+
+    def get_cert_tree(self):
+        for cert_tree in iter_cert_trees(self.cert):
+            return cert_tree
 
     # secrets
 

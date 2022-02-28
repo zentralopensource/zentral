@@ -38,15 +38,42 @@
     <tr>
       <td colspan="2"><h5>API authentication</h5></td>
     </tr>
+    <tr>
+      <td>CA chain</td>
+      <td>
+        {% for cert_tree in object.iter_ca_chain_cert_trees %}
+        <dl>
+          <dt>Common name</dt>
+          <dd>{{ cert_tree.common_name }}</dd>
+          <dt>Issuer common name</dt>
+          <dd>{{ cert_tree.signed_by.common_name }}</dd>
+          <dt>Validity</dt>
+          <dd>{{ cert_tree.valid_from }} → {{ cert_tree.valid_until }}</dd>
+        </dl>
+        {% empty %}
+        Could not get CA chain info
+        {% endfor %}
+      </td>
+    </tr>
     {% if object.cert %}
     <tr>
       <td>Client certificate</td>
       <td>
         <dl>
-          {% for key, val in object.get_cert_infos.items %}
-          <dt>{{ key }}</dt>
-          <dd>{{ val }}</dd>
-          {% endfor %}
+          {% with object.get_cert_tree as cert_tree %}
+          {% if cert_tree %}
+          <dl>
+            <dt>Common name</dt>
+            <dd>{{ cert_tree.common_name }}</dd>
+            <dt>Issuer common name</dt>
+            <dd>{{ cert_tree.signed_by.common_name }}</dd>
+            <dt>Validity</dt>
+            <dd>{{ cert_tree.valid_from }} → {{ cert_tree.valid_until }}</dd>
+          </dl>
+          {% else %}
+          Could not get cert info
+          {% endif %}
+          {% endwith %}
       </td>
     </tr>
     {% else %}
