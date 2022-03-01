@@ -101,12 +101,12 @@ class PuppetDBClient(object):
                 "name": "puppet",
                 "config": {"url": self.url}}
 
-    def make_request(self, path, certname):
+    def make_request(self, path, certname=None):
+        params = None
+        if certname:
+            params = {"query": f'["=", "certname", "{certname}"]'}
         try:
-            r = self.session.get(
-                f"{self.url}/pdb/query/v4{path}",
-                params={"query": f'["=", "certname", {certname}]'}
-            )
+            r = self.session.get(f"{self.url}/pdb/query/v4{path}", params=params)
         except requests.exceptions.RequestException as e:
             raise PuppetDBError(f"Node '{certname}' {path}: PuppetDB API error: {e}")
         if r.status_code != requests.codes.ok:
@@ -124,7 +124,7 @@ class PuppetDBClient(object):
         return inventory_d
 
     def iter_certname_packages(self, certname):
-        resp_json = self.make_request("/packages", certname)
+        resp_json = self.make_request(f"/package-inventory/{certname}")
         if not resp_json:
             logger.warning("Node '%s': no packages found", certname)
             return
