@@ -41,7 +41,7 @@ def build_self_signed_cert(name):
     return serialized_cert, serialized_key
 
 
-def build_report(host=None):
+def build_report(host=None, time='2022-02-16T17:37:47.337045569Z'):
     return {
         'cached_catalog_status': 'not_used',
         'catalog_uuid': str(uuid.uuid4()),
@@ -60,7 +60,7 @@ def build_report(host=None):
         'resource_statuses': [],
         'server_used': 'pe-master.example.com:8140',
         'status': 'unchanged',
-        'time': '2022-02-16T17:37:47.337045569Z',
+        'time': time,
         'transaction_completed': True,
         'transaction_uuid': str(uuid.uuid4())
     }

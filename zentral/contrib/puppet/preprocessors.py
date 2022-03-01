@@ -1,6 +1,7 @@
 import logging
 from dateutil import parser
 from django.db import transaction
+from django.utils import timezone
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_yield_events
 from .events import PuppetReportEvent
 from .models import Instance
@@ -12,9 +13,14 @@ logger = logging.getLogger("zentral.contrib.puppet.preprocessors")
 
 def get_report_created_at(report):
     try:
-        return parser.parse(report["time"])
-    except (KeyError, ValueError, TypeError):
-        pass
+        created_at = parser.parse(report["time"])
+    except (KeyError, ValueError, TypeError) as e:
+        input(f"e {e}")
+        return
+    else:
+        if timezone.is_aware(created_at):
+            created_at = timezone.make_naive(created_at)
+        return created_at
 
 
 class ReportEventPreprocessor(object):
