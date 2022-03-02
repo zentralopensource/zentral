@@ -35,6 +35,7 @@ class EventStore(BaseEventStore):
             priority = self.DEFAULT_PRIORITY
         try:
             priority = SysLogHandler.priority_names[priority.lower()]
+            self.priority = ("%d" % priority)
         except (TypeError, KeyError):
             raise ImproperlyConfigured("Unknown gelf priority {}".format(priority))
 
@@ -47,7 +48,7 @@ class EventStore(BaseEventStore):
         except (TypeError, KeyError):
             raise ImproperlyConfigured("Unknown gelf facility {}".format(facility))
 
-        self.priority = ("<%d>" % ((facility << 3) | priority)).encode("utf-8")
+        self.facility = ("%d" % ((facility << 3) | priority))
 
         # protocol
         protocol = config_d.get("protocol")
@@ -93,8 +94,7 @@ class EventStore(BaseEventStore):
             event = event.serialize()
         # dumping twice to escape quotes so it can be embedded into another json
         msg = json.dumps(json.dumps(remove_null_character(event)))
-        gelf = f'{{ "version": "1.1", "host": "example.org", "short_message": {msg}, "level": 5 }}'.encode()
-        logger.warning('%s', gelf)
+        gelf = f'{{ "version": "1.1", "host": "zentral", "short_message": {msg}, "level": {self.priority}, "_facility": {self.facility} }}'.encode()
         if self.socket_protocol == socket.SOCK_STREAM:
             self.socket.sendall(gelf + b'\x00')
         else:
