@@ -358,15 +358,20 @@ class BaseEvent(object):
             observer = EventObserver.deserialize(observer)
         event_uuid = uuid.uuid4()
         for index, payload in enumerate(payloads):
+            created_at = None
+            if get_created_at:
+                try:
+                    created_at = get_created_at(payload)
+                except Exception:
+                    logger.exception("Could not extract created_at from payload")
+                else:
+                    if created_at is None:
+                        logger.warning("Extracted created_at from %s payload is None", cls.event_type)
             metadata = EventMetadata(uuid=event_uuid, index=index,
                                      machine_serial_number=msn,
                                      observer=observer,
-                                     request=request)
-            if get_created_at:
-                try:
-                    metadata.created_at = get_created_at(payload)
-                except Exception:
-                    logger.exception("Could not extract created_at from payload")
+                                     request=request,
+                                     created_at=created_at)
             yield cls(metadata, payload)
 
     @classmethod

@@ -12,10 +12,14 @@ logger = logging.getLogger("zentral.contrib.puppet.preprocessors")
 
 
 def get_report_created_at(report):
+    report_time = report.get("time")
+    if not report_time:
+        logger.error("Missing or empty report time")
+        return
     try:
-        created_at = parser.parse(report["time"])
-    except (KeyError, ValueError, TypeError) as e:
-        input(f"e {e}")
+        created_at = parser.parse(report_time)
+    except (KeyError, ValueError, TypeError):
+        logger.error("Could not parse report time: %s", report_time)
         return
     else:
         if timezone.is_aware(created_at):
