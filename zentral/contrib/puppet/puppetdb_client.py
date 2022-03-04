@@ -274,7 +274,7 @@ class PuppetDBClient(object):
         # system info
         system_info = {}
 
-        # system info > processors
+        # system info > cpu physical cores, cpu logical cores
         processors = facts["processors"]
         for attr, key in (("cpu_physical_cores", "physicalcount"),
                           ("cpu_logical_cores", "count")):
@@ -285,11 +285,10 @@ class PuppetDBClient(object):
             else:
                 if val:
                     system_info[attr] = val
-        processor_models = set(processors.get("models", []))
+        # system info > cpu_brand
+        processor_models = set(processors.get("models") or [])
         if processor_models:
-            if len(processor_models) > 1:
-                logger.warning(f"Node {certname}: more than 1 processor model")
-            system_info["cpu_brand"] = processor_models.pop()
+            system_info["cpu_brand"] = ", ".join(processor_models)
 
         # system info > physical memory
         try:
@@ -343,6 +342,49 @@ class PuppetDBClient(object):
 
             # system info > computer name
             system_info['computer_name'] = facts['hostname']
+
+        elif kernel == "windows":
+            # serial number
+            try:
+                ct["serial_number"] = facts["serialnumber"]
+            except KeyError:
+                try:
+                    ct["serialnumber"] = facts["dmi"]["product"]["serial_number"]
+                except KeyError:
+                    raise PuppetDBError(f"Node '{certname}, Windows: no dmi>product>serial_number")
+
+            # OS version
+            try:
+                os_version_str = facts.get("kernelversion") or facts.get("os", {}).get("release", {}).get("full")
+                os_version_tuple = tuple(int(s) for s in os_version_str.split("."))
+                os_version = dict(zip(('major', 'minor', 'patch'), os_version_tuple))
+            except (KeyError, TypeError, ValueError):
+                pass
+            else:
+                os_version_name = facts.get("os", {}).get("windows", {}).get("product_name")
+                if not os_version_name:
+                    if os_version_tuple < (10,):
+                        os_version_name = "Windows"
+                    elif os_version_tuple < (10, 0, 22000):
+                        os_version_name = "Windows 10"
+                    else:
+                        os_version_name = "Windows 11"
+                if os_version_name:
+                    os_version["name"] = os_version_name
+                if os_version:
+                    ct["os_version"] = os_version
+
+            # hardware model
+            try:
+                system_info["hardware_model"] = facts["dmi"]["product"]["name"]
+            except KeyError:
+                pass
+
+            # hostname
+            try:
+                system_info["hostname"] = facts["hostname"]
+            except KeyError:
+                pass
 
         else:
             raise PuppetDBError(f"Node '{certname}': unknown kernel {kernel}")
