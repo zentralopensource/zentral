@@ -13,7 +13,7 @@
 <h2>Delete Workspace ONE instance</h2>
 
 <form method="POST" class="form">{% csrf_token %}
-  <p>Do you really want to delete this Workspace ONE?</p>
+  <p>Do you really want to delete this Workspace ONE instance?</p>
   <p>
     <a class="btn btn-default" href="{% url 'wsone:instance' object.pk %}">Cancel</a>
     <button class="btn btn-danger" type="submit">Delete</button>
