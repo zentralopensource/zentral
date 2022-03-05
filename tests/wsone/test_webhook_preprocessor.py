@@ -1,3 +1,4 @@
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
@@ -104,6 +105,7 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         events = list(self.preprocessor.process_raw_event(raw_event))
         self.assertEqual(len(events), 1)
         event = events[0]
+        self.assertEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
         self.assertEqual(event.metadata.event_type, "wsone_compliance_status_changed")
         self.assertEqual(event.metadata.machine_serial_number, "ZL6LTO7H27AB")
         self.assertEqual(event.metadata.observer.pk, self.instance.pk)
@@ -114,6 +116,7 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         events = list(self.preprocessor.process_raw_event(raw_event))
         self.assertEqual(len(events), 1)
         event = events[0]
+        self.assertEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
         self.assertEqual(event.metadata.event_type, "wsone_compromised_status_changed")
         self.assertEqual(event.metadata.machine_serial_number, "ZL6LTO7H27AB")
         self.assertEqual(event.metadata.observer.pk, self.instance.pk)
@@ -124,6 +127,7 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         events = list(self.preprocessor.process_raw_event(raw_event))
         self.assertEqual(len(events), 1)
         event = events[0]
+        self.assertEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
         self.assertEqual(event.metadata.event_type, "wsone_os_changed")
         self.assertEqual(event.metadata.machine_serial_number, "ZL6LTO7H27AB")
         self.assertEqual(event.metadata.observer.pk, self.instance.pk)
@@ -134,6 +138,7 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         events = list(self.preprocessor.process_raw_event(raw_event))
         self.assertEqual(len(events), 1)
         event = events[0]
+        self.assertEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
         self.assertEqual(event.metadata.event_type, "wsone_organization_group_changed")
         self.assertEqual(event.metadata.machine_serial_number, "ZL6LTO7H27AB")
         self.assertEqual(event.metadata.observer.pk, self.instance.pk)
@@ -144,6 +149,7 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         events = list(self.preprocessor.process_raw_event(raw_event))
         self.assertEqual(len(events), 1)
         event = events[0]
+        self.assertEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
         self.assertEqual(event.metadata.event_type, "wsone_mdm_enrollment_complete")
         self.assertEqual(event.metadata.machine_serial_number, "ZL6LTO7H27AB")
         self.assertEqual(event.metadata.observer.pk, self.instance.pk)
@@ -153,3 +159,21 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         raw_event = self.build_mdm_enrollment_complete_raw_event(organization_group_name="dwekjdhwkdhe")
         events = list(self.preprocessor.process_raw_event(raw_event))
         self.assertEqual(len(events), 0)
+
+    def test_missing_event_time(self):
+        raw_event = self.build_mdm_enrollment_complete_raw_event()
+        raw_event["wsone_event"].pop("EventTime")
+        events = list(self.preprocessor.process_raw_event(raw_event))
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertNotEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
+        self.assertEqual(event.metadata.event_type, "wsone_mdm_enrollment_complete")
+
+    def test_bad_event_time(self):
+        raw_event = self.build_mdm_enrollment_complete_raw_event()
+        raw_event["wsone_event"]["EventTime"] = "yolo"
+        events = list(self.preprocessor.process_raw_event(raw_event))
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertNotEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
+        self.assertEqual(event.metadata.event_type, "wsone_mdm_enrollment_complete")

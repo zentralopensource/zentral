@@ -89,20 +89,24 @@ class WebhookEventPreprocessor(object):
             event_type = "wsone_mdm_enrollment_complete"
         else:
             logger.warning("Unknown Workspace ONE event type: %s", wsone_event_type)
+            return
 
         def get_created_at(payload):
+            event_time = payload.get("EventTime")
+            if not event_time:
+                logger.error("EventTime not found or empty in %s event", event_type)
+                return
             try:
-                return datetime.fromisoformat(payload.pop("EventTime")[:26])
+                return datetime.fromisoformat(event_time[:26])
             except Exception:
-                pass
+                logger.exception("Could not parse event time in %s event", event_type)
 
-        if event_type:
-            event_cls = event_cls_from_type(event_type)
-            yield from event_cls.build_from_machine_request_payloads(
-                serial_number,
-                raw_event["request"]["user_agent"],
-                raw_event["request"]["ip"],
-                [payload],
-                get_created_at=get_created_at,
-                observer=raw_event["observer"]
-            )
+        event_cls = event_cls_from_type(event_type)
+        yield from event_cls.build_from_machine_request_payloads(
+            serial_number,
+            raw_event["request"]["user_agent"],
+            raw_event["request"]["ip"],
+            [payload],
+            get_created_at=get_created_at,
+            observer=raw_event["observer"]
+        )
