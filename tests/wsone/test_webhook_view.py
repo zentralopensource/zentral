@@ -25,7 +25,8 @@ class WSOneEventNotificationsViewTestCase(TestCase):
         cls.instance.set_api_key(get_random_string())
         cls.instance.set_client_secret(get_random_string())
         cls.instance.set_password(get_random_string())
-        cls.instance.save(bump_version=False)
+        cls.instance.save()
+        cls.instance.refresh_from_db()
 
     # utils
 

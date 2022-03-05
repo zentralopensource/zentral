@@ -49,5 +49,5 @@ class InstanceForm(forms.ModelForm):
         instance.set_api_key(self.cleaned_data["api_key"])
         instance.set_client_secret(self.cleaned_data["client_secret"])
         instance.set_password(self.cleaned_data["password"])
-        instance.save(bump_version=not new_instance)
+        instance.save()
         return instance

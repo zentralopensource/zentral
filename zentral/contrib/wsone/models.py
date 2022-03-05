@@ -51,7 +51,7 @@ class Instance(models.Model):
     def save(self, *args, **kwargs):
         if not self.pk:
             self.version = 0
-        elif kwargs.pop("bump_version", True):
+        else:
             self.version = F("version") + 1
         super().save(*args, **kwargs)
 

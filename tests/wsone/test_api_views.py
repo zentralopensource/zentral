@@ -39,7 +39,8 @@ class APIViewsTestCase(TestCase):
         instance.set_api_key(get_random_string())
         instance.set_client_secret(get_random_string())
         instance.set_password(get_random_string())
-        instance.save(bump_version=False)
+        instance.save()
+        instance.refresh_from_db()
         return instance
 
     def set_permissions(self, *permissions):

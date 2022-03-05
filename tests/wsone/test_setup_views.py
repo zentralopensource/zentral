@@ -54,7 +54,7 @@ class WSOneSetupViewsTestCase(TestCase):
         instance.set_api_key(get_random_string())
         instance.set_client_secret(get_random_string())
         instance.set_password(get_random_string())
-        instance.save(bump_version=False)
+        instance.save()
         return instance
 
     # instances
