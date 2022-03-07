@@ -96,6 +96,8 @@ class MetricsView(BasePrometheusMetricsView):
                 g.labels(le=le, **labels).set(r[le])
 
     def add_active_machines(self):
+        if not self.all_source_names:
+            return
         g = Gauge('zentral_inventory_active_machines_bucket', 'Zentral inventory active machines',
                   ['platform', 'source_id', 'source_name', 'le'],
                   registry=self.registry)
