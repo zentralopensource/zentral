@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from django.http import HttpResponseRedirect
 from django.utils.functional import cached_property
+import requests
 from requests.utils import requote_uri
 from zentral.contrib.monolith.exceptions import RepositoryError
 from zentral.utils.boto3 import make_refreshable_assume_role_session
@@ -102,10 +103,9 @@ class Repository(BaseRepository):
     @cached_property
     def _client(self):
         if not self.region_name:
-            # initiate a client without region first
-            # to get the bucket region
-            tmp_client = self._session.client("s3")
-            self.region_name = tmp_client.get_bucket_location(Bucket=self.bucket)["LocationConstraint"]
+            # unauthenticated request to get the bucket region
+            resp = requests.head("https://s3.amazonaws.com", headers={"Host": f"{self.bucket}.s3.amazonaws.com"})
+            self.region_name = resp.headers["x-amz-bucket-region"]
             logger.info("Got bucket region %s", self.region_name)
             self._event_extras["region"] = self.region_name
         return self._session.client("s3", region_name=self.region_name, endpoint_url=self.endpoint_url,
