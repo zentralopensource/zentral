@@ -263,12 +263,22 @@ class EventStore(BaseEventStore):
                                        raise_on_error=False, raise_on_exception=False,
                                        max_retries=2
                                        ):
-            if ok:
-                try:
-                    event_id, event_index = item["index"]["_id"].split(ID_SEP)
-                    yield event_id, int(event_index)
-                except (KeyError, ValueError):
-                    logger.error("could not yield indexed event key")
+            try:
+                event_id, event_index = item["index"]["_id"].split(ID_SEP)
+                event_index = int(event_index)
+            except (KeyError, ValueError):
+                logger.error("could not get event id and index")
+            else:
+                if ok:
+                    yield event_id, event_index
+                else:
+                    error = item["index"].get("error")
+                    error_type = reason = None
+                    if error:
+                        error_type = error.get("type")
+                        reason = error.get("reason")
+                    logger.error("could not index event %s %s: %s %s",
+                                 event_id, event_index, error_type or "-", reason or "-")
 
     def _build_kibana_url(self, body, from_dt=None, to_dt=None):
         if not self.kibana_discover_url:
