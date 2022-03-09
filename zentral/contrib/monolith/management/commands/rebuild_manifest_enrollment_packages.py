@@ -7,6 +7,17 @@ class Command(BaseCommand):
     help = 'Rebuild monolith manifest enrollment packages.'
 
     def handle(self, *args, **kwargs):
+        manifests = set([])
         for mep in ManifestEnrollmentPackage.objects.all():
             build_manifest_enrollment_package(mep)
-            print(mep.file.path, "rebuilt")
+            manifests.add(mep.manifest)
+            try:
+                p = mep.file.path
+            except NotImplementedError:
+                p = mep.file.name
+            print(p, "rebuilt")
+        for manifest in manifests:
+            old_version = manifest.version
+            manifest.bump_version()
+            manifest.refresh_from_db()
+            print("Bump manifest", manifest.name, "version", old_version, "→", manifest.version)
