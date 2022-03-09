@@ -15,7 +15,7 @@ def get_workers():
     for app in settings['apps']:
         try:
             workers_module = import_module("{}.workers".format(app))
-        except ImportError as e:
+        except ImportError:
             pass
         else:
             yield from getattr(workers_module, "get_workers")()

@@ -4,6 +4,7 @@ import queue
 import signal
 import threading
 import time
+from zentral.core.queues.exceptions import RetryLater
 from .sqs import SQSDeleteThread, SQSReceiveThread
 
 
@@ -303,15 +304,22 @@ class ConsumerProducer(BaseConsumer):
             else:
                 logger.debug("receipt handle %s: process new event", receipt_handle[-7:])
                 generated_event_count = 0
-                for new_routing_key, new_event_d in self.generate_events(routing_key, event_d):
-                    with self.in_flight_receipt_handles_lock:
-                        self.increment_receipt_handle_unpublished_event_count(receipt_handle)
-                    self.publish_message_queue.put((receipt_handle, new_routing_key, new_event_d, time.monotonic()))
-                    generated_event_count += 1
-                if not generated_event_count:
-                    logger.debug("receipt handle %s: no events to publish, queue for deletion", receipt_handle[-7:])
-                    self.delete_message_queue.put((receipt_handle, time.monotonic()))
+                try:
+                    for new_routing_key, new_event_d in self.generate_events(routing_key, event_d):
+                        with self.in_flight_receipt_handles_lock:
+                            self.increment_receipt_handle_unpublished_event_count(receipt_handle)
+                        self.publish_message_queue.put(
+                            (receipt_handle, new_routing_key, new_event_d, time.monotonic())
+                        )
+                        generated_event_count += 1
+                except RetryLater:
+                    logger.error("Message with routing key %s could not be processed. Re-enqueued", routing_key)
+                else:
+                    if not generated_event_count:
+                        logger.debug("receipt handle %s: no events to publish, queue for deletion",
+                                     receipt_handle[-7:])
+                        self.delete_message_queue.put((receipt_handle, time.monotonic()))
 
     def generate_events(self, routing_key, event_d):
-        # must return an iterable other the generated events
+        # must return an iterable over the generated events
         raise NotImplementedError

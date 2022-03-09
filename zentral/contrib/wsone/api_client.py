@@ -39,6 +39,10 @@ class CustomHTTPAdapter(HTTPAdapter):
         return super().send(*args, **kwargs)
 
 
+class TooManyRequestsError(Exception):
+    pass
+
+
 class ClientAuth(Enum):
     BASIC = 1
     OAUTH = 2
@@ -124,6 +128,17 @@ class Client:
         )
         if ignore_status_code and resp.status_code == ignore_status_code:
             return None
+        if resp.status_code == 429:
+            # rate limiting
+            try:
+                limit = int(resp.headers.get("X-RateLimit-Limit"))
+                remaining = int(resp.headers.get("X-RateLimit-Remaining"))
+                reset = datetime.utcfromtimestamp(int(resp.headers.get("X-RateLimit-Reset")))
+            except Exception:
+                logger.exception("Could not get rate limiting info")
+            else:
+                logger.error("Status code 429: rate limit %s, remaining %s, reset %s", limit, remaining, reset)
+            raise TooManyRequestsError
         resp.raise_for_status()
         if not resp.content:
             # return empty object if response is empty!

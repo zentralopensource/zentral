@@ -5,6 +5,7 @@ from zentral.conf import settings
 from kombu import Connection, Consumer, Exchange, Queue
 from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 from kombu.pools import producers
+from zentral.core.queues.exceptions import RetryLater
 from zentral.utils.json import save_dead_letter
 
 
@@ -100,12 +101,17 @@ class PreprocessWorker(ConsumerProducerMixin, BaseWorker):
             if not preprocessor:
                 logger.error("No preprocessor for routing key %s", routing_key)
             else:
-                for event in preprocessor.process_raw_event(body):
-                    self.producer.publish(event.serialize(machine_metadata=False),
-                                          serializer='json',
-                                          exchange=events_exchange,
-                                          declare=[events_exchange])
-                    self.inc_counter("produced_events", event.event_type)
+                try:
+                    for event in preprocessor.process_raw_event(body):
+                        self.producer.publish(event.serialize(machine_metadata=False),
+                                              serializer='json',
+                                              exchange=events_exchange,
+                                              declare=[events_exchange])
+                        self.inc_counter("produced_events", event.event_type)
+                except RetryLater:
+                    logger.error("Message with routing key %s could not be processed. Re-enqueued", routing_key)
+                    message.requeue()
+                    return
         message.ack()
         self.inc_counter("preprocessed_events", routing_key or "UNKNOWN")
 

@@ -2,9 +2,10 @@ from datetime import datetime
 import logging
 from django.db import transaction
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_yield_events
-from zentral.contrib.wsone.api_client import Client
+from zentral.contrib.wsone.api_client import Client, TooManyRequestsError
 from zentral.contrib.wsone.models import Instance
 from zentral.core.events import event_cls_from_type
+from zentral.core.queues.exceptions import RetryLater
 
 
 logger = logging.getLogger("zentral.contrib.wsone.preprocessors.webhook")
@@ -39,7 +40,10 @@ class WebhookEventPreprocessor(object):
 
     def _update_machine(self, client, device_id):
         logger.info("Update machine %s %s", client.host, device_id)
-        ms_tree = client.get_machine_snapshot_tree(device_id)
+        try:
+            ms_tree = client.get_machine_snapshot_tree(device_id)
+        except TooManyRequestsError:
+            raise RetryLater
         if not ms_tree:
             logger.error("Could not get machine %s %s snapshot tree", client.host, device_id)
             return
@@ -54,8 +58,11 @@ class WebhookEventPreprocessor(object):
 
         # event from an excluded group?
         wsone_event = raw_event["wsone_event"]
-        if client.is_excluded_event(wsone_event):
-            return
+        try:
+            if client.is_excluded_event(wsone_event):
+                return
+        except TooManyRequestsError:
+            raise RetryLater
 
         # update device if possible
         device_id = wsone_event.pop("DeviceId", None)
