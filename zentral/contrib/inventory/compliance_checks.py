@@ -109,7 +109,8 @@ class JMESPathChecksCache:
             try:
                 result = jmespath_parsed_expr.search(tree)
             except Exception:
-                logger.exception("Could not evaluate JMESPath check %s", jmespath_check.pk)
+                logger.exception("Could not evaluate JMESPath check %s source name %s serial number %s",
+                                 jmespath_check.pk, source_name, serial_number)
             else:
                 if result is True:
                     status = Status.OK
