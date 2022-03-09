@@ -25,6 +25,9 @@ class BaseWSOneEvent(BaseEvent):
         return keys
 
 
+# device compliance/compromised status
+
+
 class WSOneComplianceStatusChanged(BaseWSOneEvent):
     event_type = "wsone_compliance_status_changed"
 
@@ -39,6 +42,26 @@ class WSOneCompromisedStatusChanged(BaseWSOneEvent):
 register_event_type(WSOneCompromisedStatusChanged)
 
 
+# device enrollment
+
+
+# type = "Break MDM Confirmed"
+class WSOneBreakMDMConfirmed(BaseWSOneEvent):
+    event_type = "wsone_break_mdm_confirmed"
+
+
+register_event_type(WSOneBreakMDMConfirmed)
+
+
+# type = "Enrollment Complete"
+class WSOneEnrollmentComplete(BaseWSOneEvent):
+    event_type = "wsone_enrollment_complete"
+
+
+register_event_type(WSOneEnrollmentComplete)
+
+
+# type = "MDM Enrollment Complete"
 class WSOneMDMEnrollmentComplete(BaseWSOneEvent):
     event_type = "wsone_mdm_enrollment_complete"
 
@@ -46,6 +69,18 @@ class WSOneMDMEnrollmentComplete(BaseWSOneEvent):
 register_event_type(WSOneMDMEnrollmentComplete)
 
 
+# device attribute changes
+
+
+# type = "Device MCC"
+class WSOneMCCChanged(BaseWSOneEvent):
+    event_type = "wsone_mcc_changed"
+
+
+register_event_type(WSOneMCCChanged)
+
+
+# type = "Device Organization Group Changed"
 class WSOneOrganizationGroupChanged(BaseWSOneEvent):
     event_type = "wsone_organization_group_changed"
 
@@ -53,11 +88,12 @@ class WSOneOrganizationGroupChanged(BaseWSOneEvent):
 register_event_type(WSOneOrganizationGroupChanged)
 
 
-class WSOneOSChange(BaseWSOneEvent):
+# type = "Device Operating System Changed"
+class WSOneOSChanged(BaseWSOneEvent):
     event_type = "wsone_os_changed"
 
 
-register_event_type(WSOneOSChange)
+register_event_type(WSOneOSChanged)
 
 
 def post_webhook_event(instance, user_agent, ip, wsone_event):

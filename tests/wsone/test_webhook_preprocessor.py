@@ -88,12 +88,24 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         return cls.build_raw_event("Compromised Status Changed", organization_group_name)
 
     @classmethod
+    def build_device_mcc_raw_event(cls, organization_group_name=None):
+        return cls.build_raw_event("Device MCC", organization_group_name)
+
+    @classmethod
     def build_device_operation_system_changed_raw_event(cls, organization_group_name=None):
         return cls.build_raw_event("Device Operating System Changed", organization_group_name)
 
     @classmethod
     def build_device_organization_group_changed_raw_event(cls, organization_group_name=None):
         return cls.build_raw_event("Device Organization Group Changed", organization_group_name)
+
+    @classmethod
+    def build_break_mdm_confirmed_raw_event(cls, organization_group_name=None):
+        return cls.build_raw_event("Break MDM Confirmed", organization_group_name)
+
+    @classmethod
+    def build_enrollment_complete_raw_event(cls, organization_group_name=None):
+        return cls.build_raw_event("Enrollment Complete", organization_group_name)
 
     @classmethod
     def build_mdm_enrollment_complete_raw_event(cls, organization_group_name=None):
@@ -123,6 +135,17 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         self.assertEqual(event.metadata.observer.pk, self.instance.pk)
         self.assertEqual(event.get_linked_objects_keys(), {"wsone_instance": [(self.instance.pk,)]})
 
+    def test_device_mcc_notification(self):
+        raw_event = self.build_device_mcc_raw_event()
+        events = list(self.preprocessor.process_raw_event(raw_event))
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
+        self.assertEqual(event.metadata.event_type, "wsone_mcc_changed")
+        self.assertEqual(event.metadata.machine_serial_number, "ZL6LTO7H27AB")
+        self.assertEqual(event.metadata.observer.pk, self.instance.pk)
+        self.assertEqual(event.get_linked_objects_keys(), {"wsone_instance": [(self.instance.pk,)]})
+
     def test_device_operation_system_changed_notification(self):
         raw_event = self.build_device_operation_system_changed_raw_event()
         events = list(self.preprocessor.process_raw_event(raw_event))
@@ -141,6 +164,28 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         event = events[0]
         self.assertEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
         self.assertEqual(event.metadata.event_type, "wsone_organization_group_changed")
+        self.assertEqual(event.metadata.machine_serial_number, "ZL6LTO7H27AB")
+        self.assertEqual(event.metadata.observer.pk, self.instance.pk)
+        self.assertEqual(event.get_linked_objects_keys(), {"wsone_instance": [(self.instance.pk,)]})
+
+    def test_break_mdm_confirmed_notification(self):
+        raw_event = self.build_break_mdm_confirmed_raw_event()
+        events = list(self.preprocessor.process_raw_event(raw_event))
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
+        self.assertEqual(event.metadata.event_type, "wsone_break_mdm_confirmed")
+        self.assertEqual(event.metadata.machine_serial_number, "ZL6LTO7H27AB")
+        self.assertEqual(event.metadata.observer.pk, self.instance.pk)
+        self.assertEqual(event.get_linked_objects_keys(), {"wsone_instance": [(self.instance.pk,)]})
+
+    def test_enrollment_complete_notification(self):
+        raw_event = self.build_enrollment_complete_raw_event()
+        events = list(self.preprocessor.process_raw_event(raw_event))
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
+        self.assertEqual(event.metadata.event_type, "wsone_enrollment_complete")
         self.assertEqual(event.metadata.machine_serial_number, "ZL6LTO7H27AB")
         self.assertEqual(event.metadata.observer.pk, self.instance.pk)
         self.assertEqual(event.get_linked_objects_keys(), {"wsone_instance": [(self.instance.pk,)]})

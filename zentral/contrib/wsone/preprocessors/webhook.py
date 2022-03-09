@@ -77,14 +77,20 @@ class WebhookEventPreprocessor(object):
 
         event_type = None
         payload = {k: v for k, v in wsone_event.items() if v}
-        if wsone_event_type == "Compliance Status Changed":
+        if wsone_event_type == "Break MDM Confirmed":
+            event_type = "wsone_break_mdm_confirmed"
+        elif wsone_event_type == "Compliance Status Changed":
             event_type = "wsone_compliance_status_changed"
         elif wsone_event_type == "Compromised Status Changed":
             event_type = "wsone_compromised_status_changed"
+        elif wsone_event_type == "Device MCC":
+            event_type = "wsone_mcc_changed"
         elif wsone_event_type == "Device Operating System Changed":
             event_type = "wsone_os_changed"
         elif wsone_event_type == "Device Organization Group Changed":
             event_type = "wsone_organization_group_changed"
+        elif wsone_event_type == "Enrollment Complete":
+            event_type = "wsone_enrollment_complete"
         elif wsone_event_type == "MDM Enrollment Complete":
             event_type = "wsone_mdm_enrollment_complete"
         else:
