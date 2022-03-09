@@ -109,10 +109,14 @@ class WebhookEventPreprocessor(object):
             if not event_time:
                 logger.error("EventTime not found or empty in %s event", event_type)
                 return
-            try:
-                return datetime.fromisoformat(event_time[:26])
-            except Exception:
-                logger.exception("Could not parse event time in %s event", event_type)
+            for ts_length in (26, 23):
+                # Workspace ONE has sometimes 5 or 7 decimal places for the microseconds
+                try:
+                    return datetime.fromisoformat(event_time[:ts_length])
+                except Exception:
+                    pass
+            else:
+                logger.error("Could not parse event time '%s' in %s event", event_time, event_type)
 
         event_cls = event_cls_from_type(event_type)
         yield from event_cls.build_from_machine_request_payloads(

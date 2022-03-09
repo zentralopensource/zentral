@@ -223,3 +223,12 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         event = events[0]
         self.assertNotEqual(event.metadata.created_at, datetime(2022, 1, 16, 9, 13, 59, 572012))
         self.assertEqual(event.metadata.event_type, "wsone_mdm_enrollment_complete")
+
+    def test_event_time_too_short(self):
+        raw_event = self.build_mdm_enrollment_complete_raw_event()
+        raw_event["wsone_event"]["EventTime"] = "2022-03-09T05:52:06.39916Z"
+        events = list(self.preprocessor.process_raw_event(raw_event))
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual(event.metadata.created_at, datetime(2022, 3, 9, 5, 52, 6, 399000))
+        self.assertEqual(event.metadata.event_type, "wsone_mdm_enrollment_complete")
