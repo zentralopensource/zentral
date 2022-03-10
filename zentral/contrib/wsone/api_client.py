@@ -69,6 +69,7 @@ class Client:
         self._groups = None  # groups cache
         self._reverse_groups = None  # groups cache
         self._groups_fetched_at = None  # groups cache
+        self.latest_rate_limit = None
 
     def configure_oauth(self, client_id, client_secret, token_url):
         self.auth = ClientAuth.OAUTH
@@ -126,18 +127,21 @@ class Client:
             params={k: v for k, v in params.items() if v is not None},
             headers={"Accept": f"application/json;version={version}"},
         )
+        try:
+            self.latest_rate_limit = {
+                "limit": int(resp.headers.get("X-RateLimit-Limit")),
+                "remaining": int(resp.headers.get("X-RateLimit-Remaining")),
+                "reset": datetime.utcfromtimestamp(int(resp.headers.get("X-RateLimit-Reset"))),
+            }
+        except Exception:
+            logger.exception("Could not get rate limit info")
         if ignore_status_code and resp.status_code == ignore_status_code:
             return None
         if resp.status_code == 429:
-            # rate limiting
-            try:
-                limit = int(resp.headers.get("X-RateLimit-Limit"))
-                remaining = int(resp.headers.get("X-RateLimit-Remaining"))
-                reset = datetime.utcfromtimestamp(int(resp.headers.get("X-RateLimit-Reset")))
-            except Exception:
-                logger.exception("Could not get rate limiting info")
-            else:
-                logger.error("Status code 429: rate limit %s, remaining %s, reset %s", limit, remaining, reset)
+            logger.error(
+                "Status code 429: %s",
+                ", ".join(f"{k}: {v}" for k, v in self.latest_rate_limit.items()) if self.latest_rate_limit else "???"
+            )
             raise TooManyRequestsError
         resp.raise_for_status()
         if not resp.content:

@@ -47,7 +47,7 @@ def do_sync_inventory(instance, client, serialized_event_request=None):
     }
     if error:
         result["error"] = error
-    post_sync_finished_event(instance, serialized_event_request, result)
+    post_sync_finished_event(instance, serialized_event_request, result, client.latest_rate_limit)
     return result
 
 

@@ -183,10 +183,13 @@ class WSOneInstanceSyncFinished(BaseWSOneAuditEvent):
 register_event_type(WSOneInstanceSyncFinished)
 
 
-def post_sync_finished_event(instance, serialized_event_request, result):
+def post_sync_finished_event(instance, serialized_event_request, result, rate_limit):
     request = None
     if serialized_event_request:
         request = EventRequest.deserialize(serialized_event_request)
     metadata = EventMetadata(request=request)
-    event = WSOneInstanceSyncFinished(metadata, {"instance": instance.serialize_for_event(), "sync": result})
+    payload = {"instance": instance.serialize_for_event(), "sync": result}
+    if rate_limit:
+        payload["instance"]["rate_limit"] = rate_limit
+    event = WSOneInstanceSyncFinished(metadata, payload)
     event.post()
