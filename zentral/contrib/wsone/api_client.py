@@ -398,6 +398,17 @@ class Client:
             if device_capacity > 0:
                 ms_tree["disks"] = [{"name": "root", "size": device_capacity}]
 
+    def add_ms_tree_network_interfaces(self, ms_tree, device_d):
+        for network_info in device_d.get("DeviceNetworkInfo", []):
+            interface = network_info.get("ConnectionType")
+            mac = network_info.get("MACAddress")
+            if not interface or not mac:
+                continue
+            network_interface = {"interface": interface, "mac": mac}
+            network_interfaces = ms_tree.setdefault("network_interfaces", [])
+            if network_interface not in network_interfaces:
+                network_interfaces.append(network_interface)
+
     def add_ms_tree_principal_user(self, ms_tree, device_d):
         user_email = device_d.get("UserEmailAddress")
         user_uuid = device_d.get("UserId", {}).get("Uuid")
@@ -500,6 +511,7 @@ class Client:
         self.add_ms_tree_extra_facts(ms_tree, device_d)
         self.add_ms_tree_os_version(ms_tree, device_d)
         self.add_ms_tree_disk(ms_tree, device_d)
+        self.add_ms_tree_network_interfaces(ms_tree, device_d)
         self.add_ms_tree_principal_user(ms_tree, device_d)
         self.add_ms_tree_apps(ms_tree, device_d)
         self.add_ms_tree_profiles(ms_tree, device_d)

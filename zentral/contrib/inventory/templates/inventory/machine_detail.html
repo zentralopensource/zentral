@@ -210,7 +210,7 @@
               {{ ni.mac|default:"-" }}
               {% if org %}<br><small>{{ org.name }}</small>{% endif %}
             </td>
-            <td>{{ ni.address }}</td>
+            <td>{{ ni.address|default:"-" }}</td>
             <td>{{ ni.mask|default:"-" }}</td>
             <td>{{ ni.broadcast|default:"-" }}</td>
           </tr>
