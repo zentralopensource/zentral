@@ -105,8 +105,9 @@ class PreflightView(BaseSyncView):
         return None
 
     def _get_enrolled_machine_defaults(self):
+        serial_number = self.request_data['serial_num']
         defaults = {
-            'serial_number': self.request_data['serial_num'],
+            'serial_number': serial_number,
             'primary_user': self._get_primary_user(),
             'client_mode': Configuration.MONITOR_MODE,
             'santa_version': self.request_data['santa_version'],
@@ -117,10 +118,14 @@ class PreflightView(BaseSyncView):
         }
         # client mode
         req_client_mode = self.request_data.get('client_mode')
-        if req_client_mode == "LOCKDOWN":
+        if not req_client_mode:
+            logger.error("Machine %s: missing client mode",
+                         serial_number, extra={'request': self.request})
+        elif req_client_mode == "LOCKDOWN":
             defaults['client_mode'] = Configuration.LOCKDOWN_MODE
         elif req_client_mode != "MONITOR":
-            logger.error(f"Unknown client mode: {req_client_mode}")
+            logger.error("Machine %s: unknown client mode '%s'",
+                         serial_number, req_client_mode, extra={'request': self.request})
         return defaults
 
     def _enroll_machine(self):
