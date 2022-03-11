@@ -195,7 +195,8 @@ class Client:
                         continue
                     else:
                         seen_serial_numbers.add(serial_number)
-                yield device
+                # fetch the device info, because it is different in the search response
+                yield self.get_device(device["Id"]["Value"])
             if (page + 1) * self.paginate_by >= resp["Total"]:
                 break
             page += 1
@@ -389,7 +390,7 @@ class Client:
     def add_ms_tree_disk(self, ms_tree, device_d):
         device_uuid = device_d["Uuid"]
         try:
-            device_capacity = int(device_d["DeviceCapacity"])
+            device_capacity = int(device_d["DeviceCapacity"] * 2**30)
         except KeyError:
             logger.debug("Device %s: missing device capacity", device_uuid)
         except (TypeError, ValueError):
