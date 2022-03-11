@@ -403,7 +403,7 @@ class Client:
         for network_info in device_d.get("DeviceNetworkInfo", []):
             interface = network_info.get("ConnectionType")
             mac = network_info.get("MACAddress")
-            if not interface or not mac:
+            if not interface or not mac or mac == '00:00:00:00:00:00':
                 continue
             network_interface = {"interface": interface, "mac": mac}
             network_interfaces = ms_tree.setdefault("network_interfaces", [])
