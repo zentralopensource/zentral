@@ -412,8 +412,8 @@ class Client:
 
     def add_ms_tree_principal_user(self, ms_tree, device_d):
         user_email = device_d.get("UserEmailAddress")
-        user_uuid = device_d.get("UserId", {}).get("Uuid")
-        user_name = device_d.get("UserId", {}).get("Name")
+        user_uuid = device_d.get("EnrollmentUserUuid")
+        user_name = device_d.get("UserName")
         if user_email and user_uuid:
             ms_tree["principal_user"] = {
                 "source": {"type": "INVENTORY",
