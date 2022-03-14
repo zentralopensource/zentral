@@ -18,6 +18,7 @@ from django.db import connection, transaction
 from django.http import QueryDict
 from django.urls import reverse
 from django.utils.text import slugify
+import weakref
 import xlsxwriter
 from zentral.core.compliance_checks.models import ComplianceCheck, Status as ComplianceCheckStatus
 from zentral.core.incidents.models import Severity, Status
@@ -43,7 +44,7 @@ class BaseMSFilter:
     expression = None
     grouping_set = None
 
-    def __init__(self, idx, query_dict, hidden_value=None):
+    def __init__(self, msquery, idx, query_dict, hidden_value=None):
         self.idx = idx
         self.query_dict = query_dict
         if hidden_value:
@@ -53,6 +54,7 @@ class BaseMSFilter:
             self.value = query_dict.get(self.get_query_kwarg())
             self.hidden = False
         self.grouping_alias = "fg{}".format(idx)
+        self.msquery = weakref.proxy(msquery)
 
     def get_query_kwarg(self):
         return self.query_kwarg
@@ -741,7 +743,6 @@ class PrincipalUserNameFilter(BaseMSFilter):
 
 class LastSeenFilter(BaseMSFilter):
     query_kwarg = "ls"
-    non_grouping_expression = "lsmsc.last_seen"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -749,17 +750,34 @@ class LastSeenFilter(BaseMSFilter):
             self.days = max(1, int(self.value.replace("d", "")))
         except Exception:
             self.days = None
+        # If DateTimeFilter is already present in the query, and no filtering value is set,
+        # then we can optimize the query and use last_seen from inventory_currentmachinesnapshot
+        self.extra_join = True
+        if self.msquery:
+            for f in self.msquery.filters:
+                if isinstance(f, DateTimeFilter):
+                    if not f.value:
+                        self.extra_join = False
+                    break
+        if self.extra_join:
+            self.non_grouping_expression = "lsmsc.last_seen"
+        else:
+            self.non_grouping_expression = "cms.last_seen"
 
     def joins(self):
-        yield ("join "
-               "(select machine_snapshot_id, max(last_seen) as last_seen"
-               " from inventory_machinesnapshotcommit"
-               " group by machine_snapshot_id) as lsmsc "
-               "on (ms.id = lsmsc.machine_snapshot_id)")
+        if self.extra_join:
+            yield ("join "
+                   "(select machine_snapshot_id, max(last_seen) as last_seen"
+                   " from inventory_machinesnapshotcommit"
+                   " group by machine_snapshot_id) as lsmsc "
+                   "on (ms.id = lsmsc.machine_snapshot_id)")
 
     def wheres(self):
         if self.days:
-            yield "lsmsc.last_seen > %s"
+            if self.extra_join:
+                yield "lsmsc.last_seen > %s"
+            else:
+                yield "cms.last_seen > %s"
 
     def where_args(self):
         if self.days:
@@ -815,6 +833,7 @@ class DateTimeFilter(BaseMSFilter):
         if self.value:
             yield "left join inventory_machinesnapshot as dtfms"
         else:
+            # see LastSeenFilter optimization
             yield "join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)"
 
     def wheres(self):
@@ -1027,7 +1046,7 @@ class MSQuery:
 
     def add_filter(self, filter_class, **filter_kwargs):
         """add a filter"""
-        self.filters.append(filter_class(len(self.filters), self.query_dict, **filter_kwargs))
+        self.filters.append(filter_class(self, len(self.filters), self.query_dict, **filter_kwargs))
 
     def force_filter(self, filter_class, **filter_kwargs):
         """replace an existing filter from the same class or add it"""
@@ -1039,7 +1058,7 @@ class MSQuery:
         if not found_f:
             self.add_filter(filter_class, **filter_kwargs)
         else:
-            new_f = filter_class(found_f.idx, self.query_dict, **filter_kwargs)
+            new_f = filter_class(self, found_f.idx, self.query_dict, **filter_kwargs)
             self.filters = [f if f.idx != found_f.idx else new_f for f in self.filters]
 
     def _deserialize_filters(self, serialized_filters):
@@ -1120,7 +1139,7 @@ class MSQuery:
                 if isinstance(f, filter_class):
                     break
             else:
-                available_filter = filter_class(idx, self.query_dict)
+                available_filter = filter_class(self, idx, self.query_dict)
                 available_filter_qd = self.query_dict.copy()
                 available_filter_qd["sf"] = self.serialize_filters(filter_to_add=available_filter)
                 links.append((available_filter.title,
