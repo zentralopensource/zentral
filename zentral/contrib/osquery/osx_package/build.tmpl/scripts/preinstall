@@ -4,19 +4,25 @@
 ZENTRAL_OSQUERY_ROOT="/usr/local/zentral/osquery"
 OSQUERY_ROCKSDB_PATH="$ZENTRAL_OSQUERY_ROOT/db"
 OSQUERY_ENROLL_SECRET_PATH="$ZENTRAL_OSQUERY_ROOT/enroll_secret.txt"
-LEGACY_OSQUERY_PLIST="/Library/LaunchDaemons/com.facebook.osqueryd.plist"
+VENDOR_OSQUERY_PLIST="/Library/LaunchDaemons/com.facebook.osqueryd.plist"
 LEGACY_WATCHDOG_PLIST="/Library/LaunchDaemons/io.zentral.osquery.watchdog.plist"
+ZENTRAL_OSQUERY_PLIST="/Library/LaunchDaemons/pro.zentral.osqueryd.plist"
 
-# unload and uninstall the legacy launch daemon
-if [[ -e "$LEGACY_OSQUERY_PLIST" ]]; then
-    /bin/launchctl unload -w "$LEGACY_OSQUERY_PLIST"
-    rm "$LEGACY_OSQUERY_PLIST"
+# unload and disable the standard Osquery launch daemon
+if [[ -e "$VENDOR_OSQUERY_PLIST" ]]; then
+    /bin/launchctl unload -w "$VENDOR_OSQUERY_PLIST"
+    rm "$VENDOR_OSQUERY_PLIST"
 fi
 
-# unload and uninstall the legacy watchdog if necessary
+# unload and disable the legacy watchdog if necessary
 if [[ -e "$LEGACY_WATCHDOG_PLIST" ]]; then
     /bin/launchctl unload -w "$LEGACY_WATCHDOG_PLIST"
     rm "$LEGACY_WATCHDOG_PLIST"
+fi
+
+# unload the Zentral Osquery launch daemon if it already exists
+if [[ -e "$ZENTRAL_OSQUERY_PLIST" ]]; then
+    /bin/launchctl unload "$ZENTRAL_OSQUERY_PLIST"
 fi
 
 # delete existing osquery DB to force enrollment
