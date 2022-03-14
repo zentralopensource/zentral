@@ -8,7 +8,8 @@ from django.utils.text import slugify
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
-from zentral.contrib.osquery.events import OsqueryRequestEvent, OsqueryResultEvent, OsqueryCheckStatusUpdated
+from zentral.contrib.osquery.events import (OsqueryEnrollmentEvent, OsqueryRequestEvent, OsqueryResultEvent,
+                                            OsqueryCheckStatusUpdated)
 from zentral.contrib.osquery.models import (Configuration,
                                             DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
                                             EnrolledMachine, Enrollment,
@@ -250,7 +251,8 @@ class OsqueryAPIViewsTestCase(TestCase):
         response = self.post_as_json("enroll", {"enroll_secret": self.enrollment.secret.secret})
         self.assertEqual(response.status_code, 400)
 
-    def test_enroll_ok(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enroll_ok(self, post_event):
         serial_number = get_random_string()
         response = self.post_as_json(
             "enroll",
@@ -267,6 +269,11 @@ class OsqueryAPIViewsTestCase(TestCase):
         ms = MachineSnapshot.objects.filter(source__module="zentral.contrib.osquery",
                                             serial_number=serial_number)
         self.assertEqual(ms.first().reference, em.node_key)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 4)
+        enrollment_event = events[-1]
+        self.assertIsInstance(enrollment_event, OsqueryEnrollmentEvent)
+        self.assertEqual(enrollment_event.payload, {'action': 'enrollment'})
 
     def test_enroll_with_host_identifier_ok(self):
         serial_number = get_random_string()
@@ -282,7 +289,8 @@ class OsqueryAPIViewsTestCase(TestCase):
                                             serial_number=serial_number)
         self.assertEqual(ms.first().reference, em.node_key)
 
-    def test_re_enroll_same_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_re_enroll_same_enrollment(self, post_event):
         old_em = self.force_enrolled_machine()
         response = self.post_as_json(
             "enroll",
@@ -293,8 +301,14 @@ class OsqueryAPIViewsTestCase(TestCase):
         em = EnrolledMachine.objects.get(enrollment=self.enrollment, serial_number=old_em.serial_number)
         self.assertEqual(response.json(), {"node_key": em.node_key})
         self.assertEqual(old_em, em)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 4)
+        enrollment_event = events[-1]
+        self.assertIsInstance(enrollment_event, OsqueryEnrollmentEvent)
+        self.assertEqual(enrollment_event.payload, {'action': 're-enrollment'})
 
-    def test_re_enroll_different_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_re_enroll_different_enrollment(self, post_event):
         old_em = self.force_enrolled_machine()
         response = self.post_as_json(
             "enroll",
@@ -305,6 +319,11 @@ class OsqueryAPIViewsTestCase(TestCase):
         em = EnrolledMachine.objects.get(enrollment=self.enrollment2, serial_number=old_em.serial_number)
         self.assertEqual(response.json(), {"node_key": em.node_key})
         self.assertEqual(EnrolledMachine.objects.filter(serial_number=old_em.serial_number).count(), 1)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 4)
+        enrollment_event = events[-1]
+        self.assertIsInstance(enrollment_event, OsqueryEnrollmentEvent)
+        self.assertEqual(enrollment_event.payload, {'action': 're-enrollment'})
 
     # config
 

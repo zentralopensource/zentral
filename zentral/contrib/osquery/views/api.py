@@ -110,7 +110,7 @@ class EnrollView(BaseJsonPostView):
             enrolled_machine_defaults["osquery_version"] = self.data["host_details"]["osquery_info"]["version"]
         except KeyError:
             logger.error("Could not get osquery version from enrollment data")
-        enrolled_machine, _ = EnrolledMachine.objects.update_or_create(
+        enrolled_machine, enrolled_machine_created = EnrolledMachine.objects.update_or_create(
             enrollment=enrollment,
             serial_number=self.serial_number,
             defaults=enrolled_machine_defaults
@@ -121,11 +121,11 @@ class EnrollView(BaseJsonPostView):
             MachineTag.objects.get_or_create(serial_number=self.serial_number, tag=tag)
 
         # delete other enrolled machines
-        other_enrolled_machines = (EnrolledMachine.objects.exclude(pk=enrolled_machine.pk)
-                                                          .filter(serial_number=self.serial_number))
-        if other_enrolled_machines.count():
+        deleted_enrolled_machines, _ = (EnrolledMachine.objects.exclude(pk=enrolled_machine.pk)
+                                                               .filter(serial_number=self.serial_number)
+                                                               .delete())
+        if deleted_enrolled_machines or not enrolled_machine_created:
             enrollment_action = 're-enrollment'
-            other_enrolled_machines.delete()
         else:
             enrollment_action = 'enrollment'
 
