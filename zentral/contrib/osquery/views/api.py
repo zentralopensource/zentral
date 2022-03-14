@@ -34,6 +34,10 @@ from .utils import update_tree_with_enrollment_host_details, update_tree_with_in
 logger = logging.getLogger('zentral.contrib.osquery.views.api')
 
 
+class NodeInvalidError(Exception):
+    pass
+
+
 class BaseJsonPostView(View):
     def authenticate(self):
         pass
@@ -47,8 +51,11 @@ class BaseJsonPostView(View):
         except ValueError:
             raise SuspiciousOperation("Could not read JSON data")
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
-        self.authenticate()
-        return JsonResponse(self.do_post())
+        try:
+            self.authenticate()
+            return JsonResponse(self.do_post())
+        except NodeInvalidError:
+            return JsonResponse({"node_invalid": True})
 
 
 class EnrollView(BaseJsonPostView):
@@ -87,7 +94,8 @@ class EnrollView(BaseJsonPostView):
                 self.get_uuid()
             )
         except EnrollmentSecretVerificationFailed:
-            raise PermissionDenied("Wrong enrollment secret")
+            logger.error("Machine %s: wrong enrollment secret", self.serial_number, extra={'request': self.request})
+            raise NodeInvalidError
 
     def do_post(self):
         enrollment = self.es_request.enrollment_secret.osquery_enrollment
@@ -160,7 +168,8 @@ class BaseNodeView(BaseJsonPostView):
                 "enrollment__secret__meta_business_unit"
             ).get(node_key=self.get_node_key())
         except EnrolledMachine.DoesNotExist:
-            raise PermissionDenied("Wrong node_key")
+            logger.error("Wrong not_key", extra={'request': self.request})
+            raise NodeInvalidError
         self.machine = MetaMachine(self.enrolled_machine.serial_number)
         self.enrollment = self.enrolled_machine.enrollment
 
@@ -376,12 +385,14 @@ class LogView(BaseNodeView):
         # verify serial number
         serial_number = decorations.get("serial_number")
         if serial_number and serial_number != self.machine.serial_number:
-            logger.warning(f"osquery reported SN {serial_number} "
-                           f"different from enrolled machine SN {self.machine.serial_number}")
+            logger.warning(
+                "osquery reported SN %s different from enrolled machine SN %s",
+                serial_number, self.machine.serial_number
+            )
             post_machine_conflict_event(self.request, "zentral.contrib.osquery",
                                         serial_number, self.machine.serial_number,
                                         decorations)
-            return {"node_invalid": True}
+            raise NodeInvalidError
 
         # update osquery version if necessary
         osquery_version = decorations.get("version")

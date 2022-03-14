@@ -244,7 +244,7 @@ class OsqueryAPIViewsTestCase(TestCase):
             {"enroll_secret": "INVALID ENROLL SECRET",
              "host_details": {"system_info": {"hardware_serial": get_random_string(32)}}}
         )
-        self.assertContains(response, "Wrong enrollment secret", status_code=403)
+        self.assertContains(response, '{"node_invalid": true}', status_code=200)
 
     def test_enroll_no_serial_number(self):
         response = self.post_as_json("enroll", {"enroll_secret": self.enrollment.secret.secret})
@@ -319,7 +319,7 @@ class OsqueryAPIViewsTestCase(TestCase):
 
     def test_config_wrong_node_key(self):
         response = self.post_as_json("config", {"node_key": "godzilla"})
-        self.assertContains(response, "Wrong node_key", status_code=403)
+        self.assertContains(response, '{"node_invalid": true}', status_code=200)
 
     def test_config_ok(self):
         em = self.force_enrolled_machine()
@@ -403,7 +403,7 @@ class OsqueryAPIViewsTestCase(TestCase):
 
     def test_distributed_read_wrong_node_key(self):
         response = self.post_as_json("distributed_read", {"node_key": "godzilla"})
-        self.assertContains(response, "Wrong node_key", status_code=403)
+        self.assertContains(response, '{"node_invalid": true}', status_code=200)
 
     def test_distributed_read_empty(self):
         em = self.force_enrolled_machine()
@@ -464,7 +464,7 @@ class OsqueryAPIViewsTestCase(TestCase):
 
     def test_distributed_write_wrong_node_key(self):
         response = self.post_as_json("distributed_write", {"node_key": "godzilla"})
-        self.assertContains(response, "Wrong node_key", status_code=403)
+        self.assertContains(response, '{"node_invalid": true}', status_code=200)
 
     def test_distributed_write_no_compliance_check(self):
         em = self.force_enrolled_machine()
@@ -564,7 +564,26 @@ class OsqueryAPIViewsTestCase(TestCase):
 
     def test_log_wrong_node_key(self):
         response = self.post_as_json("log", {"node_key": "godzilla"})
-        self.assertContains(response, "Wrong node_key", status_code=403)
+        self.assertContains(response, '{"node_invalid": true}', status_code=200)
+
+    def test_log_machine_conflict(self):
+        em = self.force_enrolled_machine()
+        post_data = {
+            "node_key": em.node_key,
+            "log_type": "status",
+            "data": [
+                {'filename': 'scheduler.cpp',
+                 'line': '63',
+                 'message': 'Executing scheduled query: macos-attacks-query-pack_604dc4d3: '
+                            "select * from startup_items where path like '%iWorkServices%';",
+                 'severity': '0',
+                 'version': '2.1.2',
+                 'unixTime': '1480605737',
+                 'decorations': {'serial_number': get_random_string(63)}}
+            ]
+        }
+        response = self.post_as_json("log", post_data)
+        self.assertContains(response, '{"node_invalid": true}', status_code=200)
 
     def test_log_default_inventory_query(self):
         em = self.force_enrolled_machine()
