@@ -291,7 +291,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/distributedquery_list.html")
-        self.assertNotIn(distributed_query, response.context["object_list"])
+        self.assertNotIn(distributed_query, response.context["distributed_queries"])
 
     # distributed query machines
 

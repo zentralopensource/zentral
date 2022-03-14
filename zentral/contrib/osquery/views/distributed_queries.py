@@ -1,11 +1,14 @@
 from itertools import chain
 import logging
+import math
 from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.db import connection
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+from zentral.utils.sql import tables_in_query
+from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView
 from zentral.contrib.osquery.forms import DistributedQueryForm
 from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
                                             FileCarvingSession, Query)
@@ -14,37 +17,64 @@ from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMa
 logger = logging.getLogger('zentral.contrib.osquery.views.distributed_queries')
 
 
-class DistributedQueryListView(PermissionRequiredMixin, ListView):
+class DistributedQueryListView(PermissionRequiredMixin, TemplateView):
     permission_required = "osquery.view_distributedquery"
-    model = DistributedQuery
+    template_name = "osquery/distributedquery_list.html"
     paginate_by = 50
 
-    def get_queryset(self):
-        return (
-            super().get_queryset()
-                   .select_related("query")
-                   .annotate(machine_count=Count("distributedquerymachine", distinct=True))
-                   .annotate(result_count=Count("distributedqueryresult", distinct=True))
-                   .annotate(file_carving_session_count=Count("filecarvingsession", distinct=True))
-                   .order_by("-created_at", "-pk")
-        )
+    def get_total(self):
+        return DistributedQuery.objects.count()
+
+    def iter_distributed_queries(self, offset):
+        with connection.cursor() as c:
+            c.execute(
+                "select dq.id, dq.sql, dq.query_id, q.name as query_name,"
+                "(select count(*) from osquery_distributedquerymachine where distributed_query_id=dq.id) "
+                "as machine_count,"
+                "(select count(*) from osquery_distributedqueryresult where distributed_query_id=dq.id) "
+                "as result_count,"
+                "(select count(*) from osquery_filecarvingsession where distributed_query_id=dq.id) "
+                "as file_carving_session_count "
+                "from osquery_distributedquery dq "
+                "left join osquery_query q on (dq.query_id = q.id) "
+                "order by dq.created_at desc, dq.id desc limit %s offset %s",
+                [self.paginate_by, offset]
+            )
+            columns = [col.name for col in c.description]
+            for row in c.fetchall():
+                dq = dict(zip(columns, row))
+                dq["tables"] = sorted(tables_in_query(dq["sql"]))
+                yield dq
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        page = ctx["page_obj"]
-        ctx["distributed_query_count"] = page.paginator.count
-        if page.has_next():
+
+        # current page
+        try:
+            page = int(self.request.GET.get("page", 1))
+        except Exception:
+            page = 1
+        page = max(1, page)
+        offset = (page - 1) * self.paginate_by
+
+        # fetch distributed queries
+        ctx["distributed_query_count"] = total = self.get_total()
+        ctx["distributed_queries"] = [dq for dq in self.iter_distributed_queries(offset)]
+
+        # pagination
+        ctx["page_num"] = page
+        ctx["num_pages"] = math.ceil(total / self.paginate_by) or 1
+        if page > 1:
             qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
+            qd["page"] = page - 1
+            ctx["previous_url"] = f"?{qd.urlencode()}"
+            qd.pop("page")
+            ctx["reset_link"] = f"?{qd.urlencode()}"
+        if offset + self.paginate_by < total:
             qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
-        if page.number > 1:
-            qd = self.request.GET.copy()
-            qd.pop('page', None)
-            ctx['reset_link'] = "?{}".format(qd.urlencode())
+            qd["page"] = page + 1
+            ctx["next_url"] = f"?{qd.urlencode()}"
+
         return ctx
 
 

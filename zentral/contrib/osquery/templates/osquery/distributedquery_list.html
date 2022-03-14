@@ -10,7 +10,7 @@
   {% else %}
   <li class="active">Runs</li>
   {% endif %}
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="active">page {{ page_num }} of {{ num_pages }}</li>
 </ol>
 
 <h3>{{ distributed_query_count }} Run{{ distributed_query_count|pluralize }}</h3>
@@ -31,7 +31,7 @@
 <table class="table">
   <thead>
     <tr>
-      <th>Name</th>
+      <th>#</th>
       {% if perms.osquery.view_query %}
       <th>Query</th>
       {% endif %}
@@ -44,15 +44,14 @@
     </tr>
   </thead>
   <tbody>
-    {% for distributed_query in object_list %}
-    {% with distributed_query.query as query %}
+    {% for distributed_query in distributed_queries %}
     <tr>
       <td>
-        <a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a>
+        <a href="{% url 'osquery:distributed_query' distributed_query.id %}">{{ distributed_query.id }}</a>
       </td>
       {% if perms.osquery.view_query %}
       <td>
-        {% if query %}<a href="{{ query.get_absolute_url }}">{{ query }}</a>{% else %}-{% endif %}
+        {% if distributed_query.query_id %}<a href="{% url 'osquery:distributed_query' distributed_query.query_id %}">{{ distributed_query.query_name }}</a>{% else %}-{% endif %}
       </td>
       {% endif %}
       <td>
@@ -70,7 +69,6 @@
       </td>
       {% endif %}
     </tr>
-    {% endwith %}
     {% endfor %}
   </tbody>
 </table>
