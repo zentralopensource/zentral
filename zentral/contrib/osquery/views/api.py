@@ -168,7 +168,7 @@ class BaseNodeView(BaseJsonPostView):
                 "enrollment__secret__meta_business_unit"
             ).get(node_key=self.get_node_key())
         except EnrolledMachine.DoesNotExist:
-            logger.error("Wrong not_key", extra={'request': self.request})
+            logger.error("Wrong node_key", extra={'request': self.request})
             raise NodeInvalidError
         self.machine = MetaMachine(self.enrolled_machine.serial_number)
         self.enrollment = self.enrolled_machine.enrollment
