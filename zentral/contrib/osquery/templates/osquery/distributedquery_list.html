@@ -51,7 +51,7 @@
       </td>
       {% if perms.osquery.view_query %}
       <td>
-        {% if distributed_query.query_id %}<a href="{% url 'osquery:distributed_query' distributed_query.query_id %}">{{ distributed_query.query_name }}</a>{% else %}-{% endif %}
+        {% if distributed_query.query_id %}<a href="{% url 'osquery:query' distributed_query.query_id %}">{{ distributed_query.query_name }}</a>{% else %}-{% endif %}
       </td>
       {% endif %}
       <td>
