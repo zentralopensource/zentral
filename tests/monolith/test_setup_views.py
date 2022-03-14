@@ -9,8 +9,9 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import User
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
-from zentral.contrib.monolith.models import (Catalog, Enrollment, EnrolledMachine,
-                                             Manifest, ManifestCatalog, PkgInfo, PkgInfoName)
+from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, EnrolledMachine,
+                                             Manifest, ManifestCatalog, PkgInfo, PkgInfoName,
+                                             SubManifest, SubManifestPkgInfo)
 from zentral.contrib.munki.models import ManagedInstall
 
 
@@ -205,6 +206,106 @@ class MonolithSetupViewsTestCase(TestCase):
         self._login("monolith.view_condition")
         response = self.client.get(reverse("monolith:conditions"))
         self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/condition_list.html")
+
+    def test_condition_login_redirect(self):
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        self._login_redirect(reverse("monolith:condition", args=(condition.pk,)))
+
+    def test_condition_permission_denied(self):
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        self._login()
+        response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_condition(self):
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        self._login("monolith.view_condition")
+        response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/condition_detail.html")
+        self.assertContains(response, condition.name)
+        self.assertNotContains(response, reverse("monolith:delete_condition", args=(condition.pk,)))
+
+    def test_condition_with_delete(self):
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        self._login("monolith.view_condition", "monolith.delete_condition")
+        response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/condition_detail.html")
+        self.assertContains(response, condition.name)
+        self.assertContains(response, reverse("monolith:delete_condition", args=(condition.pk,)))
+
+    def test_condition_cannot_delete(self):
+        submanifest = SubManifest.objects.create(name=get_random_string())
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        SubManifestPkgInfo.objects.create(
+            sub_manifest=submanifest,
+            key="managed_installs",
+            pkg_info_name=self.pkginfo_name_1,
+            condition=condition
+        )
+        self._login("monolith.view_condition", "monolith.delete_condition")
+        response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/condition_detail.html")
+        self.assertContains(response, condition.name)
+        self.assertNotContains(response, reverse("monolith:delete_condition", args=(condition.pk,)))
+
+    def test_delete_condition_login_redirect(self):
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        self._login_redirect(reverse("monolith:delete_condition", args=(condition.pk,)))
+
+    def test_delete_condition_permission_denied(self):
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        self._login()
+        response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_condition_get(self):
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        self._login("monolith.delete_condition")
+        response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/condition_confirm_delete.html")
+
+    def test_delete_condition_post(self):
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        self._login("monolith.view_condition", "monolith.delete_condition")
+        response = self.client.post(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/condition_list.html")
+        self.assertEqual(Condition.objects.filter(pk=condition.pk).count(), 0)
+
+    def test_delete_condition_get_blocked(self):
+        submanifest = SubManifest.objects.create(name=get_random_string())
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        SubManifestPkgInfo.objects.create(
+            sub_manifest=submanifest,
+            key="managed_installs",
+            pkg_info_name=self.pkginfo_name_1,
+            condition=condition
+        )
+        self._login("monolith.view_condition", "monolith.delete_condition")
+        response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/condition_detail.html")
+        self.assertContains(response, "cannot be deleted")
+
+    def test_delete_condition_post_blocked(self):
+        submanifest = SubManifest.objects.create(name=get_random_string())
+        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        SubManifestPkgInfo.objects.create(
+            sub_manifest=submanifest,
+            key="managed_installs",
+            pkg_info_name=self.pkginfo_name_1,
+            condition=condition
+        )
+        self._login("monolith.view_condition", "monolith.delete_condition")
+        response = self.client.post(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/condition_detail.html")
+        self.assertContains(response, "cannot be deleted")
 
     # sub manifests
 

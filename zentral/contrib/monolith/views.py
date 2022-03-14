@@ -3,10 +3,12 @@ import logging
 import plistlib
 import random
 from urllib.parse import urlencode
+from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.core.files.storage import default_storage
+from django.db.models import ProtectedError
 from django.urls import reverse_lazy
 from django.http import (FileResponse,
                          Http404,
@@ -451,16 +453,30 @@ class UpdateConditionView(PermissionRequiredMixin, UpdateView):
         return redirect(condition)
 
 
-class DeleteConditionView(PermissionRequiredMixin, DeleteView):
+class DeleteConditionView(PermissionRequiredMixin, TemplateView):
     permission_required = "monolith.delete_condition"
-    model = Condition
-    success_url = reverse_lazy("monolith:conditions")
-    # TODO: can_be_deleted?
+    template_name = "monolith/condition_confirm_delete.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.condition = get_object_or_404(Condition, pk=kwargs["pk"])
+        if not self.condition.can_be_deleted():
+            messages.warning(request, "This condition cannot be deleted")
+            return redirect(self.condition)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['monolith'] = True
+        context["object"] = self.condition
         return context
+
+    def post(self, request, *args, **kwargs):
+        try:
+            self.condition.delete()
+        except ProtectedError:
+            messages.warning(request, "This condition cannot be deleted")
+            return redirect(self.condition)
+        else:
+            return redirect("monolith:conditions")
 
 
 # sub manifests
