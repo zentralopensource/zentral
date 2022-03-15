@@ -4,7 +4,7 @@ from django.db.models import F
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import EnrollmentSecret, File, MetaBusinessUnit
+from zentral.contrib.inventory.models import EnrollmentSecret, File, MachineSnapshot, MetaBusinessUnit
 from zentral.contrib.santa.models import Bundle, Configuration, EnrolledMachine, Enrollment, Rule, Target
 
 
@@ -100,6 +100,22 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_LOCKDOWN_MODE)
         Configuration.objects.update(client_mode=Configuration.MONITOR_MODE)
+
+        # Machine snapshot
+        ms = MachineSnapshot.objects.get(serial_number=serial_number)
+        self.assertEqual(ms.source.name, "Santa")
+        self.assertIsNone(ms.system_info.hardware_model)
+
+    def test_preflight_model_identifier(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        data["model_identifier"] = "Macmini9,1"
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        self.post_as_json(url, data)
+
+        # Machine snapshot
+        ms = MachineSnapshot.objects.get(serial_number=serial_number)
+        self.assertEqual(ms.source.name, "Santa")
+        self.assertEqual(ms.system_info.hardware_model, data["model_identifier"])
 
     def test_preflight_missing_client_mode(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()

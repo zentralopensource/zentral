@@ -211,6 +211,11 @@ class PreflightView(BaseSyncView):
                 'public_ip_address': self.ip,
                 }
 
+        # tree system info hardware model
+        model_identifier = self.request_data.get("model_identifier")
+        if model_identifier:
+            tree["system_info"]["hardware_model"] = model_identifier
+
         # tree primary user
         primary_user = self._get_primary_user()
         if primary_user:
