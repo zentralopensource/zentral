@@ -9,6 +9,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.contenttypes.models import ContentType
 from django.utils.functional import cached_property
 from geoip2.models import City
+from rest_framework.authentication import TokenAuthentication
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.incidents.models import IncidentUpdate
 from zentral.core.probes.conf import all_probes_dict
@@ -84,34 +85,41 @@ class EventRequestUser(object):
         user = request.user
         if user and user.is_authenticated:
             kwargs = {attr: getattr(user, attr) for attr in cls.attr_list if attr != "session"}
-            # session
-            session = request.session
             session_d = kwargs.setdefault("session", {})
-            # session expiry
-            seabc = session.get_expire_at_browser_close()
-            session_d["expire_at_browser_close"] = seabc
-            if not seabc:
-                session_d["expiry_age"] = session.get_expiry_age()
-            # realm session?
-            # set via realms middleware, but absent if logout from test client for example
-            ras = getattr(request, "realm_authentication_session", None)
-            if ras and ras.is_remote:
-                session_d.update({
-                    "is_remote": True,
-                    "realm_authentication_session_pk": ras.pk,
-                    "realm_user_pk": ras.user.pk,
-                    "realm": {
-                        "pk": ras.realm.pk,
-                        "name": ras.realm.name
-                    }
-                })
-            else:
-                # mfa?
+            drf_authenticator = getattr(request, "successful_authenticator", None)
+            token_authenticated = isinstance(drf_authenticator, TokenAuthentication)
+            session_d["token_authenticated"] = token_authenticated
+            if token_authenticated:
                 session_d["is_remote"] = False
-                if session.get("mfa_authenticated"):
-                    session_d["mfa_authenticated"] = True
+                session_d["mfa_authenticated"] = False
+            else:
+                # session
+                session = request.session
+                # session expiry
+                seabc = session.get_expire_at_browser_close()
+                session_d["expire_at_browser_close"] = seabc
+                if not seabc:
+                    session_d["expiry_age"] = session.get_expiry_age()
+                # realm session?
+                # set via realms middleware, but absent if logout from test client for example
+                ras = getattr(request, "realm_authentication_session", None)
+                if ras and ras.is_remote:
+                    session_d.update({
+                        "is_remote": True,
+                        "realm_authentication_session_pk": ras.pk,
+                        "realm_user_pk": ras.user.pk,
+                        "realm": {
+                            "pk": ras.realm.pk,
+                            "name": ras.realm.name
+                        }
+                    })
                 else:
-                    session_d["mfa_authenticated"] = False
+                    # mfa?
+                    session_d["is_remote"] = False
+                    if session.get("mfa_authenticated"):
+                        session_d["mfa_authenticated"] = True
+                    else:
+                        session_d["mfa_authenticated"] = False
             return cls(**kwargs)
 
     def serialize(self):
