@@ -5,7 +5,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
-from zentral.contrib.inventory.conf import DESKTOP, MACOS, SERVER, update_ms_tree_type, VM
+from zentral.contrib.inventory.conf import DESKTOP, MACOS, MOBILE, LAPTOP, SERVER, update_ms_tree_type, VM
 from zentral.contrib.inventory.models import (BusinessUnit,
                                               Certificate,
                                               CurrentMachineSnapshot,
@@ -446,15 +446,35 @@ class MachineSnapshotTestCase(TestCase):
         update_ms_tree_type(tree)
         self.assertEqual(tree.get("type"), None)
 
-    def test_update_ms_tree_type_cpu_brand(self):
+    def test_update_ms_tree_type_model_unknown_cpu_brand_known(self):
         tree = {"system_info": {"hardware_model": "kjwelkjdwlkej",
                                 "cpu_brand": "Xeon godz"}}
         update_ms_tree_type(tree)
         self.assertEqual(tree.get("type"), SERVER)
+
+    def test_update_ms_tree_type_model_unknown_cpu_brand_unknown(self):
         tree = {"system_info": {"hardware_model": "kjwelkjdwlkej",
                                 "cpu_brand": "Godz"}}
         update_ms_tree_type(tree)
         self.assertEqual(tree.get("type"), None)
+
+    def test_update_ms_tree_type_model_known_cpu_brand_known(self):
+        tree = {"system_info": {"hardware_model": "Precision 3630 Tower",
+                                "cpu_brand": "Xeon"}}
+        update_ms_tree_type(tree)
+        self.assertEqual(tree.get("type"), DESKTOP)
+
+    def test_update_ms_tree_type_model_known_2_cpu_brand_unknown(self):
+        tree = {"system_info": {"hardware_model": "HP EliteBook 840 G5",
+                                "cpu_brand": "Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz"}}
+        update_ms_tree_type(tree)
+        self.assertEqual(tree.get("type"), LAPTOP)
+
+    def test_update_ms_tree_type_model_known_3_cpu_brand_unknown(self):
+        tree = {"system_info": {"hardware_model": "google Pixel",
+                                "cpu_brand": "IQJNQE"}}
+        update_ms_tree_type(tree)
+        self.assertEqual(tree.get("type"), MOBILE)
 
     def test_last_seen(self):
         tree = copy.deepcopy(self.machine_snapshot)

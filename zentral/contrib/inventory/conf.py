@@ -44,18 +44,41 @@ TYPE_CHOICES_DICT = dict(TYPE_CHOICES)
 
 # utils
 
-HARDWARE_MODEL_SERIAL_MACHINE_TYPE_DICT = {
-    'appletv': TV,
-    'imac': DESKTOP,
-    'ipad': TABLET,
-    'iphone': MOBILE,
-    'macbook': LAPTOP,
-    'macmini': DESKTOP,
-    'macpro': DESKTOP,
-    'powermac': DESKTOP,
-    'vmware': VM,
-    'xserve': SERVER,
-}
+HARDWARE_MODEL_SERIAL_MACHINE_TYPES = [
+    # APPLE
+    ('appletv', TV),
+    ('imac', DESKTOP),
+    ('ipad', TABLET),
+    ('iphone', MOBILE),
+    ('mac13', DESKTOP),
+    ('macbook', LAPTOP),
+    ('macmini', DESKTOP),
+    ('macpro', DESKTOP),
+    ('powermac', DESKTOP),
+    ('vmware', VM),
+    ('xserve', SERVER),
+    # DELL
+    ('latitude', LAPTOP),
+    ('optiplex', DESKTOP),
+    ('xps', LAPTOP),
+    ('tower', DESKTOP),  # for precision tower
+    ('precision', LAPTOP),  # after tower, so should be only laptops
+    # GOOGLE
+    ('google pixel slate', TABLET),
+    ('google pixel', MOBILE),
+    # HP
+    ('hp elitebook', LAPTOP),
+    ('hp zbook', LAPTOP),
+    # HUAWEI
+    ('huawei ane', MOBILE),
+    ('huawei wgr', TABLET),
+    # SAMSUNG
+    ('samsung gt-p', TABLET),
+    ('samsung sm-a', MOBILE),
+    ('samsung sm-g', MOBILE),
+    ('samsung sm-p', TABLET),
+    ('samsung sm-t', TABLET),
+]
 
 
 # source http://www.techrepublic.com/blog/data-center/mac-address-scorecard-for-common-virtual-machine-platforms/
@@ -108,8 +131,8 @@ def update_ms_tree_type(tree):
         val = system_info_t.get(attr)
         if val:
             val = val.lower()
-            for prefix, ms_type in HARDWARE_MODEL_SERIAL_MACHINE_TYPE_DICT.items():
-                if val.startswith(prefix):
+            for search_str, ms_type in HARDWARE_MODEL_SERIAL_MACHINE_TYPES:
+                if search_str in val:
                     tree["type"] = ms_type
                     return
     network_interfaces = tree.get("network_interfaces")
