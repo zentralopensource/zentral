@@ -1050,6 +1050,7 @@ class MSQuery:
         except ValueError:
             self.page = 1
         self.filters = []
+        self.is_search = False
         self._redirect = False
         self._deserialize_filters(self.query_dict.get("sf"))
         self._grouping_results = None
@@ -1061,10 +1062,14 @@ class MSQuery:
     def add_filter(self, filter_class, **filter_kwargs):
         """add a filter"""
         try:
-            self.filters.append(filter_class(self, len(self.filters), self.query_dict, **filter_kwargs))
+            f = filter_class(self, len(self.filters), self.query_dict, **filter_kwargs)
         except MSQueryValueError as e:
             self.query_dict.pop(e.query_kwarg, None)
             self._redirect = True
+        else:
+            self.filters.append(f)
+            if not self.is_search and not isinstance(f, LastSeenFilter) and not f.hidden and f.value:
+                self.is_search = True
 
     def force_filter(self, filter_class, **filter_kwargs):
         """replace an existing filter from the same class or add it"""

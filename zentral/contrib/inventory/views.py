@@ -68,6 +68,7 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
     template_name = "inventory/machine_list.html"
     last_seen_session_key = "inventory_last_last_seen"
     last_seen_default = "7d"
+    force_search = False
 
     def get_object(self, **kwargs):
         return None
@@ -121,24 +122,28 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
         # msquery
         ctx["msquery"] = self.msquery
         # pagination / machines
-        ctx["machines"] = self.msquery.fetch()
         ctx["grouping_links"] = self.msquery.grouping_links()
-        if self.msquery.page > 1:
-            qd = self.request.GET.copy()
-            qd['page'] = self.msquery.page - 1
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
-        if self.msquery.page * self.msquery.paginate_by < self.msquery.count():
-            qd = self.request.GET.copy()
-            qd['page'] = self.msquery.page + 1
-            ctx['next_url'] = "?{}".format(qd.urlencode())
+
+        if self.force_search or self.msquery.is_search:
+            ctx["machines"] = self.msquery.fetch()
+            if self.msquery.page > 1:
+                qd = self.request.GET.copy()
+                qd['page'] = self.msquery.page - 1
+                ctx['previous_url'] = "?{}".format(qd.urlencode())
+            if self.msquery.page * self.msquery.paginate_by < self.msquery.count():
+                qd = self.request.GET.copy()
+                qd['page'] = self.msquery.page + 1
+                ctx['next_url'] = "?{}".format(qd.urlencode())
+
         # search form hidden values
         search_form_qd = self.request.GET.copy()
         for key in [f.get_query_kwarg() for f in self.msquery.filters if f.free_input]:
             search_form_qd.pop(key, None)
         ctx["search_form_qd"] = search_form_qd
+
         # breadcrumbs
         breadcrumbs = self.get_breadcrumbs(**kwargs)
-        if breadcrumbs:
+        if breadcrumbs and (self.force_search or self.msquery.is_search):
             num_pages = ceil(max(self.msquery.count(), 1) / self.msquery.paginate_by)
             _, anchor_text = breadcrumbs.pop()
             reset_qd = self.request.GET.copy()
@@ -147,6 +152,7 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
             breadcrumbs.extend([(reset_link, anchor_text),
                                 (None, "page {} of {}".format(self.msquery.page, num_pages))])
         ctx['breadcrumbs'] = breadcrumbs
+
         msquery_cqd = self.msquery.get_canonical_query_dict()
         ctx['export_links'] = []
         for fmt in ("xlsx", "zip"):
@@ -255,6 +261,7 @@ class GroupMachinesView(MachineListView):
 class OSXAppInstanceMachinesView(MachineListView):
     permission_required = ("inventory.view_osxappinstance", "inventory.view_machinesnapshot")
     template_name = "inventory/macos_app_instance_machines.html"
+    force_search = True
 
     def get_object(self, **kwargs):
         return OSXAppInstance.objects.select_related('app').get(app__pk=kwargs['pk'],
