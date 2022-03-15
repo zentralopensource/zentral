@@ -458,6 +458,12 @@ class BaseEvent(object):
                 val["event_type"] = cls.event_type
         return cls.payload_aggregations
 
+    # heartbeats
+
+    @classmethod
+    def get_machine_heartbeat_timeout(cls, serial_number):
+        return cls.heartbeat_timeout
+
 
 register_event_type(BaseEvent)
 

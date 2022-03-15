@@ -17,13 +17,12 @@ class InventoryMachineSubview:
 
     def __init__(self, serial_number, user):
         self.user = user
-        qs = (EnrolledMachine.objects.select_related("enrollment__configuration")
-                                     .filter(serial_number=serial_number).order_by("-updated_at"))
-        count = qs.count()
+        enrolled_machines = EnrolledMachine.objects.get_for_serial_number(serial_number)
+        count = len(enrolled_machines)
         if count > 1:
             self.err_message = f"{count} machines found!!!"
         if count > 0:
-            self.enrolled_machine = qs.first()
+            self.enrolled_machine = enrolled_machines[0]
 
     def render(self):
         ctx = {"err_message": self.err_message}

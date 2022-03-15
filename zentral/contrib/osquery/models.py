@@ -448,6 +448,15 @@ class Enrollment(BaseEnrollment):
         return "{}#enrollment_{}".format(reverse("osquery:configuration", args=(self.configuration.pk,)), self.pk)
 
 
+class EnrolledMachineManager(models.Manager):
+    def get_for_serial_number(self, serial_number):
+        return list(
+            self.select_related("enrollment__configuration")
+            .filter(serial_number=serial_number)
+            .order_by("-updated_at")
+        )
+
+
 class EnrolledMachine(models.Model):
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
 
@@ -458,6 +467,8 @@ class EnrolledMachine(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = EnrolledMachineManager()
 
     class Meta:
         unique_together = (("enrollment", "serial_number"),)

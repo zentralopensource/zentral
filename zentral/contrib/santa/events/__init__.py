@@ -2,7 +2,7 @@ from datetime import datetime
 import logging
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.contrib.inventory.models import File
-from zentral.contrib.santa.models import Bundle, Target
+from zentral.contrib.santa.models import Bundle, EnrolledMachine, Target
 from zentral.utils.certificates import APPLE_DEV_ID_ISSUER_CN, parse_apple_dev_id
 from zentral.utils.text import shard
 
@@ -31,7 +31,18 @@ register_event_type(SantaEnrollmentEvent)
 class SantaPreflightEvent(BaseEvent):
     event_type = "santa_preflight"
     tags = ["santa", "heartbeat"]
-    heartbeat_timeout = 2 * 10 * 60
+
+    @classmethod
+    def get_machine_heartbeat_timeout(cls, serial_number):
+        enrolled_machines = EnrolledMachine.objects.get_for_serial_number(serial_number)
+        count = len(enrolled_machines)
+        if not count:
+            return
+        if count > 1:
+            logger.warning("Multiple enrolled machines found for %s", serial_number)
+        timeout = 2 * enrolled_machines[0].enrollment.configuration.full_sync_interval
+        logger.debug("Santa preflight event heartbeat timeout for machine %s: %s", serial_number, timeout)
+        return timeout
 
 
 register_event_type(SantaPreflightEvent)

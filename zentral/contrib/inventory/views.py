@@ -486,7 +486,7 @@ class MachineHeartbeatsView(PermissionRequiredMixin, TemplateView):
             logger.exception("Could not get machine heartbeats")
         else:
             for event_class, source_name, ua_max_dates in last_machine_heartbeats:
-                heartbeat_timeout = event_class.heartbeat_timeout
+                heartbeat_timeout = event_class.get_machine_heartbeat_timeout(machine.serial_number)
                 if heartbeat_timeout:
                     heartbeat_timeout = timedelta(seconds=heartbeat_timeout)
                 ua_max_dates.sort(key=lambda t: (t[1], t[0]), reverse=True)

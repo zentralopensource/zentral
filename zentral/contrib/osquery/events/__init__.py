@@ -3,7 +3,7 @@ import logging
 import uuid
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
-from zentral.contrib.osquery.models import parse_pack_query_configuration_key, Pack, PackQuery
+from zentral.contrib.osquery.models import parse_pack_query_configuration_key, EnrolledMachine, Pack, PackQuery
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
 
@@ -25,7 +25,6 @@ register_event_type(OsqueryEnrollmentEvent)
 class OsqueryRequestEvent(OsqueryEvent):
     event_type = "osquery_request"
     tags = ['osquery', 'heartbeat']
-    heartbeat_timeout = 2 * 60
 
     def get_linked_objects_keys(self):
         keys = {}
@@ -40,6 +39,25 @@ class OsqueryRequestEvent(OsqueryEvent):
                 if configuration_pk:
                     keys["osquery_configuration"] = [(configuration_pk,)]
         return keys
+
+    @classmethod
+    def get_machine_heartbeat_timeout(cls, serial_number):
+        enrolled_machines = EnrolledMachine.objects.get_for_serial_number(serial_number)
+        count = len(enrolled_machines)
+        if not count:
+            return
+        if count > 1:
+            logger.warning("Multiple enrolled machines found for %s", serial_number)
+        flags = enrolled_machines[0].enrollment.configuration.get_all_flags()
+        intervals = []
+        for key in ("config_refresh", "distributed_interval"):
+            interval = flags.get(key)
+            if interval and isinstance(interval, int) and interval > 0:
+                intervals.append(interval)
+        if intervals:
+            timeout = 2 * max(intervals)
+            logger.debug("Osquery request event heartbeat timeout for machine %s: %s", serial_number, timeout)
+            return timeout
 
 
 register_event_type(OsqueryRequestEvent)
