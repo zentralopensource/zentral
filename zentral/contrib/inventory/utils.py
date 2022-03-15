@@ -32,12 +32,19 @@ from .models import EnrollmentSecret, MachineSnapshotCommit, MetaMachine
 logger = logging.getLogger("zentral.contrib.inventory.utils")
 
 
+class MSQueryValueError(Exception):
+    def __init__(self, query_kwarg):
+        super().__init__(f"Invalid MSQuery value for '{query_kwarg}'")
+        self.query_kwarg = query_kwarg
+
+
 class BaseMSFilter:
     none_value = "\u2400"
     unknown_value = "UNKNOWN"
     title = "Untitled"
     optional = False
     free_input = False
+    redirect_if_single_result = False
     query_kwarg = None
     many = False
     non_grouping_expression = None
@@ -657,6 +664,7 @@ class PlaformFilter(BaseMSFilter):
 class SerialNumberFilter(BaseMSFilter):
     query_kwarg = "sn"
     free_input = True
+    redirect_if_single_result = True
     non_grouping_expression = "ms.serial_number"
 
     def __init__(self, *args, **kwargs):
@@ -680,6 +688,7 @@ class SerialNumberFilter(BaseMSFilter):
 class ComputerNameFilter(BaseMSFilter):
     query_kwarg = "cn"
     free_input = True
+    redirect_if_single_result = True
     non_grouping_expression = "si.computer_name"
 
     def __init__(self, *args, **kwargs):
@@ -712,6 +721,7 @@ class ComputerNameFilter(BaseMSFilter):
 class PrincipalUserNameFilter(BaseMSFilter):
     query_kwarg = "pu"
     free_input = True
+    redirect_if_single_result = True
     non_grouping_expression = "pu.principal_name, pu.display_name"
 
     def __init__(self, *args, **kwargs):
@@ -743,13 +753,17 @@ class PrincipalUserNameFilter(BaseMSFilter):
 
 class LastSeenFilter(BaseMSFilter):
     query_kwarg = "ls"
+    free_input = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        try:
-            self.days = max(1, int(self.value.replace("d", "")))
-        except Exception:
-            self.days = None
+        self.min_last_seen = None
+        if self.value:
+            try:
+                days = max(1, int(self.value.replace("d", "")))
+                self.min_last_seen = datetime.utcnow() - timedelta(days=days)
+            except Exception:
+                raise MSQueryValueError(self.get_query_kwarg())
         # If DateTimeFilter is already present in the query, and no filtering value is set,
         # then we can optimize the query and use last_seen from inventory_currentmachinesnapshot
         self.extra_join = True
@@ -773,15 +787,15 @@ class LastSeenFilter(BaseMSFilter):
                    "on (ms.id = lsmsc.machine_snapshot_id)")
 
     def wheres(self):
-        if self.days:
+        if self.min_last_seen:
             if self.extra_join:
                 yield "lsmsc.last_seen > %s"
             else:
                 yield "cms.last_seen > %s"
 
     def where_args(self):
-        if self.days:
-            yield datetime.utcnow() - timedelta(days=self.days)
+        if self.min_last_seen:
+            yield self.min_last_seen
 
     def process_fetched_record(self, record, for_filtering):
         val = record.pop("last_seen", None)
@@ -1046,7 +1060,11 @@ class MSQuery:
 
     def add_filter(self, filter_class, **filter_kwargs):
         """add a filter"""
-        self.filters.append(filter_class(self, len(self.filters), self.query_dict, **filter_kwargs))
+        try:
+            self.filters.append(filter_class(self, len(self.filters), self.query_dict, **filter_kwargs))
+        except MSQueryValueError as e:
+            self.query_dict.pop(e.query_kwarg, None)
+            self._redirect = True
 
     def force_filter(self, filter_class, **filter_kwargs):
         """replace an existing filter from the same class or add it"""
@@ -1110,7 +1128,7 @@ class MSQuery:
             return self.get_url(page=1)
         elif (
             self.count() == 1 and
-            any(isinstance(f.value, str) and f.value > "" for f in self.filters if f.free_input)
+            any(isinstance(f.value, str) and f.value > "" for f in self.filters if f.redirect_if_single_result)
         ):
             # redirect to machine
             for serial_number, machine_snapshots in self.fetch():

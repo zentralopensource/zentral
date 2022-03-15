@@ -66,12 +66,17 @@ def _get_source_machine_subview(source, serial_number, user):
 
 class MachineListView(PermissionRequiredMixin, TemplateView):
     template_name = "inventory/machine_list.html"
+    last_seen_session_key = "inventory_last_last_seen"
+    last_seen_default = "7d"
 
     def get_object(self, **kwargs):
         return None
 
     def get_msquery(self, request):
-        return MSQuery(request.GET)
+        request_dict = request.GET.copy()
+        if "ls" not in request_dict:
+            request_dict["ls"] = request.session.setdefault(self.last_seen_session_key, self.last_seen_default)
+        return MSQuery(request_dict)
 
     def dispatch(self, request, *args, **kwargs):
         try:
@@ -83,6 +88,11 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
             redirect_url = self.msquery.redirect_url()
             if redirect_url:
                 return HttpResponseRedirect(redirect_url)
+        ls = self.msquery.query_dict.get("ls")
+        if ls:
+            request.session[self.last_seen_session_key] = ls
+        elif self.last_seen_session_key in request.session:
+            del request.session[self.last_seen_session_key]
         return super().dispatch(request, *args, **kwargs)
 
     def get_list_title(self):
@@ -121,7 +131,7 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
             qd = self.request.GET.copy()
             qd['page'] = self.msquery.page + 1
             ctx['next_url'] = "?{}".format(qd.urlencode())
-        # search form
+        # search form hidden values
         search_form_qd = self.request.GET.copy()
         for key in [f.get_query_kwarg() for f in self.msquery.filters if f.free_input]:
             search_form_qd.pop(key, None)
