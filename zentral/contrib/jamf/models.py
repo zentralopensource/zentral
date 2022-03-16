@@ -31,6 +31,7 @@ class JamfInstance(models.Model):
     password = models.TextField(help_text="API user password", editable=False)
     secret = models.CharField(max_length=256, editable=False, unique=True,
                               default=make_secret)
+    bearer_token_authentication = models.BooleanField(default=False)
     inventory_apps_shard = models.IntegerField(
         validators=[MinValueValidator(0),
                     MaxValueValidator(100)],
@@ -85,6 +86,7 @@ class JamfInstance(models.Model):
             "path": self.path,
             "user": self.user,
             "password": self.get_password() if decrypt_password else self.password,
+            "bearer_token_authentication": self.bearer_token_authentication,
             "secret": self.secret,
             "inventory_apps_shard": self.inventory_apps_shard,
             "tag_configs": [tm.serialize() for tm in self.tagconfig_set.select_related("taxonomy").all()],

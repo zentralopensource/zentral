@@ -1,9 +1,10 @@
 import logging
-from dateutil import parser
+from datetime import datetime, timedelta
 import re
 from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape as xml_escape
+from dateutil import parser
 from django.urls import reverse
 from django.utils.functional import cached_property
 import requests
@@ -51,6 +52,8 @@ class APIClientError(Exception):
 class APIClient(object):
     default_timeout = 15  # 15 seconds
     max_retries = 3  # max 3 attempts
+    # bearer token auth
+    token_min_validity_seconds = 300  # 5 min
 
     def __init__(self, host, port, path, user, password, secret, business_unit=None, **kwargs):
         self.host, self.path, self.port, self.secret, self.business_unit = host, path, port, secret, business_unit
@@ -58,9 +61,15 @@ class APIClient(object):
         self.api_base_url = "{}{}".format(self.base_url, path)
         # requests session setup
         self.session = requests.Session()
-        self.session.headers.update({'user-agent': 'zentral/0.0.1',
+        self.session.headers.update({'user-agent': 'zentral/0.0.2',
                                      'accept': 'application/json'})
-        self.session.auth = (user, password)
+        token_authentication = kwargs.get("bearer_token_authentication", False)
+        if not token_authentication:
+            self.token_auth = None
+            self.session.auth = (user, password)
+        else:
+            self.token_auth = (user, password)
+            self.token = None
         self.session.mount(
             self.api_base_url,
             CustomHTTPAdapter(self.default_timeout, self.max_retries)
@@ -76,6 +85,28 @@ class APIClient(object):
             tag_config = tag_config.copy()
             tag_config["regex"] = re.compile(tag_config.pop("regex"))
             self.tag_configs.append(tag_config)
+
+    def update_token_if_necessary(self, force=False):
+        if not self.token_auth:
+            logger.debug("Use basic auth for %s", self.base_url)
+            return
+        if (
+            force or
+            self.token is None
+            or self.token["expires"] + timedelta(seconds=self.token_min_validity_seconds) < datetime.utcnow()
+        ):
+            logger.info("Fetch bearer token for %s", self.base_url)
+            self.session.headers.pop("Authorization", None)
+            resp = self.session.post(f"{self.base_url}/api/v1/auth/token", auth=self.token_auth)
+            if resp.status_code != 200:
+                raise APIClientError(f"Could not get bearer token. Status code: {resp.status_code}")
+            self.token = resp.json()
+            self.token["expires"] = parser.parse(self.token.pop("expires"), ignoretz=True)
+            logger.info("Got bearer token for %s. Expires: %s", self.base_url, self.token["expires"])
+            self.session.headers["Authorization"] = f'Bearer {self.token["token"]}'
+        else:
+            logger.debug("Re-use bearer token for %s. Expires: %s", self.base_url, self.token["expires"])
+        return self.token["token"]
 
     def get_source_d(self):
         return {"module": "zentral.contrib.jamf",
@@ -94,7 +125,8 @@ class APIClient(object):
                        if s)
 
     def _make_get_query(self, path, missing_ok=False):
-        url = "%s%s" % (self.api_base_url, path)
+        self.update_token_if_necessary()
+        url = f"{self.api_base_url}{path}"
         try:
             r = self.session.get(url)
         except requests.exceptions.RequestException as e:
@@ -457,6 +489,7 @@ class APIClient(object):
         return self._make_get_query('/computerextensionattributes/name/{}'.format(name), missing_ok=True)
 
     def get_or_create_text_computer_extension_attribute(self, name, inventory_display):
+        self.update_token_if_necessary()
         assert(inventory_display in [s for s, _ in INVENTORY_DISPLAY_CHOICES])
         cea_d = self.get_compute_extension_attribute_with_name(name)
         if cea_d:
@@ -482,6 +515,7 @@ class APIClient(object):
             raise APIClientError("Could not get created text computer extension attribute ID")
 
     def update_text_computer_extension_attribute(self, jamf_id, name, inventory_display, value):
+        self.update_token_if_necessary()
         url = "{}/computers/id/{}".format(self.api_base_url, jamf_id)
         headers = {'content-type': 'text/xml'}
         cea_id = self.get_or_create_text_computer_extension_attribute(name, inventory_display)
@@ -502,6 +536,7 @@ class APIClient(object):
         return self._make_get_query('/computergroups/name/{}'.format(group_name), missing_ok=True)
 
     def add_computer_to_group(self, jamf_id, group_name):
+        self.update_token_if_necessary()
         jamf_id = int(jamf_id)
         group_d = self.get_computer_group_with_name(group_name)
         if group_d:
@@ -539,6 +574,7 @@ class APIClient(object):
             raise APIClientError(r.text)
 
     def remove_computer_from_group(self, jamf_id, group_name):
+        self.update_token_if_necessary()
         group_d = self.get_computer_group_with_name(group_name)
         if not group_d:
             logger.debug("Group {} does not exist".format(group_name))
@@ -590,6 +626,7 @@ class APIClient(object):
                 yield webhook
 
     def setup(self):
+        self.update_token_if_necessary()
         existing_webhooks = {}
         for webhook in self._iter_instance_webhooks():
             existing_webhooks[webhook['event']] = webhook['id']
@@ -603,5 +640,6 @@ class APIClient(object):
         return "Webhooks setup OK. {} machine(s).".format(len(self._computers()))
 
     def cleanup(self):
+        self.update_token_if_necessary()
         for webhook in self._iter_instance_webhooks():
             self.session.delete("{}/webhooks/id/{}".format(self.api_base_url, webhook["id"]))

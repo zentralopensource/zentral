@@ -13,6 +13,7 @@ class JamfInstanceForm(forms.ModelForm):
             "business_unit",
             "host", "port", "path",
             "user",
+            "bearer_token_authentication",
             "inventory_apps_shard",
             "checkin_heartbeat_timeout",
             "inventory_completed_heartbeat_timeout",
@@ -24,7 +25,10 @@ class JamfInstanceForm(forms.ModelForm):
             "business_unit",
             "host", "port", "path",
             "user", "password",
+            "bearer_token_authentication",
             "inventory_apps_shard",
+            "checkin_heartbeat_timeout",
+            "inventory_completed_heartbeat_timeout",
         ])
         self.fields["business_unit"].queryset = (
             BusinessUnit.objects.filter(source__module="zentral.contrib.inventory")
