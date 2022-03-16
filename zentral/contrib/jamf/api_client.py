@@ -7,6 +7,7 @@ from xml.sax.saxutils import escape as xml_escape
 from django.urls import reverse
 from django.utils.functional import cached_property
 import requests
+from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util import Retry
 from zentral.conf import settings
 from zentral.contrib.inventory.conf import macos_version_from_build
@@ -28,12 +29,29 @@ INVENTORY_DISPLAY_CHOICES = (
 )
 
 
+class CustomHTTPAdapter(HTTPAdapter):
+    def __init__(self, default_timeout, max_retries):
+        self.default_timeout = default_timeout
+        super().__init__(
+            max_retries=Retry(total=max_retries, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+        )
+
+    def send(self, *args, **kwargs):
+        timeout = kwargs.get("timeout")
+        if timeout is None:
+            kwargs["timeout"] = self.default_timeout
+        return super().send(*args, **kwargs)
+
+
 class APIClientError(Exception):
     def __init__(self, message):
         self.message = message
 
 
 class APIClient(object):
+    default_timeout = 15  # 15 seconds
+    max_retries = 3  # max 3 attempts
+
     def __init__(self, host, port, path, user, password, secret, business_unit=None, **kwargs):
         self.host, self.path, self.port, self.secret, self.business_unit = host, path, port, secret, business_unit
         self.base_url = "https://{}:{}".format(host, port)
@@ -43,9 +61,10 @@ class APIClient(object):
         self.session.headers.update({'user-agent': 'zentral/0.0.1',
                                      'accept': 'application/json'})
         self.session.auth = (user, password)
-        max_retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
-        self.session.mount(self.api_base_url,
-                           requests.adapters.HTTPAdapter(max_retries=max_retries))
+        self.session.mount(
+            self.api_base_url,
+            CustomHTTPAdapter(self.default_timeout, self.max_retries)
+        )
         self.mobile_device_groups = {}
         self.reverse_computer_groups = {}
         self.group_tag_regex = None
