@@ -112,10 +112,37 @@ class EventStore(BaseEventStore):
                                            "in aws_auth config")
 
         self._es = Elasticsearch(**kwargs)
+        self.test = test
+        self.version = None
         self.use_mapping_types = None
+        self.index_settings = {
+            "index.mapping.total_fields.limit": config_d.get("index.mapping.total_fields.limit", 2000),
+            "number_of_shards": config_d.get("number_of_shards", 1),
+            "number_of_replicas": config_d.get("number_of_replicas", 0)
+        }
 
-        self.index = config_d['index']
+        # indices
+        self.index = config_d.get('index')
+        self.default_index = self.index
+        indices = config_d.get('indices')
+        if indices:
+            if self.index:
+                raise ImproperlyConfigured("index and indices cannot be both set")
+            self.event_type_pattern_indices = {}
+            for index, patterns in indices.items():
+                for pattern in patterns:
+                    if pattern in self.event_type_pattern_indices:
+                        raise ImproperlyConfigured("pattern %s set for multiple indices", pattern)
+                    self.event_type_pattern_indices[pattern] = index
+                    if pattern == "*":
+                        self.default_index = index
+            if not self.default_index:
+                raise ImproperlyConfigured('index mapping missing for default pattern "*"')
         self.read_index = config_d.get('read_index', self.index)
+        if not self.read_index:
+            raise ImproperlyConfigured("no read index")
+
+        # kibana
         self.kibana_discover_url = config_d.get('kibana_discover_url')
         if not self.kibana_discover_url:
             # TODO deprecated. Remove.
@@ -127,13 +154,6 @@ class EventStore(BaseEventStore):
             self.object_events_url = True
             self.probe_events_url = True
         self.kibana_index_pattern_uuid = config_d.get('kibana_index_pattern_uuid')
-        self.index_settings = {
-            "index.mapping.total_fields.limit": config_d.get("index.mapping.total_fields.limit", 2000),
-            "number_of_shards": config_d.get("number_of_shards", 1),
-            "number_of_replicas": config_d.get("number_of_replicas", 0)
-        }
-        self.test = test
-        self.version = None
 
     def get_index_conf(self):
         if self.version:
@@ -150,10 +170,10 @@ class EventStore(BaseEventStore):
             try:
                 info = self._es.info()
                 self.version = [int(i) for i in info["version"]["number"].split(".")]
-                if not self._es.indices.exists(self.index):
-                    self._es.indices.create(self.index, body=self.get_index_conf())
+                if not self._es.indices.exists(self.default_index):
+                    self._es.indices.create(self.default_index, body=self.get_index_conf())
                     self.use_mapping_types = False
-                    logger.info("Index %s created", self.index)
+                    logger.info("Index %s created", self.default_index)
             except ConnectionError:
                 s = (i + 1) * random.uniform(0.9, 1.1)
                 logger.warning('Could not connect to server %d/%d. Sleep %ss',
@@ -164,14 +184,14 @@ class EventStore(BaseEventStore):
                 error = exception.error.lower()
                 if "already" in error and "exist" in error:
                     # race
-                    logger.info('Index %s exists', self.index)
+                    logger.info('Index %s exists', self.default_index)
                 else:
                     raise
             # wait for index recovery
             waiting_for_recovery = False
             while True:
-                recovery = self._es.indices.recovery(self.index, params={"active_only": "true"})
-                shards = recovery.get(self.index, {}).get("shards", [])
+                recovery = self._es.indices.recovery(self.default_index, params={"active_only": "true"})
+                shards = recovery.get(self.default_index, {}).get("shards", [])
                 if any(c["stage"] != "DONE" for c in shards):
                     waiting_for_recovery = True
                     s = 1000 / random.randint(1000, 3000)
@@ -191,7 +211,7 @@ class EventStore(BaseEventStore):
             if self.version >= [7]:
                 self.use_mapping_types = False
             else:
-                mappings = set(list(self._es.indices.get_mapping(self.index).values())[0]['mappings'])
+                mappings = set(list(self._es.indices.get_mapping(self.default_index).values())[0]['mappings'])
                 self.use_mapping_types = self.LEGACY_DOC_TYPE not in mappings
 
     def _get_type_field(self):
@@ -205,6 +225,21 @@ class EventStore(BaseEventStore):
             return {"term": {"type": event_type}}
         else:
             return {"type": {"value": event_type}}
+
+    def _get_event_type_index(self, event_type):
+        if self.index:
+            return self.index
+        else:
+            for pattern, index in self.event_type_pattern_indices.items():
+                if pattern == "*":
+                    return index
+                elif pattern.endswith("*"):
+                    if event_type.startswith(pattern[:-1]):
+                        return index
+                elif event_type == pattern:
+                    return index
+        # should never happen, since we make sure that either index is set, or the default pattern in present
+        raise RuntimeError(f"No index found for event type {event_type}")
 
     def _serialize_event(self, event):
         if not isinstance(event, dict):
@@ -220,7 +255,7 @@ class EventStore(BaseEventStore):
             es_doc_type = event_type  # document type in ES
         namespace = es_event_d.get('namespace', event_type)
         es_event_d[namespace] = event_d
-        return es_doc_type, es_event_d
+        return self._get_event_type_index(event_type), es_doc_type, es_event_d
 
     def _deserialize_event(self, es_doc_type, es_event_d):
         if es_doc_type == "_doc" or es_doc_type == self.LEGACY_DOC_TYPE:
@@ -235,13 +270,13 @@ class EventStore(BaseEventStore):
 
     def store(self, event):
         self.wait_and_configure_if_necessary()
-        doc_type, body = self._serialize_event(event)
+        index, doc_type, body = self._serialize_event(event)
         kwargs = {"body": body}
         if self.version < [7]:
             kwargs["doc_type"] = doc_type
-        self._es.index(index=self.index, **kwargs)
+        self._es.index(index=index, **kwargs)
         if self.test:
-            self._es.indices.refresh(self.index)
+            self._es.indices.refresh(index)
 
     def bulk_store(self, events):
         self.wait_and_configure_if_necessary()
@@ -254,8 +289,8 @@ class EventStore(BaseEventStore):
 
         def iter_actions():
             for event in events:
-                _, doc = self._serialize_event(event)
-                doc.update({"_index": self.index, "_id": f'{doc["id"]}{ID_SEP}{doc["index"]}'})
+                index, _, doc = self._serialize_event(event)
+                doc.update({"_index": index, "_id": f'{doc["id"]}{ID_SEP}{doc["index"]}'})
                 yield doc
 
         for ok, item in streaming_bulk(self._es, iter_actions(),
