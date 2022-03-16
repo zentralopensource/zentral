@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load base_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -11,9 +11,15 @@
 <h2>{{ title }}</h2>
 
 <table class="table">
+  <thead>
+    <tr>
+      <th style="width:30vw">Attribute</th>
+      <th>Value</th>
+    </tr>
+  </thead>
   <tbody>
     <tr>
-      <th>Business unit</th>
+      <td>Business unit</td>
       <td>
         {% if object.business_unit %}
         <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.id %}">
@@ -25,16 +31,24 @@
       </td>
     </tr>
     <tr>
-      <th>API URL</th>
+      <td>API URL</td>
       <td>{{ object.api_base_url }}</td>
     </tr>
     <tr>
-      <th>API user</th>
+      <td>API user</td>
       <td>{{ object.user }}</td>
     </tr>
     <tr>
-      <th>Inventory apps shard</th>
+      <td>Inventory apps shard</td>
       <td>{{ object.inventory_apps_shard }}%</td>
+    </tr>
+    <tr>
+      <td>Check-in heartbeat timeout</td>
+      <td>{{ object.checkin_heartbeat_timeout|duration_repr }}</td>
+    </tr>
+    <tr>
+      <td>Inventory completed heartbeat timeout</td>
+      <td>{{ object.inventory_completed_heartbeat_timeout|duration_repr }}</td>
     </tr>
   </tbody>
 </table>

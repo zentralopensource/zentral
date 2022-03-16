@@ -11,6 +11,7 @@ from django.utils.safestring import mark_safe
 from pygments import lexers, highlight
 from pygments.formatters import HtmlFormatter
 from django.conf import settings
+from zentral.utils.time import duration_repr as _duration_repr
 
 register = template.Library()
 
@@ -176,3 +177,11 @@ def truncatechars_middle(value, arg):
         return value
     else:
         return '{}[…]{}'.format(value[:ln//2], value[-((ln+1)//2):])
+
+
+@register.filter()
+def duration_repr(val):
+    try:
+        return _duration_repr(val)
+    except Exception:
+        return "-"

@@ -36,6 +36,18 @@ class JamfInstance(models.Model):
                     MaxValueValidator(100)],
         default=100
     )
+    checkin_heartbeat_timeout = models.IntegerField(
+        validators=[MinValueValidator(600),
+                    MaxValueValidator(172800)],
+        default=1200,
+        help_text="in seconds, 600 (10 min) → 172800 (2 days)"
+    )
+    inventory_completed_heartbeat_timeout = models.IntegerField(
+        validators=[MinValueValidator(600),
+                    MaxValueValidator(604800)],
+        default=172800,
+        help_text="in seconds, 600 (10 min) → 604800 (7 days)"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

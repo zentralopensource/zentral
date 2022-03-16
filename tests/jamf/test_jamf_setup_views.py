@@ -103,7 +103,9 @@ class JamfSetupViewsTestCase(TestCase):
                                      "path": "/JSSResource",
                                      "user": "godzilla",
                                      "password": "pwd",
-                                     "inventory_apps_shard": 86},
+                                     "inventory_apps_shard": 86,
+                                     "checkin_heartbeat_timeout": 601,
+                                     "inventory_completed_heartbeat_timeout": 5432},
                                     follow=True)
         self.assertEqual(response.template_name, ["jamf/jamfinstance_detail.html"])
         self.assertContains(response, "0 Tag configs")
@@ -198,7 +200,9 @@ class JamfSetupViewsTestCase(TestCase):
                                      "path": "/JSSResource",
                                      "user": "godzilla",
                                      "password": "pwd1234",
-                                     "inventory_apps_shard": 12},
+                                     "inventory_apps_shard": 12,
+                                     "checkin_heartbeat_timeout": 601,
+                                     "inventory_completed_heartbeat_timeout": 5432},
                                     follow=True)
         self.assertTemplateUsed(response, "jamf/jamfinstance_detail.html")
         self.assertContains(response, "0 Tag configs")
@@ -207,6 +211,8 @@ class JamfSetupViewsTestCase(TestCase):
         self.assertEqual(jamf_instance, jamf_instance2)
         self.assertEqual(jamf_instance2.version, 1)
         self.assertEqual(jamf_instance2.inventory_apps_shard, 12)
+        self.assertEqual(jamf_instance2.checkin_heartbeat_timeout, 601)
+        self.assertEqual(jamf_instance2.inventory_completed_heartbeat_timeout, 5432)
         self.assertEqual(jamf_instance2.get_password(), "pwd1234")
 
     # create tag config

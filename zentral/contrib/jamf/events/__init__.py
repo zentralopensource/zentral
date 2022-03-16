@@ -2,6 +2,8 @@ import logging
 from zentral.core.events import event_cls_from_type, register_event_type
 from zentral.core.events.base import BaseEvent
 from zentral.core.queues import queues
+from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.contrib.jamf.models import JamfInstance
 
 logger = logging.getLogger('zentral.contrib.jamf.events')
 
@@ -10,8 +12,10 @@ ALL_EVENTS_SEARCH_DICT = {"tag": "jamf"}
 
 
 JAMF_EVENTS = {"ComputerAdded": ("computer_added", False, None),
-               "ComputerCheckIn": ("computer_checkin", True, 2 * 10 * 60),
-               "ComputerInventoryCompleted": ("computer_inventory_completed", True, 2 * 24 * 3600),
+               "ComputerCheckIn": ("computer_checkin", True,
+                                   "checkin_heartbeat_timeout"),
+               "ComputerInventoryCompleted": ("computer_inventory_completed", True,
+                                              "inventory_completed_heartbeat_timeout"),
                "ComputerPatchPolicyCompleted": ("computer_patch_policy_completed", True, None),
                "ComputerPolicyFinished": ("computer_policy_finished", True, None),
                "ComputerPushCapabilityChanged": ("computer_push_capability_changed", False, None),
@@ -31,16 +35,34 @@ JAMF_EVENTS = {"ComputerAdded": ("computer_added", False, None),
                "SmartGroupMobileDeviceMembershipChange": ("smart_group_mobile_device_membership_change", False, None)}
 
 
-for jamf_event, (event_subtype, is_heartbeat, heartbeat_timeout) in JAMF_EVENTS.items():
+def make_get_machine_heartbeat_timeout(instance_attr):
+    def get_machine_heartbeat_timeout(cls, serial_number):
+        ms = MachineSnapshot.objects.select_related("source").filter(serial_number=serial_number,
+                                                                     source__name="jamf").order_by("-id").first()
+        if not ms:
+            logger.warning("No Jamf machine snapshot found for serial number %s", serial_number)
+            return
+        try:
+            instance = JamfInstance.objects.get(**ms.source.config)
+        except JamfInstance.MultipleObjectsReturned:
+            logger.warning("Multiple JamfInstances found for serial number %s", serial_number)
+        except (JamfInstance.DoesNotExist, MachineSnapshot.DoesNotExist):
+            logger.warning("No JamfInstance found for serial number %s", serial_number)
+        else:
+            return getattr(instance, instance_attr, None)
+    return classmethod(get_machine_heartbeat_timeout)
+
+
+for jamf_event, (event_subtype, is_heartbeat, timeout_attr) in JAMF_EVENTS.items():
     event_type = 'jamf_{}'.format(event_subtype)
     event_class_name = "".join(s.title() for s in event_type.split('_'))
     tags = ['jamf', 'jamf_webhook']
     if is_heartbeat:
         tags.append('heartbeat')
-    event_class = type(event_class_name, (BaseEvent,),
-                       {'event_type': event_type,
-                        'tags': tags,
-                        'heartbeat_timeout': heartbeat_timeout})
+    event_class_attrs = {'event_type': event_type, 'tags': tags}
+    if timeout_attr:
+        event_class_attrs["get_machine_heartbeat_timeout"] = make_get_machine_heartbeat_timeout(timeout_attr)
+    event_class = type(event_class_name, (BaseEvent,), event_class_attrs)
     register_event_type(event_class)
 
 

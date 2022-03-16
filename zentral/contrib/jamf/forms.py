@@ -14,6 +14,8 @@ class JamfInstanceForm(forms.ModelForm):
             "host", "port", "path",
             "user",
             "inventory_apps_shard",
+            "checkin_heartbeat_timeout",
+            "inventory_completed_heartbeat_timeout",
         )
 
     def __init__(self, *args, **kwargs):
