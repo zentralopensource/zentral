@@ -15,6 +15,7 @@ class JamfInstanceForm(forms.ModelForm):
             "user",
             "bearer_token_authentication",
             "inventory_apps_shard",
+            "inventory_extension_attributes",
             "checkin_heartbeat_timeout",
             "inventory_completed_heartbeat_timeout",
         )
@@ -27,6 +28,7 @@ class JamfInstanceForm(forms.ModelForm):
             "user", "password",
             "bearer_token_authentication",
             "inventory_apps_shard",
+            "inventory_extension_attributes",
             "checkin_heartbeat_timeout",
             "inventory_completed_heartbeat_timeout",
         ])

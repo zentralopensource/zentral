@@ -77,8 +77,12 @@ class APIClient(object):
         self.mobile_device_groups = {}
         self.reverse_computer_groups = {}
         self.group_tag_regex = None
-        # inventory apps shard
+        # inventory options
         self.inventory_apps_shard = kwargs.get("inventory_apps_shard", 100)
+        self.inventory_extension_attribute_set = frozenset(
+            ea_name.lower()
+            for ea_name in kwargs.get("inventory_extension_attributes", [])
+        )
         # tags from groups
         self.tag_configs = []
         for tag_config in kwargs.get("tag_configs", []):
@@ -406,6 +410,37 @@ class APIClient(object):
         else:
             logger.debug("%s computer %s: skipped osx app instances", self.api_base_url, jamf_id)
         ct['osx_app_instances'] = osx_app_instances
+
+        # extension attributes → extra facts
+        if self.inventory_extension_attribute_set:
+            extension_attributes = computer.get("extension_attributes")
+            if extension_attributes:
+                extra_facts = {}
+                for extention_attribute in extension_attributes:
+                    extention_attribute_name = extention_attribute.get("name")
+                    if not extention_attribute_name:
+                        logger.warning(
+                            "%s computer %s: extension attribute without name",
+                            self.api_base_url, jamf_id
+                        )
+                        continue
+                    if extention_attribute_name.lower() not in self.inventory_extension_attribute_set:
+                        continue
+                    value = extention_attribute.get("value")
+                    if isinstance(value, list):
+                        ok = len(value) < 100 and all(not isinstance(v, str) or len(v) < 1000 for v in value)
+                    else:
+                        ok = not isinstance(value, str) or len(value) < 1000
+                    if not ok:
+                        logger.error(
+                            "%s computer %s ea '%s': invalid value",
+                            self.api_base_url, jamf_id, extention_attribute_name
+                        )
+                        continue
+                    extra_facts[extention_attribute_name] = value
+                if extra_facts:
+                    ct['extra_facts'] = extra_facts
+
         return ct
 
     def get_mobile_device_machine_d(self, jamf_id):

@@ -47,6 +47,10 @@
       <td>{{ object.inventory_apps_shard }}%</td>
     </tr>
     <tr>
+      <td>Inventory extension attribute{{ object.inventory_extension_attributes|length|pluralize }}</td>
+      <td>{{ object.inventory_extension_attributes|join:", "|default:"-" }}</td>
+    </tr>
+    <tr>
       <td>Check-in heartbeat timeout</td>
       <td>{{ object.checkin_heartbeat_timeout|duration_repr }}</td>
     </tr>

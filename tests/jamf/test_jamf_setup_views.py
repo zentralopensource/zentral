@@ -104,6 +104,7 @@ class JamfSetupViewsTestCase(TestCase):
                                      "user": "godzilla",
                                      "password": "pwd",
                                      "inventory_apps_shard": 86,
+                                     "inventory_extension_attributes": "un, deux trois",
                                      "checkin_heartbeat_timeout": 601,
                                      "inventory_completed_heartbeat_timeout": 5432},
                                     follow=True)
@@ -112,6 +113,7 @@ class JamfSetupViewsTestCase(TestCase):
         jamf_instance = response.context["object"]
         self.assertEqual(jamf_instance.version, 0)
         self.assertEqual(jamf_instance.get_password(), "pwd")
+        self.assertEqual(sorted(jamf_instance.inventory_extension_attributes), ["deux trois", "un"])
         self.assertContains(response, "https://yo.example.com:8443/JSSResource")
         self.assertContains(response, "godzilla")
         self.assertNotContains(response, "pwd")

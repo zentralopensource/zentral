@@ -1,6 +1,7 @@
 import logging
 import os.path
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.contrib.postgres.fields import ArrayField
+from django.core.validators import MinLengthValidator, MinValueValidator, MaxValueValidator
 from django.db import models
 from django.db.models import F
 from django.urls import reverse
@@ -36,6 +37,12 @@ class JamfInstance(models.Model):
         validators=[MinValueValidator(0),
                     MaxValueValidator(100)],
         default=100
+    )
+    inventory_extension_attributes = ArrayField(
+        models.CharField(max_length=256, validators=[MinLengthValidator(1)]),
+        blank=True,
+        default=list,
+        help_text="Comma separated list of the extension attributes to collect as inventory extra facts"
     )
     checkin_heartbeat_timeout = models.IntegerField(
         validators=[MinValueValidator(600),
@@ -89,6 +96,7 @@ class JamfInstance(models.Model):
             "bearer_token_authentication": self.bearer_token_authentication,
             "secret": self.secret,
             "inventory_apps_shard": self.inventory_apps_shard,
+            "inventory_extension_attributes": self.inventory_extension_attributes,
             "tag_configs": [tm.serialize() for tm in self.tagconfig_set.select_related("taxonomy").all()],
         }
         if self.business_unit:
