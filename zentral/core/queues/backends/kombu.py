@@ -188,6 +188,7 @@ class ProcessWorker(ConsumerMixin, BaseWorker):
 
 class StoreWorker(ConsumerMixin, BaseWorker):
     counters = (
+        ("skipped_events", "event_type"),
         ("stored_events", "event_type"),
     )
 
@@ -213,15 +214,15 @@ class StoreWorker(ConsumerMixin, BaseWorker):
     def do_store_event(self, body, message):
         self.log_debug("store event")
         event_type = body['_zentral']['type']
-        if not self.event_store.is_event_type_included(event_type):
-            self.log_debug("skip %s event", event_type)
+        if not self.event_store.is_serialized_event_included(body):
+            self.inc_counter("skipped_events", event_type)
             message.ack()
             return
         try:
             self.event_store.store(body)
         except Exception:
             logger.exception("Could add event to store %s", self.event_store.name)
-            save_dead_letter(body, "event store {} error".format(self.event_store.name))
+            save_dead_letter(body, f"event store {self.event_store.name} error")
             message.reject()
         else:
             message.ack()

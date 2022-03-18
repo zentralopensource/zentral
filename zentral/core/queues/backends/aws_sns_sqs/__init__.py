@@ -193,7 +193,7 @@ class SimpleStoreWorker(WorkerMixin, Consumer):
 
     def skip_event(self, receipt_handle, event_d):
         event_type = event_d['_zentral']['type']
-        if not self.event_store.is_event_type_included(event_type):
+        if not self.event_store.is_serialized_event_included(event_d):
             self.inc_counter("skipped_events", event_type)
             return True
         else:
@@ -233,7 +233,7 @@ class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
 
     def skip_event(self, receipt_handle, event_d):
         event_type = event_d['_zentral']['type']
-        if not self.event_store.is_event_type_included(event_type):
+        if not self.event_store.is_serialized_event_included(event_d):
             self.inc_counter("skipped_events", event_type)
             return True
         else:
@@ -274,7 +274,7 @@ class BulkStoreWorker(WorkerMixin, BatchConsumer):
 
     def skip_event(self, receipt_handle, event_d):
         event_type = event_d['_zentral']['type']
-        if not self.event_store.is_event_type_included(event_type):
+        if not self.event_store.is_serialized_event_included(event_d):
             self.inc_counter("skipped_events", event_type)
             return True
         else:

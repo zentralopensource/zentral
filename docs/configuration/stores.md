@@ -39,17 +39,59 @@ The python module implementing the store, as a string. Currently available:
 
 A boolean indicating if the store is the main event store to be used to fetch events in the Zentral UI. Only one store can be set as the `frontend` store, and ATM, only the `datadog`, `elasticsearch` and `splunk` backends support fetching events for display in the UI.
 
-### `excluded_event_types`
+### `excluded_event_filters`
 
 **OPTIONAL**
 
-A list of event types that will not be stored. Empty by default (i.e. no filtering). Can be used to drop some of the events.
+A list of filters used to exclude events from the store. Each filter is a dictionary/object. Filters can have `tags`, `event_type` and `routing_key` attributes. Each filter attribute is a list of strings. For example:
+
+```json
+{
+  "excluded_event_filters": [
+    {"tags": ["munki", "santa"]},
+    {"event_type": ["osquery_result"], "routing_key": ["important"]},
+    {"event_type": ["zentral_login", "zentral_logout"]}
+  ]
+}
+```
+
+With these filters, the following events are excluded:
+
+* `munki` **or** `santa`tagged events
+* `osquery_result` events **with** the `important` `routing_key` value
+* `zentral_login` **or** `zentral_logout` events
+
+Boolean combinations: arrays/lists → `OR`, dictionaries/objects → `AND`.
+
+* Within `excluded_event_filters`, the different filters are combined using the `OR` operator.
+* Within each filter, the different attributes must all match (`AND`).
+* For each filter attribute, at least one value must match (`OR`).
+
+The `excluded_event_filters` **take precendence** over the `included_event_filters`. If an event is a match for the `excluded_event_filters`, the `included_event_filters` are not evaluated, and the event is excluded.
+
+If both `excluded_event_filters` and `included_event_filters` are not set, all events will be included in the store.
+
+### `included_event_filters`
+
+**OPTIONAL**
+
+A list of filters to included in the store. See `excluded_event_filters` for the filter syntax.
+
+The `included_event_filters` are applied **after** the `excluded_event_filters`. If an event is a match for the `excluded_event_filters`, the `included_event_filters` and not evaluated, and the event is excluded.
+
+If both `excluded_event_filters` and `included_event_filters` are not set, all events will be included in the store.
+
+### `excluded_event_types`
+
+**DEPRECATED**
+
+Use `excluded_event_filters` instead.
 
 ### `included_event_types`
 
-**OPTIONAL**
+**DEPRECATED**
 
-The list of events that will be stored. Empty by default (i.e. no filtering). The `excluded_event_types` has precedence other this list. Can be used in secondary event stores, to only forward a subset of the Zentral events to a different system.
+Use `included_event_filters` instead.
 
 ### `events_url_authorized_groups`
 
@@ -232,28 +274,30 @@ An integer between 1 and 20, 1 by default. The number of threads to use when pos
     "username": "Zentral",
     "password": "{{ env:SERVICE_NOW_API_PASSWORD }}",
     "verify_tls": true,
-    "included_event_types": [
-      "add_machine",
-      "add_machine_os_version",
-      "remove_machine_os_version",
-      "add_machine_system_info",
-      "remove_machine_system_info",
-      "add_machine_business_unit",
-      "remove_machine_business_unit",
-      "add_machine_group",
-      "remove_machine_group",
-      "add_machine_disk",
-      "remove_machine_disk",
-      "add_machine_network_interface",
-      "remove_machine_network_interface",
-      "add_machine_osx_app_instance",
-      "remove_machine_osx_app_instance",
-      "add_machine_deb_package",
-      "remove_machine_deb_package",
-      "add_machine_program_instance",
-      "remove_machine_program_instance",
-      "add_machine_principal_user",
-      "remove_machine_principal_user"
-    ]
+    "included_event_filters": [{
+      "event_type": [
+        "add_machine",
+        "add_machine_os_version",
+        "remove_machine_os_version",
+        "add_machine_system_info",
+        "remove_machine_system_info",
+        "add_machine_business_unit",
+        "remove_machine_business_unit",
+        "add_machine_group",
+        "remove_machine_group",
+        "add_machine_disk",
+        "remove_machine_disk",
+        "add_machine_network_interface",
+        "remove_machine_network_interface",
+        "add_machine_osx_app_instance",
+        "remove_machine_osx_app_instance",
+        "add_machine_deb_package",
+        "remove_machine_deb_package",
+        "add_machine_program_instance",
+        "remove_machine_program_instance",
+        "add_machine_principal_user",
+        "remove_machine_principal_user"
+      ]
+    }]
 }
 ```

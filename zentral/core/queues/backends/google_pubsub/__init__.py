@@ -131,7 +131,7 @@ class StoreWorker(Consumer):
         self.log_debug("store event")
         event_dict = json.loads(message.data)
         event_type = event_dict['_zentral']['type']
-        if not self.event_store.is_event_type_included(event_type):
+        if not self.event_store.is_serialized_event_included(event_dict):
             self.log_debug("skip %s event", event_type)
             message.ack()
             self.inc_counter("skipped_events", event_type)
@@ -279,7 +279,7 @@ class BulkStoreWorker(BaseWorker):
 
     def _skip_event(self, event_d):
         event_type = event_d['_zentral']['type']
-        if not self.event_store.is_event_type_included(event_type):
+        if not self.event_store.is_serialized_event_included(event_d):
             self.inc_counter("skipped_events", event_type)
             return True
         else:

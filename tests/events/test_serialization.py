@@ -11,7 +11,7 @@ class TestEvent3(BaseEvent):
 register_event_type(TestEvent3)
 
 
-def make_event(ip=None, ua=None, with_msn=True):
+def make_event(ip=None, ua=None, with_msn=True, routing_key=None):
     msn = request = None
     if with_msn:
         msn = "0123456789"
@@ -20,7 +20,8 @@ def make_event(ip=None, ua=None, with_msn=True):
     else:
         request = None
     return TestEvent3(EventMetadata(machine_serial_number=msn,
-                                    request=request),
+                                    request=request,
+                                    routing_key=routing_key),
                       {"godzilla": "yo"})
 
 
@@ -101,3 +102,10 @@ class EventSerializationTestCase(TestCase):
         metadata = d["_zentral"]
         self.assertNotIn("request", metadata)
         cache.delete(f"mm-si_{self.ms.serial_number}")
+
+    def test_event_routing_key(self):
+        event = make_event(routing_key="yolo123")
+        d = event.serialize(machine_metadata=False)
+        self.assertEqual(d["_zentral"]["routing_key"], "yolo123")
+        event2 = TestEvent3.deserialize(d)
+        self.assertEqual(event2.metadata.routing_key, "yolo123")

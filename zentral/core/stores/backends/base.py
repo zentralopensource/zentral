@@ -1,3 +1,7 @@
+import warnings
+from zentral.core.events.filter import EventFilterSet
+
+
 class BaseEventStore(object):
     max_batch_size = 1
     max_concurrency = 1
@@ -19,21 +23,32 @@ class BaseEventStore(object):
         self.configured = False
         self.batch_size = min(self.max_batch_size, max(config_d.get("batch_size") or 1, 1))
         self.concurrency = min(self.max_concurrency, max(config_d.get("concurrency") or 1, 1))
-        # excluded / included event types
-        for prefix in ("excluded", "included"):
-            attr = f"{prefix}_event_types"
-            val = config_d.get(attr)
-            if val:
-                val = set(val)
-            else:
-                val = None
-            setattr(self, attr, val)
+        self.event_filter_set = EventFilterSet.from_mapping(config_d)
+        # legacy included / excluded event types attrs ?
+        # TODO remove later
+        if not self.event_filter_set:
+            filter_set_m = {}
+            excluded_event_types = config_d.get("excluded_event_types")
+            if excluded_event_types:
+                warnings.warn(
+                    "excluded_event_types is deprecated and will be removed soon. "
+                    "Use excluded_event_filters instead.",
+                    DeprecationWarning, stacklevel=2,
+                )
+                filter_set_m["excluded_event_filters"] = [{"event_type": excluded_event_types}]
+            included_event_types = config_d.get("included_event_types")
+            if included_event_types:
+                warnings.warn(
+                    "included_event_types is deprecated and will be removed soon. "
+                    "Use included_event_filters instead.",
+                    DeprecationWarning, stacklevel=2,
+                )
+                filter_set_m["included_event_filters"] = [{"event_type": included_event_types}]
+            if filter_set_m:
+                self.event_filter_set = EventFilterSet.from_mapping(filter_set_m)
 
-    def is_event_type_included(self, event_type):
-        return (
-            (not self.excluded_event_types or event_type not in self.excluded_event_types)
-            and (not self.included_event_types or event_type in self.included_event_types)
-        )
+    def is_serialized_event_included(self, serialized_event):
+        return self.event_filter_set.match_serialized_event(serialized_event)
 
     def wait_and_configure(self):
         self.configured = True

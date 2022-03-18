@@ -117,8 +117,7 @@ class EventsView(EventsViewMixin, TemplateView):
         store_links = []
         store_redirect_url = self.get_store_redirect_url()
         for store in stores.iter_events_url_store_for_user(self.store_method_scope, self.request.user):
-            if not self.request_event_type or store.is_event_type_included(self.request_event_type):
-                store_links.append((store_redirect_url, store.name))
+            store_links.append((store_redirect_url, store.name))
         ctx["store_links"] = store_links
 
         return ctx
@@ -159,11 +158,8 @@ class EventsStoreRedirectView(EventsViewMixin, View):
             pass
         else:
             event_store_name = request.GET.get("es")
-            event_type = fetch_kwargs.get("event_type")
             for store in stores.iter_events_url_store_for_user(self.store_method_scope, self.request.user):
                 if not store.name == event_store_name:
-                    continue
-                if event_type and not store.is_event_type_included(event_type):
                     continue
                 store_method = getattr(store, f"get_{self.store_method_scope}_events_url")
                 url = store_method(**fetch_kwargs)

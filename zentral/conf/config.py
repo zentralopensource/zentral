@@ -1,4 +1,5 @@
 import base64
+from collections.abc import Mapping, Sequence
 import itertools
 import json
 import logging
@@ -210,7 +211,7 @@ class BaseConfig:
         return value
 
 
-class ConfigList(BaseConfig):
+class ConfigList(BaseConfig, Sequence):
     def __init__(self, config_l, path=None, resolver=None):
         super().__init__(path=path, resolver=resolver)
         self._collection = []
@@ -240,7 +241,7 @@ class ConfigList(BaseConfig):
         return s
 
 
-class ConfigDict(BaseConfig):
+class ConfigDict(BaseConfig, Mapping):
     def __init__(self, config_d, path=None, resolver=None):
         super().__init__(path=path, resolver=resolver)
         self._collection = {}

@@ -39,13 +39,24 @@ class SNSPublishThread(threading.Thread):
                         "StringValue": routing_key,
                     }
                 else:
-                    try:
+                    event_type = event_d['_zentral'].get('type')
+                    if isinstance(event_type, str):
                         message_attributes["zentral.type"] = {
                             "DataType": "String",
-                            "StringValue": event_d['_zentral']['type']
+                            "StringValue": event_type
                         }
-                    except KeyError:
-                        pass
+                    event_tags = event_d['_zentral'].get('tags')
+                    if isinstance(event_tags, list):
+                        message_attributes["zentral.tags"] = {
+                            "DataType": "String.Array",
+                            "StringValue": json.dumps(event_tags)
+                        }
+                    routing_key = event_d['_zentral'].get('routing_key')
+                    if isinstance(routing_key, str):
+                        message_attributes["zentral.routing_key"] = {
+                            "DataType": "String",
+                            "StringValue": routing_key
+                        }
                 try:
                     response = self.client.publish(
                         TopicArn=self.topic_arn,
