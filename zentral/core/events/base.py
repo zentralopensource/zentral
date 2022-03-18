@@ -253,6 +253,7 @@ class EventMetadata(object):
         self.probes = kwargs.pop('probes', [])
         self.incident_updates = kwargs.pop('incident_updates', [])
         self.tags = kwargs.pop('tags', [])
+        self.routing_key = kwargs.pop('routing_key', None)
         self.objects = kwargs.pop('objects', {})
 
     def set_event(self, event):
@@ -296,6 +297,8 @@ class EventMetadata(object):
              }
         if self.all_tags:
             d['tags'] = list(self.all_tags)
+        if self.routing_key:
+            d['routing_key'] = self.routing_key
         if self.observer:
             d['observer'] = self.observer.serialize()
         if self.request:
