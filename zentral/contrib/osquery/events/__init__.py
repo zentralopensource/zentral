@@ -87,7 +87,7 @@ class OsqueryResultEvent(OsqueryEvent):
     def get_linked_objects_keys(self):
         keys = {}
         try:
-            pack_pk, query_pk, _ = self.parse_result_name()
+            pack_pk, query_pk, _, _ = self.parse_result_name()
         except ValueError as e:
             logger.warning(str(e))
             return keys
@@ -245,17 +245,20 @@ def post_results(msn, user_agent, ip, results):
                                  request=request,
                                  created_at=event_time)
         event = OsqueryResultEvent(metadata, result)
+        try:
+            _, query_pk, query_version, event_routing_key = event.parse_result_name()
+        except ValueError:
+            logger.exception("Could not parse result name")
+            query_pk = query_version = event_routing_key = None
+        if event_routing_key:
+            event.metadata.routing_key = event_routing_key
         event.post()
         snapshot = event.payload.get("snapshot")
         if snapshot is None:
             # no snapshot, cannot be a compliance check
             continue
-        try:
-            _, query_pk, query_version = event.parse_result_name()
-        except ValueError as e:
-            logger.warning(str(e))
-            continue
-        cc_status_agg.add_result(query_pk, query_version, event_time, snapshot)
+        if query_pk is not None and query_version is not None:
+            cc_status_agg.add_result(query_pk, query_version, event_time, snapshot)
     cc_status_agg.commit_and_post_events()
 
 

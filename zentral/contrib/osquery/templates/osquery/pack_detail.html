@@ -39,6 +39,10 @@
         <td>Shard</td>
         <td>{% if object.shard %}{{ object.shard }}%{% else %}-{% endif %}</td>
       </tr>
+      <tr>
+        <td>Event routing key</td>
+        <td>{{ object.event_routing_key|default:"-" }}</td>
+      </tr>
       </tbody>
     </table>
 

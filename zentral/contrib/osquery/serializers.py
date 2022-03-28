@@ -111,13 +111,15 @@ class OsqueryPackSerializer(serializers.Serializer):
     version = serializers.RegexField(r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$", required=False)
     shard = serializers.IntegerField(min_value=1, max_value=100, required=False)
     queries = serializers.DictField(child=OsqueryQuerySerializer(), allow_empty=False)
+    event_routing_key = serializers.RegexField(r'^[-a-zA-Z0-9_]+\Z', required=False)
 
     def get_pack_defaults(self, slug):
         return {
             "name": self.data.get("name", slug),
             "description": self.data.get("description", ""),
             "discovery_queries": self.data.get("discovery", []),
-            "shard": self.data.get("shard", None)
+            "shard": self.data.get("shard", None),
+            "event_routing_key": self.data.get("event_routing_key", ""),
         }
 
     def iter_query_defaults(self, pack_slug):

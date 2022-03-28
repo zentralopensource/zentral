@@ -730,6 +730,7 @@ class APIViewsTestCase(TestCase):
             "discovery": [
               "select 1 from users where username='root'",
             ],
+            "event_routing_key": "123ABC",
             "queries": {
                 "Leverage-A_1": {
                     "query": "select * from launchd where path like '%UserEvent.System.plist';",
@@ -771,6 +772,7 @@ class APIViewsTestCase(TestCase):
              'result': 'created',
              'query_results': {'created': 3, 'deleted': 0, 'present': 0, 'updated': 0}}
         )
+        self.assertEqual(p.event_routing_key, "123ABC")
         for pack_query in p.packquery_set.select_related("query").all():
             query = pack_query.query
             if pack_query.slug == "Leverage-A_1":

@@ -5,12 +5,12 @@ from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
-from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
 from zentral.contrib.osquery.events import (OsqueryEnrollmentEvent, OsqueryRequestEvent, OsqueryResultEvent,
                                             OsqueryCheckStatusUpdated)
-from zentral.contrib.osquery.models import (Configuration,
+from zentral.contrib.osquery.models import (Configuration, ConfigurationPack,
                                             DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
                                             EnrolledMachine, Enrollment,
                                             Query, Pack, PackQuery)
@@ -170,7 +170,13 @@ class OsqueryAPIViewsTestCase(TestCase):
             platform_mask=platform_mask
         )
 
-    def force_query(self, force_pack=False, force_compliance_check=False, force_distributed_query=False):
+    def force_query(
+        self,
+        force_pack=False,
+        force_compliance_check=False,
+        force_distributed_query=False,
+        event_routing_key=None
+    ):
         if force_compliance_check:
             sql = "select 'OK' as ztl_status;"
         else:
@@ -179,7 +185,11 @@ class OsqueryAPIViewsTestCase(TestCase):
         pack = None
         if force_pack:
             pack_name = get_random_string(12)
-            pack = Pack.objects.create(name=pack_name, slug=slugify(pack_name))
+            pack = Pack.objects.create(
+                name=pack_name,
+                slug=slugify(pack_name),
+                event_routing_key=event_routing_key or ""
+            )
             PackQuery.objects.create(pack=pack, query=query, interval=12983,
                                      slug=slugify(query.name),
                                      log_removed_actions=False, snapshot_mode=force_compliance_check)
@@ -341,13 +351,44 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertContains(response, '{"node_invalid": true}', status_code=200)
 
     def test_config_ok(self):
+        tag = Tag.objects.create(name=get_random_string())
+        query1, pack1, _ = self.force_query(force_pack=True)
+        pack_query1 = pack1.packquery_set.get(query=query1)
+        cp1 = ConfigurationPack.objects.create(configuration=self.configuration, pack=pack1)
+        cp1.tags.add(tag)
+        event_routing_key = get_random_string()
+        query2, pack2, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
+        pack_query2 = pack2.packquery_set.get(query=query2)
+        ConfigurationPack.objects.create(configuration=self.configuration, pack=pack2)
+        _, pack3, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
+        tag2 = Tag.objects.create(name=get_random_string())
+        cp3 = ConfigurationPack.objects.create(configuration=self.configuration, pack=pack3)
+        cp3.tags.add(tag2)
         em = self.force_enrolled_machine()
+        MachineTag.objects.create(serial_number=em.serial_number, tag=tag)
         response = self.post_as_json("config", {"node_key": em.node_key})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertIn("schedule", json_response)
         schedule = json_response["schedule"]
         self.assertIn(INVENTORY_QUERY_NAME, schedule)
+        self.assertEqual(
+            json_response["packs"],
+            {f'{pack1.slug}/{pack1.pk}': {
+                'queries': {
+                    f'{pack_query1.slug}/{query1.pk}/1': {
+                        'interval': 12983,
+                        'query': 'select 1 from processes;',
+                        'removed': False}
+                 }
+             },
+             f'{pack2.slug}/{pack2.pk}': {
+                'queries': {
+                    f'{pack_query2.slug}/{query2.pk}/1/{event_routing_key}': {
+                        'interval': 12983,
+                        'query': 'select 1 from processes;',
+                        'removed': False}}}}
+        )
 
     def test_osx_app_instance_schedule(self):
         em = self.force_enrolled_machine()
@@ -660,7 +701,8 @@ class OsqueryAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_log_snapshot_result(self, post_event):
         em = self.force_enrolled_machine()
-        query, pack, _ = self.force_query(force_pack=True)
+        event_routing_key = get_random_string()
+        query, pack, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
         post_data = {
             "node_key": em.node_key,
             "log_type": "result",
@@ -693,6 +735,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(request_event.payload["request_type"], "log")
         result_event = events[1]
         self.assertIsInstance(result_event, OsqueryResultEvent)
+        self.assertEqual(result_event.metadata.routing_key, event_routing_key)
         self.assertEqual(result_event.get_linked_objects_keys(),
                          {"osquery_pack": [(pack.pk,)],
                           "osquery_query": [(query.pk,)]})
@@ -703,7 +746,12 @@ class OsqueryAPIViewsTestCase(TestCase):
         query1, pack1, _ = self.force_query(force_pack=True, force_compliance_check=True)
         status_time0 = datetime(2021, 12, 23)
         status_time1 = datetime(2021, 12, 24)
-        query2, pack2, _ = self.force_query(force_pack=True, force_compliance_check=True)
+        event_routing_key = get_random_string()
+        query2, pack2, _ = self.force_query(
+            force_pack=True,
+            force_compliance_check=True,
+            event_routing_key=event_routing_key
+        )
         status_time2 = datetime(2021, 12, 25)
         post_data = {
             "node_key": em.node_key,
@@ -750,8 +798,12 @@ class OsqueryAPIViewsTestCase(TestCase):
         request_event = events[0]
         self.assertIsInstance(request_event, OsqueryRequestEvent)
         self.assertEqual(request_event.payload["request_type"], "log")
-        for result_event in events[1:4]:
+        for event_idx, result_event in enumerate(events[1:4]):
             self.assertIsInstance(result_event, OsqueryResultEvent)
+            if event_idx == 2:
+                self.assertEqual(result_event.metadata.routing_key, event_routing_key)
+            else:
+                self.assertIsNone(result_event.metadata.routing_key)
         for cc_status_event in events[4:]:
             self.assertIsInstance(cc_status_event, OsqueryCheckStatusUpdated)
             if cc_status_event.payload["status"] == Status.UNKNOWN.name:

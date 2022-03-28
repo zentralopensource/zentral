@@ -148,6 +148,8 @@ class Pack(models.Model):
         help_text="Restrict every pack queries to a percentage (1-100) of target hosts"
     )
 
+    event_routing_key = models.SlugField(blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -184,18 +186,23 @@ class Pack(models.Model):
 
 def parse_pack_query_configuration_key(key):
     try:
-        _, pack_pk, _, query_pk, query_version = key.split(Pack.DELIMITER)
+        items = key.split(Pack.DELIMITER)
+        if len(items) == 6:
+            _, pack_pk, _, query_pk, query_version, event_routing_key = items
+        else:
+            _, pack_pk, _, query_pk, query_version = items
+            event_routing_key = None
         pack_pk = int(pack_pk)
         query_pk = int(query_pk)
         query_version = int(query_version)
     except (AttributeError, ValueError):
         raise ValueError("Not an osquery pack query configuration key")
-    return pack_pk, query_pk, query_version
+    return pack_pk, query_pk, query_version, event_routing_key
 
 
 class PackQueryManager(models.Manager):
     def get_with_config_key(self, key):
-        pack_pk, query_pk, _ = parse_pack_query_configuration_key(key)
+        pack_pk, query_pk, _, _ = parse_pack_query_configuration_key(key)
         return self.get(pack__pk=pack_pk, query__pk=query_pk)
 
 
@@ -240,7 +247,10 @@ class PackQuery(models.Model):
         return "{}#pq{}".format(self.pack.get_absolute_url(), self.pk)
 
     def pack_key(self):
-        return f"{self.slug}{Pack.DELIMITER}{self.query.pk}{Pack.DELIMITER}{self.query.version}"
+        items = [self.slug, str(self.query.pk), str(self.query.version)]
+        if self.pack.event_routing_key:
+            items.append(self.pack.event_routing_key)
+        return Pack.DELIMITER.join(items)
 
     def serialize(self):
         d = self.query.serialize()
