@@ -154,7 +154,7 @@ class EventStore(BaseEventStore):
             if r.ok:
                 return
             if r.status_code > 500:
-                logger.error("Temporary server error")
+                logger.error("HEC status code %s", r.status_code)
                 if i + 1 < self.max_retries:
                     seconds = random.uniform(3, 4) * (i + 1)
                     logger.error("Retry in %.1fs", seconds)
