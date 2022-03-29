@@ -144,7 +144,10 @@ class NginxAuthRequestView(View):
 
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
-            if request.is_ajax() or request.META.get('HTTP_ACCEPT', '').startswith('application/json'):
+            if (
+                request.headers.get('x-requested-with') == 'XMLHttpRequest'
+                or request.META.get('HTTP_ACCEPT', '').startswith('application/json')
+            ):
                 status_code = 403
             else:
                 status_code = 401
