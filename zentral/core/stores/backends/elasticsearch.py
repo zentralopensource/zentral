@@ -41,7 +41,7 @@ class EventStore(BaseEventStore):
                 "match": "*",
                 "unmatch": "*ip_address",
                 "match_mapping_type": "string"
-            }}
+             }},
         ],
         "properties": {
             "type": {
@@ -59,7 +59,18 @@ class EventStore(BaseEventStore):
                         }
                     }
                 }
-            }
+            },
+            "munki_event": {
+                "properties": {
+                    "conditions": {
+                        "properties": {
+                            "os_build_last_component": {
+                                "type": "keyword"
+                            }
+                        }
+                    }
+                }
+             }
         }
     }
     INTERVAL_UNIT = {
