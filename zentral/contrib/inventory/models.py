@@ -1,6 +1,7 @@
 import base64
 from collections import Counter
 from datetime import datetime, timedelta
+import json
 import logging
 import re
 import urllib.parse
@@ -1186,6 +1187,7 @@ class MetaMachine:
         for src, key, agg in self._raw_info_for_event:
             if not agg:
                 continue
+            agg = json.loads(agg)
             if key == "platforms":
                 platform_fv = Counter(agg).most_common(1)[0][0]
             elif key == "types":
@@ -1256,6 +1258,7 @@ class MetaMachine:
         for src, key, agg in self._raw_info_for_event:
             if not agg:
                 continue
+            agg = json.loads(agg)
             if src:
                 d = machine_d.setdefault(slugify(src), {})
             else:
@@ -1274,7 +1277,7 @@ class MetaMachine:
                     d[key] = os_version_str
             elif key in ("types", "platforms"):
                 d[key[:-1]] = Counter(agg).most_common(1)[0][0]
-            elif key == "principal_user":
+            elif key in ("business_unit", "principal_user"):
                 d[key] = agg
             else:
                 d.setdefault(key, []).append(agg)

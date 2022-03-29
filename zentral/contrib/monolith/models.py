@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from itertools import chain
+import json
 import logging
 import os.path
 import plistlib
@@ -181,6 +182,7 @@ class PkgInfoManager(models.Manager):
                   'count': int(count),
                   'percent': percent}
             if pi_opts:
+                pi_opts = json.loads(pi_opts)
                 pi['options'] = pi_opts
                 excluded_tags = pi_opts.get("excluded_tags")
                 shards = pi_opts.setdefault("shards", {})

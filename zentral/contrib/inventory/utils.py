@@ -182,7 +182,7 @@ class SourceFilter(BaseMSFilter):
             yield self.value
 
     def grouping_value_from_grouping_result(self, grouping_result):
-        gv = super().grouping_value_from_grouping_result(grouping_result)
+        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
         if gv["id"] is None:
             return None
         return gv
@@ -212,6 +212,8 @@ class SourceFilter(BaseMSFilter):
 
     def process_fetched_record(self, record, for_filtering):
         source = record.pop("src_j", None)
+        if isinstance(source, str):
+            source = json.loads(source)
         if source and source["id"]:
             source["display_name"] = self.display_name(source)
             record["source"] = source
@@ -250,7 +252,7 @@ class OSVersionFilter(BaseMSFilter):
             yield self.value
 
     def grouping_value_from_grouping_result(self, grouping_result):
-        gv = super().grouping_value_from_grouping_result(grouping_result)
+        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
         if gv["id"] is None:
             return None
         return gv
@@ -315,7 +317,7 @@ class MetaBusinessUnitFilter(BaseMSFilter):
             yield self.value
 
     def grouping_value_from_grouping_result(self, grouping_result):
-        gv = super().grouping_value_from_grouping_result(grouping_result)
+        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
         if gv["id"] is None:
             return None
         return gv
@@ -362,7 +364,7 @@ class MachineGroupFilter(BaseMSFilter):
             yield self.value
 
     def grouping_value_from_grouping_result(self, grouping_result):
-        gv = super().grouping_value_from_grouping_result(grouping_result)
+        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
         if gv["id"] is None:
             return None
         return gv
@@ -432,7 +434,7 @@ class TagFilter(BaseMSFilter):
             yield self.value
 
     def grouping_value_from_grouping_result(self, grouping_result):
-        gv = super().grouping_value_from_grouping_result(grouping_result)
+        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
         if gv["id"] is None:
             return None
         elif gv["meta_business_unit"]["id"] is None:
@@ -569,7 +571,7 @@ class BundleFilter(BaseMSFilter):
         return self.display_name(grouping_value)
 
     def grouping_value_from_grouping_result(self, grouping_result):
-        gv = super().grouping_value_from_grouping_result(grouping_result)
+        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
         if gv["id"] is None:
             return None
         return gv

@@ -341,6 +341,23 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id, tag2.id}),
                          cache.get("mm-probe-fvs_{}".format(mm.get_urlsafe_serial_number())))
 
+        # get_serialized_info_for_event
+        mm = MetaMachine(self.serial_number)
+        sife = mm.get_serialized_info_for_event()
+        self.assertEqual(
+            sife["meta_business_units"],
+            [{"id": self.meta_business_unit.pk,
+              "name": self.meta_business_unit.name}]
+        )
+        self.assertEqual(sife["platform"], "MACOS")
+        self.assertEqual(
+            sife["zentral"],
+            {'business_unit': {'key': self.business_unit.get_short_key(),
+                               'name': self.business_unit.name,
+                               'reference': self.business_unit.reference},
+             'os_version': 'OS X 10.11.1'}
+        )
+
         mm.archive()
 
         mm = MetaMachine(self.serial_number)

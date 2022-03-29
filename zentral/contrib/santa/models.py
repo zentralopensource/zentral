@@ -1,3 +1,4 @@
+import json
 import logging
 from dateutil import parser
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -472,7 +473,7 @@ class TargetManager(models.Manager):
         results = []
         for row in cursor.fetchall():
             result = dict(zip(columns, row))
-            obj = result["object"]
+            obj = json.loads(result["object"])
             for attr in ("valid_from", "valid_until"):
                 if attr in obj:
                     obj[attr] = parser.parse(obj[attr])
