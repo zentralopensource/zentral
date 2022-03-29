@@ -80,8 +80,13 @@
         }
       ]
     },
+    "zentral.contrib.filebeat": {},
     "zentral.contrib.jamf": {},
+    "zentral.contrib.jamf_protect": {},
     "zentral.contrib.simplemdm": {},
+    "zentral.contrib.mdm": {
+      "scep_ca_fullchain": "NOT_A_VALID_CERT"
+    },
     "zentral.contrib.munki": {
       "metrics": true,
       "principal_user_detection": {
@@ -108,6 +113,7 @@
       }
     },
     "zentral.contrib.nagios": {},
+    "zentral.contrib.okta": {},
     "zentral.contrib.osquery": {},
     "zentral.contrib.puppet": {
       "instances": [
@@ -129,6 +135,8 @@
     "zentral.contrib.santa": {
       "metrics": true
     },
-    "zentral.contrib.wsone": {}
+    "zentral.contrib.wsone": {},
+    "zentral.contrib.xnumon": {},
+    "zentral.contrib.zendesk": {}
   }
 }
