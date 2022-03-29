@@ -1,7 +1,7 @@
 import enum
 import logging
 import os.path
-from django.contrib.postgres.fields import ArrayField, JSONField
+from django.contrib.postgres.fields import ArrayField
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from django.db import models, connection
 from django.db.models import Q
@@ -339,7 +339,7 @@ class Configuration(models.Model):
         help_text="Inventory refresh interval in seconds"
     )
 
-    options = JSONField(default=dict, blank=True, help_text="Osquery options")
+    options = models.JSONField(default=dict, blank=True, help_text="Osquery options")
 
     file_categories = models.ManyToManyField(FileCategory, blank=True)
     automatic_table_constructions = models.ManyToManyField(AutomaticTableConstruction, blank=True)
@@ -604,7 +604,7 @@ class DistributedQueryMachine(models.Model):
 class DistributedQueryResult(models.Model):
     distributed_query = models.ForeignKey(DistributedQuery, on_delete=models.CASCADE)
     serial_number = models.TextField()
-    row = JSONField()
+    row = models.JSONField()
 
     class Meta:
         indexes = [

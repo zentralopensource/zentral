@@ -3,7 +3,6 @@ import logging
 from importlib import import_module
 import uuid
 from django.contrib.auth.models import Group
-from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.urls import reverse
 from django.utils.functional import cached_property
@@ -19,7 +18,7 @@ class Realm(models.Model):
 
     # backend + backend config
     backend = models.CharField(max_length=255, editable=False)
-    config = JSONField(default=dict, editable=False)
+    config = models.JSONField(default=dict, editable=False)
 
     # user claims mapping
     username_claim = models.CharField(max_length=255)
@@ -55,8 +54,8 @@ class Realm(models.Model):
 class RealmUser(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
-    claims = JSONField(default=dict)
-    password_hash = JSONField(null=True)
+    claims = models.JSONField(default=dict)
+    password_hash = models.JSONField(null=True)
 
     # mapped claims
     username = models.CharField(max_length=255)
@@ -123,10 +122,10 @@ class RealmAuthenticationSession(models.Model):
     user = models.ForeignKey(RealmUser, on_delete=models.PROTECT, null=True)
 
     save_password_hash = models.BooleanField(default=False)
-    backend_state = JSONField(null=True)
+    backend_state = models.JSONField(null=True)
 
     callback = models.CharField(max_length=255)
-    callback_kwargs = JSONField(default=dict)
+    callback_kwargs = models.JSONField(default=dict)
 
     expires_at = models.DateTimeField(null=True)
 

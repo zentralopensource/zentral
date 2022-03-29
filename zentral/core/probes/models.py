@@ -1,5 +1,5 @@
 import logging
-from django.contrib.postgres.fields import ArrayField, JSONField
+from django.contrib.postgres.fields import ArrayField
 from django.urls import reverse
 from django.db import models, transaction
 from django.db.models import F, Func
@@ -36,7 +36,7 @@ class FeedProbe(models.Model):
     name = models.TextField()
     description = models.TextField(blank=True)
     key = models.CharField(max_length=255)
-    body = JSONField()
+    body = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     archived_at = models.DateTimeField(blank=True, null=True)
@@ -110,7 +110,7 @@ class ProbeSource(models.Model):
     feed_probe_last_synced_at = models.DateTimeField(blank=True, null=True)
     feed_probe_update_available = models.BooleanField(default=False)
 
-    body = JSONField(editable=False)
+    body = models.JSONField(editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

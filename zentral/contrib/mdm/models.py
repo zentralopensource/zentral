@@ -4,7 +4,7 @@ import enum
 import logging
 import plistlib
 import uuid
-from django.contrib.postgres.fields import ArrayField, JSONField
+from django.contrib.postgres.fields import ArrayField
 from django.db import connection, models
 from django.urls import reverse
 from django.utils import timezone
@@ -76,8 +76,8 @@ class PushCertificate(models.Model):
 class Blueprint(models.Model):
     name = models.CharField(max_length=256, unique=True)
 
-    activation = JSONField(default=dict, editable=False)
-    declaration_items = JSONField(default=dict, editable=False)
+    activation = models.JSONField(default=dict, editable=False)
+    declaration_items = models.JSONField(default=dict, editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -584,7 +584,7 @@ class DEPEnrollment(models.Model):
     # optional admin account info
     admin_full_name = models.CharField(max_length=80, blank=True, null=True)
     admin_short_name = models.CharField(max_length=32, blank=True, null=True)
-    admin_password_hash = JSONField(null=True, editable=False)
+    admin_password_hash = models.JSONField(null=True, editable=False)
 
     # standard DEP profile configuration
 
@@ -1185,8 +1185,8 @@ class EnterpriseApp(models.Model):
     filename = models.TextField()
     product_id = models.TextField()
     product_version = models.TextField()
-    bundles = JSONField(default=list)
-    manifest = JSONField()
+    bundles = models.JSONField(default=list)
+    manifest = models.JSONField()
 
     def __str__(self):
         return f"{self.product_id} {self.product_version}"
@@ -1253,13 +1253,13 @@ class Command(models.Model):
     name = models.CharField(max_length=128)
     artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.PROTECT, null=True)
     artifact_operation = models.CharField(max_length=64, choices=ArtifactOperation.choices(), null=True)
-    kwargs = JSONField(default=dict)
+    kwargs = models.JSONField(default=dict)
 
     not_before = models.DateTimeField(null=True)
     time = models.DateTimeField(null=True)  # no time => queued
     result_time = models.DateTimeField(null=True)
     status = models.CharField(max_length=64, choices=CommandStatus.choices(), null=True)
-    error_chain = JSONField(null=True)
+    error_chain = models.JSONField(null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1309,7 +1309,7 @@ class SCEPConfig(models.Model):
     allow_all_apps_access = models.BooleanField(default=False,
                                                 help_text="If true, all apps have access to the private key.")
     challenge_type = models.CharField(max_length=64, choices=SCEPChallengeType.choices())
-    challenge_kwargs = JSONField(editable=False)
+    challenge_kwargs = models.JSONField(editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

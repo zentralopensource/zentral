@@ -2,7 +2,6 @@ import copy
 from datetime import datetime
 import hashlib
 from django.core.exceptions import FieldDoesNotExist
-from django.contrib.postgres.fields import JSONField
 from django.utils.functional import cached_property
 from django.utils.timezone import is_aware, make_naive
 from django.db import IntegrityError, models, transaction
@@ -130,7 +129,7 @@ class MTObjectManager(models.Manager):
                     except MTOError:
                         # JSONField ???
                         f = obj.get_mt_field(k)
-                        if isinstance(f, JSONField):
+                        if isinstance(f, models.JSONField):
                             t = copy.deepcopy(v)
                             cleanup_commit_tree(t)
                             setattr(obj, k, t)
@@ -231,7 +230,7 @@ class AbstractMTObject(models.Model):
                     v = [mto.hash() for mto in v]
                 else:
                     v = [mto.mt_hash for mto in v]
-            elif isinstance(f, JSONField) and v:
+            elif isinstance(f, models.JSONField) and v:
                 t = copy.deepcopy(v)
                 prepare_commit_tree(t)
                 v = t['mt_hash']

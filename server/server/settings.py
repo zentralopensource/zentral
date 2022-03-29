@@ -180,6 +180,9 @@ for key, default in (('HOST', None),
     if val:
         DATABASES['default'][key] = val
 
+# Django >= 3.2 have uses BigAutoField
+DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_BROKER_URL = django_zentral_settings.get("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
 CELERY_BROKER_TRANSPORT_OPTIONS = django_zentral_settings.get("CELERY_BROKER_TRANSPORT_OPTIONS", {})

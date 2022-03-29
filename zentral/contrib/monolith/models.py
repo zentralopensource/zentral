@@ -6,7 +6,7 @@ import plistlib
 import re
 import unicodedata
 import urllib.parse
-from django.contrib.postgres.fields import ArrayField, JSONField
+from django.contrib.postgres.fields import ArrayField
 from django.core import signing
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import models, connection
@@ -240,7 +240,7 @@ class PkgInfo(models.Model):
     category = models.ForeignKey(PkgInfoCategory, on_delete=models.SET_NULL, null=True, blank=True)
     requires = models.ManyToManyField(PkgInfoName, related_name="required_by")
     update_for = models.ManyToManyField(PkgInfoName, related_name="updated_by")
-    data = JSONField()
+    data = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     archived_at = models.DateTimeField(blank=True, null=True)
@@ -415,7 +415,7 @@ class SubManifestPkgInfo(models.Model):
     pkg_info_name = models.ForeignKey(PkgInfoName, on_delete=models.PROTECT)
     featured_item = models.BooleanField(default=False)
     condition = models.ForeignKey(Condition, on_delete=models.PROTECT, null=True, blank=True)
-    options = JSONField(default=dict)
+    options = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -504,7 +504,7 @@ class SubManifestAttachment(models.Model):
     identifier = models.TextField(blank=True, null=True)
     version = models.PositiveSmallIntegerField(default=0)
     file = models.FileField(upload_to=attachment_path, blank=True)
-    pkg_info = JSONField()
+    pkg_info = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     trashed_at = models.DateTimeField(null=True)
@@ -830,7 +830,7 @@ class ManifestEnrollmentPackage(models.Model):
     enrollment_pk = models.PositiveIntegerField(null=True)
 
     file = models.FileField(upload_to=enrollment_package_path, blank=True)
-    pkg_info = JSONField(blank=True, null=True)
+    pkg_info = models.JSONField(blank=True, null=True)
     version = models.PositiveSmallIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1025,7 +1025,7 @@ class Printer(models.Model):
     ppd = models.ForeignKey(PrinterPPD, on_delete=models.PROTECT)
     version = models.PositiveSmallIntegerField(default=1)
     required_package = models.ForeignKey(PkgInfoName, on_delete=models.PROTECT, blank=True, null=True)
-    pkg_info = JSONField(blank=True, null=True)
+    pkg_info = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     trashed_at = models.DateTimeField(null=True)

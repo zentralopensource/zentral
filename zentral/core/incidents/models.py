@@ -1,7 +1,6 @@
 from enum import Enum
 import logging
 from typing import NamedTuple
-from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.db.models import Q
 from django.urls import reverse
@@ -78,7 +77,7 @@ class IncidentUpdate(NamedTuple):
 
 class Incident(models.Model):
     incident_type = models.CharField(max_length=256)
-    key = JSONField()
+    key = models.JSONField()
     severity = models.PositiveIntegerField(choices=Severity.choices())
     name = models.TextField()
     status = models.CharField(max_length=64, choices=Status.choices())

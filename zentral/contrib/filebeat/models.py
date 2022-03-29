@@ -1,6 +1,5 @@
 import base64
 import logging
-from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
@@ -14,7 +13,7 @@ logger = logging.getLogger("zentral.contrib.filebeat.models")
 
 class Configuration(models.Model):
     name = models.CharField(max_length=256, unique=True)
-    inputs = JSONField(editable=False)
+    inputs = models.JSONField(editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

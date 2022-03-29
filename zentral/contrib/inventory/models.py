@@ -6,7 +6,7 @@ import re
 import urllib.parse
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.postgres.fields import ArrayField, JSONField
+from django.contrib.postgres.fields import ArrayField
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.urls import reverse
@@ -143,7 +143,7 @@ class SourceManager(MTObjectManager):
 class Source(AbstractMTObject):
     module = models.TextField()
     name = models.TextField()
-    config = JSONField(blank=True, null=True)
+    config = models.JSONField(blank=True, null=True)
 
     objects = SourceManager()
 
@@ -441,7 +441,7 @@ class IOSApp(AbstractMTObject):
 class TeamViewer(AbstractMTObject):
     teamviewer_id = models.TextField(blank=False, null=False)
     release = models.TextField(blank=True, null=True)
-    unattended = models.NullBooleanField(blank=True, null=True)
+    unattended = models.BooleanField(blank=True, null=True)
 
 
 class PuppetTrustedFacts(AbstractMTObject):
@@ -449,7 +449,7 @@ class PuppetTrustedFacts(AbstractMTObject):
                                      choices=(('remote', 'remote'),
                                               ('local', 'local'),
                                               ('false', 'false')))
-    extensions = JSONField(blank=True, null=True)
+    extensions = models.JSONField(blank=True, null=True)
     certname = models.TextField()
 
 
@@ -467,7 +467,7 @@ class PuppetNode(AbstractMTObject):
     environment = models.TextField()
     trusted_facts = models.ForeignKey(PuppetTrustedFacts, on_delete=models.PROTECT, blank=True, null=True)
     core_facts = models.ForeignKey(PuppetCoreFacts, on_delete=models.PROTECT, blank=True, null=True)
-    extra_facts = JSONField(blank=True, null=True)
+    extra_facts = models.JSONField(blank=True, null=True)
 
 
 class PrincipalUserSource(AbstractMTObject):
@@ -484,7 +484,7 @@ class PrincipalUserSource(AbstractMTObject):
         (SANTA_MACHINE_OWNER, "Santa machine owner"),
     )
     type = models.CharField(choices=TYPE_CHOICES, max_length=64)
-    properties = JSONField(blank=True, null=True)
+    properties = models.JSONField(blank=True, null=True)
 
 
 class PrincipalUser(AbstractMTObject):
@@ -560,7 +560,7 @@ class MachineSnapshot(AbstractMTObject):
     principal_user = models.ForeignKey(PrincipalUser, on_delete=models.PROTECT, blank=True, null=True)
     certificates = models.ManyToManyField(Certificate)
     public_ip_address = models.GenericIPAddressField(blank=True, null=True, unpack_ipv4=True)
-    extra_facts = JSONField(blank=True, null=True)
+    extra_facts = models.JSONField(blank=True, null=True)
 
     objects = MachineSnapshotManager()
 
