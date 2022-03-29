@@ -251,13 +251,13 @@ def _create_missing_bundles(events):
     existing_sha256_set = set(
         Bundle.objects.filter(
             target__type=Target.BUNDLE,
-            target__sha256__in=bundle_events.keys(),
+            target__identifier__in=bundle_events.keys(),
             uploaded_at__isnull=False,  # to recover from blocked uploads
-        ).values_list("target__sha256", flat=True)
+        ).values_list("target__identifier", flat=True)
     )
     unknown_file_bundle_hashes = list(set(bundle_events.keys()) - existing_sha256_set)
     for sha256 in unknown_file_bundle_hashes:
-        target, _ = Target.objects.get_or_create(type=Target.BUNDLE, sha256=sha256)
+        target, _ = Target.objects.get_or_create(type=Target.BUNDLE, identifier=sha256)
         defaults = {}
         event_d = bundle_events[sha256]
         for event_attr, bundle_attr in (("file_bundle_path", "path"),
@@ -287,7 +287,7 @@ def _create_bundle_binaries(events):
                 bundle_binary_events.setdefault(bundle_sha256, []).append(event_d)
     for bundle_sha256, events in bundle_binary_events.items():
         try:
-            bundle = Bundle.objects.get(target__type=Target.BUNDLE, target__sha256=bundle_sha256)
+            bundle = Bundle.objects.get(target__type=Target.BUNDLE, target__identifier=bundle_sha256)
         except Bundle.DoesNotExist:
             logger.error("Unknown bundle: %s", bundle_sha256)
             continue
@@ -302,7 +302,7 @@ def _create_bundle_binaries(events):
                 if event_binary_count:
                     binary_count = event_binary_count
             binary_sha256 = event_d.get("file_sha256")
-            binary_target, _ = Target.objects.get_or_create(type=Target.BINARY, sha256=binary_sha256)
+            binary_target, _ = Target.objects.get_or_create(type=Target.BINARY, identifier=binary_sha256)
             binary_targets.append(binary_target)
         bundle.binary_targets.add(*binary_targets)
         save_bundle = False

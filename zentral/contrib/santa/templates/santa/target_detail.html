@@ -9,13 +9,13 @@
   <li class="active">{{ target_type|title }}</li>
 </ol>
 
-<h3>{{ target_type|title }}</h3>
+<h3>{{ title }}</h3>
 
 <table class="table table-condensed">
   <tbody>
     <tr>
-      <td>sha256</td>
-      <td><code>{{ sha256 }}</code></td>
+      <td style="width:20vw">identifier</td>
+      <td><code>{{ identifier }}</code></td>
     </tr>
     {% for obj in objects %}
     {% if target_type == "BINARY" %}
@@ -100,6 +100,18 @@
     </tr>
     {% endif %}
     {% endfor %}
+    {% if target_type == "TEAMID" %}
+    <tr>
+      <td>Organization{{ objects|length|pluralize }}</td>
+      <td>
+        <ul class="list-unstyled">
+          {% for obj in objects %}
+          <li>{{ obj.organization|default:"-" }}</li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+    {% endif %}
   </tbody>
 </table>
 

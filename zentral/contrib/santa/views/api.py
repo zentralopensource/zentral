@@ -113,7 +113,7 @@ class PreflightView(BaseSyncView):
             'santa_version': self.request_data['santa_version'],
         }
         # cleanup rule counts
-        for prefix in ("binary", "certificate", "compiler", "transitive"):
+        for prefix in ("binary", "certificate", "compiler", "transitive", "teamid"):
             key = f"{prefix}_rule_count"
             val = self.request_data.get(key)
             if isinstance(val, int):
@@ -250,7 +250,7 @@ class PreflightView(BaseSyncView):
         self._commit_machine_snapshot()
 
         response_dict = self.enrolled_machine.enrollment.configuration.get_sync_server_config(
-            self.enrolled_machine.santa_version
+            self.enrolled_machine.get_comparable_santa_version()
         )
 
         # clean sync?

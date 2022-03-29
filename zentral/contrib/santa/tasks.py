@@ -1,4 +1,5 @@
 import csv
+import json
 import os
 import tempfile
 import zipfile
@@ -19,8 +20,9 @@ def _iter_targets(q, target_type, window_size=2000):
             results = cursor.fetchall()
             if not results:
                 break
-            for target_type, sha_256, obj, _, rule_count in results:
-                row = [("sha256", sha_256),
+            for target_type, identifier, obj, _, rule_count in results:
+                obj = json.loads(obj)
+                row = [("identifier", identifier),
                        ("rule count", rule_count)]
                 for k, v in sorted(obj.items()):
                     row.append((k.replace("_", " "), v if v is not None else ""))

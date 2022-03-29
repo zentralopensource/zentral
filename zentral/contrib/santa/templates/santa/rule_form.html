@@ -14,12 +14,12 @@
 <h2>{{ title }}</h2>
 
 <form method="POST">{% csrf_token %}
-  {% if target_type_display or target_sha256 %}
+  {% if target_type_display or target_identifier %}
   <dl class="dl-horizontal">
-    <dt>Type</dt>
+    <dt>type</dt>
     <dd>{{ target_type_display }}</dd>
-    <dt>sha256</dt>
-    <dd>{{ target_sha256 }}</dt>
+    <dt>identifier</dt>
+    <dd>{{ target_identifier }}</dt>
   </dl>
   {% endif %}
   </dl>
@@ -65,6 +65,12 @@
     <dd>{{ cert.organizational_unit|default:"-" }}</dd>
     <dt>validity</dt>
     <dd>{{ cert.valid_from }} - {{ cert.valid_until }}</dd>
+  </dl>
+  {% endfor %}
+  {% for team_id in team_ids %}
+  <dl class="dl-horizontal">
+    <dt>Organization</dt>
+    <dd>{{ team_id.organization|default:"-" }}</dd>
   </dl>
   {% endfor %}
   {{ form|bootstrap }}

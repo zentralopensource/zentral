@@ -71,6 +71,11 @@
           <td>{{ targets.certificate.rule_count }}</td>
         </tr>
         <tr>
+          <td><a href="{% url "santa:targets" %}?target_type=TEAMID">Team ID</a></td>
+          <td>{{ targets.teamid.count }}</td>
+          <td>{{ targets.teamid.rule_count }}</td>
+        </tr>
+        <tr>
           <td><a href="{% url "santa:targets" %}?target_type=BUNDLE">Bundle</a></td>
           <td>{{ targets.bundle.count }}</td>
           <td>{{ targets.bundle.rule_count }}</td>

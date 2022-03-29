@@ -30,8 +30,8 @@ class SantaSetupViewsTestCase(TestCase):
         cls.file_name = get_random_string(12)
         cls.file_bundle_name = get_random_string(12)
         cls.file_cert_sha256 = get_random_sha256()
-        cls.file_cert_cn = get_random_string(12)
-        cls.file_cert_ou = get_random_string(12)
+        cls.file_team_id = get_random_string(10, allowed_chars="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        cls.file_cert_cn = f"Developer ID Application: YOLO ({cls.file_team_id})"
         cls.file, _ = File.objects.commit({
             'source': {'module': 'zentral.contrib.santa', 'name': 'Santa events'},
             'bundle': {'bundle_id': 'servicecontroller:com.apple.stomp.transcoderx',
@@ -47,7 +47,7 @@ class SantaSetupViewsTestCase(TestCase):
             'signed_by': {
                 'common_name': cls.file_cert_cn,
                 'organization': 'Apple Inc.',
-                'organizational_unit': cls.file_cert_ou,
+                'organizational_unit': cls.file_team_id,
                 'sha_256': cls.file_cert_sha256,
                 'valid_from': datetime.datetime(2007, 2, 23, 22, 2, 56),
                 'valid_until': datetime.datetime(2015, 1, 14, 22, 2, 56),
@@ -69,7 +69,7 @@ class SantaSetupViewsTestCase(TestCase):
                 },
              }
         })
-        cls.file_target = Target.objects.create(type=Target.BINARY, sha256=cls.file_sha256)
+        cls.file_target = Target.objects.create(type=Target.BINARY, identifier=cls.file_sha256)
 
     # utility methods
 
@@ -95,7 +95,7 @@ class SantaSetupViewsTestCase(TestCase):
         return Configuration.objects.create(name=get_random_string(12), enable_sysx_cache=True)
 
     def _force_bundle(self):
-        bundle_target = Target.objects.create(type=Target.BUNDLE, sha256=get_random_sha256())
+        bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=get_random_sha256())
         return Bundle.objects.create(
             target=bundle_target,
             executable_rel_path=get_random_string(12),
@@ -121,9 +121,10 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:targets"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
-        self.assertContains(response, "2 Targets")
+        self.assertContains(response, "3 Targets")
         self.assertContains(response, self.file_sha256)
         self.assertContains(response, self.file_cert_sha256)
+        self.assertContains(response, self.file_team_id)
 
     def test_binary_targets(self):
         self._login("santa.view_target")
@@ -133,6 +134,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, "1 Target")
         self.assertContains(response, self.file_sha256)
         self.assertNotContains(response, self.file_cert_sha256)
+        self.assertContains(response, self.file_team_id)
 
     def test_certificate_targets(self):
         self._login("santa.view_target")
@@ -142,6 +144,17 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, "1 Target")
         self.assertNotContains(response, self.file_sha256)
         self.assertContains(response, self.file_cert_sha256)
+        self.assertContains(response, self.file_team_id)
+
+    def test_team_id_targets(self):
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:targets"), {"target_type": Target.TEAM_ID})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/targets.html")
+        self.assertContains(response, "1 Target")
+        self.assertNotContains(response, self.file_sha256)
+        self.assertNotContains(response, self.file_cert_sha256)
+        self.assertContains(response, self.file_team_id)
 
     # binary target
 
@@ -230,31 +243,31 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_bundle_target_redirect(self):
         bundle = self._force_bundle()
-        self._login_redirect(reverse("santa:bundle", args=(bundle.target.sha256,)))
+        self._login_redirect(reverse("santa:bundle", args=(bundle.target.identifier,)))
 
     def test_bundle_target_permission_denied(self):
         bundle = self._force_bundle()
         self._login()
-        response = self.client.get(reverse("santa:bundle", args=(bundle.target.sha256,)))
+        response = self.client.get(reverse("santa:bundle", args=(bundle.target.identifier,)))
         self.assertEqual(response.status_code, 403)
 
     def test_bundle_target_no_configuration(self):
         bundle = self._force_bundle()
         self._login("santa.view_target", "santa.add_rule")
-        response = self.client.get(reverse("santa:bundle", args=(bundle.target.sha256,)))
+        response = self.client.get(reverse("santa:bundle", args=(bundle.target.identifier,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
-        self.assertContains(response, bundle.target.sha256)
+        self.assertContains(response, bundle.target.identifier)
         self.assertNotContains(response, "Add rule to configuration")
 
     def test_bundle_target_configuration_no_add_rule_perm(self):
         bundle = self._force_bundle()
         configuration = self._force_configuration()
         self._login("santa.view_target")
-        response = self.client.get(reverse("santa:bundle", args=(bundle.target.sha256,)))
+        response = self.client.get(reverse("santa:bundle", args=(bundle.target.identifier,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
-        self.assertContains(response, bundle.target.sha256)
+        self.assertContains(response, bundle.target.identifier)
         self.assertNotContains(response, "Add rule to configuration")
         self.assertNotContains(response, configuration.name)
 
@@ -262,14 +275,14 @@ class SantaSetupViewsTestCase(TestCase):
         bundle = self._force_bundle()
         configuration = self._force_configuration()
         self._login("santa.view_target", "santa.add_rule")
-        response = self.client.get(reverse("santa:bundle", args=(bundle.target.sha256,)))
+        response = self.client.get(reverse("santa:bundle", args=(bundle.target.identifier,)))
         self.assertContains(response, "Add rule to configuration")
         self.assertContains(response, configuration.name)
 
     def test_bundle_target_events_permission_denied(self):
         bundle = self._force_bundle()
         self._login()
-        response = self.client.get(reverse("santa:bundle_events", args=(bundle.target.sha256,)))
+        response = self.client.get(reverse("santa:bundle_events", args=(bundle.target.identifier,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
@@ -277,19 +290,19 @@ class SantaSetupViewsTestCase(TestCase):
         get_aggregated_object_event_counts.return_value = {}
         bundle = self._force_bundle()
         self._login("santa.view_target")
-        response = self.client.get(reverse("santa:bundle_events", args=(bundle.target.sha256,)))
+        response = self.client.get(reverse("santa:bundle_events", args=(bundle.target.identifier,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_events.html")
-        self.assertContains(response, bundle.target.sha256)
+        self.assertContains(response, bundle.target.identifier)
 
     def test_fetch_bundle_target_events_redirect(self):
         bundle = self._force_bundle()
-        self._login_redirect(reverse("santa:fetch_bundle_events", args=(bundle.target.sha256,)))
+        self._login_redirect(reverse("santa:fetch_bundle_events", args=(bundle.target.identifier,)))
 
     def test_fetch_bundle_target_events_permission_denied(self):
         bundle = self._force_bundle()
         self._login()
-        response = self.client.get(reverse("santa:fetch_bundle_events", args=(bundle.target.sha256,)))
+        response = self.client.get(reverse("santa:fetch_bundle_events", args=(bundle.target.identifier,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
@@ -297,27 +310,27 @@ class SantaSetupViewsTestCase(TestCase):
         fetch_object_events.return_value = ([], None)
         bundle = self._force_bundle()
         self._login("santa.view_target")
-        response = self.client.get(reverse("santa:fetch_bundle_events", args=(bundle.target.sha256,)))
+        response = self.client.get(reverse("santa:fetch_bundle_events", args=(bundle.target.identifier,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_bundle_target_store_redirect_login_redirect(self):
         bundle = self._force_bundle()
-        self._login_redirect(reverse("santa:bundle_events_store_redirect", args=(bundle.target.sha256,)))
+        self._login_redirect(reverse("santa:bundle_events_store_redirect", args=(bundle.target.identifier,)))
 
     def test_bundle_target_store_redirect_permission_denied(self):
         bundle = self._force_bundle()
         self._login()
-        response = self.client.get(reverse("santa:bundle_events_store_redirect", args=(bundle.target.sha256,)))
+        response = self.client.get(reverse("santa:bundle_events_store_redirect", args=(bundle.target.identifier,)))
         self.assertEqual(response.status_code, 403)
 
     def test_bundle_target_store_redirect(self):
         bundle = self._force_bundle()
         self._login("santa.view_target")
-        response = self.client.get(reverse("santa:bundle_events_store_redirect", args=(bundle.target.sha256,)),
+        response = self.client.get(reverse("santa:bundle_events_store_redirect", args=(bundle.target.identifier,)),
                                    {"es": frontend_store.name})
         # dev store cannot redirect
-        self.assertRedirects(response, reverse("santa:bundle_events", args=(bundle.target.sha256,)))
+        self.assertRedirects(response, reverse("santa:bundle_events", args=(bundle.target.identifier,)))
 
     # certificate target
 
@@ -398,3 +411,83 @@ class SantaSetupViewsTestCase(TestCase):
                                    {"es": frontend_store.name})
         # dev store cannot redirect
         self.assertRedirects(response, reverse("santa:certificate_events", args=(self.file_cert_sha256,)))
+
+    # team ID target
+
+    def test_team_id_target_redirect(self):
+        self._login_redirect(reverse("santa:teamid", args=(self.file_team_id,)))
+
+    def test_team_id_target_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:teamid", args=(self.file_team_id,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_team_id_target_no_configuration(self):
+        self._login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:teamid", args=(self.file_team_id,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/target_detail.html")
+        self.assertContains(response, self.file_team_id)
+        self.assertNotContains(response, "Add rule to configuration")
+
+    def test_team_id_target_configuration_no_add_rule_perm(self):
+        configuration = self._force_configuration()
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:teamid", args=(self.file_team_id,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/target_detail.html")
+        self.assertContains(response, self.file_team_id)
+        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, configuration.name)
+
+    def test_team_id_target_configuration_add_rule_perm(self):
+        configuration = self._force_configuration()
+        self._login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:teamid", args=(self.file_team_id,)))
+        self.assertContains(response, "Add rule to configuration")
+        self.assertContains(response, configuration.name)
+
+    def test_team_id_target_events_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:teamid_events", args=(self.file_team_id,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    def test_team_id_target_events(self, get_aggregated_object_event_counts):
+        get_aggregated_object_event_counts.return_value = {}
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:teamid_events", args=(self.file_team_id,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/target_events.html")
+        self.assertContains(response, self.file_team_id)
+
+    def test_fetch_team_id_target_events_redirect(self):
+        self._login_redirect(reverse("santa:fetch_teamid_events", args=(self.file_team_id,)))
+
+    def test_fetch_team_id_target_events_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:fetch_teamid_events", args=(self.file_team_id,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    def test_fetch_team_id_target_events(self, fetch_object_events):
+        fetch_object_events.return_value = ([], None)
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:fetch_teamid_events", args=(self.file_team_id,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/stores/events_events.html")
+
+    def test_team_id_target_store_redirect_login_redirect(self):
+        self._login_redirect(reverse("santa:teamid_events_store_redirect", args=(self.file_team_id,)))
+
+    def test_team_id_target_store_redirect_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:teamid_events_store_redirect", args=(self.file_team_id,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_team_id_target_store_redirect(self):
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:teamid_events_store_redirect", args=(self.file_team_id,)),
+                                   {"es": frontend_store.name})
+        # dev store cannot redirect
+        self.assertRedirects(response, reverse("santa:teamid_events", args=(self.file_team_id,)))

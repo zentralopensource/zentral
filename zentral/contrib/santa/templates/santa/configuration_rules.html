@@ -38,6 +38,7 @@
     <li><a href="{% url 'santa:pick_rule_binary' configuration.id %}">Binary rule</a></li>
     <li><a href="{% url 'santa:pick_rule_bundle' configuration.id %}">Bundle rule</a></li>
     <li><a href="{% url 'santa:pick_rule_certificate' configuration.id %}">Certificate rule</a></li>
+    <li><a href="{% url 'santa:pick_rule_team_id' configuration.id %}">Team ID rule</a></li>
   </ul>
 </div>
 {% endif %}
@@ -56,8 +57,8 @@
       {{ form.policy|bootstrap_inline }}
     </div>
     <div class="form-group">
-      {{ form.sha256.label_tag }}
-      {{ form.sha256|bootstrap_inline }}
+      {{ form.identifier.label_tag }}
+      {{ form.identifier|bootstrap_inline }}
     </div>
     <button type="submit" class="btn btn-default">Search</button>
 </form>
@@ -91,9 +92,9 @@
       <td>{{ target.get_type_display }}</td>
       <td>
         {% if perms.santa.view_target %}
-        <a href="{{ target.get_absolute_url }}"><code>{{ target.sha256 }}</code></a>
+        <a href="{{ target.get_absolute_url }}"><code>{{ target.identifier }}</code></a>
         {% else %}
-        <code>{{ target.sha256 }}</code>
+        <code>{{ target.identifier }}</code>
         {% endif %}
         {% if target.type == "BINARY" %}
         {% for file in target.files %}

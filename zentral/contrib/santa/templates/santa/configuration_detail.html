@@ -149,6 +149,14 @@
         <td>Enable transitive rules</td>
         <td>{{ object.enable_transitive_rules|yesno }}</td>
       </tr>
+      <tr>
+        <td>Block USB mass storage</td>
+        <td>{{ object.block_usb_mass_storage|yesno }}</td>
+      </tr>
+      <tr>
+        <td>Remount USB mode</td>
+        <td>{% if object.remount_usb_mode %}<code>{{ object.remount_usb_mode|join:" " }}</code>{% else %}-{% endif %}</td>
+      </tr>
       </tbody>
     </table>
 

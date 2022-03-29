@@ -76,7 +76,7 @@ class SantaMetricsViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_rules(self):
-        target = Target.objects.create(type=Target.BINARY, sha256=get_random_string(64, "0123456789abcdef"))
+        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
         Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
         response = self._make_authenticated_request()
         for family in text_string_to_metric_families(response.content.decode("utf-8")):

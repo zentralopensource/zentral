@@ -94,7 +94,7 @@ class RuleSetUpdate(APIView):
             for rule_dict in data["rules"]:
                 rule_defaults = rule_dict.copy()
                 target, _ = Target.objects.get_or_create(type=rule_defaults.pop("rule_type"),
-                                                         sha256=rule_defaults.pop("sha256"))
+                                                         identifier=rule_defaults.pop("identifier"))
                 found_target_pks.append(target.pk)
                 tags = set(all_tags[n] for n in rule_defaults.pop("tags", []))
                 excluded_tags = set(all_tags[n] for n in rule_defaults.pop("excluded_tags", []))
@@ -257,7 +257,7 @@ class TargetsExport(APIView):
             query = None
         target_type = request.GET.get("target_type")
         if target_type:
-            if target_type not in (Target.BINARY, Target.BUNDLE, Target.CERTIFICATE):
+            if target_type not in (Target.BINARY, Target.BUNDLE, Target.CERTIFICATE, Target.TEAM_ID):
                 raise ValidationError("Unknown target type")
         else:
             target_type = None

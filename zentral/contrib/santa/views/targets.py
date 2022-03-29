@@ -81,7 +81,9 @@ class TargetView(PermissionRequiredMixin, TemplateView):
     permission_required = "santa.view_target"
     template_name = "santa/target_detail.html"
     target_type = None
+    title = None
     add_rule_link_key = None
+    add_rule_link_attr = "pk"
 
     def get_objects(self):
         return []
@@ -89,12 +91,12 @@ class TargetView(PermissionRequiredMixin, TemplateView):
     def get_add_rule_link_qd(self):
         if not self.objects:
             return
-        return urlencode({self.add_rule_link_key: self.objects[0].pk})
+        return urlencode({self.add_rule_link_key: getattr(self.objects[0], self.add_rule_link_attr)})
 
     def get_rules(self):
         return (
             Rule.objects.select_related("configuration", "ruleset")
-                        .filter(target__type=self.target_type, target__sha256=self.sha256)
+                        .filter(target__type=self.target_type, target__identifier=self.identifier)
         )
 
     def get_add_rule_links(self):
@@ -103,7 +105,7 @@ class TargetView(PermissionRequiredMixin, TemplateView):
         if not query_dict:
             return links
         for configuration in (Configuration.objects.exclude(rule__target__type=self.target_type,
-                                                            rule__target__sha256=self.sha256)
+                                                            rule__target__identifier=self.identifier)
                                                    .order_by("name")):
             links.append((configuration.name,
                           reverse("santa:create_configuration_rule", args=(configuration.pk,)) + f"?{query_dict}"))
@@ -111,10 +113,10 @@ class TargetView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data()
-        self.sha256 = kwargs["sha256"]
-        ctx["setup"] = True
+        self.identifier = kwargs["identifier"]
         ctx["target_type"] = self.target_type
-        ctx["sha256"] = self.sha256
+        ctx["title"] = self.title or self.target_type.title()
+        ctx["identifier"] = self.identifier
 
         # objects
         self.objects = self.get_objects()
@@ -128,11 +130,11 @@ class TargetView(PermissionRequiredMixin, TemplateView):
 
         # events
         if self.request.user.has_perms(EventsMixin.permission_required):
-            ctx["events_url"] = reverse(f"santa:{self.target_type.lower()}_events", args=(self.sha256,))
+            ctx["events_url"] = reverse(f"santa:{self.target_type.lower()}_events", args=(self.identifier,))
             store_links = []
             for store in stores.iter_events_url_store_for_user("object", self.request.user):
                 url = "{}?{}".format(
-                    reverse(f"santa:{self.target_type.lower()}_events_store_redirect", args=(self.sha256,)),
+                    reverse(f"santa:{self.target_type.lower()}_events_store_redirect", args=(self.identifier,)),
                     urlencode({"es": store.name,
                                "tr": EventsView.default_time_range})
                 )
@@ -151,7 +153,7 @@ class BinaryView(TargetView):
             File.objects.select_related("signed_by", "bundle")
                         .filter(source__module="zentral.contrib.santa",
                                 source__name="Santa events",
-                                sha_256=self.sha256)
+                                sha_256=self.identifier)
         )
 
 
@@ -163,7 +165,7 @@ class BundleView(TargetView):
         return (
             Bundle.objects.select_related("target")
                           .filter(target__type=self.target_type,
-                                  target__sha256=self.sha256)
+                                  target__identifier=self.identifier)
         )
 
 
@@ -174,8 +176,18 @@ class CertificateView(TargetView):
     def get_objects(self):
         return (
             Certificate.objects.select_related("signed_by")
-                               .filter(sha_256=self.sha256)
+                               .filter(sha_256=self.identifier)
         )
+
+
+class TeamIDView(TargetView):
+    target_type = Target.TEAM_ID
+    title = "Team ID"
+    add_rule_link_key = "tea"
+    add_rule_link_attr = "organizational_unit"
+
+    def get_objects(self):
+        return Target.objects.get_teamid_objects(self.identifier)
 
 
 class EventsMixin:
@@ -183,29 +195,33 @@ class EventsMixin:
     store_method_scope = "object"
     target_type = None
     object_key = None
+    identifier_key = None
 
     def get_object(self, **kwargs):
-        self.sha256 = kwargs["sha256"]
+        self.identifier = kwargs["identifier"]
         return None
 
     def get_fetch_kwargs_extra(self):
-        return {"key": self.object_key, "val": encode_args(("sha256", self.sha256))}
+        args = [self.identifier]
+        if self.identifier_key:
+            args.insert(0, self.identifier_key)
+        return {"key": self.object_key, "val": encode_args(args)}
 
     def get_fetch_url(self):
-        return reverse(f"santa:fetch_{self.target_type.lower()}_events", args=(self.sha256,))
+        return reverse(f"santa:fetch_{self.target_type.lower()}_events", args=(self.identifier,))
 
     def get_redirect_url(self):
-        return reverse(f"santa:{self.target_type.lower()}_events", args=(self.sha256,))
+        return reverse(f"santa:{self.target_type.lower()}_events", args=(self.identifier,))
 
     def get_store_redirect_url(self):
-        return reverse(f"santa:{self.target_type.lower()}_events_store_redirect", args=(self.sha256,))
+        return reverse(f"santa:{self.target_type.lower()}_events_store_redirect", args=(self.identifier,))
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
         ctx["target_type"] = self.target_type
-        ctx["sha256"] = self.sha256
-        ctx["target_url"] = reverse(f"santa:{self.target_type.lower()}", args=(self.sha256,))
+        ctx["identifier"] = self.identifier
+        ctx["target_url"] = reverse(f"santa:{self.target_type.lower()}", args=(self.identifier,))
         return ctx
 
 
@@ -213,45 +229,70 @@ class BinaryEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.BINARY
     object_key = "file"
+    identifier_key = "sha256"
 
 
 class FetchBinaryEventsView(EventsMixin, FetchEventsView):
     target_type = Target.BINARY
     object_key = "file"
+    identifier_key = "sha256"
 
 
 class BinaryEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     target_type = Target.BINARY
     object_key = "file"
+    identifier_key = "sha256"
 
 
 class BundleEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.BUNDLE
     object_key = "bundle"
+    identifier_key = "sha256"
 
 
 class FetchBundleEventsView(EventsMixin, FetchEventsView):
     target_type = Target.BUNDLE
     object_key = "bundle"
+    identifier_key = "sha256"
 
 
 class BundleEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     target_type = Target.BUNDLE
     object_key = "bundle"
+    identifier_key = "sha256"
 
 
 class CertificateEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.CERTIFICATE
     object_key = "certificate"
+    identifier_key = "sha256"
 
 
 class FetchCertificateEventsView(EventsMixin, FetchEventsView):
     target_type = Target.CERTIFICATE
     object_key = "certificate"
+    identifier_key = "sha256"
 
 
 class CertificateEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     target_type = Target.CERTIFICATE
     object_key = "certificate"
+    identifier_key = "sha256"
+
+
+class TeamIDEventsView(EventsMixin, EventsView):
+    template_name = "santa/target_events.html"
+    target_type = Target.TEAM_ID
+    object_key = "apple_team_id"
+
+
+class FetchTeamIDEventsView(EventsMixin, FetchEventsView):
+    target_type = Target.TEAM_ID
+    object_key = "apple_team_id"
+
+
+class TeamIDEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    target_type = Target.TEAM_ID
+    object_key = "apple_team_id"

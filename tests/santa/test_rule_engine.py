@@ -12,6 +12,8 @@ def new_sha256():
 
 
 class SantaRuleEngineTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         cls.configuration = Configuration.objects.create(name=get_random_string(256), batch_size=5)
@@ -24,23 +26,23 @@ class SantaRuleEngineTestCase(TestCase):
                                                               hardware_uuid=uuid.uuid4(),
                                                               serial_number=cls.machine_serial_number,
                                                               client_mode=Configuration.MONITOR_MODE,
-                                                              santa_version="1.17")
+                                                              santa_version="2022.1")
         cls.machine_serial_number2 = get_random_string(64)
         cls.enrolled_machine2 = EnrolledMachine.objects.create(enrollment=cls.enrollment,
                                                                hardware_uuid=uuid.uuid4(),
                                                                serial_number=cls.machine_serial_number2,
                                                                client_mode=Configuration.MONITOR_MODE,
-                                                               santa_version="1.17")
+                                                               santa_version="2022.1")
 
     def create_rule(self, target_type=Target.BINARY, policy=Rule.ALLOWLIST, configuration=None):
-        target = Target.objects.create(type=target_type, sha256=new_sha256())
+        target = Target.objects.create(type=target_type, identifier=new_sha256())
         if configuration is None:
             configuration = self.configuration
         rule = Rule.objects.create(configuration=configuration, target=target, policy=policy)
         return target, rule
 
     def create_bundle_rule(self, policy=Rule.ALLOWLIST):
-        bundle_target = Target.objects.create(type=Target.BUNDLE, sha256=new_sha256())
+        bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=new_sha256())
         bundle = Bundle.objects.create(
             target=bundle_target,
             path=get_random_string(78),
@@ -51,7 +53,7 @@ class SantaRuleEngineTestCase(TestCase):
             binary_count=3,
         )
         for _ in range(bundle.binary_count):
-            binary_target = Target.objects.create(type=Target.BINARY, sha256=new_sha256())
+            binary_target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
             bundle.binary_targets.add(binary_target)
         bundle_rule = Rule.objects.create(
             configuration=self.configuration,
@@ -66,7 +68,7 @@ class SantaRuleEngineTestCase(TestCase):
             "target_id": target.pk,
             "policy": rule.policy,
             "rule_type": target.type,
-            "sha256": target.sha256,
+            "identifier": target.identifier,
             "custom_msg": "",
             "version": rule.version,
         }
@@ -76,7 +78,7 @@ class SantaRuleEngineTestCase(TestCase):
         target, rule = self.create_rule(target_type, policy, configuration)
         serialized_rule = {
             "rule_type": target.type,
-            "sha256": target.sha256,
+            "identifier": target.identifier,
             "policy": translate_rule_policy(rule.policy),
         }
         if rule.custom_msg:
@@ -248,12 +250,12 @@ class SantaRuleEngineTestCase(TestCase):
             "target_id": binary_target.pk,
             "policy": bundle_rule.policy,
             "rule_type": binary_target.type,
-            "sha256": binary_target.sha256,
+            "identifier": binary_target.identifier,
             "custom_msg": "",
             "version": bundle_rule.version,
-            "file_bundle_hash": bundle_target.sha256,
+            "file_bundle_hash": bundle_target.identifier,
             "file_bundle_binary_count": bundle.binary_count,
-        } for binary_target in bundle.binary_targets.all().order_by("sha256")]
+        } for binary_target in bundle.binary_targets.all().order_by("identifier")]
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), results)
         # simulate acknowleged sync
         for binary_target in bundle.binary_targets.all():
@@ -300,7 +302,7 @@ class SantaRuleEngineTestCase(TestCase):
         for _ in range(6):
             _, _, serialized_rule = self.create_and_serialize_rule()
             serialized_rules.append(serialized_rule)
-        serialized_rules.sort(key=lambda r: r["sha256"])
+        serialized_rules.sort(key=lambda r: r["identifier"])
         i = 0
         response_cursor = None
         for batch_len in (5, 1):
@@ -330,7 +332,7 @@ class SantaRuleEngineTestCase(TestCase):
         for _ in range(11):
             _, _, serialized_rule = self.create_and_serialize_rule()
             serialized_rules.append(serialized_rule)
-        serialized_rules.sort(key=lambda r: r["sha256"])
+        serialized_rules.sort(key=lambda r: r["identifier"])
         response_cursor = None
         machine_rule_qs = self.enrolled_machine.machinerule_set.all()
         i = 0
@@ -397,7 +399,7 @@ class SantaRuleEngineTestCase(TestCase):
         for _ in range(6):
             _, _, serialized_rule = self.create_and_serialize_rule()
             serialized_rules.append(serialized_rule)
-        serialized_rules.sort(key=lambda r: r["sha256"])
+        serialized_rules.sort(key=lambda r: r["identifier"])
         machine_rule_qs = self.enrolled_machine.machinerule_set.all()
         # first 2 requests OK
         i = 0
@@ -487,10 +489,10 @@ class SantaRuleEngineTestCase(TestCase):
         serialized_rules = [{
             "policy": translate_rule_policy(bundle_rule.policy),
             "rule_type": binary_target.type,
-            "sha256": binary_target.sha256,
-            "file_bundle_hash": bundle_target.sha256,
+            "identifier": binary_target.identifier,
+            "file_bundle_hash": bundle_target.identifier,
             "file_bundle_binary_count": bundle.binary_count,
-        } for binary_target in bundle.binary_targets.all().order_by("sha256")]
+        } for binary_target in bundle.binary_targets.all().order_by("identifier")]
         rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
         self.assertEqual(rule_batch, serialized_rules)
         # noop

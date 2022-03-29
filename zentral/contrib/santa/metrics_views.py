@@ -82,6 +82,8 @@ class MetricsView(BasePrometheusMetricsView):
                 labels["target_type"] = "bundle"
             elif target_type == Target.CERTIFICATE:
                 labels["target_type"] = "certificate"
+            elif target_type == Target.TEAM_ID:
+                labels["target_type"] = "teamid"
             else:
                 logging.warning("Unknown target type: %s", target_type)
                 continue

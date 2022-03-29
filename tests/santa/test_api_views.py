@@ -156,7 +156,7 @@ class APIViewsTestCase(TestCase):
             "name": get_random_string(12),
             "rules": [
                 {"rule_type": "BINARY",
-                 "sha256": get_random_string(64, "0123456789abcdef"),
+                 "identifier": get_random_string(64, "0123456789abcdef"),
                  "policy": "BLOCKLIST",
                  "primary_users": [get_random_string(32)],
                  "excluded_primary_users": [get_random_string(32)],
@@ -217,7 +217,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(
             self.configuration.rule_set.filter(
                 target__type=Target.BINARY,
-                target__sha256=data["rules"][0]["sha256"],
+                target__identifier=data["rules"][0]["identifier"],
                 policy=Rule.BLOCKLIST,
                 serial_numbers=data["rules"][0]["serial_numbers"],
                 excluded_serial_numbers=data["rules"][0]["excluded_serial_numbers"],
@@ -232,7 +232,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(
             self.configuration2.rule_set.filter(
                 target__type=Target.BINARY,
-                target__sha256=data["rules"][0]["sha256"],
+                target__identifier=data["rules"][0]["identifier"],
                 policy=Rule.BLOCKLIST,
                 serial_numbers=data["rules"][0]["serial_numbers"],
                 excluded_serial_numbers=data["rules"][0]["excluded_serial_numbers"],
@@ -314,7 +314,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(
             self.configuration.rule_set.filter(
                 target__type=Target.BINARY,
-                target__sha256=data["rules"][0]["sha256"],
+                target__identifier=data["rules"][0]["identifier"],
                 policy=Rule.BLOCKLIST,
                 serial_numbers__overlap=data["rules"][0]["serial_numbers"],
                 serial_numbers__len=len(data["rules"][0]["serial_numbers"]),
@@ -333,7 +333,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(
             self.configuration2.rule_set.filter(
                 target__type=Target.BINARY,
-                target__sha256=data["rules"][0]["sha256"],
+                target__identifier=data["rules"][0]["identifier"],
                 policy=Rule.BLOCKLIST,
                 serial_numbers__overlap=data["rules"][0]["serial_numbers"],
                 serial_numbers__len=len(data["rules"][0]["serial_numbers"]),
@@ -356,7 +356,7 @@ class APIViewsTestCase(TestCase):
             "configurations": [self.configuration.name],
             "rules": [
                 {"rule_type": "BINARY",
-                 "sha256": data["rules"][0]["sha256"],
+                 "identifier": data["rules"][0]["identifier"],
                  "policy": "ALLOWLIST"}
             ]
         }
@@ -365,14 +365,14 @@ class APIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(
             json_response,
-            {"rules": {"0": {"non_field_errors": [f'BINARY/{data["rules"][0]["sha256"]}: conflict']}}}
+            {"rules": {"0": {"non_field_errors": [f'BINARY/{data["rules"][0]["identifier"]}: conflict']}}}
         )
         self.assertEqual(self.configuration.rule_set.count(), 1)
         self.assertEqual(self.configuration2.rule_set.count(), 1)
         self.assertEqual(RuleSet.objects.filter(name=data2["name"]).count(), 0)
 
         # new scoped ruleset
-        data2["rules"][0]["sha256"] = get_random_string(64, "0123456789abcdef")
+        data2["rules"][0]["identifier"] = get_random_string(64, "0123456789abcdef")
         response = self.post_json_data(url, data2)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -398,7 +398,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(
             self.configuration.rule_set.filter(
                 target__type=Target.BINARY,
-                target__sha256=data2["rules"][0]["sha256"],
+                target__identifier=data2["rules"][0]["identifier"],
                 policy=Rule.ALLOWLIST,
                 ruleset=ruleset2,
             ).count(), 1
@@ -434,8 +434,8 @@ class APIViewsTestCase(TestCase):
             url,
             {"name": get_random_string(12),
              "rules": [
-                 {"rule_type": "BINARY", "sha256": sha256, "policy": "ALLOWLIST"},
-                 {"rule_type": "BINARY", "sha256": sha256, "policy": "ALLOWLIST"},
+                 {"rule_type": "BINARY", "identifier": sha256, "policy": "ALLOWLIST"},
+                 {"rule_type": "BINARY", "identifier": sha256, "policy": "ALLOWLIST"},
              ]}
         )
         self.assertEqual(response.status_code, 400)
@@ -451,7 +451,7 @@ class APIViewsTestCase(TestCase):
             url,
             {"name": get_random_string(12),
              "rules": [
-                 {"rule_type": "BUNDLE", "sha256": sha256, "policy": "ALLOWLIST"},
+                 {"rule_type": "BUNDLE", "identifier": sha256, "policy": "ALLOWLIST"},
              ]}
         )
         self.assertEqual(response.status_code, 400)
@@ -466,7 +466,7 @@ class APIViewsTestCase(TestCase):
             url,
             {"name": get_random_string(12),
              "rules": [{"rule_type": "BINARY",
-                        "sha256": get_random_string(64, "0123456789abcdef"),
+                        "identifier": get_random_string(64, "0123456789abcdef"),
                         "policy": "ALLOWLIST",
                         "serial_numbers": ["01234567", "12345678"],
                         "excluded_serial_numbers": ["12345678"]}]}
@@ -483,7 +483,7 @@ class APIViewsTestCase(TestCase):
             url,
             {"name": get_random_string(12),
              "rules": [{"rule_type": "BINARY",
-                        "sha256": get_random_string(64, "0123456789abcdef"),
+                        "identifier": get_random_string(64, "0123456789abcdef"),
                         "policy": "ALLOWLIST",
                         "primary_users": ["vincent", "françois"],
                         "excluded_primary_users": ["françois", "paul", "les autres…"]}]}
@@ -500,7 +500,7 @@ class APIViewsTestCase(TestCase):
             url,
             {"name": get_random_string(12),
              "rules": [{"rule_type": "BINARY",
-                        "sha256": get_random_string(64, "0123456789abcdef"),
+                        "identifier": get_random_string(64, "0123456789abcdef"),
                         "policy": "ALLOWLIST",
                         "tags": ["vincent", "françois"],
                         "excluded_tags": ["françois", "paul", "les autres…"]}]}
@@ -526,6 +526,14 @@ class APIViewsTestCase(TestCase):
     def test_targets_export(self):
         self.set_permissions("santa.view_target")
         response = self.client.post(reverse("santa_api:targets_export"),
+                                    HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("task_id", response.data)
+        self.assertIn("task_result_url", response.data)
+
+    def test_team_id_targets_export(self):
+        self.set_permissions("santa.view_target")
+        response = self.client.post("{}?target_type=TEAMID".format(reverse("santa_api:targets_export")),
                                     HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)

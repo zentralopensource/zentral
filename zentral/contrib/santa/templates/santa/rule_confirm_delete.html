@@ -26,7 +26,7 @@
     <tr>
       <td>{{ target.get_type_display }}</td>
       <td>
-        {{ target.sha256 }}
+        {{ target.identifier }}
         {% if target.type == "BINARY" %}
         {% for file in target.files %}
         <dl class="dl-horizontal">

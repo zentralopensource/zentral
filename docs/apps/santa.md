@@ -112,7 +112,7 @@ The payload is an array of [NotificationSettingItem](https://developer.apple.com
 
 ### Definitions
 
-Zentral Santa rule combine a *target* and a *policy*. The target can be of type `Binary`, `Bundle` or `Certificate`. A target is uniquely identified by its type, and its sha256. The policy can be one of `Allowlist`, `Blocklist`, `Silent blocklist` and `Allowlist compiler`.
+Zentral Santa rule combine a *target* and a *policy*. The target can be of type `Binary`, `Bundle`, `Certificate` or `Team ID`. A target is uniquely identified by its type, and its identifier (sha256 hexdigest for `Binary`, `Bundle` and `Certificate` targets). The policy can be one of `Allowlist`, `Blocklist`, `Silent blocklist` and `Allowlist compiler`.
 
 To avoid conflicts, there is at most **one rule per target** for each configuration.
 
@@ -130,7 +130,7 @@ You can filter the list using the search form at the top. From this list, you ca
 
 To get the necessary information about a binary or a certificate you want to block or allow, use the [`santactl fileinfo` command](https://santa.dev/details/santactl.html#fileinfo).
 
-Once you have set the rule type, the sha256 and the policy, you can click on the [Save] button, and the rule will be added to the configuration for all the machines.
+Once you have set the rule type, the identifier and the policy, you can click on the [Save] button, and the rule will be added to the configuration for all the machines.
 
 If you do not want to wait for a full sync to happen on your machine, you can trigger one using the following command:
 
@@ -144,7 +144,7 @@ You should see a rule being downloaded in the command output.
 
 Zentral is collecting information about all the binary, bundles and certificates that are present in the events that Santa uploads.
 
-Using this information, it is possible to build a rule without knowing the sha256, using the "Binary rule", "Bundle rule" or "Certificate rule" options in Rules > [Add] dropdown menu. But it might be that the binary, bundle or certificate information is not in Zentral. In that case, use the "Base rule" form.
+Using this information, it is possible to build a rule without knowing the identifier, using the "Binary rule", "Bundle rule", "Certificate rule", or "Team ID rule" options in Rules > [Add] dropdown menu. But it might be that the binary, bundle or certificate information is not in Zentral. In that case, use the "Base rule" form.
 
 ### Rule scope
 
@@ -232,7 +232,7 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * method: POST
 * Content-Type: application/json
 
-This endpoint is designed to ingest the JSON output of the [`santactl fileinfo` command](https://santa.dev/details/santactl.html#fileinfo). This can be used to quickly and automatically upload information about binaries and certificates to Zentral. This information will be used to add context to sha256 rules, and in the rule forms.
+This endpoint is designed to ingest the JSON output of the [`santactl fileinfo` command](https://santa.dev/details/santactl.html#fileinfo). This can be used to quickly and automatically upload information about binaries and certificates to Zentral. This information will be used to add context to rules identifiers, and in the rule forms.
 
 Example:
 
@@ -286,7 +286,7 @@ A ruleset is a set of rules, with a unique name, that can be applied to some Zen
 
 Ruleset updates are applied idempotently. Rules will be added, updated or deleted in the scoped configurations to match the definition of the posted ruleset.
 
-The key for each rule is the target (type, sha256). Only **one rule** can exist **for a given target** in a configuration.
+The key for each rule is the target (type, identifier). Only **one rule** can exist **for a given target** in a configuration.
 
 Ruleset allows to automatically manage a set of rules in a configuration, without modifying rules from a different ruleset, or manually created in Zentral.
 
@@ -304,12 +304,12 @@ ruleset.json
   "rules": [
     {
       "rule_type": "BINARY",
-      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "identifier": "1111111111111111111111111111111111111111111111111111111111111111",
       "policy": "ALLOWLIST"
     },
     {
       "rule_type": "BINARY",
-      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "identifier": "2222222222222222222222222222222222222222222222222222222222222222",
       "policy": "ALLOWLIST",
       "serial_numbers": ["SN1", "SN2"],
       "excluded_serial_numbers": ["SN3"],
@@ -392,7 +392,7 @@ ruleset2.json, scoped to only one configuration, but with a conflict with rulese
   "rules": [
     {
       "rule_type": "BINARY",
-      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "identifier": "1111111111111111111111111111111111111111111111111111111111111111",
       "policy": "ALLOWLIST"
     }
   ]
@@ -413,7 +413,7 @@ If you POST it, you will get the following error:
 }
 ```
 
-This indicates that there is an existing rule in the configuration, on the same target as the first rule in ruleset2.json, but not belonging to this ruleset. If we change the sha256, a new rule will be created without conflict, and without modifying the manual rules, or the rules from ruleset.json.
+This indicates that there is an existing rule in the configuration, on the same target as the first rule in ruleset2.json, but not belonging to this ruleset. If we change the identifier, a new rule will be created without conflict, and without modifying the manual rules, or the rules from ruleset.json.
 
 ```json
 {
@@ -422,7 +422,7 @@ This indicates that there is an existing rule in the configuration, on the same 
   "rules": [
     {
       "rule_type": "BINARY",
-      "sha256": "9876987698769876987698769876987698769876987698769876987698769876",
+      "identifier": "9876987698769876987698769876987698769876987698769876987698769876",
       "policy": "ALLOWLIST"
     }
   ]
@@ -463,7 +463,7 @@ configurations:
   - Name of your configuration
 rules:
   - rule_type: BINARY
-    sha256: 9876987698769876987698769876987698769876987698769876987698769876
+    identifier: 9876987698769876987698769876987698769876987698769876987698769876
     policy: ALLOWLIST
 ```
 

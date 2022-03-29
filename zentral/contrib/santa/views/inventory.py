@@ -31,7 +31,8 @@ class InventoryMachineSubview:
                 "binary_rule_count": "-" if em.binary_rule_count is None else em.binary_rule_count,
                 "certificate_rule_count": "-" if em.certificate_rule_count is None else em.certificate_rule_count,
                 "compiler_rule_count": "-" if em.compiler_rule_count is None else em.compiler_rule_count,
-                "transitive_rule_count": "-" if em.transitive_rule_count is None else em.transitive_rule_count
+                "transitive_rule_count": "-" if em.transitive_rule_count is None else em.transitive_rule_count,
+                "teamid_rule_count": "-" if em.teamid_rule_count is None else em.teamid_rule_count,
             })
             if self.user.has_perm("santa.view_configuration"):
                 ctx["configuration"] = em.enrollment.configuration

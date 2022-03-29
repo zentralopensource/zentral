@@ -66,9 +66,17 @@
     {% for target in targets %}
     {% with target.object as obj %}
     <tr>
-      <td><a href="{{ target.url }}">{{ target.target_type|title }}</a></td>
       <td>
-        <a href="{{ target.url }}"><code>{{ target.sha256 }}</code></a>
+        <a href="{{ target.url }}">
+          {% if target.target_type == "TEAMID" %}
+          Team ID
+          {% else %}
+          {{ target.target_type|title }}
+          {% endif %}
+        </a>
+      </td>
+      <td>
+        <a href="{{ target.url }}"><code>{{ target.identifier }}</code></a>
         {% if target.target_type == "BINARY" %}
         <br>{{ obj.name }}
         {% if obj.cert_sha256 %}
@@ -83,6 +91,9 @@
         <br>{{ obj.cn }}
         <br>{{ obj.ou }}
         <br>{{ obj.valid_from|date:"Y-m-d" }} → {{ obj.valid_until|date:"Y-m-d" }}
+        {% endif %}
+        {% if target.target_type == "TEAMID" %}
+        <br>{{ obj.organization }}
         {% endif %}
       </td>
       <td>{{ target.rule_count }}</td>

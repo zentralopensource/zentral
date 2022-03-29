@@ -1,7 +1,8 @@
+from collections import namedtuple
+from dateutil import parser
 import json
 import logging
-from dateutil import parser
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import MaxValueValidator, MinLengthValidator, MinValueValidator
 from django.contrib.postgres.fields import ArrayField
 from django.db import connection, models
 from django.db.models import Count, Q
@@ -73,7 +74,9 @@ class Configuration(models.Model):
         'allowed_path_regex',
         'blocked_path_regex',
         'enable_bundles',
-        'enable_transitive_rules'
+        'enable_transitive_rules',
+        'block_usb_mass_storage',
+        'remount_usb_mode',
     }
     DEPRECATED_ATTRIBUTES_MAPPING_1_14 = {
         'allowed_path_regex': 'whitelist_regex',
@@ -223,6 +226,15 @@ class Configuration(models.Model):
         default=False,
         help_text="If set, the transitive rule feature is enabled."
     )
+    block_usb_mass_storage = models.BooleanField(
+        default=False,
+        help_text="If set, blocking USB Mass storage feature is enabled."
+    )
+    remount_usb_mode = ArrayField(
+        models.CharField(max_length=16, validators=[MinLengthValidator(2)]),
+        blank=True,
+        default=list
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -238,7 +250,7 @@ class Configuration(models.Model):
     def is_monitor_mode(self):
         return self.client_mode == self.MONITOR_MODE
 
-    def get_sync_server_config(self, santa_version):
+    def get_sync_server_config(self, comparable_santa_version):
         config = {k: getattr(self, k)
                   for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
 
@@ -257,8 +269,8 @@ class Configuration(models.Model):
                 config[attr] = "NON_MATCHING_PLACEHOLDER_{}".format(get_random_string(8))
 
         # translate attributes for older santa agents
-        santa_version = tuple(int(i) for i in santa_version.split("."))
-        if santa_version < (1, 14):
+        # TODO remove eventually
+        if comparable_santa_version < (1, 14):
             for attr, deprecated_attr in self.DEPRECATED_ATTRIBUTES_MAPPING_1_14.items():
                 config[deprecated_attr] = config.pop(attr)
 
@@ -338,6 +350,7 @@ class EnrolledMachine(models.Model):
     certificate_rule_count = models.IntegerField(null=True)
     compiler_rule_count = models.IntegerField(null=True)
     transitive_rule_count = models.IntegerField(null=True)
+    teamid_rule_count = models.IntegerField(null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -346,6 +359,12 @@ class EnrolledMachine(models.Model):
 
     class Meta:
         unique_together = ("enrollment", "hardware_uuid")
+
+    def get_comparable_santa_version(self):
+        try:
+            return tuple(int(i) for i in self.santa_version.split("."))
+        except ValueError:
+            return ()
 
 
 # Rules
@@ -361,15 +380,22 @@ class TargetManager(models.Manager):
             "  where s.module = 'zentral.contrib.santa' and s.name = 'Santa events'"
             "  group by f.sha_256, f.signed_by_id, f.name"
             "), collected_certificates as ("
-            "  select distinct c.sha_256"
+            "  select c.sha_256, c.common_name"
             "  from inventory_certificate as c"
             "  join collected_files as f on (c.id = f.signed_by_id)"
+            "  group by c.sha_256, c.common_name"
+            "), collected_team_ids as ("
+            "  select c.organizational_unit, c.organization"
+            "  from inventory_certificate as c"
+            "  join collected_files as f on (c.id = f.signed_by_id)"
+            "  where c.organizational_unit ~ '[A-Z0-9]{10}'"
+            "  group by c.organizational_unit, c.organization"
             ") "
             "select 'binary' as target_type,"
             "count(*) as target_count,"
             "(select count(distinct t.id)"
             " from santa_target as t"
-            " join collected_files as f on (t.type = 'BINARY' and t.sha256=f.sha_256)"
+            " join collected_files as f on (t.type = 'BINARY' and t.identifier=f.sha_256)"
             " join santa_rule as r on (t.id = r.target_id)) as rule_count "
             "from collected_files "
             "union "
@@ -377,9 +403,17 @@ class TargetManager(models.Manager):
             "count(*) as target_count,"
             "(select count(distinct t.id)"
             " from santa_target as t"
-            " join collected_certificates as c on (t.type = 'CERTIFICATE' and t.sha256=c.sha_256)"
+            " join collected_certificates as c on (t.type = 'CERTIFICATE' and t.identifier=c.sha_256)"
             " join santa_rule as r on (t.id = r.target_id)) as rule_count "
             "from collected_certificates "
+            "union "
+            "select 'teamid' as target_type,"
+            "count(*) as target_count,"
+            "(select count(distinct t.id)"
+            " from santa_target as t"
+            " join collected_team_ids as i on (t.type = 'TEAMID' and t.identifier=i.organizational_unit)"
+            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
+            "from collected_team_ids "
             "union "
             "select 'bundle' as target_type,"
             "count(*) as target_count,"
@@ -402,16 +436,20 @@ class TargetManager(models.Manager):
         kwargs = {}
         if q:
             kwargs["q"] = "%{}%".format(connection.ops.prep_for_like_query(q))
-            bi_where = "where upper(name) like upper(%(q)s) or upper(sha256) like upper(%(q)s)"
+            bi_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
             ce_where = ("where upper(c.common_name) like upper(%(q)s) "
                         "or upper(c.organizational_unit) like upper(%(q)s) "
                         "or upper(c.sha_256) like upper(%(q)s)")
-            bu_where = "where upper(name) like upper(%(q)s) or upper(sha256) like upper(%(q)s)"
+            ti_where = ("where c.organizational_unit ~ '[A-Z0-9]{10}' and ("
+                        "upper(c.organization) like upper(%(q)s) "
+                        "or upper(c.organizational_unit) like upper(%(q)s))")
+            bu_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
         else:
             bi_where = ce_where = bu_where = ""
+            ti_where = "where c.organizational_unit ~ '[A-Z0-9]{10}'"
         targets_subqueries = {
             "BINARY":
-                "select 'BINARY' as target_type,  f.sha256, f.name as sort_str,"
+                "select 'BINARY' as target_type,  f.identifier, f.name as sort_str,"
                 "jsonb_build_object("
                 " 'name', f.name,"
                 " 'cert_cn', c.common_name,"
@@ -420,10 +458,10 @@ class TargetManager(models.Manager):
                 ") as object "
                 "from collected_files as f "
                 "left join inventory_certificate as c on (f.signed_by_id = c.id) "
-                f"{bi_where}"
-                "group by target_type, f.sha256, f.name, c.common_name, c.sha_256, c.organizational_unit",
+                f"{bi_where} "
+                "group by target_type, f.identifier, f.name, c.common_name, c.sha_256, c.organizational_unit",
             "CERTIFICATE":
-                "select 'CERTIFICATE' as target_type, c.sha_256 as sha256, c.common_name as sort_str,"
+                "select 'CERTIFICATE' as target_type, c.sha_256 as identifier, c.common_name as sort_str,"
                 "jsonb_build_object("
                 " 'cn', c.common_name,"
                 " 'ou', c.organizational_unit,"
@@ -432,10 +470,20 @@ class TargetManager(models.Manager):
                 ") as object "
                 "from inventory_certificate as c "
                 "join collected_files as f on (c.id = f.signed_by_id) "
-                f"{ce_where}"
+                f"{ce_where} "
                 "group by target_type, c.sha_256, c.common_name, c.organizational_unit, c.valid_from, c.valid_until",
+            "TEAMID":
+                "select 'TEAMID' as target_type, c.organizational_unit as identifier, c.organization as sort_str,"
+                "jsonb_build_object("
+                " 'organizational_unit', c.organizational_unit,"
+                " 'organization', c.organization"
+                ") as object "
+                "from inventory_certificate as c "
+                "join collected_files as f on (c.id = f.signed_by_id) "
+                f"{ti_where} "
+                "group by target_type, c.organizational_unit, c.organization",
             "BUNDLE":
-                "select 'BUNDLE' as target_type, t.sha256, b.name as sort_str,"
+                "select 'BUNDLE' as target_type, t.identifier, b.name as sort_str,"
                 "jsonb_build_object("
                 " 'name', b.name,"
                 " 'version', b.version,"
@@ -443,24 +491,24 @@ class TargetManager(models.Manager):
                 ") as object "
                 "from santa_bundle as b "
                 "join santa_target as t on (b.target_id = t.id) "
-                f"{bu_where}"
+                f"{bu_where} "
         }
         targets_query = " union ".join(v for k, v in targets_subqueries.items()
                                        if target_type is None or k == target_type)
         query = (
             "with collected_files as ("
-            "  select f.sha_256 as sha256, f.signed_by_id, f.name"
+            "  select f.sha_256 as identifier, f.signed_by_id, f.name"
             "  from inventory_file as f"
             "  join inventory_source as s on (f.source_id = s.id)"
             "  where s.module='zentral.contrib.santa' and s.name = 'Santa events'"
             "  group by f.sha_256, f.signed_by_id, f.name"
             f"), targets as ({targets_query}) "
-            "select target_type, sha256, object, count(*) over() as full_count,"
+            "select target_type, identifier, object, count(*) over() as full_count,"
             "(select count(*) from santa_rule as r"
             " join santa_target as t on (r.target_id = t.id)"
-            " where t.type = ts.target_type and t.sha256 = ts.sha256) as rule_count "
+            " where t.type = ts.target_type and t.identifier = ts.identifier) as rule_count "
             "from targets as ts "
-            "order by sort_str, sha256 "
+            "order by sort_str, identifier "
         )
         return query, kwargs
 
@@ -473,52 +521,102 @@ class TargetManager(models.Manager):
         results = []
         for row in cursor.fetchall():
             result = dict(zip(columns, row))
-            obj = json.loads(result["object"])
+            obj = json.loads(result.pop("object"))
             for attr in ("valid_from", "valid_until"):
                 if attr in obj:
                     obj[attr] = parser.parse(obj[attr])
+            result["object"] = obj
             url_name = result["target_type"].lower()
-            result["url"] = reverse(f"santa:{url_name}", args=(result["sha256"],))
+            result["url"] = reverse(f"santa:{url_name}", args=(result["identifier"],))
             results.append(result)
         return results
+
+    def get_teamid_objects(self, identifier):
+        query = (
+            "select c.organizational_unit, c.organization "
+            "from inventory_certificate as c "
+            "join inventory_file as f on (f.signed_by_id = c.id) "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and c.organizational_unit = %s "
+            "group by c.organizational_unit, c.organization "
+            "order by c.organization, c.organizational_unit"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [identifier])
+        nt_teamid = namedtuple('TeamID', [col[0] for col in cursor.description])
+        return [nt_teamid(*row) for row in cursor.fetchall()]
+
+    def search_teamid_objects(self, **kwargs):
+        q = kwargs.get("query")
+        if not q:
+            return []
+        query = (
+            "select c.organizational_unit, c.organization "
+            "from inventory_certificate as c "
+            "join inventory_file as f on (f.signed_by_id = c.id) "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and (c.organizational_unit ~* %s or c.organization ~* %s)"
+            "group by c.organizational_unit, c.organization "
+            "order by c.organization, c.organizational_unit"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [q, q])
+        nt_teamid = namedtuple('TeamID', [col[0] for col in cursor.description])
+        return [nt_teamid(*row) for row in cursor.fetchall()]
 
 
 class Target(models.Model):
     BINARY = "BINARY"
     BUNDLE = "BUNDLE"
     CERTIFICATE = "CERTIFICATE"
+    TEAM_ID = "TEAMID"
     TYPE_CHOICES = (
         (BINARY, "Binary"),
         (BUNDLE, "Bundle"),
         (CERTIFICATE, "Certificate"),
+        (TEAM_ID, "Team ID"),
     )
     type = models.CharField(choices=TYPE_CHOICES, max_length=16)
-    sha256 = models.CharField(max_length=64)
+    identifier = models.CharField(max_length=64)
 
     objects = TargetManager()
 
     class Meta:
-        unique_together = (("type", "sha256"),)
+        unique_together = (("type", "identifier"),)
 
     def get_absolute_url(self):
-        return reverse(f"santa:{self.type.lower()}", args=(self.sha256,))
+        return reverse(f"santa:{self.type.lower()}", args=(self.identifier,))
 
     @cached_property
     def files(self):
         if self.type == self.BINARY:
-            return list(File.objects.select_related("bundle").filter(sha_256=self.sha256))
+            return list(File.objects.select_related("bundle").filter(sha_256=self.identifier))
         else:
             return []
 
     @cached_property
     def certificates(self):
         if self.type == self.CERTIFICATE:
-            return list(Certificate.objects.filter(sha_256=self.sha256))
+            return list(Certificate.objects.filter(sha_256=self.identifier))
+        else:
+            return []
+
+    @cached_property
+    def team_ids(self):
+        if self.type == self.TEAM_ID:
+            return Target.objects.get_teamid_objects(self.identifier)
         else:
             return []
 
     def serialize_for_event(self):
-        return {"type": self.type, "sha256": self.sha256}
+        d = {"type": self.type}
+        if self.type == self.TEAM_ID:
+            d["team_id"] = self.identifier
+        else:
+            d["sha256"] = self.identifier
+        return d
 
 
 class BundleManager(models.Manager):
@@ -558,7 +656,7 @@ class Bundle(models.Model):
         return f"{self.bundle_id} {self.version_str}"
 
     def get_absolute_url(self):
-        return reverse("santa:bundle", args=(self.target.sha256,))
+        return reverse("santa:bundle", args=(self.target.identifier,))
 
 
 class RuleSet(models.Model):
@@ -714,12 +812,12 @@ class MachineRuleManager(models.Manager):
             "  null as file_bundle_binary_count, null as file_bundle_target_id"
             "  from rule_product where rule_target_id is null"
             ") "  # limit, order and join with target to get all the necessary info
-            "select t.id as target_id, t.type as rule_type, t.sha256, cr.policy, cr.custom_msg, cr.version,"
-            "cr.file_bundle_binary_count, t2.sha256 as file_bundle_hash "
+            "select t.id as target_id, t.type as rule_type, t.identifier, cr.policy, cr.custom_msg, cr.version,"
+            "cr.file_bundle_binary_count, t2.identifier as file_bundle_hash "
             "from changed_rules as cr "
             "join santa_target as t on (t.id = cr.target_id) "
             "left join santa_target as t2 on (t2.id = cr.file_bundle_target_id) "
-            "order by t.sha256 limit %(batch_size)s"
+            "order by t.identifier limit %(batch_size)s"
         )
         configuration = enrolled_machine.enrollment.configuration
         # machine specific rules
@@ -775,9 +873,13 @@ class MachineRuleManager(models.Manager):
             # acknowlege the other machine rules from the last batch
             qs.update(cursor=None)
 
+        # translate attributes for older santa agents
+        # TODO remove eventually
+
         # return next batch
         rules = []
         new_cursor = None
+        use_sha256_attr = enrolled_machine.get_comparable_santa_version() < (2022, 1)
         for rule in self._iter_new_rules(enrolled_machine, tags):
             if new_cursor is None:
                 new_cursor = get_random_string(8)
@@ -787,6 +889,8 @@ class MachineRuleManager(models.Manager):
             version = rule.pop("version")
             if policy == MachineRule.REMOVE or not rule["custom_msg"]:
                 rule.pop("custom_msg", None)
+            if use_sha256_attr and rule["rule_type"] != Target.TEAM_ID:
+                rule["sha256"] = rule.pop("identifier")
             self.update_or_create(enrolled_machine=enrolled_machine,
                                   target=Target(pk=target_id),
                                   defaults={

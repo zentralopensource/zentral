@@ -4,6 +4,7 @@ import logging
 import os.path
 from rest_framework import serializers
 from .models import Bundle, Configuration, Rule, Target
+from .forms import test_sha256, test_team_id
 
 
 logger = logging.getLogger("zentral.contrib.santa.serializers")
@@ -12,7 +13,8 @@ logger = logging.getLogger("zentral.contrib.santa.serializers")
 class RuleUpdateSerializer(serializers.Serializer):
     policy = serializers.ChoiceField(choices=["ALLOWLIST", "ALLOWLIST_COMPILER", "BLOCKLIST", "SILENT_BLOCKLIST"])
     rule_type = serializers.ChoiceField(choices=[k for k, _ in Target.TYPE_CHOICES])
-    sha256 = serializers.RegexField(r'^[a-f0-9]{64}\Z')
+    sha256 = serializers.RegexField(r'^[a-f0-9]{64}\Z', required=False)  # Legacy field  TODO remove eventually
+    identifier = serializers.RegexField(r'^[a-zA-Z0-9]{10,64}\Z', required=False)
     custom_msg = serializers.CharField(required=False)
     serial_numbers = serializers.ListField(
         child=serializers.CharField(min_length=1),
@@ -46,12 +48,41 @@ class RuleUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError(f"Unknown policy: {value}")
 
     def validate(self, data):
-        if data["rule_type"] == Target.BUNDLE and not data["policy"] in Rule.BUNDLE_POLICIES:
+        rule_type = data["rule_type"]
+        # bundle rule policy
+        if rule_type == Target.BUNDLE and not data["policy"] in Rule.BUNDLE_POLICIES:
             raise serializers.ValidationError("Wrong policy for BUNDLE rule")
+        # identifier (or sha256)
+        identifier = data.pop("identifier", None)
+        sha256 = data.pop("sha256", None)
+        if not identifier and not sha256:
+            raise serializers.ValidationError({"identifier": "This field is required"})
+        elif identifier and sha256:
+            raise serializers.ValidationError("sha256 and identifier cannot be both set")
+        elif sha256:
+            if rule_type == Target.TEAM_ID:
+                raise serializers.ValidationError({"sha256": "This field cannot be used in a Team ID rule"})
+            else:
+                data["identifier"] = sha256
+        elif identifier:
+            if rule_type == Target.TEAM_ID:
+                identifier = identifier.upper()
+                if test_team_id(identifier):
+                    data["identifier"] = identifier
+                else:
+                    serializers.ValidationError({"identifier": "Invalid Team ID"})
+            else:
+                identifier = identifier.lower()
+                if test_sha256(identifier):
+                    data["identifier"] = identifier
+                else:
+                    serializers.ValidationError({"identifier": "Invalid sha256"})
+        # custom message only with blocklist rule
         if data["policy"] != Rule.BLOCKLIST and "custom_msg" in data:
             if data["custom_msg"]:
                 raise serializers.ValidationError("Custom message can only be set on BLOCKLIST rules")
             del data["custom_msg"]
+        # scope conflicts
         for attr in ("serial_numbers", "primary_users", "tags"):
             if set(data.get(attr, [])).intersection(set(data.get(f"excluded_{attr}", []))):
                 raise serializers.ValidationError(f"Conflict between {attr} and excluded_{attr}")
@@ -88,28 +119,28 @@ class RuleSetUpdateSerializer(serializers.Serializer):
         keys = set([])
         rule_errors = {}
         for rule_id, rule in enumerate(data.get("rules", [])):
-            key = rule["rule_type"], rule["sha256"]
+            key = rule["rule_type"], rule["identifier"]
             if key in keys:
                 rule_errors[str(rule_id)] = {
-                    "non_field_errors": ["{rule_type}/{sha256}: duplicated".format(**rule)]
+                    "non_field_errors": ["{rule_type}/{identifier}: duplicated".format(**rule)]
                 }
             keys.add(key)
             # TODO: optimize
             if (Rule.objects.exclude(ruleset__name=data["name"])
                             .filter(
                                 configuration__in=self.configurations,
-                                target__type=rule["rule_type"], target__sha256=rule["sha256"]
+                                target__type=rule["rule_type"], target__identifier=rule["identifier"]
                             ).exists()):
                 rule_errors[str(rule_id)] = {
-                    "non_field_errors": ["{rule_type}/{sha256}: conflict".format(**rule)]
+                    "non_field_errors": ["{rule_type}/{identifier}: conflict".format(**rule)]
                 }
             elif (
                 rule["rule_type"] == Target.BUNDLE and
-                not Bundle.objects.filter(target__sha256=rule["sha256"],
+                not Bundle.objects.filter(target__identifier=rule["identifier"],
                                           uploaded_at__isnull=False).exists()
             ):
                 rule_errors[str(rule_id)] = {
-                    "non_field_errors": ["{rule_type}/{sha256}: bundle unknown or not uploaded".format(**rule)]
+                    "non_field_errors": ["{rule_type}/{identifier}: bundle unknown or not uploaded".format(**rule)]
                 }
         if rule_errors:
             raise serializers.ValidationError({"rules": rule_errors})

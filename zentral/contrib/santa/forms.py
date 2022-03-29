@@ -1,10 +1,10 @@
+import re
 from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
 from django.db import transaction
 from django.db.models import Count, F
 from zentral.conf import settings
 from zentral.contrib.inventory.models import Tag
-from zentral.utils.forms import validate_sha256
 from .events import post_santa_rule_update_event
 from .models import Bundle, Configuration, Enrollment, Rule, RuleSet, Target, translate_rule_policy
 
@@ -38,6 +38,16 @@ class ConfigurationForm(forms.ModelForm):
                     field,
                     "The server requiring the client cert for authentication is not configured."
                 )
+
+        # block USB
+        block_usb_mass_storage = cleaned_data.get("block_usb_mass_storage")
+        remount_usb_mode = cleaned_data.get("remount_usb_mode")
+        if remount_usb_mode and not block_usb_mass_storage:
+            self.add_error(
+                "remount_usb_mode",
+                "'Block USB mass storage' must be set to use this option"
+            )
+
         return cleaned_data
 
 
@@ -75,14 +85,20 @@ class CertificateSearchForm(forms.Form):
                                                           "size": 50}))
 
 
+class TeamIDSearchForm(forms.Form):
+    query = forms.CharField(required=False,
+                            widget=forms.TextInput(attrs={"placeholder": "team ID, organization",
+                                                          "size": 50}))
+
+
 class RuleSearchForm(forms.Form):
     ruleset = forms.ModelChoiceField(queryset=RuleSet.objects.none(), required=False)
     target_type = forms.ChoiceField(choices=(("", "----"),) + Target.TYPE_CHOICES, required=False)
     policy = forms.ChoiceField(choices=(("", "----"),) + Rule.POLICY_CHOICES, required=False)
-    sha256 = forms.CharField(required=False,
-                             widget=forms.TextInput(attrs={"autofocus": "true",
-                                                           "size": 32,
-                                                           "placeholder": "sha256"}))
+    identifier = forms.CharField(required=False,
+                                 widget=forms.TextInput(attrs={"autofocus": "true",
+                                                               "size": 32,
+                                                               "placeholder": "identifier"}))
 
     def __init__(self, *args, **kwargs):
         self.configuration = kwargs.pop("configuration")
@@ -108,9 +124,9 @@ class RuleSearchForm(forms.Form):
         policy = self.cleaned_data.get("policy")
         if policy:
             qs = qs.filter(policy=policy)
-        sha256 = self.cleaned_data.get("sha256")
-        if sha256:
-            qs = qs.filter(target__sha256__icontains=sha256)
+        identifier = self.cleaned_data.get("identifier")
+        if identifier:
+            qs = qs.filter(target__identifier__icontains=identifier)
         return qs
 
 
@@ -144,9 +160,17 @@ class RuleFormMixin:
             )
 
 
+def test_sha256(sha256):
+    return re.match(r'^[a-f0-9]{64}\Z', sha256) is not None
+
+
+def test_team_id(team_id):
+    return re.match(r'^[0-9A-Z]{10}\Z', team_id) is not None
+
+
 class RuleForm(RuleFormMixin, forms.Form):
     target_type = forms.ChoiceField(choices=Target.TYPE_CHOICES)
-    target_sha256 = forms.CharField(validators=[validate_sha256])
+    target_identifier = forms.CharField()
     policy = forms.ChoiceField(choices=Rule.POLICY_CHOICES)
     custom_msg = forms.CharField(label="Custom message", required=False,
                                  widget=forms.Textarea(attrs={"cols": "40", "rows": "10"}))
@@ -162,10 +186,11 @@ class RuleForm(RuleFormMixin, forms.Form):
         self.binary = kwargs.pop("binary", None)
         self.bundle = kwargs.pop("bundle", None)
         self.certificate = kwargs.pop("certificate", None)
+        self.team_id = kwargs.pop("team_id", None)
         super().__init__(*args, **kwargs)
-        if self.binary or self.bundle or self.certificate:
+        if self.binary or self.bundle or self.certificate or self.team_id:
             del self.fields["target_type"]
-            del self.fields["target_sha256"]
+            del self.fields["target_identifier"]
         if self.bundle:
             self.fields["policy"].choices = (
                 (k, v)
@@ -179,30 +204,47 @@ class RuleForm(RuleFormMixin, forms.Form):
         cleaned_data = super().clean()
         if self.binary:
             target_type = Target.BINARY
-            target_sha256 = self.binary.sha_256
+            target_identifier = self.binary.sha_256
         elif self.bundle:
             target_type = Target.BUNDLE
-            target_sha256 = self.bundle.target.sha256
+            target_identifier = self.bundle.target.identifier
         elif self.certificate:
             target_type = Target.CERTIFICATE
-            target_sha256 = self.certificate.sha_256
+            target_identifier = self.certificate.sha_256
+        elif self.team_id:
+            target_type = Target.TEAM_ID
+            target_identifier = self.team_id
         else:
             target_type = cleaned_data.get("target_type")
-            target_sha256 = cleaned_data.get("target_sha256")
+            target_identifier = cleaned_data.get("target_identifier")
 
-        if target_type and target_sha256 and Rule.objects.filter(configuration=self.configuration,
-                                                                 target__type=target_type,
-                                                                 target__sha256=target_sha256).count():
+        # duplicated rule
+        if target_type and target_identifier and Rule.objects.filter(configuration=self.configuration,
+                                                                     target__type=target_type,
+                                                                     target__identifier=target_identifier).count():
             self.add_error(None, "A rule for this target already exists")
 
+        # identifier
+        if target_identifier:
+            if target_type == Target.TEAM_ID:
+                target_identifier = target_identifier.upper()
+                if not test_team_id(target_identifier):
+                    self.add_error("target_identifier", "Invalid Team ID")
+            else:
+                target_identifier = target_identifier.lower()
+                if not test_sha256(target_identifier):
+                    self.add_error("target_identifier", "Invalid sha256")
+
+        # policy
         try:
             policy = int(cleaned_data.get("policy"))
         except (TypeError, ValueError):
             pass
 
+        # bundle target checks
         if target_type == Target.BUNDLE:
             try:
-                bundle = Bundle.objects.get(target__sha256=target_sha256)
+                bundle = Bundle.objects.get(target__identifier=target_identifier)
             except Bundle.DoesNotExist:
                 self.add_error("bundle", 'Unknown bundle.')
             else:
@@ -211,20 +253,21 @@ class RuleForm(RuleFormMixin, forms.Form):
             if policy and policy not in Rule.BUNDLE_POLICIES:
                 self.add_error("policy", "Policy not allowed for bundles.")
 
+        # custom message only on blocklist rules
         if policy and policy != Rule.BLOCKLIST:
             custom_msg = cleaned_data.get("custom_msg")
             if custom_msg:
                 self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")
 
         cleaned_data["target_type"] = target_type
-        cleaned_data["target_sha256"] = target_sha256
+        cleaned_data["target_identifier"] = target_identifier
 
         self.validate_scope()
         return cleaned_data
 
     def save(self):
         target, _ = Target.objects.get_or_create(type=self.cleaned_data["target_type"],
-                                                 sha256=self.cleaned_data["target_sha256"])
+                                                 identifier=self.cleaned_data["target_identifier"])
         rule = Rule.objects.create(configuration=self.configuration,
                                    target=target,
                                    policy=self.cleaned_data["policy"],

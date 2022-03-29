@@ -26,5 +26,7 @@
   <dd>{{ compiler_rule_count }}</dd>
   <dt>Transitive rule{% if transitive_rule_count != "-" %}{{ transitive_rule_count|pluralize }}{% else %}s{% endif %}</dt>
   <dd>{{ transitive_rule_count }}</dd>
+  <dt>Team ID rule{% if teamid_rule_count != "-" %}{{ teamid_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd>{{ teamid_rule_count }}</dd>
 </dl>
 {% endif %}

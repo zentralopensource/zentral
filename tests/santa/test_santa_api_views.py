@@ -22,7 +22,7 @@ class SantaAPIViewsTestCase(TestCase):
                                                               hardware_uuid=uuid.uuid4(),
                                                               serial_number=cls.machine_serial_number,
                                                               client_mode=Configuration.MONITOR_MODE,
-                                                              santa_version="1.17")
+                                                              santa_version="2022.1")
         cls.business_unit = cls.meta_business_unit.create_enrollment_business_unit()
 
     def post_as_json(self, url, data):
@@ -34,7 +34,7 @@ class SantaAPIViewsTestCase(TestCase):
         serial_number = get_random_string(12)
         data = {
             "os_build": "20C69",
-            "santa_version": "2021.1",
+            "santa_version": "2022.1",
             "hostname": "hostname",
             "transitive_rule_count": 0,
             "os_version": "11.1",
@@ -43,7 +43,8 @@ class SantaAPIViewsTestCase(TestCase):
             "serial_num": serial_number,
             "binary_rule_count": 1,
             "primary_user": "mark.torpedo@example.com",
-            "compiler_rule_count": 0
+            "compiler_rule_count": 0,
+            "teamid_rule_count": 0
         }
         return data, serial_number, uuid.uuid4()
 
@@ -191,7 +192,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response, {"rules": []})
         # add a rule
-        target = Target.objects.create(type=Target.BINARY, sha256=get_random_string(64, "0123456789abcdef"))
+        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
         rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 200)
@@ -199,7 +200,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(
             json_response["rules"],
             [{"rule_type": Target.BINARY,
-              "sha256": target.sha256,
+              "identifier": target.identifier,
               "policy": "BLOCKLIST"}]
         )
         # rule not confirmed, same rule
@@ -209,7 +210,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(
             json_response["rules"],
             [{"rule_type": Target.BINARY,
-              "sha256": target.sha256,
+              "identifier": target.identifier,
               "policy": "BLOCKLIST"}]
         )
         # rule acknowleged, no rules
@@ -227,7 +228,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(
             json_response["rules"],
             [{"rule_type": Target.BINARY,
-              "sha256": target.sha256,
+              "identifier": target.identifier,
               "policy": "BLOCKLIST",
               "custom_msg": rule.custom_msg}]
         )
@@ -238,7 +239,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(
             json_response["rules"],
             [{"rule_type": Target.BINARY,
-              "sha256": target.sha256,
+              "identifier": target.identifier,
               "policy": "BLOCKLIST",
               "custom_msg": rule.custom_msg}]
         )
@@ -256,7 +257,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(
             json_response["rules"],
             [{"rule_type": Target.BINARY,
-              "sha256": target.sha256,
+              "identifier": target.identifier,
               "policy": "REMOVE"}]
         )
         # remove rule not confirm, same remove rule
@@ -266,7 +267,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(
             json_response["rules"],
             [{"rule_type": Target.BINARY,
-              "sha256": target.sha256,
+              "identifier": target.identifier,
               "policy": "REMOVE"}]
         )
         # rule out of scope with excluded serial number, same remove rule
@@ -279,7 +280,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(
             json_response["rules"],
             [{"rule_type": Target.BINARY,
-              "sha256": target.sha256,
+              "identifier": target.identifier,
               "policy": "REMOVE"}]
         )
         # remove rule acknowleged, no rules
@@ -296,7 +297,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(
             json_response["rules"],
             [{"rule_type": Target.BINARY,
-              "sha256": target.sha256,
+              "identifier": target.identifier,
               "policy": "BLOCKLIST",
               "custom_msg": rule.custom_msg}]
         )
@@ -368,7 +369,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {"event_upload_bundle_binaries": [event_d["file_bundle_hash"]]})
-        b = Bundle.objects.get(target__type=Target.BUNDLE, target__sha256=event_d["file_bundle_hash"])
+        b = Bundle.objects.get(target__type=Target.BUNDLE, target__identifier=event_d["file_bundle_hash"])
         self.assertIsNone(b.uploaded_at)
         self.assertEqual(b.bundle_id, event_d["file_bundle_id"])
 
@@ -380,7 +381,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(json_response, {})
         b.refresh_from_db()
         self.assertIsNotNone(b.uploaded_at)
-        self.assertEqual(list(b.binary_targets.all()), [Target.objects.get(type=Target.BINARY, sha256=f.sha_256)])
+        self.assertEqual(list(b.binary_targets.all()), [Target.objects.get(type=Target.BINARY, identifier=f.sha_256)])
 
     def test_rule_postflight_not_enrolled(self):
         url = reverse("santa:postflight", args=(self.enrollment_secret.secret, uuid.uuid4()))
