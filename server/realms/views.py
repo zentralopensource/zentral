@@ -8,7 +8,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
-from django.utils.http import is_safe_url
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView, View
 from .backends import backend_classes
 from .forms import RealmGroupMappingForm
@@ -165,9 +165,9 @@ class LoginView(View):
         callback_kwargs = {}
         if request.method == "POST":
             next_url = request.POST.get(REDIRECT_FIELD_NAME)
-            if next_url and is_safe_url(url=next_url,
-                                        allowed_hosts={request.get_host()},
-                                        require_https=request.is_secure()):
+            if next_url and url_has_allowed_host_and_scheme(url=next_url,
+                                                            allowed_hosts={request.get_host()},
+                                                            require_https=request.is_secure()):
                 callback_kwargs["next_url"] = next_url
         redirect_url = self.realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
         if redirect_url:

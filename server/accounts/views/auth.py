@@ -8,7 +8,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import resolve_url
 from django.template.response import TemplateResponse
 from django.urls import reverse
-from django.utils.http import is_safe_url
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
@@ -41,9 +41,9 @@ def login(request):
             user = form.get_user()
 
             # Ensure the user-originating redirection url is safe.
-            if not is_safe_url(url=redirect_to,
-                               allowed_hosts={request.get_host()},
-                               require_https=request.is_secure()):
+            if not url_has_allowed_host_and_scheme(url=redirect_to,
+                                                   allowed_hosts={request.get_host()},
+                                                   require_https=request.is_secure()):
                 redirect_to = resolve_url(settings.LOGIN_REDIRECT_URL)
 
             if user.has_verification_device:
