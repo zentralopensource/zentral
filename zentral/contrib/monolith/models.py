@@ -1018,7 +1018,7 @@ class Printer(models.Model):
     tags = models.ManyToManyField(Tag, blank=True)
     name = models.CharField(max_length=128, help_text="display name of the printer")
     location = models.CharField(max_length=256, blank=True, help_text="location of the printer")
-    scheme = models.CharField(max_length=5, choices=SCHEME_CHOICES, default=SCHEME_IPP)
+    scheme = models.CharField(max_length=6, choices=SCHEME_CHOICES, default=SCHEME_IPP)
     address = models.CharField(max_length=256)
     shared = models.BooleanField(default=False)
     error_policy = models.CharField(max_length=32, choices=ERROR_POLICY_CHOICES, default=ERROR_POLICY_ABORT_JOB)
