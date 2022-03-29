@@ -16,7 +16,7 @@ class MunkiInstallProbeViewsTestCase(TestCase):
         # user
         cls.pwd = "godzillapwd"
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", cls.pwd)
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utility methods
@@ -42,7 +42,7 @@ class MunkiInstallProbeViewsTestCase(TestCase):
     def _force_probe(self, active=False):
         return ProbeSource.objects.create(
             model="MunkiInstallProbe",
-            name=get_random_string(),
+            name=get_random_string(12),
             status=ProbeSource.ACTIVE if active else ProbeSource.INACTIVE,
             body={'install_types': ['removal'], 'unattended_installs': False},
         )

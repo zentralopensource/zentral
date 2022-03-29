@@ -14,8 +14,8 @@ from zentral.contrib.osquery.models import Configuration, ConfigurationPack, Pac
 class OsquerySetupConfigurationsViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utiliy methods
@@ -39,11 +39,11 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_configuration(self):
-        return Configuration.objects.create(name=get_random_string())
+        return Configuration.objects.create(name=get_random_string(12))
 
     def _force_pack(self):
-        pack = Pack.objects.create(name=get_random_string())
-        query = Query.objects.create(name=get_random_string(), sql="select 1 from processes;")
+        pack = Pack.objects.create(name=get_random_string(12))
+        query = Query.objects.create(name=get_random_string(12), sql="select 1 from processes;")
         PackQuery.objects.create(pack=pack, query=query, interval=203)
         return pack
 
@@ -72,7 +72,7 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
     def test_create_configuration_post(self):
         self._login("osquery.add_configuration", "osquery.view_configuration")
         configuration_name = get_random_string(64)
-        configuration_description = get_random_string()
+        configuration_description = get_random_string(12)
         response = self.client.post(reverse("osquery:create_configuration"),
                                     {"name": configuration_name,
                                      "description": configuration_description,
@@ -207,7 +207,7 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
     def test_update_configuration_pack_post(self):
         configuration_pack = self._force_configuration_pack()
         self._login("osquery.change_configuration", "osquery.view_configuration")
-        tag = Tag.objects.create(name=get_random_string())
+        tag = Tag.objects.create(name=get_random_string(12))
         response = self.client.post(
             reverse("osquery:update_configuration_pack",
                     args=(configuration_pack.configuration.pk, configuration_pack.pk)),

@@ -16,8 +16,8 @@ class WSOneSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
@@ -47,13 +47,13 @@ class WSOneSetupViewsTestCase(TestCase):
         instance = Instance.objects.create(
             business_unit=self.bu,
             server_url="https://{}.example.com".format(get_random_string(8)),
-            client_id=get_random_string(),
+            client_id=get_random_string(12),
             token_url="https://{}.example.com".format(get_random_string(8)),
-            username=get_random_string()
+            username=get_random_string(12)
         )
-        instance.set_api_key(get_random_string())
-        instance.set_client_secret(get_random_string())
-        instance.set_password(get_random_string())
+        instance.set_api_key(get_random_string(12))
+        instance.set_client_secret(get_random_string(12))
+        instance.set_password(get_random_string(12))
         instance.save()
         return instance
 
@@ -137,18 +137,18 @@ class WSOneSetupViewsTestCase(TestCase):
     def test_create_instance_post(self):
         self._login("wsone.add_instance", "wsone.view_instance")
         server_url = "https://{}.example.com".format(get_random_string(8))
-        api_key = get_random_string()
-        client_secret = get_random_string()
-        password = get_random_string()
+        api_key = get_random_string(12)
+        client_secret = get_random_string(12)
+        password = get_random_string(12)
         response = self.client.post(reverse("wsone:create_instance"),
                                     {"business_unit": self.bu.pk,
                                      "server_url": server_url,
                                      "excluded_groups": "un,  deux ",
                                      "api_key": api_key,
-                                     "client_id": get_random_string(),
+                                     "client_id": get_random_string(12),
                                      "client_secret": client_secret,
                                      "token_url": "https://{}.example.com".format(get_random_string(8)),
-                                     "username": get_random_string(),
+                                     "username": get_random_string(12),
                                      "password": password},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -183,9 +183,9 @@ class WSOneSetupViewsTestCase(TestCase):
     def test_update_instance_post(self):
         instance = self._force_instance()
         self._login("wsone.change_instance", "wsone.view_instance")
-        api_key = get_random_string()
-        client_secret = get_random_string()
-        password = get_random_string()
+        api_key = get_random_string(12)
+        client_secret = get_random_string(12)
+        password = get_random_string(12)
         response = self.client.post(reverse("wsone:update_instance", args=(instance.pk,)),
                                     {"business_unit": instance.business_unit.pk,
                                      "server_url": instance.server_url,

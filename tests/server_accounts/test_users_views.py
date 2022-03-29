@@ -18,27 +18,27 @@ class AccountUsersViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # ui user
-        cls.ui_user_pwd = get_random_string()
-        cls.ui_user = User.objects.create_user(get_random_string(),
-                                               "{}@zentral.io".format(get_random_string()),
+        cls.ui_user_pwd = get_random_string(12)
+        cls.ui_user = User.objects.create_user(get_random_string(12),
+                                               "{}@zentral.io".format(get_random_string(12)),
                                                cls.ui_user_pwd,
                                                is_superuser=False)
         # group
-        cls.ui_group = Group.objects.create(name=get_random_string())
+        cls.ui_group = Group.objects.create(name=get_random_string(12))
         cls.ui_user.groups.set([cls.ui_group])
         # superuser
         cls.superuser = User.objects.create_user(get_random_string(19),
-                                                 "{}@zentral.io".format(get_random_string()),
-                                                 get_random_string(),
+                                                 "{}@zentral.io".format(get_random_string(12)),
+                                                 get_random_string(12),
                                                  is_superuser=True)
         # user
         cls.pwd = get_random_string(18)
         cls.user = User.objects.create_user(get_random_string(19),
-                                            "{}@zentral.io".format(get_random_string()),
-                                            get_random_string())
+                                            "{}@zentral.io".format(get_random_string(12)),
+                                            get_random_string(12))
         # remote user
         cls.remoteuser = User.objects.create_user(get_random_string(19),
-                                                  "{}@zentral.io".format(get_random_string()),
+                                                  "{}@zentral.io".format(get_random_string(12)),
                                                   get_random_string(45),
                                                   is_remote=True)
 
@@ -91,7 +91,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_login_totp_not_ok(self):
         UserTOTP.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             secret=pyotp.random_base32(),
         )
         response = self.client.post(reverse("login"),
@@ -109,7 +109,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_login_totp_ok(self):
         user_totp = UserTOTP.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             secret=pyotp.random_base32(),
         )
         response = self.client.post(reverse("login"),
@@ -129,7 +129,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_login_webauthn_not_ok(self):
         UserWebAuthn.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             rp_id=settings["api"]["fqdn"],
             key_handle="syGQPDZRUYdb4m3rdWeyPaIMYlbmydGp1TP_33vE_lqJ3PHNyTd0iKsnKr5WjnCcBzcesZrDEfB_RBLFzU3k4w",
             public_key=base64.urlsafe_b64decode(
@@ -268,7 +268,7 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_create_service_account(self):
         self.login("accounts.add_user", "accounts.view_user", "authtoken.add_token")
-        username = get_random_string()
+        username = get_random_string(12)
         response = self.client.post(reverse("accounts:create_service_account"),
                                     {"username": username},
                                     follow=True)
@@ -377,8 +377,8 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_create_api_token_no_perms(self):
         service_account = User.objects.create_user(get_random_string(19),
-                                                   "{}@zentral.io".format(get_random_string()),
-                                                   get_random_string(),
+                                                   "{}@zentral.io".format(get_random_string(12)),
+                                                   get_random_string(12),
                                                    is_service_account=True)
         self.login()
         # service account OK, but without the required permissions
@@ -400,8 +400,8 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_server_account_create_api_token(self):
         service_account = User.objects.create_user(get_random_string(19),
-                                                   "{}@zentral.io".format(get_random_string()),
-                                                   get_random_string(),
+                                                   "{}@zentral.io".format(get_random_string(12)),
+                                                   get_random_string(12),
                                                    is_service_account=True)
         self.login("accounts.view_user", "authtoken.add_token")
         response = self.client.post(reverse("accounts:create_user_api_token", args=(service_account.id,)),
@@ -425,8 +425,8 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_delete_api_token_no_perms(self):
         service_account = User.objects.create_user(get_random_string(19),
-                                                   "{}@zentral.io".format(get_random_string()),
-                                                   get_random_string(),
+                                                   "{}@zentral.io".format(get_random_string(12)),
+                                                   get_random_string(12),
                                                    is_service_account=True)
         self.login()
         # service account OK, but without the required permissions
@@ -444,8 +444,8 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_delete_service_account_api_token(self):
         service_account = User.objects.create_user(get_random_string(19),
-                                                   "{}@zentral.io".format(get_random_string()),
-                                                   get_random_string(),
+                                                   "{}@zentral.io".format(get_random_string(12)),
+                                                   get_random_string(12),
                                                    is_service_account=True)
         token, _ = Token.objects.get_or_create(user=service_account)
         self.login("accounts.view_user", "authtoken.delete_token")
@@ -475,7 +475,7 @@ class AccountUsersViewsTestCase(TestCase):
         response = self.client.get(reverse("accounts:add_totp"))
         form = response.context["form"]
         response = self.client.post(reverse("accounts:add_totp"),
-                                    {"name": get_random_string(),
+                                    {"name": get_random_string(12),
                                      "secret": form.initial_secret,
                                      "verification_code": "AAAAAA"})
         self.assertTemplateUsed(response, "accounts/add_totp.html")
@@ -487,7 +487,7 @@ class AccountUsersViewsTestCase(TestCase):
         self.login()
         response = self.client.get(reverse("accounts:add_totp"))
         form = response.context["form"]
-        name = get_random_string()
+        name = get_random_string(12)
         response = self.client.post(reverse("accounts:add_totp"),
                                     {"name": name,
                                      "secret": form.initial_secret,
@@ -501,7 +501,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_totp_login_redirect(self):
         user_totp = UserTOTP.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             secret=pyotp.random_base32(),
         )
         self.login_redirect("delete_totp", user_totp.pk)
@@ -514,7 +514,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_totp_wrong_user_404(self):
         user_totp = UserTOTP.objects.create(
             user=self.user,  # not ui_user
-            name=get_random_string(),
+            name=get_random_string(12),
             secret=pyotp.random_base32(),
         )
         self.login()
@@ -524,7 +524,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_totp_get(self):
         user_totp = UserTOTP.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             secret=pyotp.random_base32(),
         )
         self.login()
@@ -535,7 +535,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_totp_wrong_password(self):
         user_totp = UserTOTP.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             secret=pyotp.random_base32(),
         )
         self.login()
@@ -548,7 +548,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_totp_post(self):
         user_totp = UserTOTP.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             secret=pyotp.random_base32(),
         )
         self.login()
@@ -574,7 +574,7 @@ class AccountUsersViewsTestCase(TestCase):
         self.login()
         response = self.client.get(reverse("accounts:register_webauthn_device"))
         response = self.client.post(reverse("accounts:register_webauthn_device"),
-                                    {"name": get_random_string(),
+                                    {"name": get_random_string(12),
                                      "token_response": json.dumps({})})
         self.assertTemplateUsed(response, "accounts/register_webauthn_device.html")
         self.assertContains(response, "alert-danger")
@@ -584,7 +584,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_webauthn_device_login_redirect(self):
         user_webauthn = UserWebAuthn.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             rp_id=settings["api"]["fqdn"],
             key_handle=get_random_string(length=86, allowed_chars="s9xL"),
             public_key=b"123",
@@ -601,7 +601,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_webauthn_device_wrong_user_404(self):
         user_webauthn = UserWebAuthn.objects.create(
             user=self.user,
-            name=get_random_string(),
+            name=get_random_string(12),
             rp_id=settings["api"]["fqdn"],
             key_handle=get_random_string(length=86, allowed_chars="s9xL"),
             public_key=b"123",
@@ -615,7 +615,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_webauthn_device_get(self):
         user_webauthn = UserWebAuthn.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             rp_id=settings["api"]["fqdn"],
             key_handle=get_random_string(length=86, allowed_chars="s9xL"),
             public_key=b"123",
@@ -630,7 +630,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_webauthn_device_wrong_password(self):
         user_webauthn = UserWebAuthn.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             rp_id=settings["api"]["fqdn"],
             key_handle=get_random_string(length=86, allowed_chars="s9xL"),
             public_key=b"123",
@@ -647,7 +647,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_webauthn_device_post(self):
         user_webauthn = UserWebAuthn.objects.create(
             user=self.ui_user,
-            name=get_random_string(),
+            name=get_random_string(12),
             rp_id=settings["api"]["fqdn"],
             key_handle=get_random_string(length=86, allowed_chars="s9xL"),
             public_key=b"123",

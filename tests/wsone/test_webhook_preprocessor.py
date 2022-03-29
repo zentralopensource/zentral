@@ -25,14 +25,14 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         cls.instance = Instance.objects.create(
             business_unit=cls.bu,
             server_url="https://{}.example.com".format(get_random_string(8)),
-            client_id=get_random_string(),
+            client_id=get_random_string(12),
             token_url="https://{}.example.com".format(get_random_string(8)),
-            username=get_random_string(),
+            username=get_random_string(12),
             excluded_groups=["dwekjdhwkdhe", "019318012833018"]
         )
-        cls.instance.set_api_key(get_random_string())
-        cls.instance.set_client_secret(get_random_string())
-        cls.instance.set_password(get_random_string())
+        cls.instance.set_api_key(get_random_string(12))
+        cls.instance.set_client_secret(get_random_string(12))
+        cls.instance.set_password(get_random_string(12))
         cls.instance.save()
         cls.instance.refresh_from_db()
         cls.preprocessor = list(get_preprocessors())[0]

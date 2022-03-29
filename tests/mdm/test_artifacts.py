@@ -91,9 +91,9 @@ class TestMDMArtifacts(TestCase):
         cls.enrolled_user = EnrolledUser.objects.create(
             enrolled_device=cls.enrolled_device,
             user_id=str(uuid.uuid4()).upper(),
-            long_name=get_random_string(),
-            short_name=get_random_string(),
-            token=get_random_string().encode("utf-8"),
+            long_name=get_random_string(12),
+            short_name=get_random_string(12),
+            token=get_random_string(12).encode("utf-8"),
         )
         cls.enrolled_device_awaiting_configuration = EnrolledDevice.objects.create(
             push_certificate=push_certificate,

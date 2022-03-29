@@ -17,8 +17,8 @@ class MunkiSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
@@ -50,7 +50,7 @@ class MunkiSetupViewsTestCase(TestCase):
                                 content_type="application/json")
 
     def _force_configuration(self):
-        return Configuration.objects.create(name=get_random_string())
+        return Configuration.objects.create(name=get_random_string(12))
 
     def _force_enrollment(self):
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
@@ -89,9 +89,9 @@ class MunkiSetupViewsTestCase(TestCase):
 
     def test_create_configuration_post(self):
         self._login("munki.add_configuration", "munki.view_configuration")
-        name = get_random_string()
-        description = get_random_string()
-        collected_condition_keys = sorted(get_random_string() for _ in range(3))
+        name = get_random_string(12)
+        description = get_random_string(12)
+        collected_condition_keys = sorted(get_random_string(12) for _ in range(3))
         response = self.client.post(reverse("munki:create_configuration"),
                                     {"name": name,
                                      "description": description,
@@ -137,7 +137,7 @@ class MunkiSetupViewsTestCase(TestCase):
     def test_update_configuration_post(self):
         configuration = self._force_configuration()
         self._login("munki.change_configuration", "munki.view_configuration")
-        collected_condition_keys = sorted(get_random_string() for _ in range(3))
+        collected_condition_keys = sorted(get_random_string(12) for _ in range(3))
         response = self.client.post(reverse("munki:update_configuration", args=(configuration.pk,)),
                                     {"name": configuration.name,
                                      "inventory_apps_full_info_shard": 17,

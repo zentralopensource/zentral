@@ -164,8 +164,8 @@ class OsqueryAPIViewsTestCase(TestCase):
     def force_enrolled_machine(self, osquery_version="1.2.3", platform_mask=21):
         return EnrolledMachine.objects.create(
             enrollment=self.enrollment,
-            serial_number=get_random_string(),
-            node_key=get_random_string(),
+            serial_number=get_random_string(12),
+            node_key=get_random_string(12),
             osquery_version=osquery_version,
             platform_mask=platform_mask
         )
@@ -175,10 +175,10 @@ class OsqueryAPIViewsTestCase(TestCase):
             sql = "select 'OK' as ztl_status;"
         else:
             sql = "select 1 from processes;"
-        query = Query.objects.create(name=get_random_string(), sql=sql)
+        query = Query.objects.create(name=get_random_string(12), sql=sql)
         pack = None
         if force_pack:
-            pack_name = get_random_string()
+            pack_name = get_random_string(12)
             pack = Pack.objects.create(name=pack_name, slug=slugify(pack_name))
             PackQuery.objects.create(pack=pack, query=query, interval=12983,
                                      slug=slugify(query.name),
@@ -253,7 +253,7 @@ class OsqueryAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_enroll_ok(self, post_event):
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         response = self.post_as_json(
             "enroll",
             {"enroll_secret": self.enrollment.secret.secret,
@@ -276,7 +276,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(enrollment_event.payload, {'action': 'enrollment'})
 
     def test_enroll_with_host_identifier_ok(self):
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         response = self.post_as_json(
             "enroll",
             {"enroll_secret": self.enrollment.secret.secret,

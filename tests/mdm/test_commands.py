@@ -101,9 +101,9 @@ class TestMDMCommands(TestCase):
         cls.enrolled_user = EnrolledUser.objects.create(
             enrolled_device=cls.enrolled_device,
             user_id=str(uuid.uuid4()).upper(),
-            long_name=get_random_string(),
-            short_name=get_random_string(),
-            token=get_random_string().encode("utf-8"),
+            long_name=get_random_string(12),
+            short_name=get_random_string(12),
+            token=get_random_string(12).encode("utf-8"),
         )
         cls.enrolled_device_awaiting_configuration = EnrolledDevice.objects.create(
             push_certificate=push_certificate,
@@ -120,20 +120,20 @@ class TestMDMCommands(TestCase):
         # DEP enrollment
         dep_organization = DEPOrganization.objects.create(
             identifier=get_random_string(128),
-            admin_id="{}@zentral.io".format(get_random_string()),
-            name=get_random_string(),
-            email="{}@zentral.io".format(get_random_string()),
-            phone=get_random_string(),
-            address=get_random_string(),
+            admin_id="{}@zentral.io".format(get_random_string(12)),
+            name=get_random_string(12),
+            email="{}@zentral.io".format(get_random_string(12)),
+            phone=get_random_string(12),
+            address=get_random_string(12),
             type=DEPOrganization.ORG,
             version=DEPOrganization.V2
         )
         dep_token = DEPToken.objects.create(
-            certificate=get_random_string().encode("utf-8"),
-            private_key=get_random_string().encode("utf-8"),
+            certificate=get_random_string(12).encode("utf-8"),
+            private_key=get_random_string(12).encode("utf-8"),
         )
         dep_virtual_server = DEPVirtualServer.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             uuid=uuid.uuid4(),
             organization=dep_organization,
             token=dep_token
@@ -145,7 +145,7 @@ class TestMDMCommands(TestCase):
             blueprint=cls.blueprint1,
             enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit),
             skip_setup_items=[p for p, _ in DEPEnrollment.SKIPPABLE_SETUP_PANE_CHOICES],
-            name=get_random_string()
+            name=get_random_string(12)
         )
         cls.dep_enrollment_session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
             dep_enrollment, cls.enrolled_device.serial_number, cls.enrolled_device.udid
@@ -153,7 +153,7 @@ class TestMDMCommands(TestCase):
         es_request = EnrollmentSecret.objects.verify(
             "dep_enrollment_session",
             cls.dep_enrollment_session.enrollment_secret.secret,
-            user_agent=get_random_string(), public_ip_address="127.0.0.1"
+            user_agent=get_random_string(12), public_ip_address="127.0.0.1"
         )
         cls.dep_enrollment_session.set_scep_verified_status(es_request)
         cls.dep_enrollment_session.set_authenticated_status(cls.enrolled_device)

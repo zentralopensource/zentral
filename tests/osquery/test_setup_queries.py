@@ -15,8 +15,8 @@ from zentral.core.compliance_checks.models import ComplianceCheck
 class OsquerySetupQueriesViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utiliy methods
@@ -44,7 +44,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
             sql = "select 'OK' as ztl_status;"
         else:
             sql = "select 1 from processes;"
-        query = Query.objects.create(name=get_random_string(), sql=sql)
+        query = Query.objects.create(name=get_random_string(12), sql=sql)
         sync_query_compliance_check(query, force_compliance_check)
         return query
 
@@ -67,7 +67,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
 
     def test_create_query_post(self):
         self._login("osquery.add_query", "osquery.view_query")
-        query_name = get_random_string()
+        query_name = get_random_string(12)
         response = self.client.post(reverse("osquery:create_query"),
                                     {"name": query_name,
                                      "sql": "select 1 from users;",
@@ -85,9 +85,9 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     def test_create_query_with_compliance_check_sql_error(self):
         self._login("osquery.add_query", "osquery.view_query")
         response = self.client.post(reverse("osquery:create_query"),
-                                    {"name": get_random_string(),
+                                    {"name": get_random_string(12),
                                      "sql": "select 1 from processes;",
-                                     "description": get_random_string(),
+                                     "description": get_random_string(12),
                                      "compliance_check": "on"},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -97,7 +97,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
 
     def test_create_query_with_compliance_check(self):
         self._login("osquery.add_query", "osquery.view_query")
-        query_name = get_random_string()
+        query_name = get_random_string(12)
         response = self.client.post(reverse("osquery:create_query"),
                                     {"name": query_name,
                                      "sql": "select 'OK' as ztl_status;",
@@ -136,7 +136,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     def test_update_query_post(self):
         query = self._force_query()
         self._login("osquery.change_query", "osquery.view_query")
-        new_name = get_random_string()
+        new_name = get_random_string(12)
         version = query.version
         response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
                                     {"name": new_name,
@@ -169,7 +169,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     def test_update_query_set_compliance_check_pack_error(self):
         query = self._force_query()
         # add a pack to schedule this query in 'diff' mode
-        pack = Pack.objects.create(name=get_random_string())
+        pack = Pack.objects.create(name=get_random_string(12))
         PackQuery.objects.create(pack=pack, query=query, interval=600)
         self._login("osquery.change_query", "osquery.view_query")
         response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),

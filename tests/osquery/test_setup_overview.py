@@ -12,8 +12,8 @@ from accounts.models import User
 class OsquerySetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utiliy methods

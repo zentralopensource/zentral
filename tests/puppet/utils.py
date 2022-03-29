@@ -49,7 +49,7 @@ def build_report(host=None, time='2022-02-16T17:37:47.337045569Z'):
         'configuration_version': 'pe-master.example.com-development-{}'.format(get_random_string(8)),
         'corrective_change': False,
         'environment': 'development',
-        'host': host or get_random_string(),
+        'host': host or get_random_string(12),
         'logs': [],
         'master_used': 'pe-master.example.com:8140',
         'metrics': [],

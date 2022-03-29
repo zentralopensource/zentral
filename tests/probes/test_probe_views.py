@@ -14,8 +14,8 @@ class ProbeViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utility methods
@@ -46,7 +46,7 @@ class ProbeViewsTestCase(TestCase):
             filters["inventory"] = [{"platforms": platforms}]
         return ProbeSource.objects.create(
             model="BaseProbe",
-            name=get_random_string(),
+            name=get_random_string(12),
             status=ProbeSource.ACTIVE if active else ProbeSource.INACTIVE,
             body={"filters": filters}
         )
@@ -74,7 +74,7 @@ class ProbeViewsTestCase(TestCase):
         self.assertFormError(response, "form", "name", "This field is required.")
 
     def test_create_probe(self, **kwargs):
-        name = get_random_string()
+        name = get_random_string(12)
         self._login("probes.add_probesource", "probes.view_probesource")
         response = self.client.post(reverse("probes:create"),
                                     {"name": name,

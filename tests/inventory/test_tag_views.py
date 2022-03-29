@@ -14,8 +14,8 @@ class MacOSAppsViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utility methods
@@ -39,7 +39,7 @@ class MacOSAppsViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_tag(self, name=None):
-        return Tag.objects.create(name=name or get_random_string())
+        return Tag.objects.create(name=name or get_random_string(12))
 
     # tags
 
@@ -85,7 +85,7 @@ class MacOSAppsViewsTestCase(TestCase):
         self.assertFormError(response, "form", "name", "A tag with this name already exists.")
 
     def test_create_tag_post_conflicting_slug(self):
-        tag = self._force_tag(get_random_string() + " " + get_random_string())
+        tag = self._force_tag(get_random_string(12) + " " + get_random_string(12))
         self._login("inventory.add_tag")
         response = self.client.post(reverse("inventory:create_tag"),
                                     {"name": tag.name.replace(" ", "-")})
@@ -95,7 +95,7 @@ class MacOSAppsViewsTestCase(TestCase):
 
     def test_create_tag_post(self):
         self._login("inventory.add_tag", "inventory.view_tag")
-        name = get_random_string()
+        name = get_random_string(12)
         color = get_random_string(6, "abcedf0123456789")
         response = self.client.post(reverse("inventory:create_tag"),
                                     {"name": name,
@@ -136,7 +136,7 @@ class MacOSAppsViewsTestCase(TestCase):
         self.assertFormError(response, "form", "name", "A tag with this name already exists.")
 
     def test_update_tag_post_conflicting_slug(self):
-        tag0 = self._force_tag(get_random_string() + " " + get_random_string())
+        tag0 = self._force_tag(get_random_string(12) + " " + get_random_string(12))
         tag = self._force_tag()
         self._login("inventory.change_tag")
         response = self.client.post(reverse("inventory:update_tag", args=(tag.pk,)),
@@ -147,7 +147,7 @@ class MacOSAppsViewsTestCase(TestCase):
 
     def test_update_tag_post(self):
         tag = self._force_tag()
-        name = get_random_string()
+        name = get_random_string(12)
         color = get_random_string(6, "abcedf0123456789")
         self._login("inventory.change_tag", "inventory.view_tag")
         response = self.client.post(reverse("inventory:update_tag", args=(tag.pk,)),

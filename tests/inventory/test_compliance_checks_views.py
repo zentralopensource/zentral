@@ -19,12 +19,12 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
         # machine
         cls.serial_number = "0123456789"
-        cls.source_name = get_random_string() + "z"
+        cls.source_name = get_random_string(12) + "z"
         MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
             "source": {"module": "tests.zentral.io", "name": cls.source_name.upper()},
             "serial_number": cls.serial_number,
@@ -74,7 +74,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         if jmespath_expression is None:
             jmespath_expression = f"contains(profiles[*].uuid, `{profile_uuid}`)"
         cc = ComplianceCheck.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             model=InventoryJMESPathCheck.get_model(),
         )
         if platforms is None:
@@ -136,7 +136,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def test_create_compliance_check_devtool_pre_fill(self):
         self._login("inventory.add_jmespathcheck")
-        source_name = get_random_string()
+        source_name = get_random_string(12)
         jmespath_expression = "os_version.major > `11`"
         response = self.client.get(
             reverse("inventory:create_compliance_check"),
@@ -152,11 +152,11 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def test_create_compliance_check_post(self):
         self._login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
-        name = get_random_string()
+        name = get_random_string(12)
         response = self.client.post(reverse("inventory:create_compliance_check"),
                                     {"ccf-name": name,
-                                     "ccf-description": get_random_string(),
-                                     "jcf-source_name": get_random_string(),
+                                     "ccf-description": get_random_string(12),
+                                     "jcf-source_name": get_random_string(12),
                                      "jcf-platforms": ["MACOS"],
                                      "jcf-jmespath_expression": "contains(profiles[*].uuid, `yolo`)"},
                                     follow=True)
@@ -171,8 +171,8 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self._login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
         response = self.client.post(reverse("inventory:create_compliance_check"),
                                     {"ccf-name": cc.compliance_check.name,
-                                     "ccf-description": get_random_string(),
-                                     "jcf-source_name": get_random_string(),
+                                     "ccf-description": get_random_string(12),
+                                     "jcf-source_name": get_random_string(12),
                                      "jcf-platforms": ["MACOS"],
                                      "jcf-jmespath_expression": "contains(profiles[*].uuid, `yolo`)"},
                                     follow=True)
@@ -183,9 +183,9 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     def test_create_compliance_check_post_bad_jmespath_expression(self):
         self._login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
         response = self.client.post(reverse("inventory:create_compliance_check"),
-                                    {"ccf-name": get_random_string(),
-                                     "ccf-description": get_random_string(),
-                                     "jcf-source_name": get_random_string(),
+                                    {"ccf-name": get_random_string(12),
+                                     "ccf-description": get_random_string(12),
+                                     "jcf-source_name": get_random_string(12),
                                      "jcf-platforms": ["MACOS"],
                                      "jcf-jmespath_expression": "contains("},
                                     follow=True)
@@ -298,7 +298,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         cc = self._force_jmespath_check()
         old_version = cc.compliance_check.version
         self._login("inventory.change_jmespathcheck", "inventory.view_jmespathcheck")
-        name = get_random_string()
+        name = get_random_string(12)
         response = self.client.post(reverse("inventory:update_compliance_check", args=(cc.pk,)),
                                     {"ccf-name": name,
                                      "ccf-description": cc.compliance_check.description,
@@ -320,7 +320,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         cc = self._force_jmespath_check()
         old_version = cc.compliance_check.version
         self._login("inventory.change_jmespathcheck", "inventory.view_jmespathcheck")
-        source_name = get_random_string()
+        source_name = get_random_string(12)
         response = self.client.post(reverse("inventory:update_compliance_check", args=(cc.pk,)),
                                     {"ccf-name": cc.compliance_check.name,
                                      "ccf-description": cc.compliance_check.description,
@@ -432,7 +432,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.post(
             reverse("inventory:compliance_check_devtool"),
             {"source": self.source.pk,
-             "serial_number": get_random_string(),
+             "serial_number": get_random_string(12),
              "jmespath_expression": "os_version.major > `11`"}
         )
         self.assertEqual(response.status_code, 200)
@@ -510,7 +510,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
         )
-        cc_tags = [Tag.objects.create(name=get_random_string()) for _ in range(1)]
+        cc_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         self._force_jmespath_check(tags=cc_tags)
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
@@ -523,9 +523,9 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
         )
-        cc_tags = [Tag.objects.create(name=get_random_string()) for _ in range(1)]
+        cc_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         MachineTag.objects.get_or_create(serial_number=self.machine.serial_number,
-                                         tag=Tag.objects.create(name=get_random_string()))
+                                         tag=Tag.objects.create(name=get_random_string(12)))
         self._force_jmespath_check(tags=cc_tags)
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
@@ -538,7 +538,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
         )
-        self._force_jmespath_check(source_name=get_random_string())
+        self._force_jmespath_check(source_name=get_random_string(12))
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
@@ -582,7 +582,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             'inventory.view_jmespathcheck'
         )
         cc_without_tag = self._force_jmespath_check()
-        cc_tags = [Tag.objects.create(name=get_random_string()) for _ in range(1)]
+        cc_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         cc_with_tags = self._force_jmespath_check(tags=cc_tags)
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
@@ -605,7 +605,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             # no view_jmespathcheck, no link
         )
         cc_without_tag = self._force_jmespath_check()
-        cc_tags = [Tag.objects.create(name=get_random_string()) for _ in range(1)]
+        cc_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         cc_with_tags = self._force_jmespath_check(tags=cc_tags)
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
@@ -628,7 +628,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             # no compliance_checks.view_machinestatus, no section
         )
         cc_without_tag = self._force_jmespath_check()
-        cc_tags = [Tag.objects.create(name=get_random_string()) for _ in range(1)]
+        cc_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         self._force_jmespath_check(tags=cc_tags)
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
@@ -646,7 +646,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
         )
-        tags = [Tag.objects.create(name=get_random_string()) for _ in range(3)]
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
         for tag in tags[:3]:
             MachineTag.objects.get_or_create(serial_number=self.machine.serial_number, tag=tag)
         cc = self._force_jmespath_check(tags=tags)
@@ -676,7 +676,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
         )
-        tags = [Tag.objects.create(name=get_random_string()) for _ in range(3)]
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
         for tag in tags[:3]:
             MachineTag.objects.get_or_create(serial_number=self.machine.serial_number, tag=tag)
         cc = self._force_jmespath_check(tags=tags)
@@ -688,7 +688,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             status_time=datetime.utcnow(),
         )
         # add machine status for another machine also in scope
-        other_machine_serial_number = get_random_string()
+        other_machine_serial_number = get_random_string(12)
         MachineStatus.objects.create(
             serial_number=other_machine_serial_number,
             compliance_check=cc.compliance_check,

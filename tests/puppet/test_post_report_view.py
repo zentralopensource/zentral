@@ -23,8 +23,8 @@ class PuppetPostReportViewTestCase(TestCase):
             url="https://{}.example.com".format(get_random_string(8)),
             ca_chain=build_self_signed_cert("CA")[0]
         )
-        cls.instance.set_rbac_token(get_random_string())
-        cls.token = get_random_string()
+        cls.instance.set_rbac_token(get_random_string(12))
+        cls.token = get_random_string(12)
         cls.instance.set_report_processor_token(cls.token)
         cls.instance.save()
         cls.instance.refresh_from_db()

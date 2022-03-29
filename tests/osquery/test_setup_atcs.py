@@ -13,8 +13,8 @@ from zentral.contrib.osquery.models import AutomaticTableConstruction
 class OsquerySetupATCViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utiliy methods
@@ -39,9 +39,9 @@ class OsquerySetupATCViewsTestCase(TestCase):
 
     def _get_atc_dict(self, **kwargs):
         d = {
-            "name": get_random_string(),
-            "description": get_random_string(),
-            "table_name": get_random_string(allowed_chars="abcd_"),
+            "name": get_random_string(12),
+            "description": get_random_string(12),
+            "table_name": get_random_string(length=12, allowed_chars="abcd_"),
             "query": "select 1 from yo;",
             "path": "/home/yolo",
             "columns": ["un", "deux"],
@@ -73,8 +73,8 @@ class OsquerySetupATCViewsTestCase(TestCase):
 
     def test_create_atc_post(self):
         self._login("osquery.add_automatictableconstruction", "osquery.view_automatictableconstruction")
-        atc_name = get_random_string()
-        atc_description = get_random_string()
+        atc_name = get_random_string(12)
+        atc_description = get_random_string(12)
         atc_dict = self._get_atc_dict(name=atc_name, description=atc_description)
         response = self.client.post(reverse("osquery:create_atc"), atc_dict, follow=True)
         self.assertEqual(response.status_code, 200)
@@ -106,7 +106,7 @@ class OsquerySetupATCViewsTestCase(TestCase):
     def test_update_atc_post(self):
         atc, atc_dict = self._force_atc()
         self._login("osquery.change_automatictableconstruction", "osquery.view_automatictableconstruction")
-        atc_dict["name"] = get_random_string()
+        atc_dict["name"] = get_random_string(12)
         response = self.client.post(reverse("osquery:update_atc", args=(atc.pk,)),
                                     atc_dict, follow=True)
         self.assertEqual(response.status_code, 200)

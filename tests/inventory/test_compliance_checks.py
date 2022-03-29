@@ -13,7 +13,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         if jmespath_expression is None:
             jmespath_expression = f"contains(profiles[*].uuid, `{profile_uuid}`)"
         cc = ComplianceCheck.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             model=InventoryJMESPathCheck.get_model(),
         )
         if platforms is None:
@@ -29,20 +29,20 @@ class InventoryComplianceChecksTestCase(TestCase):
         return jmespath_check
 
     def _build_tree(self, source_name, profile_uuid, serial_number=None, platform="MACOS"):
-        return {"serial_number": serial_number or get_random_string(),
+        return {"serial_number": serial_number or get_random_string(12),
                 "platform": platform,
                 "source": {"module": "io.zentral.test.module",
                            "name": source_name},
                 "profiles": [{"uuid": profile_uuid,
-                              "identifier": get_random_string()},
+                              "identifier": get_random_string(12)},
                              {"uuid": str(uuid.uuid4()),
-                              "identifier": get_random_string()}]}
+                              "identifier": get_random_string(12)}]}
 
     def test_no_tags_source_mismatch(self):
         profile_uuid = str(uuid.uuid4())
-        source_name = get_random_string()
+        source_name = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid)
-        jmespath_check = self._force_compliance_check(get_random_string(), profile_uuid)
+        jmespath_check = self._force_compliance_check(get_random_string(12), profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 0)
@@ -50,8 +50,8 @@ class InventoryComplianceChecksTestCase(TestCase):
 
     def test_no_tags_source_match_platform_match_ok(self):
         profile_uuid = str(uuid.uuid4())
-        source_name = get_random_string()
-        serial_number = get_random_string()
+        source_name = get_random_string(12)
+        serial_number = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid, serial_number, platform="IPADOS")
         jmespath_check = self._force_compliance_check(source_name, profile_uuid, platforms=["IPADOS", "MACOS"])
         jmespath_checks_cache._last_fetched_time = None  # force refresh
@@ -68,8 +68,8 @@ class InventoryComplianceChecksTestCase(TestCase):
 
     def test_no_tags_source_match_platform_missmatch(self):
         profile_uuid = str(uuid.uuid4())
-        source_name = get_random_string()
-        serial_number = get_random_string()
+        source_name = get_random_string(12)
+        serial_number = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid, serial_number, platform="IPADOS")
         self._force_compliance_check(source_name, profile_uuid, platforms=["IOS", "MACOS"])
         jmespath_checks_cache._last_fetched_time = None  # force refresh
@@ -78,8 +78,8 @@ class InventoryComplianceChecksTestCase(TestCase):
 
     def test_no_tags_source_match_failed(self):
         profile_uuid = str(uuid.uuid4())
-        source_name = get_random_string()
-        serial_number = get_random_string()
+        source_name = get_random_string(12)
+        serial_number = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid, serial_number)
         jmespath_check = self._force_compliance_check(source_name, str(uuid.uuid4()))
         jmespath_checks_cache._last_fetched_time = None  # force refresh
@@ -96,8 +96,8 @@ class InventoryComplianceChecksTestCase(TestCase):
 
     def test_no_tags_source_match_not_boolean_unknown(self):
         profile_uuid = str(uuid.uuid4())
-        source_name = get_random_string()
-        serial_number = get_random_string()
+        source_name = get_random_string(12)
+        serial_number = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid, serial_number)
         # the following jmespath_expression does not return a boolean, but a list → UNKNOWN
         jmespath_check = self._force_compliance_check(source_name, profile_uuid, jmespath_expression="profiles")
@@ -115,11 +115,11 @@ class InventoryComplianceChecksTestCase(TestCase):
 
     def test_no_tags_source_match_jmespath_error_unknown(self):
         profile_uuid = str(uuid.uuid4())
-        source_name = get_random_string()
-        serial_number = get_random_string()
+        source_name = get_random_string(12)
+        serial_number = get_random_string(12)
         tree = {"serial_number": serial_number,
                 "platform": "MACOS",
-                "source": {"module": get_random_string(), "name": source_name},
+                "source": {"module": get_random_string(12), "name": source_name},
                 "profiles": 12345}  # will trigger a jmespath error
         jmespath_check = self._force_compliance_check(source_name, profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
@@ -136,8 +136,8 @@ class InventoryComplianceChecksTestCase(TestCase):
 
     def test_no_tags_source_match_same_status_no_event(self):
         profile_uuid = str(uuid.uuid4())
-        source_name = get_random_string()
-        serial_number = get_random_string()
+        source_name = get_random_string(12)
+        serial_number = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid, serial_number)
         jmespath_check = self._force_compliance_check(source_name, profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
@@ -155,12 +155,12 @@ class InventoryComplianceChecksTestCase(TestCase):
         self.assertEqual(ms.previous_status, Status.OK.value)  # previous status also set
 
     def test_tags_no_tags_only_one_match(self):
-        tags = [Tag.objects.create(name=get_random_string()) for _ in range(3)]
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
         matching_tags = tags[:2]
         non_matching_tags = tags[2:]
         profile_uuid = str(uuid.uuid4())
-        source_name = get_random_string()
-        serial_number = get_random_string()
+        source_name = get_random_string(12)
+        serial_number = get_random_string(12)
         for tag in matching_tags:
             MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
         tree = self._build_tree(source_name, profile_uuid, serial_number)

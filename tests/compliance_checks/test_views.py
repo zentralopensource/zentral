@@ -17,8 +17,8 @@ class ComplianceChecksViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utility methods
@@ -47,12 +47,12 @@ class ComplianceChecksViewsTestCase(TestCase):
         if jmespath_expression is None:
             jmespath_expression = f"contains(profiles[*].uuid, `{profile_uuid}`)"
         cc = ComplianceCheck.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             model=InventoryJMESPathCheck.get_model(),
         )
         jmespath_check = JMESPathCheck.objects.create(
             compliance_check=cc,
-            source_name=source_name or get_random_string(),
+            source_name=source_name or get_random_string(12),
             jmespath_expression=jmespath_expression
         )
         if tags is not None:

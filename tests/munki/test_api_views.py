@@ -18,20 +18,20 @@ class APIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.service_account = User.objects.create(
-            username=get_random_string(),
-            email="{}@zentral.io".format(get_random_string()),
+            username=get_random_string(12),
+            email="{}@zentral.io".format(get_random_string(12)),
             is_service_account=True
         )
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
         cls.user.groups.set([cls.group])
         Token.objects.get_or_create(user=cls.service_account)
-        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string())
+        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
     def force_configuration(self):
-        return Configuration.objects.create(name=get_random_string())
+        return Configuration.objects.create(name=get_random_string(12))
 
     def force_enrollment(self):
         configuration = self.force_configuration()

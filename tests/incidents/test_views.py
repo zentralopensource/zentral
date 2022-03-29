@@ -18,13 +18,13 @@ class InventoryViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
         # probe
         cls.probe_source = ProbeSource.objects.create(
             model="BaseProbe",
-            name=get_random_string(),
+            name=get_random_string(12),
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_types": ["inventory_heartbeat"]}]}}
         )
@@ -60,7 +60,7 @@ class InventoryViewsTestCase(TestCase):
 
     def _force_machine_incident(self, incident, status=Status.OPEN):
         return MachineIncident.objects.create(
-            serial_number=get_random_string(),
+            serial_number=get_random_string(12),
             incident=incident,
             status=status.value,
             status_time=datetime.utcnow(),

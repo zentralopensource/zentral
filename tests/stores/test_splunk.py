@@ -9,9 +9,9 @@ class TestSplunkStore(SimpleTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.store = EventStore({"store_name": get_random_string(),
+        cls.store = EventStore({"store_name": get_random_string(12),
                                 "hec_url": "https://splunk.example.com:8088",
-                                "hec_token": get_random_string()})
+                                "hec_token": get_random_string(12)})
 
     @staticmethod
     def build_login_event():

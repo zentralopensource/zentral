@@ -16,11 +16,11 @@ class InventoryAPITests(APITestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(
-            get_random_string(),
-            "{}@zentral.io".format(get_random_string()),
-            get_random_string()
+            get_random_string(12),
+            "{}@zentral.io".format(get_random_string(12)),
+            get_random_string(12)
         )
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
         cls.token, _ = Token.objects.get_or_create(user=cls.user)
 
@@ -45,7 +45,7 @@ class InventoryAPITests(APITestCase):
 
     def commit_machine_snapshot(self, serial_number=None):
         if serial_number is None:
-            serial_number = get_random_string()
+            serial_number = get_random_string(12)
         source = {"module": "tests.zentral.io", "name": "Zentral Tests"}
         tree = {
             "source": source,
@@ -299,12 +299,12 @@ class InventoryAPITests(APITestCase):
     # get meta business unit
 
     def test_get_meta_business_unit_unauthorized(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         response = self.client.get(reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_meta_business_unit(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         self._set_permissions("inventory.view_metabusinessunit")
         response = self.client.get(reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -316,16 +316,16 @@ class InventoryAPITests(APITestCase):
     # update meta business unit
 
     def test_update_meta_business_unit_unauthorized(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         response = self.client.put(reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_meta_business_unit(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         self.assertFalse(meta_business_unit.api_enrollment_enabled())
         self._set_permissions("inventory.change_metabusinessunit")
         url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
-        updated_name = get_random_string()
+        updated_name = get_random_string(12)
         data = {'name': updated_name, 'api_enrollment_enabled': True}
         response = self.client.put(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -347,7 +347,7 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_list_meta_business_unit(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         url = reverse('inventory_api:meta_business_units')
         self._set_permissions("inventory.view_metabusinessunit")
         response = self.client.get(url, {"name": meta_business_unit.name})
@@ -364,7 +364,7 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_list_tag(self):
-        tag = Tag.objects.create(name=get_random_string())
+        tag = Tag.objects.create(name=get_random_string(12))
         self._set_permissions("inventory.view_tag")
         response = self.client.get(reverse('inventory_api:tags'))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -374,12 +374,12 @@ class InventoryAPITests(APITestCase):
     # tag
 
     def test_tag_unauthorized(self):
-        tag = Tag.objects.create(name=get_random_string())
+        tag = Tag.objects.create(name=get_random_string(12))
         response = self.client.get(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_tag(self):
-        tag = Tag.objects.create(name=get_random_string())
+        tag = Tag.objects.create(name=get_random_string(12))
         self._set_permissions("inventory.view_tag")
         response = self.client.get(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, status.HTTP_200_OK)

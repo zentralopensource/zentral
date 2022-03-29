@@ -18,18 +18,18 @@ class MonolithAPIViewsTestCase(TestCase):
     def setUpTestData(cls):
         # service account
         cls.service_account = User.objects.create(
-            username=get_random_string(),
-            email="{}@zentral.io".format(get_random_string()),
+            username=get_random_string(12),
+            email="{}@zentral.io".format(get_random_string(12)),
             is_service_account=True
         )
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
         Token.objects.get_or_create(user=cls.service_account)
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()
         # manifest
-        cls.manifest = Manifest.objects.create(meta_business_unit=cls.mbu, name=get_random_string())
+        cls.manifest = Manifest.objects.create(meta_business_unit=cls.mbu, name=get_random_string(12))
 
     # utility methods
 
@@ -96,7 +96,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_update_cache_server(self):
         self._set_permissions("monolith.change_manifest", "monolith.add_cacheserver", "monolith.change_cacheserver")
-        name = get_random_string()
+        name = get_random_string(12)
         ip_address = "129.2.1.1"
         response = self._post_json_data(reverse("monolith_api:update_cache_server", args=(self.manifest.pk,)),
                                         {"name": name,

@@ -68,7 +68,7 @@ class MonolithAPIViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()
         # manifest
-        cls.manifest = Manifest.objects.create(meta_business_unit=cls.mbu, name=get_random_string())
+        cls.manifest = Manifest.objects.create(meta_business_unit=cls.mbu, name=get_random_string(12))
         # pkginfos
         cls.pkginfo_data = plistlib.loads(pkginfo_src.encode("utf-8"))
         # enrollment
@@ -79,7 +79,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def _make_munki_request(self, url, serial_number=None, authenticated=True, tags=None):
         if not serial_number:
-            serial_number = get_random_string()
+            serial_number = get_random_string(12)
         if tags:
             MachineTag.objects.bulk_create([
                 MachineTag(serial_number=serial_number, tag=tag)
@@ -106,10 +106,10 @@ class MonolithAPIViewsTestCase(TestCase):
         smpi_options=None
     ):
         if catalog is None:
-            catalog = Catalog.objects.create(name=get_random_string())
+            catalog = Catalog.objects.create(name=get_random_string(12))
         ManifestCatalog.objects.create(manifest=self.manifest, catalog=catalog)
         if name is None:
-            name = get_random_string()
+            name = get_random_string(12)
         if version is None:
             version = "1.2.3"
         data = copy.deepcopy(self.pkginfo_data)
@@ -127,7 +127,7 @@ class MonolithAPIViewsTestCase(TestCase):
         )
         pkg_info.catalogs.set([catalog])
         if sub_manifest is None:
-            sub_manifest, _ = SubManifest.objects.get_or_create(name=get_random_string())
+            sub_manifest, _ = SubManifest.objects.get_or_create(name=get_random_string(12))
         if smpi_options is None:
             smpi_options = {}
         SubManifestPkgInfo.objects.get_or_create(
@@ -166,7 +166,7 @@ class MonolithAPIViewsTestCase(TestCase):
         )
         response = self._make_munki_request(
             reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
-            tags=[get_random_string() for _ in range(2)]
+            tags=[get_random_string(12) for _ in range(2)]
         )
         self.assertEqual(response.status_code, 200)
         catalog = plistlib.loads(response.content)
@@ -188,7 +188,7 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self._make_munki_request(
             reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
             serial_number="12345678",
-            tags=[get_random_string() for _ in range(2)]
+            tags=[get_random_string(12) for _ in range(2)]
         )
         self.assertEqual(response.status_code, 200)
         catalog = plistlib.loads(response.content)
@@ -212,7 +212,7 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self._make_munki_request(
             reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
             serial_number="12345678",
-            tags=[get_random_string() for _ in range(2)]
+            tags=[get_random_string(12) for _ in range(2)]
         )
         self.assertEqual(response.status_code, 200)
         catalog = plistlib.loads(response.content)
@@ -232,7 +232,7 @@ class MonolithAPIViewsTestCase(TestCase):
         )
         response = self._make_munki_request(
             reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
-            tags=[get_random_string() for _ in range(2)]
+            tags=[get_random_string(12) for _ in range(2)]
         )
         self.assertEqual(response.status_code, 200)
         catalog = plistlib.loads(response.content)

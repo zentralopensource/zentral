@@ -17,8 +17,8 @@ class JamfSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utility methods
@@ -46,9 +46,9 @@ class JamfSetupViewsTestCase(TestCase):
             host="{}.example.com".format(get_random_string(12)),
             port=443,
             path="/JSSResource",
-            user=get_random_string()
+            user=get_random_string(12)
         )
-        jamf_instance.set_password(get_random_string())
+        jamf_instance.set_password(get_random_string(12))
         super(JamfInstance, jamf_instance).save()
         return jamf_instance
 

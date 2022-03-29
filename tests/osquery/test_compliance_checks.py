@@ -10,7 +10,7 @@ from zentral.contrib.osquery.models import DistributedQuery, Pack, PackQuery, Qu
 
 class OsqueryComplianceChecksTestCase(TestCase):
     def _force_pack(self):
-        name = get_random_string()
+        name = get_random_string(12)
         return Pack.objects.create(name=name, slug=slugify(name))
 
     def _force_query(self, force_pack=False, force_compliance_check=False, force_distributed_query=False):
@@ -18,7 +18,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
             sql = "select 'OK' as ztl_status;"
         else:
             sql = "select 1 from processes;"
-        query = Query.objects.create(name=get_random_string(), sql=sql)
+        query = Query.objects.create(name=get_random_string(12), sql=sql)
         pack = None
         if force_pack:
             pack = self._force_pack()
@@ -38,7 +38,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
 
     def test_no_compliance_check(self):
         query, _, _ = self._force_query(force_pack=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         cc_status_agg.add_result(query.pk, query.version, datetime.utcnow(), [{"ztl_status": Status.OK.value}])
         events = list(cc_status_agg.commit())
@@ -49,7 +49,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
     def test_scheduled_compliance_check_one_ok_tuple(self):
         query, pack, _ = self._force_query(force_pack=True, force_compliance_check=True)
         compliance_check = query.compliance_check
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         status_time = datetime(2021, 12, 25)
         cc_status_agg.add_result(query.pk, query.version, status_time, [{"ztl_status": Status.OK.name}])
@@ -84,7 +84,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
             force_distributed_query=True
         )
         compliance_check = query.compliance_check
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         status_time = datetime.utcnow()
         cc_status_agg.add_result(
@@ -115,7 +115,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
 
     def test_scheduled_compliance_check_no_tuple(self):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         status_time = datetime.utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time, [])
@@ -130,7 +130,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
 
     def test_scheduled_compliance_check_worse_missing_unknown_tuple(self):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         status_time = datetime.utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time,
@@ -147,7 +147,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
 
     def test_scheduled_compliance_check_worse_bad_unknown_tuple(self):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         status_time = datetime.utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time,
@@ -164,7 +164,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
 
     def test_scheduled_compliance_check_worse_failed_tuple(self):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         status_time = datetime.utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time,
@@ -181,7 +181,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
 
     def test_scheduled_compliance_check_two_tuples_last_wins(self):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         cc_status_agg.add_result(query.pk, query.version, datetime(2001, 1, 1), [{"ztl_status": Status.FAILED.name}])
         status_time = datetime.utcnow()
@@ -197,7 +197,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
 
     def test_scheduled_compliance_check_two_tuples_reversed_last_wins(self):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         status_time = datetime.utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time, [{"ztl_status": Status.OK.name}])
@@ -213,7 +213,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
 
     def test_scheduled_compliance_check_one_outdated_failed_tuple(self):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         status_time = datetime.utcnow()
         existing_ms = MachineStatus.objects.create(
             serial_number=serial_number,
@@ -238,7 +238,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
         query.version = 127
         query.save()
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         cc_status_agg.add_result(query.pk, 1, datetime.utcnow(), [{"ztl_status": Status.FAILED.name}])
         events = list(cc_status_agg.commit())
@@ -248,7 +248,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
 
     def test_scheduled_compliance_check_one_ok_tuple_no_update(self):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         existing_ms = MachineStatus.objects.create(
             serial_number=serial_number,
@@ -271,7 +271,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
 
     def test_scheduled_compliance_check_one_ok_tuple_update(self):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         existing_ms = MachineStatus.objects.create(
             serial_number=serial_number,
@@ -298,7 +298,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
     def test_scheduled_compliance_check_one_ok_one_failed_tuple(self):
         query1, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
         query2, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         status_time1 = datetime.utcnow()
         status_time2 = datetime.utcnow()

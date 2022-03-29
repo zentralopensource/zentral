@@ -20,20 +20,20 @@ class APIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.service_account = User.objects.create(
-            username=get_random_string(),
-            email="{}@zentral.io".format(get_random_string()),
+            username=get_random_string(12),
+            email="{}@zentral.io".format(get_random_string(12)),
             is_service_account=True
         )
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
         cls.user.groups.set([cls.group])
         Token.objects.get_or_create(user=cls.service_account)
-        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string())
+        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
     def force_configuration(self):
-        return Configuration.objects.create(name=get_random_string())
+        return Configuration.objects.create(name=get_random_string(12))
 
     def force_enrollment(self):
         configuration = self.force_configuration()
@@ -182,7 +182,7 @@ class APIViewsTestCase(TestCase):
 
     def test_update_configuration(self):
         config = self.force_configuration()
-        new_name = get_random_string()
+        new_name = get_random_string(12)
         data = {'name': new_name}
         self.set_permissions("osquery.change_configuration")
         response = self.put_json_data(reverse('osquery_api:configuration', args=(config.pk,)), data)
@@ -539,28 +539,28 @@ class APIViewsTestCase(TestCase):
     # put pack
 
     def test_put_pack_unauthorized(self):
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(url, {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_put_pack_permission_denied(self):
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(url, {}, include_token=True)
         self.assertEqual(response.status_code, 403)
 
     def test_delete_pack_unauthorized(self):
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.delete(url, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_delete_pack_permission_denied(self):
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.delete(url, include_token=True)
         self.assertEqual(response.status_code, 403)
 
     def test_put_no_queries(self):
         self.set_pack_endpoint_put_permissions()
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(url, {})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -570,7 +570,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_malformed_query(self):
         self.set_pack_endpoint_put_permissions()
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(url, {"queries": {"first_query": {"query": ""}}})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -581,7 +581,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_removed_and_snapshot_query(self):
         self.set_pack_endpoint_put_permissions()
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(
             url,
             {"queries": {"first_query": {"query": "select * from users;",
@@ -602,7 +602,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_diff_query_with_compliance_check(self):
         self.set_pack_endpoint_put_permissions()
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(
             url,
             {"queries": {"first_query": {"query": "select 'OK' as ztl_status",
@@ -624,7 +624,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_query_with_compliance_check_without_ztl_status(self):
         self.set_pack_endpoint_put_permissions()
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(
             url,
             {"queries": {"first_query": {"query": "select * from users",
@@ -645,7 +645,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_invalid_version_query(self):
         self.set_pack_endpoint_put_permissions()
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(
             url,
             {"queries": {"first_query": {"query": "select * from users;",
@@ -660,7 +660,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_invalid_platform_query(self):
         self.set_pack_endpoint_put_permissions()
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(
             url,
             {"queries": {"first_query": {"query": "select * from users;",
@@ -675,7 +675,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_invalid_interval_query(self):
         self.set_pack_endpoint_put_permissions()
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(
             url,
             {"queries": {"first_query": {"query": "select * from users;",
@@ -689,7 +689,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_invalid_shard_query(self):
         self.set_pack_endpoint_put_permissions()
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(
             url,
             {"queries": {"first_query": {"query": "select * from users;",
@@ -704,8 +704,8 @@ class APIViewsTestCase(TestCase):
 
     def test_put_name_conflict(self):
         self.set_pack_endpoint_put_permissions()
-        Pack.objects.create(slug=get_random_string(), name="Yolo")
-        url = reverse("osquery_api:pack", args=(get_random_string(),))
+        Pack.objects.create(slug=get_random_string(12), name="Yolo")
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(
             url,
             {"name": "Yolo",
@@ -720,7 +720,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_pack_json(self):
         self.set_pack_endpoint_put_permissions()
-        slug = get_random_string()
+        slug = get_random_string(12)
         url = reverse("osquery_api:pack", args=(slug,))
 
         # create pack
@@ -870,7 +870,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_pack_osquery_conf(self):
         self.set_pack_endpoint_put_permissions()
-        slug = get_random_string()
+        slug = get_random_string(12)
         url = reverse("osquery_api:pack", args=(slug,))
 
         pack = """
@@ -909,7 +909,7 @@ class APIViewsTestCase(TestCase):
 
     def test_put_pack_yaml(self):
         self.set_pack_endpoint_put_permissions()
-        slug = get_random_string()
+        slug = get_random_string(12)
         url = reverse("osquery_api:pack", args=(slug,))
 
         pack = (
@@ -945,7 +945,7 @@ class APIViewsTestCase(TestCase):
 
     def test_delete_pack_404(self):
         self.set_pack_endpoint_delete_permissions()
-        slug = get_random_string()
+        slug = get_random_string(12)
         url = reverse("osquery_api:pack", args=(slug,))
         response = self.delete(url, include_token=True)
         self.assertEqual(response.status_code, 404)
@@ -955,7 +955,7 @@ class APIViewsTestCase(TestCase):
         )
 
     def test_delete_pack(self):
-        slug = get_random_string()
+        slug = get_random_string(12)
         url = reverse("osquery_api:pack", args=(slug,))
 
         # create pack
@@ -1014,7 +1014,7 @@ class APIViewsTestCase(TestCase):
 
     def _force_distributed_query(self):
         query = Query.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             sql="select * from osquery_schedule;"
         )
         return DistributedQuery.objects.create(

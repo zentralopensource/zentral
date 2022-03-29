@@ -13,16 +13,16 @@ class AccountUsersViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # ui user
-        cls.ui_user = User.objects.create_user(get_random_string(),
-                                               "{}@zentral.io".format(get_random_string()),
-                                               get_random_string(),
+        cls.ui_user = User.objects.create_user(get_random_string(12),
+                                               "{}@zentral.io".format(get_random_string(12)),
+                                               get_random_string(12),
                                                is_superuser=False)
         # ui group
-        cls.ui_group = Group.objects.create(name=get_random_string())
+        cls.ui_group = Group.objects.create(name=get_random_string(12))
         cls.ui_user.groups.set([cls.ui_group])
         # groups
-        cls.group = Group.objects.create(name=get_random_string())
-        cls.group2 = Group.objects.create(name=get_random_string())
+        cls.group = Group.objects.create(name=get_random_string(12))
+        cls.group2 = Group.objects.create(name=get_random_string(12))
 
     # auth utils
 
@@ -117,7 +117,7 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_create_group_ok(self):
         self.login("auth.add_group", "auth.view_group")
-        name = get_random_string()
+        name = get_random_string(12)
         response = self.client.post(reverse("accounts:create_group"),
                                     {"name": name},
                                     follow=True)
@@ -148,7 +148,7 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_update_group_ok(self):
         self.login("auth.change_group", "auth.view_group")
-        name = get_random_string()
+        name = get_random_string(12)
         response = self.client.post(reverse("accounts:update_group", args=(self.group.pk,)),
                                     {"name": name},
                                     follow=True)

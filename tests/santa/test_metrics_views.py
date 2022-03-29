@@ -26,7 +26,7 @@ class SantaMetricsViewsTestCase(TestCase):
     # utility methods
 
     def _force_configuration(self):
-        return Configuration.objects.create(name=get_random_string())
+        return Configuration.objects.create(name=get_random_string(12))
 
     def _make_authenticated_request(self):
         return self.client.get(reverse("santa_metrics:all"),

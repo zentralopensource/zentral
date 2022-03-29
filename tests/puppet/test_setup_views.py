@@ -20,8 +20,8 @@ class PuppetSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
@@ -54,9 +54,9 @@ class PuppetSetupViewsTestCase(TestCase):
             url="https://{}.example.com".format(get_random_string(8)),
             ca_chain=ca_chain,
         )
-        instance.set_report_processor_token(get_random_string())
+        instance.set_report_processor_token(get_random_string(12))
         if rbac_auth:
-            instance.set_rbac_token(get_random_string())
+            instance.set_rbac_token(get_random_string(12))
         else:
             instance.cert, key = build_self_signed_cert(f"{instance.pk}-client")
             instance.set_key(key)
@@ -145,7 +145,7 @@ class PuppetSetupViewsTestCase(TestCase):
         self._login("puppet.add_instance", "puppet.view_instance")
         url = "https://{}.example.com".format(get_random_string(8))
         ca_chain, _ = build_self_signed_cert("CA")
-        name = get_random_string()
+        name = get_random_string(12)
         cert, key = build_self_signed_cert(name)
         response = self.client.post(reverse("puppet:create_instance"),
                                     {"business_unit": self.bu.pk,
@@ -196,7 +196,7 @@ class PuppetSetupViewsTestCase(TestCase):
     def test_update_rbac_token_instance_post(self):
         instance = self._force_instance(rbac_auth=False)  # instance with cert & key
         self._login("puppet.change_instance", "puppet.view_instance")
-        rbac_token = get_random_string()
+        rbac_token = get_random_string(12)
         response = self.client.post(reverse("puppet:update_instance", args=(instance.pk,)),
                                     {"business_unit": instance.business_unit.pk,
                                      "url": instance.url,

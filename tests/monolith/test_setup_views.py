@@ -20,14 +20,14 @@ class MonolithSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()
         # manifest
-        cls.manifest = Manifest.objects.create(meta_business_unit=cls.mbu, name=get_random_string())
+        cls.manifest = Manifest.objects.create(meta_business_unit=cls.mbu, name=get_random_string(12))
         # catalog
         cls.catalog_1 = Catalog.objects.create(name=get_random_string(13), priority=10)
         # manifest catalog
@@ -43,7 +43,7 @@ class MonolithSetupViewsTestCase(TestCase):
         cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.mbu)
         cls.enrollment = Enrollment.objects.create(secret=cls.enrollment_secret, manifest=cls.manifest)
         # enrolled machine
-        cls.serial_number = get_random_string()
+        cls.serial_number = get_random_string(12)
         cls.enrolled_machine = EnrolledMachine.objects.create(enrollment=cls.enrollment,
                                                               serial_number=cls.serial_number)
         # simulate 1 install of 1v1
@@ -209,17 +209,17 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "monolith/condition_list.html")
 
     def test_condition_login_redirect(self):
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         self._login_redirect(reverse("monolith:condition", args=(condition.pk,)))
 
     def test_condition_permission_denied(self):
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         self._login()
         response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_condition(self):
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         self._login("monolith.view_condition")
         response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -228,7 +228,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("monolith:delete_condition", args=(condition.pk,)))
 
     def test_condition_with_delete(self):
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -237,8 +237,8 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertContains(response, reverse("monolith:delete_condition", args=(condition.pk,)))
 
     def test_condition_cannot_delete(self):
-        submanifest = SubManifest.objects.create(name=get_random_string())
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        submanifest = SubManifest.objects.create(name=get_random_string(12))
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         SubManifestPkgInfo.objects.create(
             sub_manifest=submanifest,
             key="managed_installs",
@@ -253,24 +253,24 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("monolith:delete_condition", args=(condition.pk,)))
 
     def test_delete_condition_login_redirect(self):
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         self._login_redirect(reverse("monolith:delete_condition", args=(condition.pk,)))
 
     def test_delete_condition_permission_denied(self):
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         self._login()
         response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_condition_get(self):
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         self._login("monolith.delete_condition")
         response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/condition_confirm_delete.html")
 
     def test_delete_condition_post(self):
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.post(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -278,8 +278,8 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(Condition.objects.filter(pk=condition.pk).count(), 0)
 
     def test_delete_condition_get_blocked(self):
-        submanifest = SubManifest.objects.create(name=get_random_string())
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        submanifest = SubManifest.objects.create(name=get_random_string(12))
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         SubManifestPkgInfo.objects.create(
             sub_manifest=submanifest,
             key="managed_installs",
@@ -293,8 +293,8 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertContains(response, "cannot be deleted")
 
     def test_delete_condition_post_blocked(self):
-        submanifest = SubManifest.objects.create(name=get_random_string())
-        condition = Condition.objects.create(name=get_random_string(), predicate='machine_type == "laptop"')
+        submanifest = SubManifest.objects.create(name=get_random_string(12))
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         SubManifestPkgInfo.objects.create(
             sub_manifest=submanifest,
             key="managed_installs",
@@ -340,7 +340,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_create_submanifest_post(self):
         self._login("monolith.add_submanifest", "monolith.view_submanifest")
-        name = get_random_string()
+        name = get_random_string(12)
         response = self.client.post(reverse("monolith:create_sub_manifest"),
                                     {"name": name},
                                     follow=True)

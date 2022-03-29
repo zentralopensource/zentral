@@ -41,20 +41,20 @@ class EventDeserializationTestCase(TestCase):
     def setUpTestData(cls):
         cls.probe_source = ProbeSource.objects.create(
             model="BaseProbe",
-            name=get_random_string(),
+            name=get_random_string(12),
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_types": ["inventory_heartbeat"]}]}}
         )
         cls.probe_source_with_incident = ProbeSource.objects.create(
             model="BaseProbe",
-            name=get_random_string(),
+            name=get_random_string(12),
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_types": ["inventory_heartbeat"]}]},
                   "incident_severity": Severity.CRITICAL.value},
         )
         cls.probe_source_for_incident_with_incident = ProbeSource.objects.create(
             model="BaseProbe",
-            name=get_random_string(),
+            name=get_random_string(12),
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_types": ["incident_created"]}]},
                   "incident_severity": Severity.CRITICAL.value},  # only for the tests! Not useful at all!

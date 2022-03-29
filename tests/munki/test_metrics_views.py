@@ -12,11 +12,11 @@ class MunkiMetricsViewsTestCase(TestCase):
 
     def _force_managed_install(self, failed=False, count=1, reinstall=False, age_days=22):
         mi = ManagedInstall.objects.create(
-            machine_serial_number=get_random_string(),
-            name=get_random_string(),
-            installed_version=get_random_string(),
+            machine_serial_number=get_random_string(12),
+            name=get_random_string(12),
+            installed_version=get_random_string(12),
             installed_at=datetime.now(),
-            failed_version=get_random_string() if failed else None,
+            failed_version=get_random_string(12) if failed else None,
             failed_at=datetime.now() if failed else None,
             reinstall=reinstall,
         )
@@ -41,7 +41,7 @@ class MunkiMetricsViewsTestCase(TestCase):
 
     def test_active_machines(self):
         for age in (2, 22, 31):
-            ms = MunkiState.objects.create(machine_serial_number=get_random_string())
+            ms = MunkiState.objects.create(machine_serial_number=get_random_string(12))
             MunkiState.objects.filter(pk=ms.pk).update(last_seen=datetime.utcnow() - timedelta(days=age))
         response = self._make_authenticated_request()
         self.assertEqual(response.status_code, 200)

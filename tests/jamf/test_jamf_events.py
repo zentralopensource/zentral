@@ -13,15 +13,15 @@ class JamfEventsTestCase(TestCase):
             host="{}.example.com".format(get_random_string(12)),
             port=443,
             path="/JSSResource",
-            user=get_random_string(),
+            user=get_random_string(12),
             checkin_heartbeat_timeout=703,
             inventory_completed_heartbeat_timeout=7203,
         )
-        cls.jamf_instance.set_password(get_random_string())
+        cls.jamf_instance.set_password(get_random_string(12))
         super(JamfInstance, cls.jamf_instance).save()
 
     def commit_minimal_ms_tree(self):
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         api_client = APIClient(**self.jamf_instance.serialize(decrypt_password=True))
         ms_tree = {"source": api_client.get_source_d(),
                    "reference": 123,
@@ -31,11 +31,11 @@ class JamfEventsTestCase(TestCase):
 
     def test_checkin_heartbeat_timeout_unknown_machine(self):
         event_cls = event_cls_from_type("jamf_computer_checkin")
-        self.assertIsNone(event_cls.get_machine_heartbeat_timeout(get_random_string()))
+        self.assertIsNone(event_cls.get_machine_heartbeat_timeout(get_random_string(12)))
 
     def test_inventory_completed_heartbeat_timeout_unknown_machine(self):
         event_cls = event_cls_from_type("jamf_computer_inventory_completed")
-        self.assertIsNone(event_cls.get_machine_heartbeat_timeout(get_random_string()))
+        self.assertIsNone(event_cls.get_machine_heartbeat_timeout(get_random_string(12)))
 
     def test_checkin_heartbeat_timeout(self):
         serial_number = self.commit_minimal_ms_tree()

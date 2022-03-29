@@ -19,13 +19,13 @@ class IncidentsMetricsViewsTestCase(TestCase):
         )
         MachineIncident.objects.create(
             incident=cls.incident,
-            serial_number=get_random_string(),
+            serial_number=get_random_string(12),
             status=Status.OPEN.value,
             status_time=datetime.utcnow()
         )
         MachineIncident.objects.create(
             incident=cls.incident,
-            serial_number=get_random_string(),
+            serial_number=get_random_string(12),
             status=Status.OPEN.value,
             status_time=datetime.utcnow()
         )

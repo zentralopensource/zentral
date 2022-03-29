@@ -20,11 +20,11 @@ class APIViewsTestCase(TestCase):
         cls.configuration = Configuration.objects.create(name=get_random_string(256))
         cls.configuration2 = Configuration.objects.create(name=get_random_string(256))
         cls.service_account = User.objects.create(
-            username=get_random_string(),
-            email="{}@zentral.io".format(get_random_string()),
+            username=get_random_string(12),
+            email="{}@zentral.io".format(get_random_string(12)),
             is_service_account=True
         )
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
         Token.objects.get_or_create(user=cls.service_account)
         cls.maxDiff = None
@@ -153,7 +153,7 @@ class APIViewsTestCase(TestCase):
 
         # JSON rule for all configurations
         data = {
-            "name": get_random_string(),
+            "name": get_random_string(12),
             "rules": [
                 {"rule_type": "BINARY",
                  "sha256": get_random_string(64, "0123456789abcdef"),
@@ -276,13 +276,13 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(self.configuration2.rule_set.count(), 1)
 
         # update
-        data["rules"][0]["custom_msg"] = get_random_string()
-        data["rules"][0]["serial_numbers"].append(get_random_string())
-        data["rules"][0]["excluded_serial_numbers"].append(get_random_string())
-        data["rules"][0]["primary_users"] = [get_random_string()]
-        data["rules"][0]["excluded_primary_users"].append(get_random_string())
-        data["rules"][0]["tags"].insert(0, get_random_string())
-        data["rules"][0]["excluded_tags"] = [get_random_string()]
+        data["rules"][0]["custom_msg"] = get_random_string(12)
+        data["rules"][0]["serial_numbers"].append(get_random_string(12))
+        data["rules"][0]["excluded_serial_numbers"].append(get_random_string(12))
+        data["rules"][0]["primary_users"] = [get_random_string(12)]
+        data["rules"][0]["excluded_primary_users"].append(get_random_string(12))
+        data["rules"][0]["tags"].insert(0, get_random_string(12))
+        data["rules"][0]["excluded_tags"] = [get_random_string(12)]
         response = self.post_json_data(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -352,7 +352,7 @@ class APIViewsTestCase(TestCase):
 
         # scoped + conflict
         data2 = {
-            "name": get_random_string(),
+            "name": get_random_string(12),
             "configurations": [self.configuration.name],
             "rules": [
                 {"rule_type": "BINARY",
@@ -432,7 +432,7 @@ class APIViewsTestCase(TestCase):
         sha256 = get_random_string(64, "0123456789abcdef")
         response = self.post_json_data(
             url,
-            {"name": get_random_string(),
+            {"name": get_random_string(12),
              "rules": [
                  {"rule_type": "BINARY", "sha256": sha256, "policy": "ALLOWLIST"},
                  {"rule_type": "BINARY", "sha256": sha256, "policy": "ALLOWLIST"},
@@ -449,7 +449,7 @@ class APIViewsTestCase(TestCase):
         sha256 = get_random_string(64, "0123456789abcdef")
         response = self.post_json_data(
             url,
-            {"name": get_random_string(),
+            {"name": get_random_string(12),
              "rules": [
                  {"rule_type": "BUNDLE", "sha256": sha256, "policy": "ALLOWLIST"},
              ]}
@@ -464,7 +464,7 @@ class APIViewsTestCase(TestCase):
         # serial number conflict
         response = self.post_json_data(
             url,
-            {"name": get_random_string(),
+            {"name": get_random_string(12),
              "rules": [{"rule_type": "BINARY",
                         "sha256": get_random_string(64, "0123456789abcdef"),
                         "policy": "ALLOWLIST",
@@ -481,7 +481,7 @@ class APIViewsTestCase(TestCase):
         # primary user conflict
         response = self.post_json_data(
             url,
-            {"name": get_random_string(),
+            {"name": get_random_string(12),
              "rules": [{"rule_type": "BINARY",
                         "sha256": get_random_string(64, "0123456789abcdef"),
                         "policy": "ALLOWLIST",
@@ -498,7 +498,7 @@ class APIViewsTestCase(TestCase):
         # tag conflict
         response = self.post_json_data(
             url,
-            {"name": get_random_string(),
+            {"name": get_random_string(12),
              "rules": [{"rule_type": "BINARY",
                         "sha256": get_random_string(64, "0123456789abcdef"),
                         "policy": "ALLOWLIST",

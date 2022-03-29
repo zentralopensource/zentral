@@ -12,12 +12,12 @@ class ComplianceChecksMetricsViewsTestCase(TestCase):
 
     def _force_compliance_check(self, failed=False, count=1, age_days=22):
         cc = ComplianceCheck.objects.create(
-            name=get_random_string(),
-            model=get_random_string()
+            name=get_random_string(12),
+            model=get_random_string(12)
         )
         for _ in range(count):
             MachineStatus.objects.create(
-                serial_number=get_random_string(),
+                serial_number=get_random_string(12),
                 compliance_check=cc,
                 compliance_check_version=cc.version,
                 status=Status.OK.value if failed is False else Status.FAILED.value,

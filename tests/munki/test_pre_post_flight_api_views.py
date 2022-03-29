@@ -19,7 +19,7 @@ class MunkiAPIViewsTestCase(TestCase):
         cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.business_unit = cls.meta_business_unit.create_enrollment_business_unit()
         cls.configuration = Configuration.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True
         )
@@ -140,8 +140,8 @@ class MunkiAPIViewsTestCase(TestCase):
         # one open, one closed incident
         for status in (Status.OPEN, Status.CLOSED):
             i = Incident.objects.create(
-                incident_type=get_random_string(),
-                key={"un": get_random_string()},
+                incident_type=get_random_string(12),
+                key={"un": get_random_string(12)},
                 status=status.value,
                 status_time=datetime.utcnow(),
                 severity=Severity.MAJOR.value
@@ -174,7 +174,7 @@ class MunkiAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_job(self, post_event):
-        tag_name = get_random_string()
+        tag_name = get_random_string(12)
         enrolled_machine = self._make_enrolled_machine(tag_name=tag_name)
         computer_name = get_random_string(45)
         report_sha1sum = 40 * "0"
@@ -261,7 +261,7 @@ class MunkiAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_job_with_wipe(self, post_event):
-        tag_name = get_random_string()
+        tag_name = get_random_string(12)
         enrolled_machine = self._make_enrolled_machine(tag_name=tag_name)
         computer_name = get_random_string(45)
 

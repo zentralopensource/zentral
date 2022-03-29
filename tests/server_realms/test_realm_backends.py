@@ -71,18 +71,18 @@ class RealmModelsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.ldap_realm_no_login = Realm.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             backend="ldap",
             username_claim="username",
         )
         cls.ldap_realm = Realm.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             backend="ldap",
             username_claim="username",
             enabled_for_login=True
         )
         cls.openidc_realm = Realm.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             backend="openidc",
             username_claim="username",
             config={"discovery_url": "https://www.example.com/discovery",
@@ -91,7 +91,7 @@ class RealmModelsTestCase(TestCase):
             enabled_for_login=True
         )
         cls.saml_realm = Realm.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             backend="saml",
             username_claim="username",
             config={"idp_metadata": SAML2_IDP_METADATA_TEST_STRING},
@@ -103,7 +103,7 @@ class RealmModelsTestCase(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_ldap_login(self):
-        next_url = "/{}".format(get_random_string())
+        next_url = "/{}".format(get_random_string(12))
         response = self.client.post(
             reverse("realms:login", args=(self.ldap_realm.pk,)),
             {"next": next_url + "\u0000"}
@@ -119,7 +119,7 @@ class RealmModelsTestCase(TestCase):
         _get_openid_configuration.return_value = {
             "authorization_endpoint": authorization_endpoint_url
         }
-        next_url = "/{}".format(get_random_string())
+        next_url = "/{}".format(get_random_string(12))
         response = self.client.post(
             reverse("realms:login", args=(self.openidc_realm.pk,)),
             {"next": next_url + "\u0000"}
@@ -143,7 +143,7 @@ class RealmModelsTestCase(TestCase):
         _get_openid_configuration.assert_called_once_with(self.openidc_realm.config["discovery_url"])
 
     def test_saml_login(self):
-        next_url = "/{}".format(get_random_string())
+        next_url = "/{}".format(get_random_string(12))
         response = self.client.post(
             reverse("realms:login", args=(self.saml_realm.pk,)),
             {"next": next_url + "\u0000"}

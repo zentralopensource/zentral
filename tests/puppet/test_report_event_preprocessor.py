@@ -22,8 +22,8 @@ class PuppetWebhookPreprocessorTestCase(TestCase):
             url="https://{}.example.com".format(get_random_string(8)),
             ca_chain=build_self_signed_cert("CA")[0]
         )
-        cls.instance.set_rbac_token(get_random_string())
-        cls.token = get_random_string()
+        cls.instance.set_rbac_token(get_random_string(12))
+        cls.token = get_random_string(12)
         cls.instance.set_report_processor_token(cls.token)
         cls.instance.save()
         cls.instance.refresh_from_db()
@@ -44,8 +44,8 @@ class PuppetWebhookPreprocessorTestCase(TestCase):
 
     @patch("zentral.contrib.puppet.puppetdb_client.PuppetDBClient.get_machine_d")
     def test_raw_event(self, get_machine_d):
-        host = get_random_string()
-        serial_number = get_random_string()
+        host = get_random_string(12)
+        serial_number = get_random_string(12)
         get_machine_d.return_value = {
             "source": {"module": "zentral.contrib.puppet",
                        "name": "puppet",
@@ -73,8 +73,8 @@ class PuppetWebhookPreprocessorTestCase(TestCase):
 
     @patch("zentral.contrib.puppet.puppetdb_client.PuppetDBClient.get_machine_d")
     def test_raw_event_tz(self, get_machine_d):
-        host = get_random_string()
-        serial_number = get_random_string()
+        host = get_random_string(12)
+        serial_number = get_random_string(12)
         get_machine_d.return_value = {
             "source": {"module": "zentral.contrib.puppet",
                        "name": "puppet",

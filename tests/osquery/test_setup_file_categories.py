@@ -13,8 +13,8 @@ from zentral.contrib.osquery.models import FileCategory
 class OsquerySetupFileCategoriesViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utiliy methods
@@ -39,7 +39,7 @@ class OsquerySetupFileCategoriesViewsTestCase(TestCase):
 
     def _force_file_category(self):
         return FileCategory.objects.create(
-            name=get_random_string(),
+            name=get_random_string(12),
             file_paths=[get_random_string(16) for i in range(3)]
         )
 
@@ -99,7 +99,7 @@ class OsquerySetupFileCategoriesViewsTestCase(TestCase):
     def test_update_file_category_post(self):
         file_category = self._force_file_category()
         self._login("osquery.change_filecategory", "osquery.view_filecategory")
-        new_name = get_random_string()
+        new_name = get_random_string(12)
         response = self.client.post(reverse("osquery:update_file_category", args=(file_category.pk,)),
                                     {"name": new_name,
                                      "file_paths": "yolo, 2020forever",

@@ -17,8 +17,8 @@ from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMa
 class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utiliy methods
@@ -51,7 +51,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         )
 
     def _force_query(self):
-        return Query.objects.create(name=get_random_string(), sql="select 1 from processes;")
+        return Query.objects.create(name=get_random_string(12), sql="select 1 from processes;")
 
     # create distributed query
 
@@ -310,8 +310,8 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         get_paginate_by.return_value = 1
         distributed_query = self._force_distributed_query()
         dqm_count = 3
-        serial_numbers = [get_random_string() for _ in range(dqm_count)]
-        err_msgs = [get_random_string() for _ in range(dqm_count)]
+        serial_numbers = [get_random_string(12) for _ in range(dqm_count)]
+        err_msgs = [get_random_string(12) for _ in range(dqm_count)]
         dqm_gen = (
             DistributedQueryMachine(
                 distributed_query=distributed_query,
@@ -347,12 +347,12 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         get_paginate_by.return_value = 1
         distributed_query = self._force_distributed_query()
         dqr_count = 4
-        serial_numbers = [get_random_string() for _ in range(dqr_count)]
+        serial_numbers = [get_random_string(12) for _ in range(dqr_count)]
         dqr_gen = (
             DistributedQueryResult(
                 distributed_query=distributed_query,
                 serial_number=serial_numbers[i],
-                row={"un": get_random_string()}
+                row={"un": get_random_string(12)}
             ) for i in range(dqr_count)
         )
         DistributedQueryResult.objects.bulk_create(dqr_gen)
@@ -363,7 +363,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertContains(response, f"{dqr_count} Results")
         self.assertContains(response, serial_numbers[-1])
         self.assertContains(response, f"page 1 of {dqr_count}")
-        search_term = serial_numbers[0] + get_random_string()
+        search_term = serial_numbers[0] + get_random_string(12)
         response = self.client.get(
             "{}?q={}".format(reverse("osquery:distributed_query_results", args=(distributed_query.pk,)),
                              search_term)
@@ -398,7 +398,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         get_paginate_by.return_value = 1
         distributed_query = self._force_distributed_query()
         fcs_count = 5
-        serial_numbers = [get_random_string() for _ in range(fcs_count)]
+        serial_numbers = [get_random_string(12) for _ in range(fcs_count)]
         fcs_gen = (
             FileCarvingSession(
                 id=uuid.uuid4(),

@@ -12,9 +12,9 @@ class NginxAuthRequestViewTestCase(TestCase):
     def setUpTestData(cls):
         cls.pwd = "yo"
         cls.user = User.objects.create_user("yo", "yo@zentral.io", cls.pwd)
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
-        cls.group2 = Group.objects.create(name=get_random_string())
+        cls.group2 = Group.objects.create(name=get_random_string(12))
         # force the extra links we need for this test
         cls.extra_links = [
             # external link for all users

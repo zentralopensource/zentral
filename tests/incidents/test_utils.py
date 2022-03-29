@@ -19,8 +19,8 @@ class TestEvent(BaseEvent):
 
 class IncidentTestCase(TestCase):
     def _create_event(self, severity=Severity.CRITICAL, serial_number=None):
-        incident_type = get_random_string()
-        key = {"key": get_random_string()}
+        incident_type = get_random_string(12)
+        key = {"key": get_random_string(12)}
         incident_update = IncidentUpdate(incident_type, key, severity)
         return TestEvent(
             EventMetadata(
@@ -161,7 +161,7 @@ class IncidentTestCase(TestCase):
         )
         existing_machine_incident = MachineIncident.objects.create(
             incident=existing_incident,
-            serial_number=get_random_string(),
+            serial_number=get_random_string(12),
             status=Status.OPEN.value,
             status_time=datetime.utcnow()
         )
@@ -479,8 +479,8 @@ class IncidentTestCase(TestCase):
 
     def test_update_incident_status_noop(self):
         incident = Incident.objects.create(
-            incident_type=get_random_string(),
-            key={"key": get_random_string()},
+            incident_type=get_random_string(12),
+            key={"key": get_random_string(12)},
             status=Status.CLOSED.value,
             status_time=datetime.utcnow(),
             severity=Severity.MAJOR.value
@@ -494,8 +494,8 @@ class IncidentTestCase(TestCase):
 
     def test_update_incident_status_ok(self):
         incident = Incident.objects.create(
-            incident_type=get_random_string(),
-            key={"key": get_random_string()},
+            incident_type=get_random_string(12),
+            key={"key": get_random_string(12)},
             status=Status.OPEN.value,
             status_time=datetime.utcnow(),
             severity=Severity.MAJOR.value
@@ -515,8 +515,8 @@ class IncidentTestCase(TestCase):
 
     def test_update_machine_incident_status_noop(self):
         incident = Incident.objects.create(
-            incident_type=get_random_string(),
-            key={"key": get_random_string()},
+            incident_type=get_random_string(12),
+            key={"key": get_random_string(12)},
             status=Status.CLOSED.value,
             status_time=datetime.utcnow(),
             severity=Severity.MAJOR.value
@@ -538,8 +538,8 @@ class IncidentTestCase(TestCase):
 
     def test_update_machine_incident_status_ok(self):
         incident = Incident.objects.create(
-            incident_type=get_random_string(),
-            key={"key": get_random_string()},
+            incident_type=get_random_string(12),
+            key={"key": get_random_string(12)},
             status=Status.OPEN.value,
             status_time=datetime.utcnow(),
             severity=Severity.MAJOR.value

@@ -22,16 +22,16 @@ class SantaSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
         # file tree
         cls.file_sha256 = get_random_sha256()
-        cls.file_name = get_random_string()
-        cls.file_bundle_name = get_random_string()
+        cls.file_name = get_random_string(12)
+        cls.file_bundle_name = get_random_string(12)
         cls.file_cert_sha256 = get_random_sha256()
-        cls.file_cert_cn = get_random_string()
-        cls.file_cert_ou = get_random_string()
+        cls.file_cert_cn = get_random_string(12)
+        cls.file_cert_ou = get_random_string(12)
         cls.file, _ = File.objects.commit({
             'source': {'module': 'zentral.contrib.santa', 'name': 'Santa events'},
             'bundle': {'bundle_id': 'servicecontroller:com.apple.stomp.transcoderx',
@@ -92,13 +92,13 @@ class SantaSetupViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_configuration(self):
-        return Configuration.objects.create(name=get_random_string(), enable_sysx_cache=True)
+        return Configuration.objects.create(name=get_random_string(12), enable_sysx_cache=True)
 
     def _force_bundle(self):
         bundle_target = Target.objects.create(type=Target.BUNDLE, sha256=get_random_sha256())
         return Bundle.objects.create(
             target=bundle_target,
-            executable_rel_path=get_random_string(),
+            executable_rel_path=get_random_string(12),
             bundle_id=self.file.bundle.bundle_id,
             name=self.file_bundle_name,
             version=self.file.bundle.bundle_version,

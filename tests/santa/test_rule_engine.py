@@ -144,7 +144,7 @@ class SantaRuleEngineTestCase(TestCase):
         rule.excluded_serial_numbers = [self.enrolled_machine.serial_number]
         rule.save()
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
-        rule.excluded_serial_numbers = [get_random_string()]
+        rule.excluded_serial_numbers = [get_random_string(12)]
         rule.save()
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
 
@@ -178,13 +178,13 @@ class SantaRuleEngineTestCase(TestCase):
 
     def test_one_excluded_primary_user(self):
         target, rule, result = self.create_and_serialize_for_iter_rule()
-        primary_user = get_random_string()
+        primary_user = get_random_string(12)
         rule.excluded_primary_users = [primary_user]
         rule.save()
         self.enrolled_machine.primary_user = primary_user
         self.enrolled_machine.save()
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
-        rule.excluded_primary_users = [get_random_string()]
+        rule.excluded_primary_users = [get_random_string(12)]
         rule.save()
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
         # no rules if excluded_primary_users and the machine reports no primary user!!!

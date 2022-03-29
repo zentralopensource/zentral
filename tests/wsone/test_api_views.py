@@ -15,30 +15,30 @@ class APIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.service_account = User.objects.create(
-            username=get_random_string(),
-            email="{}@zentral.io".format(get_random_string()),
+            username=get_random_string(12),
+            email="{}@zentral.io".format(get_random_string(12)),
             is_service_account=True
         )
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
         cls.user.groups.set([cls.group])
         Token.objects.get_or_create(user=cls.service_account)
-        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string())
+        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.bu = cls.mbu.create_enrollment_business_unit()
 
     def force_instance(self, excluded_groups_count=0):
         instance = Instance.objects.create(
             business_unit=self.bu,
             server_url="https://{}.example.com".format(get_random_string(8)),
-            client_id=get_random_string(),
+            client_id=get_random_string(12),
             token_url="https://{}.example.com".format(get_random_string(8)),
-            username=get_random_string(),
-            excluded_groups=[get_random_string() for i in range(excluded_groups_count)]
+            username=get_random_string(12),
+            excluded_groups=[get_random_string(12) for i in range(excluded_groups_count)]
         )
-        instance.set_api_key(get_random_string())
-        instance.set_client_secret(get_random_string())
-        instance.set_password(get_random_string())
+        instance.set_api_key(get_random_string(12))
+        instance.set_client_secret(get_random_string(12))
+        instance.set_password(get_random_string(12))
         instance.save()
         instance.refresh_from_db()
         return instance

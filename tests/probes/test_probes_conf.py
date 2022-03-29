@@ -8,12 +8,12 @@ class ProbesConfTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.inactive_probe_source = ProbeSource.objects.create(model="BaseProbe",
-                                                               name=get_random_string(),
+                                                               name=get_random_string(12),
                                                                status=ProbeSource.INACTIVE,
                                                                body={})
         cls.inactive_probe = cls.inactive_probe_source.load()
         cls.probe_source = ProbeSource.objects.create(model="BaseProbe",
-                                                      name=get_random_string(),
+                                                      name=get_random_string(12),
                                                       status=ProbeSource.ACTIVE,
                                                       body={})
         cls.probe = cls.probe_source.load()

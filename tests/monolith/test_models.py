@@ -64,20 +64,20 @@ class MonolithModelsTestCase(TestCase):
         cls.pkginfo_2_1.catalogs.set([cls.catalog_1, cls.catalog_2])
         # simulate 1 install of 1v1 and 3 installs of 1v2, 1 install of 2v1
         ManagedInstall.objects.create(
-            machine_serial_number=get_random_string(),
+            machine_serial_number=get_random_string(12),
             name=cls.pkginfo_name_1.name,
             installed_version=cls.pkginfo_1_1.version,
             installed_at=datetime.utcnow()
         )
         for i in range(3):
             ManagedInstall.objects.create(
-                machine_serial_number=get_random_string(),
+                machine_serial_number=get_random_string(12),
                 name=cls.pkginfo_name_1.name,
                 installed_version=cls.pkginfo_1_2.version,
                 installed_at=datetime.utcnow()
             )
         ManagedInstall.objects.create(
-            machine_serial_number=get_random_string(),
+            machine_serial_number=get_random_string(12),
             name=cls.pkginfo_name_2.name,
             installed_version=cls.pkginfo_2_1.version,
             installed_at=datetime.utcnow()

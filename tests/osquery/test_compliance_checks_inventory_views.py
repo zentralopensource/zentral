@@ -18,8 +18,8 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
         # machine
         cls.serial_number = "0123456789"
@@ -42,7 +42,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def _force_check_query(self):
         sql = "select 'OK' as ztl_status;"
-        query = Query.objects.create(name=get_random_string(), sql=sql)
+        query = Query.objects.create(name=get_random_string(12), sql=sql)
         sync_query_compliance_check(query, True)
         return query
 
@@ -81,7 +81,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     def test_machine_one_compliance_check_other_machine(self):
         query = self._force_check_query()
         MachineStatus.objects.create(
-            serial_number=get_random_string(),  # no the tested machine
+            serial_number=get_random_string(12),  # no the tested machine
             compliance_check=query.compliance_check,
             compliance_check_version=query.compliance_check.version,
             status=Status.OK.value,

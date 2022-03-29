@@ -14,8 +14,8 @@ from zentral.contrib.osquery.models import Pack, PackQuery, Query
 class OsquerySetupPacksViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string())
-        cls.group = Group.objects.create(name=get_random_string())
+        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
     # utiliy methods
@@ -39,14 +39,14 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_pack(self):
-        return Pack.objects.create(name=get_random_string())
+        return Pack.objects.create(name=get_random_string(12))
 
     def _force_query(self, force_pack=False, force_compliance_check=False):
         if force_compliance_check:
             sql = "select 'OK' as ztl_status;"
         else:
             sql = "select 1 from processes;"
-        query = Query.objects.create(name=get_random_string(), sql=sql)
+        query = Query.objects.create(name=get_random_string(12), sql=sql)
         if force_pack:
             pack = self._force_pack()
             PackQuery.objects.create(pack=pack, query=query, interval=12983,
@@ -103,7 +103,7 @@ class OsquerySetupPacksViewsTestCase(TestCase):
     def test_update_pack_post(self):
         pack = self._force_pack()
         self._login("osquery.change_pack", "osquery.view_pack")
-        new_name = get_random_string()
+        new_name = get_random_string(12)
         response = self.client.post(reverse("osquery:update_pack", args=(pack.pk,)),
                                     {"name": new_name,
                                      "shard": 97},

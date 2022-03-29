@@ -31,7 +31,7 @@ class SantaAPIViewsTestCase(TestCase):
                                 content_type="application/json")
 
     def _get_preflight_data(self):
-        serial_number = get_random_string()
+        serial_number = get_random_string(12)
         data = {
             "os_build": "20C69",
             "santa_version": "2021.1",
@@ -49,7 +49,7 @@ class SantaAPIViewsTestCase(TestCase):
 
     def test_preflight_bad_secret(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
-        url = reverse("santa:preflight", args=(get_random_string(), hardware_uuid))
+        url = reverse("santa:preflight", args=(get_random_string(12), hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 403)
 
@@ -226,7 +226,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response, {"rules": []})
         # rule out of scope, remove rule
-        rule.serial_numbers = [get_random_string()]
+        rule.serial_numbers = [get_random_string(12)]
         rule.save()
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 200)
