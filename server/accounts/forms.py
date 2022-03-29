@@ -11,7 +11,7 @@ from django.contrib.auth.models import Group
 from django.core import signing, validators
 from django.db.models import Q
 from django.utils.crypto import get_random_string
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 import pyotp
 from webauthn import generate_authentication_options, options_to_json, verify_authentication_response
 from webauthn.helpers.structs import AuthenticationCredential, PublicKeyCredentialDescriptor

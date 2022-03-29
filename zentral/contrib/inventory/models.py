@@ -17,7 +17,7 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from django.utils.text import slugify
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from zentral.conf import settings
 from zentral.core.compliance_checks.utils import get_machine_compliance_check_statuses
 from zentral.core.incidents.models import MachineIncident, Status

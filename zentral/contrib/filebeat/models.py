@@ -2,7 +2,7 @@ import base64
 import logging
 from django.db import models
 from django.urls import reverse
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from zentral.contrib.inventory.models import BaseEnrollment, EnrollmentSecret, EnrollmentSecretRequest
 
 logger = logging.getLogger("zentral.contrib.filebeat.models")

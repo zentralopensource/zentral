@@ -1,6 +1,6 @@
 import logging
 from django import forms
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from zentral.core.actions.backends.base import BaseAction, BaseActionForm
 from zentral.contrib.jamf.api_client import APIClient, APIClientError
 from zentral.contrib.jamf.models import JamfInstance
