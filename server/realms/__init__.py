@@ -1,5 +1,3 @@
-default_app_config = "realms.apps.ZentralRealmsAppConfig"
-
 SESSION_KEY = "realm_authentication_session"
 
 

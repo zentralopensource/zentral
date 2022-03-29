@@ -2,9 +2,6 @@ import logging
 from zentral.core.exceptions import ImproperlyConfigured
 
 
-default_app_config = "zentral.core.compliance_checks.apps.ZentralComplianceChecksAppConfig"
-
-
 logger = logging.getLogger("zentral.core.compliance_checks")
 
 

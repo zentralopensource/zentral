@@ -3,6 +3,7 @@ from zentral.utils.apps import ZentralAppConfig
 
 class ZentralInventoryAppConfig(ZentralAppConfig):
     name = "zentral.contrib.inventory"
+    default = True
     verbose_name = "Zentral inventory contrib app"
     permission_models = (
         "androidapp",
