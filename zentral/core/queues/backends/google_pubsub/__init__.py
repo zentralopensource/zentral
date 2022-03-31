@@ -117,14 +117,10 @@ class StoreWorker(Consumer):
         ("stored_events", "event_type"),
     )
 
-    def __init__(self, enriched_events_topic, credentials, event_store, use_message_filters):
+    def __init__(self, enriched_events_topic, credentials, event_store):
         self.name = f"store worker {event_store.name}"
         self.subscription_id = "{}-store-enriched-events-subscription".format(slugify(event_store.name))
-        kwargs = {}
-        if use_message_filters:
-            kwargs["included_event_types"] = event_store.included_event_types
-            kwargs["excluded_event_types"] = event_store.excluded_event_types
-        super().__init__(enriched_events_topic, credentials, **kwargs)
+        super().__init__(enriched_events_topic, credentials)
         self.event_store = event_store
 
     def callback(self, message):
@@ -259,14 +255,10 @@ class BulkStoreWorker(BaseWorker):
     max_event_age_seconds = 5
     receive_thread_count = 2  # TODO verify
 
-    def __init__(self, enriched_events_topic, credentials, event_store, use_message_filters):
+    def __init__(self, enriched_events_topic, credentials, event_store):
         self.name = f"store worker {event_store.name}"
         self.subscription_id = "{}-store-enriched-events-subscription".format(slugify(event_store.name))
-        kwargs = {}
-        if use_message_filters:
-            kwargs["included_event_types"] = event_store.included_event_types
-            kwargs["excluded_event_types"] = event_store.excluded_event_types
-        super().__init__(enriched_events_topic, credentials, **kwargs)
+        super().__init__(enriched_events_topic, credentials)
         self.event_store = event_store
         # threading
         self.process_message_queue = queue.Queue(maxsize=self.event_store.batch_size)
@@ -402,9 +394,6 @@ class EventQueues(object):
         self.events_topic = topics["events"]
         self.enriched_events_topic = topics["enriched_events"]
 
-        # subscriptions
-        self.use_message_filters = config_d.get("use_message_filters", False)
-
         # credentials
         self.credentials = None
         credentials_file = config_d.get("credentials")
@@ -435,7 +424,7 @@ class EventQueues(object):
             worker_class = BulkStoreWorker
         else:
             worker_class = StoreWorker
-        return worker_class(self.enriched_events_topic, self.credentials, event_store, self.use_message_filters)
+        return worker_class(self.enriched_events_topic, self.credentials, event_store)
 
     def post_raw_event(self, routing_key, raw_event):
         self._publish(self.raw_events_topic, raw_event, routing_key=routing_key)

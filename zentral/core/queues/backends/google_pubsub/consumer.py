@@ -15,11 +15,9 @@ class BaseWorker:
     ack_deadline_seconds = None
     counters = None
 
-    def __init__(self, topic, credentials, included_event_types=None, excluded_event_types=None):
+    def __init__(self, topic, credentials):
         self.topic = topic
         self.credentials = credentials
-        self.included_event_types = included_event_types
-        self.excluded_event_types = excluded_event_types
 
     # subscriber API
 
@@ -43,10 +41,6 @@ class BaseWorker:
         }
         if self.ack_deadline_seconds is not None:
             sub_kwargs["ack_deadline_seconds"] = self.ack_deadline_seconds
-        if self.included_event_types:
-            sub_kwargs["filter"] = " AND ".join(f'attributes.event_type = "{t}"' for t in self.included_event_types)
-        elif self.excluded_event_types:
-            sub_kwargs["filter"] = " AND ".join(f'attributes.event_type != "{t}"' for t in self.excluded_event_types)
         try:
             self.subscriber_client.create_subscription(request=sub_kwargs)
         except AlreadyExists:
@@ -141,8 +135,8 @@ class BaseWorker:
 
 
 class Consumer(BaseWorker):
-    def __init__(self, topic, credentials, included_event_types=None, excluded_event_types=None):
-        super().__init__(topic, credentials, included_event_types, excluded_event_types)
+    def __init__(self, topic, credentials):
+        super().__init__(topic, credentials)
         self.pull_future = None
 
     def shutdown(self, error=False):
