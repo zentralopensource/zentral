@@ -154,7 +154,7 @@ class ProcessWorker(WorkerMixin, Consumer):
         super().__init__(
             event_queues.setup_queue(
                 "process-enriched-events",
-                "enriched-events"
+                topic_basename="enriched-events"
             ),
             event_queues.client_kwargs
         )
@@ -172,6 +172,47 @@ class ProcessWorker(WorkerMixin, Consumer):
         self.inc_counter("processed_events", event_type)
 
 
+def build_sns_filter_policy_for_event_store(event_store):
+    """Try to build a SNS filter policy for the event store.
+
+    If the event store has a compatible event filter set, a policy will be built.
+    A compatible event filter set is not empty, and has either included event filters
+    or excluded event filters on a single attribute type.
+    """
+    event_filter_set = event_store.event_filter_set
+    if not event_filter_set:
+        logger.debug("No SNS filter policy: %s event store has no filters", event_store.name)
+        return
+    for anything_but, event_filters in ((False, event_filter_set.included_event_filters),
+                                        (True, event_filter_set.excluded_event_filters)):
+        if not event_filters:
+            continue
+        current_attr = None
+        accumulator = set([])
+        single_attr = True
+        for event_filter in event_filters:
+            for attr, values in event_filter.items():
+                if attr == "event_type":
+                    attr = "type"
+                if current_attr is None:
+                    current_attr = attr
+                elif current_attr != attr:
+                    single_attr = False
+                    break
+                accumulator.update(values)
+            if not single_attr:
+                break
+        if not single_attr:
+            continue
+        values = sorted(accumulator)  # sorted to make it testable
+        if not values:
+            break
+        if anything_but:
+            values = [{"anything-but": values}]
+        return {f"zentral.{current_attr}": values}
+    logger.warning("No SNS filter policy: incompatible %s event store filters", event_store.name)
+
+
 class SimpleStoreWorker(WorkerMixin, Consumer):
     counters = (
         ("skipped_events", "event_type"),
@@ -182,9 +223,8 @@ class SimpleStoreWorker(WorkerMixin, Consumer):
         super().__init__(
             event_queues.setup_queue(
                 "store-enriched-events-{}".format(slugify(event_store.name)),
-                "enriched-events",
-                included_event_types=event_store.included_event_types,
-                excluded_event_types=event_store.excluded_event_types
+                topic_basename="enriched-events",
+                filter_policy=build_sns_filter_policy_for_event_store(event_store)
             ),
             event_queues.client_kwargs
         )
@@ -222,9 +262,8 @@ class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
         super().__init__(
             event_queues.setup_queue(
                 "store-enriched-events-{}".format(slugify(event_store.name)),
-                "enriched-events",
-                included_event_types=event_store.included_event_types,
-                excluded_event_types=event_store.excluded_event_types
+                topic_basename="enriched-events",
+                filter_policy=build_sns_filter_policy_for_event_store(event_store)
             ),
             event_store.concurrency,
             event_queues.client_kwargs
@@ -262,9 +301,8 @@ class BulkStoreWorker(WorkerMixin, BatchConsumer):
         super().__init__(
             event_queues.setup_queue(
                 "store-enriched-events-{}".format(slugify(event_store.name)),
-                "enriched-events",
-                included_event_types=event_store.included_event_types,
-                excluded_event_types=event_store.excluded_event_types
+                topic_basename="enriched-events",
+                filter_policy=build_sns_filter_policy_for_event_store(event_store)
             ),
             event_store.batch_size,
             event_queues.client_kwargs
@@ -371,13 +409,9 @@ class EventQueues(object):
             self._known_topics[topic_basename] = topic_arn
             return topic_arn
 
-    def setup_queue(self, queue_basename, topic_basename=None, included_event_types=None, excluded_event_types=None):
-        filter_policy = None
-        if self._use_filter_policies and topic_basename:
-            if included_event_types:
-                filter_policy = {"zentral.type": list(included_event_types)}
-            elif excluded_event_types:
-                filter_policy = {"zentral.type": [{"anything-but": list(excluded_event_types)}]}
+    def setup_queue(self, queue_basename, topic_basename=None, filter_policy=None):
+        if not self._use_filter_policies or not topic_basename:
+            filter_policy = None
         try:
             queue_url = self._known_queues[queue_basename]
         except KeyError:
