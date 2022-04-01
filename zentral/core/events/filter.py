@@ -75,7 +75,7 @@ class EventFilterSet:
     def match_serialized_event(self, serialized_event):
         try:
             metadata = serialized_event["_zentral"]
-            event_tags = metadata["tags"]
+            event_tags = metadata.get("tags", [])
             event_type = metadata["type"]
             event_routing_key = metadata.get("routing_key")
         except (KeyError, TypeError):

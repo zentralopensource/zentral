@@ -1,6 +1,7 @@
 from django.test import SimpleTestCase
 from accounts.events import LoginEvent
 from zentral.conf.config import ConfigDict
+from zentral.contrib.inventory.events import EnrollmentSecretVerificationEvent
 from zentral.core.events.base import EventMetadata
 from zentral.core.events.filter import EventFilter, EventFilterSet
 
@@ -104,8 +105,20 @@ class EventFilterTestCase(SimpleTestCase):
 
 
 class EventFilterSetTestCase(SimpleTestCase):
-    def make_event(self, routing_key=None):
-        return LoginEvent(EventMetadata(routing_key=routing_key), {"user": {"username": "yolofomo"}})
+    def make_event(self, routing_key=None, event_with_tags=True):
+        event_metadata = EventMetadata(routing_key=routing_key)
+        if event_with_tags:
+            return LoginEvent(
+                event_metadata,
+                {"user": {"username": "yolofomo"}}
+            )
+        else:
+            return EnrollmentSecretVerificationEvent(
+                event_metadata,
+                {"status": "failure",
+                 "reason": "unknown secret",
+                 "type": "osquery_enrollment"}
+            )
 
     def test_from_mapping_bad_type(self):
         with self.assertRaises(TypeError) as e:
@@ -292,6 +305,16 @@ class EventFilterSetTestCase(SimpleTestCase):
                 ],
                 "excluded_event_filters": [
                     {"routing_key": ["yili"]},
+                ],
+            }).match_serialized_event(event.serialize())
+        )
+
+    def test_event_without_tags_included(self):
+        event = self.make_event(routing_key="yolo", event_with_tags=False)
+        self.assertTrue(
+            EventFilterSet.from_mapping({
+                "included_event_filters": [
+                    {"tags": ["jomo", "fomo"]}, {"event_type": ["enrollment_secret_verification"]},
                 ],
             }).match_serialized_event(event.serialize())
         )
