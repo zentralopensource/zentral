@@ -197,7 +197,7 @@ class EventStore(BaseEventStore):
             try:
                 info = self._es.info()
                 self.version = [int(i) for i in info["version"]["number"].split(".")]
-                if not self._es.indices.exists(self.default_index):
+                if self.default_index and not self._es.indices.exists(self.default_index):
                     self._es.indices.create(self.default_index, body=self.get_index_conf())
                     self.use_mapping_types = False
                     logger.info("Index %s created", self.default_index)
@@ -214,20 +214,21 @@ class EventStore(BaseEventStore):
                     logger.info('Index %s exists', self.default_index)
                 else:
                     raise
-            # wait for index recovery
-            waiting_for_recovery = False
-            while True:
-                recovery = self._es.indices.recovery(self.default_index, params={"active_only": "true"})
-                shards = recovery.get(self.default_index, {}).get("shards", [])
-                if any(c["stage"] != "DONE" for c in shards):
-                    waiting_for_recovery = True
-                    s = 1000 / random.randint(1000, 3000)
-                    time.sleep(s)
-                    logger.warning("Elasticsearch index recovering")
-                else:
-                    if waiting_for_recovery:
-                        logger.warning("Elasticsearch index recovery done")
-                    break
+            if self.default_index:
+                # wait for index recovery
+                waiting_for_recovery = False
+                while True:
+                    recovery = self._es.indices.recovery(self.default_index, params={"active_only": "true"})
+                    shards = recovery.get(self.default_index, {}).get("shards", [])
+                    if any(c["stage"] != "DONE" for c in shards):
+                        waiting_for_recovery = True
+                        s = 1000 / random.randint(1000, 3000)
+                        time.sleep(s)
+                        logger.warning("Elasticsearch index recovering")
+                    else:
+                        if waiting_for_recovery:
+                            logger.warning("Elasticsearch index recovery done")
+                        break
             self.configured = True
             break
         else:
