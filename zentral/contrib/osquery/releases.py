@@ -11,35 +11,57 @@ from zentral.utils.local_dir import get_and_create_local_dir
 logger = logging.getLogger("zentral.contrib.osquery.releases")
 
 
-GITHUB_API_URL = "https://api.github.com/repos/facebook/osquery/releases"
+GITHUB_API_URL = "https://api.github.com/repos/osquery/osquery/releases"
 
 
-SUFFIX_URLS = {
-    ".amd64.deb": "https://pkg.osquery.io/deb/osquery_{}_1.linux{}",
-    ".x86_64.rpm": "https://pkg.osquery.io/rpm/osquery-{}-1.linux{}",
-    ".msi": "https://pkg.osquery.io/windows/osquery-{}{}",
-    ".pkg": "https://pkg.osquery.io/darwin/osquery-{}{}",
-}
+SUFFIXES = (
+    ".linux.aarch64.rpm",
+    ".linux_amd64.deb",
+    ".linux_arm64.deb",
+    ".linux.x86_64.rpm",
+    ".msi",
+    ".pkg"
+)
 
 
 def get_osquery_versions(ignore_draft_release=True, check_urls=True, last=3):
     try:
-        resp = requests.get(GITHUB_API_URL)
+        resp = requests.get(GITHUB_API_URL, timeout=2)
         resp.raise_for_status()
     except (ConnectionError, HTTPError):
         logger.exception("Could not get versions from Github.")
         return
     versions = []
-    for release in resp.json():
+    for release in resp.json()[:last * 2]:
         if release.get("draft") and ignore_draft_release:
             continue
         prerelease = release.get("prerelease", False)
         tag_name = release["tag_name"]
         available_assets = {}
-        for suffix, url_tmpl in SUFFIX_URLS.items():
-            download_url = url_tmpl.format(tag_name, suffix)
-            if not check_urls or requests.head(download_url).status_code == 200:
-                available_assets[suffix] = download_url
+        for asset in release.get("assets", []):
+            asset_name = asset.get("name")
+            if not asset_name:
+                continue
+            if "dbgsym" in asset_name or "debuginfo" in asset_name:
+                continue
+            asset_suffix = None
+            for suffix in SUFFIXES:
+                if asset_name.endswith(suffix):
+                    asset_suffix = suffix
+                    break
+            else:
+                continue
+            download_url = asset.get("browser_download_url")
+            if not download_url:
+                continue
+            if check_urls:
+                try:
+                    resp = requests.head(download_url, allow_redirects=True, timeout=2)
+                    resp.raise_for_status()
+                except Exception:
+                    logger.exception("Asset link %s broken", download_url)
+                    continue
+            available_assets[asset_suffix] = download_url
         if available_assets:
             versions.append((tag_name, prerelease, available_assets))
             if last and len(versions) >= last:
