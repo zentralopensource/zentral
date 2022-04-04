@@ -56,7 +56,7 @@ for attr in ('link',
             (BaseEvent,),
             {'event_type': event_type,
              'namespace': 'inventory',
-             'tags': ['machine', 'machine_update']}
+             'tags': ['machine', 'machine_update', f'machine_{action}_update']}
         )
         register_event_type(event_class)
 
