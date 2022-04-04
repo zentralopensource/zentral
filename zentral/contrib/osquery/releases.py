@@ -32,7 +32,11 @@ def get_osquery_versions(ignore_draft_release=True, check_urls=True, last=3):
         logger.exception("Could not get versions from Github.")
         return
     versions = []
-    for release in resp.json()[:last * 2]:
+    releases = resp.json()
+    if last:
+        # limit releases to check
+        releases = releases[:last * 2]
+    for release in releases:
         if release.get("draft") and ignore_draft_release:
             continue
         prerelease = release.get("prerelease", False)
