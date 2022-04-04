@@ -1,9 +1,9 @@
 import logging
+from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.contrib.jamf.models import JamfInstance
 from zentral.core.events import event_cls_from_type, register_event_type
 from zentral.core.events.base import BaseEvent
 from zentral.core.queues import queues
-from zentral.contrib.inventory.models import MachineSnapshot
-from zentral.contrib.jamf.models import JamfInstance
 
 logger = logging.getLogger('zentral.contrib.jamf.events')
 
@@ -46,7 +46,7 @@ def make_get_machine_heartbeat_timeout(instance_attr):
             instance = JamfInstance.objects.get(**ms.source.config)
         except JamfInstance.MultipleObjectsReturned:
             logger.warning("Multiple JamfInstances found for serial number %s", serial_number)
-        except (JamfInstance.DoesNotExist, MachineSnapshot.DoesNotExist):
+        except JamfInstance.DoesNotExist:
             logger.warning("No JamfInstance found for serial number %s", serial_number)
         else:
             return getattr(instance, instance_attr, None)
