@@ -178,8 +178,7 @@ class ConsumerProducer(Consumer):
 
     def publish_event(self, event, machine_metadata):
         message = json.dumps(event.serialize(machine_metadata=machine_metadata)).encode("utf-8")
-        self.producer_client.publish(
-            self.out_topic, message,
-            event_type=event.event_type,
-            routing_key=event.metadata.routing_key
-        )
+        kwargs = {"event_type": event.event_type}
+        if event.metadata.routing_key:
+            kwargs["routing_key"] = event.metadata.routing_key
+        self.producer_client.publish(self.out_topic, message, **kwargs)
