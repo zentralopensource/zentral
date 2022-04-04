@@ -1,4 +1,6 @@
 import logging
+from zentral.contrib.inventory.models import MachineSnapshot
+from zentral.contrib.puppet.models import Instance
 from zentral.core.events import register_event_type
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
 from zentral.core.queues import queues
@@ -15,7 +17,7 @@ ALL_EVENTS_SEARCH_DICT = {"tag": "puppet"}
 
 class PuppetReportEvent(BaseEvent):
     event_type = "puppet_report"
-    tags = ["puppet"]
+    tags = ["puppet", "heartbeat"]
 
     def get_linked_objects_keys(self):
         keys = {}
@@ -23,6 +25,23 @@ class PuppetReportEvent(BaseEvent):
         if observer and observer.content_type == "puppet.instance" and observer.pk:
             keys["puppet_instance"] = [(observer.pk,)]
         return keys
+
+    @classmethod
+    def get_machine_heartbeat_timeout(cls, serial_number):
+        ms = MachineSnapshot.objects.select_related("source").filter(serial_number=serial_number,
+                                                                     source__module="zentral.contrib.puppet",
+                                                                     source__name="puppet").order_by("-id").first()
+        if not ms:
+            logger.warning("No Puppet machine snapshot found for serial number %s", serial_number)
+            return
+        try:
+            instance = Instance.objects.get(url=ms.source.config["url"])
+        except KeyError:
+            logger.warning("Puppet source without URL")
+        except Instance.DoesNotExist:
+            logger.warning("No Puppet instance found for serial number %s", serial_number)
+        else:
+            return instance.report_heartbeat_timeout
 
 
 register_event_type(PuppetReportEvent)

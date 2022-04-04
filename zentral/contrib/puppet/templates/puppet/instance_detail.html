@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load base_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -104,7 +104,7 @@
     </tr>
     <tr>
       <td>Requests timeout</td>
-      <td>{{ object.timeout }}s</td>
+      <td>{{ object.timeout|duration_repr }}</td>
     </tr>
     <tr>
       <td>Group fact keys</td>
@@ -131,6 +131,10 @@
     <tr>
       <td>Windows programs shard</td>
       <td>{{ object.programs_shard }}%</td>
+    </tr>
+    <tr>
+      <td>Report heartbeat timeout</td>
+      <td>{{ object.report_heartbeat_timeout|duration_repr }}</td>
     </tr>
   </tbody>
 </table>

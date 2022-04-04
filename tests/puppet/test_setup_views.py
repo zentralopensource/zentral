@@ -158,7 +158,8 @@ class PuppetSetupViewsTestCase(TestCase):
                                      "extra_fact_keys": "trois,quatre",
                                      "timeout": 8,
                                      "deb_packages_shard": 10,
-                                     "programs_shard": 20},
+                                     "programs_shard": 20,
+                                     "report_heartbeat_timeout": 1234},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "puppet/instance_detail.html")
@@ -173,6 +174,7 @@ class PuppetSetupViewsTestCase(TestCase):
         self.assertEqual(instance.extra_fact_keys, ["trois", "quatre"])
         self.assertEqual(instance.deb_packages_shard, 10)
         self.assertEqual(instance.programs_shard, 20)
+        self.assertEqual(instance.report_heartbeat_timeout, 1234)
 
     # update instance
 
@@ -207,7 +209,8 @@ class PuppetSetupViewsTestCase(TestCase):
                                      "extra_fact_keys": "trois,quatre",
                                      "timeout": instance.timeout,
                                      "deb_packages_shard": instance.deb_packages_shard,
-                                     "programs_shard": instance.programs_shard},
+                                     "programs_shard": instance.programs_shard,
+                                     "report_heartbeat_timeout": 1234},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "puppet/instance_detail.html")
@@ -219,6 +222,7 @@ class PuppetSetupViewsTestCase(TestCase):
         self.assertEqual(instance2.get_rbac_token(), rbac_token)
         self.assertEqual(instance2.cert, "")
         self.assertEqual(instance2.get_key(), "")
+        self.assertEqual(instance2.report_heartbeat_timeout, 1234)
         # the cached info is updated using a post_save signal handler, so the following is OK:
         version, observer_dict = test_report_processor_token(instance.pk, instance.get_report_processor_token())
         self.assertNotEqual(version, instance.version)

@@ -62,6 +62,13 @@ class Instance(models.Model):
     )
     # Report processor
     report_processor_token = models.TextField(editable=False)  # secret
+    # Heartbeats
+    report_heartbeat_timeout = models.IntegerField(
+        validators=[MinValueValidator(600),
+                    MaxValueValidator(172800)],
+        default=3600,
+        help_text="in seconds, 600 (10 min) → 172800 (2 days)"
+    )
     # Versioning
     version = models.PositiveIntegerField(editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
