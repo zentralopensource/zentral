@@ -611,6 +611,100 @@ class BundleFilter(BaseMSFilter):
                                                   or osx_apps[-1].get("bundle_version"))}
 
 
+class DebPackageFilter(BaseMSFilter):
+    optional = True
+    many = True
+
+    def __init__(self, *args, **kwargs):
+        self.name = kwargs.pop("name")
+        self.title = self.name
+        super().__init__(*args, **kwargs)
+        self.expression = (
+            "jsonb_build_object("
+            f"'id', dp{self.idx}.id, "
+            f"'name', dp{self.idx}.name, "
+            f"'version', dp{self.idx}.version, "
+            f"'source', dp{self.idx}.source, "
+            f"'size', dp{self.idx}.size, "
+            f"'arch', dp{self.idx}.arch, "
+            f"'revision', dp{self.idx}.revision, "
+            f"'status', dp{self.idx}.status, "
+            f"'maintainer', dp{self.idx}.maintainer, "
+            f"'section', dp{self.idx}.section, "
+            f"'priority', dp{self.idx}.priority"
+            f") as dp{self.idx}_j"
+        )
+        self.grouping_set = (f"dp{self.idx}.id", f"dp{self.idx}_j")
+
+    def get_query_kwarg(self):
+        return "dp{}".format(self.idx)
+
+    def joins(self):
+        yield (("left join lateral ("
+                "select dp.* from inventory_debpackage as dp "
+                "join inventory_machinesnapshot_deb_packages as msdp on (msdp.debpackage_id = dp.id) "
+                "where msdp.machinesnapshot_id = ms.id and dp.name = %s"
+                f") dp{self.idx} on TRUE"),
+               [self.name])
+
+    def wheres(self):
+        if self.value:
+            if self.value != self.none_value:
+                yield f"dp{self.idx}.id = %s"
+            else:
+                yield f"dp{self.idx}.id is null"
+
+    def where_args(self):
+        if self.value and self.value != self.none_value:
+            yield self.value
+
+    def serialize(self):
+        return f"dp.{self.name}"
+
+    @staticmethod
+    def display_name(deb_package):
+        return " ".join(e for e in (deb_package["name"], deb_package["version"]) if e)
+
+    def label_for_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return self.none_value
+        return self.display_name(grouping_value)
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
+        if gv["id"] is None:
+            return None
+        return gv
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        if grouping_value:
+            return grouping_value["id"]
+
+    def process_fetched_record(self, record, for_filtering):
+        deb_packages = []
+        for deb_package in record.pop(self.grouping_set[-1], []):
+            if not deb_package["id"]:
+                continue
+            deb_package["display_name"] = self.display_name(deb_package)
+            if deb_package not in deb_packages:
+                deb_packages.append(deb_package)
+        deb_packages.sort(key=lambda deb: (deb.get("version") or "", deb.get("id")))
+        if not for_filtering:
+            # TODO: verify no conflict
+            record.setdefault("deb_packages", OrderedDict())[self.name] = deb_packages
+        else:
+            deb_packages_dict = record.setdefault("deb_packages", {})
+            deb_package_idx = len(deb_packages)  # we do not use self.idx because we want to start from 0
+            deb_package_dict = deb_packages_dict.setdefault(str(deb_package_idx), {})
+            if self.name:
+                deb_package_dict["name"] = self.name
+            if not deb_packages:
+                deb_package_dict["version"] = {"min": self.unknown_value, "max": self.unknown_value}
+            else:
+                deb_package_dict["version"] = {"min": deb_packages[0].get("version"),
+                                               "max": deb_packages[-1].get("version")}
+
+
 class TypeFilter(BaseMSFilter):
     title = "Types"
     optional = True
@@ -1107,6 +1201,9 @@ class MSQuery:
                     self.add_filter(BundleFilter, bundle_name=value)
                 elif attr == "i":
                     self.add_filter(BundleFilter, bundle_id=value)
+            elif serialized_filter.startswith("dp."):
+                _, name = serialized_filter.split(".", 1)
+                self.add_filter(DebPackageFilter, name=name)
             elif serialized_filter.startswith("ccs."):
                 try:
                     cc_pk = int(serialized_filter[4:])
@@ -1516,6 +1613,25 @@ class BundleFilterForm(forms.Form):
             if any(isinstance(f, BundleFilter) and f.bundle_id == bundle_id
                    for f in self.msquery.filters):
                 raise forms.ValidationError("A filter for this bundle ID already exists")
+
+
+class DebPackageFilterForm(forms.Form):
+    name = forms.CharField(label="Debian package name", required=False,
+                           widget=forms.TextInput(attrs={"class": "form-control",
+                                                         "placeholder": "Debian package name"}))
+
+    def __init__(self, *args, **kwargs):
+        self.msquery = kwargs.pop("msquery")
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        name = cleaned_data.get("name")
+        if (
+            name and
+            any(isinstance(f, DebPackageFilter) and f.name == name for f in self.msquery.filters)
+        ):
+            raise forms.ValidationError("A filter for this Debian package name already exists")
 
 
 class ComplianceCheckStatusFilterForm(forms.Form):

@@ -36,6 +36,7 @@ from .models import (BusinessUnit,
                      JMESPathCheck)
 from .utils import (BundleFilter, BundleFilterForm,
                     ComplianceCheckStatusFilter, ComplianceCheckStatusFilterForm,
+                    DebPackageFilter, DebPackageFilterForm,
                     MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
                     MSQuery)
 
@@ -69,6 +70,11 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
     last_seen_session_key = "inventory_last_last_seen"
     last_seen_default = "7d"
     force_search = False
+    filter_forms = (
+        ("bundle_filter_form", BundleFilterForm, "bf"),
+        ("deb_package_filter_form", DebPackageFilterForm, "dp"),
+        ("compliance_check_status_filter_form", ComplianceCheckStatusFilterForm, "ccsf")
+    )
 
     def get_object(self, **kwargs):
         return None
@@ -103,15 +109,13 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
         return []
 
     def get_forms(self):
-        bundle_filter_form_kwargs = {"prefix": "bf", "msquery": self.msquery}
-        compliance_check_status_filter_form_kwargs = {"prefix": "ccsf", "msquery": self.msquery}
-        if self.request.method == "POST":
-            bundle_filter_form_kwargs["data"] = self.request.POST
-            compliance_check_status_filter_form_kwargs["data"] = self.request.POST
-        return (
-            BundleFilterForm(**bundle_filter_form_kwargs),
-            ComplianceCheckStatusFilterForm(**compliance_check_status_filter_form_kwargs)
-        )
+        forms = {}
+        for key, filter_form_class, prefix in self.filter_forms:
+            kwargs = {"prefix": prefix, "msquery": self.msquery}
+            if self.request.method == "POST" and self.request.POST.get("filter_key") == key:
+                kwargs["data"] = self.request.POST
+            forms[key] = filter_form_class(**kwargs)
+        return forms
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -161,17 +165,15 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
             ctx['export_links'].append((fmt,
                                         "{}?{}".format(reverse("inventory_api:machines_export"),
                                                        export_qd.urlencode())))
-        if "bundle_filter_form" not in kwargs and "compliance_check_status_filter_form" not in kwargs:
-            ctx['bundle_filter_form'], ctx['compliance_check_status_filter_form'] = self.get_forms()
+        # filter forms
+        for key, form in self.get_forms().items():
+            if key not in kwargs:
+                ctx[key] = form
         return ctx
 
-    def form_invalid(self, bundle_filter_form, compliance_check_status_filter_form):
-        return self.render_to_response(
-            self.get_context_data(
-                bundle_filter_form=bundle_filter_form,
-                compliance_check_status_filter_form=compliance_check_status_filter_form
-            )
-        )
+    def form_invalid(self, **kwargs):
+        kwargs["filter_form_errors"] = True
+        return self.render_to_response(self.get_context_data(**kwargs))
 
     def bundle_filter_form_valid(self, form):
         f_kwargs = {}
@@ -182,23 +184,23 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
         elif bundle_name:
             f_kwargs["bundle_name"] = bundle_name
         self.msquery.add_filter(BundleFilter, **f_kwargs)
-        return HttpResponseRedirect(self.msquery.get_url())
+
+    def deb_package_filter_form_valid(self, form):
+        name = form.cleaned_data.get("name")
+        self.msquery.add_filter(DebPackageFilter, name=name)
 
     def compliance_check_status_filter_form_valid(self, form):
         compliance_check = form.cleaned_data.get("compliance_check")
         self.msquery.add_filter(ComplianceCheckStatusFilter, compliance_check_pk=compliance_check.pk)
-        return HttpResponseRedirect(self.msquery.get_url())
 
     def post(self, request, *args, **kwargs):
-        bundle_filter_form, compliance_check_status_filter_form = self.get_forms()
-        filter_type = request.POST.get("filter_type")
-        if filter_type == "bundle":
-            if bundle_filter_form.is_valid():
-                return self.bundle_filter_form_valid(bundle_filter_form)
-        elif filter_type == "compliance_check_status":
-            if compliance_check_status_filter_form.is_valid():
-                return self.compliance_check_status_filter_form_valid(compliance_check_status_filter_form)
-        return self.form_invalid(bundle_filter_form, compliance_check_status_filter_form)
+        forms = self.get_forms()
+        filter_key = request.POST.get("filter_key")
+        form = forms[filter_key]
+        if form.is_valid():
+            getattr(self, f"{filter_key}_valid")(form)
+            return HttpResponseRedirect(self.msquery.get_url())
+        return self.form_invalid(**forms)
 
 
 class IndexView(MachineListView):
