@@ -34,7 +34,8 @@ from .models import (BusinessUnit,
                      MetaBusinessUnitTag, MachineTag, Tag, Taxonomy,
                      OSXApp, OSXAppInstance,
                      JMESPathCheck)
-from .utils import (BundleFilter, BundleFilterForm,
+from .utils import (AndroidAppFilter, AndroidAppFilterForm,
+                    BundleFilter, BundleFilterForm,
                     ComplianceCheckStatusFilter, ComplianceCheckStatusFilterForm,
                     DebPackageFilter, DebPackageFilterForm,
                     MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
@@ -72,6 +73,7 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
     last_seen_default = "7d"
     force_search = False
     filter_forms = (
+        ("android_app_filter_form", AndroidAppFilterForm, "aaf"),
         ("bundle_filter_form", BundleFilterForm, "bf"),
         ("deb_package_filter_form", DebPackageFilterForm, "dpf"),
         ("program_filter_form", ProgramFilterForm, "pf"),
@@ -176,6 +178,10 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
     def form_invalid(self, **kwargs):
         kwargs["filter_form_errors"] = True
         return self.render_to_response(self.get_context_data(**kwargs))
+
+    def android_app_filter_form_valid(self, form):
+        display_name = form.cleaned_data.get("display_name")
+        self.msquery.add_filter(AndroidAppFilter, display_name=display_name)
 
     def bundle_filter_form_valid(self, form):
         f_kwargs = {}

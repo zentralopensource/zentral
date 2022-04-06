@@ -611,6 +611,89 @@ class BundleFilter(BaseMSFilter):
                                                   or osx_apps[-1].get("bundle_version"))}
 
 
+class AndroidAppFilter(BaseMSFilter):
+    optional = True
+    many = True
+
+    def __init__(self, *args, **kwargs):
+        self.display_name = kwargs.pop("display_name")
+        self.title = self.display_name
+        super().__init__(*args, **kwargs)
+        self.expression = (
+            "jsonb_build_object("
+            f"'id', aa{self.idx}.id, "
+            f"'display_name', aa{self.idx}.display_name, "
+            f"'version_name', aa{self.idx}.version_name, "
+            f"'package_name', aa{self.idx}.package_name, "
+            f"'installer_package_name', aa{self.idx}.installer_package_name"
+            f") as aa{self.idx}_j"
+        )
+        self.grouping_set = (f"aa{self.idx}.id", f"aa{self.idx}_j")
+
+    def get_query_kwarg(self):
+        return f"aa{self.idx}"
+
+    def joins(self):
+        yield (("left join lateral ("
+                "select aa.* from inventory_androidapp as aa "
+                "join inventory_machinesnapshot_android_apps as msaa on (msaa.androidapp_id = aa.id) "
+                "where msaa.machinesnapshot_id = ms.id and aa.display_name = %s"
+                f") aa{self.idx} on TRUE"),
+               [self.display_name])
+
+    def wheres(self):
+        if self.value:
+            if self.value != self.none_value:
+                yield f"aa{self.idx}.id = %s"
+            else:
+                yield f"aa{self.idx}.id is null"
+
+    def where_args(self):
+        if self.value and self.value != self.none_value:
+            yield self.value
+
+    def serialize(self):
+        return f"aa.{self.display_name}"
+
+    def label_for_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return self.none_value
+        return " ".join(e for e in (grouping_value["display_name"], grouping_value["version_name"]) if e)
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
+        if gv["id"] is None:
+            return None
+        return gv
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        if grouping_value:
+            return grouping_value["id"]
+
+    def process_fetched_record(self, record, for_filtering):
+        android_apps = []
+        for android_app in record.pop(self.grouping_set[-1], []):
+            if not android_app["id"]:
+                continue
+            if android_app not in android_apps:
+                android_apps.append(android_app)
+        android_apps.sort(key=lambda aa: (aa.get("version_name") or "", aa.get("id")))
+        if not for_filtering:
+            # TODO: verify no conflict
+            record.setdefault("android_apps", OrderedDict())[self.display_name] = android_apps
+        else:
+            android_apps_dict = record.setdefault("android_apps", {})
+            android_app_idx = len(android_apps_dict)  # we do not use self.idx because we want to start from 0
+            android_app_dict = android_apps_dict.setdefault(str(android_app_idx), {})
+            if self.display_name:
+                android_app_dict["display_name"] = self.display_name
+            if not android_apps:
+                android_app_dict["version_name"] = {"min": self.unknown_value, "max": self.unknown_value}
+            else:
+                android_app_dict["version_name"] = {"min": android_apps[0].get("version_name"),
+                                                    "max": android_apps[-1].get("version_name")}
+
+
 class DebPackageFilter(BaseMSFilter):
     optional = True
     many = True
@@ -1291,6 +1374,9 @@ class MSQuery:
                     self.add_filter(BundleFilter, bundle_name=value)
                 elif attr == "i":
                     self.add_filter(BundleFilter, bundle_id=value)
+            elif serialized_filter.startswith("aa."):
+                _, display_name = serialized_filter.split(".", 1)
+                self.add_filter(AndroidAppFilter, display_name=display_name)
             elif serialized_filter.startswith("dp."):
                 _, name = serialized_filter.split(".", 1)
                 self.add_filter(DebPackageFilter, name=name)
@@ -1676,6 +1762,25 @@ class MSQuery:
                         w.writerow(row)
                 zip_f.write(tmp_file, "{}.csv".format(slugify(title)))
                 os.unlink(tmp_file)
+
+
+class AndroidAppFilterForm(forms.Form):
+    display_name = forms.CharField(label="Android app name", required=False,
+                                   widget=forms.TextInput(attrs={"class": "form-control",
+                                                                 "placeholder": "Android app name"}))
+
+    def __init__(self, *args, **kwargs):
+        self.msquery = kwargs.pop("msquery")
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        display_name = cleaned_data.get("display_name")
+        if (
+            display_name and
+            any(isinstance(f, AndroidAppFilter) and f.display_name == display_name for f in self.msquery.filters)
+        ):
+            raise forms.ValidationError("A filter for this Android app name already exists")
 
 
 class BundleFilterForm(forms.Form):

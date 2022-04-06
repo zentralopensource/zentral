@@ -44,6 +44,19 @@
         </div>
         <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
           <div class="form-group">
+            <label for="id_{{ android_app_filter_form.prefix }}-name" class="sr-only">Android app name</label>
+            {{ android_app_filter_form.display_name }}
+            <button name="filter_key" value="android_app_filter_form" type="submit" class="btn btn-primary">
+              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+              App
+            </button>
+            {% for error in android_app_filter_form.non_field_errors %}
+            <p class="text-danger">{{ error }}</p>
+            {% endfor %}
+          </div>
+        </form>
+        <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
+          <div class="form-group">
             <label for="id_{{ bundle_filter_form.prefix }}-bundle_id" class="sr-only">Bundle ID</label>
             {{ bundle_filter_form.bundle_id }}
             <label for="id_{{ bundle_filter_form.prefix }}-bundle_name" class="sr-only">Bundle name</label>
