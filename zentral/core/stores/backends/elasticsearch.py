@@ -334,8 +334,13 @@ class EventStore(BaseEventStore):
                     error = item["index"].get("error")
                     error_type = reason = None
                     if error:
-                        error_type = error.get("type")
-                        reason = error.get("reason")
+                        if isinstance(error, dict):
+                            error_type = error.get("type")
+                            reason = error.get("reason")
+                        elif isinstance(error, str):
+                            reason = error
+                        else:
+                            reason = "UNKNOWN"
                     logger.error("could not index event %s %s: %s %s",
                                  event_id, event_index, error_type or "-", reason or "-")
 
