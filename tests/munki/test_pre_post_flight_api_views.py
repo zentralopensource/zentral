@@ -259,6 +259,38 @@ class MunkiAPIViewsTestCase(TestCase):
              "last_seen_sha1sum": report_sha1sum}
         )
 
+    def test_post_job_duplicated_profile(self):
+        enrolled_machine = self._make_enrolled_machine()
+        profile = {
+            "uuid": "a62a458d-6cdb-4b3c-a440-2ac3129022db",
+            "identifier": "un.deux.trois",
+            "display_name": "Un Deux Trois",
+            "description": "Un Deux Trois description",
+            "organization": "Zentral",
+            "removal_disallowed": True,
+            "verified": True,
+            "payloads": [
+                {"uuid": "660d9eaf-3326-44bc-ae70-3a938bdf67bd",
+                 "identifier": "un.deux.trois.quatre",
+                 "display_name": "Un Deux Trois Quatre",
+                 "description": "Un Deux Trois Quatre description",
+                 "type": "com.apple.ManagedClient.preferences"}
+            ]
+        }
+        response = self._post_as_json(
+            reverse("munki:post_job"),
+            {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
+                                  "system_info": {"computer_name": "yolo"},
+                                  "profiles": [profile, profile]},
+             "reports": []},
+            HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token)
+        )
+        self.assertEqual(response.status_code, 200)
+        ms = MachineSnapshot.objects.current().get(serial_number=enrolled_machine.serial_number)
+        self.assertEqual(ms.profiles.count(), 1)
+        db_profile = ms.profiles.first()
+        self.assertEqual(db_profile.uuid, profile["uuid"])
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_job_with_wipe(self, post_event):
         tag_name = get_random_string(12)

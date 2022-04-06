@@ -370,9 +370,20 @@ class PostJobView(BaseView):
         extra_facts = ms_tree.pop("extra_facts", None)
         if isinstance(extra_facts, dict):
             ms_tree["extra_facts"] = remove_null_character(extra_facts)
+        # cleanup profiles
+        reported_profiles = ms_tree.pop("profiles", None)
+        if reported_profiles:
+            profiles = []
+            for profile in reported_profiles:
+                if profile not in profiles:
+                    profiles.append(profile)
+                else:
+                    logger.error("Duplicated profile %s for machine %s.",
+                                 profile.get("uuid", "UNKNOWN UUID"), self.machine_serial_number)
+            ms_tree["profiles"] = profiles
         ms = commit_machine_snapshot_and_trigger_events(ms_tree)
         if not ms:
-            raise RuntimeError("Could not commit machine snapshot")
+            raise RuntimeError(f"Could not commit machine {self.machine_serial_number} snapshot")
 
         # delete all managed installs if last seen report not found
         # which is a good indicator that the machine has been wiped
