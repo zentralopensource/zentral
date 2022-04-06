@@ -111,11 +111,20 @@ class PreflightView(BaseSyncView):
             'primary_user': self._get_primary_user(),
             'client_mode': Configuration.MONITOR_MODE,
             'santa_version': self.request_data['santa_version'],
-            'binary_rule_count': self.request_data.get('binary_rule_count'),
-            'certificate_rule_count': self.request_data.get('certificate_rule_count'),
-            'compiler_rule_count': self.request_data.get('compiler_rule_count'),
-            'transitive_rule_count': self.request_data.get('transitive_rule_count'),
         }
+        # cleanup rule counts
+        for prefix in ("binary", "certificate", "compiler", "transitive"):
+            key = f"{prefix}_rule_count"
+            val = self.request_data.get(key)
+            if isinstance(val, int):
+                if val > 2147483648:
+                    logger.error("Machine %s: reported %s %s overflow", serial_number, key, val)
+                    val = 2147483647  # max IntegerField value
+                elif val < 0:
+                    logger.error("Machine %s: reported %s %s negative", serial_number, key, val)
+                    val = 0
+                defaults[key] = val
+
         # client mode
         req_client_mode = self.request_data.get('client_mode')
         if not req_client_mode:

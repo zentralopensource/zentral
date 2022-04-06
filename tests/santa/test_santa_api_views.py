@@ -132,6 +132,28 @@ class SantaAPIViewsTestCase(TestCase):
         enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
         self.assertEqual(enrolled_machine.client_mode, Configuration.MONITOR_MODE)
 
+    def test_preflight_compiler_rule_count_overflow(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        data["compiler_rule_count"] = 27551562368811008
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+
+        # Enrolled machine
+        enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
+        self.assertEqual(enrolled_machine.compiler_rule_count, 2147483647)
+
+    def test_preflight_binary_rule_count_negative(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        data["binary_rule_count"] = -27551562368811008
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+
+        # Enrolled machine
+        enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
+        self.assertEqual(enrolled_machine.binary_rule_count, 0)
+
     def test_preflight_clean_sync(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
