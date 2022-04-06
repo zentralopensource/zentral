@@ -133,6 +133,25 @@
       <td>{{ object.programs_shard }}%</td>
     </tr>
     <tr>
+      <td>Principal user</td>
+      <td>
+        <table class="table table-condensed">
+          <tr>
+            <td>Unique ID key</td>
+            <td>{{ object.principal_user_unique_id_key|default:"-" }}</td>
+          </tr>
+          <tr>
+            <td>Principal name key</td>
+            <td>{{ object.principal_user_principal_name_key|default:"-" }}</td>
+          </tr>
+          <tr>
+            <td>Display name key</td>
+            <td>{{ object.principal_user_display_name_key|default:"-" }}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
       <td>Report heartbeat timeout</td>
       <td>{{ object.report_heartbeat_timeout|duration_repr }}</td>
     </tr>

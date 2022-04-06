@@ -60,6 +60,10 @@ class Instance(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(100)], default=100,
         help_text="Restrict the collection of Windows programs to a percentage (0→100) of hosts"
     )
+    # Principal user
+    principal_user_unique_id_key = models.CharField(max_length=255, blank=True)
+    principal_user_principal_name_key = models.CharField(max_length=255, blank=True)
+    principal_user_display_name_key = models.CharField(max_length=255, blank=True)
     # Report processor
     report_processor_token = models.TextField(editable=False)  # secret
     # Heartbeats

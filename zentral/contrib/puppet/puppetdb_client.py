@@ -45,7 +45,10 @@ class PuppetDBClient(object):
     def __init__(
         self, business_unit, url,
         group_fact_keys, extra_fact_keys, puppetboard_url,
-        deb_packages_shard, programs_shard
+        deb_packages_shard, programs_shard,
+        principal_user_unique_id_key,
+        principal_user_principal_name_key,
+        principal_user_display_name_key
     ):
         self.business_unit = business_unit
         self.url = url
@@ -56,6 +59,10 @@ class PuppetDBClient(object):
         # packages
         self.deb_packages_shard = deb_packages_shard
         self.programs_shard = programs_shard
+        # principal user
+        self.principal_user_unique_id_key = principal_user_unique_id_key
+        self.principal_user_principal_name_key = principal_user_principal_name_key
+        self.principal_user_display_name_key = principal_user_display_name_key
         # requests session
         self.session = requests.Session()
         self.session.headers["User-Agent"] = deployment_info.user_agent
@@ -76,7 +83,10 @@ class PuppetDBClient(object):
             instance.extra_fact_keys,
             instance.puppetboard_url,
             instance.deb_packages_shard,
-            instance.programs_shard
+            instance.programs_shard,
+            instance.principal_user_unique_id_key,
+            instance.principal_user_principal_name_key,
+            instance.principal_user_display_name_key
         )
         if instance.cert:
             client.configure_client_cert_auth(
@@ -241,6 +251,22 @@ class PuppetDBClient(object):
 
         if puppet_node:
             ct['puppet_node'] = puppet_node
+
+        # principal user
+        principal_user = {}
+        for attr in ("unique_id", "principal_name", "display_name"):
+            key = getattr(self, f"principal_user_{attr}_key")
+            if key:
+                val = get_nested_val(facts, key)
+                if val:
+                    principal_user[attr] = val
+        if principal_user:
+            if "principal_name" in principal_user and "display_name" not in principal_user:
+                principal_user["display_name"] = principal_user["principal_name"]
+            if len(principal_user) == 3:
+                principal_user["source"] = {"type": "INVENTORY",
+                                            "properties": self.get_source_d()}
+                ct['principal_user'] = principal_user
 
         # groups from puppet facts
         groups = []
