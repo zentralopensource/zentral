@@ -705,6 +705,96 @@ class DebPackageFilter(BaseMSFilter):
                                                "max": deb_packages[-1].get("version")}
 
 
+class ProgramFilter(BaseMSFilter):
+    optional = True
+    many = True
+
+    def __init__(self, *args, **kwargs):
+        self.name = kwargs.pop("name")
+        self.title = self.name
+        super().__init__(*args, **kwargs)
+        self.expression = (
+            "jsonb_build_object("
+            f"'id', p{self.idx}.id, "
+            f"'name', p{self.idx}.name, "
+            f"'version', p{self.idx}.version, "
+            f"'language', p{self.idx}.language, "
+            f"'publisher', p{self.idx}.publisher, "
+            f"'identifying_number', p{self.idx}.identifying_number"
+            f") as p{self.idx}_j"
+        )
+        self.grouping_set = (f"p{self.idx}.id", f"p{self.idx}_j")
+
+    def get_query_kwarg(self):
+        return f"p{self.idx}"
+
+    def joins(self):
+        yield (("left join lateral ("
+                "select p.* from inventory_program as p "
+                "join inventory_programinstance as pi on (pi.program_id = p.id) "
+                "join inventory_machinesnapshot_program_instances as mspi on (mspi.programinstance_id = pi.id) "
+                "where mspi.machinesnapshot_id = ms.id and p.name = %s"
+                f") p{self.idx} on TRUE"),
+               [self.name])
+
+    def wheres(self):
+        if self.value:
+            if self.value != self.none_value:
+                yield f"p{self.idx}.id = %s"
+            else:
+                yield f"p{self.idx}.id is null"
+
+    def where_args(self):
+        if self.value and self.value != self.none_value:
+            yield self.value
+
+    def serialize(self):
+        return f"p.{self.name}"
+
+    @staticmethod
+    def display_name(program):
+        return " ".join(e for e in (program["name"], program["version"]) if e)
+
+    def label_for_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return self.none_value
+        return self.display_name(grouping_value)
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
+        if gv["id"] is None:
+            return None
+        return gv
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        if grouping_value:
+            return grouping_value["id"]
+
+    def process_fetched_record(self, record, for_filtering):
+        programs = []
+        for program in record.pop(self.grouping_set[-1], []):
+            if not program["id"]:
+                continue
+            program["display_name"] = self.display_name(program)
+            if program not in programs:
+                programs.append(program)
+        programs.sort(key=lambda program: (program.get("version") or "",
+                                           program.get("id")))
+        if not for_filtering:
+            # TODO: verify no conflict
+            record.setdefault("programs", OrderedDict())[self.name] = programs
+        else:
+            programs_dict = record.setdefault("programs", {})
+            program_idx = len(programs_dict)  # we do not use self.idx because we want to start from 0
+            program_dict = programs_dict.setdefault(str(program_idx), {})
+            program_dict["name"] = self.name
+            if not programs:
+                program_dict["version"] = {"min": self.unknown_value, "max": self.unknown_value}
+            else:
+                program_dict["version"] = {"min": programs[0].get("version"),
+                                           "max": programs[-1].get("version")}
+
+
 class TypeFilter(BaseMSFilter):
     title = "Types"
     optional = True
@@ -1204,6 +1294,9 @@ class MSQuery:
             elif serialized_filter.startswith("dp."):
                 _, name = serialized_filter.split(".", 1)
                 self.add_filter(DebPackageFilter, name=name)
+            elif serialized_filter.startswith("p."):
+                _, name = serialized_filter.split(".", 1)
+                self.add_filter(ProgramFilter, name=name)
             elif serialized_filter.startswith("ccs."):
                 try:
                     cc_pk = int(serialized_filter[4:])
@@ -1632,6 +1725,25 @@ class DebPackageFilterForm(forms.Form):
             any(isinstance(f, DebPackageFilter) and f.name == name for f in self.msquery.filters)
         ):
             raise forms.ValidationError("A filter for this Debian package name already exists")
+
+
+class ProgramFilterForm(forms.Form):
+    name = forms.CharField(label="Program name", required=False,
+                           widget=forms.TextInput(attrs={"class": "form-control",
+                                                         "placeholder": "Program name"}))
+
+    def __init__(self, *args, **kwargs):
+        self.msquery = kwargs.pop("msquery")
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        name = cleaned_data.get("name")
+        if (
+            name and
+            any(isinstance(f, ProgramFilter) and f.name == name for f in self.msquery.filters)
+        ):
+            raise forms.ValidationError("A filter for this program name already exists")
 
 
 class ComplianceCheckStatusFilterForm(forms.Form):

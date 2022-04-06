@@ -38,6 +38,7 @@ from .utils import (BundleFilter, BundleFilterForm,
                     ComplianceCheckStatusFilter, ComplianceCheckStatusFilterForm,
                     DebPackageFilter, DebPackageFilterForm,
                     MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
+                    ProgramFilter, ProgramFilterForm,
                     MSQuery)
 
 
@@ -72,7 +73,8 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
     force_search = False
     filter_forms = (
         ("bundle_filter_form", BundleFilterForm, "bf"),
-        ("deb_package_filter_form", DebPackageFilterForm, "dp"),
+        ("deb_package_filter_form", DebPackageFilterForm, "dpf"),
+        ("program_filter_form", ProgramFilterForm, "pf"),
         ("compliance_check_status_filter_form", ComplianceCheckStatusFilterForm, "ccsf")
     )
 
@@ -188,6 +190,10 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
     def deb_package_filter_form_valid(self, form):
         name = form.cleaned_data.get("name")
         self.msquery.add_filter(DebPackageFilter, name=name)
+
+    def program_filter_form_valid(self, form):
+        name = form.cleaned_data.get("name")
+        self.msquery.add_filter(ProgramFilter, name=name)
 
     def compliance_check_status_filter_form_valid(self, form):
         compliance_check = form.cleaned_data.get("compliance_check")

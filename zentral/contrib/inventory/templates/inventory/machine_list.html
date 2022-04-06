@@ -70,6 +70,19 @@
             {% endfor %}
           </div>
         </form>
+        <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
+          <div class="form-group">
+            <label for="id_{{ program_filter_form.prefix }}-name" class="sr-only">Program name</label>
+            {{ program_filter_form.name }}
+            <button name="filter_key" value="program_filter_form" type="submit" class="btn btn-primary">
+              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+              Program
+            </button>
+            {% for error in program_filter_form.non_field_errors %}
+            <p class="text-danger">{{ error }}</p>
+            {% endfor %}
+          </div>
+        </form>
         {% if not compliance_check_status_filter_form.disabled %}
         <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
           <div class="form-group">
