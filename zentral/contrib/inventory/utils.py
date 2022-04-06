@@ -720,7 +720,7 @@ class DebPackageFilter(BaseMSFilter):
         self.grouping_set = (f"dp{self.idx}.id", f"dp{self.idx}_j")
 
     def get_query_kwarg(self):
-        return "dp{}".format(self.idx)
+        return f"dp{self.idx}"
 
     def joins(self):
         yield (("left join lateral ("
@@ -786,6 +786,92 @@ class DebPackageFilter(BaseMSFilter):
             else:
                 deb_package_dict["version"] = {"min": deb_packages[0].get("version"),
                                                "max": deb_packages[-1].get("version")}
+
+
+class IOSAppFilter(BaseMSFilter):
+    optional = True
+    many = True
+
+    def __init__(self, *args, **kwargs):
+        self.name = kwargs.pop("name")
+        self.title = self.name
+        super().__init__(*args, **kwargs)
+        self.expression = (
+            "jsonb_build_object("
+            f"'id', ia{self.idx}.id, "
+            f"'name', ia{self.idx}.name, "
+            f"'version', ia{self.idx}.version"
+            f") as ia{self.idx}_j"
+        )
+        self.grouping_set = (f"ia{self.idx}.id", f"ia{self.idx}_j")
+
+    def get_query_kwarg(self):
+        return f"ia{self.idx}"
+
+    def joins(self):
+        yield (("left join lateral ("
+                "select ia.* from inventory_iosapp as ia "
+                "join inventory_machinesnapshot_ios_apps as msia on (msia.iosapp_id = ia.id) "
+                "where msia.machinesnapshot_id = ms.id and ia.name = %s"
+                f") ia{self.idx} on TRUE"),
+               [self.name])
+
+    def wheres(self):
+        if self.value:
+            if self.value != self.none_value:
+                yield f"ia{self.idx}.id = %s"
+            else:
+                yield f"ia{self.idx}.id is null"
+
+    def where_args(self):
+        if self.value and self.value != self.none_value:
+            yield self.value
+
+    def serialize(self):
+        return f"ia.{self.name}"
+
+    @staticmethod
+    def display_name(ios_app):
+        return " ".join(e for e in (ios_app["name"], ios_app["version"]) if e)
+
+    def label_for_grouping_value(self, grouping_value):
+        if not grouping_value:
+            return self.none_value
+        return self.display_name(grouping_value)
+
+    def grouping_value_from_grouping_result(self, grouping_result):
+        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
+        if gv["id"] is None:
+            return None
+        return gv
+
+    def query_kwarg_value_from_grouping_value(self, grouping_value):
+        if grouping_value:
+            return grouping_value["id"]
+
+    def process_fetched_record(self, record, for_filtering):
+        ios_apps = []
+        for ios_app in record.pop(self.grouping_set[-1], []):
+            if not ios_app["id"]:
+                continue
+            ios_app["display_name"] = self.display_name(ios_app)
+            if ios_app not in ios_apps:
+                ios_apps.append(ios_app)
+        ios_apps.sort(key=lambda ia: (ia.get("version") or "", ia.get("id")))
+        if not for_filtering:
+            # TODO: verify no conflict
+            record.setdefault("ios_apps", OrderedDict())[self.name] = ios_apps
+        else:
+            ios_apps_dict = record.setdefault("ios_apps", {})
+            ios_app_idx = len(ios_apps)  # we do not use self.idx because we want to start from 0
+            ios_app_dict = ios_apps_dict.setdefault(str(ios_app_idx), {})
+            if self.name:
+                ios_app_dict["name"] = self.name
+            if not ios_apps:
+                ios_app_dict["version"] = {"min": self.unknown_value, "max": self.unknown_value}
+            else:
+                ios_app_dict["version"] = {"min": ios_apps[0].get("version"),
+                                           "max": ios_apps[-1].get("version")}
 
 
 class ProgramFilter(BaseMSFilter):
@@ -1380,6 +1466,9 @@ class MSQuery:
             elif serialized_filter.startswith("dp."):
                 _, name = serialized_filter.split(".", 1)
                 self.add_filter(DebPackageFilter, name=name)
+            elif serialized_filter.startswith("ia."):
+                _, name = serialized_filter.split(".", 1)
+                self.add_filter(IOSAppFilter, name=name)
             elif serialized_filter.startswith("p."):
                 _, name = serialized_filter.split(".", 1)
                 self.add_filter(ProgramFilter, name=name)
@@ -1830,6 +1919,25 @@ class DebPackageFilterForm(forms.Form):
             any(isinstance(f, DebPackageFilter) and f.name == name for f in self.msquery.filters)
         ):
             raise forms.ValidationError("A filter for this Debian package name already exists")
+
+
+class IOSAppFilterForm(forms.Form):
+    name = forms.CharField(label="iOS app name", required=False,
+                           widget=forms.TextInput(attrs={"class": "form-control",
+                                                         "placeholder": "iOS app name"}))
+
+    def __init__(self, *args, **kwargs):
+        self.msquery = kwargs.pop("msquery")
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        name = cleaned_data.get("name")
+        if (
+            name and
+            any(isinstance(f, IOSAppFilter) and f.name == name for f in self.msquery.filters)
+        ):
+            raise forms.ValidationError("A filter for this iOS app name already exists")
 
 
 class ProgramFilterForm(forms.Form):

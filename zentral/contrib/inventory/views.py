@@ -39,6 +39,7 @@ from .utils import (AndroidAppFilter, AndroidAppFilterForm,
                     ComplianceCheckStatusFilter, ComplianceCheckStatusFilterForm,
                     DebPackageFilter, DebPackageFilterForm,
                     MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
+                    IOSAppFilter, IOSAppFilterForm,
                     ProgramFilter, ProgramFilterForm,
                     MSQuery)
 
@@ -76,6 +77,7 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
         ("android_app_filter_form", AndroidAppFilterForm, "aaf"),
         ("bundle_filter_form", BundleFilterForm, "bf"),
         ("deb_package_filter_form", DebPackageFilterForm, "dpf"),
+        ("ios_app_filter_form", IOSAppFilterForm, "iaf"),
         ("program_filter_form", ProgramFilterForm, "pf"),
         ("compliance_check_status_filter_form", ComplianceCheckStatusFilterForm, "ccsf")
     )
@@ -196,6 +198,10 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
     def deb_package_filter_form_valid(self, form):
         name = form.cleaned_data.get("name")
         self.msquery.add_filter(DebPackageFilter, name=name)
+
+    def ios_app_filter_form_valid(self, form):
+        name = form.cleaned_data.get("name")
+        self.msquery.add_filter(IOSAppFilter, name=name)
 
     def program_filter_form_valid(self, form):
         name = form.cleaned_data.get("name")
