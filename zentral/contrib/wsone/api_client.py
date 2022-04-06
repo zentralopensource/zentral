@@ -11,6 +11,7 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util import Retry
 from requests.packages.urllib3.util.ssl_ import create_urllib3_context
 from base.utils import deployment_info
+from zentral.utils.json import remove_null_character
 
 
 logger = logging.getLogger("zentral.contrib.wsone.api_client")
@@ -433,10 +434,12 @@ class Client:
             if not app_name:
                 logger.warning("Device %s: app without name", device_uuid)
                 continue
+            app_name = remove_null_character(app_name)
             app_version = app["installed_version"]
             if not app_version:
                 logger.warning("Device %s: app without installed version", device_uuid)
                 continue
+            app_version = remove_null_character(app_version)
             if device_platform == "Apple":
                 ios_app = {"name": app_name, "version": app_version}
                 ios_apps = ms_tree.setdefault("ios_apps", [])
