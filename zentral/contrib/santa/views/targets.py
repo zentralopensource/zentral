@@ -7,9 +7,9 @@ from django.views.generic import TemplateView
 from zentral.contrib.inventory.models import Certificate, File
 from zentral.contrib.santa.models import Bundle, Configuration, Rule, Target
 from zentral.contrib.santa.forms import TargetSearchForm
-from zentral.core.events.utils import encode_args
 from zentral.core.stores import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
+from zentral.utils.text import encode_args
 
 
 logger = logging.getLogger('zentral.contrib.santa.views.targets')

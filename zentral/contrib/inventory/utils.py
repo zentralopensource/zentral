@@ -23,6 +23,7 @@ import xlsxwriter
 from zentral.core.compliance_checks.models import ComplianceCheck, Status as ComplianceCheckStatus
 from zentral.core.incidents.models import Severity, Status
 from zentral.utils.json import save_dead_letter
+from zentral.utils.text import decode_args, encode_args
 from .compliance_checks import jmespath_checks_cache
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      iter_inventory_events)
@@ -1440,9 +1441,9 @@ class MSQuery:
             self.filters = [f if f.idx != found_f.idx else new_f for f in self.filters]
 
     def _deserialize_filters(self, serialized_filters):
+        default = False
         try:
-            serialized_filters = serialized_filters.split("-")
-            default = False
+            serialized_filters = decode_args(serialized_filters, delimiter="-")
         except Exception:
             serialized_filters = []
             default = True
@@ -1481,8 +1482,11 @@ class MSQuery:
                     self.add_filter(ComplianceCheckStatusFilter, compliance_check_pk=cc_pk)
 
     def serialize_filters(self, filter_to_add=None, filter_to_remove=None, include_hidden=False):
-        return "-".join(f.serialize() for f in chain(self.filters, [filter_to_add])
-                        if f and f.optional and not f == filter_to_remove and (include_hidden or not f.hidden))
+        return encode_args(
+            (f.serialize() for f in chain(self.filters, [filter_to_add])
+             if f and f.optional and not f == filter_to_remove and (include_hidden or not f.hidden)),
+            delimiter="-"
+        )
 
     def get_url(self, page=None):
         qd = self.query_dict.copy()

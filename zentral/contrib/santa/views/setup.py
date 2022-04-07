@@ -14,9 +14,9 @@ from zentral.contrib.santa.forms import (BinarySearchForm, BundleSearchForm, Cer
                                          ConfigurationForm, EnrollmentForm, RuleForm, RuleSearchForm, UpdateRuleForm)
 from zentral.contrib.santa.models import Bundle, Configuration, Enrollment, Rule, Target
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
-from zentral.core.events.utils import encode_args
 from zentral.core.stores import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
+from zentral.utils.text import encode_args
 
 
 logger = logging.getLogger('zentral.contrib.santa.views.setup')

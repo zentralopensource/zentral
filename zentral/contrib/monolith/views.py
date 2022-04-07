@@ -23,12 +23,11 @@ from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFai
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine, Tag
 from zentral.contrib.inventory.utils import verify_enrollment_secret
-from zentral.core.events.utils import encode_args
 from zentral.core.stores import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.storage import file_storage_has_signed_urls
-from zentral.utils.text import get_version_sort_key, shard as compute_shard
+from zentral.utils.text import get_version_sort_key, shard as compute_shard, encode_args
 from .conf import monolith_conf
 from .events import (post_monolith_enrollment_event,
                      post_monolith_munki_request, post_monolith_repository_updates)

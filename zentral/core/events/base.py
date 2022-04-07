@@ -15,8 +15,8 @@ from zentral.core.incidents.models import IncidentUpdate
 from zentral.core.probes.conf import all_probes_dict
 from zentral.core.queues import queues
 from zentral.utils.http import user_agent_and_ip_address_from_request
+from zentral.utils.text import decode_args, encode_args
 from .template_loader import TemplateLoader
-from .utils import decode_args, encode_args
 from . import register_event_type
 
 logger = logging.getLogger('zentral.core.events.base')
