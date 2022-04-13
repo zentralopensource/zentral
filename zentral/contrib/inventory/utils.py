@@ -1397,6 +1397,7 @@ class MSQuery:
     ]
     extra_filters = [
         ComplianceStatusFilter,
+        OSXAppInstanceFilter,
     ]
 
     def __init__(self, query_dict=None):
