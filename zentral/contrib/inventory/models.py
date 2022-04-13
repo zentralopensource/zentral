@@ -342,7 +342,7 @@ class OSXApp(AbstractMTObject):
 
     def current_instances(self):
         return (self.osxappinstance_set.filter(machinesnapshot__currentmachinesnapshot__isnull=False)
-                                       .annotate(machinesnapshot_num=Count('machinesnapshot')))
+                                       .annotate(machine_count=Count('machinesnapshot__serial_number', distinct=True)))
 
     def all_names(self):
         if self.bundle_display_name:

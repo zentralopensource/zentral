@@ -30,7 +30,7 @@
   <div class="panel-body">
       <p>
         <a class="btn btn-primary" href="{% url 'inventory:macos_app_instance_machines' macos_app.id instance.id %}">
-          View {{ instance.machinesnapshot_num }} machine{{ instance.machinesnapshot_num|pluralize }}
+          View {{ instance.machine_count }} machine{{ instance.machine_count|pluralize }}
         </a>
       </p>
       <dl class="dl-horizontal">
