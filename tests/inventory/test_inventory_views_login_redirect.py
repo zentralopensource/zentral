@@ -120,15 +120,3 @@ class InventoryLoginRedirectTestCase(TestCase):
 
     def test_tag_delete(self):
         self.login_redirect("delete_tag", self.tag1.id)
-
-    def test_macos_apps(self):
-        self.login_redirect("macos_apps")
-
-    def test_macos_app(self):
-        self.login_redirect("macos_app", self.osx_app_instance.app.id)
-
-    def test_macos_app_instance_machines(self):
-        self.login_redirect("macos_app_instance_machines",
-                            self.osx_app_instance.app.id,
-                            self.osx_app_instance.id,
-                            query="sf=mbu-t-tp-hm-pf-osv")

@@ -16,7 +16,7 @@
 <h3>{{ title }}</h3>
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
   <div class="form-group">
-    {{ search_form.bundle_name|bootstrap_inline }}
+    {{ search_form.name|bootstrap_inline }}
   </div>
   <div class="form-group">
     {{ search_form.source|bootstrap_inline }}
@@ -31,8 +31,8 @@
       Export <span class="caret"></span>
     </button>
     <ul class="dropdown-menu">
-      <li><a href="{% url 'inventory_api:macos_apps_export' %}" data-format="csv" class="task">CSV</a></li>
-      <li><a href="{% url 'inventory_api:macos_apps_export' %}" data-format="xlsx" class="task">XLSX</a></li>
+      <li><a href="{% url 'inventory_api:ios_apps_export' %}" data-format="csv" class="task">CSV</a></li>
+      <li><a href="{% url 'inventory_api:ios_apps_export' %}" data-format="xlsx" class="task">XLSX</a></li>
     </ul>
   </div>
 </form>
@@ -69,23 +69,19 @@
       {% endfor %}
     </thead>
     <tbody>
-    {% for macos_app in object_list %}
+    {% for ios_app in object_list %}
     <tr>
       <td colspan="2">
-        <a href="{{ macos_app.link }}">{{ macos_app.bundle_name|default:"-" }}</a>
-        {% if macos_app.bundle_id %}<br><code>{{ macos_app.bundle_id }}</code>{% endif %}
+        <a href="{{ ios_app.link }}">{{ ios_app.name|default:"-" }}</a>
+        {% if ios_app.identifier %}<br><code>{{ ios_app.identifier }}</code>{% endif %}
       </td>
       <td>
-          {{ macos_app.ms_count }}
+          {{ ios_app.ms_count }}
       </td>
     </tr>
-    {% for version in macos_app.versions %}
+    {% for version in ios_app.versions %}
     <tr>
-      <td style="border-top:1px dotted #ddd">
-        <a href="{{ version.link }}">
-          {{ version.bundle_version_str|default:"-" }} / {{ version.bundle_version|default:"-" }}
-        </a>
-      </td>
+      <td style="border-top:1px dotted #ddd"><a href="{{ version.link }}">{{ version.short_version|default:"-" }} / {{ version.version|default:"-" }}</a></td>
       <td style="border-top:1px dotted #ddd">{{ version.source_name }}</td>
       <td style="border-top:1px dotted #ddd">{{ version.ms_count }}</td>
     </tr>

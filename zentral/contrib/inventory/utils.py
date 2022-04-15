@@ -52,10 +52,13 @@ class BaseMSFilter:
     expression = None
     grouping_set = None
 
-    def __init__(self, msquery, idx, query_dict, hidden_value=None):
+    def __init__(self, msquery, idx, query_dict, value=None, hidden_value=None):
         self.idx = idx
         self.query_dict = query_dict
-        if hidden_value:
+        if value:
+            self.value = value
+            self.hidden = False
+        elif hidden_value:
             self.value = hidden_value
             self.hidden = True
         else:
@@ -474,27 +477,6 @@ class TagFilter(BaseMSFilter):
             if tag not in tags:
                 tags.append(tag)
         record["tags"] = tags
-
-
-class OSXAppInstanceFilter(BaseMSFilter):
-    title = "macOS app instances"
-    optional = True
-    many = True
-    query_kwarg = "mosai"
-
-    def joins(self):
-        yield "left join inventory_machinesnapshot_osx_app_instances as mosai on (mosai.machinesnapshot_id = ms.id)"
-
-    def wheres(self):
-        if self.value:
-            if self.value != self.none_value:
-                yield "mosai.osxappinstance_id = %s"
-            else:
-                yield "mosai.osxappinstance_id is null"
-
-    def where_args(self):
-        if self.value and self.value != self.none_value:
-            yield self.value
 
 
 class BundleFilter(BaseMSFilter):
@@ -1397,7 +1379,6 @@ class MSQuery:
     ]
     extra_filters = [
         ComplianceStatusFilter,
-        OSXAppInstanceFilter,
     ]
 
     def __init__(self, query_dict=None):
@@ -1525,6 +1506,11 @@ class MSQuery:
 
     def get_urlencoded_canonical_query_dict(self):
         return self.get_canonical_query_dict().urlencode()
+
+    def get_canonical_url(self):
+        # used when the msquery object is built programmatically
+        # see apps search
+        return "?{}".format(urllib.parse.urlencode(self.get_canonical_query_dict()))
 
     def available_filters(self):
         links = []

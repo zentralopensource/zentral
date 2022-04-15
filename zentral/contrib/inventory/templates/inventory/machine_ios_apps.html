@@ -19,9 +19,9 @@
   <input class="form-control" type="text" id="search-input" autofocus="" placeholder="Search name, identifier" style="max-width:30vw">
 </p>
 
-{% if machine.snapshots_with_ios_apps %}
+{% if tabs %}
 <ul class="nav nav-tabs">
-  {% for ms in machine.snapshots_with_ios_apps %}
+  {% for ms, rows in tabs %}
   <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
     <a href="#" data-tabclass="mstab" data-tabid="ms-{{ ms.id }}">
       {{ ms.source.name }}
@@ -30,7 +30,7 @@
   {% endfor %}
 </ul>
 
-{% for ms in machine.snapshots_with_ios_apps %}
+{% for ms, rows in tabs %}
 <div class="table-reponsive mstab" id="ms-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
   <table class="table table-condensed table-filtered">
     <thead>
@@ -44,11 +44,15 @@
       </tr>
     </thead>
     <tbody>
-      {% for ios_app in ms.ordered_ios_apps %}
+      {% for ios_app, app_link, version_link in rows %}
       <tr>
-        <td class="search-cell">{{ ios_app.name|default:"-" }}</td>
+        <td class="search-cell">
+          <a href="{{ app_link }}">{{ ios_app.name|default:"-" }}</a>
+        </td>
         <td class="search-cell">{{ ios_app.identifier|default:"-" }}</td>
-        <td>{{ ios_app.version|default:"-" }}</td>
+        <td>
+          <a href="{{ version_link }}">{{ ios_app.version|default:"-" }}</a>
+        </td>
         <td>{{ ios_app.beta|default:"-" }}</td>
         <td>{{ ios_app.app_store_vendable|default:"-" }}</td>
         <td>{{ ios_app.device_based_vpp|default:"-" }}</td>

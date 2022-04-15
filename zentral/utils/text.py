@@ -40,6 +40,8 @@ def shard(key, salt="", modulo=100):
 
 def get_version_sort_key(version):
     sort_key = []
+    if not version or not isinstance(version, str):
+        return sort_key
     for version_elm in version.split("."):
         try:
             version_elm = "{:016d}".format(int(version_elm))

@@ -1,7 +1,6 @@
 from django.test import SimpleTestCase
 from zentral.contrib.inventory.templatetags.inventory_extras import (base_inventory_tag,
-                                                                     base_machine_type_icon,
-                                                                     sha_256_link)
+                                                                     base_machine_type_icon)
 
 
 class InventoryExtrasTestCase(SimpleTestCase):
@@ -23,12 +22,3 @@ class InventoryExtrasTestCase(SimpleTestCase):
                                      ('TV', '<i class="fas fa-tv"></i>'),
                                      ('<script></script>', ''),):
             self.assertEqual(base_machine_type_icon(machine_type), result)
-
-    def test_sha_256_link(self):
-        self.assertEqual(sha_256_link(""), '-')
-        self.assertEqual(sha_256_link("<script></script>"), '-')
-        sha_256 = 64 * "f"
-        self.assertEqual(
-            sha_256_link(sha_256),
-            f'<a href="/inventory/macos_apps/?sha_256={sha_256}">{sha_256}</a>'
-        )

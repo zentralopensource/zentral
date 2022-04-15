@@ -2,7 +2,8 @@ from django.urls import path
 from rest_framework.urlpatterns import format_suffix_patterns
 from .api_views import (ArchiveMachines,
                         CleanupInventory,
-                        MachinesExport, MacOSAppsExport,
+                        MachinesExport,
+                        AndroidAppsExport, DebPackagesExport, IOSAppsExport, MacOSAppsExport, ProgramsExport,
                         MachineMacOSAppInstancesExport,
                         MachineAndroidAppsExport,
                         MachineDebPackagesExport,
@@ -25,7 +26,11 @@ urlpatterns = [
 
     # machine and apps reports
     path('machines/export/', MachinesExport.as_view(), name="machines_export"),
+    path('android_apps/export/', AndroidAppsExport.as_view(), name="android_apps_export"),
+    path('deb_packages/export/', DebPackagesExport.as_view(), name="deb_packages_export"),
+    path('ios_apps/export/', IOSAppsExport.as_view(), name="ios_apps_export"),
     path('macos_apps/export/', MacOSAppsExport.as_view(), name="macos_apps_export"),
+    path('programs/export/', ProgramsExport.as_view(), name="programs_export"),
 
     # machine apps, debs, and programs exports
     path('machines/export_android_apps/',

@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from zentral.core.events.base import EventRequest
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
-from .forms import MacOSAppSearchForm
+from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
 from .models import CurrentMachineSnapshot, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag, Taxonomy
 from .serializers import (CleanupInventorySerializer,
                           MachineSerialNumbersSerializer,
@@ -17,7 +17,8 @@ from .serializers import (CleanupInventorySerializer,
                           MetaBusinessUnitSerializer,
                           TagSerializer)
 from .tasks import (cleanup_inventory,
-                    export_inventory, export_macos_apps,
+                    export_inventory,
+                    export_android_apps, export_deb_packages, export_ios_apps, export_macos_apps, export_programs,
                     export_machine_macos_app_instances,
                     export_machine_android_apps,
                     export_machine_deb_packages,
@@ -136,7 +137,7 @@ class PruneMachines(APIView):
         return Response(response)
 
 
-# Machine and apps reports
+# Machine and apps reports based on the UI views
 
 
 class MachinesExport(APIView):
@@ -155,22 +156,60 @@ class MachinesExport(APIView):
                         status=status.HTTP_201_CREATED)
 
 
-class MacOSAppsExport(APIView):
-    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
+class BaseAppsExport(APIView):
+    permission_required = None
     permission_classes = [DjangoPermissionRequired]
+    form_class = None
+    filename_prefix = None
+    task = None
 
     def post(self, request, *args, **kwargs):
         export_format = request.data.pop("export_format", "xlsx")
         if export_format not in ("xlsx", "csv"):
             raise ValidationError("Invalid export format")
-        form = MacOSAppSearchForm(request.data, export=True)
+        form = self.form_class(request.data, export=True)
         if not form.is_valid():
             raise ValidationError("Invalid search parameters")
-        filename = "macos_apps_export_{:%Y-%m-%d_%H-%M-%S}.{}".format(timezone.now(), export_format)
-        result = export_macos_apps.apply_async((request.data, filename,))
+        filename = "{}_export_{:%Y-%m-%d_%H-%M-%S}.{}".format(self.filename_prefix, timezone.now(), export_format)
+        result = self.task.apply_async((request.data, filename,))
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
+
+
+class AndroidAppsExport(BaseAppsExport):
+    permission_required = "inventory.view_androidapp"
+    form_class = AndroidAppSearchForm
+    filename_prefix = "android_apps"
+    task = export_android_apps
+
+
+class DebPackagesExport(BaseAppsExport):
+    permission_required = "inventory.view_debpackage"
+    form_class = DebPackageSearchForm
+    filename_prefix = "deb_packages"
+    task = export_deb_packages
+
+
+class IOSAppsExport(BaseAppsExport):
+    permission_required = "inventory.view_iosapp"
+    form_class = IOSAppSearchForm
+    filename_prefix = "ios_apps"
+    task = export_ios_apps
+
+
+class MacOSAppsExport(BaseAppsExport):
+    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
+    form_class = MacOSAppSearchForm
+    filename_prefix = "macos_apps"
+    task = export_macos_apps
+
+
+class ProgramsExport(BaseAppsExport):
+    permission_required = ("inventory.view_program", "inventory.view_programinstance")
+    form_class = ProgramsSearchForm
+    filename_prefix = "programs"
+    task = export_programs
 
 
 # Machine apps, debs and programs exports (ZIPPED CSV files)

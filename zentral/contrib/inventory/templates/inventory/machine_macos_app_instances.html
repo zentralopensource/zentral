@@ -19,9 +19,9 @@
   <input class="form-control" type="text" id="search-input" autofocus="" placeholder="Search bundle name" style="max-width:30vw">
 </p>
 
-{% if machine.snapshots_with_osx_app_instances %}
+{% if tabs %}
 <ul class="nav nav-tabs">
-  {% for ms in machine.snapshots_with_osx_app_instances %}
+  {% for ms, rows in tabs %}
   <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
     <a href="#" data-tabclass="appstab" data-tabid="apps-{{ ms.id }}">
       {{ ms.source.name }}
@@ -30,7 +30,7 @@
   {% endfor %}
 </ul>
 
-{% for ms in machine.snapshots_with_osx_app_instances %}
+{% for ms, rows in tabs %}
 <div class="table-reponsive appstab" id="apps-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
   <table class="table table-condensed table-filtered">
     <thead>
@@ -41,27 +41,31 @@
       </tr>
     </thead>
     <tbody>
-      {% for osx_app_instance in ms.ordered_osx_app_instances %}
-      {% with osx_app_instance.app as app %}
+      {% for app_instance, app, bundle_link, version_link in rows %}
       <tr>
         <td class="search-cell">
-          {% if perms.inventory.view_osxapp and perms.inventory.view_osxappinstance %}
-          <a href="{% url 'inventory:macos_app' app.id %}">{{ app.all_names|join:" / "|default:"-" }}</a>
+          {% if bundle_link %}
+          <a href="{{ bundle_link }}">{{ app.all_names|join:" / "|default:"-" }}</a>
           {% else %}
           {{ app.all_names|join:" / "|default:"-" }}
           {% endif %}
           {% if app.bundle_id %}<br><code>{{ app.bundle_id }}</code>{% endif %}
         </td>
         <td>
+          {% if version_link %}
+          <a href="{{ version_link }}">
+          {% endif %}
           {% for v in app.all_versions %}
           {% if not forloop.first %}<br>{% endif %}{{ v }}
           {% empty %}
           -
           {% endfor %}
+          {% if version_link %}
+          </a>
+          {% endif %}
         </td>
-        <td>{{ osx_app_instance.bundle_path|default:"" }}</td>
+        <td>{{ app_instance.bundle_path|default:"" }}</td>
       </tr>
-      {% endwith %}
       {% endfor %}
     </tbody>
   </table>

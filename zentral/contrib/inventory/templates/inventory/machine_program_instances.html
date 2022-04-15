@@ -6,7 +6,7 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
   <li><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
-  <li class="active">Windows programs</li>
+  <li class="active">Programs</li>
 </ol>
 
 <h2>
@@ -19,9 +19,9 @@
   <input class="form-control" type="text" id="search-input" autofocus="" placeholder="Search name, publisher" style="max-width:30vw">
 </p>
 
-{% if machine.snapshots_with_program_instances %}
+{% if tabs %}
 <ul class="nav nav-tabs">
-  {% for ms in machine.snapshots_with_program_instances %}
+  {% for ms, rows in tabs %}
   <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
     <a href="#" data-tabclass="pitab" data-tabid="ms-{{ ms.id }}">
       {{ ms.source.name }}
@@ -30,7 +30,7 @@
   {% endfor %}
 </ul>
 
-{% for ms in machine.snapshots_with_program_instances %}
+{% for ms, rows in tabs %}
 <div class="table-reponsive pitab" id="ms-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
   <table class="table table-condensed table-filtered">
     <thead>
@@ -43,16 +43,18 @@
       </tr>
     </thead>
     <tbody>
-      {% for program_instance in ms.ordered_program_instances %}
-      {% with program_instance.program as program %}
+      {% for program_instance, program, program_link, version_link in rows %}
       <tr>
-        <td class="search-cell">{{ program.name|default:"-" }}</td>
+        <td class="search-cell">
+          <a href="{{ program_link }}">{{ program.name|default:"-" }}</a>
+        </td>
         <td class="search-cell">{{ program.publisher|default:"-" }}</td>
-        <td>{{ program.version|default:"-" }}</td>
+        <td>
+          <a href="{{ version_link }}">{{ program.version|default:"-" }}</a>
+        </td>
         <td>{{ program_instance.install_date|date:"Y-m-d"|default:"-" }}</td>
         <td>{{ program_instance.install_location|default:"-" }}</td>
       </tr>
-      {% endwith %}
       {% endfor %}
     </tbody>
   </table>

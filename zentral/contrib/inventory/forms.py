@@ -1,9 +1,13 @@
+from datetime import datetime, timedelta
+import json
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db import connection
 from django.http import QueryDict
+from django.urls import reverse
 from django.utils.text import slugify
 import jmespath
+from zentral.utils.text import get_version_sort_key
 from .conf import PLATFORM_CHOICES
 from .models import (CurrentMachineSnapshot,
                      EnrollmentSecret,
@@ -11,6 +15,14 @@ from .models import (CurrentMachineSnapshot,
                      MetaBusinessUnit, MetaBusinessUnitTag,
                      Source, Tag,
                      JMESPathCheck)
+from .utils import (AndroidAppFilter,
+                    BundleFilter,
+                    DebPackageFilter,
+                    IOSAppFilter,
+                    LastSeenFilter,
+                    MSQuery,
+                    ProgramFilter,
+                    SourceFilter)
 
 
 class MachineGroupSearchForm(forms.Form):
@@ -193,30 +205,47 @@ class AddMachineTagForm(AddTagForm):
                                                 tag=self._get_tag())
 
 
-class MacOSAppSearchForm(forms.Form):
-    bundle_name = forms.CharField(label='Bundle name', max_length=64,
-                                  widget=forms.TextInput(attrs={"autofocus": "true"}))
+class BaseAppSearchForm(forms.Form):
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_snapshot_sources(),
+                                    empty_label="- source -",
                                     required=False)
+    last_seen = forms.ChoiceField(
+        choices=(("", "- last seen -"),
+                 ("1d", "24 hours"),
+                 ("7d", "7 days"),
+                 ("14d", "14 days"),
+                 ("30d", "30 days"),
+                 ("45d", "45 days"),
+                 ("90d", "90 days")),
+        initial="1d",
+        required=False
+    )
     order = forms.ChoiceField(choices=[], required=False)
-    order_mapping = {"bn": "bundle_name",
-                     "mc": "machine_count"}
+    order_mapping = {}
+    default_order = None
+    title = None
+    app_headers = None
+    version_headers = None
+    version_sort_keys = ("version",)
 
     def __init__(self, *args, **kwargs):
-        export = kwargs.pop("export", False)
+        self.export = kwargs.pop("export", False)
         super().__init__(*args, **kwargs)
         self.fields["order"].choices = [(f"{k}-{d}", f"{k}-{d}") for k in self.order_mapping for d in ("a", "d")]
-        if export:
-            self.fields["bundle_name"].required = False
+        if self.export:
+            for field in self.fields.values():
+                field.required = False
 
     def _get_current_order(self):
         try:
             order_attr_abv, order_dir = self.cleaned_data["order"].split("-")
             return self.order_mapping[order_attr_abv], "ASC" if order_dir == "a" else "DESC"
         except (KeyError, TypeError, ValueError):
-            return "bundle_name", "ASC"
+            return self.default_order
 
     def get_header_label_and_link(self, attr, label):
+        if not attr:
+            return label, None
         reversed_order_mapping = {v: k for k, v in self.order_mapping.items()}
         link = None
         attr_abv = reversed_order_mapping.get(attr)
@@ -235,42 +264,77 @@ class MacOSAppSearchForm(forms.Form):
             link = "?{}".format(qd.urlencode())
         return label, link
 
+    def get_table_headers(self):
+        table_headers = []
+        for _, order_attr, ui_header, label in self.app_headers:
+            if ui_header:
+                table_headers.append(self.get_header_label_and_link(order_attr, label))
+        for _, ui_header, label in self.version_headers:
+            if ui_header:
+                table_headers.append(self.get_header_label_and_link(None, label))
+        table_headers.append(self.get_header_label_and_link("ms_count", "Machines"))
+        return table_headers
+
+    def iter_export_headers(self):
+        for attr, _, _, label in self.app_headers:
+            yield attr, label
+        for attr, _, label in self.version_headers:
+            yield attr, label
+        yield "ms_count", "Machines"
+
+    def get_source(self):
+        return self.cleaned_data.get("source")
+
+    def get_last_seen(self):
+        last_seen = self.cleaned_data.get("last_seen")
+        if last_seen:
+            return datetime.utcnow() - timedelta(days=int(last_seen.replace("d", "")))
+
+    def get_ms_query_filters(self, result, version=None):
+        """Return a list of MSQuery filters for an app or one of its versions
+
+        Used in the get_link method to build a link for an app and its versions.
+        Override to add the correct filter.
+        """
+        filters = []
+        if version:
+            source_pk = version.get("source_pk")
+            if source_pk:
+                filters.append((SourceFilter, {"value": source_pk}))
+        else:
+            source = self.get_source()
+            if source:
+                filters.append((SourceFilter, {"value": source.pk}))
+        last_seen = self.cleaned_data.get("last_seen")
+        if last_seen:
+            filters.append((LastSeenFilter, {"value": last_seen}))
+        return filters
+
+    def get_link(self, result, version=None):
+        """Used to add a link to the inventory index for an app and its versions"""
+        ms_query = MSQuery()
+        for filter_class, filter_kwargs in self.get_ms_query_filters(result, version):
+            ms_query.force_filter(filter_class, **filter_kwargs)
+        return "{}{}".format(reverse("inventory:index"), ms_query.get_canonical_url())
+
+    def get_version_sort_key(self, version):
+        sort_key = []
+        for attr in self.version_sort_keys:
+            val = version.get(attr)
+            if val:
+                sort_key.append(get_version_sort_key(val))
+        return sort_key
+
+    def get_query_and_args(self):
+        raise NotImplementedError
+
     def iter_results(self, page=None, limit=None):
-        args = []
-        query = ("SELECT a.id, a.bundle_id, a.bundle_name, a.bundle_version, a.bundle_version_str, "
-                 "string_agg(distinct src.name, ',  ') as source_names, "
-                 "count(distinct cms.serial_number) as machine_count, "
-                 "count(*) over () as full_count "
-                 "FROM inventory_osxapp AS a "
-                 "JOIN inventory_osxappinstance AS i ON (i.app_id = a.id) "
-                 "JOIN inventory_machinesnapshot_osx_app_instances AS si ON (si.osxappinstance_id = i.id) "
-                 "JOIN inventory_currentmachinesnapshot AS cms ON (si.machinesnapshot_id = cms.machine_snapshot_id) "
-                 "JOIN inventory_source AS src ON (cms.source_id = src.id)")
-        wheres = []
-        # bundle name
-        bundle_name = self.cleaned_data['bundle_name']
-        if bundle_name:
-            args.append(bundle_name)
-            wheres.append("a.bundle_name ~* %s")
-        # source
-        source = self.cleaned_data['source']
-        if source:
-            args.append(source.id)
-            wheres.append("src.id = %s")
-        if wheres:
-            query = "{} WHERE {}".format(query, " AND ".join(f"({w})" for w in wheres))
-        # ordering
-        order_attr, order_dir = self._get_current_order()
-        order_str = f"{order_attr} {order_dir}"
-        if order_attr == "machine_count":
-            order_str = f"{order_str}, a.bundle_name ASC"
-        query = (f"{query} GROUP BY a.id, a.bundle_id, a.bundle_name, a.bundle_version, a.bundle_version_str "
-                 f"ORDER BY {order_str}, a.bundle_id, a.bundle_version_str, a.bundle_version")
+        query, args = self.get_query_and_args()
         # pagination
         if page and limit:
             offset = (page - 1) * limit
             args.extend([offset, limit])
-            query += " OFFSET %s LIMIT %s"
+            query += " offset %s limit %s"
         # execute
         cursor = connection.cursor()
         cursor.execute(query, args)
@@ -282,8 +346,26 @@ class MacOSAppSearchForm(forms.Form):
                 break
             for t in results:
                 d = dict(zip(columns, t))
+                if not self.export:
+                    d["link"] = self.get_link(d)
                 self.full_count = d.pop('full_count')
+                versions = json.loads(d.pop('versions'))
+                if not self.export:
+                    for version in versions:
+                        version["link"] = self.get_link(d, version)
+                versions.sort(key=lambda d: self.get_version_sort_key(d), reverse=True)
+                d['versions'] = versions
                 yield d
+
+    def iter_export_rows(self):
+        attrs = list(attr for attr, _ in self.iter_export_headers())
+        for result in self.iter_results():
+            versions = result.pop("versions")
+            yield [result.get(attr) for attr in attrs]
+            for version in versions:
+                row = result.copy()
+                row.update(version)
+                yield [row.get(attr) for attr in attrs]
 
     def search(self, page=1, limit=50):
         page = max(1, page)
@@ -303,9 +385,418 @@ class MacOSAppSearchForm(forms.Form):
         return results, self.full_count, previous_page, next_page, total_pages
 
     def clean(self):
+        super().clean()
         cleaned_data = self.cleaned_data
         cleaned_data['page'] = max(1, int(cleaned_data.get('page') or 1))
         return cleaned_data
+
+
+class AndroidAppSearchForm(BaseAppSearchForm):
+    display_name = forms.CharField(label="Name", max_length=64,
+                                   widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}))
+    order_mapping = {"dn": "display_name",
+                     "mc": "ms_count"}
+    default_order = ("display_name", "ASC")
+    title = "Android apps"
+    app_headers = (
+        ("display_name", "display_name", True, "Name"),
+    )
+    version_headers = (
+        ("version_name", False, "Version name"),
+        ("version_code", False, "Version code"),
+        ("source_name", True, "Source"),
+    )
+    version_sort_keys = ("version_name", "version_code")
+
+    def get_ms_query_filters(self, result, version=None):
+        filters = super().get_ms_query_filters(result, version)
+        filter_kwargs = {"display_name": result["display_name"]}
+        if version:
+            filter_kwargs["value"] = version["pk"]
+        filters.append((AndroidAppFilter, filter_kwargs))
+        return filters
+
+    def get_query_and_args(self):
+        args = []
+
+        # filtering
+        wheres = []
+        display_name = self.cleaned_data.get("display_name")
+        if display_name:
+            args.append(display_name)
+            wheres.append("aa.display_name ~* %s")
+        source = self.get_source()
+        if source:
+            args.append(source.id)
+            wheres.append("s.id = %s")
+        last_seen = self.get_last_seen()
+        if last_seen:
+            args.append(last_seen)
+            wheres.append("cms.last_seen >= %s")
+        if wheres:
+            wheres_str = "where {}".format(" and ".join(wheres))
+        else:
+            wheres_str = ""
+
+        # ordering
+        order_attr, order_dir = self._get_current_order()
+        order_str = f"{order_attr} {order_dir}"
+        if order_attr == "ms_count":
+            order_str = f"{order_str}, display_name ASC"
+
+        query = (
+            "with aaa as ("
+            "  select aa.id, aa.display_name, aa.version_name, aa.version_code,"
+            "  sum(count(*)) over (partition by aa.display_name) name_ms_count,"
+            "  count(*) version_ms_count"
+            "  from inventory_androidapp as aa"
+            "  join inventory_machinesnapshot_android_apps as msaa on (aa.id = msaa.androidapp_id)"
+            "  join inventory_currentmachinesnapshot as cms on (msaa.machinesnapshot_id = cms.machine_snapshot_id)"
+            "  join inventory_source as s on (cms.source_id = s.id)"
+            f" {wheres_str}"
+            "  group by aa.id, aa.display_name, aa.version_name, aa.version_code"
+            ") select display_name, name_ms_count ms_count,"
+            "jsonb_agg("
+            "  jsonb_build_object("
+            "    'pk', id,"
+            "    'version_name', version_name,"
+            "    'version_code', version_code,"
+            "    'ms_count', version_ms_count"
+            ")) versions,"
+            "count(*) over () as full_count "
+            "from aaa "
+            "group by display_name, ms_count "
+            f"order by {order_str}"
+        )
+        return query, args
+
+
+class DebPackageSearchForm(BaseAppSearchForm):
+    name = forms.CharField(label="Package name", max_length=64,
+                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Package name"}))
+    order_mapping = {"n": "name",
+                     "mc": "ms_count"}
+    default_order = ("name", "ASC")
+    title = "Debian packages"
+    app_headers = (
+        ("name", "name", True, "Package"),
+    )
+    version_headers = (
+        ("version", False, "Version"),
+        ("source_name", True, "Source"),
+    )
+
+    def get_ms_query_filters(self, result, version=None):
+        filters = super().get_ms_query_filters(result, version)
+        filter_kwargs = {"name": result["name"]}
+        if version:
+            filter_kwargs["value"] = version["pk"]
+        filters.append((DebPackageFilter, filter_kwargs))
+        return filters
+
+    def get_query_and_args(self):
+        args = []
+
+        # filtering
+        wheres = []
+        name = self.cleaned_data.get("name")
+        if name:
+            args.append(name)
+            wheres.append("dp.name ~* %s")
+        source = self.get_source()
+        if source:
+            args.append(source.id)
+            wheres.append("s.id = %s")
+        last_seen = self.get_last_seen()
+        if last_seen:
+            args.append(last_seen)
+            wheres.append("cms.last_seen >= %s")
+        if wheres:
+            wheres_str = "where {}".format(" and ".join(wheres))
+        else:
+            wheres_str = ""
+
+        # ordering
+        order_attr, order_dir = self._get_current_order()
+        order_str = f"{order_attr} {order_dir}"
+        if order_attr == "ms_count":
+            order_str = f"{order_str}, name ASC"
+
+        query = (
+            "with adp as ("
+            "  select dp.id, dp.name, dp.version, s.name source_name, s.id source_id,"
+            "  sum(count(*)) over (partition by dp.name) name_ms_count,"
+            "  count(*) version_ms_count"
+            "  from inventory_debpackage as dp"
+            "  join inventory_machinesnapshot_deb_packages as msdp on (dp.id = msdp.debpackage_id)"
+            "  join inventory_currentmachinesnapshot as cms on (msdp.machinesnapshot_id = cms.machine_snapshot_id)"
+            "  join inventory_source as s on (cms.source_id = s.id)"
+            f" {wheres_str}"
+            "  group by dp.id, dp.name, dp.version, s.name, s.id"
+            ") select name, name_ms_count ms_count,"
+            "jsonb_agg("
+            "  jsonb_build_object("
+            "    'pk', id,"
+            "    'version', version,"
+            "    'source_name', source_name,"
+            "    'source_pk', source_id,"
+            "    'ms_count', version_ms_count"
+            ")) versions,"
+            "count(*) over () as full_count "
+            "from adp "
+            "group by name, ms_count "
+            f"order by {order_str}"
+        )
+        return query, args
+
+
+class IOSAppSearchForm(BaseAppSearchForm):
+    name = forms.CharField(label="Name", max_length=64,
+                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}))
+    order_mapping = {"n": "name",
+                     "mc": "ms_count"}
+    default_order = ("name", "ASC")
+    title = "iOS apps"
+    app_headers = (
+        ("name", "name", True, "Name"),
+        ("identifier", None, False, "Identifier"),
+    )
+    version_headers = (
+        ("version", False, "Version"),
+        ("short_version", False, "Short version"),
+        ("source_name", True, "Source"),
+    )
+    version_sort_keys = ("version", "short_version")
+
+    def get_ms_query_filters(self, result, version=None):
+        filters = super().get_ms_query_filters(result, version)
+        filter_kwargs = {"name": result["name"]}
+        if version:
+            filter_kwargs["value"] = version["pk"]
+        filters.append((IOSAppFilter, filter_kwargs))
+        return filters
+
+    def get_query_and_args(self):
+        args = []
+
+        # filtering
+        wheres = []
+        name = self.cleaned_data.get("name")
+        if name:
+            args.append(name)
+            wheres.append("ia.name ~* %s")
+        source = self.get_source()
+        if source:
+            args.append(source.id)
+            wheres.append("s.id = %s")
+        last_seen = self.get_last_seen()
+        if last_seen:
+            args.append(last_seen)
+            wheres.append("cms.last_seen >= %s")
+        if wheres:
+            wheres_str = "where {}".format(" and ".join(wheres))
+        else:
+            wheres_str = ""
+
+        # ordering
+        order_attr, order_dir = self._get_current_order()
+        order_str = f"{order_attr} {order_dir}"
+        if order_attr == "ms_count":
+            order_str = f"{order_str}, name ASC"
+
+        query = (
+            "with aia as ("
+            "  select ia.id, ia.name, ia.identifier, ia.version, ia.short_version,"
+            "  sum(count(*)) over (partition by ia.name, ia.identifier) name_ms_count,"
+            "  count(*) version_ms_count"
+            "  from inventory_iosapp as ia"
+            "  join inventory_machinesnapshot_ios_apps as msia on (ia.id = msia.iosapp_id)"
+            "  join inventory_currentmachinesnapshot as cms on (msia.machinesnapshot_id = cms.machine_snapshot_id)"
+            "  join inventory_source as s on (cms.source_id = s.id)"
+            f" {wheres_str}"
+            "  group by ia.id, ia.name, ia.identifier, ia.version, ia.short_version"
+            "  order by ia.name"
+            ") select name, identifier, name_ms_count ms_count,"
+            "jsonb_agg("
+            "  jsonb_build_object("
+            "    'pk', id,"
+            "    'version', version,"
+            "    'short_version', short_version,"
+            "    'ms_count', version_ms_count"
+            ")) versions,"
+            "count(*) over () as full_count "
+            "from aia "
+            "group by name, identifier, ms_count "
+            f"order by {order_str}"
+        )
+        return query, args
+
+
+class MacOSAppSearchForm(BaseAppSearchForm):
+    bundle_name = forms.CharField(label='Bundle name', max_length=64,
+                                  widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Bundle name"}))
+    order_mapping = {"bn": "bundle_name",
+                     "mc": "ms_count"}
+    default_order = ("bundle_name", "ASC")
+    title = "macOS apps"
+    app_headers = (
+        ("bundle_name", "bundle_name", True, "Bundle"),
+        ("bundle_id", None, False, "Bundle ID"),
+    )
+    version_headers = (
+        ("bundle_version", False, "Bundle version"),
+        ("bundle_version_str", False, "Bundle version str"),
+        ("source_name", True, "Source"),
+    )
+    version_sort_keys = ("bundle_version", "bundle_version_str")
+
+    def get_ms_query_filters(self, result, version=None):
+        filters = super().get_ms_query_filters(result, version)
+        filter_kwargs = {"bundle_name": result["bundle_name"]}
+        if version:
+            filter_kwargs["value"] = version["pk"]
+        filters.append((BundleFilter, filter_kwargs))
+        return filters
+
+    def get_query_and_args(self):
+        args = []
+
+        # filtering
+        wheres = []
+        bundle_name = self.cleaned_data.get("bundle_name")
+        if bundle_name:
+            args.append(bundle_name)
+            wheres.append("a.bundle_name ~* %s")
+        source = self.get_source()
+        if source:
+            args.append(source.id)
+            wheres.append("s.id = %s")
+        last_seen = self.get_last_seen()
+        if last_seen:
+            args.append(last_seen)
+            wheres.append("cms.last_seen >= %s")
+        if wheres:
+            wheres_str = "where {}".format(" and ".join(wheres))
+        else:
+            wheres_str = ""
+
+        # ordering
+        order_attr, order_dir = self._get_current_order()
+        order_str = f"{order_attr} {order_dir}"
+        if order_attr == "ms_count":
+            order_str = f"{order_str}, bundle_name ASC"
+
+        query = (
+            "with ama as ("
+            "  select a.id, a.bundle_id, a.bundle_name, a.bundle_version, a.bundle_version_str,"
+            "  s.name source_name, s.id source_id,"
+            "  sum(count(*)) over (partition by a.bundle_id, a.bundle_name) bundle_ms_count,"
+            "  count(*) version_ms_count"
+            "  from inventory_osxapp as a"
+            "  join inventory_osxappinstance as ai on (ai.app_id = a.id)"
+            "  join inventory_machinesnapshot_osx_app_instances as msoai on(msoai.osxappinstance_id = ai.id)"
+            "  join inventory_currentmachinesnapshot as cms on (msoai.machinesnapshot_id = cms.machine_snapshot_id)"
+            "  join inventory_source as s on (cms.source_id = s.id)"
+            f" {wheres_str}"
+            "  group by a.id, a.bundle_id, a.bundle_name, a.bundle_version, a.bundle_version_str, s.name, s.id"
+            ") select bundle_id, bundle_name, bundle_ms_count ms_count,"
+            "jsonb_agg("
+            "jsonb_build_object("
+            "  'pk', id,"
+            "  'bundle_version', bundle_version,"
+            "  'bundle_version_str', bundle_version_str,"
+            "  'source_name', source_name,"
+            "  'source_pk', source_id,"
+            "  'ms_count', version_ms_count"
+            ")) versions,"
+            "count(*) over () as full_count "
+            "from ama "
+            "group by bundle_id, bundle_name, ms_count "
+            f"order by {order_str}"
+        )
+        return query, args
+
+
+class ProgramsSearchForm(BaseAppSearchForm):
+    name = forms.CharField(label='Name', max_length=64,
+                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}))
+    order_mapping = {"n": "name",
+                     "mc": "ms_count"}
+    default_order = ("name", "ASC")
+    title = "Programs"
+    app_headers = (
+        ("name", "name", True, "Name"),
+        ("identifying_number", None, False, "Identifying number"),
+    )
+    version_headers = (
+        ("version", False, "Version"),
+        ("source_name", True, "Source"),
+    )
+
+    def get_ms_query_filters(self, result, version=None):
+        filters = super().get_ms_query_filters(result, version)
+        filter_kwargs = {"name": result["name"]}
+        if version:
+            filter_kwargs["value"] = version["pk"]
+        filters.append((ProgramFilter, filter_kwargs))
+        return filters
+
+    def get_query_and_args(self):
+        args = []
+
+        # filtering
+        wheres = []
+        name = self.cleaned_data.get("name")
+        if name:
+            args.append(name)
+            wheres.append("p.name ~* %s")
+        source = self.get_source()
+        if source:
+            args.append(source.id)
+            wheres.append("s.id = %s")
+        last_seen = self.get_last_seen()
+        if last_seen:
+            args.append(last_seen)
+            wheres.append("cms.last_seen >= %s")
+        if wheres:
+            wheres_str = "where {}".format(" and ".join(wheres))
+        else:
+            wheres_str = ""
+
+        # ordering
+        order_attr, order_dir = self._get_current_order()
+        order_str = f"{order_attr} {order_dir}"
+        if order_attr == "ms_count":
+            order_str = f"{order_str}, name ASC"
+
+        query = (
+            "with ap as ("
+            "  select p.id, p.name, p.identifying_number, p.version,"
+            "  s.name source_name, s.id source_id,"
+            "  sum(count(*)) over (partition by p.name, p.identifying_number) program_ms_count,"
+            "  count(*) version_ms_count"
+            "  from inventory_program as p"
+            "  join inventory_programinstance as pi on (pi.program_id = p.id)"
+            "  join inventory_machinesnapshot_program_instances as mspi on(mspi.programinstance_id = pi.id)"
+            "  join inventory_currentmachinesnapshot as cms on (mspi.machinesnapshot_id = cms.machine_snapshot_id)"
+            "  join inventory_source as s on (cms.source_id = s.id)"
+            f" {wheres_str}"
+            "  group by p.id, p.name, p.identifying_number, p.version, s.name, s.id"
+            ") select name, identifying_number, program_ms_count ms_count,"
+            "jsonb_agg("
+            "jsonb_build_object("
+            "  'pk', id,"
+            "  'version', version,"
+            "  'source_name', source_name,"
+            "  'source_pk', source_id,"
+            "  'ms_count', version_ms_count"
+            ")) versions,"
+            "count(*) over () as full_count "
+            "from ap "
+            "group by name, identifying_number, ms_count "
+            f"order by {order_str}"
+        )
+        return query, args
 
 
 class EnrollmentSecretForm(forms.ModelForm):

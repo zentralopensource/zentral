@@ -6,22 +6,22 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
   <li><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
-  <li class="active">Deb packages</li>
+  <li class="active">Debian packages</li>
 </ol>
 
 <h2>
   {% machine_type_icon machine %}
   {% machine_platform_icon machine %}
-  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / deb packages
+  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / Debian packages
 </h2>
 
 <p>
   <input class="form-control" type="text" id="search-input" autofocus="" placeholder="Search name, source" style="max-width:30vw">
 </p>
 
-{% if machine.snapshots_with_deb_packages %}
+{% if tabs %}
 <ul class="nav nav-tabs">
-  {% for ms in machine.snapshots_with_deb_packages %}
+  {% for ms, rows in tabs %}
   <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
     <a href="#" data-tabclass="mstab" data-tabid="ms-{{ ms.id }}">
       {{ ms.source.name }}
@@ -30,7 +30,7 @@
   {% endfor %}
 </ul>
 
-{% for ms in machine.snapshots_with_deb_packages %}
+{% for ms, rows in tabs %}
 <div class="table-reponsive mstab" id="ms-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
   <table class="table table-condensed table-filtered">
     <thead>
@@ -42,10 +42,14 @@
       </tr>
     </thead>
     <tbody>
-      {% for deb_package in ms.ordered_deb_packages %}
+      {% for deb_package, package_link, version_link in rows %}
       <tr>
-        <td class="search-cell">{{ deb_package.name|default:"-" }}</td>
-        <td>{{ deb_package.version|default:"-" }}</td>
+        <td class="search-cell">
+          <a href="{{ package_link }}">{{ deb_package.name|default:"-" }}</a>
+        </td>
+        <td>
+          <a href="{{ version_link }}">{{ deb_package.version|default:"-" }}</a>
+        </td>
         <td class="search-cell">{{ deb_package.source|default:"-" }}</td>
         <td>{{ deb_package.status|default:"-" }}</td>
       </tr>

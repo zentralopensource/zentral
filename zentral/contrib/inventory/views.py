@@ -26,21 +26,22 @@ from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm,
                     MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
                     CreateTagForm, UpdateTagForm,
-                    MacOSAppSearchForm,
+                    AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm,
+                    MacOSAppSearchForm, ProgramsSearchForm,
                     JMESPathCheckForm, JMESPathCheckDevToolForm, Source)
 from .models import (BusinessUnit,
                      MetaBusinessUnit, MachineGroup,
                      MetaMachine,
                      MetaBusinessUnitTag, MachineTag, Tag, Taxonomy,
-                     OSXApp, OSXAppInstance,
                      JMESPathCheck)
 from .utils import (AndroidAppFilter, AndroidAppFilterForm,
                     BundleFilter, BundleFilterForm,
                     ComplianceCheckStatusFilter, ComplianceCheckStatusFilterForm,
                     DebPackageFilter, DebPackageFilterForm,
-                    MachineGroupFilter, MetaBusinessUnitFilter, OSXAppInstanceFilter,
+                    MachineGroupFilter, MetaBusinessUnitFilter,
                     IOSAppFilter, IOSAppFilterForm,
                     ProgramFilter, ProgramFilterForm,
+                    SourceFilter,
                     MSQuery)
 
 
@@ -276,29 +277,6 @@ class GroupMachinesView(MachineListView):
     def get_breadcrumbs(self, **kwargs):
         return [(reverse('inventory:groups'), 'Inventory groups'),
                 (None, self.object.name)]
-
-
-class OSXAppInstanceMachinesView(MachineListView):
-    permission_required = ("inventory.view_osxappinstance", "inventory.view_machinesnapshot")
-    template_name = "inventory/macos_app_instance_machines.html"
-    force_search = True
-
-    def get_object(self, **kwargs):
-        return OSXAppInstance.objects.select_related('app').get(app__pk=kwargs['pk'],
-                                                                pk=kwargs['osx_app_instance_id'])
-
-    def get_msquery(self, request):
-        ms_query = super().get_msquery(request)
-        ms_query.force_filter(OSXAppInstanceFilter, hidden_value=self.object.pk)
-        return ms_query
-
-    def get_list_title(self):
-        return "macOS app instance: {}".format(self.object.app)
-
-    def get_breadcrumbs(self, **kwargs):
-        return [(reverse('inventory:macos_apps'), 'macOS applications'),
-                ((reverse('inventory:macos_app', args=(self.object.app.id,)), str(self.object.app))),
-                (None, "Machines")]
 
 
 class MBUView(PermissionRequiredMixin, ListView):
@@ -688,30 +666,147 @@ class MachineExtrasView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['inventory'] = True
-        context['machine'] = machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
-        context['serial_number'] = machine.serial_number
+        self.machine = MetaMachine.from_urlsafe_serial_number(context['urlsafe_serial_number'])
+        context['machine'] = self.machine
+        context['serial_number'] = self.machine.serial_number
         return context
-
-
-class MachineMacOSAppInstancesView(MachineExtrasView):
-    template_name = "inventory/machine_macos_app_instances.html"
-
-
-class MachineProgramInstancesView(MachineExtrasView):
-    template_name = "inventory/machine_program_instances.html"
-
-
-class MachineDebPackagesView(MachineExtrasView):
-    template_name = "inventory/machine_deb_packages.html"
 
 
 class MachineAndroidAppsView(MachineExtrasView):
     template_name = "inventory/machine_android_apps.html"
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        tabs = []
+        base_link_url = reverse("inventory:index")
+        for ms in self.machine.snapshots_with_android_apps():
+            rows = []
+            for android_app in ms.ordered_android_apps():
+                if android_app.display_name:
+                    ms_query = MSQuery()
+                    ms_query.force_filter(SourceFilter, value=ms.source_id)
+                    ms_query.force_filter(
+                        AndroidAppFilter, display_name=android_app.display_name
+                    )
+                    app_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
+                    ms_query.force_filter(
+                        AndroidAppFilter, display_name=android_app.display_name, value=android_app.pk
+                    )
+                    version_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
+                else:
+                    app_link = version_link = None
+                rows.append((android_app, app_link, version_link))
+            tabs.append((ms, rows))
+        ctx["tabs"] = tabs
+        return ctx
+
+
+class MachineDebPackagesView(MachineExtrasView):
+    template_name = "inventory/machine_deb_packages.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        tabs = []
+        base_link_url = reverse("inventory:index")
+        for ms in self.machine.snapshots_with_deb_packages():
+            rows = []
+            for deb_package in ms.ordered_deb_packages():
+                if deb_package.name:
+                    ms_query = MSQuery()
+                    ms_query.force_filter(SourceFilter, value=ms.source_id)
+                    ms_query.force_filter(DebPackageFilter, name=deb_package.name)
+                    package_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
+                    ms_query.force_filter(DebPackageFilter, name=deb_package.name, value=deb_package.pk)
+                    version_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
+                else:
+                    package_link = version_link = None
+                rows.append((deb_package, package_link, version_link))
+            tabs.append((ms, rows))
+        ctx["tabs"] = tabs
+        return ctx
+
 
 class MachineIOSAppsView(MachineExtrasView):
     template_name = "inventory/machine_ios_apps.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        tabs = []
+        base_link_url = reverse("inventory:index")
+        for ms in self.machine.snapshots_with_ios_apps():
+            rows = []
+            for ios_app in ms.ordered_ios_apps():
+                if ios_app.name:
+                    ms_query = MSQuery()
+                    ms_query.force_filter(SourceFilter, value=ms.source_id)
+                    ms_query.force_filter(IOSAppFilter, name=ios_app.name)
+                    app_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
+                    ms_query.force_filter(IOSAppFilter, name=ios_app.name, value=ios_app.pk)
+                    version_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
+                else:
+                    app_link = version_link = None
+                rows.append((ios_app, app_link, version_link))
+            tabs.append((ms, rows))
+        ctx["tabs"] = tabs
+        return ctx
+
+
+class MachineMacOSAppInstancesView(MachineExtrasView):
+    template_name = "inventory/machine_macos_app_instances.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        tabs = []
+        base_link_url = reverse("inventory:index")
+        for ms in self.machine.snapshots_with_osx_app_instances():
+            rows = []
+            for app_instance in ms.ordered_osx_app_instances():
+                app = app_instance.app
+                if app.bundle_name or app.bundle_id:
+                    ms_query = MSQuery()
+                    ms_query.force_filter(SourceFilter, value=ms.source_id)
+                    if app.bundle_name:
+                        ms_query.force_filter(BundleFilter, bundle_name=app.bundle_name)
+                    else:
+                        ms_query.force_filter(BundleFilter, bundle_id=app.bundle_id)
+                    bundle_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
+                    if app.bundle_name:
+                        ms_query.force_filter(BundleFilter, bundle_name=app.bundle_name, value=app_instance.pk)
+                    else:
+                        ms_query.force_filter(BundleFilter, bundle_id=app.bundle_id, value=app_instance.pk)
+                    version_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
+                else:
+                    bundle_link = version_link = None
+                rows.append((app_instance, app, bundle_link, version_link))
+            tabs.append((ms, rows))
+        ctx["tabs"] = tabs
+        return ctx
+
+
+class MachineProgramInstancesView(MachineExtrasView):
+    template_name = "inventory/machine_program_instances.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        tabs = []
+        base_link_url = reverse("inventory:index")
+        for ms in self.machine.snapshots_with_program_instances():
+            rows = []
+            for program_instance in ms.ordered_program_instances():
+                program = program_instance.program
+                if program.name:
+                    ms_query = MSQuery()
+                    ms_query.force_filter(SourceFilter, value=ms.source_id)
+                    ms_query.force_filter(ProgramFilter, name=program.name)
+                    program_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
+                    ms_query.force_filter(ProgramFilter, name=program.name, value=program_instance.pk)
+                    version_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
+                else:
+                    program_link = version_link = None
+                rows.append((program_instance, program, program_link, version_link))
+            tabs.append((ms, rows))
+        ctx["tabs"] = tabs
+        return ctx
 
 
 class MachineProfilesView(MachineExtrasView):
@@ -1155,18 +1250,18 @@ class DeleteTaxonomyView(PermissionRequiredMixin, DeleteView):
         return ctx
 
 
-class MacOSAppsView(PermissionRequiredMixin, TemplateView):
-    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
-    template_name = "inventory/macos_apps.html"
+# Apps
 
+
+class BaseAppsView(PermissionRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['inventory'] = True
         if self.request.GET:
-            search_form = MacOSAppSearchForm(self.request.GET)
+            search_form = self.form_class(self.request.GET)
         else:
-            search_form = MacOSAppSearchForm()
+            search_form = self.form_class()
         ctx['search_form'] = search_form
+        ctx["title"] = search_form.title
         qd = self.request.GET.copy()
         try:
             page = int(qd.pop('page', None)[0])
@@ -1176,7 +1271,7 @@ class MacOSAppsView(PermissionRequiredMixin, TemplateView):
             reset_link = "?{}".format(qd.urlencode())
         else:
             reset_link = "?"
-        breadcrumbs = [(reset_link, "Search macOS applications")]
+        breadcrumbs = [(reset_link, search_form.title)]
         if search_form.has_changed() and search_form.is_valid():
             (ctx['object_list'],
              ctx['total_objects'],
@@ -1193,24 +1288,36 @@ class MacOSAppsView(PermissionRequiredMixin, TemplateView):
                 ctx['previous_url'] = "?{}".format(qd.urlencode())
             breadcrumbs.append((None, "page {} of {}".format(search_form.cleaned_data['page'],
                                                              ctx.get('total_pages', 1))))
-            ctx['table_headers'] = [search_form.get_header_label_and_link("bundle_name", "Bundle name")]
-            ctx['table_headers'].extend((name, None) for name in ("Bundle ID", "Version", "Version str."))
-            ctx['table_headers'].append(search_form.get_header_label_and_link("machine_count", "Machines"))
-            ctx['table_headers'].append(("Sources", None))
+            ctx['table_headers'] = search_form.get_table_headers()
         ctx['breadcrumbs'] = breadcrumbs
         return ctx
 
 
-class MacOSAppView(PermissionRequiredMixin, TemplateView):
-    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
-    template_name = "inventory/macos_app.html"
+class AndroidAppsView(BaseAppsView):
+    permission_required = "inventory.view_androidapp"
+    template_name = "inventory/android_apps.html"
+    form_class = AndroidAppSearchForm
 
-    def get_context_data(self, **kwargs):
-        ctx = super(MacOSAppView, self).get_context_data(**kwargs)
-        macos_app = get_object_or_404(OSXApp, pk=kwargs['pk'])
-        ctx['macos_app'] = macos_app
-        instance_qs = macos_app.current_instances()
-        ctx['instance_count'] = instance_qs.count()
-        ctx['instances'] = instance_qs.order_by('id')
-        ctx['inventory'] = True
-        return ctx
+
+class DebPackagesView(BaseAppsView):
+    permission_required = "inventory.view_debpackage"
+    template_name = "inventory/deb_packages.html"
+    form_class = DebPackageSearchForm
+
+
+class IOSAppsView(BaseAppsView):
+    permission_required = "inventory.view_iosapp"
+    template_name = "inventory/ios_apps.html"
+    form_class = IOSAppSearchForm
+
+
+class MacOSAppsView(BaseAppsView):
+    permission_required = ("inventory.view_osxapp", "inventory.view_osxappinstance")
+    template_name = "inventory/macos_apps.html"
+    form_class = MacOSAppSearchForm
+
+
+class ProgramsView(BaseAppsView):
+    permission_required = ("inventory.view_program", "inventory.view_programinstance")
+    template_name = "inventory/programs.html"
+    form_class = ProgramsSearchForm

@@ -158,7 +158,46 @@ class InventoryAPITests(APITestCase):
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
 
-    # macos apps export
+    # Android apps export
+
+    def test_export_android_apps_unauthorized(self):
+        response = self.client.post(reverse('inventory_api:android_apps_export'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_export_android_apps(self):
+        self._set_permissions("inventory.view_androidapp")
+        response = self.client.post(reverse('inventory_api:android_apps_export'))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("task_id", response.data)
+        self.assertIn("task_result_url", response.data)
+
+    # Debian packages export
+
+    def test_export_deb_packages_unauthorized(self):
+        response = self.client.post(reverse('inventory_api:deb_packages_export'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_export_deb_packages(self):
+        self._set_permissions("inventory.view_debpackage")
+        response = self.client.post(reverse('inventory_api:deb_packages_export'))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("task_id", response.data)
+        self.assertIn("task_result_url", response.data)
+
+    # iOS apps export
+
+    def test_export_ios_apps_unauthorized(self):
+        response = self.client.post(reverse('inventory_api:ios_apps_export'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_export_ios_apps(self):
+        self._set_permissions("inventory.view_iosapp")
+        response = self.client.post(reverse('inventory_api:ios_apps_export'))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("task_id", response.data)
+        self.assertIn("task_result_url", response.data)
+
+    # macOS apps export
 
     def test_export_macos_apps_unauthorized(self):
         response = self.client.post(reverse('inventory_api:macos_apps_export'))
@@ -167,6 +206,19 @@ class InventoryAPITests(APITestCase):
     def test_export_macos_apps(self):
         self._set_permissions("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.post(reverse('inventory_api:macos_apps_export'))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("task_id", response.data)
+        self.assertIn("task_result_url", response.data)
+
+    # Programs export
+
+    def test_export_programs_unauthorized(self):
+        response = self.client.post(reverse('inventory_api:programs_export'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_export_programs(self):
+        self._set_permissions("inventory.view_program", "inventory.view_programinstance")
+        response = self.client.post(reverse('inventory_api:programs_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)

@@ -19,9 +19,9 @@
   <input class="form-control" type="text" id="search-input" autofocus="" placeholder="Search display name, package name" style="max-width:30vw">
 </p>
 
-{% if machine.snapshots_with_android_apps %}
+{% if tabs %}
 <ul class="nav nav-tabs">
-  {% for ms in machine.snapshots_with_android_apps %}
+  {% for ms, rows in tabs %}
   <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
     <a href="#" data-tabclass="mstab" data-tabid="ms-{{ ms.id }}">
       {{ ms.source.name }}
@@ -30,7 +30,7 @@
   {% endfor %}
 </ul>
 
-{% for ms in machine.snapshots_with_android_apps %}
+{% for ms, rows in tabs %}
 <div class="table-reponsive mstab" id="ms-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
   <table class="table table-condensed table-filtered">
     <thead>
@@ -42,11 +42,15 @@
       </tr>
     </thead>
     <tbody>
-      {% for android_app in ms.ordered_android_apps %}
+      {% for android_app, app_link, version_link in rows %}
       <tr>
-        <td class="search-cell">{{ android_app.display_name|default:"-" }}</td>
+        <td class="search-cell">
+          <a href="{{ app_link }}">{{ android_app.display_name|default:"-" }}</a>
+        </td>
         <td class="search-cell">{{ android_app.package_name|default:"-" }}</td>
-        <td>{{ android_app.version_name|default:"-" }}</td>
+        <td>
+          <a href="{{ version_link }}">{{ android_app.version_name|default:"-" }}</a>
+        </td>
         <td>{{ android_app.installer_package_name|default:"-" }}</td>
       </tr>
       {% endfor %}
