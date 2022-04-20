@@ -273,9 +273,13 @@ class PuppetDBClient(object):
         for key in self.group_fact_keys:
             group_name = get_nested_val(facts, key)
             if group_name:
-                groups.append({'source': self.get_source_d(),
-                               'reference': group_name,
-                               'name': group_name})
+                group = {'source': self.get_source_d(),
+                         'reference': group_name,
+                         'name': group_name}
+                if group not in groups:
+                    groups.append(group)
+                else:
+                    logger.warning("Node '%s': duplicated group '%s'", certname, group_name)
         if groups:
             ct['groups'] = groups
 
