@@ -70,7 +70,7 @@ class EnrollView(BaseJsonPostView):
             serial_number = self.data["host_details"]["system_info"]["hardware_serial"].strip()
         except (KeyError, AttributeError):
             serial_number = None
-        if serial_number is None:
+        if not serial_number:
             # special configuration for linux machines. see install script.
             serial_number = self.data.get("host_identifier")
         if not serial_number:

@@ -290,6 +290,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         response = self.post_as_json(
             "enroll",
             {"enroll_secret": self.enrollment.secret.secret,
+             "host_details": {"system_info": {"hardware_serial": ""}},
              "host_identifier": serial_number}
         )
         self.assertEqual(response.status_code, 200)
