@@ -186,7 +186,7 @@ cat << OSQUERY_FLAGS | sudo tee /etc/osquery/osquery.flags
 --audit_allow_config=true
 --audit_persist=true
 --host_identifier=specified
---specified_identifier="$HOST_IDENTIFIER"
+--specified_identifier=$HOST_IDENTIFIER
 OSQUERY_FLAGS
 
 restart_osqueryd
