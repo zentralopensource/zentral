@@ -771,9 +771,9 @@ class MachineMacOSAppInstancesView(MachineExtrasView):
                         ms_query.force_filter(BundleFilter, bundle_id=app.bundle_id)
                     bundle_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
                     if app.bundle_name:
-                        ms_query.force_filter(BundleFilter, bundle_name=app.bundle_name, value=app_instance.pk)
+                        ms_query.force_filter(BundleFilter, bundle_name=app.bundle_name, value=app.pk)
                     else:
-                        ms_query.force_filter(BundleFilter, bundle_id=app.bundle_id, value=app_instance.pk)
+                        ms_query.force_filter(BundleFilter, bundle_id=app.bundle_id, value=app.pk)
                     version_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
                 else:
                     bundle_link = version_link = None
@@ -799,7 +799,7 @@ class MachineProgramInstancesView(MachineExtrasView):
                     ms_query.force_filter(SourceFilter, value=ms.source_id)
                     ms_query.force_filter(ProgramFilter, name=program.name)
                     program_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
-                    ms_query.force_filter(ProgramFilter, name=program.name, value=program_instance.pk)
+                    ms_query.force_filter(ProgramFilter, name=program.name, value=program.pk)
                     version_link = "{}{}".format(base_link_url, ms_query.get_canonical_url())
                 else:
                     program_link = version_link = None
