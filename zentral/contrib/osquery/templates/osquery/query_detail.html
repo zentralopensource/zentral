@@ -9,7 +9,7 @@
   <li class="active">{{ object }}</li>
 </ol>
 
-<h2>Query <i>{{ object.name }}</i></h2>
+<h3>Query <i>{{ object.name }}</i></h3>
 
 <div class="row">
   <div class="col-md-12">
@@ -70,20 +70,30 @@
   </div>
 </div>
 
-<p>
+<div class="btn-group" role="group" style="margin:0 0 10px 0">
   {% if perms.osquery.change_query %}
   <a class="btn btn-default" href="{% url 'osquery:update_query' object.id %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
   {% endif %}
+  {% if events_url %}
+  <a class="btn btn-default" href="{{ events_url }}">
+    <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
+  </a>
+  {% endif %}
+  {% for link, anchor_text in store_links  %}
+  <a class="btn btn-default" href="{{ link }}">
+    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
+  </a>
+  {% endfor %}
   {% if perms.osquery.delete_query %}
   <a class="btn btn-danger" href="{% url 'osquery:delete_query' object.id %}">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     Delete
   </a>
   {% endif %}
-</p>
+</div>
 
 {% if perms.osquery.view_distributedquery %}
 <h3 id="runs">{{ distributed_query_count }} Run{{ distributed_query_count|pluralize }}</h3>

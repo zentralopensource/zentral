@@ -14,7 +14,7 @@
   {% endif %}
 </ol>
 
-<h2>{% if object %}Update{% else %}Create{% endif %} Query</h2>
+<h3>{% if object %}Update{% else %}Create{% endif %} query</h3>
 
 <form method="post" class="form">{% csrf_token %}
   {{ form|bootstrap }}

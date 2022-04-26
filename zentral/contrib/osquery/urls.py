@@ -52,6 +52,12 @@ urlpatterns = [
     path('queries/<int:pk>/', views.QueryView.as_view(), name="query"),
     path('queries/<int:pk>/update/', views.UpdateQueryView.as_view(), name="update_query"),
     path('queries/<int:pk>/delete/', views.DeleteQueryView.as_view(), name="delete_query"),
+    path('queries/<int:pk>/events/',
+         views.QueryEventsView.as_view(), name="query_events"),
+    path('queries/<int:pk>/events/fetch/',
+         views.FetchQueryEventsView.as_view(), name="fetch_query_events"),
+    path('queries/<int:pk>/events/store_redirect/',
+         views.QueryEventsStoreRedirectView.as_view(), name="query_events_store_redirect"),
 
     # distributed queries
     path('runs/', views.DistributedQueryListView.as_view(), name="distributed_queries"),

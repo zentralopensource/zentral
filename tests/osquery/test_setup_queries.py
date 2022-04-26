@@ -1,5 +1,6 @@
 from functools import reduce
 import operator
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
@@ -63,7 +64,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         response = self.client.get(reverse("osquery:create_query"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_form.html")
-        self.assertContains(response, "Create Query")
+        self.assertContains(response, "Create query")
 
     def test_create_query_post(self):
         self._login("osquery.add_query", "osquery.view_query")
@@ -242,6 +243,46 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         self.assertEqual(Query.objects.filter(pk=query.pk).count(), 0)
         self.assertNotContains(response, query.name)
         self.assertEqual(ComplianceCheck.objects.filter(pk=compliance_check_pk).count(), 0)
+
+    # query events
+
+    def test_query_events_redirect(self):
+        query = self._force_query()
+        self._login_redirect(reverse("osquery:query_events", args=(query.pk,)))
+
+    def test_query_events_permission_denied(self):
+        query = self._force_query()
+        self._login()
+        response = self.client.get(reverse("osquery:query_events", args=(query.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    def test_query_events_ok(self, get_aggregated_object_event_counts):
+        get_aggregated_object_event_counts.return_value = {}
+        query = self._force_query()
+        self._login("osquery.view_query")
+        response = self.client.get(reverse("osquery:query_events", args=(query.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/query_events.html")
+
+    def test_fetch_query_events_redirect(self):
+        query = self._force_query()
+        self._login_redirect(reverse("osquery:fetch_query_events", args=(query.pk,)))
+
+    def test_fetch_query_events_permission_denied(self):
+        query = self._force_query()
+        self._login()
+        response = self.client.get(reverse("osquery:fetch_query_events", args=(query.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    def test_fetch_query_events_ok(self, fetch_object_events):
+        fetch_object_events.return_value = ([], None)
+        query = self._force_query()
+        self._login("osquery.view_query")
+        response = self.client.get(reverse("osquery:fetch_query_events", args=(query.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     # query list
 

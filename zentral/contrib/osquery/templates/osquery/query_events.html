@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li><a href="{% url 'osquery:queries' %}">Queries</a></li>
+  <li><a href="{% url 'osquery:query' query.pk %}">{{ query }}</a></li>
+  <li class="active">events</li>
+</ol>
+
+<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
+  <h3 style="margin:0 0 20px 0">
+    Query <i>{{ query }}</i> - events
+  </h3>
+  {% include "core/stores/events_form.html" %}
+</div>
+
+{% include "core/stores/events_table.html" %}
+
+{% endblock %}
+
+{% block extrajs %}
+{% include "core/stores/events_script.html" %}
+{% endblock %}
