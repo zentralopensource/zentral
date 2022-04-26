@@ -52,6 +52,12 @@ class OsqueryRequestEvent(OsqueryEvent):
         intervals = []
         for key in ("config_refresh", "distributed_interval"):
             interval = flags.get(key)
+            if isinstance(interval, str):
+                try:
+                    interval = int(interval)
+                except ValueError:
+                    logger.error("Invalid %s value for enrolled machine %s", key, serial_number)
+                    continue
             if interval and isinstance(interval, int) and interval > 0:
                 intervals.append(interval)
         if intervals:
