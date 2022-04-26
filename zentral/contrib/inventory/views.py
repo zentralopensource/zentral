@@ -1272,7 +1272,7 @@ class BaseAppsView(PermissionRequiredMixin, TemplateView):
         else:
             reset_link = "?"
         breadcrumbs = [(reset_link, search_form.title)]
-        if search_form.has_changed() and search_form.is_valid():
+        if search_form.fetch_results():
             (ctx['object_list'],
              ctx['total_objects'],
              previous_page,

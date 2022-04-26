@@ -221,6 +221,7 @@ class BaseAppSearchForm(forms.Form):
         required=False
     )
     order = forms.ChoiceField(choices=[], required=False)
+    action = forms.CharField(required=False)
     order_mapping = {}
     default_order = None
     title = None
@@ -232,9 +233,9 @@ class BaseAppSearchForm(forms.Form):
         self.export = kwargs.pop("export", False)
         super().__init__(*args, **kwargs)
         self.fields["order"].choices = [(f"{k}-{d}", f"{k}-{d}") for k in self.order_mapping for d in ("a", "d")]
-        if self.export:
-            for field in self.fields.values():
-                field.required = False
+
+    def fetch_results(self):
+        return self.is_valid() and self.cleaned_data.get("action") == "search"
 
     def _get_current_order(self):
         try:
@@ -393,7 +394,8 @@ class BaseAppSearchForm(forms.Form):
 
 class AndroidAppSearchForm(BaseAppSearchForm):
     display_name = forms.CharField(label="Name", max_length=64,
-                                   widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}))
+                                   widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
+                                   required=False)
     order_mapping = {"dn": "display_name",
                      "mc": "ms_count"}
     default_order = ("display_name", "ASC")
@@ -475,7 +477,8 @@ class AndroidAppSearchForm(BaseAppSearchForm):
 
 class DebPackageSearchForm(BaseAppSearchForm):
     name = forms.CharField(label="Package name", max_length=64,
-                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Package name"}))
+                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Package name"}),
+                           required=False)
     order_mapping = {"n": "name",
                      "mc": "ms_count"}
     default_order = ("name", "ASC")
@@ -554,7 +557,8 @@ class DebPackageSearchForm(BaseAppSearchForm):
 
 class IOSAppSearchForm(BaseAppSearchForm):
     name = forms.CharField(label="Name", max_length=64,
-                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}))
+                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
+                           required=False)
     order_mapping = {"n": "name",
                      "mc": "ms_count"}
     default_order = ("name", "ASC")
@@ -637,7 +641,8 @@ class IOSAppSearchForm(BaseAppSearchForm):
 
 class MacOSAppSearchForm(BaseAppSearchForm):
     bundle_name = forms.CharField(label='Bundle name', max_length=64,
-                                  widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Bundle name"}))
+                                  widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Bundle name"}),
+                                  required=False)
     order_mapping = {"bn": "bundle_name",
                      "mc": "ms_count"}
     default_order = ("bundle_name", "ASC")
@@ -655,10 +660,16 @@ class MacOSAppSearchForm(BaseAppSearchForm):
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
-        filter_kwargs = {"bundle_name": result["bundle_name"]}
-        if version:
-            filter_kwargs["value"] = version["pk"]
-        filters.append((BundleFilter, filter_kwargs))
+        bundle_name = result["bundle_name"]
+        bundle_id = result["bundle_id"]
+        if bundle_name or bundle_id:
+            if bundle_name:
+                filter_kwargs = {"bundle_name": bundle_name}
+            else:
+                filter_kwargs = {"bundle_id": bundle_id}
+            if version:
+                filter_kwargs["value"] = version["pk"]
+            filters.append((BundleFilter, filter_kwargs))
         return filters
 
     def get_query_and_args(self):
@@ -722,7 +733,8 @@ class MacOSAppSearchForm(BaseAppSearchForm):
 
 class ProgramsSearchForm(BaseAppSearchForm):
     name = forms.CharField(label='Name', max_length=64,
-                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}))
+                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
+                           required=False)
     order_mapping = {"n": "name",
                      "mc": "ms_count"}
     default_order = ("name", "ASC")
