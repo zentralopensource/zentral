@@ -68,16 +68,19 @@ def export_apps(form_class, form_data, filename):
     filepath = os.path.join("exports", filename)
     headers = list(label for _, label in form.iter_export_headers())
     if extension == ".csv":
-        with tempfile.TemporaryFile(mode="w+") as of:
-            content_type = "text/csv"
+        content_type = "text/csv"
+        ofh, op = tempfile.mkstemp()
+        with os.fdopen(ofh, mode="w", newline="") as of:
             writer = csv.writer(of, delimiter=";")
             writer.writerow(headers)
             for row in form.iter_export_rows():
                 writer.writerow(str(val) if val is not None else "" for val in row)
+        with open(op, "rb") as of:
             default_storage.save(filepath, of)
+        os.unlink(op)
     elif extension == ".xlsx":
+        content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         with tempfile.TemporaryFile() as of:
-            content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             workbook = xlsxwriter.Workbook(of)
             worksheet = workbook.add_worksheet(form.title)
             row_idx = 0
