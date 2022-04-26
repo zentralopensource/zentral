@@ -72,7 +72,7 @@
     {% for android_app in object_list %}
     <tr>
       <td colspan="2">
-        <a href="{{ android_app.link }}">{{ android_app.name|default:"-" }}</a>
+        <a href="{{ android_app.link }}">{{ android_app.display_name|default:"-" }}</a>
       </td>
       <td>
           {{ android_app.ms_count }}

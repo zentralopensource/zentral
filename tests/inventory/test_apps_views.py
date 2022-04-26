@@ -140,6 +140,7 @@ class AppsViewsTestCase(TestCase):
             urlencode({"display_name": "AndroidApp1"})
         ))
         self.assertContains(response, "1 result")
+        self.assertContains(response, ">AndroidApp1</a>")
         response = self.client.get("{}?{}".format(
             reverse("inventory:android_apps"),
             urlencode({"display_name": "AndroidApp11"})
@@ -154,6 +155,7 @@ class AppsViewsTestCase(TestCase):
                        "source": self.ms.source.id})
         ))
         self.assertContains(response, "1 result")
+        self.assertContains(response, ">AndroidApp1</a>")
 
     # Debian packages
 
