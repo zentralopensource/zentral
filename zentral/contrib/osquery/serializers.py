@@ -113,6 +113,11 @@ class OsqueryPackSerializer(serializers.Serializer):
     queries = serializers.DictField(child=OsqueryQuerySerializer(), allow_empty=False)
     event_routing_key = serializers.RegexField(r'^[-a-zA-Z0-9_]+\Z', required=False)
 
+    def validate_queries(self, value):
+        if isinstance(value, dict) and "" in value:
+            raise serializers.ValidationError("Query name cannot be empty")
+        return value
+
     def get_pack_defaults(self, slug):
         return {
             "name": self.data.get("name", slug),

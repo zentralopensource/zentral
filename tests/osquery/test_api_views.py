@@ -718,6 +718,21 @@ class APIViewsTestCase(TestCase):
             {'name': 'A pack with the same name but a different slug already exists'}
         )
 
+    def test_put_empty_query_name(self):
+        self.set_pack_endpoint_put_permissions()
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
+        response = self.put_json_data(
+            url,
+            {"name": "Yolo",
+             "queries": {"": {"query": "select 1 from users;",
+                              "interval": 10}}}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"queries": ["Query name cannot be empty"]}
+        )
+
     def test_put_pack_json(self):
         self.set_pack_endpoint_put_permissions()
         slug = get_random_string(12)
