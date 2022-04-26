@@ -146,6 +146,14 @@
         </dl>
         {% endfor %}
         {% endif %}
+        {% if target.type == "TEAMID" %}
+        {% for team_id in target.team_ids %}
+        <dl class="dl-horizontal">
+          <dt>organization</dt>
+          <dd>{{ team_id.organization|default:"-" }}</dd>
+        </dl>
+        {% endfor %}
+        {% endif %}
       </td>
     </tr>
     {% if rule.custom_msg %}
