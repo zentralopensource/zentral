@@ -94,6 +94,11 @@ ORPHANS = (
     # Profile not linked to machine snapshots
     ("inventory_profile", "id",
      (("profile_id", "inventory_machinesnapshot_profiles"),)),
+    # EC2
+    ("inventory_ec2instancemetadata", "id",
+     (("ec2_instance_metadata_id", "inventory_machinesnapshot"),)),
+    ("inventory_ec2instancetag", "id",
+     (("ec2instancetag_id", "inventory_machinesnapshot_ec2_instance_tags"),)),
 )
 
 

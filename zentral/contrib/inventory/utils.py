@@ -25,6 +25,7 @@ from zentral.core.incidents.models import Severity, Status
 from zentral.utils.json import save_dead_letter
 from zentral.utils.text import decode_args, encode_args
 from .compliance_checks import jmespath_checks_cache
+from .conf import EC2
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      iter_inventory_events)
 from .exceptions import EnrollmentSecretVerificationFailed
@@ -967,7 +968,10 @@ class TypeFilter(BaseMSFilter):
 
     def label_for_grouping_value(self, grouping_value):
         if grouping_value:
-            return grouping_value.title()
+            if grouping_value == EC2:
+                return "EC2 instance"
+            else:
+                return grouping_value.title()
         else:
             return self.none_value
 
@@ -1359,6 +1363,64 @@ class ComplianceCheckStatusFilter(BaseMSFilter):
         }
 
 
+class AWSAccountFilter(BaseMSFilter):
+    title = "AWS account"
+    optional = True
+    query_kwarg = "awsa"
+    expression = "eim.account_id"
+    grouping_set = ("eim.account_id",)
+
+    def joins(self):
+        yield "left join inventory_ec2instancemetadata as eim on (ms.ec2_instance_metadata_id = eim.id)"
+
+    def wheres(self):
+        if self.value:
+            if self.value != self.none_value:
+                yield "eim.account_id = %s"
+            else:
+                yield "eim.account_id is null"
+
+    def where_args(self):
+        if self.value and self.value != self.none_value:
+            yield self.value
+
+    def process_fetched_record(self, record, for_filtering):
+        account_id = record.pop("account_id", None)
+        if account_id:
+            record.setdefault("ec2_instance_metadata", {})["account_id"] = account_id
+        elif for_filtering:
+            record.setdefault("ec2_instance_metadata", {})["account_id"] = account_id
+
+
+class EC2InstanceTypeFilter(BaseMSFilter):
+    title = "EC2 instance type"
+    optional = True
+    query_kwarg = "eit"
+    expression = "eim.instance_type"
+    grouping_set = ("eim.instance_type",)
+
+    def joins(self):
+        yield "left join inventory_ec2instancemetadata as eim on (ms.ec2_instance_metadata_id = eim.id)"
+
+    def wheres(self):
+        if self.value:
+            if self.value != self.none_value:
+                yield "eim.instance_type = %s"
+            else:
+                yield "eim.instance_type is null"
+
+    def where_args(self):
+        if self.value and self.value != self.none_value:
+            yield self.value
+
+    def process_fetched_record(self, record, for_filtering):
+        instance_type = record.pop("instance_type", None)
+        if instance_type:
+            record.setdefault("ec2_instance_metadata", {})["instance_type"] = instance_type
+        elif for_filtering:
+            record.setdefault("ec2_instance_metadata", {})["instance_type"] = self.unknown_value
+
+
 class MSQuery:
     paginate_by = 50
     itersize = 1000
@@ -1379,6 +1441,8 @@ class MSQuery:
     ]
     extra_filters = [
         ComplianceStatusFilter,
+        AWSAccountFilter,
+        EC2InstanceTypeFilter,
     ]
 
     def __init__(self, query_dict=None):
@@ -2232,7 +2296,8 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                           'network_interfaces',
                           'osx_app_instances',
                           'program_instances',
-                          'profiles'):
+                          'profiles',
+                          'ec2_instance_tags'):
         m2m_diff = diff.get(m2m_diff_attr, {})
         if not m2m_diff:
             continue
@@ -2247,7 +2312,8 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                  'teamviewer',
                  'puppet_node',
                  'principal_user',
-                 'extra_facts'):
+                 'extra_facts',
+                 'ec2_instance_metadata'):
         fk_diff = diff.get(attr, {})
         if not fk_diff:
             continue

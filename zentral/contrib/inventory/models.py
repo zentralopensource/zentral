@@ -515,6 +515,39 @@ class Profile(AbstractMTObject):
     payloads = models.ManyToManyField(Payload)
 
 
+class EC2InstanceMetadata(AbstractMTObject):
+    instance_id = models.TextField()
+    instance_type = models.TextField()
+    architecture = models.TextField()
+    region = models.TextField()
+    availability_zone = models.TextField()
+    local_hostname = models.TextField()
+    local_ipv4 = models.GenericIPAddressField(protocol='IPv4', blank=True, null=True)
+    mac = models.CharField(max_length=23)  # 48 or 64 bit with separators
+    security_groups = models.TextField(blank=True, null=True)
+    iam_arn = models.TextField(blank=True, null=True)
+    ami_id = models.TextField()
+    reservation_id = models.TextField()
+    account_id = models.TextField()
+    ssh_public_key = models.TextField(blank=True, null=True)
+
+    @cached_property
+    def security_group_list(self):
+        security_group_list = []
+        if self.security_groups:
+            for security_group in self.security_groups.split(","):
+                security_group = security_group.strip()
+                if security_group and security_group not in security_group_list:
+                    security_group_list.append(security_group)
+        security_group_list.sort()
+        return security_group_list
+
+
+class EC2InstanceTag(AbstractMTObject):
+    key = models.TextField()
+    value = models.TextField()
+
+
 class MachineSnapshotManager(MTObjectManager):
     def current(self):
         return (self.select_related('business_unit__meta_business_unit',
@@ -556,6 +589,8 @@ class MachineSnapshot(AbstractMTObject):
     osx_app_instances = models.ManyToManyField(OSXAppInstance)
     program_instances = models.ManyToManyField(ProgramInstance)
     profiles = models.ManyToManyField(Profile)
+    ec2_instance_metadata = models.ForeignKey(EC2InstanceMetadata, on_delete=models.PROTECT, blank=True, null=True)
+    ec2_instance_tags = models.ManyToManyField(EC2InstanceTag)
     teamviewer = models.ForeignKey(TeamViewer, on_delete=models.PROTECT, blank=True, null=True)
     puppet_node = models.ForeignKey(PuppetNode, on_delete=models.PROTECT, blank=True, null=True)
     principal_user = models.ForeignKey(PrincipalUser, on_delete=models.PROTECT, blank=True, null=True)
@@ -610,6 +645,10 @@ class MachineSnapshot(AbstractMTObject):
             return self.machinesnapshotcommit_set.all().order_by("-id")[0]
         except IndexError:
             pass
+
+    @cached_property
+    def ec2_instance_tag_list(self):
+        return list(self.ec2_instance_tags.all().order_by("key", "value"))
 
 
 class MachineSnapshotCommitManager(models.Manager):

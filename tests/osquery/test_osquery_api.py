@@ -118,26 +118,31 @@ DEB_PACKAGE = {
     "table_name": "deb_packages"
 }
 
-AZURE_AD_INFO_TUPLES = [
-    {"common_name": "d14a06da-2547-4c80-9c5a-4851d1e4c7b2",
-     "not_valid_before": "1556232938",
-     "table_name": "azure_ad_certificate"},
-    {"username": "jean",
-     "key": "aadUniqueId",
-     "value": "fc0e524e-9b87-4f63-a318-02727dc7983e",
-     "table_name": "azure_ad_user_info"},
-    {"username": "jean",
-     "key": "aadUserId",
-     "value": "jean@example.com",
-     "table_name": "azure_ad_user_info"},
-    {"username": "jean",
-     "key": "version",
-     "value": "1.1",
-     "table_name": "azure_ad_user_info"},
-    {"username": "jean",
-     "key": "aadAuthorityUrl",
-     "value": "https://login.microsoftonline.com/common",
-     "table_name": "azure_ad_user_info"},
+EC2_INSTANCE_METADATA = {
+    "account_id": "222222222222",
+    "ami_id": "ami-00000000000000000",
+    "architecture": "x86_64",
+    "availability_zone": "us-east-1c",
+    "iam_arn": "",
+    "instance_id": "i-11111111111111111",
+    "instance_type": "t2.micro",
+    "local_hostname": "ip-172-31-12-31.eu-central-1.compute.internal",
+    "local_ipv4": "172.31.12.31",
+    "mac": "0a:f6:38:c5:f7:e0",
+    "region": "eu-central-1",
+    "reservation_id": "r-33333333333333333",
+    "security_groups": "SSH Maybe,HTTP Yes",
+    "ssh_public_key": "ssh-rsa AAAABBBB yolo@fomo",
+    "table_name": "ec2_instance_metadata"
+}
+
+EC2_INSTANCE_TAGS = [
+    {"key": "YOLO",
+     "value": "fomo",
+     "table_name": "ec2_instance_tags"},
+    {"key": "UN",
+     "value": "deux",
+     "table_name": "ec2_instance_tags"},
 ]
 
 
@@ -204,7 +209,7 @@ class OsqueryAPIViewsTestCase(TestCase):
             )
         return query, pack, distributed_query
 
-    def post_default_inventory_query_snapshot(self, node_key, platform, with_app=False, with_azure_ad=False):
+    def post_default_inventory_query_snapshot(self, node_key, platform, with_app=False, with_ec2=False):
         if platform == "macos":
             qs = INVENTORY_QUERY_SNAPSHOT
         elif platform == "windows":
@@ -216,8 +221,9 @@ class OsqueryAPIViewsTestCase(TestCase):
             snapshot.append(OSX_APP_INSTANCE)
             snapshot.append(WIN_PROGRAM_INSTANCE)
             snapshot.append(DEB_PACKAGE)
-        if with_azure_ad:
-            snapshot.extend(AZURE_AD_INFO_TUPLES)
+        if with_ec2:
+            snapshot.append(EC2_INSTANCE_METADATA)
+            snapshot.extend(EC2_INSTANCE_TAGS)
         return self.post_as_json(
             "log",
             {"node_key": node_key,
@@ -420,7 +426,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertIn("schedule", json_response)
         schedule = json_response["schedule"]
         self.assertIn(INVENTORY_QUERY_NAME, schedule)
-        self.assertNotIn(" 'apps' ", schedule[INVENTORY_QUERY_NAME]["query"])
+        self.assertNotIn(" 'programs' ", schedule[INVENTORY_QUERY_NAME]["query"])
         self.configuration.inventory_apps = True
         self.configuration.save()
         response = self.post_as_json("config", {"node_key": em.node_key})
@@ -440,7 +446,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertIn("schedule", json_response)
         schedule = json_response["schedule"]
         self.assertIn(INVENTORY_QUERY_NAME, schedule)
-        self.assertNotIn(" 'apps' ", schedule[INVENTORY_QUERY_NAME]["query"])
+        self.assertNotIn(" 'deb_packages' ", schedule[INVENTORY_QUERY_NAME]["query"])
         self.configuration.inventory_apps = True
         self.configuration.save()
         response = self.post_as_json("config", {"node_key": em.node_key})
@@ -450,6 +456,28 @@ class OsqueryAPIViewsTestCase(TestCase):
         schedule = json_response["schedule"]
         self.assertIn(INVENTORY_QUERY_NAME, schedule)
         self.assertIn(" 'deb_packages' ", schedule[INVENTORY_QUERY_NAME]["query"])
+
+    def test_ec2_instance_metadata_tags_schedule(self):
+        em = self.force_enrolled_machine()
+        self.post_default_inventory_query_snapshot(em.node_key, platform="linux")
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertIn("schedule", json_response)
+        schedule = json_response["schedule"]
+        self.assertIn(INVENTORY_QUERY_NAME, schedule)
+        self.assertNotIn(" 'ec2_instance_metadata' ", schedule[INVENTORY_QUERY_NAME]["query"])
+        self.assertNotIn(" 'ec2_instance_tags' ", schedule[INVENTORY_QUERY_NAME]["query"])
+        self.configuration.inventory_ec2 = True
+        self.configuration.save()
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertIn("schedule", json_response)
+        schedule = json_response["schedule"]
+        self.assertIn(INVENTORY_QUERY_NAME, schedule)
+        self.assertIn(" 'ec2_instance_metadata' ", schedule[INVENTORY_QUERY_NAME]["query"])
+        self.assertIn(" 'ec2_instance_tags' ", schedule[INVENTORY_QUERY_NAME]["query"])
 
     # distributed queries
 
@@ -661,6 +689,26 @@ class OsqueryAPIViewsTestCase(TestCase):
                          [WIN_PROGRAM_INSTANCE["name"]])
         self.assertEqual(list(ms.deb_packages.values_list("name", flat=True)),
                          [DEB_PACKAGE["name"]])
+
+    def test_log_ec2_inventory_query(self):
+        em = self.force_enrolled_machine()
+        response = self.post_default_inventory_query_snapshot(em.node_key, platform="linux", with_ec2=True)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response, {})
+        ms = MachineSnapshot.objects.current().get(serial_number=em.serial_number, reference=em.node_key)
+        self.assertEqual(ms.os_version.name, LINUX_INVENTORY_QUERY_SNAPSHOT[0]["name"])
+        self.assertEqual(ms.system_info.hardware_model, LINUX_INVENTORY_QUERY_SNAPSHOT[1]["hardware_model"])
+        self.assertEqual(ms.deb_packages.count(), 0)
+        self.assertEqual(ms.osx_app_instances.count(), 0)
+        self.assertEqual(ms.program_instances.count(), 0)
+        for k, v in EC2_INSTANCE_METADATA.items():
+            if k == "table_name":
+                continue
+            self.assertEqual(getattr(ms.ec2_instance_metadata, k), v or None)
+        self.assertEqual(ms.ec2_instance_tags.count(), len(EC2_INSTANCE_TAGS))
+        for tag in EC2_INSTANCE_TAGS:
+            self.assertEqual(ms.ec2_instance_tags.get(key=tag["key"]).value, tag["value"])
 
     def test_log_status(self):
         em = self.force_enrolled_machine()

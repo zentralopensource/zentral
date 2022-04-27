@@ -4,7 +4,8 @@ from django.template.defaultfilters import unordered_list
 from django.urls import reverse
 from django.utils.html import escape, conditional_escape
 from django.utils.safestring import mark_safe
-from zentral.contrib.inventory.conf import ANDROID, IOS, IPADOS, LINUX, MACOS, TVOS, TYPE_CHOICES_DICT, WINDOWS
+from zentral.contrib.inventory.conf import (ANDROID, IOS, IPADOS, LINUX, MACOS, TVOS, WINDOWS,
+                                            EC2, VM, TYPE_CHOICES_DICT)
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.color import text_color_for_background_color
 
@@ -32,13 +33,17 @@ def inventory_tag(tag):
 def base_machine_type_icon(machine_type):
     if machine_type not in TYPE_CHOICES_DICT:
         return ""
+    icon_class = "fas"
     icon = None
-    if machine_type == "VM":
+    if machine_type == EC2:
+        icon_class = "fab"
+        icon = "aws"
+    elif machine_type == VM:
         icon = "cube"
     elif machine_type:
         icon = machine_type.lower()
     if icon:
-        return mark_safe('<i class="fas fa-{}"></i>'.format(icon))
+        return mark_safe(f'<i class="{icon_class} fa-{icon}"></i>')
     return ""
 
 
@@ -73,6 +78,18 @@ def machine_platform_icon(meta_machine):
 @register.simple_tag
 def machine_url(serial_number):
     return reverse("inventory:machine", args=(MetaMachine(serial_number).get_urlsafe_serial_number(),))
+
+
+@register.simple_tag
+def ec2_instance_link(machine_snapshot):
+    ec2_instance_metadata = machine_snapshot.ec2_instance_metadata
+    if not ec2_instance_metadata:
+        return
+    return (
+        f"https://{ec2_instance_metadata.region}.console.aws.amazon.com"
+        f"/ec2/v2/home?region={ec2_instance_metadata.region}"
+        f"#InstanceDetails:instanceId={ec2_instance_metadata.instance_id}"
+    )
 
 
 @register.filter(needs_autoescape=True)

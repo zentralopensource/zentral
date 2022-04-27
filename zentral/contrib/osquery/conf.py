@@ -32,6 +32,14 @@ INVENTORY_QUERIES = (
 DEB_PACKAGE_QUERY = "select 'deb_packages' as table_name, * from deb_packages;"
 
 
+EC2_QUERIES = (
+    ("ec2_instance_metadata",
+     "select 'ec2_instance_metadata' as table_name, * from ec2_instance_metadata;"),
+    ("ec2_instance_tags",
+     "select 'ec2_instance_tags' as table_name, * from ec2_instance_tags;"),
+)
+
+
 LINUX_DISK_QUERY = (
     "select 'disks' as table_name, "
     "bd.name, bd.block_size * bd.size as size "
@@ -103,7 +111,7 @@ DECORATORS = {
 }
 
 
-def _get_inventory_queries_for_machine(machine, include_apps=False):
+def _get_inventory_queries_for_machine(machine, include_apps=False, include_ec2=False):
     yield from INVENTORY_QUERIES
     if include_apps:
         if machine.platform == MACOS:
@@ -112,6 +120,8 @@ def _get_inventory_queries_for_machine(machine, include_apps=False):
             yield "programs", WIN_PROGRAM_QUERY
         elif machine.has_deb_packages:
             yield "deb_packages", DEB_PACKAGE_QUERY
+    if include_ec2:
+        yield from EC2_QUERIES
     if machine.platform == LINUX:
         yield "disks", LINUX_DISK_QUERY
     if machine.platform == MACOS:
@@ -123,8 +133,8 @@ def _get_inventory_queries_for_machine(machine, include_apps=False):
         yield "disks", WINDOWS_DISK_QUERY
 
 
-def get_inventory_query_for_machine(machine, include_apps):
-    return "".join(q for _, q in _get_inventory_queries_for_machine(machine, include_apps))
+def get_inventory_query_for_machine(machine, include_apps, include_ec2):
+    return "".join(q for _, q in _get_inventory_queries_for_machine(machine, include_apps, include_ec2))
 
 
 def build_osquery_conf(machine, enrollment):
@@ -138,7 +148,9 @@ def build_osquery_conf(machine, enrollment):
     # inventory
     if configuration.inventory:
         conf.setdefault("schedule", {})[INVENTORY_QUERY_NAME] = {
-            'query': get_inventory_query_for_machine(machine, configuration.inventory_apps),
+            'query': get_inventory_query_for_machine(
+                machine, configuration.inventory_apps, configuration.inventory_ec2
+            ),
             'interval': configuration.inventory_interval,
             'snapshot': True,
         }

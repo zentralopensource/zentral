@@ -342,6 +342,11 @@ class Configuration(models.Model):
         default=False,
         help_text="Include macOS apps or linux packages in the inventory"
     )
+    inventory_ec2 = models.BooleanField(
+        default=False,
+        help_text="Include AWS EC2 information in the inventory",
+        verbose_name="Inventory EC2 information"
+    )
     inventory_interval = models.IntegerField(
         default=86400,  # 1d
         validators=[MinValueValidator(300),  # 5m

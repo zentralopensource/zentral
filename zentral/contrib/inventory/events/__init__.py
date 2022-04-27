@@ -47,7 +47,9 @@ for attr in ('link',
              'puppet_node',
              'principal_user',
              'certificate',
-             'extra_facts'):
+             'extra_facts',
+             'ec2_instance_metadata',
+             'ec2_instance_tag',):
     for action in ("add", "remove"):
         event_type = f"{action}_machine_{attr}"
         event_class_name = "".join(s.title() for s in event_type.split('_'))

@@ -48,6 +48,17 @@ def update_system_uptime(tree, t):
             tree['system_uptime'] = system_uptime
 
 
+def update_ec2_instance_metadata(tree, t):
+    ec2_instance_metadata = clean_dict(
+        t,
+        {"instance_id", "instance_type", "architecture", "region", "availability_zone",
+         "local_hostname", "local_ipv4", "mac", "security_groups", "iam_arn", "ami_id",
+         "reservation_id", "account_id", "ssh_public_key"}
+    )
+    if ec2_instance_metadata:
+        tree["ec2_instance_metadata"] = ec2_instance_metadata
+
+
 def collect_disk(disks, t):
     disk = clean_dict(t)
     if disk:
@@ -133,6 +144,17 @@ def collect_principal_user(principal_user, t):
             principal_user_source.setdefault("properties", {})[pu_src_prop_key] = value
 
 
+def collect_ec2_instance_tag(ec2_instance_tags, t):
+    ec2_instance_tag = clean_dict(t, {"key", "value"})
+    if len(ec2_instance_tag) == 2:
+        if ec2_instance_tag not in ec2_instance_tags:
+            ec2_instance_tags.append(ec2_instance_tag)
+        else:
+            logger.warning("Duplicated EC2 instance tag")
+    else:
+        logger.warning("Invalid EC2 instance tag")
+
+
 def get_dn_value_from_dn_d(dn_d, attr):
     try:
         return dn_d[attr][-1]
@@ -194,6 +216,7 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
     program_instances = []
     principal_user = {}
     certificates = []
+    ec2_instance_tags = []
     for t in snapshot:
         table_name = t.pop('table_name')
         if table_name == 'os_version':
@@ -216,6 +239,10 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
             collect_certificate(certificates, t)
         elif table_name == 'programs':
             collect_program_instance(program_instances, t)
+        elif table_name == 'ec2_instance_metadata':
+            update_ec2_instance_metadata(tree, t)
+        elif table_name == 'ec2_instance_tags':
+            collect_ec2_instance_tag(ec2_instance_tags, t)
     if deb_packages:
         tree["deb_packages"] = deb_packages
     if disks:
@@ -230,3 +257,5 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
         tree["principal_user"] = principal_user
     if certificates:
         tree["certificates"] = certificates
+    if ec2_instance_tags:
+        tree["ec2_instance_tags"] = ec2_instance_tags

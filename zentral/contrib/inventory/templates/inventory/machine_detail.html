@@ -171,6 +171,59 @@
       </dl>
       {% endif %}
 
+      {% if ms.ec2_instance_metadata %}
+      <h3>EC2 instance</h3>
+      <dl class="dl-horizontal">
+        <dt>Instance ID</dt>
+        <dd><a href="{% ec2_instance_link ms %}">{{ ms.ec2_instance_metadata.instance_id }}</a></dd>
+        <dt>Instance type</dt>
+        <dd>{{ ms.ec2_instance_metadata.instance_type }}</dd>
+        <dt>Architecture</dt>
+        <dd>{{ ms.ec2_instance_metadata.architecture }}</dd>
+        <dt>Region</dt>
+        <dd>{{ ms.ec2_instance_metadata.region }}</dd>
+        <dt>Availability zone</dt>
+        <dd>{{ ms.ec2_instance_metadata.availability_zone }}</dd>
+        <dt>Local hostname</dt>
+        <dd>{{ ms.ec2_instance_metadata.local_hostname }}</dd>
+        <dt>Local IPv4</dt>
+        <dd>{{ ms.ec2_instance_metadata.local_ipv4|default:"-" }}</dd>
+        <dt>MAC</dt>
+        <dd>{{ ms.ec2_instance_metadata.mac }}</dd>
+        <dt>Security group{{ ms.ec2_instance_metadata.security_group_list|length|pluralize }}</dt>
+        <dd>{{ ms.ec2_instance_metadata.security_group_list|join:", "|default:"-" }}</dd>
+        <dt>IAM profile ARN</dt>
+        <dd>{{ ms.ec2_instance_metadata.iam_arn|default:"-" }}</dd>
+        <dt>AMI ID</dt>
+        <dd>{{ ms.ec2_instance_metadata.ami_id }}</dd>
+        <dt>Reservation ID</dt>
+        <dd>{{ ms.ec2_instance_metadata.reservation_id }}</dd>
+        <dt>Account ID</dt>
+        <dd>{{ ms.ec2_instance_metadata.account_id }}</dd>
+        <dt>SSH public key</dt>
+        <dd style="overflow-wrap:break-word">{{ ms.ec2_instance_metadata.ssh_public_key|default:"-" }}</dd>
+      </dl>
+      {% endif %}
+
+      {% if ms.ec2_instance_tag_list %}
+      <h3>EC2 instance tag{{ ms.ec2_instance_tag_list|length|pluralize }}</h3>
+      <table class="table table-condensed">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for tag in ms.ec2_instance_tag_list %}
+        <tr>
+          <td>{{ tag.key }}</td>
+          <td>{{ tag.value }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% endif %}
+
       {% with ms.disks.count as disks %}
       {% if disks %}
       <h3>{{ disks }} Disk{{ disks|pluralize }}</h3>

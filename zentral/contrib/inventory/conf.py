@@ -24,6 +24,7 @@ PLATFORM_CHOICES_DICT = dict(PLATFORM_CHOICES)
 
 # machine snapshot types
 DESKTOP = "DESKTOP"
+EC2 = "EC2"
 LAPTOP = "LAPTOP"
 MOBILE = "MOBILE"
 SERVER = "SERVER"
@@ -32,6 +33,7 @@ TV = "TV"
 VM = "VM"
 TYPE_CHOICES = (
     (DESKTOP, 'Desktop'),
+    (EC2, 'EC2 instance'),
     (LAPTOP, 'Laptop'),
     (MOBILE, 'Mobile'),
     (SERVER, 'Server'),
@@ -126,6 +128,9 @@ def update_ms_tree_platform(tree):
 
 
 def update_ms_tree_type(tree):
+    if tree.get("ec2_instance_metadata"):
+        tree["type"] = EC2
+        return
     system_info_t = tree.get("system_info", {})
     for attr in ("hardware_model", "hardware_serial"):
         val = system_info_t.get(attr)

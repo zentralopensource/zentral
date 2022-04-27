@@ -76,7 +76,8 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
         response = self.client.post(reverse("osquery:create_configuration"),
                                     {"name": configuration_name,
                                      "description": configuration_description,
-                                     "inventory_interval": 86321},
+                                     "inventory_interval": 86321,
+                                     "inventory_ec2": True},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/configuration_detail.html")
@@ -86,6 +87,7 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
         self.assertEqual(configuration.name, configuration_name)
         self.assertEqual(configuration.description, configuration_description)
         self.assertEqual(configuration.inventory_interval, 86321)
+        self.assertTrue(configuration.inventory_ec2)
         self.assertEqual(configuration.options, {})
 
     # update configuration
