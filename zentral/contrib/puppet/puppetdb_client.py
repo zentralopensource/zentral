@@ -5,6 +5,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util import Retry
 from base.utils import deployment_info
+from zentral.contrib.inventory.conf import cleanup_windows_os_version
 from zentral.utils.dict import get_nested_val
 from zentral.utils.ssl import create_client_ssl_context
 from zentral.utils.text import shard
@@ -391,17 +392,8 @@ class PuppetDBClient(object):
             except (KeyError, TypeError, ValueError):
                 pass
             else:
-                os_version_name = facts.get("os", {}).get("windows", {}).get("product_name")
-                if not os_version_name:
-                    if os_version_tuple < (10,):
-                        os_version_name = "Windows"
-                    elif os_version_tuple < (10, 0, 22000):
-                        os_version_name = "Windows 10"
-                    else:
-                        os_version_name = "Windows 11"
-                if os_version_name:
-                    os_version["name"] = os_version_name
-                if os_version:
+                os_version = cleanup_windows_os_version(os_version)
+                if os_version.get("major"):
                     ct["os_version"] = os_version
 
             # hardware model

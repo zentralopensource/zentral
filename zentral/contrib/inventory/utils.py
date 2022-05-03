@@ -25,7 +25,7 @@ from zentral.core.incidents.models import Severity, Status
 from zentral.utils.json import save_dead_letter
 from zentral.utils.text import decode_args, encode_args
 from .compliance_checks import jmespath_checks_cache
-from .conf import EC2
+from .conf import EC2, os_version_display, os_version_version_display
 from .events import (post_enrollment_secret_verification_failure, post_enrollment_secret_verification_success,
                      iter_inventory_events)
 from .exceptions import EnrollmentSecretVerificationFailed
@@ -234,12 +234,13 @@ class OSVersionFilter(BaseMSFilter):
     optional = True
     query_kwarg = "osv"
     expression = ("jsonb_build_object("
-                  "'id', osv.id, "
-                  "'name', osv.name, "
-                  "'major', osv.major, "
-                  "'minor', osv.minor, "
-                  "'patch', osv.patch, "
-                  "'build', osv.build) as osv_j")
+                  "'id', osv.id,"
+                  "'name', osv.name,"
+                  "'major', osv.major,"
+                  "'minor', osv.minor,"
+                  "'patch', osv.patch,"
+                  "'build', osv.build,"
+                  "'version', osv.version) as osv_j")
     grouping_set = ("osv.id", "osv_j")
 
     def joins(self):
@@ -262,27 +263,11 @@ class OSVersionFilter(BaseMSFilter):
             return None
         return gv
 
-    @staticmethod
-    def version(os_version):
-        return ".".join(str(num) for num in
-                        (os_version.get(attr) for attr in ("major", "minor", "patch"))
-                        if num is not None)
-
-    def version_with_build(self, os_version):
-        version = self.version(os_version)
-        build = os_version.get("build")
-        if build:
-            version = "{} ({})".format(version, build)
-        return version.strip()
-
-    def display_name(self, os_version):
-        return " ".join(e for e in (os_version["name"], self.version_with_build(os_version)) if e)
-
     def label_for_grouping_value(self, grouping_value):
         if not grouping_value:
             return self.none_value
         else:
-            return self.display_name(grouping_value)
+            return os_version_display(grouping_value)
 
     def query_kwarg_value_from_grouping_value(self, grouping_value):
         if grouping_value:
@@ -291,12 +276,15 @@ class OSVersionFilter(BaseMSFilter):
     def process_fetched_record(self, record, for_filtering):
         os_version = record.pop("osv_j", None)
         if os_version and os_version["id"]:
-            os_version["version"] = self.version(os_version)
-            os_version["display_name"] = self.display_name(os_version)
-            record["os_version"] = os_version
+            record["os_version"] = {
+                "version": os_version_version_display(os_version),
+                "display_name": os_version_display(os_version),
+            }
         elif for_filtering:
-            record["os_version"] = {"version": self.unknown_value,
-                                    "display_name": self.unknown_value.title()}
+            record["os_version"] = {
+                "version": self.unknown_value,
+                "display_name": self.unknown_value.title(),
+            }
 
 
 class MetaBusinessUnitFilter(BaseMSFilter):

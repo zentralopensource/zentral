@@ -25,6 +25,7 @@ from zentral.core.incidents.models import MachineIncident, Status
 from zentral.utils.model_extras import find_all_related_objects
 from zentral.utils.mt_models import AbstractMTObject, prepare_commit_tree, MTObjectManager, MTOError
 from .conf import (has_deb_packages,
+                   os_version_display, os_version_version_display,
                    update_ms_tree_platform, update_ms_tree_type,
                    PLATFORM_CHOICES, PLATFORM_CHOICES_DICT,
                    TYPE_CHOICES, TYPE_CHOICES_DICT)
@@ -263,17 +264,13 @@ class OSVersion(AbstractMTObject):
     minor = models.PositiveIntegerField(blank=True, null=True)
     patch = models.PositiveIntegerField(blank=True, null=True)
     build = models.TextField(blank=True, null=True)
+    version = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        items = [self.get_number_display()]
-        if self.name:
-            items.insert(0, self.name)
-        if self.build:
-            items.append("({})".format(self.build))
-        return " ".join(items)
+        return os_version_display(self.serialize())
 
-    def get_number_display(self):
-        return ".".join((str(i) for i in (self.major, self.minor, self.patch) if i is not None))
+    def get_version_display(self):
+        return os_version_version_display(self.serialize())
 
 
 class SystemInfo(AbstractMTObject):

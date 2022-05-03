@@ -5,7 +5,8 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
-from zentral.contrib.inventory.conf import DESKTOP, MACOS, MOBILE, LAPTOP, SERVER, update_ms_tree_type, VM
+from zentral.contrib.inventory.conf import (DESKTOP, MACOS, MOBILE, LAPTOP, SERVER, VM,
+                                            os_version_display, os_version_version_display, update_ms_tree_type)
 from zentral.contrib.inventory.models import (BusinessUnit,
                                               Certificate,
                                               CurrentMachineSnapshot,
@@ -427,6 +428,8 @@ class MachineSnapshotTestCase(TestCase):
         mm.archive()
         self.assertEqual(list(Tag.objects.used_in_inventory()), [])
 
+    # update ms tree
+
     def test_update_ms_tree_type_hardware_model(self):
         tree = {"system_info": {"hardware_model": "IMac"}}
         update_ms_tree_type(tree)
@@ -492,6 +495,26 @@ class MachineSnapshotTestCase(TestCase):
                                 "cpu_brand": "IQJNQE"}}
         update_ms_tree_type(tree)
         self.assertEqual(tree.get("type"), MOBILE)
+
+    # os version number display
+
+    def test_os_version_version_display(self):
+        os_version = {"major": 10, "minor": 15, "patch": None}
+        self.assertEqual(os_version_version_display(os_version), "10.15")
+
+    def test_os_version_version_display_drop_number(self):
+        os_version = {"name": "Windows 10", "major": 10, "version": "21H2", "build": "19044.1682"}
+        self.assertEqual(os_version_version_display(os_version), "21H2")
+
+    def test_os_version_display(self):
+        os_version = {"name": "macOS", "major": 12, "minor": 3, "patch": 1, "build": "21E258"}
+        self.assertEqual(os_version_display(os_version), "macOS 12.3.1 (21E258)")
+
+    def test_os_version_display_drop_number(self):
+        os_version = {"name": "Windows 10", "major": 10, "version": "21H2", "build": "19044.1682"}
+        self.assertEqual(os_version_display(os_version), "Windows 10 21H2 (19044.1682)")
+
+    # last seen
 
     def test_last_seen(self):
         tree = copy.deepcopy(self.machine_snapshot)

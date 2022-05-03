@@ -11,6 +11,7 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util import Retry
 from requests.packages.urllib3.util.ssl_ import create_urllib3_context
 from base.utils import deployment_info
+from zentral.contrib.inventory.conf import cleanup_windows_os_version
 from zentral.utils.json import remove_null_character
 
 
@@ -357,36 +358,33 @@ class Client:
 
     def add_ms_tree_os_version(self, ms_tree, device_d):
         try:
-            os_version = dict(zip(('major', 'minor', 'patch'),
-                                  (int(s) for s in device_d["OperatingSystem"].split('.'))))
+            os_version_tuple = tuple(int(s) for s in device_d["OperatingSystem"].split('.'))
+            os_version = dict(zip(('major', 'minor', 'patch'), os_version_tuple))
         except (TypeError, ValueError):
             logger.warning("Device %s: could not parse OS version", device_d.get("Uuid", "?"))
             return
-        device_model = device_d["Model"]
+        os_build = device_d.get("OSBuildVersion")
+        if os_build:
+            os_version["build"] = os_build
         device_platform = device_d["Platform"]
-        os_version_t = tuple(os_version.get(k) for k in ("major", "minor", "patch"))
         if device_platform == "Apple":
             os_name = "iOS"
-            if "ipad" in device_model.lower() and os_version_t >= (13, 1):
+            if "ipad" in device_d["Model"].lower() and os_version_tuple >= (13, 1):
                 os_name = "iPadOS"
+            os_version["name"] = os_name
         elif device_platform == "AppleOsX":
             os_name = "macOS"
-            if os_version_t < (10, 12):
+            if os_version_tuple < (10, 12):
                 os_name = "OS X"
+            os_version["name"] = os_name
         elif device_platform == "WinRT":
-            if os_version_t < (10,):
-                os_name = "Windows"
-            elif os_version_t < (10, 0, 22000):
-                os_name = "Windows 10"
-            else:
-                os_name = "Windows 11"
+            os_version = cleanup_windows_os_version(os_version)
         elif device_platform == "Android":
-            os_name = "Android"
+            os_version["name"] = "Android"
         else:
             raise ValueError(f"Unknown platform {device_platform}")
-        os_version["name"] = os_name
-        os_version["build"] = device_d.get("OSBuildVersion")
-        ms_tree["os_version"] = os_version
+        if os_version.get("major"):
+            ms_tree["os_version"] = os_version
 
     def add_ms_tree_disk(self, ms_tree, device_d):
         device_uuid = device_d["Uuid"]

@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+from zentral.contrib.inventory.conf import macos_version_from_build, cleanup_windows_os_version
 from zentral.contrib.inventory.models import PrincipalUserSource
 from zentral.utils.certificates import parse_text_dn
 
@@ -23,7 +24,20 @@ def clean_dict(d, keys_to_keep=None):
 
 def update_os_version(tree, t):
     os_version = clean_dict(t, {"name", "major", "minor", "patch", "build"})
-    if os_version:
+    name = os_version.get("name")
+    build = os_version.get("build")
+    if name and build:
+        name = name.lower()
+        if "os x" in name:
+            try:
+                tree['os_version'] = macos_version_from_build(build)
+            except ValueError:
+                pass
+            else:
+                return
+        elif "windows" in name:
+            os_version = cleanup_windows_os_version(os_version)
+    if os_version.get("major"):
         tree['os_version'] = os_version
 
 

@@ -162,6 +162,41 @@ def has_deb_packages(machine_snapshot):
     return "ubuntu" in os_name or "debian" in os_name
 
 
+# OSVersion utils
+
+
+def os_version_version_display(os_version_d):
+    items = []
+    number = ".".join(
+        str(num) for num in (os_version_d.get(attr) for attr in ("major", "minor", "patch"))
+        if num is not None
+    )
+    name = os_version_d.get("name")
+    if not name or number not in name:
+        items.append(number)
+    version = os_version_d.get("version")
+    if version:
+        items.append(version)
+    return " ".join(items)
+
+
+def os_version_display(os_version_d):
+    items = []
+    name = os_version_d.get("name")
+    if name:
+        items.append(name)
+    version = os_version_version_display(os_version_d)
+    if version:
+        items.append(version)
+    build = os_version_d.get("build")
+    if build:
+        items.append(f"({build})")
+    return " ".join(items)
+
+
+# macOS versions
+
+
 MACOS_BUILD_RE = re.compile(r"(?P<minor>[0-9]{1,2})(?P<patch_letter>[A-Z])[1-9]+[a-z]?")
 
 
@@ -217,3 +252,77 @@ def macos_version_from_build(build):
         }
     else:
         raise ValueError("Bad build number")
+
+
+# Windows versions
+
+
+WINDOWS_BUILD_VERSIONS = {
+    # Windows 11
+    22000: "21H2",
+    # Windows 10
+    19044: "21H2",
+    19043: "21H1",
+    19042: "20H2",
+    19041: "2004",
+    18363: "1909",
+    18362: "1903",
+    17763: "1809",
+    17134: "1803",
+    16299: "1709",
+    15063: "1703",
+    14393: "1607",
+    10586: "1511",
+    10240: "1507",
+}
+
+
+def windows_version_from_build(build):
+    try:
+        build_major = int(build.split(".")[0])
+    except Exception:
+        raise ValueError("Bad build number")
+    try:
+        version = WINDOWS_BUILD_VERSIONS[build_major]
+    except KeyError:
+        raise ValueError("Unknown build number")
+    if build_major >= 22000:
+        major = 11
+    else:
+        major = 10
+    return {
+        "name": f"Windows {major}",
+        "major": major,
+        "build": build,
+        "version": version,
+    }
+
+
+def cleanup_windows_os_version(os_version):
+    build = os_version.get("build")
+    patch = os_version.get("patch")
+    if isinstance(patch, int):
+        if isinstance(build, str):
+            build = f"{patch}.{build}"
+        else:
+            build = str(patch)
+    if build:
+        try:
+            return windows_version_from_build(build)
+        except ValueError:
+            pass
+        os_version["build"] = build
+    if isinstance(patch, int):
+        os_version.pop("patch")
+        if patch >= 10000:
+            os_version.pop("minor", None)
+            if patch >= 22000:
+                os_version["name"] = "Windows 11"
+                os_version["major"] = 11
+            else:
+                os_version["name"] = "Windows 10"
+                os_version["major"] = 10
+            return os_version
+    # TODO: better?
+    os_version["name"] = "Windows"
+    return os_version

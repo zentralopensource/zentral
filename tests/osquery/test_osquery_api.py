@@ -18,11 +18,11 @@ from zentral.core.compliance_checks.models import MachineStatus, Status
 
 
 INVENTORY_QUERY_SNAPSHOT = [
-    {'build': '15D21',
+    {'build': '19H1824',
      'major': '10',
-     'minor': '11',
+     'minor': '15',
      'name': 'Mac OS X',
-     'patch': '3',
+     'patch': '7',
      'table_name': 'os_version'},
     {'computer_name': 'godzilla',
      'cpu_brand': 'Intel(R) Core(TM)2 Duo CPU T9600 @2.80GHz',
@@ -44,10 +44,10 @@ INVENTORY_QUERY_SNAPSHOT = [
 ]
 
 WIN_INVENTORY_QUERY_SNAPSHOT = [
-    {"build": "19041",
+    {"build": "19044",
      "major": "10",
      "minor": "0",
-     "name": "Microsoft Windows 10 Enterprise Evaluation",
+     "name": "Microsoft Windows 10 Pro",
      "patch": "",
      "table_name": "os_version"},
     {"computer_name": "WinDev2010Eval",
@@ -681,6 +681,10 @@ class OsqueryAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response, {})
         ms = MachineSnapshot.objects.current().get(serial_number=em.serial_number, reference=em.node_key)
+        self.assertEqual(ms.os_version.name, "macOS")
+        self.assertEqual(ms.os_version.major, 10)
+        self.assertEqual(ms.os_version.minor, 15)
+        self.assertEqual(ms.os_version.patch, 7)
         self.assertEqual(ms.os_version.build, INVENTORY_QUERY_SNAPSHOT[0]["build"])
         self.assertEqual(ms.system_info.hardware_model, INVENTORY_QUERY_SNAPSHOT[1]["hardware_model"].strip(" \u0000"))
         self.assertEqual(list(ms.osx_app_instances.values_list("app__bundle_name", flat=True)),
@@ -689,6 +693,20 @@ class OsqueryAPIViewsTestCase(TestCase):
                          [WIN_PROGRAM_INSTANCE["name"]])
         self.assertEqual(list(ms.deb_packages.values_list("name", flat=True)),
                          [DEB_PACKAGE["name"]])
+
+    def test_log_windows_version_inventory_query(self):
+        em = self.force_enrolled_machine()
+        response = self.post_default_inventory_query_snapshot(em.node_key, platform="windows", with_app=False)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response, {})
+        ms = MachineSnapshot.objects.current().get(serial_number=em.serial_number, reference=em.node_key)
+        self.assertEqual(ms.os_version.name, "Windows 10")
+        self.assertEqual(ms.os_version.major, 10)
+        self.assertIsNone(ms.os_version.minor)
+        self.assertIsNone(ms.os_version.patch)
+        self.assertEqual(ms.os_version.build, "19044")
+        self.assertEqual(ms.os_version.version, "21H2")
 
     def test_log_ec2_inventory_query(self):
         em = self.force_enrolled_machine()
