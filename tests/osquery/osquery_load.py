@@ -4,106 +4,96 @@ import string
 import uuid as uuid_mod
 
 
-model_identifiers = {
-    'PowerBook': [
-        (1, 1),
-        (2, 1), (2, 2),
-        (3, 1), (3, 2), (3, 3), (3, 4), (3, 5),
-        (4, 1), (4, 2), (4, 3),
-        (5, 1), (5, 2), (5, 3), (5, 4), (5, 5), (5, 6), (5, 7), (5, 8), (5, 9),
-        (6, 1), (6, 2), (6, 3), (6, 4), (6, 5), (6, 7), (6, 8)
-    ],
-    'MacBookAir': [
-        (1, 1),
-        (2, 1),
-        (3, 1), (3, 2),
-        (4, 1), (4, 2),
-        (5, 1), (5, 2),
-        (6, 1), (6, 2),
-        (7, 1), (7, 2),
-        (8, 1)
-    ],
-    'MacBook': [
-        (1, 1),
-        (2, 1),
-        (3, 1),
-        (4, 1),
-        (5, 1), (5, 2),
-        (6, 1),
-        (7, 1),
-        (8, 1),
-        (9, 1),
-        (10, 1)
-    ],
-    'PowerMac': [
-        (1, 1), (1, 2),
-        (2, 1), (2, 2),
-        (3, 1), (3, 3), (3, 4), (3, 5), (3, 6),
-        (4, 1), (4, 2), (4, 4), (4, 5),
-        (5, 1),
-        (6, 1), (6, 3), (6, 4),
-        (7, 2), (7, 3),
-        (8, 1), (8, 2),
-        (9, 1),
-        (10, 1), (10, 2),
-        (11, 2),
-        (12, 1)
-    ],
-    'MacBookPro': [
-        (1, 1), (1, 2),
-        (2, 1), (2, 2),
-        (3, 1),
-        (4, 1),
-        (5, 1), (5, 2), (5, 3), (5, 4), (5, 5),
-        (6, 1), (6, 2),
-        (7, 1),
-        (8, 1), (8, 2), (8, 3),
-        (9, 1), (9, 2),
-        (10, 1), (10, 2),
-        (11, 1), (11, 2), (11, 3), (11, 4), (11, 5),
-        (12, 1),
-        (13, 1), (13, 2), (13, 3),
-        (14, 1), (14, 2), (14, 3),
-        (15, 1), (15, 2)
-    ],
-    'Macmini': [
-        (1, 1), (2, 1), (3, 1), (4, 1),
-        (5, 1), (5, 2), (5, 3),
-        (6, 1), (6, 2),
-        (7, 1),
-        (8, 1)
-    ], 'iMac': [
-        (4, 1), (4, 2),
-        (5, 1), (5, 2),
-        (6, 1),
-        (7, 1), (8, 1), (9, 1), (10, 1),
-        (11, 1), (11, 2), (11, 3),
-        (12, 1), (12, 2),
-        (13, 1), (13, 2),
-        (14, 1), (14, 2), (14, 3), (14, 4),
-        (15, 1),
-        (16, 1), (16, 2),
-        (17, 1),
-        (18, 1), (18, 2), (18, 3)
-    ],
-    'MacPro': [
-        (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)
-    ],
-    'Xserve': [
-        (1, 1), (2, 1), (3, 1)
-    ],
-    'RackMac': [
-        (1, 1), (1, 2), (3, 1)
-    ],
-    'iMacPro': [
-        (1, 1)
-    ]
-}
+SYSTEM_INFOS = [
+    {'cpu_brand': 'Apple M1',
+     'cpu_logical_cores': '8',
+     'cpu_physical_cores': '8',
+     'cpu_subtype': 'ARM64E',
+     'cpu_type': 'arm64e',
+     'hardware_model': 'MacBook Air (M1, 2020)',
+     'physical_memory': '17179869184'},
+    {'cpu_brand': 'Intel(R) Core(TM) i7-1068NG7 CPU @ 2.30GHz',
+     'cpu_logical_cores': '8',
+     'cpu_physical_cores': '4',
+     'cpu_subtype': 'Intel x86-64h Haswell',
+     'cpu_type': 'x86_64h',
+     'hardware_model': 'MacBookPro16,2',
+     'physical_memory': '17179869184'},
+    {'cpu_brand': 'Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz',
+     'cpu_logical_cores': '16',
+     'cpu_physical_cores': '8',
+     'cpu_subtype': 'Intel x86-64h Haswell',
+     'cpu_type': 'x86_64h',
+     'hardware_model': 'MacBookPro16,1',
+     'physical_memory': '34359738368'},
+    {'cpu_brand': 'Intel(R) Core(TM) i5-8210Y CPU @ 1.60GHz',
+     'cpu_logical_cores': '4',
+     'cpu_physical_cores': '2',
+     'cpu_subtype': 'Intel x86-64h Haswell',
+     'cpu_type': 'x86_64h',
+     'hardware_model': 'MacBookAir8,2',
+     'physical_memory': '17179869184'},
+    {'cpu_brand': 'Intel(R) Core(TM) i5-1030NG7 CPU @ 1.10GHz',
+     'cpu_logical_cores': '8',
+     'cpu_physical_cores': '4',
+     'cpu_subtype': 'Intel x86-64h Haswell',
+     'cpu_type': 'x86_64h',
+     'hardware_model': 'MacBookAir9,1',
+     'physical_memory': '17179869184'},
+    {'cpu_brand': 'Intel(R) Core(TM) i5-8279U CPU @ 2.40GHz',
+     'cpu_logical_cores': '8',
+     'cpu_physical_cores': '4',
+     'cpu_subtype': 'Intel x86-64h Haswell',
+     'cpu_type': 'x86_64h',
+     'hardware_model': 'MacBookPro15,2',
+     'physical_memory': '17179869184'},
+    {'cpu_brand': 'Intel(R) Core(TM) i5-8259U CPU @ 2.30GHz',
+     'cpu_logical_cores': '8',
+     'cpu_physical_cores': '4',
+     'cpu_subtype': 'Intel x86-64h Haswell',
+     'cpu_type': 'x86_64h',
+     'hardware_model': 'MacBookPro15,2',
+     'physical_memory': '17179869184'},
+    {'cpu_brand': 'Apple M1 Max',
+     'cpu_logical_cores': '10',
+     'cpu_physical_cores': '10',
+     'cpu_subtype': 'ARM64E',
+     'cpu_type': 'arm64e',
+     'hardware_model': 'MacBook Pro (16-inch, 2021)',
+     'physical_memory': '68719476736'},
+    {'cpu_brand': 'Apple M1 Pro',
+     'cpu_logical_cores': '8',
+     'cpu_physical_cores': '8',
+     'cpu_subtype': 'ARM64E',
+     'cpu_type': 'arm64e',
+     'hardware_model': 'MacBook Pro (14-inch, 2021)',
+     'physical_memory': '34359738368'},
+    {'cpu_brand': 'Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz',
+     'cpu_logical_cores': '12',
+     'cpu_physical_cores': '6',
+     'cpu_subtype': 'Intel x86-64h Haswell',
+     'cpu_type': 'x86_64h',
+     'hardware_model': 'MacBookPro15,1',
+     'physical_memory': '34359738368'},
+]
+
+OS_VERSIONS = [
+    (12, 3, 1, "macOS", "21E258"),
+    (12, 2, 1, "macOS", "21D62"),
+    (11, 6, 5, "macOS", "20G527"),
+    (11, 6, 0, "macOS", "20G165"),
+]
+
+FIREFOX_CHOICES = [
+    ("10022.4.19", "100.0"),
+    ("9922.4.11", "99.0.1"),
+    ("9922.3.30", "99.0"),
+]
 
 
 def make_random_word_function():
     with open("/usr/share/dict/words", "r", encoding="utf-8") as f:
-        word_list = list(set(w.strip().lower() for w in f.readlines() if w.strip()))
+        word_list = list(set(w.strip().lower() for w in f.readlines() if w.strip() and len(w) > 3))
 
     def random_word_function():
         return random.choice(word_list)
@@ -111,9 +101,10 @@ def make_random_word_function():
     return random_word_function
 
 
-def random_serial_number():
-    return (random.choice(string.ascii_uppercase)
-            + "".join(random.sample(string.ascii_uppercase + string.digits, 9))
+def random_serial_number(prefix=""):
+    return (prefix
+            + random.choice(string.ascii_uppercase)
+            + "".join(random.sample(string.ascii_uppercase + string.digits, max(0, 9 - len(prefix))))
             + "".join(random.sample(string.ascii_uppercase, 2)))
 
 
@@ -121,114 +112,104 @@ def random_uuid():
     return str(uuid_mod.uuid4()).upper()
 
 
-def random_os_version():
-    major = 10
-    minor = random.choices([9, 10, 11, 12, 13, 14], [1, 2, 4, 8, 16, 32])[0]
-    patch = random.randint(1, 3)
-    return {"major": major,
-            "minor": minor,
-            "patch": patch,
-            "name": "Mac OS X",
-            "build": "".join(random.sample(string.ascii_uppercase + string.digits, 5))}
+def random_os_version(cpu_type):
+    choices = OS_VERSIONS
+    if "arm" in cpu_type.lower():
+        choices = [t for t in choices if t[0] >= 12]
+    os_version_t = random.choice(choices)
+    os_version = dict(zip(("major", "minor", "patch", "name", "build"), os_version_t))
+    os_version["table_name"] = "os_version"
+    return os_version
 
 
-def random_model_identifier():
-    family = random.choices(
-        ["MacBookAir", "MacBook", "PowerMac", "MacBookPro", "Macmini", "iMac", "MacPro", "iMacPro"],
-        [10, 2, 2, 100, 50, 100, 20, 20]
-    )[0]
-    family_model_identifiers = model_identifiers.get(family)
-    major, minor = random.choices(
-        family_model_identifiers,
-        (2**i for i in range(len(family_model_identifiers)))
-    )[0]
-    return f"{family}{major},{minor}"
-
-
-def random_system_info(computer_name, serial_number, uuid):
-    return {
-        "computer_name": computer_name,
-        "hostname": f"{computer_name}.localhost",
-        "cpu_brand": "Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz",
-        "cpu_logical_cores": "4",
-        "cpu_physical_cores": "2",
-        "cpu_subtype": "Intel x86-64h Haswell",
-        "cpu_type": "x86_64h",
-        "hardware_model": random_model_identifier(),
-        "hardware_serial": serial_number,
-        "physical_memory": "17179869184",
-    }
+def random_system_info(computer_name, serial_number):
+    system_info = random.choice(SYSTEM_INFOS)
+    system_info["computer_name"] = computer_name
+    system_info["hardware_serial"] = serial_number
+    system_info["table_name"] = "system_info"
+    return system_info
 
 
 def random_firefox_version():
-    major = random.choices([63, 64, 65, 66, 67], [5, 10, 70, 8, 7])[0]
+    version, version_str = random.choice(FIREFOX_CHOICES)
     return {
         "bundle_id": "org.mozilla.firefox",
         "bundle_name": "Firefox",
-        "bundle_version": f"{major}18.12.6",
-        "bundle_version_str": f"{major}.0",
-        "bundle_path": "/Applications/Firefox.app"
+        "bundle_version": version,
+        "bundle_version_str": version_str,
+        "bundle_path": "/Applications/Firefox.app",
+        "table_name": "apps"
     }
 
 
-def random_inventory_payload(node_key, computer_name, serial_number, uuid):
-    os_version = random_os_version()
-    os_version["table_name"] = "os_version"
-    system_info = random_system_info(computer_name, serial_number, uuid)
-    system_info["table_name"] = "system_info"
-    apps = random_firefox_version()
-    apps["table_name"] = "apps"
+def random_inventory_result(node_key, computer_name, serial_number, uuid, osquery_version):
+    system_info = random_system_info(computer_name, serial_number)
+    os_version = random_os_version(system_info["cpu_type"])
+    app = random_firefox_version()
     return {
-        "queries": {
-            "__zentral_distributed_inventory_query_apps": [apps],
-            "__zentral_distributed_inventory_query_os_version": [os_version],
-            "__zentral_distributed_inventory_query_system_info": [system_info],
-            "__zentral_distributed_inventory_query_uptime": [{
-                "table_name": "uptime",
-                "total_seconds": str(random.randint(62, 24*3600*100))
-            }]
-        },
-        "statuses": {
-            "__zentral_distributed_inventory_query_apps": 0,
-            # "__zentral_distributed_inventory_query_network_interface": 0,
-            "__zentral_distributed_inventory_query_os_version": 0,
-            "__zentral_distributed_inventory_query_system_info": 0,
-            "__zentral_distributed_inventory_query_uptime": 0
-        },
         "node_key": node_key,
+        "log_type": "result",
+        "action": "snapshot",
+        "data": [
+            {"snapshot": [
+                system_info,
+                os_version,
+                app,
+             ],
+             "hostIdentifier": serial_number,
+             "calendarTime": "",
+             "unixTime": 0,
+             "epoch": 0,
+             "counter": 0,
+             "numerics": False,
+             "name": "ztl-inv",
+             "decorations": {
+                 "serial_number": serial_number,
+                 "version": osquery_version,
+             }}
+        ]
     }
 
 
-def enroll(computer_name, serial_number, uuid, ca_cert):
+def enroll(base_url, enrollment_secret, computer_name, serial_number, uuid, osquery_version):
     enroll_payload = {
         "host_identifier": computer_name,
-        "enroll_secret": "tmYA0Il53Z6YcEvGONdylvBrloKKYG8MB74Ktn36T3T9SONxxEo7NLfLZ4Jk2lEz",
+        "enroll_secret": enrollment_secret,
+        "platform_type": "21",
         "host_details": {"system_info": {"hardware_serial": serial_number,
-                                         "uuid": uuid}}
+                                         "uuid": uuid},
+                         "osquery_info": {"version": osquery_version}},
     }
-    response = requests.post("https://zentral/osquery/enroll", json=enroll_payload, verify=ca_cert)
+    response = requests.post(f"{base_url}/osquery/enroll",
+                             json=enroll_payload,
+                             headers={'user-agent': f"osquery/{osquery_version}"})
     response.raise_for_status()
     return response.json()["node_key"]
 
 
-def post_inventory_distributed_query(node_key, computer_name, serial_number, uuid, ca_cert):
-    inventory_payload = random_inventory_payload(node_key, computer_name, serial_number, uuid)
-    response = requests.post("https://zentral/osquery/distributed/write", json=inventory_payload, verify=ca_cert)
+def post_inventory_result(base_url, node_key, computer_name, serial_number, uuid, osquery_version):
+    inventory_result = random_inventory_result(node_key, computer_name, serial_number, uuid, osquery_version)
+    response = requests.post(f"{base_url}/osquery/log",
+                             json=inventory_result,
+                             headers={'user-agent': f"osquery/{osquery_version}"})
     response.raise_for_status()
 
 
-def iter_machines(num=10):
+def iter_machines(num=10, prefix=""):
     random_word_function = make_random_word_function()
     for i in range(num):
-        yield random_word_function(), random_serial_number(), random_uuid()
+        yield ("-".join(random_word_function() for _ in range(3)),
+               random_serial_number(prefix),
+               random_uuid())
 
 
 if __name__ == "__main__":
     import sys
-    ca_cert = sys.argv[1]
-    for computer_name, serial_number, uuid in iter_machines(100):
+    base_url, enrollment_secret = sys.argv[1:]
+    osquery_version = "5.2.2"
+    for computer_name, serial_number, uuid in iter_machines(2000, prefix="DEMO"):
         print(computer_name, serial_number, uuid)
-        node_key = enroll(computer_name, serial_number, uuid, ca_cert)
+        node_key = enroll(base_url, enrollment_secret, computer_name, serial_number, uuid, osquery_version)
         print("Enrollment OK")
-        post_inventory_distributed_query(node_key, computer_name, serial_number, uuid, ca_cert)
+        post_inventory_result(base_url, node_key, computer_name, serial_number, uuid, osquery_version)
         print("Inventory OK")
