@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from zentral.contrib.inventory.models import BaseEnrollment, Certificate, File, Tag
+from zentral.utils.text import shard
 
 
 logger = logging.getLogger("zentral.contrib.santa.models")
@@ -180,6 +181,12 @@ class Configuration(models.Model):
         default=100,
         help_text="Restrict the reporting of 'Allow Unknown' events to a percentage (0-100) of hosts"
     )
+    enable_all_event_upload_shard = models.IntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        default=0,
+        help_text="Restrict the upload of all execution events to Zentral, including those that were "
+                  "explicitly allowed, to a percentage (0-100) of hosts"
+    )
 
     # TLS
 
@@ -250,7 +257,7 @@ class Configuration(models.Model):
     def is_monitor_mode(self):
         return self.client_mode == self.MONITOR_MODE
 
-    def get_sync_server_config(self, comparable_santa_version):
+    def get_sync_server_config(self, serial_number, comparable_santa_version):
         config = {k: getattr(self, k)
                   for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
 
@@ -273,6 +280,13 @@ class Configuration(models.Model):
         if comparable_santa_version < (1, 14):
             for attr, deprecated_attr in self.DEPRECATED_ATTRIBUTES_MAPPING_1_14.items():
                 config[deprecated_attr] = config.pop(attr)
+
+        # enable_all_event_upload
+        config["enable_all_event_upload"] = (
+            self.enable_all_event_upload_shard > 0 and
+            (self.enable_all_event_upload_shard == 100 or
+             shard(serial_number, self.pk) <= self.enable_all_event_upload_shard)
+        )
 
         return config
 

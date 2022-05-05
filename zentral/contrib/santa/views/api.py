@@ -250,6 +250,7 @@ class PreflightView(BaseSyncView):
         self._commit_machine_snapshot()
 
         response_dict = self.enrolled_machine.enrollment.configuration.get_sync_server_config(
+            self.enrolled_machine.serial_number,
             self.enrolled_machine.get_comparable_santa_version()
         )
 
