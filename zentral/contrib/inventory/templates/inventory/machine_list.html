@@ -212,7 +212,7 @@
           <div style="z-index:10;position:absolute;top:0;bottom:0;right:0;left:0;">
             <span class="badge pull-right">{{ count }}</span>
           </div>
-          <a style="z-index:20;position:absolute;display:block;padding:0 2.5em 0 0;left:0;right:0;top:0;bottom:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}">
+          <a title="{{ label }}" style="z-index:20;position:absolute;display:block;padding:0 2.5em 0 0;left:0;right:0;top:0;bottom:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}">
             {{ label }}
           </a>
         </div>
