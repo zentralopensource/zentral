@@ -90,7 +90,7 @@ Example:
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/inventory/cleanup/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -119,7 +119,7 @@ curl -XPOST \
   -H 'Content-Type: application/json' \
   -d '{"serial_numbers": ["0123456789"]}' \
   https://zentral.example.com/api/inventory/machines/archive/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -145,7 +145,7 @@ curl -XPOST \
   -H 'Content-Type: application/json' \
   -d '{"serial_numbers": ["0123456789"]}' \
   https://zentral.example.com/api/inventory/machines/prune/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -172,7 +172,7 @@ Example:
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/inventory/machines/export_android_apps/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -199,7 +199,7 @@ Example:
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/inventory/machines/export_deb_packages/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -227,7 +227,7 @@ Example:
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/inventory/machines/export_ios_apps/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -256,7 +256,7 @@ Example:
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/inventory/machines/export_macos_app_instances/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -285,7 +285,7 @@ Example:
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/inventory/machines/export_program_instances/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -313,7 +313,7 @@ Example:
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/inventory/machines/export_snapshots/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:

@@ -77,7 +77,7 @@ $ curl -XPUT \
   -H 'Content-Type: application/json' \
   -d @pack.json \
   https://zentral.example.com/api/osquery/packs/first-pack-slug/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 You should get a response close to this one:
@@ -124,7 +124,7 @@ $ curl -XDELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   https://zentral.example.com/api/osquery/packs/first-pack-slug/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 You should get a response close to this one:
@@ -173,7 +173,7 @@ $ curl -XPUT \
   -H 'Content-Type: application/x-osquery-conf' \
   --data-binary @pack.conf \
   https://zentral.example.com/api/osquery/packs/second-pack-slug/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 You should get a response close to this one:
@@ -220,7 +220,7 @@ $ curl -XPUT \
   -H 'Content-Type: application/yaml' \
   --data-binary @pack.yml \
   https://zentral.example.com/api/osquery/packs/second-pack-slug/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 You should get a response close to this one:

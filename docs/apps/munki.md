@@ -35,7 +35,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   https://zentral.example.com/api/munki/configurations/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -81,7 +81,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   https://zentral.example.com/api/munki/configurations/1/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -125,7 +125,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   https://zentral.example.com/api/munki/enrollments/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -168,7 +168,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   https://zentral.example.com/api/munki/enrollments/1/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:

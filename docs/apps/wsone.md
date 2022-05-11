@@ -56,7 +56,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   https://zentral.example.com/api/wsone/instances/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -90,7 +90,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   https://zentral.example.com/api/wsone/instances/1/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:
@@ -124,7 +124,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   https://zentral.example.com/api/wsone/instances/1/sync/ \
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Response:

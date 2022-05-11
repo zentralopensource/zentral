@@ -330,7 +330,7 @@ $ curl -XPOST \
   -H 'Content-Type: application/json' \
   -d @ruleset.json \
   https://zentral.example.com/api/santa/rulesets/update/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 You should get a response close to this one:
@@ -475,7 +475,7 @@ $ curl -XPOST \
   -H 'Content-Type: application/yaml' \
   --data-binary @ruleset2.yml \
   https://zentral.example.com/api/santa/rulesets/update/\
-  |python -m json.tool
+  |python3 -m json.tool
 ```
 
 Nothing was changed:
