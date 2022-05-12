@@ -1293,7 +1293,10 @@ class ComplianceCheckStatusFilter(BaseMSFilter):
     statuses_dict = dict(ComplianceCheckStatus.choices())
 
     def __init__(self, *args, **kwargs):
-        self.compliance_check = ComplianceCheck.objects.get(pk=kwargs.pop("compliance_check_pk"))
+        try:
+            self.compliance_check = ComplianceCheck.objects.get(pk=kwargs.pop("compliance_check_pk"))
+        except Exception:
+            raise MSQueryValueError("ccs")
         self.title = self.compliance_check.name
         super().__init__(*args, **kwargs)
         self.expression = f"ccs{self.idx}.max_compliance_check_status as ccs{self.idx}_max_compliance_check_status"
