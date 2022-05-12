@@ -359,7 +359,7 @@
       var divs = [];
       $.each($filter_list.children("div"), function () {
         var $div = $(this);
-        var sortDiv = {l: $div.data("label"), "c": $div.data("count"), "div": $div.detach().get(0)};
+        var sortDiv = {l: this.dataset["label"], "c": $div.data("count"), "div": $div.detach().get(0)};
         sortDiv["linn"] = sortDiv["l"] != '\u2400';
         divs.push(sortDiv);
       });
