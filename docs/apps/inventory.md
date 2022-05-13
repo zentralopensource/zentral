@@ -156,6 +156,178 @@ Response:
  "machine_snapshot_commits": 13}
 ```
 
+### `/api/inventory/android_apps/export/`
+
+* method: POST
+* Content-Type: application/json
+* required permission:
+    * `inventory.view_androidapp`
+* optional parameters:
+    * `export_format`: `csv` or `xlsx`. Defaults to `xlsx`.
+    * `source`: The ID of an inventory source. Only Android apps collected via this source will be included in the export.
+    * `last_seen`: `1d`, `7d`, `14d`, `30d`, `45d`, `90d`. Only Android apps collected within this time window will be included in the export.
+    * `display_name`: A search string.
+
+Use this endpoint to trigger an Android apps export task. The result of this task will be a spreadsheet.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"display_name": "Chrome"}' \
+  https://zentral.example.com/api/inventory/android_apps/export/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd3",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd3/"
+}
+```
+
+### `/api/inventory/deb_packages/export/`
+
+* method: POST
+* Content-Type: application/json
+* required permission:
+    * `inventory.view_debpackage`
+* optional parameters:
+    * `export_format`: `csv` or `xlsx`. Defaults to `xlsx`.
+    * `source`: The ID of an inventory source. Only Debian packages collected via this source will be included in the export.
+    * `last_seen`: `1d`, `7d`, `14d`, `30d`, `45d`, `90d`. Only Debian packages collected within this time window will be included in the export.
+    * `name`: A search string.
+
+Use this endpoint to trigger a Debian packages export task. The result of this task will be a spreadsheet.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "Firefox", "last_seen": "90d"}' \
+  https://zentral.example.com/api/inventory/deb_packages/export/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a9243fddd3",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a9243fddd3/"
+}
+```
+
+### `/api/inventory/ios_apps/export/`
+
+* method: POST
+* Content-Type: application/json
+* required permission:
+    * `inventory.view_iosapp`
+* optional parameters:
+    * `export_format`: `csv` or `xlsx`. Defaults to `xlsx`.
+    * `source`: The ID of an inventory source. Only iOS apps collected via this source will be included in the export.
+    * `last_seen`: `1d`, `7d`, `14d`, `30d`, `45d`, `90d`. Only iOS apps collected within this time window will be included in the export.
+    * `name`: A search string.
+
+Use this endpoint to trigger an iOS apps export task. The result of this task will be a spreadsheet.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "1Password", "last_seen": "1d"}' \
+  https://zentral.example.com/api/inventory/ios_apps/export/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-83a9243fddd3",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-83a9243fddd3/"
+}
+```
+
+### `/api/inventory/macos_apps/export/`
+
+* method: POST
+* Content-Type: application/json
+* required permission:
+    * `inventory.view_osxapp`
+    * `inventory.view_osxappinstance`
+* optional parameters:
+    * `export_format`: `csv` or `xlsx`. Defaults to `xlsx`.
+    * `source`: The ID of an inventory source. Only macOS apps collected via this source will be included in the export.
+    * `last_seen`: `1d`, `7d`, `14d`, `30d`, `45d`, `90d`. Only macOS apps collected within this time window will be included in the export.
+    * `bundle_name`: A search string.
+
+Use this endpoint to trigger a macOS apps export task. The result of this task will be a spreadsheet.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"bundle_name": "1Password", "last_seen": "14d", "source": 4641}' \
+  https://zentral.example.com/api/inventory/macos_apps/export/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "c1512b8d-1e17-4181-a1c3-83a9243fddd3",
+  "task_result_url": "/api/task_result/c1512b8d-1e17-4181-a1c3-83a9243fddd3/"
+}
+```
+
+### `/api/inventory/programs/export/`
+
+* method: POST
+* Content-Type: application/json
+* required permission:
+    * `inventory.view_program`
+    * `inventory.view_programinstance`
+* optional parameters:
+    * `export_format`: `csv` or `xlsx`. Defaults to `xlsx`.
+    * `source`: The ID of an inventory source. Only Windows programs collected via this source will be included in the export.
+    * `last_seen`: `1d`, `7d`, `14d`, `30d`, `45d`, `90d`. Only Windows programs collected within this time window will be included in the export.
+    * `name`: A search string.
+
+Use this endpoint to trigger a Windows programs export task. The result of this task will be a spreadsheet.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "1Password", "export_format": "csv"}' \
+  https://zentral.example.com/api/inventory/programs/export/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "c2512b8d-1e17-4181-a1c3-83a9243fddd3",
+  "task_result_url": "/api/task_result/c2512b8d-1e17-4181-a1c3-83a9243fddd3/"
+}
+```
+
 ### `/api/inventory/machines/export_android_apps/`
 
 * method: POST
