@@ -162,16 +162,16 @@ Response:
 * required permission:
 	* `inventory.view_androidapp`
 * optional parameter:
-	* `source`: The name of an inventory source. Only machines with Android apps collected via this source will be included in the export.
+	* `source_name`: The name of an inventory source. Only machines with Android apps collected via this source will be included in the export.
 
 Use this endpoint to trigger a machine Android apps export task. The result of this task will be a Zip archive containing a CSV file for each source.
 
-Example:
+Example of an export limited to the `Workspace ONE` source:
 
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/inventory/machines/export_android_apps/\
+  "https://zentral.example.com/api/inventory/machines/export_android_apps/?source_name=Workspace%20ONE" \
   |python3 -m json.tool
 ```
 
@@ -189,7 +189,7 @@ Response:
 * required permission:
 	* `inventory.view_debpackage`
 * optional parameter:
-	* `source`: The name of an inventory source. Only machines with Debian packages collected via this source will be included in the export.
+	* `source_name`: The name of an inventory source. Only machines with Debian packages collected via this source will be included in the export.
 
 Use this endpoint to trigger a machine Debian packages export task. The result of this task will be a Zip archive containing a CSV file for each source.
 
@@ -217,7 +217,7 @@ Response:
 * required permission:
 	* `inventory.view_iosapp`
 * optional parameter:
-	* `source`: The name of an inventory source. Only machines with iOS apps collected via this source will be included in the export.
+	* `source_name`: The name of an inventory source. Only machines with iOS apps collected via this source will be included in the export.
 
 Use this endpoint to trigger a machine iOS apps export task. The result of this task will be a Zip archive containing a CSV file for each source.
 
@@ -246,7 +246,7 @@ Response:
 	* `inventory.view_osxapp`
 	* `inventory.view_osxappinstance`
 * optional parameter:
-	* `source`: The name of an inventory source. Only machines with macOS apps collected via this source will be included in the export.
+	* `source_name`: The name of an inventory source. Only machines with macOS apps collected via this source will be included in the export.
 
 Use this endpoint to trigger a machine macOS app instances export task. The result of this task will be a Zip archive containing a CSV file for each source.
 
@@ -275,7 +275,7 @@ Response:
 	* `inventory.view_program`
 	* `inventory.view_programinstance`
 * optional parameter:
-	* `source`: The name of an inventory source. Only machines with Windows programs collected via this source will be included in the export.
+	* `source_name`: The name of an inventory source. Only machines with Windows programs collected via this source will be included in the export.
 
 Use this endpoint to trigger a machine Windows program instances export task. The result of this task will be a Zip archive containing a CSV file for each source.
 
@@ -303,7 +303,7 @@ Response:
 * required permissions:
 	* `inventory.view_machinesnapshot`
 * optional parameter:
-	* `source`: The name of an inventory source. Only machine snapshots collected via this source will be included in the export.
+	* `source_name`: The name of an inventory source. Only machine snapshots collected via this source will be included in the export.
 
 Use this endpoint to trigger a machine snapshots export task. The result of this task will be a Zip archive containing a JSONL file for each source.
 
