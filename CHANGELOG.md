@@ -1,8 +1,72 @@
-## 2021.3 (Upcoming)
+## 2022.1 (May 16, 2021)
+
+### Features (some, not all…)
+
+Add Santa team ID rules.
+
+Multiple Elasticsearch indices/aliases for event lifecycle management.
+
+Add event routing keys. Use routing keys for the event stores.
+
+Refactor Puppet inventory souce.
+
+Add Workspace ONE inventory source.
+
+Add iOS and Android apps to inventory.
+
+Upgrade to Django 3.2 LTS.
+
+Replace U2F by WebAuthN for 2FA.
+
+Add API endpoints for Munki, Osquery, and Santa enrollements.
+
+Add shards in Monolith/Munki PkgInfos and Submanifests.
+
+Add last seen filter to inventory machine list
+
+Add inventory (JMESPath) and Osquery compliance checks
+
+Collect AWS EC2 information in inventory.
+
+Collect macOS profiles & payloads in inventory.
+
+New incident architecture. Add incidents for Munki reinstalls and failed installs.
+
+Bulk store worker on GCP Pub/Sub.
+
+Add Santa metrics and targets views.
+
+Add event linked objects search.
+
+Splunk can be used as frontend store.
+
+Shards for Santa Allow unknown and Upload all events options
+
+Munki managed installs collection and metrics
+
+Monolith managed installs collection and metrics
+
+mdmcerts management commannd for the MDM vendor and push certificates
+
+Secret engines can be used to encrypt the secrets stored in the database.
+
+### Backward incompatibilities
 
 #### 🧨 Python compatibility change
 
-Zentral support for python 3.6 dropped. Zentral supports python 3.7, 3.8, 3.9.
+Zentral support for python 3.6 dropped. Zentral supports python 3.7, 3.8, 3.9, and 3.10.
+
+#### 🧨 GCP Pub/Sub subscription filters removed
+
+They could not be updated, and are not compatible with the event routing keys.
+
+#### 💣 Puppet integration
+
+The Puppet module has been refactored, and PuppetDB instances must be configured in the setup section.
+
+#### ⚠️  event filters for event stores
+
+`excluded_event_types` and `included_event_types` are deprecated. They have been replaced by `excluded_event_filters` and `included_event_filters` respectively.
 
 ## 2021.2 (October 1, 2021)
 
