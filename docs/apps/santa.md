@@ -294,6 +294,32 @@ But if a manual rule or a rule from a different ruleset on a given target alread
 
 Finally, rules belonging to a ruleset cannot be manually edited in Zentral.
 
+#### Payloads
+
+The rulesets can be posted in JSON or YAML format. See *Examples* below, and the different `Content-Type` header values.
+
+##### Ruleset attributes
+
+|Attribute|Mandatory|Value|
+|---|---|---|
+|`name`|✓|Unique name of the ruleset.<br>Used as key to determine if it is a create or update operation|
+|`rules`|✓|A list of rule objects (see below)|
+
+##### Rule attributes
+
+|Attribute|Mandatory|Value|
+|---|---|---|
+|`rule_type`|✓|Either `BINARY`, `CERTIFICATE`, `BUNDLE`, or `TEAMID`|
+|`identifier`|✓|The `BINARY`, `CERTIFICATE`, `BUNDLE` sha256 hex digest,<br>or the `TEAMID` of the signing certificate|
+|`policy`|✓|Either `ALLOWLIST`, `ALLOWLIST_COMPILER`, `BLOCKLIST`,<br>or `SILENT_BLOCKLIST`|
+|`custom_msg`||Optional message to show when the application is blocked.<br>Only valid for a `BLOCKLIST` policy|
+|`serial_numbers`||A list of machine serial numbers.<br>If set, **only** those machines will receive the rule|
+|`excluded_serial_numbers`||A list of machine serial numbers.<br>If set, those machines will **not** receive the rule|
+|`primary_users`||A list of machine owners.<br>If set, **only** the machines associated with those owners<br>(see Santa `MachineOwner`) will receive the rule|
+|`excluded_primary_users`||A list  of machine owners.<br>If set, the machines associated with those owners<br>(see Santa `MachineOwner`) will **not** receive the rule|
+|`tags`||A list of machine tags.<br>If set, **only** the machines with any one of those tags<br>will receive the rule|
+|`excluded_tags`||A list of machine tags.<br>If set, the machines with any one of those tags<br>will **not** receive the rule|
+
 #### Examples
 
 ruleset.json
