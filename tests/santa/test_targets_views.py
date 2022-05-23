@@ -10,7 +10,7 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import File
 from accounts.models import User
 from zentral.contrib.santa.models import Bundle, Configuration, Target
-from zentral.core.stores import frontend_store
+from zentral.core.stores.conf import frontend_store
 
 
 def get_random_sha256():

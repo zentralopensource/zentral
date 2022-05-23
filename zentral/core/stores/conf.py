@@ -3,7 +3,7 @@ import logging
 from django.utils.functional import SimpleLazyObject
 from zentral.conf import settings
 
-logger = logging.getLogger('zentral.core.stores')
+logger = logging.getLogger('zentral.core.stores.conf')
 
 
 __all__ = ['frontend_store', 'stores']
