@@ -18,7 +18,7 @@ from zentral.conf import settings
 from zentral.core.compliance_checks import compliance_check_class_from_model
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
 from zentral.core.incidents.models import MachineIncident
-from zentral.core.stores import frontend_store, stores
+from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
 from .compliance_checks import InventoryJMESPathCheck

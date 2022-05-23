@@ -10,7 +10,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.core.incidents.models import Incident, MachineIncident, Status, Severity
 from zentral.core.probes.models import ProbeSource
-from zentral.core.stores import frontend_store
+from zentral.core.stores.conf import frontend_store
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')

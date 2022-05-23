@@ -1,7 +1,7 @@
 from importlib import import_module
 from . import queues
 from zentral.conf import settings
-from zentral.core.stores import stores
+from zentral.core.stores.conf import stores
 from zentral.core.events.pipeline import enrich_event, process_event
 
 

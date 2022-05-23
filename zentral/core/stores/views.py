@@ -4,7 +4,7 @@ from django.core import signing
 from django.http import HttpResponseRedirect
 from django.views.generic import TemplateView, View
 from zentral.core.events import event_types
-from zentral.core.stores import frontend_store, stores
+from zentral.core.stores.conf import frontend_store, stores
 
 
 #
