@@ -7,7 +7,7 @@ from django.utils.functional import cached_property
 from rest_framework import serializers
 from zentral.contrib.inventory.conf import (PLATFORM_CHOICES, PLATFORM_CHOICES_DICT,
                                             TYPE_CHOICES, TYPE_CHOICES_DICT)
-from zentral.core.actions import actions as available_actions
+from zentral.core.actions.conf import actions as available_actions
 from zentral.core.events import event_types
 from zentral.core.incidents.models import Severity
 from .incidents import ProbeIncident
