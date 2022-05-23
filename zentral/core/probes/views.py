@@ -8,6 +8,7 @@ from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
+from zentral.core.actions.conf import actions as available_actions
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.charts import make_dataset
@@ -330,7 +331,6 @@ class EditActionView(PermissionRequiredMixin, FormView):
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
         self.probe = self.probe_source.load()
-        from zentral.core.actions import actions as available_actions
         try:
             self.action = available_actions[kwargs["action"]]
         except KeyError:
@@ -377,7 +377,6 @@ class DeleteActionView(PermissionRequiredMixin, TemplateView):
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
         self.probe = self.probe_source.load()
-        from zentral.core.actions import actions as available_actions
         try:
             self.action = available_actions[kwargs["action"]]
         except KeyError:
