@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
-from zentral.core.stores import frontend_store, stores
+from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.text import encode_args

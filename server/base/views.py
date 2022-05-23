@@ -3,7 +3,7 @@ from django.apps import apps
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.generic import TemplateView, View
-from zentral.core.stores import frontend_store
+from zentral.core.stores.conf import frontend_store
 
 
 logger = logging.getLogger("server.base.views")

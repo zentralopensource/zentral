@@ -23,7 +23,7 @@ from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFai
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaMachine, Tag
 from zentral.contrib.inventory.utils import verify_enrollment_secret
-from zentral.core.stores import frontend_store, stores
+from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.storage import file_storage_has_signed_urls

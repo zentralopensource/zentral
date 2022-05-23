@@ -10,7 +10,7 @@ from django.urls import reverse, reverse_lazy
 from django.utils.crypto import constant_time_compare
 from django.views.generic import DetailView, ListView, TemplateView
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
-from zentral.core.stores import frontend_store, stores
+from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.text import encode_args
