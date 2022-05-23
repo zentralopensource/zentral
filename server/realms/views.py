@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView, View
-from .backends import backend_classes
+from .backends.registry import backend_classes
 from .forms import RealmGroupMappingForm
 from .models import Realm, RealmAuthenticationSession, RealmGroupMapping
 from .utils import get_realm_user_mapped_groups

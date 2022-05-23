@@ -6,6 +6,8 @@ from django.contrib.auth.models import Group
 from django.db import models
 from django.urls import reverse
 from django.utils.functional import cached_property
+from .backends.registry import backend_classes
+
 
 logger = logging.getLogger('zentral.realms.models')
 
@@ -38,7 +40,6 @@ class Realm(models.Model):
 
     @cached_property
     def backend_instance(self):
-        from .backends import backend_classes
         backend_class = backend_classes.get(self.backend)
         if backend_class:
             return backend_class(self)
