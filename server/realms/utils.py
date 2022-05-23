@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, login
 from django.urls import reverse
 from accounts.events import post_group_membership_updates
-from . import SESSION_KEY
+from .middlewares import SESSION_KEY
 
 
 logger = logging.getLogger("zentral.realms.utils")
