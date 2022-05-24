@@ -328,7 +328,6 @@ class EventMetadata(object):
         except ReferenceError:
             # should not happen
             logger.error("Cannot compute probe event incident update")
-            pass
         else:
             if incident_update is not None:
                 self.incident_updates.append(incident_update)
