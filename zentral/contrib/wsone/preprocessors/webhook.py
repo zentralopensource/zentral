@@ -115,8 +115,7 @@ class WebhookEventPreprocessor(object):
                     return datetime.fromisoformat(event_time[:ts_length])
                 except Exception:
                     pass
-            else:
-                logger.error("Could not parse event time '%s' in %s event", event_time, event_type)
+            logger.error("Could not parse event time '%s' in %s event", event_time, event_type)
 
         event_cls = event_cls_from_type(event_type)
         yield from event_cls.build_from_machine_request_payloads(
