@@ -37,7 +37,7 @@ class InstallEnterpriseApplication(Command):
 
     def command_acknowledged(self):
         if self.artifact_version.enterprise_app.bundles:
-            device_artifact, created = DeviceArtifact.objects.update_or_create(
+            DeviceArtifact.objects.update_or_create(
                 enrolled_device=self.enrolled_device,
                 artifact_version=self.artifact_version,
                 defaults={"status": TargetArtifactStatus.AwaitingConfirmation.name}

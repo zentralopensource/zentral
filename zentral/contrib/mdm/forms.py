@@ -132,7 +132,7 @@ class EncryptedDEPTokenForm(forms.ModelForm):
         try:
             virtual_server = DEPVirtualServer.objects.get(uuid=server_uuid)
         except DEPVirtualServer.DoesNotExist:
-            virtual_server = DEPVirtualServer.objects.create(uuid=server_uuid, **defaults)
+            DEPVirtualServer.objects.create(uuid=server_uuid, **defaults)
         else:
             # we do not use update_or_create to be able to remove the old dep token
             old_token = virtual_server.token
@@ -305,14 +305,14 @@ class UploadEnterpriseAppForm(forms.Form):
                                                channel=Channel.Device.name,
                                                platforms=[Platform.macOS.name])
             artifact_version = ArtifactVersion.objects.create(artifact=artifact, version=1)
-            enterprise_app = EnterpriseApp.objects.create(artifact_version=artifact_version, **cleaned_data)
+            EnterpriseApp.objects.create(artifact_version=artifact_version, **cleaned_data)
         else:
             artifact = enterprise_app.artifact_version.artifact
             if enterprise_app.manifest != cleaned_data["manifest"]:
                 operation = "updated"
                 artifact_version = ArtifactVersion.objects.create(artifact=artifact,
                                                                   version=enterprise_app.artifact_version.version + 1)
-                enterprise_app = EnterpriseApp.objects.create(artifact_version=artifact_version, **cleaned_data)
+                EnterpriseApp.objects.create(artifact_version=artifact_version, **cleaned_data)
                 artifact.name = name
                 artifact.trashed_at = None
                 artifact.save()
@@ -381,14 +381,14 @@ class UploadProfileForm(forms.Form):
                                                channel=channel,
                                                platforms=Platform.all_values())
             artifact_version = ArtifactVersion.objects.create(artifact=artifact, version=1)
-            profile = Profile.objects.create(artifact_version=artifact_version, **cleaned_data)
+            Profile.objects.create(artifact_version=artifact_version, **cleaned_data)
         else:
             artifact = profile.artifact_version.artifact
             if profile.source.tobytes() != cleaned_data["source"]:
                 operation = "updated"
                 artifact_version = ArtifactVersion.objects.create(artifact=artifact,
                                                                   version=profile.artifact_version.version + 1)
-                profile = Profile.objects.create(artifact_version=artifact_version, **cleaned_data)
+                Profile.objects.create(artifact_version=artifact_version, **cleaned_data)
                 artifact.name = name
                 artifact.channel = channel
                 artifact.trashed_at = None
