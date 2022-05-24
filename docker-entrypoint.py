@@ -86,12 +86,16 @@ KNOWN_COMMANDS = {
     # extras
     "shell": ["python", 'server/manage.py', 'shell'],
     "tests": ["python", 'server/manage.py', 'test', 'tests/'],
+    "tests_with_coverage": ["coverage", "run", 'server/manage.py', 'test', 'tests/'],
+    "coverage_lcov": ["coverage", "lcov"],
     "createuser": ["python", 'server/manage.py', 'create_zentral_user'],
 }
 
 KNOWN_COMMANDS_EXTRA_ENV = {
     "tests": {"ZENTRAL_PROBES_SYNC": "0",
-              "ZENTRAL_CONF_DIR": "/zentral/tests/conf"}
+              "ZENTRAL_CONF_DIR": "/zentral/tests/conf"},
+    "tests_with_coverage": {"ZENTRAL_PROBES_SYNC": "0",
+                            "ZENTRAL_CONF_DIR": "/zentral/tests/conf"}
 }
 
 KNOWN_COMMANDS_CHDIR = {
