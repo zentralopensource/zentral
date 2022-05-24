@@ -7,9 +7,6 @@ from .http import user_agent_and_ip_address_from_request
 
 
 class CustomJSONEncoder(DjangoJSONEncoder):
-    def prepare_http_request(request):
-        return request.META
-
     def default(self, o):
         try:
             return super().default(o)
