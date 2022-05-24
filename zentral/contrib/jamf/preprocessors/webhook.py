@@ -33,7 +33,6 @@ class WebhookEventPreprocessor(object):
                              jamf_instance_d["pk"], jamf_instance_d["version"])
                 # event might have been queued before the secret engines migration
                 # allow password as it is in the event
-                pass
             client = APIClient(password=password, **jamf_instance_d)
             self.clients[key] = client
         return key, client
