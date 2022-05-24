@@ -157,7 +157,7 @@ def get_post_data(secret, serial_number, uuid):
 
 
 def start_enrollment(serial_number, uuid):
-    print("START ENROLLMENT", ENROLLMENT_SECRET)
+    print("START ENROLLMENT")
     req = urllib.request.Request(START_ENROLLMENT_URL,
                                  get_post_data(ENROLLMENT_SECRET, serial_number, uuid),
                                  DEFAULT_HEADERS)
@@ -209,7 +209,7 @@ def build_csr(tmpdir, serial_number, cn, org, challenge):
 
 
 def get_certificate(serial_number, cn, org, challenge, url):
-    print("GET CERTIFICATE", cn, org, challenge, url)
+    print("GET CERTIFICATE", cn, org, url)
     if not os.path.isdir(FILEBEAT_HOME):
         os.makedirs(FILEBEAT_HOME)
     old_umask = os.umask(0o077)
@@ -233,7 +233,7 @@ def get_certificate(serial_number, cn, org, challenge, url):
 
 
 def complete_enrollment(client_cert, client_key, enrollment_session_secret, serial_number, uuid):
-    print("COMPLETE ENROLLMENT", client_cert, client_key, enrollment_session_secret)
+    print("COMPLETE ENROLLMENT")
     req = urllib.request.Request(COMPLETE_ENROLLMENT_URL,
                                  get_post_data(enrollment_session_secret, serial_number, uuid),
                                  DEFAULT_HEADERS)
