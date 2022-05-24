@@ -55,7 +55,6 @@ def parse_dn(dn):
 
     if current_attr:
         d[current_attr] = current_val
-        current_attr = current_val = ""
 
     # try to extract the serial number
     encoded_serial_number = d.get(SERIAL_NUMBER_OID)
@@ -101,7 +100,6 @@ def parse_text_dn(dn):
 
     if current_attr:
         d[current_attr].append(current_val)
-        current_attr = current_val = ""
     return d
 
 

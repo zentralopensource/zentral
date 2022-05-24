@@ -1,7 +1,9 @@
 import datetime
 import os
+from asn1crypto.core import UTF8String
 from django.test import SimpleTestCase
-from zentral.utils.certificates import is_ca, iter_cert_trees, iter_certificates, parse_apple_dev_id
+from zentral.utils.certificates import (is_ca, iter_cert_trees, iter_certificates, parse_apple_dev_id,
+                                        parse_dn, parse_text_dn)
 
 
 class CertificatesTestCate(SimpleTestCase):
@@ -49,4 +51,23 @@ class CertificatesTestCate(SimpleTestCase):
                             'organizational_unit': 'IT'},
               'valid_from': datetime.datetime(2017, 10, 16, 15, 14, 38),
               'valid_until': datetime.datetime(2027, 10, 14, 15, 14, 38)}]
+        )
+
+    def test_parse_dn(self):
+        serialNumber = "le début de la fin"
+        serialNumberASN1 = UTF8String(serialNumber).dump().hex()
+        self.assertEqual(
+            parse_dn(f"CN=L. Eagle,O=Sue\\, Grabbit and Runn,C=GB,2.5.4.5=#{serialNumberASN1}"),
+            {"CN": "L. Eagle",
+             "O": "Sue, Grabbit and Runn",
+             "C": "GB",
+             "serialNumber": serialNumber}
+        )
+
+    def test_parse_text_dn(self):
+        self.assertEqual(
+            parse_text_dn("/DC=com/DC=dhl/CN=Kundenkonto, Noreply, BN/emailAddress=noreply.kundenkonto@dhl.de"),
+            {"DC": ["com", "dhl"],
+             "CN": ["Kundenkonto, Noreply, BN"],
+             "emailAddress": ["noreply.kundenkonto@dhl.de"]}
         )
