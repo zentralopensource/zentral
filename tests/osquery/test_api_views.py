@@ -885,6 +885,20 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(query.version, 3)
         self.assertEqual(query.compliance_check.version, 3)
 
+    def test_put_pack_osquery_conf_parse_error(self):
+        self.set_pack_endpoint_put_permissions()
+        slug = get_random_string(12)
+        url = reverse("osquery_api:pack", args=(slug,))
+
+        pack = """
+        {
+          // Do not use this query in production!!!
+        """
+
+        response = self.put_data(url, pack.encode("utf-8"), "application/x-osquery-conf", include_token=True)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'detail': 'Osquery config parse error'})
+
     def test_put_pack_osquery_conf(self):
         self.set_pack_endpoint_put_permissions()
         slug = get_random_string(12)

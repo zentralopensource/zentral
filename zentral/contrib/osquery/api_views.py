@@ -138,8 +138,8 @@ class OsqueryConfigParser(BaseParser):
                     continue
                 sink += line + "\n"
             return json.loads(sink)
-        except ValueError as exc:
-            raise ParseError(f'Osquery config parse error - {exc}')
+        except ValueError:
+            raise ParseError('Osquery config parse error')
 
 
 class PackView(APIView):
