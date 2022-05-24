@@ -70,13 +70,13 @@ class RuleUpdateSerializer(serializers.Serializer):
                 if test_team_id(identifier):
                     data["identifier"] = identifier
                 else:
-                    serializers.ValidationError({"identifier": "Invalid Team ID"})
+                    raise serializers.ValidationError({"identifier": "Invalid Team ID"})
             else:
                 identifier = identifier.lower()
                 if test_sha256(identifier):
                     data["identifier"] = identifier
                 else:
-                    serializers.ValidationError({"identifier": "Invalid sha256"})
+                    raise serializers.ValidationError({"identifier": "Invalid sha256"})
         # custom message only with blocklist rule
         if data["policy"] != Rule.BLOCKLIST and "custom_msg" in data:
             if data["custom_msg"]:
