@@ -54,7 +54,6 @@ class PushCertificateForm(forms.ModelForm):
             except ValueError as e:
                 raise forms.ValidationError(str(e))
             except Exception:
-                raise
                 raise forms.ValidationError("Could not load certificate or key file")
             if self.instance.topic and push_certificate_d["topic"] != self.instance.topic:
                 raise forms.ValidationError("The new certificate has a different topic")
