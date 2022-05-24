@@ -134,11 +134,11 @@ class APIClient(object):
         try:
             r = self.session.get(url)
         except requests.exceptions.RequestException as e:
-            raise APIClientError("jamf API error: {}".format(str(e)))
+            raise APIClientError(f"jamf API error: {e}")
         if missing_ok and r.status_code == 404:
             return None
         elif r.status_code != requests.codes.ok:
-            raise APIClientError("{} jamf API HTTP response status code {}".format(url, r.status_code))
+            raise APIClientError(f"{url} jamf API HTTP response status code {r.status_code}")
         return r.json()
 
     def _computers(self):
@@ -225,7 +225,7 @@ class APIClient(object):
         elif device_type == "mobile_device":
             path, obj_attr, list_attr = "mobiledevicegroups", "mobile_device_group", "mobile_devices"
         else:
-            raise APIClientError("Unknown device type {}".format(device_type))
+            raise APIClientError(f"Unknown device type: {device_type}")
         endpoint = "/{}/id/{}".format(path, jamf_id)
         for device in self._make_get_query(endpoint)[obj_attr][list_attr]:
             yield self.machine_reference(device_type, device["id"])
@@ -236,7 +236,7 @@ class APIClient(object):
         elif device_type == "mobile_device":
             return self.get_mobile_device_machine_d(jamf_id)
         else:
-            raise APIClientError("Unknown device type %s", device_type)
+            raise APIClientError(f"Unknown device type: {device_type}")
 
     def get_machine_d_and_tags(self, device_type, jamf_id):
         machine_d = self.get_machine_d(device_type, jamf_id)
@@ -612,7 +612,7 @@ class APIClient(object):
         self.update_token_if_necessary()
         group_d = self.get_computer_group_with_name(group_name)
         if not group_d:
-            logger.debug("Group {} does not exist".format(group_name))
+            logger.debug("Group %s does not exist", group_name)
             return
         else:
             jamf_group_id = group_d["computer_group"]["id"]
@@ -631,7 +631,7 @@ class APIClient(object):
                     ).format(jamf_group_id, jamf_id)
                     r = self.session.put(url, headers=headers, data=data)
                     if r.status_code != requests.codes.created:
-                        raise APIClientError()
+                        raise APIClientError(f"Could not remove computer {jamf_id} from group {group_name}")
                     break
             else:
                 logger.debug("Machine {} already not in group {}".format(jamf_id, group_name))
