@@ -106,8 +106,9 @@ class JSONPostAPIView(View):
     def dispatch(self, request, *args, **kwargs):
         try:
             self.check_request_secret(request, *args, **kwargs)
-        except APIAuthError as auth_err:
-            return HttpResponseForbidden(str(auth_err))
+        except APIAuthError as e:
+            logger.error("Forbidden: %s", e, extra={'request': request})
+            return HttpResponseForbidden()
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
         return super().dispatch(request, *args, **kwargs)
 
@@ -146,9 +147,9 @@ class JSONPostAPIView(View):
                 raise SuspiciousOperation("Payload is not valid json")
         try:
             self.check_data_secret(data)
-        except APIAuthError as auth_err:
-            logger.error("APIAuthError %s", auth_err, extra={'request': request})
-            return HttpResponseForbidden(str(auth_err))
+        except APIAuthError as e:
+            logger.error("Forbidden: %s", e, extra={'request': request})
+            return HttpResponseForbidden()
         response_data = self.do_post(data)
         return JsonResponse(response_data)
 
