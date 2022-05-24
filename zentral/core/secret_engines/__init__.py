@@ -47,7 +47,7 @@ class SecretEngines:
         if not self.default_secret_engine:
             logger.info("No default secret engine")
             for secret_engine_name, secret_engine in self.secret_engines.items():
-                logger.info("Use '%s' secret engine as default", secret_engine_name)
+                logger.info("Use '%s' secret engine as default", secret_engine_name)  # noqa lgtm[py/clear-text-logging-sensitive-data]
                 self.default_secret_engine = secret_engine
                 break
 
