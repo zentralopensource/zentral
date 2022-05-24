@@ -52,7 +52,7 @@ class DeviceInformation(Command):
         "IsRoaming",
         "IsSupervised",
         "iTunesStoreAccountHash",
-        "iTunesStoreAccountIsActive"
+        "iTunesStoreAccountIsActive",
         "LastCloudBackupDate",
         "LocalHostName",
         "MaximumResidentUsers",
