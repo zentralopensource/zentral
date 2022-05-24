@@ -31,3 +31,6 @@ nav:
   - ZAIO on AWS: deployment/zaio-aws.md
   - ZAIO on GCP: deployment/zaio-gcp.md
   - ZAIO setup: deployment/zaio-setup.md
+- Development:
+  - Intro: development/index.md
+  - Secure coding notes: development/secure-coding.md
