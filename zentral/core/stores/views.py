@@ -7,24 +7,42 @@ from zentral.core.events import event_types
 from zentral.core.stores import frontend_store, stores
 
 
+#
+# The following views must be combined with a Mixin for each kind of object.
+# See for example the EventsMixin in zentral.core.probes.views.
+#
+# class EventsMixin:
+#     # the permission to protect the view (see PermissionRequiredMixin)
+#     permission_required = None
+#     # the store search method to use to fetch the object events
+#     store_method_scope = None
+#
+#     def get_object(self, **kwargs):
+#         """Returns the object from the request kwargs"""
+#         return None
+#
+#     def get_fetch_kwargs_extra(self):
+#         """Returns the extra kwargs for the store search method"""
+#         return {}
+#
+#     def get_fetch_url(self):
+#         """Returns the URL of the fetch events view for the object"""
+#         return None
+#
+#     def get_redirect_url(self):
+#         """Returns the URL of the events view for the object"""
+#         return None
+#
+#     def get_store_redirect_url(self):
+#         """Returns the URL of the store redirect view for the object"""
+#         return None
+#
+
+
 class EventsViewMixin(PermissionRequiredMixin):
-    store_method_scope = None
+    """A common Mixin for all the events views"""
+
     default_time_range = "now-7d"
-
-    def get_object(self, **kwargs):
-        return None
-
-    def get_fetch_kwargs_extra(self):
-        return {}
-
-    def get_fetch_url(self):
-        return None
-
-    def get_redirect_url(self):
-        return None
-
-    def get_store_redirect_url(self):
-        return None
 
     def clean_fetch_kwargs(self):
         kwargs = self.get_fetch_kwargs_extra()
@@ -64,6 +82,12 @@ class EventsViewMixin(PermissionRequiredMixin):
 
 
 class EventsView(EventsViewMixin, TemplateView):
+    """The main object events view
+
+    Combine this view with an EventsMixin to get a
+    TemplateView to browse the events linked to an object
+    """
+
     def get(self, request, *args, **kwargs):
         self.object = self.get_object(**kwargs)
         try:
@@ -124,6 +148,15 @@ class EventsView(EventsViewMixin, TemplateView):
 
 
 class FetchEventsView(EventsViewMixin, TemplateView):
+    """The view to fetch the events linked to an object
+
+    Combine this view with an EventsMixin to get a
+    TemplateView to fetch the events linked to an object
+
+    This view is called from the EventsView template using
+    Javascript
+    """
+
     template_name = "core/stores/events_events.html"
     paginate_by = 20
     include_machine_info = True
@@ -150,6 +183,15 @@ class FetchEventsView(EventsViewMixin, TemplateView):
 
 
 class EventsStoreRedirectView(EventsViewMixin, View):
+    """The view to redirect to the store events linked to an object
+
+    Combine this view with an EventsMixin to get a view to
+    redirect the users to the object events in the compatible
+    stores (if they provide an event browser)
+
+    Links to this view are displayed in the EventsView template
+    """
+
     def get(self, request, *args, **kwargs):
         self.object = self.get_object(**kwargs)
         try:
