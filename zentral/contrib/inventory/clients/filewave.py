@@ -150,8 +150,8 @@ class InventoryClient(BaseInventory):
 
     def get_machines(self):
         trees = {}
-        for t in self.execute_machine_query():
-            result = dict(zip(self.MACHINE_FIELDS, t))
+        for machine_tuple in self.execute_machine_query():
+            result = dict(zip(self.MACHINE_FIELDS, machine_tuple))
             serial_number = result["serial_number"]
             if serial_number not in trees:
                 tree = {"serial_number": serial_number,
@@ -166,17 +166,17 @@ class InventoryClient(BaseInventory):
                 if os_version:
                     tree["os_version"] = os_version
                 # system info
-                system_info = dict((t, result[t])
-                                   for t in ("computer_name", "hardware_model", "cpu_type")
-                                   if result[t])
-                for t in ("cpu_logical_cores", "physical_memory"):
+                system_info = dict((attr, result[attr])
+                                   for attr in ("computer_name", "hardware_model", "cpu_type")
+                                   if result[attr])
+                for attr in ("cpu_logical_cores", "physical_memory"):
                     try:
-                        v = int(result[t])
+                        v = int(result[attr])
                     except (TypeError, ValueError):
                         pass
                     else:
                         if v > 0:
-                            system_info[t] = v
+                            system_info[attr] = v
                 if system_info:
                     tree["system_info"] = system_info
                 if result["os_type"] == "OSX":
@@ -200,9 +200,9 @@ class InventoryClient(BaseInventory):
             else:
                 tree = trees[serial_number]
             # network interface
-            network_interface = dict((t, result[t])
-                                     for t in ("interface", "mac", "address")
-                                     if result[t])
+            network_interface = dict((attr, result[attr])
+                                     for attr in ("interface", "mac", "address")
+                                     if result[attr])
             if network_interface and "address" in network_interface:
                 tree_network_interfaces = tree.setdefault("network_interfaces", [])
                 if network_interface not in tree_network_interfaces:
