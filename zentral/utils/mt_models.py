@@ -202,7 +202,7 @@ class AbstractMTObject(models.Model):
         if many_to_many:
             assert(many_to_one is None)
             many_to_one = False
-        if f.many_to_one != many_to_one or f.many_to_many != f.many_to_many:
+        if f.many_to_one != many_to_one or f.many_to_many != many_to_many:
             raise MTOError("Field '{}' of {} has "
                            "many_to_one: {}, many_to_many: {}".format(name,
                                                                       self._meta.object_name,
