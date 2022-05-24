@@ -204,12 +204,6 @@ class BaseConfig:
     def __setitem__(self, key, value):
         self._collection[key] = self._from_python(key, value)
 
-    def pop(self, key, default=None):
-        value = self._collection.pop(key, default)
-        if isinstance(value, Proxy):
-            value = value.get()
-        return value
-
 
 class ConfigList(BaseConfig, Sequence):
     def __init__(self, config_l, path=None, resolver=None):
@@ -228,6 +222,17 @@ class ConfigList(BaseConfig, Sequence):
             logger.debug("Get /%s[%s] config key", "/".join(self._path), key)
             return self._to_python(value)
 
+    def __eq__(self, other):
+        if not isinstance(other, ConfigList):
+            return False
+        if not len(other) == len(self):
+            return False
+        # TODO: better?
+        for x, y in zip(self, other):
+            if x != y:
+                return False
+        return True
+
     def __iter__(self):
         for element in self._collection:
             yield self._to_python(element)
@@ -239,6 +244,10 @@ class ConfigList(BaseConfig, Sequence):
                 v = v.serialize()
             s.append(v)
         return s
+
+    def pop(self, index=-1):
+        value = self._collection.pop(index)
+        return self._to_python(value)
 
 
 class ConfigDict(BaseConfig, Mapping):
@@ -301,7 +310,7 @@ class ConfigDict(BaseConfig, Mapping):
             chain = itertools.chain(chain, iterator)
         if kwargs:
             chain = itertools.chain(chain, kwargs.items())
-        for key, value in iterator:
+        for key, value in chain:
             self._collection[key] = self._from_python(key, value)
 
     def serialize(self):
