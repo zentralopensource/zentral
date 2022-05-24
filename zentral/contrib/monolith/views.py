@@ -1168,7 +1168,6 @@ class EditManifestCatalogView(PermissionRequiredMixin, BaseManifestM2MView):
 
 class DeleteManifestCatalogView(PermissionRequiredMixin, BaseManifestM2MView):
     permission_required = "monolith.delete_manifestcatalog"
-    form_class = EditManifestCatalogForm
     form_class = DeleteManifestCatalogForm
     template_name = "monolith/delete_manifest_catalog.html"
     m2m_model = Catalog
