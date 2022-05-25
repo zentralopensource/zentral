@@ -54,7 +54,7 @@ def get_and_create_certificate_authority():
     if TLS_SERVER_CERTS:
         certificate_authority = os.path.join(get_and_create_zentral_dir(), "tls_server_certs.crt")
         with open(certificate_authority, "w") as caf:
-            caf.write(TLS_SERVER_CERTS)
+            caf.write(TLS_SERVER_CERTS)  # lgtm[py/clear-text-storage-sensitive-data]
         return certificate_authority
 
 
