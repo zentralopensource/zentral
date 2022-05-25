@@ -416,7 +416,7 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         for pattern, replacement in patterns:
             content = content.replace(pattern, replacement)
         with open(filename, "w", encoding="utf-8") as f:
-            f.write(content)
+            f.write(content)  # lgtm[py/clear-text-storage-sensitive-data]
 
     def set_plist_keys(self, filename, keyvals):
         if not keyvals:
