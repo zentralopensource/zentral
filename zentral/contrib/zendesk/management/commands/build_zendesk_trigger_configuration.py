@@ -22,4 +22,4 @@ class Command(BaseCommand):
             print("TRIGGER TYPE:", trigger_type)
             template = self.read_template(trigger_type)
             template = template.replace("%ZENTRAL_API_SECRET%", zentral_api_secret)
-            print(template)
+            print(template)  # lgtm[py/clear-text-logging-sensitive-data]
