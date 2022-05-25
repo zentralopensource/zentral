@@ -56,7 +56,12 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
         ctx["enrollments"] = enrollments
         ctx["enrollments_count"] = len(enrollments)
         ctx["rules_count"] = self.object.rule_set.count()
-        if self.request.user.has_perms(EventsMixin.permission_required):
+        if self.request.user.has_perms(
+            ("santa.view_configuration",
+             "santa.view_enrollment",
+             "santa.view_rule",
+             "santa.view_ruleset")
+        ):
             ctx["show_events_link"] = frontend_store.object_events
             store_links = []
             for store in stores.iter_events_url_store_for_user("object", self.request.user):
@@ -71,10 +76,6 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
 
 
 class EventsMixin:
-    permission_required = ("santa.view_configuration",
-                           "santa.view_enrollment",
-                           "santa.view_rule",
-                           "santa.view_ruleset")
     store_method_scope = "object"
 
     def get_object(self, **kwargs):
@@ -99,15 +100,25 @@ class EventsMixin:
 
 
 class ConfigurationEventsView(EventsMixin, EventsView):
+    permission_required = ("santa.view_configuration",
+                           "santa.view_enrollment",
+                           "santa.view_rule",
+                           "santa.view_ruleset")
     template_name = "santa/configuration_events.html"
 
 
 class FetchConfigurationEventsView(EventsMixin, FetchEventsView):
-    pass
+    permission_required = ("santa.view_configuration",
+                           "santa.view_enrollment",
+                           "santa.view_rule",
+                           "santa.view_ruleset")
 
 
 class ConfigurationEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
-    pass
+    permission_required = ("santa.view_configuration",
+                           "santa.view_enrollment",
+                           "santa.view_rule",
+                           "santa.view_ruleset")
 
 
 class UpdateConfigurationView(PermissionRequiredMixin, UpdateView):

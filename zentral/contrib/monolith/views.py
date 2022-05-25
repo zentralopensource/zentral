@@ -144,7 +144,7 @@ class PkgInfoNameView(PermissionRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         pkg_info_name = ctx["object"]
         # events
-        if self.request.user.has_perms(EventsMixin.permission_required):
+        if self.request.user.has_perms(("monolith.view_pkginfo", "monolith.view_pkginfoname")):
             ctx["show_events_link"] = frontend_store.object_events
             store_links = []
             for store in stores.iter_events_url_store_for_user("object", self.request.user):
@@ -174,7 +174,6 @@ class PkgInfoNameView(PermissionRequiredMixin, DetailView):
 
 
 class EventsMixin:
-    permission_required = ("monolith.view_pkginfo", "monolith.view_pkginfoname")
     store_method_scope = "object"
 
     def get_object(self, **kwargs):
@@ -200,15 +199,16 @@ class EventsMixin:
 
 
 class PkgInfoNameEventsView(EventsMixin, EventsView):
+    permission_required = ("monolith.view_pkginfo", "monolith.view_pkginfoname")
     template_name = "monolith/pkg_info_name_events.html"
 
 
 class FetchPkgInfoNameEventsView(EventsMixin, FetchEventsView):
-    pass
+    permission_required = ("monolith.view_pkginfo", "monolith.view_pkginfoname")
 
 
 class PkgInfoNameEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
-    pass
+    permission_required = ("monolith.view_pkginfo", "monolith.view_pkginfoname")
 
 
 # PPDs

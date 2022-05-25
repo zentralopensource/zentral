@@ -66,7 +66,7 @@ class InstanceView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        if self.request.user.has_perms(EventsMixin.permission_required):
+        if self.request.user.has_perm(EventsMixin.permission_required):
             ctx["show_events_link"] = frontend_store.object_events
             store_links = []
             for store in stores.iter_events_url_store_for_user("object", self.request.user):
@@ -106,7 +106,7 @@ class DeleteInstanceView(PermissionRequiredMixin, DeleteView):
 
 
 class EventsMixin:
-    permission_required = ("wsone.view_instance",)
+    permission_required = "wsone.view_instance"
     store_method_scope = "object"
 
     def get_object(self, **kwargs):

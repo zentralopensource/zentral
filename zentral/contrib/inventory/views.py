@@ -959,7 +959,7 @@ class ComplianceCheckView(PermissionRequiredMixin, DetailView):
                 urlencode({"source_name": self.object.source_name,
                            "jmespath_expression": self.object.jmespath_expression})
             )
-        if self.request.user.has_perms(ComplianceCheckEventsMixin.permission_required):
+        if self.request.user.has_perm(ComplianceCheckEventsMixin.permission_required):
             ctx["show_events_link"] = frontend_store.object_events
             store_links = []
             for store in stores.iter_events_url_store_for_user("object", self.request.user):
@@ -1062,7 +1062,7 @@ class DeleteComplianceCheckView(PermissionRequiredMixin, DeleteView):
 
 
 class ComplianceCheckEventsMixin:
-    permission_required = ("inventory.view_jmespathcheck",)
+    permission_required = "inventory.view_jmespathcheck"
     store_method_scope = "object"
 
     def get_object(self, **kwargs):
