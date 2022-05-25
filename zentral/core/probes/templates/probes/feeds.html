@@ -15,7 +15,7 @@
 
 <h2>{{ paginator.count }} Feed{{ paginator.count|pluralize }}</h2>
 
-<a href="{% url 'probes:add_feed' %}" class="btn btn-default">Add feed</a>
+<a href="{% url 'probes:create_feed' %}" class="btn btn-default">Create feed</a>
 
 {% if next_url or previous_url %}
 <nav>
@@ -34,7 +34,6 @@
   <table class="table">
     <thead>
       <th>Name</th>
-      <th>URL</th>
       <th>Created at</th>
       <th>Updated at</th>
     </thead>
@@ -42,7 +41,6 @@
     {% for feed in object_list %}
     <tr>
       <td><a href="{% url 'probes:feed' feed.id %}">{{ feed.name }}</a></td>
-      <td><a href="{{ feed.url }}" target="_blank">{{ feed.url }}</a></td>
       <td>{{ feed.created_at }}</td>
       <td>{{ feed.updated_at }}</td>
     </tr>

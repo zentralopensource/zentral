@@ -12,7 +12,7 @@ class BaseActionForm(forms.Form):
 
 class BaseAction(object):
     action_form_class = BaseActionForm
-    probe_config_template_name = "core/probes/_action_probe_config.html"
+    probe_config_template_name = "probes/_action_probe_config.html"
 
     def __init__(self, config_d):
         self.name = config_d.pop("action_name")

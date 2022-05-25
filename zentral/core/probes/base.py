@@ -237,7 +237,7 @@ class BaseProbe(object):
     model_display = "events"
     forced_event_type = None
     create_url = reverse_lazy("probes:create")
-    template_name = "core/probes/probe.html"
+    template_name = "probes/probe.html"
     can_edit_payload_filters = True
 
     def __init__(self, source):

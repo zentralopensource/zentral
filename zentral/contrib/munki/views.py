@@ -179,7 +179,7 @@ class EnrollmentBumpVersionView(PermissionRequiredMixin, TemplateView):
 class CreateInstallProbeView(PermissionRequiredMixin, FormView):
     permission_required = "probes.add_probesource"
     form_class = CreateInstallProbeForm
-    template_name = "core/probes/form.html"
+    template_name = "probes/form.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -195,7 +195,7 @@ class CreateInstallProbeView(PermissionRequiredMixin, FormView):
 class UpdateInstallProbeView(PermissionRequiredMixin, FormView):
     permission_required = "probes.change_probesource"
     form_class = UpdateInstallProbeForm
-    template_name = "core/probes/form.html"
+    template_name = "probes/form.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs['probe_id'])

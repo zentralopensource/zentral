@@ -1,15 +1,13 @@
 from functools import reduce
-import json
 import operator
-from unittest.mock import patch, MagicMock
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import User
-from requests.exceptions import ConnectionError, HTTPError
-from zentral.core.probes.feeds import sync_feed, update_or_create_feed
+from zentral.core.probes.feeds import sync_feed
+from zentral.core.probes.models import Feed
 
 
 FEED = {
@@ -34,7 +32,6 @@ FEED = {
         }
     }
 }
-FEED_URL = "https://www.example.com/feed.json"
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -66,13 +63,10 @@ class FeedViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    @patch("zentral.core.probes.feeds.fetch_feed")
-    def _create_feed(self, fetch_feed):
-        fetch_feed.return_value = FEED
-        feed, _ = update_or_create_feed(FEED_URL)
-        sync_feed(feed)
-        feed_probe = feed.feedprobe_set.all()[0]
-        return feed, feed_probe
+    def _create_feed(self):
+        feed = Feed.objects.create(name=get_random_string(12))
+        sync_feed(feed, FEED)
+        return feed, feed.feedprobe_set.first()
 
     # feeds
 
@@ -90,75 +84,36 @@ class FeedViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "0 Feeds", status_code=200)
 
-    # add feed
+    # create feed
 
-    def test_add_feed_redirect(self):
-        self._login_redirect(reverse("probes:add_feed"))
+    def test_create_feed_redirect(self):
+        self._login_redirect(reverse("probes:create_feed"))
 
-    def test_add_feed_permission_denied(self):
+    def test_create_feed_permission_denied(self):
         self._login()
-        response = self.client.get(reverse("probes:add_feed"))
+        response = self.client.get(reverse("probes:create_feed"))
         self.assertEqual(response.status_code, 403)
 
-    def test_add_feed_get(self):
+    def test_create_feed_get(self):
         self._login("probes.add_feed")
-        response = self.client.get(reverse("probes:add_feed"))
-        self.assertContains(response, "Add feed", status_code=200)
+        response = self.client.get(reverse("probes:create_feed"))
+        self.assertContains(response, "Create feed", status_code=200)
 
-    @patch("zentral.core.probes.feeds.requests.get")
-    def test_add_feed_post_connection_error(self, requests_get):
-        requests_get.side_effect = ConnectionError("Boom!")
-        url = reverse("probes:add_feed")
-        feed_url = "http://dewkjhdkwjhkjedhwdkwj.de/zu"
+    def test_create_feed_error(self):
         self._login("probes.add_feed")
-        response = self.client.post(url, {"url": feed_url}, follow=True)
+        response = self.client.post(reverse("probes:create_feed"), {}, follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/add_feed.html")
-        self.assertFormError(response, "form", "url", "Connection error")
-        requests_get.assert_called_once_with(feed_url, stream=True)
+        self.assertTemplateUsed(response, "probes/feed_form.html")
+        self.assertFormError(response, "form", "name", "This field is required.")
 
-    @patch("zentral.core.probes.feeds.requests.get")
-    def test_add_feed_post_http_error_404(self, requests_get):
-        error = HTTPError("Boom 404!")
-        error.response = MagicMock()
-        error.response.status_code = 404
-        requests_get.side_effect = error
-        feed_url = "http://dewkjhdkwjhkjedhwdkwj.de/zu"
-        self._login("probes.add_feed")
-        response = self.client.post(reverse("probes:add_feed"),
-                                    {"url": feed_url},
-                                    follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/add_feed.html")
-        self.assertFormError(response, "form", "url", "HTTP error 404")
-        requests_get.assert_called_once_with(feed_url, stream=True)
-
-    @patch("zentral.core.probes.feeds.fetch_feed")
-    def test_add_feed_post_feed_error(self, fetch_feed):
-        fetch_feed.side_effect = json.decoder.JSONDecodeError("YALA", "", 0)
-        feed_url = "http://dewkjhdkwjhkjedhwdkwj.de/zu"
-        self._login("probes.add_feed")
-        response = self.client.post(reverse("probes:add_feed"),
-                                    {"url": feed_url},
-                                    follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/add_feed.html")
-        self.assertFormError(response, "form", "url", "Invalid JSON")
-        fetch_feed.assert_called_once_with(feed_url)
-
-    @patch("zentral.core.probes.feeds.fetch_feed")
-    def test_add_feed_post_query_pack_ok(self, fetch_feed):
-        fetch_feed.return_value = FEED
+    def test_create_feed_post(self):
         self._login("probes.add_feed", "probes.view_feed")
-        response = self.client.post(reverse("probes:add_feed"),
-                                    {"url": FEED_URL},
-                                    follow=True)
+        name = get_random_string(24)
+        response = self.client.post(reverse("probes:create_feed"), {"name": name}, follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/feed.html")
-        self.assertIn("object", response.context)
-        feed = response.context["object"]
-        self.assertEqual(feed.url, FEED_URL)
-        self.assertEqual(feed.name, FEED["name"])
+        self.assertTemplateUsed(response, "probes/feed.html")
+        self.assertContains(response, name)
+        self.assertContains(response, "0 Probes")
 
     # feed
 
@@ -177,6 +132,36 @@ class FeedViewsTestCase(TestCase):
         self._login("probes.view_feed")
         response = self.client.get(feed.get_absolute_url())
         self.assertContains(response, FEED["name"], status_code=200)
+
+    # update feed
+
+    def test_update_feed_redirect(self):
+        feed, _ = self._create_feed()
+        self._login_redirect(reverse("probes:update_feed", args=(feed.id,)))
+
+    def test_update_feed_permission_denied(self):
+        feed, _ = self._create_feed()
+        self._login()
+        response = self.client.get(reverse("probes:update_feed", args=(feed.id,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_feed_get(self):
+        feed, _ = self._create_feed()
+        self._login("probes.change_feed")
+        response = self.client.get(reverse("probes:update_feed", args=(feed.id,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "probes/feed_form.html")
+        self.assertContains(response, "Update feed")
+
+    def test_update_feed(self):
+        feed, _ = self._create_feed()
+        self._login("probes.change_feed", "probes.view_feed")
+        new_name = get_random_string(12)
+        self.assertNotEqual(feed.name, new_name)
+        response = self.client.post(reverse("probes:update_feed", args=(feed.id,)), {"name": new_name}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "probes/feed.html")
+        self.assertContains(response, new_name)
 
     # delete feed
 
@@ -201,25 +186,6 @@ class FeedViewsTestCase(TestCase):
         self._login("probes.delete_feed", "probes.view_feed")
         response = self.client.post(reverse("probes:delete_feed", args=(feed.id,)), follow=True)
         self.assertContains(response, "0 Feed", status_code=200)
-
-    # sync feed
-
-    def test_sync_feed_redirect(self):
-        feed, _ = self._create_feed()
-        self._login_redirect(reverse("probes:sync_feed", args=(feed.id,)))
-
-    def test_sync_feed_permission_denied(self):
-        feed, _ = self._create_feed()
-        self._login()
-        response = self.client.get(reverse("probes:sync_feed", args=(feed.id,)))
-        self.assertEqual(response.status_code, 403)
-
-    def test_sync_feed_post(self):
-        feed, _ = self._create_feed()
-        self._login("probes.change_feed", "probes.view_feed")
-        response = self.client.post(reverse("probes:sync_feed", args=(feed.id,)), follow=True)
-        self.assertContains(response, feed.name, status_code=200)
-        self.assertTemplateUsed(response, "core/probes/feed.html")
 
     # feed probe
 

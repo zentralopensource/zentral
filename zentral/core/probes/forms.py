@@ -8,8 +8,7 @@ from zentral.core.incidents.models import Severity
 from zentral.core.probes.base import PayloadFilter
 from zentral.utils.forms import CommaSeparatedQuotedStringField
 from .base import BaseProbe
-from .feeds import FeedError, get_feed_serializer, sync_feed, update_or_create_feed
-from .models import ProbeSource
+from .models import Feed, ProbeSource
 from . import probe_classes
 
 
@@ -241,22 +240,10 @@ class UpdateProbeForm(forms.ModelForm):
         return probe_source
 
 
-class AddFeedForm(forms.Form):
-    url = forms.URLField()
-
-    def clean(self):
-        url = self.cleaned_data.get("url")
-        if url:
-            try:
-                self.cleaned_data["serializer"] = get_feed_serializer(url)
-            except FeedError as e:
-                self.add_error("url", e.message)
-        return self.cleaned_data
-
-    def save(self):
-        feed, created = update_or_create_feed(self.cleaned_data["url"])
-        sync_feed(feed)
-        return feed, created
+class FeedForm(forms.ModelForm):
+    class Meta:
+        model = Feed
+        fields = ("name", "description")
 
 
 class ImportFeedProbeForm(forms.Form):

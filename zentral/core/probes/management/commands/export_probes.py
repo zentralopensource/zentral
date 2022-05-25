@@ -4,8 +4,7 @@ from django.utils import timezone
 from zentral.core.probes.conf import ProbeList
 from zentral.core.probes.feeds import export_feed
 
-logger = logging.getLogger("zentral.core.probes.management."
-                           "commands.add_probe_feed")
+logger = logging.getLogger("zentral.core.probes.management.commands.export_probes")
 
 
 class Command(BaseCommand):

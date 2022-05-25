@@ -61,13 +61,13 @@ class MunkiInstallProbeViewsTestCase(TestCase):
         self._login("probes.add_probesource")
         response = self.client.get(reverse("munki:create_install_probe"))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/form.html")
+        self.assertTemplateUsed(response, "probes/form.html")
         self.assertContains(response, "Create munki install probe")
 
     def test_create_probe_post_error(self):
         self._login("probes.add_probesource")
         response = self.client.post(reverse("munki:create_install_probe"), {})
-        self.assertTemplateUsed(response, "core/probes/form.html")
+        self.assertTemplateUsed(response, "probes/form.html")
         self.assertFormError(response, "form", "install_types", "This field is required.")
 
     def test_create_probe_post_redirect(self):
@@ -123,7 +123,7 @@ class MunkiInstallProbeViewsTestCase(TestCase):
         self._login("probes.change_probesource")
         response = self.client.get(reverse("munki:update_install_probe", args=(probe_source.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/form.html")
+        self.assertTemplateUsed(response, "probes/form.html")
 
     def test_update_probe_post(self):
         probe_source = self._force_probe()

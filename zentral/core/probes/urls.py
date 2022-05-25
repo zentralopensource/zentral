@@ -28,9 +28,9 @@ urlpatterns = [
             views.DeleteFilterView.as_view(), name='delete_filter'),
     # feeds
     path('feeds/', views.FeedsView.as_view(), name="feeds"),
-    path('feeds/add/', views.AddFeedView.as_view(), name="add_feed"),
+    path('feeds/create/', views.CreateFeedView.as_view(), name="create_feed"),
     path('feeds/<int:pk>/', views.FeedView.as_view(), name="feed"),
-    path('feeds/<int:pk>/sync/', views.SyncFeedView.as_view(), name="sync_feed"),
+    path('feeds/<int:pk>/update/', views.UpdateFeedView.as_view(), name="update_feed"),
     path('feeds/<int:pk>/delete/', views.DeleteFeedView.as_view(), name="delete_feed"),
     path('feeds/<int:pk>/probes/<int:probe_id>/', views.FeedProbeView.as_view(), name="feed_probe"),
     path('feeds/<int:pk>/probes/<int:probe_id>/import/',

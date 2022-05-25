@@ -1,16 +1,13 @@
 from collections import OrderedDict
-from importlib import import_module
 import json
 import logging
-import pprint
 from urllib.parse import urlparse
 from django.utils import timezone
-import requests
 from rest_framework import serializers
 from zentral.conf import settings
 from zentral.utils.dict import dict_diff
 from . import probe_classes
-from .models import Feed, FeedProbe
+from .models import FeedProbe
 
 logger = logging.getLogger("zentral.core.probes.feeds")
 
@@ -35,7 +32,7 @@ class FeedSerializer(serializers.Serializer):
         child=FeedProbeSerializer()
     )
 
-    def get_name(self, url):
+    def get_name(self):
         return self.validated_data["name"]
 
     def iter_feed_probes(self):
@@ -44,66 +41,20 @@ class FeedSerializer(serializers.Serializer):
             model = probe_validated_data["model"]
             probe_class = probe_classes.get(model)
             if not probe_class:
-                raise FeedError("Probe {}: unknown model {}".format(probe_id, model))
+                raise FeedError(f"Probe {probe_id}: unknown model {model}")
             probe_serializer = probe_class.serializer_class(data=probe_validated_data["body"])
             if not probe_serializer.is_valid():
-                raise FeedError("Probe {}: invalid {} body".format(probe_id, model))
-            yield "{}.{}".format(feed_id, probe_id), probe_validated_data
+                raise FeedError(f"Probe {probe_id}: invalid {model} body")
+            yield f"{feed_id}.{probe_id}", probe_validated_data
 
 
-feed_serializers = []
-
-
-def get_feed_serializer_classes():
-    if not feed_serializers:
-        for app in settings['apps']:
-            try:
-                feeds_module = import_module("{}.feeds".format(app))
-            except ImportError:
-                pass
-            else:
-                feed_serializers.extend(o for o in feeds_module.__dict__.values()
-                                        if hasattr(o, "get_name") and hasattr(o, "iter_feed_probes"))
-    yield from feed_serializers
-
-
-def fetch_feed(url):
-    try:
-        r = requests.get(url, stream=True)
-        r.raise_for_status()
-    except requests.exceptions.ConnectionError:
-        raise FeedError("Connection error")
-    except requests.exceptions.HTTPError as e:
-        raise FeedError("HTTP error {}".format(e.response.status_code))
-    return r.json()
-
-
-def get_feed_serializer(url):
-    try:
-        feed_data = fetch_feed(url)
-    except json.decoder.JSONDecodeError:
-        raise FeedError("Invalid JSON")
-    for feed_serializer_cls in get_feed_serializer_classes():
-        feed_serializer = feed_serializer_cls(data=feed_data)
-        if feed_serializer.is_valid():
-            return feed_serializer
-        else:
-            logger.warning("Feed serializer %s errors", feed_serializer_cls)
-            logger.warning(pprint.pformat(feed_serializer.errors))
-    raise FeedError("Unknown feed type")
-
-
-def update_or_create_feed(url):
-    feed_serializer = get_feed_serializer(url)
-    return Feed.objects.update_or_create(url=url, defaults={"name": feed_serializer.get_name(url)})
-
-
-def sync_feed(feed):
+def sync_feed(feed, feed_data):
+    feed_serializer = FeedSerializer(data=feed_data)
+    feed_serializer.is_valid(raise_exception=True)
     now = timezone.now()
     # feed
     feed_updated = False
-    feed_serializer = get_feed_serializer(feed.url)
-    current_feed_name = feed_serializer.get_name(feed.url)
+    current_feed_name = feed_serializer.get_name()
     if not feed.name == current_feed_name:
         feed_updated = True
         feed.name = current_feed_name
@@ -122,7 +73,7 @@ def sync_feed(feed):
                                                                  defaults=feed_probe_data)
         if not fp_created:
             if feed_probe.model != feed_probe_data["model"]:
-                raise FeedError("Can't change feed probe {} model.".format(feed_probe_key))
+                raise FeedError(f"Cannot change feed probe {feed_probe_key} model")
             feed_probe_data["archived_at"] = None
             diff = dict_diff({"model": feed_probe.model,
                               "name": feed_probe.name,

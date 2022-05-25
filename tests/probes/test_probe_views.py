@@ -65,7 +65,7 @@ class ProbeViewsTestCase(TestCase):
         self._login("probes.add_probesource")
         response = self.client.get(reverse("probes:create"))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/form.html")
+        self.assertTemplateUsed(response, "probes/form.html")
         self.assertContains(response, "Create event probe")
 
     def test_create_probe_error(self):
@@ -82,7 +82,7 @@ class ProbeViewsTestCase(TestCase):
                                                      "zentral_logout"]},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/probe.html")
+        self.assertTemplateUsed(response, "probes/probe.html")
         self.assertIn("probe", response.context)
         probe = response.context["probe"]
         self.assertIn("object", response.context)
@@ -109,7 +109,7 @@ class ProbeViewsTestCase(TestCase):
         self._login("probes.change_probesource")
         response = self.client.get(reverse("probes:update", args=(probe_source.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/form.html")
+        self.assertTemplateUsed(response, "probes/form.html")
 
     def test_update_probe_post(self):
         probe_source = self._force_probe(active=True)
@@ -119,7 +119,7 @@ class ProbeViewsTestCase(TestCase):
                                      "status": ProbeSource.INACTIVE},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/probe.html")
+        self.assertTemplateUsed(response, "probes/probe.html")
         ctx_probe_source = response.context["object"]
         self.assertEqual(ctx_probe_source, probe_source)
         self.assertEqual(ctx_probe_source.status, ProbeSource.INACTIVE)
@@ -141,14 +141,14 @@ class ProbeViewsTestCase(TestCase):
         self._login("probes.delete_probesource")
         response = self.client.get(reverse("probes:delete", args=(probe_source.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/delete.html")
+        self.assertTemplateUsed(response, "probes/delete.html")
 
     def test_delete_probe_post(self):
         probe_source = self._force_probe()
         self._login("probes.delete_probesource", "probes.view_probesource")
         response = self.client.post(reverse("probes:delete", args=(probe_source.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/index.html")
+        self.assertTemplateUsed(response, "probes/index.html")
 
     # add filter
 
@@ -167,7 +167,7 @@ class ProbeViewsTestCase(TestCase):
         self._login("probes.change_probesource")
         response = self.client.get(reverse("probes:add_filter", args=(probe_source.pk, "inventory")))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/filter_form.html")
+        self.assertTemplateUsed(response, "probes/filter_form.html")
 
     def test_add_probe_filter_post(self):
         probe_source = self._force_probe()
@@ -176,7 +176,7 @@ class ProbeViewsTestCase(TestCase):
                                     {"platforms": "LINUX"},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/probe.html")
+        self.assertTemplateUsed(response, "probes/probe.html")
         ctx_probe_source = response.context["object"]
         self.assertEqual(ctx_probe_source, probe_source)
         self.assertEqual(ctx_probe_source.body["filters"]["inventory"][0],
@@ -199,7 +199,7 @@ class ProbeViewsTestCase(TestCase):
         self._login("probes.change_probesource")
         response = self.client.get(reverse("probes:update_filter", args=(probe_source.pk, "inventory", 0)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/filter_form.html")
+        self.assertTemplateUsed(response, "probes/filter_form.html")
 
     def test_update_probe_filter_post(self):
         probe_source = self._force_probe(platforms=["LINUX"])
@@ -208,7 +208,7 @@ class ProbeViewsTestCase(TestCase):
                                     {"platforms": "WINDOWS"},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/probe.html")
+        self.assertTemplateUsed(response, "probes/probe.html")
         ctx_probe_source = response.context["object"]
         self.assertEqual(ctx_probe_source, probe_source)
         self.assertEqual(ctx_probe_source.body["filters"]["inventory"][0],
@@ -231,7 +231,7 @@ class ProbeViewsTestCase(TestCase):
         self._login("probes.change_probesource")
         response = self.client.get(reverse("probes:delete_filter", args=(probe_source.pk, "inventory", 0)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/delete_filter.html")
+        self.assertTemplateUsed(response, "probes/delete_filter.html")
 
     def test_delete_probe_filter_post(self):
         probe_source = self._force_probe(platforms=["LINUX"])
@@ -239,7 +239,7 @@ class ProbeViewsTestCase(TestCase):
         response = self.client.post(reverse("probes:delete_filter", args=(probe_source.pk, "inventory", 0)),
                                     follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "core/probes/probe.html")
+        self.assertTemplateUsed(response, "probes/probe.html")
         ctx_probe_source = response.context["object"]
         self.assertEqual(ctx_probe_source, probe_source)
         self.assertEqual(ctx_probe_source.body["filters"]["inventory"], [])

@@ -7,14 +7,13 @@ from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
-from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.core.stores import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.charts import make_dataset
-from .feeds import FeedError, sync_feed
 from .forms import (CreateProbeForm, ProbeSearchForm,
                     InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet,
-                    AddFeedForm, ImportFeedProbeForm,
+                    FeedForm, ImportFeedProbeForm,
                     CloneProbeForm, UpdateProbeForm)
 from .models import Feed, FeedProbe, ProbeSource
 
@@ -26,7 +25,7 @@ class IndexView(PermissionRequiredMixin, ListView):
     permission_required = "probes.view_probesource"
     model = ProbeSource
     paginate_by = 50
-    template_name = "core/probes/index.html"
+    template_name = "probes/index.html"
 
     def get(self, request, *args, **kwargs):
         qd = self.request.GET.copy()
@@ -72,7 +71,7 @@ class IndexView(PermissionRequiredMixin, ListView):
 class CreateProbeView(PermissionRequiredMixin, FormView):
     permission_required = "probes.add_probesource"
     form_class = CreateProbeForm
-    template_name = "core/probes/form.html"
+    template_name = "probes/form.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -116,13 +115,13 @@ class ProbeView(PermissionRequiredMixin, DetailView):
         if self.probe.loaded:
             return [self.probe.template_name]
         else:
-            return ["core/probes/syntax_error.html"]
+            return ["probes/syntax_error.html"]
 
 
 class ProbeDashboardView(PermissionRequiredMixin, DetailView):
     permission_required = "probes.view_probesource"
     model = ProbeSource
-    template_name = "core/probes/probe_dashboard.html"
+    template_name = "probes/probe_dashboard.html"
 
     def get_context_data(self, **kwargs):
         ctx = super(ProbeDashboardView, self).get_context_data(**kwargs)
@@ -176,8 +175,8 @@ class ProbeDashboardDataView(PermissionRequiredMixin, View):
                 chart_config = {
                     "type": "doughnut",
                     "data": {
-                        "labels": ["Other" if l is None else l for l, _ in results["values"]],
-                        "datasets": [make_dataset([v for _, v in results["values"]])],
+                        "labels": ["Other" if label is None else label for label, _ in results["values"]],
+                        "datasets": [make_dataset([value for _, value in results["values"]])],
                     }
                 }
             elif a_type == "date_histogram":
@@ -185,8 +184,8 @@ class ProbeDashboardDataView(PermissionRequiredMixin, View):
                 chart_config = {
                     "type": "bar",
                     "data": {
-                        "labels": [l.strftime(date_format) for l, _ in results["values"]],
-                        "datasets": [make_dataset([v for _, v in results["values"]],
+                        "labels": [label.strftime(date_format) for label, _ in results["values"]],
+                        "datasets": [make_dataset([value for _, value in results["values"]],
                                                   cycle_colors=False,
                                                   label="event number")]
                     }
@@ -226,7 +225,7 @@ class EventsMixin:
 
 
 class ProbeEventsView(EventsMixin, EventsView):
-    template_name = "core/probes/probe_events.html"
+    template_name = "probes/probe_events.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -250,7 +249,7 @@ class UpdateProbeView(PermissionRequiredMixin, UpdateView):
     permission_required = "probes.change_probesource"
     model = ProbeSource
     form_class = UpdateProbeForm
-    template_name = "core/probes/form.html"
+    template_name = "probes/form.html"
 
     def get_context_data(self, **kwargs):
         ctx = super(UpdateProbeView, self).get_context_data(**kwargs)
@@ -264,7 +263,7 @@ class UpdateProbeView(PermissionRequiredMixin, UpdateView):
 class DeleteProbeView(PermissionRequiredMixin, DeleteView):
     permission_required = "probes.delete_probesource"
     model = ProbeSource
-    template_name = "core/probes/delete.html"
+    template_name = "probes/delete.html"
     success_url = reverse_lazy('probes:index')
 
     def get_context_data(self, **kwargs):
@@ -275,7 +274,7 @@ class DeleteProbeView(PermissionRequiredMixin, DeleteView):
 
 class CloneProbeView(PermissionRequiredMixin, FormView):
     permission_required = "probes.add_probesource"
-    template_name = "core/probes/clone.html"
+    template_name = "probes/clone.html"
     form_class = CloneProbeForm
 
     def dispatch(self, request, *args, **kwargs):
@@ -297,7 +296,7 @@ class CloneProbeView(PermissionRequiredMixin, FormView):
 
 class ReviewProbeUpdateView(PermissionRequiredMixin, TemplateView):
     permission_required = "probes.change_probesource"
-    template_name = "core/probes/review_update.html"
+    template_name = "probes/review_update.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -326,7 +325,7 @@ class ReviewProbeUpdateView(PermissionRequiredMixin, TemplateView):
 
 class EditActionView(PermissionRequiredMixin, FormView):
     permission_required = "probes.change_probesource"
-    template_name = "core/probes/action_form.html"
+    template_name = "probes/action_form.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -373,7 +372,7 @@ class EditActionView(PermissionRequiredMixin, FormView):
 
 class DeleteActionView(PermissionRequiredMixin, TemplateView):
     permission_required = "probes.change_probesource"
-    template_name = "core/probes/delete_action.html"
+    template_name = "probes/delete_action.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -410,8 +409,8 @@ class AddFilterView(PermissionRequiredMixin, FormView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_template_names(self):
-        return ["core/probes/{}_filter_form.html".format(self.section),
-                "core/probes/filter_form.html"]
+        return ["probes/{}_filter_form.html".format(self.section),
+                "probes/filter_form.html"]
 
     def get_form_class(self):
         if self.section == "inventory":
@@ -453,8 +452,8 @@ class UpdateFilterView(PermissionRequiredMixin, FormView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_template_names(self):
-        return ["core/probes/{}_filter_form.html".format(self.section),
-                "core/probes/filter_form.html"]
+        return ["probes/{}_filter_form.html".format(self.section),
+                "probes/filter_form.html"]
 
     def get_form_class(self):
         if self.section == "inventory":
@@ -486,7 +485,7 @@ class UpdateFilterView(PermissionRequiredMixin, FormView):
 
 class DeleteFilterView(PermissionRequiredMixin, TemplateView):
     permission_required = "probes.change_probesource"
-    template_name = "core/probes/delete_filter.html"
+    template_name = "probes/delete_filter.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
@@ -611,7 +610,7 @@ class DeleteProbeItemView(EditProbeItemView):
 
 class FeedsView(PermissionRequiredMixin, ListView):
     permission_required = "probes.view_feed"
-    template_name = "core/probes/feeds.html"
+    template_name = "probes/feeds.html"
     model = Feed
     paginate_by = 10
 
@@ -647,25 +646,20 @@ class FeedsView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class AddFeedView(PermissionRequiredMixin, FormView):
+class CreateFeedView(PermissionRequiredMixin, CreateView):
     permission_required = "probes.add_feed"
-    form_class = AddFeedForm
-    template_name = "core/probes/add_feed.html"
+    model = Feed
+    form_class = FeedForm
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['probes'] = True
-        ctx['title'] = "Add feed"
+        ctx['title'] = "Create feed"
         return ctx
-
-    def form_valid(self, form):
-        feed, created = form.save()
-        return HttpResponseRedirect(feed.get_absolute_url())
 
 
 class FeedView(PermissionRequiredMixin, DetailView):
     permission_required = "probes.view_feed"
-    template_name = "core/probes/feed.html"
+    template_name = "probes/feed.html"
     model = Feed
 
     def get_context_data(self, **kwargs):
@@ -675,28 +669,21 @@ class FeedView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class SyncFeedView(PermissionRequiredMixin, View):
+class UpdateFeedView(PermissionRequiredMixin, UpdateView):
     permission_required = "probes.change_feed"
+    model = Feed
+    form_class = FeedForm
 
-    def post(self, request, *args, **kwargs):
-        feed = get_object_or_404(Feed, pk=int(kwargs["pk"]))
-        try:
-            operations = sync_feed(feed)
-        except FeedError as e:
-            messages.error(request, "Could not sync feed. {}".format(e.message))
-        else:
-            if operations:
-                msg = "Probes {}.".format(", ".join("{}: {}".format(l, v) for l, v in operations.items()))
-            else:
-                msg = "No changes."
-            messages.info(request, "Sync OK. {}".format(msg))
-        return HttpResponseRedirect(feed.get_absolute_url())
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['title'] = "Update feed"
+        return ctx
 
 
 class DeleteFeedView(PermissionRequiredMixin, DeleteView):
     permission_required = "probes.delete_feed"
     model = Feed
-    template_name = "core/probes/delete_feed.html"
+    template_name = "probes/delete_feed.html"
     success_url = reverse_lazy('probes:feeds')
 
     def get_context_data(self, **kwargs):
@@ -708,7 +695,7 @@ class DeleteFeedView(PermissionRequiredMixin, DeleteView):
 
 class FeedProbeView(PermissionRequiredMixin, DetailView):
     permission_required = "probes.view_feedprobe"
-    template_name = "core/probes/feed_probe.html"
+    template_name = "probes/feed_probe.html"
     model = FeedProbe
 
     def get_object(self):
@@ -723,7 +710,7 @@ class FeedProbeView(PermissionRequiredMixin, DetailView):
 class ImportFeedProbeView(PermissionRequiredMixin, FormView):
     permission_required = ("probes.view_feedprobe", "probes.add_probesource")
     form_class = ImportFeedProbeForm
-    template_name = "core/probes/import_feed_probe.html"
+    template_name = "probes/import_feed_probe.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.feed_probe = get_object_or_404(FeedProbe, pk=self.kwargs["probe_id"], feed__pk=self.kwargs["pk"])

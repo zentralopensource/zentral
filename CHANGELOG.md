@@ -1,3 +1,13 @@
+## 2022.2 (TBD)
+
+### Backward incompatibilities
+
+#### 🧨 Probe feeds are not pulled anymore
+
+The URL field of the probe feeds has been removed. To update a feed, you need
+to use the API and push it.
+
+
 ## 2022.1 (May 16, 2022)
 
 ### Features (some, not all…)

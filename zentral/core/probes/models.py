@@ -13,7 +13,6 @@ logger = logging.getLogger('zentral.core.probes.models')
 
 
 class Feed(models.Model):
-    url = models.URLField(unique=True)
     name = models.TextField()
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
