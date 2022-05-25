@@ -1,4 +1,5 @@
 from enum import Enum
+import functools
 import logging
 from django.db import models
 from django.utils.functional import cached_property
@@ -37,6 +38,7 @@ class ComplianceCheck(models.Model):
         return cls(self)
 
 
+@functools.total_ordering
 class Status(Enum):
     OK = 0
     PENDING = 100

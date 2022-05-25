@@ -12,6 +12,9 @@ class ComplianceChecksTestCase(TestCase):
             model=get_random_string(12),
         )
 
+    def test_status_total_ordering(self):
+        self.assertTrue(Status.OK <= Status.PENDING)
+
     def test_update_machine_statuses_create_two(self):
         cc1 = self._force_compliance_check()
         cc2 = self._force_compliance_check()
