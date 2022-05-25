@@ -16,19 +16,25 @@ class Command(BaseCommand):
             name = event_hook.name
             collected_okta_credentials.add((okta_domain, event_hook.api_token))
             event_hook.delete()
-            print("Deleted DB web hook {} {}".format(okta_domain, name))
+            self.stdout.write(
+                f"Deleted DB web hook {okta_domain} {name}"
+            )  # lgtm[py/clear-text-logging-sensitive-data]
         for okta_domain, api_token in collected_okta_credentials:
             session = requests.Session()
             session.headers.update({"Accept": "application/json",
                                     "Authorization": "SSWS {}".format(event_hook.api_token),
                                     "Content-Type": "application/json"})
-            response = session.get("https://{}/api/v1/eventHooks".format(okta_domain))
+            response = session.get(f"https://{okta_domain}/api/v1/eventHooks")
             for event_hook_d in response.json():
+                hook_id = event_hook_d["id"]
+                name = event_hook_d["name"]
                 status = event_hook_d["status"]
                 if status == "ACTIVE":
-                    session.post(
-                        "https://{}/api/v1/eventHooks/{}/lifecycle/deactivate".format(okta_domain, event_hook_d["id"])
-                    )
-                    print("Deactivated Okta web hook {} {}".format(okta_domain, event_hook_d["name"]))
-                session.delete("https://{}/api/v1/eventHooks/{}".format(okta_domain, event_hook_d["id"]))
-                print("Deleted Okta web hook {} {}".format(okta_domain, event_hook_d["name"]))
+                    session.post(f"https://{okta_domain}/api/v1/eventHooks/{hook_id}/lifecycle/deactivate")
+                    self.stdout.write(
+                        f"Deactivated Okta web hook {okta_domain} {name}"
+                    )  # lgtm[py/clear-text-logging-sensitive-data]
+                session.delete(f"https://{okta_domain}/api/v1/eventHooks/{hook_id}")
+                self.stdout.write(
+                    f"Deleted Okta web hook {okta_domain} {name}"
+                )  # lgtm[py/clear-text-logging-sensitive-data]
