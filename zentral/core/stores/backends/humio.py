@@ -23,7 +23,7 @@ class EventStore(BaseEventStore):
             'Authorization': "Bearer {}".format(ingest_token)
         })
 
-    def store(self, event):
+    def _serialize_event(self, event):
         if not isinstance(event, dict):
             event = event.serialize()
         humio_attributes = event.pop("_zentral")
@@ -33,6 +33,8 @@ class EventStore(BaseEventStore):
         humio_attributes[namespace] = event
         created_at = humio_attributes.pop("created_at")
         timestamp = "{}Z".format(created_at[:-3])
-        data = [{"tags": humio_tags, "events": [{"timestamp": timestamp, "attributes": humio_attributes}]}]
-        r = self._session.post(self.ingest_url, json=data)
+        return [{"tags": humio_tags, "events": [{"timestamp": timestamp, "attributes": humio_attributes}]}]
+
+    def store(self, event):
+        r = self._session.post(self.ingest_url, json=self._serialize_event(event))
         r.raise_for_status()

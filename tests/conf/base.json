@@ -8,8 +8,10 @@
     "metrics_bearer_token": "CHANGE ME!!!"
   },
   "extra_links": [
-    {"anchor_text": "Prometheus",
-     "url": "https://zentral/prometheus/"}
+    {
+      "anchor_text": "Prometheus",
+      "url": "https://zentral/prometheus/"
+    }
   ],
   "django": {
     "SECRET_KEY": "DJANGO SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
@@ -46,6 +48,70 @@
     "debug": {
       "backend": "zentral.core.actions.backends.json_file",
       "local_dir": "/tmp/zentral_notifications/"
+    },
+    "test_email": {
+      "backend": "zentral.core.actions.backends.email",
+      "smtp_host": "127.0.0.1",
+      "smtp_port": 25,
+      "recipients": [
+        "hi@example.com"
+      ]
+    },
+    "test_freshdesk": {
+      "backend": "zentral.core.actions.backends.freshdesk",
+      "api_key": "123",
+      "password": "456",
+      "subdomain": "test",
+      "default_ticket_email": "hi@example.com",
+      "extra_attributes": {
+        "un": "deux"
+      }
+    },
+    "test_google_chat": {
+      "backend": "zentral.core.actions.backends.google_chat",
+      "webhook": "https://example.com"
+    },
+    "test_http_post": {
+      "backend": "zentral.core.actions.backends.http_post",
+      "url": "https://example.com",
+      "basic_auth": {
+        "login": "user",
+        "password": "123"
+      },
+      "headers": {
+        "X-Custom-Header": "value"
+      }
+    },
+    "test_slack": {
+      "backend": "zentral.core.actions.backends.slack",
+      "webhook": "https://example.com"
+    },
+    "test_github": {
+      "backend": "zentral.core.actions.backends.github",
+      "repository": "example",
+      "user": "user",
+      "access_token": "123",
+      "assignees": [
+        "person1",
+        "person2"
+      ]
+    },
+    "test_trello": {
+      "backend": "zentral.core.actions.backends.trello",
+      "application_key": "123",
+      "token": "456",
+      "default_board": "default_board",
+      "default_list": "default_list"
+    },
+    "test_twilio": {
+      "backend": "zentral.core.actions.backends.twilio",
+      "account_sid": "123",
+      "auth_token": "456",
+      "from_number": "0123456789",
+      "to_numbers": [
+        "1234567890",
+        "2345678901"
+      ]
     }
   },
   "apps": {
@@ -93,19 +159,29 @@
     "zentral.contrib.munki": {
       "metrics": true,
       "principal_user_detection": {
-        "sources": ["company_portal", "google_chrome", "logged_in_user"],
-        "domains": ["zentral.pro"]
+        "sources": [
+          "company_portal",
+          "google_chrome",
+          "logged_in_user"
+        ],
+        "domains": [
+          "zentral.pro"
+        ]
       }
     },
     "zentral.contrib.monolith": {
       "metrics": true,
       "enrollment_package_builders": {
         "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
-          "requires": ["munkitools_core"],
+          "requires": [
+            "munkitools_core"
+          ],
           "optional": false
         },
         "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
-          "requires": ["osquery"],
+          "requires": [
+            "osquery"
+          ],
           "optional": true
         }
       },
