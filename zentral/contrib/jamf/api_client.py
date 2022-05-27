@@ -298,7 +298,8 @@ class APIClient(object):
             try:
                 group_id, is_smart = self.get_computer_group(computer_group_name)
             except KeyError:
-                # TODO
+                logger.error("%s computer %s: could not find group '%s'",
+                             self.api_base_url, jamf_id, computer_group_name)
                 continue
             else:
                 groups.append({'source': self.get_source_d(),
