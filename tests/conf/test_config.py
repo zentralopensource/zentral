@@ -3,6 +3,12 @@ from zentral.conf.config import ConfigDict, ConfigList
 
 
 class ConfTestCase(SimpleTestCase):
+    def test_config_dict_eq_different_type(self):
+        self.assertFalse(ConfigDict({"un": 1}) == {"un": 1})
+
+    def test_config_dict_eq_different(self):
+        self.assertFalse(ConfigDict({"un": 1, "deux": 2}) == ConfigDict({"un": 1, "deux": 3}))
+
     def test_update_config_dict_key_values(self):
         d = ConfigDict({"un": 1})
         d.update(deux=2, trois=3)

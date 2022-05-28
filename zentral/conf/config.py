@@ -257,6 +257,11 @@ class ConfigDict(BaseConfig, Mapping):
         for key, value in config_d.items():
             self._collection[key] = self._from_python(key, value)
 
+    def __eq__(self, other):
+        if not isinstance(other, ConfigDict):
+            return False
+        return self._collection == other._collection
+
     def __getitem__(self, key):
         logger.debug("Get /%s config key", "/".join(self._path + (key,)))
         value = self._collection[key]
