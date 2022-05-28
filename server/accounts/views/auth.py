@@ -89,7 +89,7 @@ def login(request):
     return TemplateResponse(request, "registration/login.html", context)
 
 
-class VerificationMixin(object):
+class BaseVerify2FView(FormView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         request = self.request
@@ -108,12 +108,12 @@ class VerificationMixin(object):
         return super().form_invalid(form)
 
 
-class VerifyTOTPView(VerificationMixin, FormView):
+class VerifyTOTPView(BaseVerify2FView):
     template_name = "accounts/verify_totp.html"
     form_class = VerifyTOTPForm
 
 
-class VerifyWebAuthnView(VerificationMixin, FormView):
+class VerifyWebAuthnView(BaseVerify2FView):
     template_name = "accounts/verify_webauthn.html"
     form_class = VerifyWebAuthnForm
 
