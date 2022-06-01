@@ -54,6 +54,13 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 403)
 
+    def test_preflight_missing_serial_num(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        data.pop("serial_num")
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 400)
+
     def test_preflight_no_mtls(self):
         self.configuration.client_certificate_auth = True
         self.configuration.save()

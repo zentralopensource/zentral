@@ -104,8 +104,14 @@ class PreflightView(BaseSyncView):
                 return primary_user
         return None
 
+    def _get_serial_number(self):
+        serial_number = self.request_data.get("serial_num")
+        if not serial_number:
+            raise SuspiciousOperation("Missing or empty serial_num")
+        return serial_number
+
     def _get_enrolled_machine_defaults(self):
-        serial_number = self.request_data['serial_num']
+        serial_number = self._get_serial_number()
         defaults = {
             'serial_number': serial_number,
             'primary_user': self._get_primary_user(),
@@ -149,7 +155,7 @@ class PreflightView(BaseSyncView):
             verify_enrollment_secret(
                 "santa_enrollment", self.enrollment_secret_secret,
                 self.user_agent, self.ip,
-                serial_number=self.request_data["serial_num"],
+                serial_number=self._get_serial_number(),
                 udid=self.hardware_uuid,
             )
         except EnrollmentSecretVerificationFailed:
