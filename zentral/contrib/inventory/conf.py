@@ -1,5 +1,4 @@
 import re
-import string
 
 # machine snapshot platforms
 
@@ -197,13 +196,21 @@ def os_version_display(os_version_d):
 # macOS versions
 
 
-MACOS_BUILD_RE = re.compile(r"(?P<minor>[0-9]{1,2})(?P<patch_letter>[A-Z])[1-9]+[a-z]?")
+MACOS_BUILD_RE = re.compile(
+    r"\A"
+    r"(?P<minor>[0-9]{1,2})"
+    r"(?P<patch_letter>[A-Z])"
+    r"(?P<patch_number>[0-9]+)"
+    r"(?P<beta>[a-z]+)?"
+    r"\Z"
+)
 
 
 def macos_version_from_build(build):
     match = MACOS_BUILD_RE.match(build)
     if match:
-        patch = ord(match.group("patch_letter")) - 65
+        patch_letter = match.group("patch_letter")
+        patch = ord(patch_letter) - 65
         minor = int(match.group("minor")) - 4
         if minor < 8:
             # the patch letters are not always consecutive for older versions
@@ -222,23 +229,27 @@ def macos_version_from_build(build):
                 patch = 0
             if minor > 0:
                 minor -= 1
-            if build[-1] in string.ascii_lowercase:
+            if match.group("beta"):
                 name = "macOS Beta"
         elif minor == 16:
             major = 11
-            minor = max(0, patch - 1)
-            if build in ("20B29", "20B50", "20D74", "20D75", "20E241", "20G80"):
+            patch_number = int(match.group("patch_number"))
+            if patch_letter >= "G" and patch_number >= 165:
+                minor = 6
+            else:
+                minor = max(0, patch - 1)
+            if build in ("20B29", "20B50", "20D74", "20D75", "20E241", "20G80", "20G224"):
                 patch = 1
-            elif build in ("20D80", "20G95"):
+            elif build in ("20D80", "20G95", "20G314"):
                 patch = 2
-            elif build == "20D91":
+            elif build in ("20D91", "20G415"):
                 patch = 3
-            elif build == "20G165":
-                minor = 6
-                patch = 0
-            elif build == "20G224":
-                minor = 6
-                patch = 1
+            elif build == "20G417":
+                patch = 4
+            elif build == "20G527":
+                patch = 5
+            elif build == "20G624":
+                patch = 6
             else:
                 patch = 0
         else:
