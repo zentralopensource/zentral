@@ -247,6 +247,18 @@ class PreflightView(BaseSyncView):
 
         commit_machine_snapshot_and_trigger_events(tree)
 
+    def _do_clean_sync(self):
+        if self.request_data.get("request_clean_sync"):
+            logger.info("Machine %s: clean sync requested", self.enrolled_machine.serial_number)
+            return True
+        if self.enrollment_action:
+            logger.info("Machine %s: clean sync for %s", self.enrolled_machine.serial_number, self.enrollment_action)
+            return True
+        if not self.enrolled_machine.sync_ok():
+            logger.error("Machine %s: clean sync forced", self.enrolled_machine.serial_number)
+            return True
+        return False
+
     def do_post(self):
         post_preflight_event(self.enrolled_machine.serial_number,
                              self.user_agent,
@@ -260,8 +272,7 @@ class PreflightView(BaseSyncView):
             self.enrolled_machine.get_comparable_santa_version()
         )
 
-        # clean sync?
-        if self.request_data.get("request_clean_sync") is True or self.enrollment_action is not None:
+        if self._do_clean_sync():
             MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).delete()
             response_dict["clean_sync"] = True
 

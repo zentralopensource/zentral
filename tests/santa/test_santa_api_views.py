@@ -30,23 +30,23 @@ class SantaAPIViewsTestCase(TestCase):
                                 json.dumps(data),
                                 content_type="application/json")
 
-    def _get_preflight_data(self):
-        serial_number = get_random_string(12)
+    def _get_preflight_data(self, use_enrolled_machine=False):
+        serial_number = self.enrolled_machine.serial_number if use_enrolled_machine else get_random_string(12)
         data = {
             "os_build": "20C69",
             "santa_version": "2022.1",
             "hostname": "hostname",
             "transitive_rule_count": 0,
             "os_version": "11.1",
-            "certificate_rule_count": 2,
+            "certificate_rule_count": 0,
             "client_mode": "LOCKDOWN",
             "serial_num": serial_number,
-            "binary_rule_count": 1,
+            "binary_rule_count": 0,
             "primary_user": "mark.torpedo@example.com",
             "compiler_rule_count": 0,
             "teamid_rule_count": 0
         }
-        return data, serial_number, uuid.uuid4()
+        return data, serial_number, self.enrolled_machine.hardware_uuid if use_enrolled_machine else uuid.uuid4()
 
     def test_preflight_bad_secret(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
@@ -162,24 +162,35 @@ class SantaAPIViewsTestCase(TestCase):
         enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
         self.assertEqual(enrolled_machine.binary_rule_count, 0)
 
-    def test_preflight_clean_sync(self):
+    def test_preflight_enrollment_not_requested_clean_sync(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
-
-        # enrollment, clean sync not requested → clean sync
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertTrue(json_response["clean_sync"])
 
-        # no enrollment, clean sync not requested → no clean sync
+    def test_preflight_no_enrollment_not_requested_no_clean_sync(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data(use_enrolled_machine=True)
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertFalse(json_response.get("clean_sync", False))
 
-        # no enrollment, clean sync requested → clean sync
+    def test_preflight_no_enrollment_requested_clean_sync(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data(use_enrolled_machine=True)
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         data["request_clean_sync"] = True
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertTrue(json_response["clean_sync"])
+
+    def test_preflight_no_enrollment_sync_no_ok_clean_sync(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data(use_enrolled_machine=True)
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        data["binary_rule_count"] = 432
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()

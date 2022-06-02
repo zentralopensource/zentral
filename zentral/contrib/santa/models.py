@@ -365,6 +365,7 @@ class EnrolledMachine(models.Model):
     compiler_rule_count = models.IntegerField(null=True)
     transitive_rule_count = models.IntegerField(null=True)
     teamid_rule_count = models.IntegerField(null=True)
+    # see sync_ok below
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -379,6 +380,30 @@ class EnrolledMachine(models.Model):
             return tuple(int(i) for i in self.santa_version.split("."))
         except ValueError:
             return ()
+
+    def sync_ok(self):
+        """
+        Compare the synced and reported rules
+        """
+        synced_rules = {
+            r["target__type"]: r["count"]
+            for r in self.machinerule_set.filter(cursor__isnull=True)
+                                         .values("target__type")
+                                         .annotate(count=Count("id"))
+        }
+        ok = True
+        for target_type, attr in ((Target.BINARY, "binary_rule_count"),
+                                  (Target.CERTIFICATE, "certificate_rule_count"),
+                                  (Target.TEAM_ID, "teamid_rule_count")):
+            synced_count = synced_rules.get(target_type, 0)
+            reported_count = getattr(self, attr) or 0
+            if synced_count != reported_count:
+                logger.error(
+                    "Enrolled machine %s: %s rules synced %s, reported %s",
+                    self.pk, target_type, synced_count, reported_count  # lgtm[py/clear-text-logging-sensitive-data]
+                )
+                ok = False
+        return ok
 
 
 # Rules
