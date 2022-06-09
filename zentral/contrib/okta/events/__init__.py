@@ -27,7 +27,7 @@ register_event_type(OktaUserSessionEnd)
 
 
 def post_okta_events(event_hook, data):
-    event_observer = EventObserver(**event_hook.observer_dict())
+    event_observer = EventObserver.deserialize(event_hook.observer_dict())
     for event in data["data"]["events"]:
         event_type = event["eventType"]
         if event_type == "user.session.start":
