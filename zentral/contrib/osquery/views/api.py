@@ -4,7 +4,6 @@ from gzip import GzipFile
 from itertools import chain, islice
 import json
 import logging
-import uuid
 from django.core.exceptions import SuspiciousOperation, PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
@@ -20,7 +19,8 @@ from zentral.contrib.osquery.conf import build_osquery_conf, INVENTORY_QUERY_NAM
 from zentral.contrib.osquery.events import (post_enrollment_event,
                                             post_file_carve_events,
                                             post_request_event, post_results, post_status_logs)
-from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
+from zentral.contrib.osquery.models import (parse_result_name,
+                                            DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
                                             EnrolledMachine,
                                             FileCarvingBlock, FileCarvingSession,
                                             PackQuery)
@@ -28,7 +28,8 @@ from zentral.contrib.osquery.tasks import build_file_carving_session_archive
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
-from .utils import update_tree_with_enrollment_host_details, update_tree_with_inventory_query_snapshot
+from .utils import (prepare_file_carving_session_if_necessary,
+                    update_tree_with_enrollment_host_details, update_tree_with_inventory_query_snapshot)
 
 
 logger = logging.getLogger('zentral.contrib.osquery.views.api')
@@ -192,40 +193,29 @@ class StartFileCarvingView(BaseNodeView):
     request_type = "start_file_carving"
 
     def do_node_post(self):
-        request_id = self.data.get("request_id")
-        if not request_id:
-            raise SuspiciousOperation("Missing request_id")
+        carve_guid = self.data.get("carve_id")
+        if not carve_guid:
+            raise SuspiciousOperation("Missing carve_id")
 
-        # origin
-        distributed_query = pack_query = None
         try:
-            # distributed queries are sent with the distributed query machine pk as key
-            dqm_pk = int(request_id)
-        except ValueError:
-            # pack query
-            try:
-                pack_query = PackQuery.objects.get_with_config_key(request_id)
-            except ValueError:
-                raise SuspiciousOperation("Unknown request_id format")
-            except PackQuery.DoesNotExist:
-                raise Http404("Unknown pack query")
-        else:
-            try:
-                dqm = DistributedQueryMachine.objects.select_related("distributed_query").get(pk=dqm_pk)
-            except DistributedQueryMachine.DoesNotExist:
-                raise Http404("Unknown distributed query")
-            distributed_query = dqm.distributed_query
+            fcs = FileCarvingSession.objects.get(carve_guid=carve_guid)
+        except FileCarvingSession.DoesNotExist:
+            raise Http404("Unknown carve_id")
 
-        fcs = FileCarvingSession.objects.create(
-            id=uuid.uuid4(),
-            distributed_query=distributed_query,
-            pack_query=pack_query,
-            serial_number=self.machine.serial_number,
-            carve_guid=self.data["carve_id"],
-            carve_size=int(self.data["carve_size"]),
-            block_size=int(self.data["block_size"]),
-            block_count=int(self.data["block_count"])
-        )
+        if fcs.filecarvingblock_set.count():
+            raise SuspiciousOperation("File carving session already has blocks")
+
+        fcs_updated = False
+        for attr in ("block_count", "block_size", "carve_size"):
+            val = self.data.get(attr)
+            if getattr(fcs, attr) == -1:
+                fcs_updated = True
+                setattr(fcs, attr, val)
+        if fcs_updated:
+            fcs.save()
+        else:
+            logger.error("File carving session %s not updated", fcs.pk, extra={'request': self.request})
+
         session_id = str(fcs.pk)
         post_file_carve_events(self.machine.serial_number, self.user_agent, self.ip,
                                [{"action": "start",
@@ -354,6 +344,20 @@ class DistributedWriteView(BaseNodeView):
                 break
             DistributedQueryResult.objects.bulk_create(batch, self.batch_size)
 
+        # process file carving
+        for dqm_pk, dqm_results in results.items():
+            for columns in dqm_results:
+                file_carving_session = prepare_file_carving_session_if_necessary(columns)
+                if file_carving_session:
+                    file_carving_session.serial_number = self.machine.serial_number
+                    file_carving_session.distributed_query = dqm_cache[dqm_pk].distributed_query
+                    file_carving_session.save()
+                    post_file_carve_events(self.machine.serial_number, self.user_agent, self.ip,
+                                           [{"action": "schedule",
+                                             "session_id": str(file_carving_session.pk)}])
+                # only test the first tuple
+                break
+
         # process compliance checks
         cc_status_agg = ComplianceCheckStatusAggregator(self.machine.serial_number)
         status_time = datetime.utcnow()  # TODO: how to get a better time? add ztl_status_time = now() to the query?
@@ -419,6 +423,30 @@ class LogView(BaseNodeView):
                     last_inventory_snapshot = record.get("snapshot")
                 else:
                     results.append(record)
+                    # file carving ?
+                    columns = None
+                    if "columns" in record:
+                        columns = record["columns"]
+                    elif "snapshot" in record:
+                        try:
+                            columns = record["snapshot"][0]
+                        except IndexError:
+                            pass
+                    if columns:
+                        file_carving_session = prepare_file_carving_session_if_necessary(columns)
+                        if file_carving_session:
+                            try:
+                                pack_pk, query_pk, _, _ = parse_result_name(record["name"])
+                                pack_query = PackQuery.objects.get(pack__pk=pack_pk, query__pk=query_pk)
+                            except Exception:
+                                logger.exception("could not find file carving result pack query")
+                            else:
+                                file_carving_session.serial_number = self.machine.serial_number
+                                file_carving_session.pack_query = pack_query
+                                file_carving_session.save()
+                                post_file_carve_events(self.machine.serial_number, self.user_agent, self.ip,
+                                                       [{"action": "schedule",
+                                                         "session_id": str(file_carving_session.pk)}])
             if last_inventory_snapshot:
                 tree = {"source": {"module": "zentral.contrib.osquery",
                                    "name": "osquery"},

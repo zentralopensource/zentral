@@ -3,7 +3,7 @@ import logging
 import uuid
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
-from zentral.contrib.osquery.models import parse_pack_query_configuration_key, EnrolledMachine, Pack, PackQuery
+from zentral.contrib.osquery.models import parse_result_name, EnrolledMachine, PackQuery
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
 
@@ -84,11 +84,7 @@ class OsqueryResultEvent(OsqueryEvent):
         name = self.payload.get("name")
         if not name:
             raise ValueError("result query name not found")
-        expected_prefix = "pack" + Pack.DELIMITER
-        if not name.startswith(expected_prefix):
-            raise ValueError("result query name doesn't start with expected prefix")
-        configuration_key = name[len(expected_prefix):]
-        return parse_pack_query_configuration_key(configuration_key)
+        return parse_result_name(name)
 
     def get_linked_objects_keys(self):
         keys = {}

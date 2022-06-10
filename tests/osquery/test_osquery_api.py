@@ -1,6 +1,7 @@
 from datetime import datetime
 import json
 from unittest.mock import patch
+import uuid
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
@@ -9,10 +10,10 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, 
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
 from zentral.contrib.osquery.events import (OsqueryEnrollmentEvent, OsqueryRequestEvent, OsqueryResultEvent,
-                                            OsqueryCheckStatusUpdated)
+                                            OsqueryCheckStatusUpdated, OsqueryFileCarvingEvent)
 from zentral.contrib.osquery.models import (Configuration, ConfigurationPack,
                                             DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
-                                            EnrolledMachine, Enrollment,
+                                            EnrolledMachine, Enrollment, FileCarvingSession,
                                             Query, Pack, PackQuery)
 from zentral.core.compliance_checks.models import MachineStatus, Status
 
@@ -576,6 +577,48 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(ms_qs.count(), 0)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_distributed_write_one_carve(self, post_event):
+        query, _, distributed_query = self.force_query(force_distributed_query=True)
+        em = self.force_enrolled_machine()
+        dqm = DistributedQueryMachine.objects.create(distributed_query=distributed_query,
+                                                     serial_number=em.serial_number)
+        carve_guid = uuid.uuid4()
+        request_id = uuid.uuid4()
+        response = self.post_as_json(
+           "distributed_write",
+           {"node_key": em.node_key,
+            "queries": {
+                str(dqm.pk): [
+                    {"path": "/var/db/santa/rules.db,/var/db/santa/rules.db-journal",
+                     "size": "-1",
+                     "time": "1654766663",
+                     "carve": "1",
+                     "sha256": "",
+                     "status": "SCHEDULED",
+                     "carve_guid": str(carve_guid),
+                     "request_id": str(request_id)}
+                ]
+            },
+            "statuses": {str(dqm.pk): 0}})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {})
+        fcs = FileCarvingSession.objects.get(carve_guid=carve_guid)
+        self.assertEqual(fcs.carve_guid, carve_guid)
+        self.assertEqual(fcs.serial_number, em.serial_number)
+        self.assertEqual(fcs.distributed_query, distributed_query)
+        self.assertIsNone(fcs.pack_query)
+        self.assertEqual(set(fcs.paths), set(["/var/db/santa/rules.db", "/var/db/santa/rules.db-journal"]))
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 2)
+        request_event = events[0]
+        self.assertIsInstance(request_event, OsqueryRequestEvent)
+        self.assertEqual(request_event.payload["request_type"], "distributed_write")
+        file_carving_event = events[1]
+        self.assertIsInstance(file_carving_event, OsqueryFileCarvingEvent)
+        self.assertEqual(file_carving_event.payload["action"], "schedule")
+        self.assertEqual(file_carving_event.payload["session_id"], str(fcs.pk))
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_distributed_write_two_distributed_queries_one_compliance_check(self, post_event):
         query1, _, distributed_query1 = self.force_query(force_distributed_query=True, force_compliance_check=True)
         query2, _, distributed_query2 = self.force_query(force_distributed_query=True, force_compliance_check=False)
@@ -766,6 +809,59 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(json_response, {})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_log_added_result_with_carve(self, post_event):
+        em = self.force_enrolled_machine()
+        event_routing_key = get_random_string()
+        query, pack, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
+        carve_guid = uuid.uuid4()
+        request_id = uuid.uuid4()
+        post_data = {
+            "node_key": em.node_key,
+            "log_type": "result",
+            "data": [
+                {'name': Pack.DELIMITER.join(['pack', pack.configuration_key(), query.packquery.pack_key()]),
+                 'action': 'added',
+                 'hostIdentifier': 'godzilla.local',
+                 "columns": {
+                     'carve': '1',
+                     'carve_guid': str(carve_guid),
+                     'path': '/var/db/santa/rules.db,/var/db/santa/rules.db-journal',
+                     'request_id': str(request_id),
+                     'sha256': '',
+                     'size': '-1',
+                     'status': 'SCHEDULED',
+                     'time': '1654768001'
+                 },
+                 'unixTime': '1480605737'}
+            ]
+        }
+        response = self.post_as_json("log", post_data)
+        json_response = response.json()
+        self.assertEqual(json_response, {})
+        fcs = FileCarvingSession.objects.get(carve_guid=carve_guid)
+        self.assertEqual(fcs.carve_guid, carve_guid)
+        self.assertEqual(fcs.serial_number, em.serial_number)
+        self.assertIsNone(fcs.distributed_query)
+        self.assertEqual(fcs.pack_query.pack, pack)
+        self.assertEqual(fcs.pack_query.query, query)
+        self.assertEqual(set(fcs.paths), set(["/var/db/santa/rules.db", "/var/db/santa/rules.db-journal"]))
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 3)
+        request_event = events[0]
+        self.assertIsInstance(request_event, OsqueryRequestEvent)
+        self.assertEqual(request_event.payload["request_type"], "log")
+        file_carving_event = events[1]
+        self.assertIsInstance(file_carving_event, OsqueryFileCarvingEvent)
+        self.assertEqual(file_carving_event.payload["action"], "schedule")
+        self.assertEqual(file_carving_event.payload["session_id"], str(fcs.pk))
+        result_event = events[2]
+        self.assertIsInstance(result_event, OsqueryResultEvent)
+        self.assertEqual(result_event.metadata.routing_key, event_routing_key)
+        self.assertEqual(result_event.get_linked_objects_keys(),
+                         {"osquery_pack": [(pack.pk,)],
+                          "osquery_query": [(query.pk,)]})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_log_snapshot_result(self, post_event):
         em = self.force_enrolled_machine()
         event_routing_key = get_random_string()
@@ -801,6 +897,59 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertIsInstance(request_event, OsqueryRequestEvent)
         self.assertEqual(request_event.payload["request_type"], "log")
         result_event = events[1]
+        self.assertIsInstance(result_event, OsqueryResultEvent)
+        self.assertEqual(result_event.metadata.routing_key, event_routing_key)
+        self.assertEqual(result_event.get_linked_objects_keys(),
+                         {"osquery_pack": [(pack.pk,)],
+                          "osquery_query": [(query.pk,)]})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_log_snapshot_result_with_carve(self, post_event):
+        em = self.force_enrolled_machine()
+        event_routing_key = get_random_string()
+        query, pack, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
+        carve_guid = uuid.uuid4()
+        request_id = uuid.uuid4()
+        post_data = {
+            "node_key": em.node_key,
+            "log_type": "result",
+            "data": [
+                {'name': Pack.DELIMITER.join(['pack', pack.configuration_key(), query.packquery.pack_key()]),
+                 'action': 'snapshot',
+                 'hostIdentifier': 'godzilla.local',
+                 "snapshot": [
+                     {'carve': '1',
+                      'carve_guid': str(carve_guid),
+                      'path': '/var/db/santa/rules.db,/var/db/santa/rules.db-journal',
+                      'request_id': str(request_id),
+                      'sha256': '',
+                      'size': '-1',
+                      'status': 'SCHEDULED',
+                      'time': '1654768001'}
+                 ],
+                 'unixTime': '1480605737'}
+            ]
+        }
+        response = self.post_as_json("log", post_data)
+        json_response = response.json()
+        self.assertEqual(json_response, {})
+        fcs = FileCarvingSession.objects.get(carve_guid=carve_guid)
+        self.assertEqual(fcs.carve_guid, carve_guid)
+        self.assertEqual(fcs.serial_number, em.serial_number)
+        self.assertIsNone(fcs.distributed_query)
+        self.assertEqual(fcs.pack_query.pack, pack)
+        self.assertEqual(fcs.pack_query.query, query)
+        self.assertEqual(set(fcs.paths), set(["/var/db/santa/rules.db", "/var/db/santa/rules.db-journal"]))
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 3)
+        request_event = events[0]
+        self.assertIsInstance(request_event, OsqueryRequestEvent)
+        self.assertEqual(request_event.payload["request_type"], "log")
+        file_carving_event = events[1]
+        self.assertIsInstance(file_carving_event, OsqueryFileCarvingEvent)
+        self.assertEqual(file_carving_event.payload["action"], "schedule")
+        self.assertEqual(file_carving_event.payload["session_id"], str(fcs.pk))
+        result_event = events[2]
         self.assertIsInstance(result_event, OsqueryResultEvent)
         self.assertEqual(result_event.metadata.routing_key, event_routing_key)
         self.assertEqual(result_event.get_linked_objects_keys(),
@@ -888,3 +1037,240 @@ class OsqueryAPIViewsTestCase(TestCase):
                                  {"compliance_check": [(query1.compliance_check.pk,)],
                                   "osquery_pack": [(pack1.pk,)],
                                   "osquery_query": [(query1.pk,)]})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_start_file_carving(self, post_event):
+        em = self.force_enrolled_machine()
+        _, _, distributed_query = self.force_query(force_distributed_query=True)
+        carve_guid = uuid.uuid4()
+        fcs = FileCarvingSession.objects.create(
+            id=uuid.uuid4(),
+            distributed_query=distributed_query,
+            serial_number=em.serial_number,
+            carve_guid=carve_guid,
+            carve_size=-1,
+            block_size=-1,
+            block_count=-1
+        )
+        post_data = {
+            'block_count': 4455,
+            'block_size': 8192,
+            'carve_id': str(carve_guid),
+            'carve_size': 36492800,
+            'node_key': em.node_key,
+            # https://github.com/osquery/osquery/blob/be88cb495fece507a41049eedbc2f262e9415b47/osquery/tables/forensic/carves.cpp#L102-L105  # NOQA
+            'request_id': str(uuid.uuid4()),
+        }
+        response = self.post_as_json("carver_start", post_data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["session_id"], str(fcs.pk))
+        fcs.refresh_from_db()
+        self.assertEqual(fcs.block_count, 4455)
+        self.assertEqual(fcs.block_size, 8192)
+        self.assertEqual(fcs.carve_size, 36492800)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 2)
+        request_event = events[0]
+        self.assertIsInstance(request_event, OsqueryRequestEvent)
+        self.assertEqual(request_event.payload["request_type"], "start_file_carving")
+        file_carving_event = events[1]
+        self.assertIsInstance(file_carving_event, OsqueryFileCarvingEvent)
+        self.assertEqual(file_carving_event.payload["action"], "start")
+        self.assertEqual(file_carving_event.payload["session_id"], str(fcs.pk))
+
+    def test_start_file_carving_missing_carve_guid(self):
+        em = self.force_enrolled_machine()
+        _, _, distributed_query = self.force_query(force_distributed_query=True)
+        carve_guid = uuid.uuid4()
+        FileCarvingSession.objects.create(
+            id=uuid.uuid4(),
+            distributed_query=distributed_query,
+            serial_number=em.serial_number,
+            carve_guid=carve_guid,
+            carve_size=-1,
+            block_size=-1,
+            block_count=-1
+        )
+        post_data = {
+            'block_count': 4455,
+            'block_size': 8192,
+            'carve_size': 36492800,
+            'node_key': em.node_key,
+            'request_id': str(uuid.uuid4()),
+        }
+        response = self.post_as_json("carver_start", post_data)
+        self.assertEqual(response.status_code, 400)
+
+    def test_start_file_carving_unknown_carve_guid(self):
+        em = self.force_enrolled_machine()
+        _, _, distributed_query = self.force_query(force_distributed_query=True)
+        carve_guid = uuid.uuid4()
+        FileCarvingSession.objects.create(
+            id=uuid.uuid4(),
+            distributed_query=distributed_query,
+            serial_number=em.serial_number,
+            carve_guid=carve_guid,
+            carve_size=-1,
+            block_size=-1,
+            block_count=-1
+        )
+        post_data = {
+            'block_count': 4455,
+            'block_size': 8192,
+            'carve_id': str(uuid.uuid4()),
+            'carve_size': 36492800,
+            'node_key': em.node_key,
+            'request_id': str(uuid.uuid4()),
+        }
+        response = self.post_as_json("carver_start", post_data)
+        self.assertEqual(response.status_code, 404)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_continue_file_carving(self, post_event):
+        em = self.force_enrolled_machine()
+        _, _, distributed_query = self.force_query(force_distributed_query=True)
+        carve_guid = uuid.uuid4()
+        fcs = FileCarvingSession.objects.create(
+            id=uuid.uuid4(),
+            distributed_query=distributed_query,
+            serial_number=em.serial_number,
+            carve_guid=carve_guid,
+            carve_size=36492800,
+            block_size=8192,
+            block_count=4455
+        )
+        post_data = {
+            'session_id': str(fcs.pk),
+            'block_id': 1,
+            'data': 'eW9sb2ZvbW8='
+        }
+        response = self.post_as_json("carver_continue", post_data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response, {})
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 2)
+        request_event = events[0]
+        self.assertIsInstance(request_event, OsqueryRequestEvent)
+        self.assertEqual(request_event.payload["request_type"], "continue_file_carving")
+        file_carving_event = events[1]
+        self.assertIsInstance(file_carving_event, OsqueryFileCarvingEvent)
+        self.assertEqual(file_carving_event.payload["action"], "continue")
+        self.assertEqual(
+            file_carving_event.payload,
+            {"action": "continue",
+             "block_id": 1,
+             "session_finished": False,
+             "session_id": str(fcs.pk)}
+        )
+
+    def test_continue_file_carving_missing_session_id(self):
+        post_data = {
+            'block_id': 1,
+            'data': 'eW9sb2ZvbW8='
+        }
+        response = self.post_as_json("carver_continue", post_data)
+        self.assertEqual(response.status_code, 400)
+
+    def test_continue_file_carving_unknown_session_id(self):
+        em = self.force_enrolled_machine()
+        _, _, distributed_query = self.force_query(force_distributed_query=True)
+        carve_guid = uuid.uuid4()
+        FileCarvingSession.objects.create(
+            id=uuid.uuid4(),
+            distributed_query=distributed_query,
+            serial_number=em.serial_number,
+            carve_guid=carve_guid,
+            carve_size=36492800,
+            block_size=8192,
+            block_count=4455
+        )
+        post_data = {
+            'session_id': str(uuid.uuid4()),
+            'block_id': 1,
+            'data': 'eW9sb2ZvbW8='
+        }
+        response = self.post_as_json("carver_continue", post_data)
+        self.assertEqual(response.status_code, 403)
+
+    def test_continue_file_carving_missing_block_id(self):
+        em = self.force_enrolled_machine()
+        _, _, distributed_query = self.force_query(force_distributed_query=True)
+        carve_guid = uuid.uuid4()
+        fcs = FileCarvingSession.objects.create(
+            id=uuid.uuid4(),
+            distributed_query=distributed_query,
+            serial_number=em.serial_number,
+            carve_guid=carve_guid,
+            carve_size=36492800,
+            block_size=8192,
+            block_count=4455
+        )
+        post_data = {
+            'session_id': str(fcs.pk),
+            'data': 'eW9sb2ZvbW8='
+        }
+        response = self.post_as_json("carver_continue", post_data)
+        self.assertEqual(response.status_code, 400)
+
+    def test_continue_file_carving_invalid_block_id(self):
+        em = self.force_enrolled_machine()
+        _, _, distributed_query = self.force_query(force_distributed_query=True)
+        carve_guid = uuid.uuid4()
+        fcs = FileCarvingSession.objects.create(
+            id=uuid.uuid4(),
+            distributed_query=distributed_query,
+            serial_number=em.serial_number,
+            carve_guid=carve_guid,
+            carve_size=36492800,
+            block_size=8192,
+            block_count=4455
+        )
+        post_data = {
+            'session_id': str(fcs.pk),
+            'block_id': "a",
+            'data': 'eW9sb2ZvbW8='
+        }
+        response = self.post_as_json("carver_continue", post_data)
+        self.assertEqual(response.status_code, 400)
+
+    def test_continue_file_carving_missing_block_data(self):
+        em = self.force_enrolled_machine()
+        _, _, distributed_query = self.force_query(force_distributed_query=True)
+        carve_guid = uuid.uuid4()
+        fcs = FileCarvingSession.objects.create(
+            id=uuid.uuid4(),
+            distributed_query=distributed_query,
+            serial_number=em.serial_number,
+            carve_guid=carve_guid,
+            carve_size=36492800,
+            block_size=8192,
+            block_count=4455
+        )
+        post_data = {
+            'session_id': str(fcs.pk),
+        }
+        response = self.post_as_json("carver_continue", post_data)
+        self.assertEqual(response.status_code, 400)
+
+    def test_continue_file_carving_invalid_block_data(self):
+        em = self.force_enrolled_machine()
+        _, _, distributed_query = self.force_query(force_distributed_query=True)
+        carve_guid = uuid.uuid4()
+        fcs = FileCarvingSession.objects.create(
+            id=uuid.uuid4(),
+            distributed_query=distributed_query,
+            serial_number=em.serial_number,
+            carve_guid=carve_guid,
+            carve_size=36492800,
+            block_size=8192,
+            block_count=4455
+        )
+        post_data = {
+            'session_id': str(fcs.pk),
+            'block_id': 1,
+            'data': 'le temps des cerises'
+        }
+        response = self.post_as_json("carver_continue", post_data)
+        self.assertEqual(response.status_code, 400)

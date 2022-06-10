@@ -1,7 +1,9 @@
 from datetime import datetime
 import logging
+import uuid
 from zentral.contrib.inventory.conf import macos_version_from_build, cleanup_windows_os_version
 from zentral.contrib.inventory.models import PrincipalUserSource
+from zentral.contrib.osquery.models import FileCarvingSession
 from zentral.utils.certificates import parse_text_dn
 
 
@@ -273,3 +275,29 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
         tree["certificates"] = certificates
     if ec2_instance_tags:
         tree["ec2_instance_tags"] = ec2_instance_tags
+
+
+def prepare_file_carving_session_if_necessary(columns):
+    carve = columns.get("carve")
+    if carve != '1':
+        return
+    carve_guid = columns.get("carve_guid")
+    if not carve_guid:
+        return
+    try:
+        carve_guid = uuid.UUID(carve_guid)
+    except (TypeError, ValueError):
+        logger.error("Bad carve guid")
+        return
+    paths = []
+    columns_path = columns.get("path")
+    if isinstance(columns_path, str):
+        paths = [p.strip() for p in columns_path.split(",")]
+    return FileCarvingSession(
+        id=uuid.uuid4(),
+        carve_guid=carve_guid,
+        paths=paths,
+        carve_size=-1,
+        block_size=-1,
+        block_count=-1
+    )

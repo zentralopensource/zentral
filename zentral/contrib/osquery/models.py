@@ -200,6 +200,14 @@ def parse_pack_query_configuration_key(key):
     return pack_pk, query_pk, query_version, event_routing_key
 
 
+def parse_result_name(name):
+    expected_prefix = "pack" + Pack.DELIMITER
+    if not name.startswith(expected_prefix):
+        raise ValueError("result query name doesn't start with expected prefix")
+    configuration_key = name[len(expected_prefix):]
+    return parse_pack_query_configuration_key(configuration_key)
+
+
 class PackQueryManager(models.Manager):
     def get_with_config_key(self, key):
         pack_pk, query_pk, _, _ = parse_pack_query_configuration_key(key)
@@ -653,12 +661,13 @@ def file_carving_session_archive_path(instance, filename):
 
 class FileCarvingSession(models.Model):
     id = models.UUIDField(primary_key=True)
+    carve_guid = models.UUIDField(unique=True)
+    serial_number = models.TextField(db_index=True)
 
     distributed_query = models.ForeignKey(DistributedQuery, on_delete=models.CASCADE, null=True)
     pack_query = models.ForeignKey(PackQuery, on_delete=models.CASCADE, null=True)
 
-    serial_number = models.TextField(db_index=True)
-    carve_guid = models.TextField()
+    paths = ArrayField(models.CharField(max_length=1024), default=list)
     carve_size = models.BigIntegerField()
     block_size = models.IntegerField()
     block_count = models.IntegerField()
