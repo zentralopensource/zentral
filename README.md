@@ -13,3 +13,5 @@ The Zentral docs are in the [docs](https://github.com/zentralopensource/zentral/
 ## Releases
 
 You will find the latest release information [on GitHub](https://github.com/zentralopensource/zentral/releases).
+
+.
