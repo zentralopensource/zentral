@@ -281,6 +281,7 @@ class PrometheusViewsTestCase(TestCase):
                                   'patch': '_',
                                   'source_name': self.ms2.source.name,
                                   'source_id': str(self.ms2.source.pk),
+                                  'platform': 'MACOS',
                                   'le': le})
                 if le in ("1", "7"):  # source 2 is 13 days old
                     self.assertEqual(sample.value, 0)
