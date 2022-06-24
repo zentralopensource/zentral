@@ -13,6 +13,7 @@ class PrometheusViewsTestCase(TestCase):
         tree = {
             "source": {"module": "tests.zentral.io", "name": "Zentral Tests"},
             "serial_number": "0123456789",
+            "system_info": {"hardware_model": "MacBookPro14,2"},
             "os_version": {'name': 'OS X', 'major': 10, 'minor': 11, 'patch': 1},
             "android_apps": [
                 {"display_name": "AndroidApp1",
@@ -54,6 +55,7 @@ class PrometheusViewsTestCase(TestCase):
         tree = {
             "source": {"module": "tests2.zentral.io", "name": "Zentral Tests2"},
             "serial_number": "0123456789",
+            "system_info": {"hardware_model": "MacBookPro14,2"},
             "os_version": {'name': 'OS X', 'major': 12, 'minor': 2},
             "android_apps": [
                 {"display_name": "AndroidApp1",
@@ -214,6 +216,7 @@ class PrometheusViewsTestCase(TestCase):
                                   'source_name': self.ms2.source.name,
                                   'source_id': str(self.ms2.source.pk),
                                   'version': '2.2',
+                                  'machine_type': 'LAPTOP',
                                   'le': le})
                 if le in ("1", "7"):  # source 2 is 13 days old
                     self.assertEqual(sample.value, 0)

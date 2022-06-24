@@ -2130,15 +2130,16 @@ def android_app_count(source_names, names):
 def deb_package_count(source_names, package_names):
     query = (
         "with all_deb_packages as ("
-        "  select d.name, d.version, s.id as source_id, s.name as source_name,"
+        "  select d.name, d.version, s.id as source_id, s.name as source_name, ms.type machine_type,"
         "  date_part('days', now() - cms.last_seen) as age"
         "  from inventory_debpackage as d"
         "  join inventory_machinesnapshot_deb_packages as msdp on (msdp.debpackage_id = d.id)"
-        "  join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = msdp.machinesnapshot_id)"
+        "  join inventory_machinesnapshot as ms on (ms.id = msdp.machinesnapshot_id)"
+        "  join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)"
         "  join inventory_source as s on (s.id = cms.source_id)"
         "  where LOWER(s.name) in %s"
         "  and d.name in %s"
-        ") select name, version, source_id, source_name,"
+        ") select name, version, source_id, source_name, machine_type,"
         'count(*) filter (where age < 1) as "1",'
         'count(*) filter (where age < 7) as "7",'
         'count(*) filter (where age < 14) as "14",'
@@ -2147,7 +2148,7 @@ def deb_package_count(source_names, package_names):
         'count(*) filter (where age < 90) as "90",'
         'count(*) as "+Inf" '
         "from all_deb_packages "
-        "group by name, version, source_id, source_name"
+        "group by name, version, source_id, source_name, machine_type"
     )
     cursor = connection.cursor()
     cursor.execute(query, [tuple(n.lower() for n in source_names),

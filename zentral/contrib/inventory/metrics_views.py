@@ -29,10 +29,10 @@ class MetricsView(BasePrometheusMetricsView):
             return
         self.all_source_names.update(sources)
         g = Gauge('zentral_inventory_deb_packages_bucket',  'Zentral inventory Debian packages',
-                  ['name', 'version', 'source_name', 'source_id', 'le'],
+                  ['name', 'version', 'source_name', 'source_id', 'machine_type', 'le'],
                   registry=self.registry)
         for r in deb_package_count(sources, names):
-            labels = {k: r[k] for k in ("name", "version", "source_name", "source_id")}
+            labels = {k: r[k] for k in ("name", "version", "source_name", "source_id", "machine_type")}
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 
