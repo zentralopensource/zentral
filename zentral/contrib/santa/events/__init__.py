@@ -79,6 +79,7 @@ class SantaEventEvent(BaseEvent):
         signing_chain = self.payload.get("signing_chain")
         if not signing_chain:
             return keys
+        team_id = self.payload.get("team_id")
         cert_sha256_list = []
         for cert_idx, cert in enumerate(signing_chain):
             # cert sha256
@@ -86,17 +87,19 @@ class SantaEventEvent(BaseEvent):
             if cert_sha256:
                 cert_sha256_list.append(("sha256", cert_sha256))
             # Apple Developer Team ID
-            if cert_idx == 0:
-                try:
-                    _, team_id = parse_apple_dev_id(cert["cn"])
-                except (KeyError, ValueError):
-                    continue
+            if not team_id and cert_idx == 0:
                 try:
                     issuer_cn = signing_chain[cert_idx + 1]["cn"]
                 except KeyError:
                     continue
-                if issuer_cn == APPLE_DEV_ID_ISSUER_CN:
-                    keys["apple_team_id"] = [(team_id,)]
+                if issuer_cn != APPLE_DEV_ID_ISSUER_CN:
+                    continue
+                try:
+                    _, team_id = parse_apple_dev_id(cert["cn"])
+                except (KeyError, ValueError):
+                    pass
+        if team_id:
+            keys["apple_team_id"] = [(team_id,)]
         if cert_sha256_list:
             keys['certificate'] = cert_sha256_list
         return keys

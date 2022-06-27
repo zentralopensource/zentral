@@ -155,7 +155,8 @@ class SantaEventTestCase(SimpleTestCase):
         }
         self.assertEqual(_build_file_tree_from_santa_event(event_d), file_d)
 
-    def test_event_linked_objects(self):
+    @staticmethod
+    def get_event_with_linked_objects(mas_signed=False, with_team_id=True, unknown_dev_id_issuer=False):
         event_d = {
             'current_sessions': ['personne@console', 'flaco@ttys000'],
             'decision': 'ALLOW_UNKNOWN',
@@ -177,14 +178,41 @@ class SantaEventTestCase(SimpleTestCase):
             'quarantine_data_url': 'https://download-installer.cdn.mozilla.net/pub/firefox/releases'
                                    '/94.0.1/mac/de/Firefox%2094.0.1.dmg',
             'quarantine_timestamp': 1637562799,
-            'signing_chain': [
+            'signing_chain': []
+        }
+        if mas_signed:
+            event_d['signing_chain'] = [
+                {'cn': 'Apple Mac OS Application Signing',
+                 'org': 'Apple Inc.',
+                 'sha256': '61977d6006459c4cefe9b988a453589946224957bfc07b262cd7ca1b7a61e04e',
+                 'valid_from': 1452150602,
+                 'valid_until': 1675728000},
+                {'cn': 'Apple Worldwide Developer Relations Certification Authority',
+                 'org': 'Apple Inc.',
+                 'ou': 'Apple Worldwide Developer Relations',
+                 'sha256': 'ce057691d730f89ca25e916f7335f4c8a15713dcd273a658c024023f8eb809c2',
+                 'valid_from': 1360273727,
+                 'valid_until': 1675806527},
+                {'cn': 'Apple Root CA',
+                 'org': 'Apple Inc.',
+                 'ou': 'Apple Certification Authority',
+                 'sha256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
+                 'valid_from': 1146001236,
+                 'valid_until': 2054670036}
+            ]
+        else:
+            if unknown_dev_id_issuer:
+                issuer_cn = "UNKNOWN ISSUER"
+            else:
+                issuer_cn = "Developer ID Certification Authority"
+            event_d['signing_chain'] = [
                 {'cn': 'Developer ID Application: Mozilla Corporation (43AQ936H96)',
                  'org': 'Mozilla Corporation',
                  'ou': '43AQ936H96',
                  'sha256': '96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b',
                  'valid_from': 1494270538,
                  'valid_until': 1652123338},
-                {'cn': 'Developer ID Certification Authority',
+                {'cn': issuer_cn,
                  'org': 'Apple Inc.',
                  'ou': 'Apple Certification Authority',
                  'sha256': '7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f',
@@ -195,14 +223,61 @@ class SantaEventTestCase(SimpleTestCase):
                  'ou': 'Apple Certification Authority',
                  'sha256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
                  'valid_from': 1146001236,
-                 'valid_until': 2054670036}]
-        }
-        event = SantaEventEvent(EventMetadata(), event_d)
+                 'valid_until': 2054670036}
+            ]
+        if with_team_id:
+            event_d['team_id'] = '43AQ936H96'
+        return SantaEventEvent(EventMetadata(), event_d)
+
+    def test_std_event_without_team_id_known_issuer_linked_objects(self):
+        event = self.get_event_with_linked_objects(mas_signed=False, with_team_id=False, unknown_dev_id_issuer=False)
         self.assertEqual(
             event.get_linked_objects_keys(),
             {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
              "certificate": [("sha256", "96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b"),
                              ("sha256", "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"),
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
+             "apple_team_id": [("43AQ936H96",)]}
+        )
+
+    def test_std_event_without_team_id_unknown_issuer_linked_objects(self):
+        event = self.get_event_with_linked_objects(mas_signed=False, with_team_id=False, unknown_dev_id_issuer=True)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b"),
+                             ("sha256", "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"),
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")]}
+        )
+
+    def test_std_event_with_team_id_linked_objects(self):
+        event = self.get_event_with_linked_objects(mas_signed=False, with_team_id=True)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b"),
+                             ("sha256", "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"),
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
+             "apple_team_id": [("43AQ936H96",)]}
+        )
+
+    def test_mas_event_without_team_id_linked_objects(self):
+        event = self.get_event_with_linked_objects(mas_signed=True, with_team_id=False)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "61977d6006459c4cefe9b988a453589946224957bfc07b262cd7ca1b7a61e04e"),
+                             ("sha256", "ce057691d730f89ca25e916f7335f4c8a15713dcd273a658c024023f8eb809c2"),
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")]}
+        )
+
+    def test_mas_event_with_team_id_linked_objects(self):
+        event = self.get_event_with_linked_objects(mas_signed=True, with_team_id=True)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "61977d6006459c4cefe9b988a453589946224957bfc07b262cd7ca1b7a61e04e"),
+                             ("sha256", "ce057691d730f89ca25e916f7335f4c8a15713dcd273a658c024023f8eb809c2"),
                              ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
              "apple_team_id": [("43AQ936H96",)]}
         )
