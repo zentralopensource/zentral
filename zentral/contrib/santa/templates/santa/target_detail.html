@@ -17,6 +17,9 @@
       <td style="width:20vw">identifier</td>
       <td><code>{{ identifier }}</code></td>
     </tr>
+    <tr>
+      <td colspan="2">&nbsp;</td>
+    </tr>
     {% for obj in objects %}
     {% if target_type == "BINARY" %}
     <tr>
@@ -96,7 +99,7 @@
       <td>{{ obj.organization }}</td>
     </tr>
     {% endif %}
-    {% if obj.ou %}
+    {% if obj.organizational_unit %}
     <tr>
       <td>ou</td>
       <td>{{ obj.organizational_unit }}</td>
@@ -109,7 +112,7 @@
     {% endif %}
     {% if not forloop.last %}
     <tr>
-      <td colspan="2"></td>
+      <td colspan="2">&nbsp;</td>
     </tr>
     {% endif %}
     {% endfor %}
