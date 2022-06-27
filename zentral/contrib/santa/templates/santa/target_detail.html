@@ -90,13 +90,26 @@
       <td>cn</td>
       <td>{{ obj.common_name }}</td>
     </tr>
+    {% if obj.organization %}
+    <tr>
+      <td>org</td>
+      <td>{{ obj.organization }}</td>
+    </tr>
+    {% endif %}
+    {% if obj.ou %}
     <tr>
       <td>ou</td>
       <td>{{ obj.organizational_unit }}</td>
     </tr>
+    {% endif %}
     <tr>
       <td>validity</td>
       <td>{{ obj.valid_from|date:"Y-m-d" }} → {{ obj.valid_until|date:"Y-m-d" }}</td>
+    </tr>
+    {% endif %}
+    {% if not forloop.last %}
+    <tr>
+      <td colspan="2"></td>
     </tr>
     {% endif %}
     {% endfor %}
