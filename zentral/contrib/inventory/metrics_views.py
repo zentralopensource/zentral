@@ -104,10 +104,10 @@ class MetricsView(BasePrometheusMetricsView):
         if not self.all_source_names:
             return
         g = Gauge('zentral_inventory_active_machines_bucket', 'Zentral inventory active machines',
-                  ['platform', 'source_id', 'source_name', 'le'],
+                  ['platform', 'machine_type', 'source_id', 'source_name', 'le'],
                   registry=self.registry)
         for r in active_machines_count(self.all_source_names):
-            labels = {k: r[k] for k in ('platform', 'source_name', 'source_id')}
+            labels = {k: r[k] for k in ('platform', 'machine_type', 'source_name', 'source_id')}
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 

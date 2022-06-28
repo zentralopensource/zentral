@@ -314,6 +314,7 @@ class PrometheusViewsTestCase(TestCase):
                 le = sample.labels["le"]
                 self.assertEqual(sample.labels,
                                  {'platform': MACOS,
+                                  'machine_type': 'LAPTOP',
                                   'source_name': self.ms2.source.name,
                                   'source_id': str(self.ms2.source.pk),
                                   'le': le})
