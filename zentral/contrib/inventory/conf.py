@@ -56,6 +56,7 @@ HARDWARE_MODEL_SERIAL_MACHINE_TYPES = [
     ('macmini', DESKTOP),
     ('macpro', DESKTOP),
     ('powermac', DESKTOP),
+    ('virtualmac', VM),
     ('vmware', VM),
     ('xserve', SERVER),
     # DELL
