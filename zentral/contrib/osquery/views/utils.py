@@ -1,7 +1,9 @@
 from datetime import datetime
 import logging
 import uuid
-from zentral.contrib.inventory.conf import macos_version_from_build, cleanup_windows_os_version
+from zentral.contrib.inventory.conf import (cleanup_windows_os_version,
+                                            macos_version_from_build,
+                                            windows_version_from_build)
 from zentral.contrib.inventory.models import PrincipalUserSource
 from zentral.contrib.osquery.models import FileCarvingSession
 from zentral.utils.certificates import parse_text_dn
@@ -41,6 +43,20 @@ def update_os_version(tree, t):
             os_version = cleanup_windows_os_version(os_version)
     if os_version.get("major"):
         tree['os_version'] = os_version
+
+
+def update_windows_build(tree, windows_build):
+    current_build = windows_build.get("CurrentBuild")
+    ubr = windows_build.get("UBR")
+    if current_build and ubr:
+        try:
+            os_version = windows_version_from_build(f"{current_build}.{ubr}")
+        except ValueError:
+            logger.warning("Could not update Windows build: unknown build")
+        else:
+            tree['os_version'] = os_version
+    else:
+        logger.warning("Could not update Windows build: missing data")
 
 
 def update_system_info(tree, t):
@@ -233,6 +249,7 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
     principal_user = {}
     certificates = []
     ec2_instance_tags = []
+    windows_build = {}
     for t in snapshot:
         table_name = t.pop('table_name')
         if table_name == 'os_version':
@@ -259,6 +276,9 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
             update_ec2_instance_metadata(tree, t)
         elif table_name == 'ec2_instance_tags':
             collect_ec2_instance_tag(ec2_instance_tags, t)
+        elif table_name == 'windows_build':
+            windows_build_attr = clean_dict(t, {"name", "data"})
+            windows_build[windows_build_attr["name"]] = windows_build_attr["data"]
     if deb_packages:
         tree["deb_packages"] = deb_packages
     if disks:
@@ -275,6 +295,8 @@ def update_tree_with_inventory_query_snapshot(tree, snapshot):
         tree["certificates"] = certificates
     if ec2_instance_tags:
         tree["ec2_instance_tags"] = ec2_instance_tags
+    if windows_build:
+        update_windows_build(tree, windows_build)
 
 
 def prepare_file_carving_session_if_necessary(columns):

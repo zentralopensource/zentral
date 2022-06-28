@@ -61,7 +61,13 @@ WIN_INVENTORY_QUERY_SNAPSHOT = [
      "hardware_serial": "VMware-56 4d e4 40 34 98 81 58-e5 82 7e b7 a6 74 cc 2d",
      "hostname": "WinDev2010Eval",
      "physical_memory": "4294430720",
-     "table_name": "system.info"}
+     "table_name": "system.info"},
+    {"name": "UBR",
+     "data": "1766",
+     "table_name": "windows_build"},
+    {"name": "CurrentBuild",
+     "data": "19044",
+     "table_name": "windows_build"},
 ]
 
 LINUX_INVENTORY_QUERY_SNAPSHOT = [
@@ -210,11 +216,26 @@ class OsqueryAPIViewsTestCase(TestCase):
             )
         return query, pack, distributed_query
 
-    def post_default_inventory_query_snapshot(self, node_key, platform, with_app=False, with_ec2=False):
+    def post_default_inventory_query_snapshot(
+        self,
+        node_key,
+        platform,
+        with_app=False,
+        with_ec2=False,
+        no_windows_build_data=False,
+        missing_windows_build_data=False,
+        unknown_windows_build=False,
+    ):
         if platform == "macos":
             qs = INVENTORY_QUERY_SNAPSHOT
         elif platform == "windows":
-            qs = WIN_INVENTORY_QUERY_SNAPSHOT
+            qs = [d.copy() for d in WIN_INVENTORY_QUERY_SNAPSHOT]
+            if no_windows_build_data:
+                qs = qs[:-2]
+            elif missing_windows_build_data:
+                qs = qs[:-1]
+            elif unknown_windows_build:
+                qs[-1]["data"] = "0000000000000000"
         else:
             qs = LINUX_INVENTORY_QUERY_SNAPSHOT
         snapshot = list(qs)
@@ -480,6 +501,24 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertIn(" 'ec2_instance_metadata' ", schedule[INVENTORY_QUERY_NAME]["query"])
         self.assertIn(" 'ec2_instance_tags' ", schedule[INVENTORY_QUERY_NAME]["query"])
 
+    def test_windows_build_instance_schedule(self):
+        em = self.force_enrolled_machine()
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertIn("schedule", json_response)
+        schedule = json_response["schedule"]
+        self.assertIn(INVENTORY_QUERY_NAME, schedule)
+        self.assertNotIn(" 'windows_build' ", schedule[INVENTORY_QUERY_NAME]["query"])
+        self.post_default_inventory_query_snapshot(em.node_key, platform="windows")
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertIn("schedule", json_response)
+        schedule = json_response["schedule"]
+        self.assertIn(INVENTORY_QUERY_NAME, schedule)
+        self.assertIn(" 'windows_build' ", schedule[INVENTORY_QUERY_NAME]["query"])
+
     # distributed queries
 
     def test_distributed_read_405(self):
@@ -740,6 +779,54 @@ class OsqueryAPIViewsTestCase(TestCase):
     def test_log_windows_version_inventory_query(self):
         em = self.force_enrolled_machine()
         response = self.post_default_inventory_query_snapshot(em.node_key, platform="windows", with_app=False)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response, {})
+        ms = MachineSnapshot.objects.current().get(serial_number=em.serial_number, reference=em.node_key)
+        self.assertEqual(ms.os_version.name, "Windows 10")
+        self.assertEqual(ms.os_version.major, 10)
+        self.assertIsNone(ms.os_version.minor)
+        self.assertIsNone(ms.os_version.patch)
+        self.assertEqual(ms.os_version.build, "19044.1766")
+        self.assertEqual(ms.os_version.version, "21H2")
+
+    def test_log_windows_version_inventory_query_no_windows_build_data(self):
+        em = self.force_enrolled_machine()
+        response = self.post_default_inventory_query_snapshot(
+            em.node_key, platform="windows", with_app=False, no_windows_build_data=True
+        )
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response, {})
+        ms = MachineSnapshot.objects.current().get(serial_number=em.serial_number, reference=em.node_key)
+        self.assertEqual(ms.os_version.name, "Windows 10")
+        self.assertEqual(ms.os_version.major, 10)
+        self.assertIsNone(ms.os_version.minor)
+        self.assertIsNone(ms.os_version.patch)
+        self.assertEqual(ms.os_version.build, "19044")
+        self.assertEqual(ms.os_version.version, "21H2")
+
+    def test_log_windows_version_inventory_query_missing_windows_build_data(self):
+        em = self.force_enrolled_machine()
+        response = self.post_default_inventory_query_snapshot(
+            em.node_key, platform="windows", with_app=False, missing_windows_build_data=True
+        )
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response, {})
+        ms = MachineSnapshot.objects.current().get(serial_number=em.serial_number, reference=em.node_key)
+        self.assertEqual(ms.os_version.name, "Windows 10")
+        self.assertEqual(ms.os_version.major, 10)
+        self.assertIsNone(ms.os_version.minor)
+        self.assertIsNone(ms.os_version.patch)
+        self.assertEqual(ms.os_version.build, "19044")
+        self.assertEqual(ms.os_version.version, "21H2")
+
+    def test_log_windows_version_inventory_query_unknown_windows_build(self):
+        em = self.force_enrolled_machine()
+        response = self.post_default_inventory_query_snapshot(
+            em.node_key, platform="windows", with_app=False, unknown_windows_build=True
+        )
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {})

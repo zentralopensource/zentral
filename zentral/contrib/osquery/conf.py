@@ -59,6 +59,17 @@ MACOS_DISK_QUERY = (
 )
 
 
+WINDOWS_BUILD_QUERY = (
+    "with keys(path) as ("
+    "values "
+    "('HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\CurrentBuild'),"
+    "('HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\UBR')"
+    ") select 'windows_build' as table_name,"
+    "name, data from registry "
+    "join keys on (registry.path = keys.path);"
+)
+
+
 WINDOWS_DISK_QUERY = (
     "select 'disks' as table_name, "
     "name, disk_size as size "
@@ -130,6 +141,7 @@ def _get_inventory_queries_for_machine(machine, include_apps=False, include_ec2=
     if machine.platform in (MACOS, WINDOWS):
         yield "certificates", CERTIFICATES_QUERY
     if machine.platform == WINDOWS:
+        yield "windows_build", WINDOWS_BUILD_QUERY
         yield "disks", WINDOWS_DISK_QUERY
 
 
