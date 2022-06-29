@@ -964,7 +964,7 @@ class ComplianceCheckView(PermissionRequiredMixin, DetailView):
             store_links = []
             for store in stores.iter_events_url_store_for_user("object", self.request.user):
                 url = "{}?{}".format(
-                    reverse("santa:configuration_events_store_redirect", args=(self.object.pk,)),
+                    reverse("inventory:compliance_check_events_store_redirect", args=(self.object.pk,)),
                     urlencode({"es": store.name,
                                "tr": ComplianceCheckEventsView.default_time_range})
                 )

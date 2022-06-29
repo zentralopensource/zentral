@@ -270,8 +270,7 @@ class InventoryViewsTestCase(TestCase):
         self._login("incidents.view_incident")
         response = self.client.get(reverse("incidents:incident_events_store_redirect", args=(incident.pk,)),
                                    {"es": frontend_store.name})
-        # dev store cannot redirect
-        self.assertRedirects(response, reverse("incidents:incident_events", args=(incident.pk,)))
+        self.assertTrue(response.url.startswith("/kibana/"))
 
     # update machine incident
 

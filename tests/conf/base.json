@@ -32,7 +32,9 @@
       "hosts": [
         "http://elastic:9200"
       ],
-      "index": "zentral-events"
+      "index": "zentral-events",
+      "kibana_base_url": "/kibana/",
+      "kibana_index_pattern_uuid": "yolo-fomo"
     }
   },
   "processor_workers": {

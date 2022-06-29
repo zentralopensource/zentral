@@ -236,8 +236,7 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:binary_events_store_redirect", args=(self.file_sha256,)),
                                    {"es": frontend_store.name})
-        # dev store cannot redirect
-        self.assertRedirects(response, reverse("santa:binary_events", args=(self.file_sha256,)))
+        self.assertTrue(response.url.startswith("/kibana/"))
 
     # bundle target
 
@@ -329,8 +328,7 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:bundle_events_store_redirect", args=(bundle.target.identifier,)),
                                    {"es": frontend_store.name})
-        # dev store cannot redirect
-        self.assertRedirects(response, reverse("santa:bundle_events", args=(bundle.target.identifier,)))
+        self.assertTrue(response.url.startswith("/kibana/"))
 
     # certificate target
 
@@ -409,8 +407,7 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:certificate_events_store_redirect", args=(self.file_cert_sha256,)),
                                    {"es": frontend_store.name})
-        # dev store cannot redirect
-        self.assertRedirects(response, reverse("santa:certificate_events", args=(self.file_cert_sha256,)))
+        self.assertTrue(response.url.startswith("/kibana/"))
 
     # team ID target
 
@@ -489,5 +486,4 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:teamid_events_store_redirect", args=(self.file_team_id,)),
                                    {"es": frontend_store.name})
-        # dev store cannot redirect
-        self.assertRedirects(response, reverse("santa:teamid_events", args=(self.file_team_id,)))
+        self.assertTrue(response.url.startswith("/kibana/"))
