@@ -348,7 +348,7 @@ class Configuration(models.Model):
     )
     inventory_apps = models.BooleanField(
         default=False,
-        help_text="Include macOS apps or linux packages in the inventory"
+        help_text="Include executables (apps/programs) or linux packages in the inventory"
     )
     inventory_ec2 = models.BooleanField(
         default=False,
