@@ -2549,8 +2549,8 @@ def export_machine_snapshots(source_name=None, window_size=5000):
     args = []
     query = (
         "select "
-        "ms.serial_number, ms.imei, ms.meid, ms.platform, ms.type, ms.mt_created_at as last_change,"
-        "max(msc.last_seen) as last_seen,"
+        "ms.serial_number, ms.imei, ms.meid, ms.platform, ms.type, ms.extra_facts,"
+        "ms.mt_created_at as last_change, max(msc.last_seen) as last_seen,"
         "json_build_object('module', s.module, 'name', s.name) as source,"
         "json_agg(json_build_object("
         "  'anchor_text', l.anchor_text,"
@@ -2609,7 +2609,7 @@ def export_machine_snapshots(source_name=None, window_size=5000):
         args.append(source_name.upper())
     query += (
         "group by "
-        "ms.serial_number, ms.imei, ms.meid, ms.platform, ms.type, ms.mt_created_at,"
+        "ms.serial_number, ms.imei, ms.meid, ms.platform, ms.type, ms.extra_facts, ms.mt_created_at,"
         "s.module, s.name,"
         "o.name, o.major, o.minor, o.patch, o.build,"
         "si.computer_name, si.hostname, si.hardware_model, si.hardware_serial,"
@@ -2626,6 +2626,8 @@ def export_machine_snapshots(source_name=None, window_size=5000):
         for k, v in list(row_d.items()):
             if v is None:
                 del row_d[k]
+            elif k == "extra_facts":
+                row_d[k] = json.loads(v)
             elif isinstance(v, dict):
                 _prepare_machine_snapshot(v)
                 if not v:
