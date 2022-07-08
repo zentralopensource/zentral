@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
-import multiprocessing
 import os
 import random
 import subprocess
@@ -73,13 +72,11 @@ def create_zentral_superuser():
 
 KNOWN_COMMANDS = {
     "runserver": ["python", 'server/manage.py', 'runserver', '0.0.0.0:8000'],
-    "gunicorn": ["gunicorn", "--chdir", "/zentral/server",
-                             "-b", "0.0.0.0:8000",
-                             "-w", str(2 * multiprocessing.cpu_count() + 1),
-                             "--access-logfile", "-",
-                             "--access-logformat", '"%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"',
-                             "--error-logfile", "-",
-                             "server.wsgi"],
+    "gunicorn": ["gunicorn",
+                 "--worker-tmp-dir", "/dev/shm",
+                 "-b", "127.0.0.1:8000",
+                 "--error-logfile", "-",
+                 "--chdir", "/zentral/server", "server.wsgi"],
     "runworker": ["python", 'server/manage.py', 'runworker'],
     "runworkers": ["python", 'server/manage.py', 'runworkers'],
     "celery": ["celery", "-A", "server", "worker"],
