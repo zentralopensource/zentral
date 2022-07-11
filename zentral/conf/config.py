@@ -79,6 +79,11 @@ class Resolver:
         self._param_client = None
         self._secret_client = None
 
+    @staticmethod
+    def _get_time():
+        # to help with tests
+        return time.monotonic()
+
     def _get_or_create_cached_value(self, key, getter, ttl=None):
         # happy path
         try:
@@ -86,7 +91,7 @@ class Resolver:
         except KeyError:
             pass
         else:
-            if expiry is None or time.time() < expiry:
+            if expiry is None or self._get_time() < expiry:
                 logger.debug("Key %s from cache", key)
                 return value
             logger.debug("Cache for key %s has expired", key)
@@ -94,7 +99,7 @@ class Resolver:
         # get value
         value = getter()
         if ttl:
-            expiry = time.time() + ttl
+            expiry = self._get_time() + ttl
         else:
             expiry = None
         self._cache[key] = (expiry, value)
@@ -109,7 +114,7 @@ class Resolver:
             with open(filepath, "r") as f:
                 return f.read()
 
-        return self._get_or_create_cached_value(cache_key, getter)
+        return self._get_or_create_cached_value(cache_key, getter, ttl=600)
 
     def get_secret_value(self, name):
         cache_key = ("SECRET", name)

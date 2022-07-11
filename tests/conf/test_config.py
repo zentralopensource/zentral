@@ -1,3 +1,6 @@
+import os
+from tempfile import NamedTemporaryFile
+from unittest.mock import call, Mock
 from django.test import SimpleTestCase
 from zentral.conf.config import ConfigDict, ConfigList
 
@@ -137,3 +140,32 @@ class ConfTestCase(SimpleTestCase):
 
     def test_config_list_eq_different_item(self):
         self.assertFalse(ConfigList(["un", "deux"]) == ConfigList(["un", "trois"]))
+
+    def test_config_file_resolver_cache(self):
+        with NamedTemporaryFile() as tmp_file:
+            tmp_file.write(b"un")
+            tmp_file.flush()
+            c = ConfigDict({"f": f'{{{{ file:{tmp_file.name} }}}}'})
+            # first read operation
+            m0 = Mock(return_value=0)
+            c._resolver._get_time = m0
+            self.assertEqual(c["f"], "un")
+            m0.assert_called_once()
+            tmp_file.seek(0)
+            tmp_file.write(b"undeux")
+            tmp_file.flush()
+            # read from cache
+            m599 = Mock(return_value=599)
+            c._resolver._get_time = m599
+            self.assertEqual(c["f"], "un")
+            m599.assert_called_once()
+            # force expiry (time > 0 + default ttl)
+            m601 = Mock(return_value=601)
+            c._resolver._get_time = m601
+            self.assertEqual(c["f"], "undeux")
+            m601.assert_has_calls([call(), call()])
+
+    def test_config_file_jsondecode_element_resolvers(self):
+        base_json = os.path.join(os.path.dirname(os.path.abspath(__file__)), "base.json")
+        c = ConfigDict({"api": f'{{{{ file:{base_json}|jsondecode|element:api }}}}'})
+        self.assertEqual(c["api"]["tls_hostname"], "https://zentral")
