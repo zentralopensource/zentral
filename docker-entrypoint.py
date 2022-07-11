@@ -74,7 +74,6 @@ KNOWN_COMMANDS = {
     "runserver": ["python", 'server/manage.py', 'runserver', '0.0.0.0:8000'],
     "gunicorn": ["gunicorn",
                  "--worker-tmp-dir", "/dev/shm",
-                 "-b", "127.0.0.1:8000",
                  "--error-logfile", "-",
                  "--chdir", "/zentral/server", "server.wsgi"],
     "runworker": ["python", 'server/manage.py', 'runworker'],
