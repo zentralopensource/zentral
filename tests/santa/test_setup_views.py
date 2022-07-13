@@ -308,8 +308,9 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, configuration.name)
 
     def create_enrollment(self, configuration, no_assertions=False):
-        mbu = MetaBusinessUnit.objects.create(name="{} MBU".format(configuration.name))
-        mbu.create_enrollment_business_unit()
+        mbu, _ = MetaBusinessUnit.objects.get_or_create(name="{} MBU".format(configuration.name))
+        if not mbu.api_enrollment_enabled():
+            mbu.create_enrollment_business_unit()
         response = self.client.post(reverse("santa:create_enrollment", args=(configuration.pk,)),
                                     {"secret-meta_business_unit": mbu.pk,
                                      "configuration": configuration.pk,

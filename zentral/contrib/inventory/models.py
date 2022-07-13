@@ -39,8 +39,7 @@ class MetaBusinessUnitManager(models.Manager):
         try:
             mbu = self.filter(businessunit__key=key)[0]
         except IndexError:
-            mbu = MetaBusinessUnit(name=name)
-            mbu.save()
+            mbu, _ = MetaBusinessUnit.objects.get_or_create(name=name)
         return mbu
 
     def available_for_api_enrollment(self):
@@ -49,7 +48,7 @@ class MetaBusinessUnitManager(models.Manager):
 
 class MetaBusinessUnit(models.Model):
     """The object to link the different BusinessUnits."""
-    name = models.TextField()
+    name = models.TextField(unique=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

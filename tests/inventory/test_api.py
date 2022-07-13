@@ -348,6 +348,15 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(meta_business_unit.name, 'TestMBU1')
         self.assertTrue(meta_business_unit.api_enrollment_enabled())
 
+    def test_create_meta_business_unit_name_error(self):
+        name = get_random_string(12)
+        MetaBusinessUnit.objects.create(name=name)
+        data = {'name': name}
+        self._set_permissions("inventory.add_metabusinessunit")
+        response = self.client.post(reverse('inventory_api:meta_business_units'), data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {"name": ["meta business unit with this name already exists."]})
+
     # get meta business unit
 
     def test_get_meta_business_unit_unauthorized(self):
@@ -391,6 +400,17 @@ class InventoryAPITests(APITestCase):
                          {"api_enrollment_enabled": [
                               "Cannot disable API enrollment"
                           ]})
+
+    def test_update_meta_business_unit_name_error(self):
+        name = get_random_string(12)
+        MetaBusinessUnit.objects.create(name=name)
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        self._set_permissions("inventory.change_metabusinessunit")
+        url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
+        data = {'name': name, 'api_enrollment_enabled': False}
+        response = self.client.put(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {"name": ["meta business unit with this name already exists."]})
 
     # list meta business unit
 
