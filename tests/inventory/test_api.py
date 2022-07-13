@@ -372,7 +372,9 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.data,
                          {'id': meta_business_unit.pk,
                           'name': meta_business_unit.name,
-                          'api_enrollment_enabled': meta_business_unit.api_enrollment_enabled()})
+                          'api_enrollment_enabled': meta_business_unit.api_enrollment_enabled(),
+                          'created_at': meta_business_unit.created_at.isoformat(),
+                          'updated_at': meta_business_unit.updated_at.isoformat()})
 
     # update meta business unit
 
@@ -427,7 +429,9 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.data,
                          [{"id": meta_business_unit.pk,
                            "name": meta_business_unit.name,
-                           "api_enrollment_enabled": meta_business_unit.api_enrollment_enabled()}])
+                           "api_enrollment_enabled": meta_business_unit.api_enrollment_enabled(),
+                           "created_at": meta_business_unit.created_at.isoformat(),
+                           "updated_at": meta_business_unit.updated_at.isoformat()}])
 
     # list tag
 

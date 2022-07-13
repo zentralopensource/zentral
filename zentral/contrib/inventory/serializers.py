@@ -53,7 +53,7 @@ class MetaBusinessUnitSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MetaBusinessUnit
-        fields = ("id", "name", "api_enrollment_enabled")
+        fields = ("id", "name", "api_enrollment_enabled", "created_at", "updated_at")
         read_only_fields = ("api_enrollment_enabled",)
 
     def validate_api_enrollment_enabled(self, value):
