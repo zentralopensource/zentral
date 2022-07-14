@@ -80,7 +80,7 @@ class MetaBusinessUnitSerializer(serializers.ModelSerializer):
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
-        fields = ("id", "meta_business_unit", "name", "slug", "color")
+        fields = ("id", "taxonomy", "meta_business_unit", "name", "slug", "color")
         # TODO: Taxonomy
 
 

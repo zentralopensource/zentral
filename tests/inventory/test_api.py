@@ -9,7 +9,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 from accounts.models import User
 from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineSnapshot,
-                                              MachineSnapshotCommit, MetaBusinessUnit, Tag)
+                                              MachineSnapshotCommit, MetaBusinessUnit, Tag, Taxonomy)
 
 
 class InventoryAPITests(APITestCase):
@@ -440,11 +440,19 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_list_tag(self):
-        tag = Tag.objects.create(name=get_random_string(12))
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        taxonomy = Taxonomy.objects.create(name=get_random_string())
+        tag = Tag.objects.create(
+            taxonomy=taxonomy,
+            meta_business_unit=meta_business_unit,
+            name=get_random_string(12)
+        )
         self._set_permissions("inventory.view_tag")
         response = self.client.get(reverse('inventory_api:tags'))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data[0]["id"], tag.pk)
+        self.assertEqual(response.data[0]["taxonomy"], taxonomy.pk)
+        self.assertEqual(response.data[0]["meta_business_unit"], meta_business_unit.pk)
         self.assertEqual(response.data[0]["name"], tag.name)
 
     # tag
@@ -455,9 +463,17 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_tag(self):
-        tag = Tag.objects.create(name=get_random_string(12))
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        taxonomy = Taxonomy.objects.create(name=get_random_string())
+        tag = Tag.objects.create(
+            taxonomy=taxonomy,
+            meta_business_unit=meta_business_unit,
+            name=get_random_string(12)
+        )
         self._set_permissions("inventory.view_tag")
         response = self.client.get(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["id"], tag.pk)
+        self.assertEqual(response.data["taxonomy"], taxonomy.pk)
+        self.assertEqual(response.data["meta_business_unit"], meta_business_unit.pk)
         self.assertEqual(response.data["name"], tag.name)
