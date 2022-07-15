@@ -576,3 +576,118 @@ class InventoryAPITests(APITestCase):
              "slug": tag.slug,
              "color": tag.color}
         )
+
+    # create taxonomy
+
+    def test_create_taxonomy_unauthorized(self):
+        data = {"name": "TestTax01"}
+        response = self.client.post(reverse('inventory_api:taxonomies'), data)
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_taxonomy(self):
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        data = {'meta_business_unit': meta_business_unit.pk, 'name': 'TestTax0'}
+        self._set_permissions("inventory.add_taxonomy")
+        response = self.client.post(reverse('inventory_api:taxonomies'), data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        taxonomy = Taxonomy.objects.get(name='TestTax0')
+        self.assertEqual(taxonomy.meta_business_unit, meta_business_unit)
+        self.assertEqual(taxonomy.name, data["name"])
+        self.assertEqual(
+            response.data,
+            {"id": taxonomy.pk,
+             "meta_business_unit": meta_business_unit.pk,
+             "name": taxonomy.name,
+             "created_at": taxonomy.created_at.isoformat(),
+             "updated_at": taxonomy.updated_at.isoformat()}
+        )
+
+    # get taxonomy
+
+    def test_get_taxonomy_unauthorized(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        response = self.client.get(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_taxonomy(self):
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        taxonomy = Taxonomy.objects.create(meta_business_unit=meta_business_unit, name=get_random_string())
+        self._set_permissions("inventory.view_taxonomy")
+        response = self.client.get(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data,
+            {"id": taxonomy.pk,
+             "meta_business_unit": meta_business_unit.pk,
+             "name": taxonomy.name,
+             "created_at": taxonomy.created_at.isoformat(),
+             "updated_at": taxonomy.updated_at.isoformat()}
+        )
+
+    # update taxonomy
+
+    def test_update_taxonomy_unauthorized(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        response = self.client.put(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_taxonomy(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        self._set_permissions("inventory.change_taxonomy")
+        url = reverse('inventory_api:taxonomy', args=(taxonomy.pk,))
+        updated_name = get_random_string(12)
+        data = {'name': updated_name}
+        response = self.client.put(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        taxonomy.refresh_from_db()
+        self.assertEqual(taxonomy.name, updated_name)
+
+    def test_update_taxonomy_name_error(self):
+        name = get_random_string(12)
+        Taxonomy.objects.create(name=name)
+        taxonomy = Taxonomy.objects.create(name=get_random_string())
+        self._set_permissions("inventory.change_taxonomy")
+        url = reverse('inventory_api:taxonomy', args=(taxonomy.pk,))
+        data = {'name': name}
+        response = self.client.put(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {"name": ["taxonomy with this name already exists."]})
+
+    # delete taxonomy
+
+    def test_delete_taxonomy_unauthorized(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        response = self.client.delete(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_taxonomy(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        self._set_permissions("inventory.delete_taxonomy")
+        response = self.client.delete(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(Taxonomy.objects.filter(pk=taxonomy.pk).count(), 0)
+
+    # list taxonomy
+
+    def test_list_taxonomy_unauthorized(self):
+        response = self.client.get(reverse('inventory_api:taxonomies'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_list_taxonomy(self):
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        taxonomy = Taxonomy.objects.create(
+            meta_business_unit=meta_business_unit,
+            name=get_random_string(12)
+        )
+        self._set_permissions("inventory.view_taxonomy")
+        response = self.client.get(reverse('inventory_api:taxonomies'), {"name": taxonomy.name})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(
+            response.data[0],
+            {"id": taxonomy.pk,
+             "meta_business_unit": meta_business_unit.pk,
+             "name": taxonomy.name,
+             "created_at": taxonomy.created_at.isoformat(),
+             "updated_at": taxonomy.updated_at.isoformat()}
+        )

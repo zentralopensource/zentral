@@ -15,7 +15,7 @@ from .serializers import (CleanupInventorySerializer,
                           MachineSerialNumbersSerializer,
                           MachineTagsUpdateSerializer,
                           MetaBusinessUnitSerializer,
-                          TagSerializer)
+                          TagSerializer, TaxonomySerializer)
 from .tasks import (cleanup_inventory,
                     export_inventory,
                     export_android_apps, export_deb_packages, export_ios_apps, export_macos_apps, export_programs,
@@ -357,3 +357,23 @@ class TagDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Tag.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = TagSerializer
+
+
+class TaxonomyList(generics.ListCreateAPIView):
+    """
+    List all taxonomies, search by taxonomy name, or create a new taxonomy.
+    """
+    queryset = Taxonomy.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = TaxonomySerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ('name',)
+
+
+class TaxonomyDetail(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update or delete a taxonomy.
+    """
+    queryset = Taxonomy.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = TaxonomySerializer

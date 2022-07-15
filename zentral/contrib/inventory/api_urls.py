@@ -12,7 +12,9 @@ from .api_views import (ArchiveMachines,
                         MachineSnapshotsExport,
                         MetaBusinessUnitDetail, MetaBusinessUnitList,
                         PruneMachines,
-                        TagDetail, TagList, UpdateMachineTags)
+                        TagDetail, TagList,
+                        TaxonomyDetail, TaxonomyList,
+                        UpdateMachineTags)
 
 
 app_name = "inventory_api"
@@ -60,6 +62,8 @@ urlpatterns = [
     path('meta_business_units/<int:pk>/', MetaBusinessUnitDetail.as_view(), name="meta_business_unit"),
     path('tags/', TagList.as_view(), name="tags"),
     path('tags/<int:pk>/', TagDetail.as_view(), name="tag"),
+    path('taxonomies/', TaxonomyList.as_view(), name="taxonomies"),
+    path('taxonomies/<int:pk>/', TaxonomyDetail.as_view(), name="taxonomy"),
 ]
 
 

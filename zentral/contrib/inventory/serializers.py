@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .cleanup import get_default_snapshot_retention_days
-from .models import EnrollmentSecret, MetaBusinessUnit, Tag
+from .models import EnrollmentSecret, MetaBusinessUnit, Tag, Taxonomy
 
 
 # Machine mass tagging
@@ -81,7 +81,12 @@ class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = ("id", "taxonomy", "meta_business_unit", "name", "slug", "color")
-        # TODO: Taxonomy
+
+
+class TaxonomySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Taxonomy
+        fields = ("id", "meta_business_unit", "name", "created_at", "updated_at")
 
 
 class EnrollmentSecretSerializer(serializers.ModelSerializer):
