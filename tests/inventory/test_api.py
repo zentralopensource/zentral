@@ -395,7 +395,14 @@ class InventoryAPITests(APITestCase):
         meta_business_unit.refresh_from_db()
         self.assertEqual(meta_business_unit.name, updated_name)
         self.assertTrue(meta_business_unit.api_enrollment_enabled())
-        data = {"name": updated_name, 'api_enrollment_enabled': False}
+
+    def test_update_meta_business_unit_disable_api_enrollment_error(self):
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        meta_business_unit.create_enrollment_business_unit()
+        self.assertTrue(meta_business_unit.api_enrollment_enabled())
+        self._set_permissions("inventory.change_metabusinessunit")
+        url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
+        data = {"name": get_random_string(12), 'api_enrollment_enabled': False}
         response = self.client.put(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data,
@@ -413,6 +420,22 @@ class InventoryAPITests(APITestCase):
         response = self.client.put(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {"name": ["meta business unit with this name already exists."]})
+
+    # delete meta business unit
+
+    def test_delete_meta_business_unit_unauthorized(self):
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_meta_business_unit(self):
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        self._set_permissions("inventory.delete_metabusinessunit")
+        url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(MetaBusinessUnit.objects.filter(pk=meta_business_unit.pk).count(), 0)
 
     # list meta business unit
 
@@ -433,6 +456,99 @@ class InventoryAPITests(APITestCase):
                            "created_at": meta_business_unit.created_at.isoformat(),
                            "updated_at": meta_business_unit.updated_at.isoformat()}])
 
+    # create tag
+
+    def test_create_tag_unauthorized(self):
+        data = {'name': 'TestTag0'}
+        response = self.client.post(reverse('inventory_api:tags'), data, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_tag(self):
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        data = {'meta_business_unit': meta_business_unit.pk, 'name': 'TestTag0', 'color': 'ff0000'}
+        self._set_permissions("inventory.add_tag")
+        response = self.client.post(reverse('inventory_api:tags'), data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        tag = Tag.objects.get(name='TestTag0')
+        self.assertEqual(tag.meta_business_unit, meta_business_unit)
+        self.assertEqual(tag.name, data["name"])
+        self.assertEqual(tag.color, data["color"])
+        self.assertEqual(
+            response.data,
+            {"id": tag.pk,
+             "taxonomy": None,
+             "meta_business_unit": meta_business_unit.pk,
+             "name": tag.name,
+             "slug": tag.slug,
+             "color": tag.color}
+        )
+
+    # get tag
+
+    def test_get_tag_unauthorized(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        response = self.client.get(reverse('inventory_api:tag', args=(tag.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_tag(self):
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        tag = Tag.objects.create(meta_business_unit=meta_business_unit, name=get_random_string())
+        self._set_permissions("inventory.view_tag")
+        response = self.client.get(reverse('inventory_api:tag', args=(tag.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data,
+            {"id": tag.pk,
+             "taxonomy": None,
+             "meta_business_unit": meta_business_unit.pk,
+             "name": tag.name,
+             "slug": tag.slug,
+             "color": tag.color}
+        )
+
+    # update tag
+
+    def test_update_tag_unauthorized(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        response = self.client.put(reverse('inventory_api:tag', args=(tag.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_tag(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        self._set_permissions("inventory.change_tag")
+        url = reverse('inventory_api:tag', args=(tag.pk,))
+        updated_name = get_random_string(12)
+        data = {'name': updated_name}
+        response = self.client.put(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        tag.refresh_from_db()
+        self.assertEqual(tag.name, updated_name)
+
+    def test_update_tag_name_error(self):
+        name = get_random_string(12)
+        Tag.objects.create(name=name)
+        tag = Tag.objects.create(name=get_random_string())
+        self._set_permissions("inventory.change_tag")
+        url = reverse('inventory_api:tag', args=(tag.pk,))
+        data = {'name': name}
+        response = self.client.put(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {"name": ["tag with this name already exists."]})
+
+    # delete tag
+
+    def test_delete_tag_unauthorized(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        response = self.client.delete(reverse('inventory_api:tag', args=(tag.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_tag(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        self._set_permissions("inventory.delete_tag")
+        response = self.client.delete(reverse('inventory_api:tag', args=(tag.pk,)))
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(Tag.objects.filter(pk=tag.pk).count(), 0)
+
     # list tag
 
     def test_list_tag_unauthorized(self):
@@ -448,32 +564,15 @@ class InventoryAPITests(APITestCase):
             name=get_random_string(12)
         )
         self._set_permissions("inventory.view_tag")
-        response = self.client.get(reverse('inventory_api:tags'))
+        response = self.client.get(reverse('inventory_api:tags'), {"name": tag.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data[0]["id"], tag.pk)
-        self.assertEqual(response.data[0]["taxonomy"], taxonomy.pk)
-        self.assertEqual(response.data[0]["meta_business_unit"], meta_business_unit.pk)
-        self.assertEqual(response.data[0]["name"], tag.name)
-
-    # tag
-
-    def test_tag_unauthorized(self):
-        tag = Tag.objects.create(name=get_random_string(12))
-        response = self.client.get(reverse('inventory_api:tag', args=(tag.pk,)))
-        self.assertEqual(response.status_code, 403)
-
-    def test_tag(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
-        taxonomy = Taxonomy.objects.create(name=get_random_string())
-        tag = Tag.objects.create(
-            taxonomy=taxonomy,
-            meta_business_unit=meta_business_unit,
-            name=get_random_string(12)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(
+            response.data[0],
+            {"id": tag.pk,
+             "taxonomy": taxonomy.pk,
+             "meta_business_unit": meta_business_unit.pk,
+             "name": tag.name,
+             "slug": tag.slug,
+             "color": tag.color}
         )
-        self._set_permissions("inventory.view_tag")
-        response = self.client.get(reverse('inventory_api:tag', args=(tag.pk,)))
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["id"], tag.pk)
-        self.assertEqual(response.data["taxonomy"], taxonomy.pk)
-        self.assertEqual(response.data["meta_business_unit"], meta_business_unit.pk)
-        self.assertEqual(response.data["name"], tag.name)
