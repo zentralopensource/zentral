@@ -1,5 +1,6 @@
 # Defining environment
 ARG APP_ENV=dev
+ARG APP_VERSION=unknown
 
 
 ####
@@ -195,11 +196,13 @@ COPY --from=gcp-builder /opt/venv /opt/venv
 #
 
 FROM ${APP_ENV}-runner as final
+ARG APP_VERSION
 LABEL maintainer="Éric Falconnier <eric@zentral.pro>"
 
 COPY docker-entrypoint.py /zentral/
 COPY ./server /zentral/server
 COPY ./zentral /zentral/zentral
+RUN printf "version = \"\"\"$APP_VERSION\"\"\"\n" > /zentral/server/base/deployment.py
 
 WORKDIR /zentral
 USER zentral
