@@ -138,7 +138,6 @@
       "metrics": true
     },
     "zentral.contrib.wsone": {},
-    "zentral.contrib.xnumon": {},
     "zentral.contrib.zendesk": {}
   }
 }

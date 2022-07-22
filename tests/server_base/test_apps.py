@@ -25,7 +25,6 @@ class TestZentralApps(SimpleTestCase):
         "santa",
         "simplemdm",
         "wsone",
-        "xnumon",
         "zendesk",
     ]
 
