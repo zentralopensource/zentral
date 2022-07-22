@@ -38,7 +38,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
+            type=sha
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && matrix.app_env == 'dev' }}
 
       - name: Set up QEMU
