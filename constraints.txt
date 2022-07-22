@@ -23,7 +23,7 @@ defusedxml==0.7.1
 Django==3.2.14
 django-bootstrap-form==3.4
 django-celery-results==2.4.0
-django-filter==2.4.0
+django-filter==22.1
 django-redis==5.0.0
 django-storages==1.11.1
 djangorestframework==3.12.4
