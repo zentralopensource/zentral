@@ -108,6 +108,6 @@ urllib3==1.26.8
 vine==5.0.0
 wcwidth==0.2.5
 XlsxWriter==3.0.1
-xmlschema==1.5.1
+xmlschema==2.0.1
 yarl==1.6.3
 webauthn==1.2.1
