@@ -19,6 +19,7 @@ class EventStore(ESOSEventStore):
         kwargs = super()._get_client_kwargs(config_d)
         aws_auth = config_d.get("aws_auth")
         if aws_auth is None:
+            logger.info("No AWS authentication")
             return kwargs
         try:
             region = aws_auth["region"]
@@ -37,6 +38,7 @@ class EventStore(ESOSEventStore):
             raise ImproperlyConfigured("Could not get AWS credentials")
         kwargs["http_auth"] = AWSV4SignerAuth(credentials, region)
         kwargs["connection_class"] = RequestsHttpConnection
+        logger.info("AWS authentication configured")
         return kwargs
 
     def _streaming_bulk(self, *args, **kwargs):
