@@ -2,7 +2,7 @@ version: '2'
 
 services:
   db:
-    image: postgres:13
+    image: postgres:14
     env_file:
       - ./conf/start/docker/postgres.env
   elastic:
