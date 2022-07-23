@@ -6,10 +6,11 @@ services:
     env_file:
       - ./conf/start/docker/postgres.env
   elastic:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.3.2
     environment:
       ES_JAVA_OPTS: -Xms512m -Xmx512m
       discovery.type: single-node
+      xpack.security.enabled: "false"
     networks:
       default:
         aliases:
