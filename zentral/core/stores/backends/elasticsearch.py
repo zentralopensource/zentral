@@ -4,7 +4,8 @@ import random
 import time
 from urllib.parse import urlencode, urljoin, urlparse
 from dateutil import parser
-from elasticsearch import Elasticsearch, RequestsHttpConnection
+from elastic_transport import RequestsHttpNode
+from elasticsearch import Elasticsearch
 from elasticsearch.helpers import streaming_bulk
 from elasticsearch.exceptions import ConnectionError, RequestError
 from zentral.core.events import event_from_event_d, event_types
@@ -100,6 +101,9 @@ class EventStore(BaseEventStore):
                     if o.port is None:
                         host['port'] = 443
                     host['use_ssl'] = True
+                    host['scheme'] = "https"
+                else:
+                    host['scheme'] = "http"
             hosts.append(host)
         kwargs['hosts'] = hosts
 
@@ -110,7 +114,7 @@ class EventStore(BaseEventStore):
         # es kwargs > http_auth (for AWS)
         aws_auth = config_d.get("aws_auth")
         if aws_auth:
-            kwargs["connection_class"] = RequestsHttpConnection
+            kwargs["node_class"] = RequestsHttpNode
             try:
                 from requests_aws4auth import AWS4Auth
                 kwargs['http_auth'] = AWS4Auth(aws_auth['access_id'],
@@ -197,8 +201,8 @@ class EventStore(BaseEventStore):
             try:
                 info = self._es.info()
                 self.version = [int(i) for i in info["version"]["number"].split(".")]
-                if self.default_index and not self._es.indices.exists(self.default_index):
-                    self._es.indices.create(self.default_index, body=self.get_index_conf())
+                if self.default_index and not self._es.indices.exists(index=self.default_index):
+                    self._es.indices.create(index=self.default_index, body=self.get_index_conf())
                     self.use_mapping_types = False
                     logger.info("Index %s created", self.default_index)
             except ConnectionError:
@@ -218,7 +222,7 @@ class EventStore(BaseEventStore):
                 # wait for index recovery
                 waiting_for_recovery = False
                 while True:
-                    recovery = self._es.indices.recovery(self.default_index, params={"active_only": "true"})
+                    recovery = self._es.indices.recovery(index=self.default_index, params={"active_only": "true"})
                     shards = recovery.get(self.default_index, {}).get("shards", [])
                     if any(c["stage"] != "DONE" for c in shards):
                         waiting_for_recovery = True
@@ -239,7 +243,7 @@ class EventStore(BaseEventStore):
             if self.version >= [7]:
                 self.use_mapping_types = False
             else:
-                mappings = set(list(self._es.indices.get_mapping(self.default_index).values())[0]['mappings'])
+                mappings = set(list(self._es.indices.get_mapping(index=self.default_index).values())[0]['mappings'])
                 self.use_mapping_types = self.LEGACY_DOC_TYPE not in mappings
 
     def _get_type_field(self):
@@ -300,7 +304,7 @@ class EventStore(BaseEventStore):
             kwargs["doc_type"] = doc_type
         self._es.index(index=index, **kwargs)
         if self.test:
-            self._es.indices.refresh(index)
+            self._es.indices.refresh(index=index)
 
     def bulk_store(self, events):
         self.wait_and_configure_if_necessary()
@@ -732,6 +736,4 @@ class EventStore(BaseEventStore):
                 for b in r['aggregations']['buckets']['buckets']]
 
     def close(self):
-        for connection in self._es.transport.connection_pool.connections:
-            if hasattr(connection, 'pool'):
-                connection.pool.close()
+        self._es.close()

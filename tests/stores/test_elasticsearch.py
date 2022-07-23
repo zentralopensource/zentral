@@ -9,10 +9,17 @@ class TestElasticsearchEventStore(TestCase, BaseTestEventStore):
     def setUpClass(cls):
         super().setUpClass()
         cls.index = get_random_string(12).lower()
-        cls.event_store = ElasticsearchEventStore({'servers': ["http://elastic:9200"],
-                                                   'index': cls.index,
-                                                   'store_name': 'elasticsearch_test'},
-                                                  test=True)
+        cls.event_store = ElasticsearchEventStore(
+            {'servers': ["http://elastic:9200"],
+             'index': cls.index,
+             'store_name': 'elasticsearch_test',
+             'aws_auth': {
+                 'access_id': 'testing',
+                 'secret_key': 'testing',
+                 'region': 'us-east-1'
+             }},
+            test=True
+        )
 
     @classmethod
     def tearDownClass(cls):
