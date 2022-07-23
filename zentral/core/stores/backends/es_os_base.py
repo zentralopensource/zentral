@@ -2,7 +2,7 @@ from collections.abc import Mapping
 import logging
 import random
 import time
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urljoin, urlparse
 from dateutil import parser
 from zentral.core.events import event_from_event_d, event_types
 from zentral.core.events.filter import EventFilterSet
@@ -166,6 +166,11 @@ class ESOSEventStore(BaseEventStore):
 
         # kibana
         self.kibana_discover_url = config_d.get('kibana_discover_url')
+        if not self.kibana_discover_url:
+            # TODO deprecated. Remove.
+            kibana_base_url = config_d.get('kibana_base_url')
+            if kibana_base_url:
+                self.kibana_discover_url = urljoin(kibana_base_url, "app/discover#/")
         if self.kibana_discover_url:
             self.machine_events_url = True
             self.object_events_url = True
