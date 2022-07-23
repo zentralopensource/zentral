@@ -19,7 +19,7 @@ class EventStore(ESOSEventStore):
         kwargs = super()._get_client_kwargs(config_d)
         aws_auth = config_d.get("aws_auth")
         if aws_auth is None:
-            return
+            return kwargs
         try:
             region = aws_auth["region"]
         except KeyError:
