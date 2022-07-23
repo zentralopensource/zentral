@@ -1,5 +1,8 @@
 -c constraints.txt
 
+# OpenSearch
+opensearch-py<3
+
 # Django file storgae
 django-storages[boto3]
 

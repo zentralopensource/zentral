@@ -24,5 +24,5 @@ class TestElasticsearchEventStore(TestCase, BaseTestEventStore):
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
-        cls.event_store._es.indices.delete(index=cls.index, ignore=[404])
+        cls.event_store._client.indices.delete(index=cls.index, ignore=[404])
         cls.event_store.close()
