@@ -11,7 +11,7 @@ ARG APP_VERSION=unknown
 # - Make venv and install common requirements
 #
 
-FROM python:3.9-buster AS base-builder
+FROM python:3.10-bullseye AS base-builder
 
 # zentral apt dependencies
 RUN apt-get update && \
@@ -111,7 +111,7 @@ RUN pip install -r requirements_gcp.txt
 # - copy tini, mkbom and xar from stage 0
 #
 
-FROM python:3.9-slim-buster as base-runner
+FROM python:3.10-slim-bullseye as base-runner
 
 # zentral apt dependencies
 RUN apt-get update && \
@@ -120,14 +120,14 @@ RUN apt-get update && \
 # xar to build the packages
             libbz2-1.0 \
 # bsdcpio to generate the pkg files
-            bsdcpio \
+            libarchive-tools \
 # xmlsec1 for PySAML2
             xmlsec1 \
 # libpq5 for psycopg2
             libpq5 \
 # extra dependencies for python crypto / WebAuthn
             libssl1.1 \
-            libffi6 \
+            libffi7 \
 # dep for python-ldap
             libldap-2.4-2 \
             libsasl2-2 && \
