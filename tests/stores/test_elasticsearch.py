@@ -13,11 +13,7 @@ class TestElasticsearchEventStore(TestCase, BaseTestEventStore):
             {'servers': ["http://elastic:9200"],
              'index': cls.index,
              'store_name': 'elasticsearch_test',
-             'aws_auth': {
-                 'access_id': 'testing',
-                 'secret_key': 'testing',
-                 'region': 'us-east-1'
-             }},
+             'batch_size': 100},
             test=True
         )
 

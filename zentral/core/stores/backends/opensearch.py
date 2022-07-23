@@ -10,6 +10,8 @@ logger = logging.getLogger('zentral.core.stores.backends.opensearch')
 
 class EventStore(ESOSEventStore):
     client_class = OpenSearch
-    streaming_bulk = streaming_bulk
     connection_error_class = ConnectionError
     request_error_class = RequestError
+
+    def _streaming_bulk(self, *args, **kwargs):
+        return streaming_bulk(*args, **kwargs)

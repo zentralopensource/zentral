@@ -289,6 +289,9 @@ class ESOSEventStore(BaseEventStore):
         event_d['_zentral'] = es_event_d
         return event_from_event_d(event_d)
 
+    def _streaming_bulk(self, *args, **kwargs):
+        raise NotImplementedError
+
     def store(self, event):
         self.wait_and_configure_if_necessary()
         index, doc_type, body = self._serialize_event(event)
@@ -314,10 +317,11 @@ class ESOSEventStore(BaseEventStore):
                 doc.update({"_index": index, "_id": f'{doc["id"]}{ID_SEP}{doc["index"]}'})
                 yield doc
 
-        for ok, item in self.streaming_bulk(self._es, iter_actions(),
-                                            chunk_size=self.batch_size,
-                                            raise_on_error=False, raise_on_exception=False,
-                                            max_retries=2):
+        for ok, item in self._streaming_bulk(client=self._client,
+                                             actions=iter_actions(),
+                                             chunk_size=self.batch_size,
+                                             raise_on_error=False, raise_on_exception=False,
+                                             max_retries=2):
             try:
                 event_id, event_index = item["index"]["_id"].split(ID_SEP)
                 event_index = int(event_index)
