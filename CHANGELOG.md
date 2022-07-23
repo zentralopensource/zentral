@@ -2,11 +2,22 @@
 
 ### Backward incompatibilities
 
+#### 🧨 elasticsearch-py version 8.3.1
+
+For a while now, the elasticsearch clients check the server headers and will refuse to connect to an OpenSearch instance if the reported version is > 7.10. Use the `override_main_response_version` in OpenSearch to maintain compatibility.
+
+#### 🧨 Elasticearch 8.3.2
+
+The elasticsearch version in the docker compose configuration has been upgraded to 8.3.2. If you have an existing deployment, you need to first upgrade to the lastest 7.X version (7.15.2 ATM), before upgrading to this version.
+
+#### 🧨 PostgreSQL 14
+
+The PostgreSQL version in the docker compose configuration has been upgraded to 14. If you have an existing deployment, you need to first backup your DB and reimport it after the upgrade.
+
 #### 🧨 Probe feeds are not pulled anymore
 
 The URL field of the probe feeds has been removed. To update a feed, you need
 to use the API and push it.
-
 
 ## 2022.1 (May 16, 2022)
 
