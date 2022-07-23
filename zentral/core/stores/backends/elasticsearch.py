@@ -282,7 +282,7 @@ class EventStore(BaseEventStore):
         return index, es_doc_type, es_event_d
 
     def _deserialize_event(self, es_doc_type, es_event_d):
-        if es_doc_type == "_doc" or es_doc_type == self.LEGACY_DOC_TYPE:
+        if es_doc_type is None or es_doc_type == "_doc" or es_doc_type == self.LEGACY_DOC_TYPE:
             event_type = es_event_d["type"]
         else:
             event_type = es_doc_type
@@ -383,7 +383,7 @@ class EventStore(BaseEventStore):
         events = []
         next_cursor = None
         for hit in r['hits']['hits']:
-            events.append(self._deserialize_event(hit['_type'], hit['_source']))
+            events.append(self._deserialize_event(hit.get('_type'), hit['_source']))
             next_cursor = hit.pop("sort", None)
         if len(events) < limit:
             next_cursor = None
