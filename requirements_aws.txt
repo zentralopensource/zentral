@@ -1,10 +1,10 @@
 -c constraints.txt
 
+# OpenSearch
+opensearch-py<3
+
 # Django file storgae
 django-storages[boto3]
-
-# AWS authentication for elasticsearch event store backend
-requests_aws4auth
 
 # SQS as celery broker
 kombu[sqs]<6  # <6 for compatibility with celery<6

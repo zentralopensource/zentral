@@ -1,10 +1,18 @@
 ## 2022.2 (TBD)
 
+### Features (some, not all…)
+
+New `zentral.core.stores.backends.opensearch` store backend to solve the connection issues with OpenSearch instances.
+
 ### Backward incompatibilities
+
+#### 🧨 AWS auth for elasticsearch
+
+The AWS authentication for elasticsearch has been removed. It is only available for the `zentral.core.stores.backends.opensearch` store backend.
 
 #### 🧨 elasticsearch-py version 8.3.1
 
-For a while now, the elasticsearch clients check the server headers and will refuse to connect to an OpenSearch instance if the reported version is > 7.10. Use the `override_main_response_version` in OpenSearch to maintain compatibility.
+The newer elasticsearch clients will refuse to connect to an OpenSearch instance. Use the new `zentral.core.stores.backends.opensearch` store backend instead.
 
 #### 🧨 Elasticearch 8.3.2
 

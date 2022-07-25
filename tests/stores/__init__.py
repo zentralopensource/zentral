@@ -68,6 +68,19 @@ class BaseTestEventStore(object):
         e = l[0]
         self.assertEqual(e.serialize(), event.serialize())
 
+    def test_bulk_store_event_with_request(self):
+        if self.event_store.batch_size > 1:
+            event_keys = set()
+            events = []
+            for _ in range(self.event_store.batch_size):
+                event = make_event()
+                event_keys.add((str(event.metadata.uuid), event.metadata.index))
+                events.append(event)
+            results = self.event_store.bulk_store(events)
+            for key in results:
+                event_keys.remove(key)
+            self.assertEqual(len(event_keys), 0)
+
     def test_fetch_machine_events_cursor(self):
         for i in range(100):
             event = make_event(idx=i)
