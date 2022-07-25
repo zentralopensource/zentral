@@ -88,7 +88,7 @@ pyOpenSSL==22.0.0
 pyasn1-modules==0.2.8
 pyasn1==0.4.8
 pycparser==2.21
-pycurl==7.44.1
+pycurl==7.45.1
 pydantic==1.9.1
 pylibmc==1.6.1
 pyotp==2.6.0
