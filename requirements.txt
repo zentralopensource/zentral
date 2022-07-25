@@ -7,7 +7,7 @@ django-celery-results==2.4.0
 cryptography                    # MDM, monolith (cloudfront), munki
 defusedxml
 django-bootstrap-form
-django>=3.2,<4
+django>=3.2,<5
 djangorestframework
 djangorestframework-yaml
 django-filter                   # API
