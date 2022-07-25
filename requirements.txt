@@ -11,7 +11,7 @@ django>=3.2,<4
 djangorestframework
 djangorestframework-yaml
 django-filter                   # API
-elasticsearch<9                 # Use OpenSearch override_main_response_version option to maintain compatibility
+elasticsearch<9                 # For OpenSearch, see requirements_aws.txt
 geoip2
 gunicorn
 httpx[http2]                    # MDM (apns)
