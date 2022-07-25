@@ -4,5 +4,8 @@
 .wy-nav-top {
   background-color: rgb(225, 113, 97);
 }
+.wy-menu-vertical header, .wy-menu-vertical p.caption {
+  color: #9b9b9b;
+}
 table {margin-bottom: 24px;}
 td, th {padding: 12px;}
