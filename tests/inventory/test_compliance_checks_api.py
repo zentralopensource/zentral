@@ -217,6 +217,31 @@ class JMESPathCheckAPITests(APITestCase):
         self.assertIsInstance(event, JMESPathCheckUpdated)
         self.assertEqual(event.payload["pk"], jpcc.compliance_check.pk)
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_jpcc_same_name_no_platforms_no_tags(self, post_event):
+        tags = [Tag.objects.create(name=get_random_string(12))]
+        jpcc = self.force_compliance_check(tags=tags)
+        data = {
+            "name": jpcc.compliance_check.name,
+            "description": jpcc.compliance_check.description,
+            "source_name": jpcc.source_name,
+            "platforms": [],
+            "tags": [],
+            "jmespath_expression": jpcc.jmespath_expression,
+        }
+        self.set_permissions('inventory.change_jmespathcheck')
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.put(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)), data, format='json')
+        self.assertEqual(response.status_code, 200)
+        jpcc.refresh_from_db()
+        self.assertEqual(jpcc.platforms, [])
+        self.assertEqual(list(jpcc.tags.all().order_by("pk")), [])
+        # event
+        self.assertEqual(len(post_event.call_args.args), 1)
+        event = post_event.call_args.args[0]
+        self.assertIsInstance(event, JMESPathCheckUpdated)
+        self.assertEqual(event.payload["pk"], jpcc.compliance_check.pk)
+
     # delete compliance check
 
     def test_delete_jpcc_unauthorized(self):

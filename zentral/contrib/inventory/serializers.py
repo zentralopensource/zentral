@@ -65,7 +65,7 @@ class JMESPathCheckSerializer(serializers.ModelSerializer):
     def validate_name(self, value):
         qs = ComplianceCheck.objects.filter(model=InventoryJMESPathCheck.get_model(), name=value)
         if self.instance:
-            qs.exclude(pk=self.instance.compliance_check.pk)
+            qs = qs.exclude(pk=self.instance.compliance_check.pk)
         if qs.count():
             raise serializers.ValidationError(
                 f"A {InventoryJMESPathCheck.model_display} with this name already exists."
