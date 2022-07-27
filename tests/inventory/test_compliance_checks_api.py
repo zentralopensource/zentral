@@ -131,6 +131,71 @@ class JMESPathCheckAPITests(APITestCase):
         self.assertIsInstance(event, JMESPathCheckCreated)
         self.assertEqual(event.payload["pk"], jpcc.compliance_check.pk)
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_jpcc_empty_description(self, post_event):
+        name = get_random_string(12)
+        source_name = get_random_string(12)
+        platforms = ["MACOS"]
+        tags = sorted([Tag.objects.create(name=get_random_string(12)) for _ in range(2)],
+                      key=lambda t: t.pk)
+        jmespath_expression = "contains(profiles[*].uuid, `ca0b2c5d-9bba-416a-a3f4-4337f02edd29`)"
+        data = {
+            "name": name,
+            "description": "",
+            "source_name": source_name,
+            "platforms": platforms,
+            "jmespath_expression": jmespath_expression,
+            "tags": [t.id for t in tags],
+        }
+        self.set_permissions('inventory.add_jmespathcheck')
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse('inventory_api:jmespath_checks'), data, format='json')
+        self.assertEqual(response.status_code, 201)
+        jpcc = JMESPathCheck.objects.get(compliance_check__name=name)
+        self.assertEqual(jpcc.compliance_check.description, "")
+        self.assertEqual(jpcc.compliance_check.version, 1)
+        self.assertEqual(jpcc.source_name, source_name)
+        self.assertEqual(jpcc.platforms, platforms)
+        self.assertEqual(jpcc.jmespath_expression, jmespath_expression)
+        self.assertEqual(list(jpcc.tags.all().order_by("pk")), tags)
+        # event
+        self.assertEqual(len(post_event.call_args.args), 1)
+        event = post_event.call_args.args[0]
+        self.assertIsInstance(event, JMESPathCheckCreated)
+        self.assertEqual(event.payload["pk"], jpcc.compliance_check.pk)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_jpcc_missing_description(self, post_event):
+        name = get_random_string(12)
+        source_name = get_random_string(12)
+        platforms = ["MACOS"]
+        tags = sorted([Tag.objects.create(name=get_random_string(12)) for _ in range(2)],
+                      key=lambda t: t.pk)
+        jmespath_expression = "contains(profiles[*].uuid, `ca0b2c5d-9bba-416a-a3f4-4337f02edd29`)"
+        data = {
+            "name": name,
+            "source_name": source_name,
+            "platforms": platforms,
+            "jmespath_expression": jmespath_expression,
+            "tags": [t.id for t in tags],
+        }
+        self.set_permissions('inventory.add_jmespathcheck')
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse('inventory_api:jmespath_checks'), data, format='json')
+        self.assertEqual(response.status_code, 201)
+        jpcc = JMESPathCheck.objects.get(compliance_check__name=name)
+        self.assertEqual(jpcc.compliance_check.description, "")
+        self.assertEqual(jpcc.compliance_check.version, 1)
+        self.assertEqual(jpcc.source_name, source_name)
+        self.assertEqual(jpcc.platforms, platforms)
+        self.assertEqual(jpcc.jmespath_expression, jmespath_expression)
+        self.assertEqual(list(jpcc.tags.all().order_by("pk")), tags)
+        # event
+        self.assertEqual(len(post_event.call_args.args), 1)
+        event = post_event.call_args.args[0]
+        self.assertIsInstance(event, JMESPathCheckCreated)
+        self.assertEqual(event.payload["pk"], jpcc.compliance_check.pk)
+
     # get compliance check
 
     def test_get_jpcc_unauthorized(self):

@@ -53,7 +53,10 @@ class CleanupInventorySerializer(serializers.Serializer):
 
 class JMESPathCheckSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="compliance_check.name")
-    description = serializers.CharField(source="compliance_check.description")
+    description = serializers.CharField(
+        source="compliance_check.description",
+        allow_blank=True, required=False, default=""
+    )
     version = serializers.IntegerField(source="compliance_check.version", read_only=True)
 
     class Meta:
