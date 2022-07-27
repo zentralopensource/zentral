@@ -1,6 +1,9 @@
+from django.db.models import F
 from rest_framework import serializers
+from zentral.core.compliance_checks.models import ComplianceCheck
 from .cleanup import get_default_snapshot_retention_days
-from .models import EnrollmentSecret, MetaBusinessUnit, Tag, Taxonomy
+from .compliance_checks import InventoryJMESPathCheck
+from .models import EnrollmentSecret, JMESPathCheck, MetaBusinessUnit, Tag, Taxonomy
 
 
 # Machine mass tagging
@@ -46,6 +49,69 @@ class CleanupInventorySerializer(serializers.Serializer):
 
 
 # Standard model serializers
+
+
+class JMESPathCheckSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source="compliance_check.name")
+    description = serializers.CharField(source="compliance_check.description")
+    version = serializers.IntegerField(source="compliance_check.version", read_only=True)
+
+    class Meta:
+        model = JMESPathCheck
+        fields = ("name", "description", "version",
+                  "pk", "source_name", "platforms", "tags",
+                  "jmespath_expression", "created_at", "updated_at")
+
+    def validate_name(self, value):
+        qs = ComplianceCheck.objects.filter(model=InventoryJMESPathCheck.get_model(), name=value)
+        if self.instance:
+            qs.exclude(pk=self.instance.compliance_check.pk)
+        if qs.count():
+            raise serializers.ValidationError(
+                f"A {InventoryJMESPathCheck.model_display} with this name already exists."
+            )
+        return value
+
+    def create(self, validated_data):
+        cc_data = validated_data.pop("compliance_check")
+        compliance_check = ComplianceCheck.objects.create(
+            model=InventoryJMESPathCheck.get_model(),
+            name=cc_data.get("name"),
+            description=cc_data.get("description") or "",
+        )
+        tags = validated_data.pop("tags")
+        jmespath_check = JMESPathCheck.objects.create(
+            compliance_check=compliance_check,
+            **validated_data,
+        )
+        jmespath_check.tags.set(tags)
+        return jmespath_check
+
+    def update(self, instance, validated_data):
+        # compliance check
+        compliance_check = instance.compliance_check
+        cc_data = validated_data.pop("compliance_check")
+        compliance_check.name = cc_data.get("name")
+        compliance_check.description = cc_data.get("description") or ""
+        # JMESPath check
+        jmespath_check_updated = False
+        tags = sorted(validated_data.pop("tags", []), key=lambda t: t.pk)
+        for key, value in validated_data.items():
+            old_value = getattr(instance, key)
+            if value != old_value:
+                jmespath_check_updated = True
+            setattr(instance, key, value)
+        if sorted(instance.tags.all(), key=lambda t: t.pk) != tags:
+            jmespath_check_updated = True
+        if jmespath_check_updated:
+            compliance_check.version = F("version") + 1
+        compliance_check.save()
+        if jmespath_check_updated:
+            # to materialize the updated version
+            compliance_check.refresh_from_db()
+        instance.save()
+        instance.tags.set(tags)
+        return instance
 
 
 class MetaBusinessUnitSerializer(serializers.ModelSerializer):

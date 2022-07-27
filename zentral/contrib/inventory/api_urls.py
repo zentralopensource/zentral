@@ -10,6 +10,7 @@ from .api_views import (ArchiveMachines,
                         MachineIOSAppsExport,
                         MachineProgramInstancesExport,
                         MachineSnapshotsExport,
+                        JMESPathCheckDetail, JMESPathCheckList,
                         MetaBusinessUnitDetail, MetaBusinessUnitList,
                         PruneMachines,
                         TagDetail, TagList,
@@ -58,6 +59,8 @@ urlpatterns = [
     path('cleanup/', CleanupInventory.as_view(), name="cleanup"),
 
     # standard DRF views
+    path('jmespath_checks/', JMESPathCheckList.as_view(), name="jmespath_checks"),
+    path('jmespath_checks/<int:pk>/', JMESPathCheckDetail.as_view(), name="jmespath_check"),
     path('meta_business_units/', MetaBusinessUnitList.as_view(), name="meta_business_units"),
     path('meta_business_units/<int:pk>/', MetaBusinessUnitDetail.as_view(), name="meta_business_unit"),
     path('tags/', TagList.as_view(), name="tags"),
