@@ -16,6 +16,10 @@
   {% if perms.inventory.view_machinesnapshot %}
   <a href="{% url 'inventory:compliance_check_devtool' %}" class="btn btn-default">DevTool</a>
   {% endif %}
+  <a href="{% url 'inventory:compliance_check_terraform_export' %}" class="btn btn-default">
+    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+    Terraform config
+  </a>
 </p>
 
 <table class="table">

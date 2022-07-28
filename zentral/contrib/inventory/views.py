@@ -9,8 +9,9 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import F
 from django.urls import reverse, reverse_lazy
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.conf import settings
@@ -1138,6 +1139,29 @@ class ComplianceCheckDevToolView(PermissionRequiredMixin, FormView):
             ))
         else:
             return self.render_test(form)
+
+
+class ComplianceCheckTerraformExportView(PermissionRequiredMixin, View):
+    permission_required = "inventory.view_jmespathcheck"
+
+    def get(self, request, *args, **kwargs):
+        tags = set()
+        compliance_checks = []
+        for cc in (JMESPathCheck.objects.select_related("compliance_check")
+                                        .prefetch_related("tags").all().order_by("pk")):
+            tags.update(cc.tags.all())
+            compliance_checks.append(cc)
+        return HttpResponse(
+            render_to_string(
+                "inventory/compliancecheck_export.tf",
+                {"tags": sorted(tags, key=lambda t: t.pk),
+                 "compliance_checks": compliance_checks}
+            ).strip(),
+            headers={
+                "Content-Type": "text/plain",
+                "Content-Disposition": 'attachment; filename="jmespath_checks.tf"',
+            }
+        )
 
 
 # tags

@@ -492,6 +492,20 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(form.initial["source_name"], self.source.name)
         self.assertEqual(form.initial["jmespath_expression"], "os_version.major > `9`")
 
+    # terraform export
+
+    def test_compliance_check_terraform_export_redirect(self):
+        self._login_redirect(reverse("inventory:compliance_check_terraform_export"))
+
+    def test_compliance_check_terraform_export(self):
+        cc_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
+        cc = self._force_jmespath_check(tags=cc_tags)
+        self._login('inventory.view_jmespathcheck')
+        response = self.client.get(reverse("inventory:compliance_check_terraform_export"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "tag{}".format(cc_tags[0].pk))
+        self.assertContains(response, f"check{cc.pk}")
+
     # machine
 
     def test_machine_no_compliance_checks(self):
