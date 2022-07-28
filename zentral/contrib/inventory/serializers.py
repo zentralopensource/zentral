@@ -62,7 +62,7 @@ class JMESPathCheckSerializer(serializers.ModelSerializer):
     class Meta:
         model = JMESPathCheck
         fields = ("name", "description", "version",
-                  "pk", "source_name", "platforms", "tags",
+                  "id", "source_name", "platforms", "tags",
                   "jmespath_expression", "created_at", "updated_at")
 
     def validate_name(self, value):

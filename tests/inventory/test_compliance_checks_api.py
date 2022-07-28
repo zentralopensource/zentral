@@ -211,7 +211,7 @@ class JMESPathCheckAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            {"pk": jpcc.pk,
+            {"id": jpcc.pk,
              "name": jpcc.compliance_check.name,
              "description": jpcc.compliance_check.description,
              "version": jpcc.compliance_check.version,
@@ -343,7 +343,7 @@ class JMESPathCheckAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{"pk": jpcc.pk,
+            [{"id": jpcc.pk,
               "name": jpcc.compliance_check.name,
               "description": jpcc.compliance_check.description,
               "version": jpcc.compliance_check.version,
@@ -364,7 +364,7 @@ class JMESPathCheckAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{"pk": jpcc.pk,
+            [{"id": jpcc.pk,
               "name": jpcc.compliance_check.name,
               "description": jpcc.compliance_check.description,
               "version": jpcc.compliance_check.version,
