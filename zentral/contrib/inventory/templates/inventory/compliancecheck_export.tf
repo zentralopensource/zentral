@@ -11,7 +11,7 @@ resource "zentral_jmespath_check" "check{{ cc.pk }}" {
   description         = {{ cc.compliance_check.description|tf_quoted_str }}
   source_name         = {{ cc.source_name|tf_quoted_str }}
   platforms           = [{% for pf in cc.platforms %}{{ pf|tf_quoted_str }}{% if not forloop.last %}, {% endif %}{% endfor %}]
-  tags                = [{% for tag in cc.tags.all %}data.zentral_tag.tag{{ tag.pk }}.id{% if not forloop.last %}, {% endif %}{% endfor %}]
+  tag_ids             = [{% for tag in cc.tags.all %}data.zentral_tag.tag{{ tag.pk }}.id{% if not forloop.last %}, {% endif %}{% endfor %}]
   jmespath_expression = {{ cc.jmespath_expression|tf_quoted_str }}
 }
 
