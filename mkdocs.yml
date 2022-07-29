@@ -20,6 +20,7 @@ nav:
   - Users: configuration/users.md
 - Apps:
   - Inventory: apps/inventory.md
+  - MDM: apps/mdm.md
   - Monolith: apps/monolith.md
   - Munki: apps/munki.md
   - Osquery: apps/osquery.md
