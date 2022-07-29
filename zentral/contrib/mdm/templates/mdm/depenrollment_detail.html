@@ -9,7 +9,7 @@
   <li class="active">[DEP] {{ object }}</li>
 </ol>
 
-<h3>DEP {{ object }}</h3>
+<h3>[DEP] {{ object }}</h3>
 
 <h4 style="margin-top:20px">Configuration</h4>
 <table class="table table-condensed">
@@ -20,7 +20,17 @@
         {% if perms.mdm.view_pushcertificate %}
         <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
         {% else %}
-        {{ push_certificate }}
+        {{ object.push_certificate }}
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th width="160px">SCEP config</th>
+      <td>
+        {% if perms.mdm.view_scepconfig %}
+        <a href="{{ object.scep_config.get_absolute_url }}">{{ object.scep_config }}</a>
+        {% else %}
+        {{ object.scep_config }}
         {% endif %}
       </td>
     </tr>

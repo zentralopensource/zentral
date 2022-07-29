@@ -54,9 +54,18 @@ class EnrollmentListView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["dep_enrollments"] = list(DEPEnrollment.objects.all().order_by("-pk"))
-        ctx["ota_enrollments"] = list(OTAEnrollment.objects.all().order_by("-pk"))
-        ctx["user_enrollments"] = list(UserEnrollment.objects.all().order_by("-pk"))
+        if self.request.user.has_perm("mdm.view_depenrollment"):
+            ctx["dep_enrollments"] = list(DEPEnrollment.objects.all().order_by("-pk"))
+        else:
+            ctx["dep_enrollments"] = []
+        if self.request.user.has_perm("mdm.view_otaenrollment"):
+            ctx["ota_enrollments"] = list(OTAEnrollment.objects.all().order_by("-pk"))
+        else:
+            ctx["ota_enrollments"] = []
+        if self.request.user.has_perm("mdm.view_userenrollment"):
+            ctx["user_enrollments"] = list(UserEnrollment.objects.all().order_by("-pk"))
+        else:
+            ctx["user_enrollments"] = []
         return ctx
 
 

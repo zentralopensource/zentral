@@ -48,7 +48,7 @@
 {% endif %}
 
 {% if perms.mdm.view_otaenrollment %}
-<h3>{{ ota_enrollments|length }} OTA enrollment{{ ota_enrollments|length|pluralize }}</h3>
+<h3>{{ ota_enrollments|length }} OTA enrollment{{ ota_enrollments|length|pluralize }}</h3>
 
 {% if perms.mdm.add_otaenrollment %}
 <p>
@@ -91,7 +91,7 @@
 {% endif %}
 
 {% if perms.mdm.view_userenrollment %}
-<h3>{{ user_enrollments|length }} User enrollment{{ user_enrollments|length|pluralize }}</h3>
+<h3>{{ user_enrollments|length }} User enrollment{{ user_enrollments|length|pluralize }}</h3>
 
 {% if perms.mdm.add_userenrollment %}
 <p>

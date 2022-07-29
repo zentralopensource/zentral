@@ -7,6 +7,7 @@ from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
 from zentral.utils.payloads import sign_payload
 from .models import OTAEnrollment, OTAEnrollmentSession
+from .scep import update_scep_payload
 
 
 logger = logging.getLogger("zentral.contrib.mdm.payloads")
@@ -72,16 +73,12 @@ def build_scep_payload(enrollment_session):
     if serial_number:
         subject.append([["2.5.4.5", serial_number]])
     subject.append([["O", enrollment_session.get_organization()]])
+    scep_payload = {"Subject": subject}
+    update_scep_payload(scep_payload, enrollment_session.get_enrollment().scep_config)
     return build_payload("com.apple.security.scep",
                          enrollment_session.get_payload_name(),
                          "scep",
-                         {"URL": "{}/scep".format(settings["api"]["tls_hostname"]),  # TODO: hardcoded scep url
-                          "Subject": subject,
-                          "Challenge": enrollment_session.get_challenge(),
-                          "Keysize": 2048,
-                          "KeyType": "RSA",
-                          "Key Usage": 5,  # 1 is signing, 4 is encryption, 5 is both signing and encryption
-                          },
+                         scep_payload,
                          encapsulate_content=True)
 
 

@@ -21,10 +21,21 @@
         {% if perms.mdm.view_pushcertificate %}
         <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
         {% else %}
-        {{ push_certificate }}
+        {{ object.push_certificate }}
         {% endif %}
       </td>
     </tr>
+    <tr>
+      <th width="160px">SCEP config</th>
+      <td>
+        {% if perms.mdm.view_scepconfig %}
+        <a href="{{ object.scep_config.get_absolute_url }}">{{ object.scep_config }}</a>
+        {% else %}
+        {{ object.scep_config }}
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
       <th>Realm</th>
       <td>
         {% if object.realm %}

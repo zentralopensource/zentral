@@ -1476,8 +1476,9 @@ class EnrollmentSecret(models.Model):
             pass
 
     def urlsafe_serial_numbers(self):
-        for serial_number in self.serial_numbers:
-            yield serial_number, MetaMachine(serial_number).get_urlsafe_serial_number()
+        if self.serial_numbers:
+            for serial_number in self.serial_numbers:
+                yield serial_number, MetaMachine(serial_number).get_urlsafe_serial_number()
 
 
 class EnrollmentSecretRequest(models.Model):

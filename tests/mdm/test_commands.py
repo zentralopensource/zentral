@@ -13,7 +13,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         DEPOrganization, DEPToken, DEPVirtualServer,
                                         EnrolledDevice, EnrolledUser,
                                         Platform, Profile, PushCertificate,
-                                        UserArtifact)
+                                        SCEPConfig, UserArtifact)
 from zentral.contrib.mdm.commands.device_configured import DeviceConfigured
 from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.install_profile import InstallProfile
@@ -138,10 +138,17 @@ class TestMDMCommands(TestCase):
             organization=dep_organization,
             token=dep_token
         )
+        scep_config = SCEPConfig.objects.create(
+            name=get_random_string(12),
+            url="https://example.com/{}".format(get_random_string(12)),
+            challenge_type="STATIC",
+            challenge_kwargs={"challenge": get_random_string(12)}
+        )
         dep_enrollment = DEPEnrollment.objects.create(
             uuid=uuid.uuid4(),
             virtual_server=dep_virtual_server,
             push_certificate=push_certificate,
+            scep_config=scep_config,
             blueprint=cls.blueprint1,
             enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit),
             skip_setup_items=[p for p, _ in DEPEnrollment.SKIPPABLE_SETUP_PANE_CHOICES],

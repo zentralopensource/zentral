@@ -1,4 +1,3 @@
-import base64
 from datetime import timedelta
 import enum
 import logging
@@ -218,10 +217,6 @@ class EnrollmentSession(models.Model):
         if serial_number:
             return MetaMachine(serial_number).get_urlsafe_serial_number()
 
-    def get_challenge(self):
-        path = reverse("mdm:verify_scep_csr")
-        return base64.b64encode(path.encode("utf-8")).decode("ascii")
-
     def get_payload_name(self):
         return "Zentral - {prefix} Enrollment SCEP".format(prefix=" - ".join(self.get_prefix().split("$")))
 
@@ -246,23 +241,29 @@ class EnrollmentSession(models.Model):
             raise EnrollmentSessionStatusError(self, next_status)
 
 
+# Abstract MDM enrollment model
+
+
+class MDMEnrollment(models.Model):
+    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
+    scep_config = models.ForeignKey("mdm.SCEPConfig", on_delete=models.PROTECT)
+    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
+    blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
 # OTA Enrollment
 
 
-class OTAEnrollment(models.Model):
+class OTAEnrollment(MDMEnrollment):
     name = models.CharField(max_length=256, unique=True)
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="ota_enrollment")
-
-    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
-    blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
-
-    # linked to an auth realm
-    # if linked, a user has to authenticate to get the mdm payload.
-    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # if linked to an auth realm, a user has to authenticate to get the mdm payload.
 
     class Meta:
         ordering = ("-created_at",)
@@ -359,6 +360,9 @@ class OTAEnrollmentSession(EnrollmentSession):
                                             null=True, related_name="+")
 
     objects = OTAEnrollmentSessionManager()
+
+    def get_enrollment(self):
+        return self.ota_enrollment
 
     def get_prefix(self):
         if self.status == self.PHASE_2:
@@ -519,7 +523,7 @@ class DEPVirtualServer(models.Model):
         return reverse("mdm:dep_virtual_server", args=(self.pk,))
 
 
-class DEPEnrollment(models.Model):
+class DEPEnrollment(MDMEnrollment):
     # https://developer.apple.com/documentation/devicemanagement/skipkeys
     SKIPPABLE_SETUP_PANES = (
         ("Accessibility", True),
@@ -564,9 +568,6 @@ class DEPEnrollment(models.Model):
     uuid = models.UUIDField(unique=True, editable=False)
     virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE)
 
-    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT, null=True)
-    blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
-
     # to protect the dep enrollment endpoint. Link to the meta business unit too
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="dep_enrollment", editable=False)
@@ -574,7 +575,6 @@ class DEPEnrollment(models.Model):
     # Authentication
 
     # if linked to a realm, a user has to authenticate to get the mdm payload.
-    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
     # if realm, use the realm user either to auto populate the user form
     # or auto create the admin
     use_realm_user = models.BooleanField(default=False)
@@ -612,9 +612,6 @@ class DEPEnrollment(models.Model):
     # url is automatically set using the enrollment secret
     # Auto populate anchor_certs using the fullchain when building the profile payload?
     include_tls_certificates = models.BooleanField(default=False)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ("name",)
@@ -750,6 +747,9 @@ class DEPEnrollmentSession(EnrollmentSession):
 
     objects = DEPEnrollmentSessionManager()
 
+    def get_enrollment(self):
+        return self.dep_enrollment
+
     def get_prefix(self):
         if self.status == self.STARTED:
             return "MDM$DEP"
@@ -789,20 +789,12 @@ class DEPEnrollmentSession(EnrollmentSession):
 # User Enrollment
 
 
-class UserEnrollment(models.Model):
+class UserEnrollment(MDMEnrollment):
     name = models.CharField(max_length=256, unique=True)
 
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="user_enrollment")
-
     # if linked to a realm, the enrollment can start from the device
-    realm = models.ForeignKey(Realm, on_delete=models.PROTECT, blank=True, null=True)
-
-    push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
-    blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ("-created_at",)
@@ -892,6 +884,9 @@ class UserEnrollmentSession(EnrollmentSession):
     access_token = models.CharField(max_length=40, unique=True, null=True)
 
     objects = UserEnrollmentSessionManager()
+
+    def get_enrollment(self):
+        return self.user_enrollment
 
     def get_prefix(self):
         if self.status == self.STARTED:

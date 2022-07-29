@@ -16,22 +16,12 @@ def load_scep_challenge(scep_config):
         raise ValueError(f"Unknown challenge type: {scep_config.challenge_type}")
 
 
-def process_scep_payload(scep_payload):
-    # does the payload have a name?
-    name = scep_payload.get("Name")
-    if not name:
-        # nothing to do
-        return
-
-    # do we have a matching config in the DB?
-    try:
-        scep_config = SCEPConfig.objects.get(name=name)
-    except SCEPConfig.DoesNotExist:
-        # nothing to do
-        return
-
+def update_scep_payload(scep_payload, scep_config):
+    # always RSA https://developer.apple.com/documentation/devicemanagement/scep/payloadcontent
+    scep_payload["Key Type"] = "RSA"
     # fill in the missing attributes
-    for db_attr, pl_attr in (("url", "URL"),
+    for db_attr, pl_attr in (("name", "Name"),
+                             ("url", "URL"),
                              ("key_usage", "Key Usage"),
                              ("key_is_extractable", "KeyIsExtractable"),
                              ("keysize", "Keysize"),
@@ -46,6 +36,23 @@ def process_scep_payload(scep_payload):
         scep_payload["Challenge"] = scep_challenge.get(scep_payload["Key Usage"],
                                                        scep_payload.get("Subject"),
                                                        scep_payload.get("SubjectAltName"))
+
+
+def process_scep_payload(scep_payload):
+    # does the payload have a name?
+    name = scep_payload.get("Name")
+    if not name:
+        # nothing to do
+        return
+
+    # do we have a matching config in the DB?
+    try:
+        scep_config = SCEPConfig.objects.get(name=name)
+    except SCEPConfig.DoesNotExist:
+        # nothing to do
+        return
+
+    update_scep_payload(scep_payload, scep_config)
 
 
 def process_scep_payloads(profile_payload):
