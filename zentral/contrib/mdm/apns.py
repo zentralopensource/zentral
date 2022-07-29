@@ -32,7 +32,8 @@ class APNSClient(object):
         logger.debug("APNS notify device %s, target %s", enrolled_device, target)
         path = "/3/device/{}".format(target.token.hex())
         json_data = {"mdm": enrolled_device.push_magic}
-        headers = {"apns-expiration": str(int(time.time()) + expiration_seconds),
+        headers = {"apns-push-type": "mdm",
+                   "apns-expiration": str(int(time.time()) + expiration_seconds),
                    "apns-priority": str(priority),
                    "apns-topic": self.push_certificate.topic}
 
