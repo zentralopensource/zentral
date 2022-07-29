@@ -137,13 +137,13 @@ class Command(BaseCommand):
             "-sign", self._vendor_key_path(),
             "-passin", "env:ZENTRAL_MDMCERTS_VPKP",
             csr_path
-        ], env=env, capture_output=True)
+        ], env=env, capture_output=True, check=True)
         signature = base64.b64encode(cp.stdout).decode("utf-8")
         self.stderr.write("OK")
         return signature
 
     def _write_push_req(self, prefix, fullchain, b64_csr, b64_signature):
-        req_path = os.path.join(self._dir, f"{prefix}push.req")
+        req_path = os.path.join(self._dir, f"{prefix}push.b64")
         self.stderr.write(f"Save Push REQ {req_path}", ending=" ")
         payload = {
             "PushCertCertificateChain": fullchain,
