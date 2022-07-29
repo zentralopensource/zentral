@@ -347,9 +347,7 @@ def ota_enroll_callback(request, realm_authentication_session, ota_enrollment_pk
     ota_enrollment = OTAEnrollment.objects.get(pk=ota_enrollment_pk, realm__isnull=False)
     realm_user = realm_authentication_session.user
     request.session["_ota_{}_realm_user_pk".format(ota_enrollment.pk)] = str(realm_user.pk)
-    return reverse("mdm:ota_enrollment_enroll",
-                   args=(ota_enrollment.enrollment_secret.meta_business_unit.pk,
-                         ota_enrollment.pk))
+    return reverse("mdm:ota_enrollment_enroll", args=(ota_enrollment.pk,))
 
 
 class OTAEnrollmentEnrollView(View):
