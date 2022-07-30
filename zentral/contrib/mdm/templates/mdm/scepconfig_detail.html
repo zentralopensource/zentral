@@ -79,7 +79,7 @@
     Edit
   </a>
   {% endif %}
-  {% if perms.mdm.delete_scepconfig %}
+  {% if perms.mdm.delete_scepconfig and object.can_be_deleted %}
   <a class="btn btn-danger"
      href="{% url 'mdm:delete_scep_config' object.pk %}">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>

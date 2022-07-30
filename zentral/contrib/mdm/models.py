@@ -154,6 +154,12 @@ class SCEPConfig(models.Model):
         challenge = load_scep_challenge(self)
         challenge.rewrap_kwargs()
 
+    def can_be_deleted(self):
+        return (
+            self.depenrollment_set.count() == 0
+            and self.otaenrollment_set.count() == 0
+            and self.userenrollment_set.count() == 0
+        )
 
 # Enrollment
 

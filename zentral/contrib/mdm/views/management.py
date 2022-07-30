@@ -944,6 +944,12 @@ class DeleteSCEPConfigView(PermissionRequiredMixin, DeleteView):
     model = SCEPConfig
     success_url = reverse_lazy("mdm:scep_configs")
 
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        if not obj.can_be_deleted():
+            raise SuspiciousOperation("This SCEP config cannot be deleted")
+        return obj
+
 
 # Devices
 
