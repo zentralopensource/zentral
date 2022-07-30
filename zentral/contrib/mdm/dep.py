@@ -3,7 +3,6 @@ import datetime
 import json
 import logging
 from cryptography import x509
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
@@ -24,7 +23,6 @@ def build_dep_token_certificate(dep_token):
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
-        backend=default_backend()
     )
     public_key = private_key.public_key()
     builder = x509.CertificateBuilder()
@@ -45,7 +43,6 @@ def build_dep_token_certificate(dep_token):
     )
     certificate = builder.sign(
         private_key=private_key, algorithm=hashes.SHA256(),
-        backend=default_backend()
     )
     return certificate, private_key
 
@@ -120,9 +117,8 @@ def serialize_dep_profile(dep_enrollment):
     # certificates
     if dep_enrollment.include_tls_certificates:
         anchor_certs = []
-        crypto_backend = default_backend()
         for pem_data in split_certificate_chain(settings["api"]["tls_fullchain"]):
-            certificate = x509.load_pem_x509_certificate(pem_data.encode("utf-8"), crypto_backend)
+            certificate = x509.load_pem_x509_certificate(pem_data.encode("utf-8"))
             der_bytes = certificate.public_bytes(serialization.Encoding.DER)
             anchor_certs.append(base64.b64encode(der_bytes).decode("utf-8"))
         if anchor_certs:

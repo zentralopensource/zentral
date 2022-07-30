@@ -153,7 +153,9 @@ class ConnectDEPVirtualServerView(PermissionRequiredMixin, View):
         return HttpResponseRedirect(reverse("mdm:dep_virtual_servers"))
 
     def post(self, request, *args, **kwargs):
-        self.get_or_create_current_dep_token(request)
+        response = self.get_or_create_current_dep_token(request)
+        if response:
+            return response
         action = request.POST.get("action", None)
         if action == "cancel":
             return self.do_cancel(request)

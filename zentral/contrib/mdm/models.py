@@ -652,7 +652,8 @@ class DEPToken(models.Model):
         return {"pk": self.pk, "model": "mdm.deptoken", "field": field}
 
     def get_private_key(self):
-        return decrypt(self.private_key, **self._get_secret_engine_kwargs("private_key"))
+        if self.private_key:
+            return decrypt(self.private_key, **self._get_secret_engine_kwargs("private_key"))
 
     def set_private_key(self, private_key):
         self.private_key = encrypt(private_key, **self._get_secret_engine_kwargs("private_key"))
@@ -660,8 +661,6 @@ class DEPToken(models.Model):
     def get_consumer_secret(self):
         if self.consumer_secret:
             return decrypt_str(self.consumer_secret, **self._get_secret_engine_kwargs("consumer_secret"))
-        else:
-            return None
 
     def set_consumer_secret(self, consumer_secret):
         self.consumer_secret = encrypt_str(consumer_secret, **self._get_secret_engine_kwargs("consumer_secret"))
@@ -669,14 +668,13 @@ class DEPToken(models.Model):
     def get_access_secret(self):
         if self.access_secret:
             return decrypt_str(self.access_secret, **self._get_secret_engine_kwargs("access_secret"))
-        else:
-            return None
 
     def set_access_secret(self, access_secret):
-        self.access_secret = encrypt_str(self.access_secret, **self._get_secret_engine_kwargs("access_secret"))
+        self.access_secret = encrypt_str(access_secret, **self._get_secret_engine_kwargs("access_secret"))
 
     def rewrap_secrets(self):
-        self.private_key = rewrap(self.private_key, **self._get_secret_engine_kwargs("private_key"))
+        if self.private_key:
+            self.private_key = rewrap(self.private_key, **self._get_secret_engine_kwargs("private_key"))
         if self.consumer_secret:
             self.consumer_secret = rewrap(self.consumer_secret, **self._get_secret_engine_kwargs("consumer_secret"))
         if self.access_secret:
