@@ -1,12 +1,13 @@
-import os.path
+import os
 import subprocess
-import tempfile
+from tempfile import NamedTemporaryFile
 from asn1crypto import cms
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.x509.oid import NameOID
+from django.utils.crypto import get_random_string
 from django.utils.functional import SimpleLazyObject
 from zentral.conf import settings
 from OpenSSL import crypto
@@ -148,16 +149,45 @@ def verify_iphone_ca_signed_payload(data):
     raise ValueError("Untrusted CA")
 
 
-def decrypt_cms_payload(payload, private_key_bytes):
-    tmp_inkey_fd, tmp_inkey = tempfile.mkstemp()
-    with os.fdopen(tmp_inkey_fd, "wb") as f:
-        f.write(private_key_bytes)
-    p = subprocess.Popen(["/usr/bin/openssl", "smime",  "-decrypt", "-inkey", tmp_inkey],
-                         stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE)
-    stdout, stderr = p.communicate(payload)
-    os.unlink(tmp_inkey)
-    return stdout
+def decrypt_cms_payload(payload, privkey_bytes, privkey_password=None):
+    # load the private key
+    private_key = serialization.load_pem_private_key(privkey_bytes, privkey_password)
+    # encrypt the private key, using a temporary password
+    tmp_inkey_pwd = get_random_string(length=42).encode("utf-8")
+    tmp_inkey_data = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.BestAvailableEncryption(tmp_inkey_pwd)
+    )
+    # use the environment to pass the temporary private key password to openssl
+    env = os.environ.copy()
+    env_var = get_random_string(length=12)
+    env[env_var] = tmp_inkey_pwd
+    # write the encryped private key in a temporary file
+    with NamedTemporaryFile() as tmp_inkey_file:
+        tmp_inkey_file.write(tmp_inkey_data)
+        tmp_inkey_file.flush()
+        # decrypt the payload
+        p = subprocess.Popen(["/usr/bin/openssl", "smime", "-decrypt",
+                              "-inkey", tmp_inkey_file.name, "-passin", f"env:{env_var}"],
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE,
+                             env=env)
+        stdout, _ = p.communicate(payload)
+        return stdout
+
+
+def encrypt_cms_payload(payload, public_key_bytes):
+    # write the public key in a temporary file
+    with NamedTemporaryFile() as tmp_pubkey_file:
+        tmp_pubkey_file.write(public_key_bytes)
+        tmp_pubkey_file.flush()
+        # encrypt the paload
+        p = subprocess.Popen(["/usr/bin/openssl", "smime",  "-encrypt", tmp_pubkey_file.name],
+                             stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE)
+        stdout, _ = p.communicate(payload)
+        return stdout
 
 
 # push certificate
