@@ -208,11 +208,11 @@ def load_push_certificate_and_key(cert_pem_bytes, key_pem_bytes, password=None):
     except Exception:
         raise ValueError("Could not load PEM private key")
     message = b"Buffalo buffalo buffalo buffalo"
-    pad = padding.OAEP(
-        mgf=padding.MGF1(algorithm=hashes.SHA256()),
-        algorithm=hashes.SHA256(),
-        label=None
-    )
+    # padding.OAEP is recommended for new applications, but
+    # we only do a quick check here, and we need to be able to use
+    # small private keys (TODO verify <1024bit with padding.OAEP → errror)
+    # to speed up the tests!
+    pad = padding.PKCS1v15()
     try:
         key.decrypt(cert.public_key().encrypt(message, pad), pad)
     except Exception:
