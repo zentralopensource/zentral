@@ -12,10 +12,15 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.base")
 
 class Command:
     request_type = None
+    db_name = None
     allowed_channel = None
     allowed_platform = None
     allowed_in_user_enrollment = False
     artifact_operation = None
+
+    @classmethod
+    def get_db_name(cls):
+        return cls.db_name or cls.request_type
 
     @classmethod
     def verify_channel_and_device(cls, channel, enrolled_device):
@@ -24,14 +29,14 @@ class Command:
         if isinstance(allowed_channels, Channel):
             allowed_channels = (allowed_channels,)
         if channel not in allowed_channels:
-            logger.debug("Command %s: incompatible channel %s", cls.request_type, channel.name)
+            logger.warning("Command %s: incompatible channel %s", cls.request_type, channel.name)
             return False
         # verify platform
         allowed_platforms = cls.allowed_platform
         if isinstance(allowed_platforms, Platform):
             allowed_platforms = (allowed_platforms,)
         if all(enrolled_device.platform != p.name for p in allowed_platforms):
-            logger.debug("Command %s: incompatible platform %s", cls.request_type, enrolled_device.platform)
+            logger.warning("Command %s: incompatible platform %s", cls.request_type, enrolled_device.platform)
             return False
         return True
 
@@ -94,7 +99,7 @@ class Command:
         if not self.db_command.pk:
             # new command
             self.db_command.uuid = uuid.uuid4()
-            self.db_command.name = self.request_type
+            self.db_command.name = self.get_db_name()
             if self.artifact_operation:
                 self.db_command.artifact_operation = self.artifact_operation.name
             self.db_command.save()
@@ -158,4 +163,4 @@ registered_commands = {}
 
 
 def register_command(command_cls):
-    registered_commands[command_cls.request_type] = command_cls
+    registered_commands[command_cls.get_db_name()] = command_cls

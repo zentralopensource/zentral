@@ -71,10 +71,7 @@ class EnrollUserView(PostEventMixin, View):
             except UserEnrollmentSession.DoesNotExist:
                 self.abort("Invalid access token")
             user_enrollment_session.set_started_status()
-            configuration_profile = build_mdm_configuration_profile(
-                user_enrollment_session,
-                self.user_enrollment.push_certificate
-            )
+            configuration_profile = build_mdm_configuration_profile(user_enrollment_session)
             configuration_profile_filename = "zentral_mdm"
             self.post_event("success", **user_enrollment_session.serialize_for_event())
             return build_configuration_profile_response(configuration_profile, configuration_profile_filename)

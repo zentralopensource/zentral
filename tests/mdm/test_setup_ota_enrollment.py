@@ -6,8 +6,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
-from zentral.contrib.mdm.models import OTAEnrollment, PushCertificate, SCEPConfig
+from zentral.contrib.inventory.models import MetaBusinessUnit
+from .utils import force_ota_enrollment, force_push_certificate, force_scep_config
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -40,37 +40,6 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _force_push_certificate(self):
-        push_certificate = PushCertificate(
-            name=get_random_string(12),
-            topic=get_random_string(12),
-            not_before="2000-01-01",
-            not_after="2040-01-01",
-            certificate=b"1",
-        )
-        push_certificate.set_private_key(b"2")
-        push_certificate.save()
-        return push_certificate
-
-    def _force_scep_config(self):
-        scep_config = SCEPConfig(
-            name=get_random_string(12),
-            url="https://example.com/{}".format(get_random_string(12)),
-            challenge_type="STATIC",
-            challenge_kwargs={"challenge": get_random_string(12)}
-        )
-        scep_config.set_challenge_kwargs({"challenge": get_random_string(12)})
-        scep_config.save()
-        return scep_config
-
-    def _force_ota_enrollment(self):
-        return OTAEnrollment.objects.create(
-            push_certificate=self._force_push_certificate(),
-            scep_config=self._force_scep_config(),
-            name=get_random_string(12),
-            enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
-        )
-
     # create OTA enrollment
 
     def test_create_ota_enrollment_redirect(self):
@@ -91,8 +60,8 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
     def test_create_ota_enrollment_post(self):
         self._login("mdm.add_otaenrollment", "mdm.view_otaenrollment")
         name = get_random_string(64)
-        push_certificate = self._force_push_certificate()
-        scep_config = self._force_scep_config()
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
         response = self.client.post(reverse("mdm:create_ota_enrollment"),
                                     {"oe-name": name,
                                      "oe-scep_config": scep_config.pk,
@@ -114,17 +83,17 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
     # view OTA enrollment
 
     def test_view_ota_enrollment_redirect(self):
-        enrollment = self._force_ota_enrollment()
+        enrollment = force_ota_enrollment(self.mbu)
         self._login_redirect(reverse("mdm:ota_enrollment", args=(enrollment.pk,)))
 
     def test_view_ota_enrollment_permission_denied(self):
-        enrollment = self._force_ota_enrollment()
+        enrollment = force_ota_enrollment(self.mbu)
         self._login()
         response = self.client.get(reverse("mdm:ota_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_view_ota_enrollment_no_extra_perms(self):
-        enrollment = self._force_ota_enrollment()
+        enrollment = force_ota_enrollment(self.mbu)
         self._login("mdm.view_otaenrollment")
         response = self.client.get(reverse("mdm:ota_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -136,7 +105,7 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, enrollment.scep_config.get_absolute_url())
 
     def test_view_ota_enrollment_extra_perms(self):
-        enrollment = self._force_ota_enrollment()
+        enrollment = force_ota_enrollment(self.mbu)
         self._login("mdm.view_otaenrollment", "mdm.view_pushcertificate", "mdm.view_scepconfig")
         response = self.client.get(reverse("mdm:ota_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -150,17 +119,17 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
     # update OTA enrollment
 
     def test_update_ota_enrollment_redirect(self):
-        enrollment = self._force_ota_enrollment()
+        enrollment = force_ota_enrollment(self.mbu)
         self._login_redirect(reverse("mdm:update_ota_enrollment", args=(enrollment.pk,)))
 
     def test_update_ota_enrollment_permission_denied(self):
-        enrollment = self._force_ota_enrollment()
+        enrollment = force_ota_enrollment(self.mbu)
         self._login()
         response = self.client.get(reverse("mdm:update_ota_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_ota_enrollment_get(self):
-        enrollment = self._force_ota_enrollment()
+        enrollment = force_ota_enrollment(self.mbu)
         self._login("mdm.change_otaenrollment")
         response = self.client.get(reverse("mdm:update_ota_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -168,7 +137,7 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, f"[OTA] {enrollment.name}")
 
     def test_update_ota_enrollment_post(self):
-        enrollment = self._force_ota_enrollment()
+        enrollment = force_ota_enrollment(self.mbu)
         self._login("mdm.change_otaenrollment", "mdm.view_otaenrollment")
         new_name = get_random_string(64)
         response = self.client.post(reverse("mdm:update_ota_enrollment", args=(enrollment.pk,)),
@@ -193,7 +162,7 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self._login_redirect(reverse("mdm:enrollments"))
 
     def test_list_ota_enrollments_no_perm_empty(self):
-        enrollment = self._force_ota_enrollment()
+        enrollment = force_ota_enrollment(self.mbu)
         self._login()
         response = self.client.get(reverse("mdm:enrollments"))
         self.assertEqual(response.status_code, 200)
@@ -201,7 +170,7 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, enrollment.name)
 
     def test_list_ota_enrollments(self):
-        enrollment = self._force_ota_enrollment()
+        enrollment = force_ota_enrollment(self.mbu)
         self._login("mdm.view_otaenrollment")
         response = self.client.get(reverse("mdm:enrollments"))
         self.assertEqual(response.status_code, 200)

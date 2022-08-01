@@ -1,7 +1,7 @@
 import copy
 import plistlib
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.http import HttpResponse
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -9,19 +9,21 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         Blueprint, BlueprintArtifact,
                                         Channel, DeviceArtifact,
-                                        DEPEnrollment, DEPEnrollmentSession,
-                                        DEPOrganization, DEPToken, DEPVirtualServer,
+                                        DEPEnrollmentSession,
                                         EnrolledDevice, EnrolledUser,
                                         Platform, Profile, PushCertificate,
-                                        SCEPConfig, UserArtifact)
+                                        ReEnrollmentSession, UserArtifact)
 from zentral.contrib.mdm.commands.device_configured import DeviceConfigured
 from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.install_profile import InstallProfile
+from zentral.contrib.mdm.commands.reenroll import Reenroll
 from zentral.contrib.mdm.commands.remove_profile import RemoveProfile
 from zentral.contrib.mdm.commands.utils import (_finish_dep_enrollment_configuration,
                                                 _install_artifacts,
                                                 _get_next_queued_command,
+                                                _reenroll,
                                                 _remove_artifacts)
+from .utils import force_dep_enrollment
 
 
 PROFILE_TEMPLATE = {
@@ -118,44 +120,9 @@ class TestMDMCommands(TestCase):
         )
 
         # DEP enrollment
-        dep_organization = DEPOrganization.objects.create(
-            identifier=get_random_string(128),
-            admin_id="{}@zentral.io".format(get_random_string(12)),
-            name=get_random_string(12),
-            email="{}@zentral.io".format(get_random_string(12)),
-            phone=get_random_string(12),
-            address=get_random_string(12),
-            type=DEPOrganization.ORG,
-            version=DEPOrganization.V2
-        )
-        dep_token = DEPToken.objects.create(
-            certificate=get_random_string(12).encode("utf-8"),
-            private_key=get_random_string(12).encode("utf-8"),
-        )
-        dep_virtual_server = DEPVirtualServer.objects.create(
-            name=get_random_string(12),
-            uuid=uuid.uuid4(),
-            organization=dep_organization,
-            token=dep_token
-        )
-        scep_config = SCEPConfig.objects.create(
-            name=get_random_string(12),
-            url="https://example.com/{}".format(get_random_string(12)),
-            challenge_type="STATIC",
-            challenge_kwargs={"challenge": get_random_string(12)}
-        )
-        dep_enrollment = DEPEnrollment.objects.create(
-            uuid=uuid.uuid4(),
-            virtual_server=dep_virtual_server,
-            push_certificate=push_certificate,
-            scep_config=scep_config,
-            blueprint=cls.blueprint1,
-            enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit),
-            skip_setup_items=[p for p, _ in DEPEnrollment.SKIPPABLE_SETUP_PANE_CHOICES],
-            name=get_random_string(12)
-        )
+        cls.dep_enrollment = force_dep_enrollment(cls.meta_business_unit)
         cls.dep_enrollment_session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
-            dep_enrollment, cls.enrolled_device.serial_number, cls.enrolled_device.udid
+            cls.dep_enrollment, cls.enrolled_device.serial_number, cls.enrolled_device.udid
         )
         es_request = EnrollmentSecret.objects.verify(
             "dep_enrollment_session",
@@ -513,3 +480,60 @@ class TestMDMCommands(TestCase):
             self.enrolled_device,
             self.enrolled_user
         ))
+
+    # re-enrollment
+
+    def test_reenroll_user_channel_noop(self):
+        self.assertIsNone(
+            _reenroll(Channel.User, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+        )
+
+    def test_reenroll_device_channel_no_cert_not_valid_after(self):
+        self.assertIsNone(self.enrolled_device.cert_not_valid_after)
+        command = _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+        self.assertIsInstance(command, Reenroll)
+        self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
+        self.assertEqual(command.reenrollment_session.get_enrollment(), self.dep_enrollment)
+        self.assertEqual(command.reenrollment_session.enrolled_device, self.enrolled_device)
+
+    def test_reenroll_device_channel_no_cert_not_valid_after_recent_reenrollment_session_noop(self):
+        self.assertIsNone(self.enrolled_device.cert_not_valid_after)
+        ReEnrollmentSession.objects.create_from_enrollment_session(self.dep_enrollment_session)
+        self.assertIsNone(
+            _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+        )
+
+    def test_reenroll_device_channel_cert_too_old(self):
+        self.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=10)
+        self.enrolled_device.save()
+        command = _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+        self.assertIsInstance(command, Reenroll)
+        self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
+        self.assertEqual(command.reenrollment_session.get_enrollment(), self.dep_enrollment)
+        self.assertEqual(command.reenrollment_session.enrolled_device, self.enrolled_device)
+
+    def test_reenroll_device_channel_cert_too_old_recent_reenrollment_session_noop(self):
+        self.enrolled_device.cert_not_valid_after = datetime.utcnow()
+        self.enrolled_device.save()
+        ReEnrollmentSession.objects.create_from_enrollment_session(self.dep_enrollment_session)
+        self.assertIsNone(
+            _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+        )
+
+    def test_reenroll_device_channel_cert_too_old_older_reenrollment_session(self):
+        self.enrolled_device.cert_not_valid_after = datetime.utcnow()
+        self.enrolled_device.save()
+        rs = ReEnrollmentSession.objects.create_from_enrollment_session(self.dep_enrollment_session)
+        ReEnrollmentSession.objects.filter(pk=rs.pk).update(created_at=datetime.utcnow() - timedelta(hours=8))
+        command = _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+        self.assertIsInstance(command, Reenroll)
+        self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
+        self.assertEqual(command.reenrollment_session.get_enrollment(), self.dep_enrollment)
+        self.assertEqual(command.reenrollment_session.enrolled_device, self.enrolled_device)
+
+    def test_reenroll_device_channel_cert_ok_noop(self):
+        self.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=167)
+        self.enrolled_device.save()
+        self.assertIsNone(
+            _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+        )

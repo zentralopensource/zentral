@@ -8,9 +8,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
-from zentral.contrib.mdm.models import (DEPEnrollment, DEPOrganization, DEPToken, DEPVirtualServer,
-                                        PushCertificate, SCEPConfig)
+from zentral.contrib.inventory.models import MetaBusinessUnit
+from .utils import force_dep_enrollment, force_dep_virtual_server, force_push_certificate, force_scep_config
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -43,61 +42,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _force_push_certificate(self):
-        push_certificate = PushCertificate(
-            name=get_random_string(12),
-            topic=get_random_string(12),
-            not_before="2000-01-01",
-            not_after="2040-01-01",
-            certificate=b"1",
-        )
-        push_certificate.set_private_key(b"2")
-        push_certificate.save()
-        return push_certificate
-
-    def _force_scep_config(self):
-        scep_config = SCEPConfig(
-            name=get_random_string(12),
-            url="https://example.com/{}".format(get_random_string(12)),
-            challenge_type="STATIC",
-            challenge_kwargs={"challenge": get_random_string(12)}
-        )
-        scep_config.set_challenge_kwargs({"challenge": get_random_string(12)})
-        scep_config.save()
-        return scep_config
-
-    def _force_dep_virtual_server(self):
-        dep_organization = DEPOrganization.objects.create(
-            identifier=get_random_string(128),
-            admin_id="{}@zentral.io".format(get_random_string(12)),
-            name=get_random_string(12),
-            email="{}@zentral.io".format(get_random_string(12)),
-            phone=get_random_string(12),
-            address=get_random_string(12),
-            type=DEPOrganization.ORG,
-            version=DEPOrganization.V2
-        )
-        dep_token = DEPToken.objects.create(
-            certificate=get_random_string(12).encode("utf-8"),
-        )
-        return DEPVirtualServer.objects.create(
-            name=get_random_string(12),
-            uuid=uuid.uuid4(),
-            organization=dep_organization,
-            token=dep_token
-        )
-
-    def _force_dep_enrollment(self):
-        return DEPEnrollment.objects.create(
-            name=get_random_string(12),
-            uuid=uuid.uuid4(),
-            push_certificate=self._force_push_certificate(),
-            scep_config=self._force_scep_config(),
-            virtual_server=self._force_dep_virtual_server(),
-            enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=self.mbu),
-            skip_setup_items=[p for p, _ in DEPEnrollment.SKIPPABLE_SETUP_PANE_CHOICES],
-        )
-
     # create DEP enrollment
 
     def test_create_dep_enrollment_redirect(self):
@@ -123,9 +67,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         add_dep_profile.side_effect = add_dep_profile_side_effect
         self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
-        push_certificate = self._force_push_certificate()
-        scep_config = self._force_scep_config()
-        dep_virtual_server = self._force_dep_virtual_server()
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
         response = self.client.post(reverse("mdm:create_dep_enrollment"),
                                     {"de-name": name,
                                      "de-scep_config": scep_config.pk,
@@ -151,17 +95,17 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
     # view DEP enrollment
 
     def test_view_dep_enrollment_redirect(self):
-        enrollment = self._force_dep_enrollment()
+        enrollment = force_dep_enrollment(self.mbu)
         self._login_redirect(reverse("mdm:dep_enrollment", args=(enrollment.pk,)))
 
     def test_view_dep_enrollment_permission_denied(self):
-        enrollment = self._force_dep_enrollment()
+        enrollment = force_dep_enrollment(self.mbu)
         self._login()
         response = self.client.get(reverse("mdm:dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_view_dep_enrollment_no_extra_perms(self):
-        enrollment = self._force_dep_enrollment()
+        enrollment = force_dep_enrollment(self.mbu)
         self._login("mdm.view_depenrollment")
         response = self.client.get(reverse("mdm:dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -173,7 +117,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, enrollment.scep_config.get_absolute_url())
 
     def test_view_dep_enrollment_extra_perms(self):
-        enrollment = self._force_dep_enrollment()
+        enrollment = force_dep_enrollment(self.mbu)
         self._login("mdm.view_depenrollment", "mdm.view_pushcertificate", "mdm.view_scepconfig")
         response = self.client.get(reverse("mdm:dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -187,17 +131,17 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
     # update DEP enrollment
 
     def test_update_dep_enrollment_redirect(self):
-        enrollment = self._force_dep_enrollment()
+        enrollment = force_dep_enrollment(self.mbu)
         self._login_redirect(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)))
 
     def test_update_dep_enrollment_permission_denied(self):
-        enrollment = self._force_dep_enrollment()
+        enrollment = force_dep_enrollment(self.mbu)
         self._login()
         response = self.client.get(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_dep_enrollment_get(self):
-        enrollment = self._force_dep_enrollment()
+        enrollment = force_dep_enrollment(self.mbu)
         self._login("mdm.change_depenrollment")
         response = self.client.get(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -209,7 +153,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         def add_dep_profile_side_effect(dep_profile):
             dep_profile.save()
         add_dep_profile.side_effect = add_dep_profile_side_effect
-        enrollment = self._force_dep_enrollment()
+        enrollment = force_dep_enrollment(self.mbu)
         self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
         new_name = get_random_string(12)
         response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
@@ -238,7 +182,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self._login_redirect(reverse("mdm:enrollments"))
 
     def test_list_dep_enrollments_no_perm_empty(self):
-        enrollment = self._force_dep_enrollment()
+        enrollment = force_dep_enrollment(self.mbu)
         self._login()
         response = self.client.get(reverse("mdm:enrollments"))
         self.assertEqual(response.status_code, 200)
@@ -246,7 +190,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, enrollment.name)
 
     def test_list_dep_enrollments(self):
-        enrollment = self._force_dep_enrollment()
+        enrollment = force_dep_enrollment(self.mbu)
         self._login("mdm.view_depenrollment")
         response = self.client.get(reverse("mdm:enrollments"))
         self.assertEqual(response.status_code, 200)

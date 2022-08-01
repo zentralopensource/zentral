@@ -6,8 +6,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
-from zentral.contrib.mdm.models import UserEnrollment, PushCertificate, SCEPConfig
+from zentral.contrib.inventory.models import MetaBusinessUnit
+from .utils import force_push_certificate, force_scep_config, force_user_enrollment
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -40,37 +40,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _force_push_certificate(self):
-        push_certificate = PushCertificate(
-            name=get_random_string(12),
-            topic=get_random_string(12),
-            not_before="2000-01-01",
-            not_after="2040-01-01",
-            certificate=b"1",
-        )
-        push_certificate.set_private_key(b"2")
-        push_certificate.save()
-        return push_certificate
-
-    def _force_scep_config(self):
-        scep_config = SCEPConfig(
-            name=get_random_string(12),
-            url="https://example.com/{}".format(get_random_string(12)),
-            challenge_type="STATIC",
-            challenge_kwargs={"challenge": get_random_string(12)}
-        )
-        scep_config.set_challenge_kwargs({"challenge": get_random_string(12)})
-        scep_config.save()
-        return scep_config
-
-    def _force_user_enrollment(self):
-        return UserEnrollment.objects.create(
-            push_certificate=self._force_push_certificate(),
-            scep_config=self._force_scep_config(),
-            name=get_random_string(12),
-            enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
-        )
-
     # create User enrollment
 
     def test_create_user_enrollment_redirect(self):
@@ -91,8 +60,8 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     def test_create_user_enrollment_post(self):
         self._login("mdm.add_userenrollment", "mdm.view_userenrollment")
         name = get_random_string(64)
-        push_certificate = self._force_push_certificate()
-        scep_config = self._force_scep_config()
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
         response = self.client.post(reverse("mdm:create_user_enrollment"),
                                     {"ue-name": name,
                                      "ue-scep_config": scep_config.pk,
@@ -114,17 +83,17 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     # view User enrollment
 
     def test_view_user_enrollment_redirect(self):
-        enrollment = self._force_user_enrollment()
+        enrollment = force_user_enrollment(self.mbu, None)
         self._login_redirect(reverse("mdm:user_enrollment", args=(enrollment.pk,)))
 
     def test_view_user_enrollment_permission_denied(self):
-        enrollment = self._force_user_enrollment()
+        enrollment = force_user_enrollment(self.mbu, None)
         self._login()
         response = self.client.get(reverse("mdm:user_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_view_user_enrollment_no_extra_perms(self):
-        enrollment = self._force_user_enrollment()
+        enrollment = force_user_enrollment(self.mbu, None)
         self._login("mdm.view_userenrollment")
         response = self.client.get(reverse("mdm:user_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -136,7 +105,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, enrollment.scep_config.get_absolute_url())
 
     def test_view_user_enrollment_extra_perms(self):
-        enrollment = self._force_user_enrollment()
+        enrollment = force_user_enrollment(self.mbu, None)
         self._login("mdm.view_userenrollment", "mdm.view_pushcertificate", "mdm.view_scepconfig")
         response = self.client.get(reverse("mdm:user_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -150,17 +119,17 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     # update User enrollment
 
     def test_update_user_enrollment_redirect(self):
-        enrollment = self._force_user_enrollment()
+        enrollment = force_user_enrollment(self.mbu, None)
         self._login_redirect(reverse("mdm:update_user_enrollment", args=(enrollment.pk,)))
 
     def test_update_user_enrollment_permission_denied(self):
-        enrollment = self._force_user_enrollment()
+        enrollment = force_user_enrollment(self.mbu, None)
         self._login()
         response = self.client.get(reverse("mdm:update_user_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_user_enrollment_get(self):
-        enrollment = self._force_user_enrollment()
+        enrollment = force_user_enrollment(self.mbu, None)
         self._login("mdm.change_userenrollment")
         response = self.client.get(reverse("mdm:update_user_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -168,7 +137,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, f"[USER] {enrollment.name}")
 
     def test_update_user_enrollment_post(self):
-        enrollment = self._force_user_enrollment()
+        enrollment = force_user_enrollment(self.mbu, None)
         self._login("mdm.change_userenrollment", "mdm.view_userenrollment")
         new_name = get_random_string(64)
         response = self.client.post(reverse("mdm:update_user_enrollment", args=(enrollment.pk,)),
@@ -193,7 +162,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self._login_redirect(reverse("mdm:enrollments"))
 
     def test_list_user_enrollments_no_perm_empty(self):
-        enrollment = self._force_user_enrollment()
+        enrollment = force_user_enrollment(self.mbu, None)
         self._login()
         response = self.client.get(reverse("mdm:enrollments"))
         self.assertEqual(response.status_code, 200)
@@ -201,7 +170,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, enrollment.name)
 
     def test_list_user_enrollments(self):
-        enrollment = self._force_user_enrollment()
+        enrollment = force_user_enrollment(self.mbu, None)
         self._login("mdm.view_userenrollment")
         response = self.client.get(reverse("mdm:enrollments"))
         self.assertEqual(response.status_code, 200)

@@ -13,7 +13,8 @@ from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
 from zentral.contrib.mdm.dep import add_dep_token_certificate
-from zentral.contrib.mdm.models import DEPOrganization, DEPToken, DEPVirtualServer
+from zentral.contrib.mdm.models import DEPToken, DEPVirtualServer
+from .utils import force_dep_virtual_server
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -45,27 +46,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         else:
             self.group.permissions.clear()
         self.client.force_login(self.user)
-
-    def _force_dep_virtual_server(self, server_uuid=None):
-        dep_organization = DEPOrganization.objects.create(
-            identifier=get_random_string(12),
-            admin_id="{}@zentral.io".format(get_random_string(12)),
-            name=get_random_string(12),
-            email="{}@zentral.io".format(get_random_string(12)),
-            phone=get_random_string(12),
-            address=get_random_string(12),
-            type=DEPOrganization.ORG,
-            version=DEPOrganization.V2
-        )
-        dep_token = DEPToken.objects.create(
-            certificate=get_random_string(12).encode("utf-8"),
-        )
-        return DEPVirtualServer.objects.create(
-            name=get_random_string(12),
-            uuid=uuid.uuid4() if server_uuid is None else server_uuid,
-            organization=dep_organization,
-            token=dep_token
-        )
 
     def _build_mock_dep_client(self):
         server_name = get_random_string(12)
@@ -107,7 +87,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_list_dep_virtual_servers(self):
-        virtual_server = self._force_dep_virtual_server()
+        virtual_server = force_dep_virtual_server()
         self._login("mdm.view_depvirtualserver")
         response = self.client.get(reverse("mdm:dep_virtual_servers"))
         self.assertTemplateUsed(response, "mdm/depvirtualserver_list.html")
@@ -161,7 +141,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotEqual(dep_token.pk, 3120938120398)
 
     def test_connect_dep_virtual_server_post_start_attached_server_redirect(self):
-        virtual_server = self._force_dep_virtual_server()
+        virtual_server = force_dep_virtual_server()
         self._login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
         session = self.client.session
         session["current_dep_token_id"] = virtual_server.token.pk
@@ -318,7 +298,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         dep_token.set_access_secret("oldasecret")
         dep_token.save()
         # create an existing virtual server with this new server_name, server uuid
-        existing_virtual_server = self._force_dep_virtual_server(server_uuid)
+        existing_virtual_server = force_dep_virtual_server(server_uuid)
         existing_virtual_server_token_pk = existing_virtual_server.token.pk
         self._login("mdm.change_depvirtualserver", "mdm.view_depvirtualserver")
         response = self.client.post(reverse("mdm:renew_dep_token", args=(dep_token.pk,)),

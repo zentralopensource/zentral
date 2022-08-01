@@ -557,7 +557,7 @@ class UserEnrollmentEnrollView(FormView):
             self.user_enrollment, managed_apple_id
         )
         return build_configuration_profile_response(
-            build_mdm_configuration_profile(user_enrollment_session, self.user_enrollment.push_certificate),
+            build_mdm_configuration_profile(user_enrollment_session),
             "zentral_user_enrollment"
         )
 

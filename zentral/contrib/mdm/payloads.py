@@ -108,12 +108,12 @@ def build_ota_scep_configuration_profile(ota_enrollment_session):
                          [build_scep_payload(ota_enrollment_session)])
 
 
-def build_mdm_configuration_profile(enrollment_session, push_certificate):
+def build_mdm_configuration_profile(enrollment_session):
     scep_payload = build_scep_payload(enrollment_session)
     payloads = build_root_ca_payloads()
     mdm_config = {
         "IdentityCertificateUUID": scep_payload["PayloadUUID"],
-        "Topic": push_certificate.topic,
+        "Topic": enrollment_session.get_enrollment().push_certificate.topic,
         "ServerURL": "{}{}".format(
             settings["api"]["tls_hostname_for_client_cert_auth"],
             reverse("mdm:connect")),

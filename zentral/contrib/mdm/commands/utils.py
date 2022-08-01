@@ -1,16 +1,18 @@
+from datetime import datetime, timedelta
 import logging
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         Channel, CommandStatus,
-                                        DeviceCommand, UserCommand)
+                                        DeviceCommand, ReEnrollmentSession, UserCommand)
 from .account_configuration import AccountConfiguration
 from .declarative_management import DeclarativeManagement
 from .device_configured import DeviceConfigured
 from .install_profile import InstallProfile
 from .install_enterprise_application import InstallEnterpriseApplication
 from .remove_profile import RemoveProfile
+from .reenroll import Reenroll
 from .base import registered_commands
 
 
@@ -96,10 +98,22 @@ def _configure_dep_enrollment_accounts(channel, enrollment_session, enrolled_dev
     return AccountConfiguration.create_for_device(enrolled_device)
 
 
-def _renew_mdm_payload(channel, enrollment_session, enrolled_device, enrolled_user):
+def _reenroll(channel, enrollment_session, enrolled_device, enrolled_user):
     if channel != Channel.Device:
         return
-    # TODO implement MDM payload renewal
+    # TODO configuration for the 90 days and 4 hours
+    # no certificate expiry or certificate expiry within the next 90 days
+    if (
+        enrolled_device.cert_not_valid_after is None
+        or enrolled_device.cert_not_valid_after - datetime.utcnow() < timedelta(days=90)
+    ):
+        # no other re-enrollment session for this enrolled device in the last 4 hours
+        if ReEnrollmentSession.objects.filter(enrolled_device=enrolled_device,
+                                              created_at__gt=datetime.utcnow() - timedelta(hours=4)).count() == 0:
+            return Reenroll.create_for_enrollment_session(enrollment_session)
+        else:
+            logger.warning("Enrolled device %s needs to re-enroll, but there was at least one re-enrollment session "
+                           "in the last 4 hours", enrolled_device.udid)
 
 
 def _install_artifacts(channel, enrollment_session, enrolled_device, enrolled_user):
@@ -167,7 +181,7 @@ def _finish_dep_enrollment_configuration(channel, enrollment_session, enrolled_d
 def get_next_command_response(channel, enrollment_session, enrolled_device, enrolled_user):
     for next_command_func in (_get_next_queued_command,
                               _configure_dep_enrollment_accounts,
-                              _renew_mdm_payload,
+                              _reenroll,
                               _install_artifacts,
                               _remove_artifacts,
                               _trigger_declarative_management,

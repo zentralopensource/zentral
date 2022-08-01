@@ -497,9 +497,6 @@ class OTAEnrollmentSession(EnrollmentSession):
     def serialize_for_event(self):
         return super().serialize_for_event("ota", self.ota_enrollment.serialize_for_event())
 
-    def get_scep_config(self):
-        return self.ota_enrollment.scep_config
-
     def get_blueprint(self):
         return self.ota_enrollment.blueprint
 
@@ -935,9 +932,6 @@ class DEPEnrollmentSession(EnrollmentSession):
     def serialize_for_event(self):
         return super().serialize_for_event("dep", self.dep_enrollment.serialize_for_event())
 
-    def get_scep_config(self):
-        return self.dep_enrollment.scep_config
-
     def get_blueprint(self):
         return self.dep_enrollment.blueprint
 
@@ -1086,9 +1080,6 @@ class UserEnrollmentSession(EnrollmentSession):
     def serialize_for_event(self):
         return super().serialize_for_event("user", self.user_enrollment.serialize_for_event())
 
-    def get_scep_config(self):
-        return self.user_enrollment.scep_config
-
     def get_blueprint(self):
         return self.user_enrollment.blueprint
 
@@ -1132,6 +1123,124 @@ class UserEnrollmentSession(EnrollmentSession):
 
     def set_completed_status(self, enrolled_device):
         if self.user_enrollment.scep_verification:
+            scep_ok = self.scep_request is not None
+        else:
+            scep_ok = True
+        test = (enrolled_device
+                and scep_ok
+                and self.status == self.AUTHENTICATED
+                and self.enrolled_device == enrolled_device)
+        self._set_next_status(self.COMPLETED, test)
+
+
+# MDM re-enrollment
+
+
+class ReEnrollmentSessionManager(models.Manager):
+    def create_from_enrollment_session(self, enrollment_session):
+        if not enrollment_session.enrolled_device:
+            raise ValueError("The enrollment session doesn't have an enrolled device")
+        enrollment = enrollment_session.get_enrollment()
+        enrollment_secret = enrollment.enrollment_secret
+
+        meta_business_unit = enrollment_secret.meta_business_unit
+        tags = list(enrollment_secret.tags.all())
+
+        # verified only once with the SCEP payload
+        quota = 1
+
+        # expires 60 minutes from now, plenty enough for the device to contact the SCEP server
+        expired_at = timezone.now() + timedelta(hours=1)
+
+        enrolled_device = enrollment_session.enrolled_device
+        new_es = EnrollmentSecret(
+            meta_business_unit=meta_business_unit,
+            serial_numbers=[enrolled_device.serial_number],
+            udids=[enrolled_device.udid],
+            quota=quota,
+            expired_at=expired_at,
+        )
+        new_es.save(secret_length=57)  # CN max 64 - $ separator - prefix MDM$RE
+        new_es.tags.set(tags)
+        enrollment_session = self.model(status=self.model.STARTED,
+                                        enrollment_secret=new_es,
+                                        enrolled_device=enrolled_device)  # important, see _reenroll !!!
+        if isinstance(enrollment, DEPEnrollment):
+            enrollment_session.dep_enrollment = enrollment
+        elif isinstance(enrollment, OTAEnrollment):
+            enrollment_session.ota_enrollment = enrollment
+        elif isinstance(enrollment, UserEnrollment):
+            enrollment_session.user_enrollment = enrollment
+        else:
+            raise ValueError("Unknown enrollment type")
+        enrollment_session.save()
+        return enrollment_session
+
+
+class ReEnrollmentSession(EnrollmentSession):
+    STARTED = "STARTED"
+    SCEP_VERIFIED = "SCEP_VERIFIED"
+    AUTHENTICATED = "AUTHENTICATED"
+    COMPLETED = "COMPLETED"
+    STATUS_CHOICES = (
+        (STARTED, _("Started")),
+        (SCEP_VERIFIED, _("SCEP verified")),  # Optional, the SCEP service verified the MDM CSR
+        (AUTHENTICATED, _("Authenticated")),  # first MDM Checkin Authenticate call
+        (COMPLETED, _("Completed")),  # first MDM Checkin TokenUpdate call
+    )
+    status = models.CharField(max_length=64, choices=STATUS_CHOICES)
+    dep_enrollment = models.ForeignKey(DEPEnrollment, on_delete=models.CASCADE, null=True)
+    ota_enrollment = models.ForeignKey(OTAEnrollment, on_delete=models.CASCADE, null=True)
+    user_enrollment = models.ForeignKey(UserEnrollment, on_delete=models.CASCADE, null=True)
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+                                             related_name="reenrollment_session")
+    scep_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT, null=True, related_name="+")
+
+    objects = ReEnrollmentSessionManager()
+
+    def get_enrollment(self):
+        if self.dep_enrollment:
+            return self.dep_enrollment
+        elif self.ota_enrollment:
+            return self.ota_enrollment
+        else:
+            return self.user_enrollment
+
+    def get_prefix(self):
+        if self.status == self.STARTED:
+            return "MDM$RE"
+        else:
+            raise ValueError("Wrong enrollment sessions status")
+
+    def serialize_for_event(self):
+        return super().serialize_for_event("re", self.get_enrollment().serialize_for_event())
+
+    def get_blueprint(self):
+        return self.get_enrollment().blueprint
+
+    # status update methods
+
+    def set_scep_verified_status(self, es_request):
+        test = (es_request
+                and self.status == self.STARTED
+                and self.scep_request is None)
+        self._set_next_status(self.SCEP_VERIFIED, test, scep_request=es_request)
+
+    def set_authenticated_status(self, enrolled_device):
+        if self.get_enrollment().scep_verification:
+            allowed_statuses = (self.SCEP_VERIFIED,)
+            scep_ok = self.scep_request is not None
+        else:
+            allowed_statuses = (self.STARTED, self.SCEP_VERIFIED)
+            scep_ok = True
+        test = (enrolled_device
+                and scep_ok
+                and self.status in allowed_statuses
+                and self.enrolled_device == enrolled_device)
+        self._set_next_status(self.AUTHENTICATED, test, enrolled_device=enrolled_device)
+
+    def set_completed_status(self, enrolled_device):
+        if self.get_enrollment().scep_verification:
             scep_ok = self.scep_request is not None
         else:
             scep_ok = True

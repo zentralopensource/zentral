@@ -22,7 +22,8 @@ from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.inventory import commit_tree_from_payload
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         Channel, DeviceCommand, EnrolledDevice, EnrolledUser,
-                                        DEPEnrollmentSession, OTAEnrollmentSession, UserEnrollmentSession,
+                                        DEPEnrollmentSession, OTAEnrollmentSession,
+                                        ReEnrollmentSession, UserEnrollmentSession,
                                         PushCertificate)
 from zentral.contrib.mdm.tasks import send_enrolled_device_notification, send_enrolled_user_notification
 from zentral.utils.certificates import parse_dn
@@ -74,6 +75,7 @@ class MDMView(PostEventMixin, View):
                 self.enrollment_session = (
                     OTAEnrollmentSession.objects
                     .select_for_update()
+                    .select_related("ota_enrollment")
                     .get(enrollment_secret__secret=enrollment_secret_secret)
                 )
             except OTAEnrollmentSession.DoesNotExist:
@@ -83,15 +85,26 @@ class MDMView(PostEventMixin, View):
                 self.enrollment_session = (
                     DEPEnrollmentSession.objects
                     .select_for_update()
+                    .select_related("dep_enrollment")
                     .get(enrollment_secret__secret=enrollment_secret_secret)
                 )
             except DEPEnrollmentSession.DoesNotExist:
                 self.abort("Bad DEP enrollment session secret in client certificate CN")
+        elif enrollment_type == "RE":
+            try:
+                self.enrollment_session = (
+                    ReEnrollmentSession.objects
+                    .select_for_update()
+                    .get(enrollment_secret__secret=enrollment_secret_secret)
+                )
+            except ReEnrollmentSession.DoesNotExist:
+                self.abort("Bad re-enrollment session secret in client certificate CN")
         elif enrollment_type == "USER":
             try:
                 self.enrollment_session = (
                     UserEnrollmentSession.objects
                     .select_for_update()
+                    .select_related("user_enrollment")
                     .get(enrollment_secret__secret=enrollment_secret_secret)
                 )
             except UserEnrollmentSession.DoesNotExist:
@@ -216,25 +229,22 @@ class CheckinView(MDMView):
         enrolled_device, created = EnrolledDevice.objects.update_or_create(udid=self.enrolled_device_udid,
                                                                            defaults=enrolled_device_defaults)
 
-        # purge the installed artifacts and sent commands, to start from scratch
-        if not created:
-            # TODO do not purge if renewal
+        is_reenrollment = isinstance(self.enrollment_session, ReEnrollmentSession)
+        # purge the installed artifacts and sent commands, if it is not a re-enrollment
+        if not created and not is_reenrollment:
             enrolled_device.purge_state()
-
-        # schedule a DeviceInformation command
-        DeviceInformation.create_for_device(enrolled_device, queue=True)
-        # switch on declarative management if possible
-        if DeclarativeManagement.verify_channel_and_device(Channel.Device, enrolled_device):
-            DeclarativeManagement.create_for_device(enrolled_device, queue=True)
+        if created or not is_reenrollment:
+            # schedule a DeviceInformation command
+            DeviceInformation.create_for_device(enrolled_device, queue=True)
+            # switch on declarative management if possible
+            if DeclarativeManagement.verify_channel_and_device(Channel.Device, enrolled_device):
+                DeclarativeManagement.create_for_device(enrolled_device, queue=True)
 
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)
 
-        # post events
-        if created:
-            self.post_event("success", reenrollment=False)
-        else:
-            self.post_event("success", reenrollment=True)
+        # post event
+        self.post_event("success", new_enrolled_device=created, reenrollment=is_reenrollment)
 
     def do_token_update(self):
         self.get_push_certificate()

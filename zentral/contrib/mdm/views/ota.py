@@ -133,9 +133,7 @@ class OTAEnrollView(PostEventMixin, View):
                 self.abort("DN mbu doesn't match ota enrollment session mbu", phase=phase)
 
             # Get the MDM push certificate
-            push_certificate = ota_enrollment_session.ota_enrollment.push_certificate
-
-            configuration_profile = build_mdm_configuration_profile(ota_enrollment_session, push_certificate)
+            configuration_profile = build_mdm_configuration_profile(ota_enrollment_session)
             configuration_profile_filename = "zentral_mdm"
 
         self.post_event("success", phase=phase)

@@ -14,7 +14,8 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.mdm.crypto import load_push_certificate_and_key
-from zentral.contrib.mdm.models import UserEnrollment, PushCertificate, SCEPConfig
+from zentral.contrib.mdm.models import UserEnrollment, PushCertificate
+from .utils import force_scep_config
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -50,7 +51,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     def _force_push_certificate_material(self, topic=None):
         privkey = rsa.generate_private_key(
             public_exponent=65537,
-            key_size=2048,
+            key_size=512,  # faster
         )
         builder = x509.CertificateBuilder()
         name = get_random_string(12)
@@ -94,21 +95,10 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         push_certificate.save()
         return push_certificate
 
-    def _force_scep_config(self):
-        push_certificate = SCEPConfig(
-            name=get_random_string(12),
-            url="https://example.com/{}".format(get_random_string(12)),
-            challenge_type="STATIC",
-            challenge_kwargs={"challenge": get_random_string(12)}
-        )
-        push_certificate.set_challenge_kwargs({"challenge": get_random_string(12)})
-        push_certificate.save()
-        return push_certificate
-
     def _force_user_enrollment(self):
         return UserEnrollment.objects.create(
             push_certificate=self._force_push_certificate(),
-            scep_config=self._force_scep_config(),
+            scep_config=force_scep_config(),
             name=get_random_string(12),
             enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
         )

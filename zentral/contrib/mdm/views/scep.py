@@ -1,6 +1,7 @@
 import logging
 from zentral.contrib.mdm.events import MDMSCEPVerificationEvent
-from zentral.contrib.mdm.models import DEPEnrollmentSession, OTAEnrollmentSession, UserEnrollmentSession
+from zentral.contrib.mdm.models import (DEPEnrollmentSession, OTAEnrollmentSession,
+                                        ReEnrollmentSession, UserEnrollmentSession)
 from zentral.utils.api_views import BaseVerifySCEPCSRView
 
 
@@ -14,14 +15,16 @@ class VerifySCEPCSRView(BaseVerifySCEPCSRView):
     event_class = MDMSCEPVerificationEvent
 
     def get_enrollment_session_info(self, cn_prefix):
-        if cn_prefix == "OTA" or cn_prefix == "MDM$OTA":
+        if cn_prefix == "MDM$DEP":
+            return "dep_enrollment_session", DEPEnrollmentSession.STARTED, "set_scep_verified_status"
+        elif cn_prefix == "OTA" or cn_prefix == "MDM$OTA":
             model = "ota_enrollment_session"
             if cn_prefix == "OTA":
                 return model, OTAEnrollmentSession.PHASE_2, "set_phase2_scep_verified_status"
             else:
                 return model, OTAEnrollmentSession.PHASE_3, "set_phase3_scep_verified_status"
-        elif cn_prefix == "MDM$DEP":
-            return "dep_enrollment_session", DEPEnrollmentSession.STARTED, "set_scep_verified_status"
+        elif cn_prefix == "MDM$RE":
+            return "re_enrollment_session", ReEnrollmentSession.STARTED, "set_scep_verified_status"
         elif cn_prefix == "MDM$USER":
             return "user_enrollment_session", UserEnrollmentSession.STARTED, "set_scep_verified_status"
         else:
