@@ -1,10 +1,9 @@
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from realms.models import Realm, RealmUser
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import ReEnrollmentSession, UserEnrollmentSession
 from zentral.contrib.mdm.payloads import build_scep_payload
-from .utils import complete_enrollment_session, force_user_enrollment
+from .utils import complete_enrollment_session, force_realm_user, force_user_enrollment
 
 
 class TestUserEnrollment(TestCase):
@@ -12,21 +11,7 @@ class TestUserEnrollment(TestCase):
     def setUpTestData(cls):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
-        cls.realm = Realm.objects.create(
-            name=get_random_string(12),
-            backend="ldap",
-            username_claim="username",
-            email_claim="email",
-        )
-        username = get_random_string(12)
-        email = f"{username}@example.com"
-        cls.realm_user = RealmUser.objects.create(
-            realm=cls.realm,
-            claims={"username": username,
-                    "email": email},
-            username=username,
-            email=email,
-        )
+        cls.realm, cls.realm_user = force_realm_user()
 
     def test_create_user_enrollment_session_no_managed_apple_id(self):
         enrollment = force_user_enrollment(self.mbu, self.realm)

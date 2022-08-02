@@ -24,7 +24,7 @@ class VerifySCEPCSRView(BaseVerifySCEPCSRView):
             else:
                 return model, OTAEnrollmentSession.PHASE_3, "set_phase3_scep_verified_status"
         elif cn_prefix == "MDM$RE":
-            return "re_enrollment_session", ReEnrollmentSession.STARTED, "set_scep_verified_status"
+            return "reenrollment_session", ReEnrollmentSession.STARTED, "set_scep_verified_status"
         elif cn_prefix == "MDM$USER":
             return "user_enrollment_session", UserEnrollmentSession.STARTED, "set_scep_verified_status"
         else:

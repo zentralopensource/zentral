@@ -540,10 +540,13 @@ class OTAEnrollmentSession(EnrollmentSession):
         self._set_next_status(self.PHASE_3, test)
 
     def set_phase3_scep_verified_status(self, es_request):
+        if self.ota_enrollment.scep_verification:
+            scep_ok = self.phase2_scep_request is not None and self.phase3_scep_request is None
+        else:
+            scep_ok = self.phase3_scep_request is None
         test = (es_request
+                and scep_ok
                 and self.status == self.PHASE_3
-                and self.phase2_scep_request is not None
-                and not self.phase3_scep_request
                 and not self.enrolled_device)
         self._set_next_status(self.PHASE_3_SCEP_VERIFIED, test, phase3_scep_request=es_request)
 

@@ -201,8 +201,11 @@ class BaseVerifySCEPCSRView(SignedRequestHeaderJSONPostAPIView):
         raise SuspiciousOperation(reason)
 
     def do_post(self, data):
-        csr_data = base64.b64decode(data["csr"].encode("ascii"))
-        csr_info = csr.CertificationRequest.load(csr_data)["certification_request_info"]
+        try:
+            csr_data = base64.b64decode(data["csr"].encode("ascii"))
+            csr_info = csr.CertificationRequest.load(csr_data)["certification_request_info"]
+        except Exception:
+            self.abort("Could not load CSR")
 
         csr_d = {}
 

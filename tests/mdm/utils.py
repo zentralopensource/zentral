@@ -6,13 +6,37 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from django.utils.crypto import get_random_string
+from realms.models import Realm, RealmUser
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.mdm.crypto import load_push_certificate_and_key
 from zentral.contrib.mdm.models import (DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
                                         DEPVirtualServer, EnrolledDevice, EnrolledUser,
-                                        OTAEnrollment,
+                                        OTAEnrollment, OTAEnrollmentSession,
                                         PushCertificate, SCEPConfig,
-                                        UserEnrollment)
+                                        UserEnrollment, UserEnrollmentSession)
+
+
+def force_realm():
+    return Realm.objects.create(
+        name=get_random_string(12),
+        backend="ldap",
+        username_claim="username",
+        email_claim="email"
+    )
+
+
+def force_realm_user():
+    realm = force_realm()
+    username = get_random_string(12)
+    email = f"{username}@example.com"
+    realm_user = RealmUser.objects.create(
+        realm=realm,
+        claims={"username": username,
+                "email": email},
+        username=username,
+        email=email,
+    )
+    return realm, realm_user
 
 
 def force_push_certificate_material(topic=None, reduced_key_size=True):
@@ -142,42 +166,11 @@ def force_user_enrollment(mbu, realm):
     )
 
 
-def force_dep_enrollment_session(mbu, authenticated=False, completed=False, push_certificate=None):
-    dep_enrollment = force_dep_enrollment(mbu, push_certificate)
-    serial_number = get_random_string(12)
-    device_udid = str(uuid.uuid4())
-    session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
-        dep_enrollment, serial_number, device_udid
-    )
-    if authenticated:
-        enrolled_device = EnrolledDevice.objects.create(
-            udid=device_udid,
-            enrollment_id=device_udid,
-            serial_number=serial_number,
-            push_certificate=session.get_enrollment().push_certificate,
-            platform="macOS",
-            cert_fingerprint=hashlib.sha256(get_random_string(12).encode("utf-8")).digest(),
-            cert_not_valid_after=(datetime.utcnow() + timedelta(days=366))
-        )
-        session.set_authenticated_status(enrolled_device)
-        if completed:
-            enrolled_device, _ = EnrolledDevice.objects.update_or_create(
-                udid=device_udid,
-                defaults={
-                    "push_magic": get_random_string(12),
-                    "token": get_random_string(12).encode("utf-8"),
-                }
-            )
-            session.set_completed_status(enrolled_device)
-            session.refresh_from_db()
-    return session, device_udid, serial_number
-
-
-def complete_enrollment_session(session):
+def get_session_device_udid_and_serial_number(session):
     if session.enrolled_device:
-        # To avoid issues in the ReEnrollmentSessions status updates
+        # To avoid issues in the ReEnrollmentSessions
         device_udid = session.enrolled_device.udid
-        enrolled_device = session.enrolled_device
+        serial_number = session.enrolled_device.serial_number
     else:
         if session.enrollment_secret.udids:
             device_udid = session.enrollment_secret.udids[0]
@@ -187,16 +180,30 @@ def complete_enrollment_session(session):
             serial_number = session.enrollment_secret.serial_numbers[0]
         else:
             serial_number = get_random_string(12)
+    return device_udid, serial_number
+
+
+def authenticate_enrollment_session(session):
+    device_udid, serial_number = get_session_device_udid_and_serial_number(session)
+    if not session.enrolled_device:
         enrolled_device = EnrolledDevice.objects.create(
             udid=device_udid,
             enrollment_id=device_udid,
             serial_number=serial_number,
             push_certificate=session.get_enrollment().push_certificate,
-            platform="MACOS",
+            platform="macOS",
             cert_fingerprint=hashlib.sha256(get_random_string(12).encode("utf-8")).digest(),
             cert_not_valid_after=(datetime.utcnow() + timedelta(days=366))
         )
+    else:
+        # To avoid issues in the ReEnrollmentSessions
+        enrolled_device = session.enrolled_device
     session.set_authenticated_status(enrolled_device)
+    return device_udid, serial_number
+
+
+def complete_enrollment_session(session):
+    device_udid, serial_number = authenticate_enrollment_session(session)
     enrolled_device, _ = EnrolledDevice.objects.update_or_create(
         udid=device_udid,
         defaults={
@@ -205,6 +212,53 @@ def complete_enrollment_session(session):
         }
     )
     session.set_completed_status(enrolled_device)
+    session.refresh_from_db()
+    return device_udid, serial_number
+
+
+def force_dep_enrollment_session(mbu, authenticated=False, completed=False, push_certificate=None):
+    dep_enrollment = force_dep_enrollment(mbu, push_certificate)
+    serial_number = get_random_string(12)
+    device_udid = str(uuid.uuid4())
+    session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
+        dep_enrollment, serial_number, device_udid
+    )
+    if completed:
+        complete_enrollment_session(session)
+    elif authenticated:
+        authenticate_enrollment_session(session)
+    return session, device_udid, serial_number
+
+
+def force_ota_enrollment_session(mbu, phase3=False, authenticated=False, completed=False):
+    ota_enrollment = force_ota_enrollment(mbu)
+    serial_number = get_random_string(12)
+    device_udid = str(uuid.uuid4())
+    session = OTAEnrollmentSession.objects.create_from_machine_info(
+        ota_enrollment, serial_number, device_udid
+    )
+    if phase3 or authenticated or completed:
+        session.set_phase3_status()
+        if completed:
+            complete_enrollment_session(session)
+        elif authenticated:
+            authenticate_enrollment_session(session)
+    return session, device_udid, serial_number
+
+
+def force_user_enrollment_session(mbu, authenticated=False, completed=False):
+    realm, realm_user = force_realm_user()
+    user_enrollment = force_user_enrollment(mbu, realm)
+    serial_number = get_random_string(12)
+    device_udid = str(uuid.uuid4())
+    session = UserEnrollmentSession.objects.create_from_user_enrollment(user_enrollment)
+    session.set_account_driven_authenticated_status(realm_user)
+    session.set_started_status()
+    if completed:
+        complete_enrollment_session(session)
+    elif authenticated:
+        authenticate_enrollment_session(session)
+    return session, device_udid, serial_number
 
 
 def force_enrolled_user(enrolled_device):
