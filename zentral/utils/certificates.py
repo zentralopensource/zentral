@@ -20,6 +20,13 @@ def split_certificate_chain(chain):
     return pem_certificates
 
 
+def split_and_load_certificate_pem_chain(chain):
+    return [
+        x509.load_pem_x509_certificate(cert_data.encode("utf-8"))
+        for cert_data in split_certificate_chain(chain)
+    ]
+
+
 # the way for example that the logstash filebeat input serializes the serialNumber of a client cert
 SERIAL_NUMBER_OID = '2.5.4.5'
 ASN1_ENCODED_STRING_RE = re.compile("^#(?P<bytes>(?:[0-9a-f][0-9a-f]){3,})$")

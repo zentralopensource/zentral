@@ -1,9 +1,9 @@
 import logging
 import uuid
-from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.serialization import pkcs7
 from zentral.conf import settings
+from .certificates import split_and_load_certificate_pem_chain
 
 
 logger = logging.getLogger("zentral.utils.payloads")
@@ -33,12 +33,12 @@ def sign_payload(payload):
     if not tls_fullchain:
         logger.error("Could not sign payload: missing tls fullchain")
         return payload
-    certificates = []
+    try:
+        certificates = split_and_load_certificate_pem_chain(api_settings["tls_fullchain"])
+    except Exception:
+        logger.exception("Could not load tls fullchain")
+        return payload
     key = serialization.load_pem_private_key(api_settings["tls_privkey"].encode("utf-8"), None)
-    head = "-----BEGIN CERTIFICATE-----"
-    for tail in api_settings["tls_fullchain"].split(head)[1:]:
-        cert_data = (head + tail).encode("utf-8")
-        certificates.append(x509.load_pem_x509_certificate(cert_data))
     signature_builder = pkcs7.PKCS7SignatureBuilder().set_data(
         payload
     ).add_signer(
