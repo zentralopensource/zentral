@@ -18,8 +18,8 @@ class APNSClient(object):
     def __init__(self, push_certificate):
         self.push_certificate = push_certificate
         ssl_context = create_client_ssl_context(
-            self.push_certificate.certificate.tobytes(),
-            self.push_certificate.private_key.tobytes()
+            self.push_certificate.certificate,
+            self.push_certificate.get_private_key()
         )
         self.client = httpx.Client(
             base_url=self.apns_production_base_url,
@@ -55,7 +55,7 @@ class APNSClient(object):
 
             sleep_time = random.random() * 2 ** retry_num
             logger.warning("Could not send notification. Sleep %.2f seconds before retry %s of %s.",
-                           sleep_time, retry_num, self.MAX_RETRIES)
+                           sleep_time, retry_num, self.max_retries)
             time.sleep(sleep_time)
 
         event_metadata = EventMetadata(machine_serial_number=enrolled_device.serial_number)

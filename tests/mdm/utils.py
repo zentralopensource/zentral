@@ -1,24 +1,76 @@
 from datetime import datetime, timedelta
 import hashlib
 import uuid
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret
+from zentral.contrib.mdm.crypto import load_push_certificate_and_key
 from zentral.contrib.mdm.models import (DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
-                                        DEPVirtualServer,
+                                        DEPVirtualServer, EnrolledDevice, EnrolledUser,
                                         OTAEnrollment,
-                                        EnrolledDevice, PushCertificate, SCEPConfig,
+                                        PushCertificate, SCEPConfig,
                                         UserEnrollment)
 
 
-def force_push_certificate():
-    push_certificate = PushCertificate(
-        name=get_random_string(12),
-        topic=get_random_string(12),
-        not_before="2000-01-01",
-        not_after="2040-01-01",
-        certificate=b"1",
+def force_push_certificate_material(topic=None, reduced_key_size=True):
+    privkey = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=512 if reduced_key_size else 2048,
     )
-    push_certificate.set_private_key(b"2")
+    builder = x509.CertificateBuilder()
+    name = get_random_string(12)
+    if topic is None:
+        topic = get_random_string(12)
+    builder = builder.subject_name(x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
+        x509.NameAttribute(NameOID.USER_ID, topic),
+    ]))
+    builder = builder.issuer_name(x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, name),
+    ]))
+    builder = builder.not_valid_before(datetime.today() - timedelta(days=1))
+    builder = builder.not_valid_after(datetime.today() + timedelta(days=365))
+    builder = builder.serial_number(x509.random_serial_number())
+    builder = builder.public_key(privkey.public_key())
+    cert = builder.sign(
+        private_key=privkey, algorithm=hashes.SHA256(),
+    )
+    cert_pem = cert.public_bytes(
+        encoding=serialization.Encoding.PEM
+    )
+    privkey_password = get_random_string(12).encode("utf-8")
+    privkey_pem = privkey.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.BestAvailableEncryption(privkey_password)
+    )
+    return cert_pem, privkey_pem, privkey_password
+
+
+def force_push_certificate(topic=None, with_material=False, reduced_key_size=True):
+    if topic is None:
+        topic = get_random_string(12)
+    name = get_random_string(12)
+    if with_material:
+        push_certificate = PushCertificate(name=name)
+        cert_pem, privkey_pem, privkey_password = force_push_certificate_material(topic, reduced_key_size)
+        for k, v in load_push_certificate_and_key(cert_pem, privkey_pem, privkey_password).items():
+            if k == "private_key":
+                push_certificate.set_private_key(v)
+            else:
+                setattr(push_certificate, k, v)
+    else:
+        push_certificate = PushCertificate(
+            name=name,
+            topic=topic,
+            not_before="2000-01-01",
+            not_after="2040-01-01",
+            certificate=b"1",
+        )
+        push_certificate.set_private_key(b"2")
     push_certificate.save()
     return push_certificate
 
@@ -57,11 +109,13 @@ def force_dep_virtual_server(server_uuid=None):
     )
 
 
-def force_dep_enrollment(mbu):
+def force_dep_enrollment(mbu, push_certificate=None):
+    if push_certificate is None:
+        push_certificate = force_push_certificate()
     return DEPEnrollment.objects.create(
         name=get_random_string(12),
         uuid=uuid.uuid4(),
-        push_certificate=force_push_certificate(),
+        push_certificate=push_certificate,
         scep_config=force_scep_config(),
         virtual_server=force_dep_virtual_server(),
         enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu),
@@ -88,8 +142,8 @@ def force_user_enrollment(mbu, realm):
     )
 
 
-def force_dep_enrollment_session(mbu, authenticated=False, completed=False):
-    dep_enrollment = force_dep_enrollment(mbu)
+def force_dep_enrollment_session(mbu, authenticated=False, completed=False, push_certificate=None):
+    dep_enrollment = force_dep_enrollment(mbu, push_certificate)
     serial_number = get_random_string(12)
     device_udid = str(uuid.uuid4())
     session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
@@ -151,3 +205,13 @@ def complete_enrollment_session(session):
         }
     )
     session.set_completed_status(enrolled_device)
+
+
+def force_enrolled_user(enrolled_device):
+    return EnrolledUser.objects.create(
+        enrolled_device=enrolled_device,
+        user_id=str(uuid.uuid4()),
+        long_name=get_random_string(12),
+        short_name=get_random_string(12),
+        token=get_random_string(12).encode("utf-8")
+    )

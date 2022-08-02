@@ -14,17 +14,21 @@ def create_client_ssl_context(certdata=None, keydata=None, keydata_password=None
     """
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
+    def ensure_bytes(v):
+        if isinstance(v, str):
+            return v.encode("utf-8")
+        elif isinstance(v, memoryview):
+            return v.tobytes()
+        return v
+
     # client cert authentication
     if certdata and keydata:
         # client cert & key cannot be loaded from memory using the stdlib
         # use a temporary file to store the encrypted key and cert
         # TODO fix when the Python API is available
-        if isinstance(certdata, str):
-            certdata = certdata.encode("ascii")
-        if isinstance(keydata, str):
-            keydata = keydata.encode("ascii")
-        if isinstance(keydata_password, str):
-            keydata_password = keydata_password.encode("utf-8")
+        certdata = ensure_bytes(certdata)
+        keydata = ensure_bytes(keydata)
+        keydata_password = ensure_bytes(keydata_password)
         key = serialization.load_pem_private_key(keydata, password=keydata_password)
         tmp_key_pwd = get_random_string(length=42).encode("utf-8")
         tmp_keydata = key.private_bytes(
