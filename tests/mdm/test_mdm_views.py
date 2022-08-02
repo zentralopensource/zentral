@@ -12,6 +12,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.models import DEPEnrollmentSession, DeviceCommand, OTAEnrollmentSession, ReEnrollmentSession
 from .utils import force_dep_enrollment_session
@@ -286,3 +287,16 @@ class MDMViewsTestCase(TestCase):
         db_command = DeviceCommand.objects.get(uuid=command_uuid)
         self.assertEqual(db_command.name, "Reenroll")
         self.assertEqual(db_command.enrolled_device, session.enrolled_device)
+        certificates, profile_data = verify_signed_payload(data["Command"]["Payload"])
+        profile = plistlib.loads(profile_data)
+        mdm_payload = scep_payload = None
+        for payload in profile["PayloadContent"]:
+            payload_type = payload["PayloadType"]
+            if payload_type == "com.apple.security.scep":
+                scep_payload = payload
+            elif payload_type == "com.apple.mdm":
+                mdm_payload = payload
+        resession = ReEnrollmentSession.objects.filter(enrolled_device__udid=udid).order_by("-pk").first()
+        self.assertEqual(mdm_payload["IdentityCertificateUUID"], scep_payload["PayloadUUID"])
+        self.assertEqual(scep_payload["PayloadContent"]["Subject"][0][0],
+                         ["CN", f"MDM$RE${resession.enrollment_secret.secret}"])
