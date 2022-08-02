@@ -19,7 +19,7 @@ def force_push_certificate_material(topic=None, reduced_key_size=True):
     privkey = rsa.generate_private_key(
         public_exponent=65537,
         key_size=512 if reduced_key_size else 2048,
-    )
+    )  # lgtm[py/weak-crypto-key]
     builder = x509.CertificateBuilder()
     name = get_random_string(12)
     if topic is None:
