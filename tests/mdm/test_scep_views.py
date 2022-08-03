@@ -72,6 +72,7 @@ class SCEPViewsTestCase(TestCase):
         ev_event, scep_event = post_event.call_args_list[0].args[0], post_event.call_args_list[1].args[0]
         self.assertIsInstance(ev_event, EnrollmentSecretVerificationEvent)
         self.assertIsInstance(scep_event, MDMSCEPVerificationEvent)
+        self.assertEqual(scep_event.metadata.machine_serial_number, serial_number)
         self.assertEqual(scep_event.payload["scep_status"], "success")
         self.assertEqual(scep_event.payload["enrollment_session"]["pk"], dep_enrollment_session.pk)
         self.assertEqual(scep_event.payload["enrollment_session"]["type"], "dep")
@@ -91,6 +92,7 @@ class SCEPViewsTestCase(TestCase):
         ev_event, scep_event = post_event.call_args_list[0].args[0], post_event.call_args_list[1].args[0]
         self.assertIsInstance(ev_event, EnrollmentSecretVerificationEvent)
         self.assertIsInstance(scep_event, MDMSCEPVerificationEvent)
+        self.assertEqual(scep_event.metadata.machine_serial_number, serial_number)
         self.assertEqual(scep_event.payload["scep_status"], "success")
         self.assertEqual(scep_event.payload["enrollment_session"]["pk"], ota_enrollment_session.pk)
         self.assertEqual(scep_event.payload["enrollment_session"]["type"], "ota")
@@ -110,6 +112,7 @@ class SCEPViewsTestCase(TestCase):
         ev_event, scep_event = post_event.call_args_list[0].args[0], post_event.call_args_list[1].args[0]
         self.assertIsInstance(ev_event, EnrollmentSecretVerificationEvent)
         self.assertIsInstance(scep_event, MDMSCEPVerificationEvent)
+        self.assertEqual(scep_event.metadata.machine_serial_number, serial_number)
         self.assertEqual(scep_event.payload["scep_status"], "success")
         self.assertEqual(scep_event.payload["enrollment_session"]["pk"], ota_enrollment_session.pk)
         self.assertEqual(scep_event.payload["enrollment_session"]["type"], "ota")
@@ -132,6 +135,7 @@ class SCEPViewsTestCase(TestCase):
         ev_event, scep_event = post_event.call_args_list[0].args[0], post_event.call_args_list[1].args[0]
         self.assertIsInstance(ev_event, EnrollmentSecretVerificationEvent)
         self.assertIsInstance(scep_event, MDMSCEPVerificationEvent)
+        self.assertEqual(scep_event.metadata.machine_serial_number, serial_number)
         self.assertEqual(scep_event.payload["scep_status"], "success")
         self.assertEqual(scep_event.payload["enrollment_session"]["pk"], reenrollment_session.pk)
         self.assertEqual(scep_event.payload["enrollment_session"]["type"], "re")
@@ -151,6 +155,7 @@ class SCEPViewsTestCase(TestCase):
         ev_event, scep_event = post_event.call_args_list[0].args[0], post_event.call_args_list[1].args[0]
         self.assertIsInstance(ev_event, EnrollmentSecretVerificationEvent)
         self.assertIsInstance(scep_event, MDMSCEPVerificationEvent)
+        self.assertEqual(scep_event.metadata.machine_serial_number, serial_number)
         self.assertEqual(scep_event.payload["scep_status"], "success")
         self.assertEqual(scep_event.payload["enrollment_session"]["pk"], user_enrollment_session.pk)
         self.assertEqual(scep_event.payload["enrollment_session"]["type"], "user")

@@ -216,9 +216,9 @@ class BaseVerifySCEPCSRView(SignedRequestHeaderJSONPostAPIView):
 
         kwargs = {"user_agent": self.user_agent,
                   "public_ip_address": self.ip}
-        serial_number = csr_d.pop("serial_number", None)  # TODO: better system to find this attr in csr_d
-        if serial_number:
-            kwargs["serial_number"] = serial_number
+        self.serial_number = csr_d.get("serial_number")  # TODO: better system to find this attr in csr_d
+        if self.serial_number:
+            kwargs["serial_number"] = self.serial_number
 
         # meta business
         organization_name = csr_d.get("organization_name")
