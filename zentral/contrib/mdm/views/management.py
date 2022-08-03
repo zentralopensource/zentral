@@ -1015,16 +1015,8 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
                                       .all()
                                       .order_by("-created_at"))
         ctx["commands_count"] = ctx["commands"].count()
-        ctx["dep_enrollment_sessions"] = (self.object.depenrollmentsession_set
-                                                     .select_related("dep_enrollment", "realm_user")
-                                                     .all()
-                                                     .order_by("-pk"))
-        ctx["dep_enrollment_sessions_count"] = ctx["dep_enrollment_sessions"].count()
-        ctx["ota_enrollment_sessions"] = (self.object.otaenrollmentsession_set
-                                                     .select_related("ota_enrollment", "realm_user")
-                                                     .all()
-                                                     .order_by("-pk"))
-        ctx["ota_enrollment_sessions_count"] = ctx["ota_enrollment_sessions"].count()
+        ctx["enrollment_session_info_list"] = list(self.object.iter_enrollment_session_info())
+        ctx["enrollment_session_info_count"] = len(ctx["enrollment_session_info_list"])
         return ctx
 
 

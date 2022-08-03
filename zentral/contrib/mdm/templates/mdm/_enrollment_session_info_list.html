@@ -1,0 +1,65 @@
+<table class="table table-condensed">
+  <thead>
+    <th class="col-md-3">type</th>
+    <th class="col-md-3">enrollment</th>
+    <th class="col-md-3">realm user</th>
+    <th class="col-md-2">status</th>
+    <th class="col-md-2">created at</th>
+    <th class="col-md-2">updated at</th>
+  </thead>
+  <tbody>
+    {% for session in enrollment_session_info_list %}
+    <tr>
+      <td>
+        {% if session.session_type == "DEP" %}
+        DEP
+        {% endif %}
+        {% if session.session_type == "OTA" %}
+        OTA
+        {% endif %}
+        {% if session.session_type == "USER" %}
+        User
+        {% endif %}
+        {% if session.session_type == "RE" %}
+        Re-enrollment
+        {% endif %}
+      </td>
+      {% if session.enrollment_type == "DEP" %}
+      <td>
+        {% if perms.mdm.view_depenrollment %}
+        <a href="{% url 'mdm:dep_enrollment' session.enrollment_id %}">{{ session.enrollment_name }}</a>
+        {% else %}
+        {{ session.enrollment_name }}
+        {% endif %}
+      </td>
+      {% endif %}
+      {% if session.enrollment_type == "OTA" %}
+      <td>
+        {% if perms.mdm.view_otaenrollment %}
+        <a href="{% url 'mdm:ota_enrollment' session.enrollment_id %}">{{ session.enrollment_name }}</a>
+        {% else %}
+        {{ session.enrollment_name }}
+        {% endif %}
+      </td>
+      {% endif %}
+      {% if session.enrollment_type == "USER" %}
+      <td>
+        {% if perms.mdm.view_userenrollment %}
+        <a href="{% url 'mdm:user_enrollment' session.enrollment_id %}">{{ session.enrollment_name }}</a>
+        {% else %}
+        {{ session.enrollment_name }}
+        {% endif %}
+      </td>
+      {% endif %}
+      <td>
+        {% if session.realm_user %}{{ session.realm_user }}{% else %}-{% endif %}
+      </td>
+      <td class="{% if session.status == "COMPLETED" %}bg-success{% else %}bg-warning{% endif %}">
+        {{ session.status|title }}
+      </td>
+      <td>{{ session.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ session.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

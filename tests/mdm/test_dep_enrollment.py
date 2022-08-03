@@ -67,6 +67,17 @@ class TestDEPEnrollment(TestCase):
         self.assertIsNone(reenrollment_session.ota_enrollment)
         self.assertIsNone(reenrollment_session.user_enrollment)
         self.assertEqual(reenrollment_session.status, ReEnrollmentSession.STARTED)
+        re_s, dep_s = list(session.enrolled_device.iter_enrollment_session_info())
+        self.assertEqual(re_s["session_type"], "RE")
+        self.assertEqual(re_s["id"], reenrollment_session.pk)
+        self.assertEqual(re_s["status"], "STARTED")
+        self.assertEqual(re_s["enrollment_type"], "DEP")
+        self.assertEqual(re_s["enrollment_id"], enrollment.pk)
+        self.assertEqual(dep_s["session_type"], "DEP")
+        self.assertEqual(dep_s["id"], session.pk)
+        self.assertEqual(dep_s["status"], "COMPLETED")
+        self.assertEqual(dep_s["enrollment_type"], "DEP")
+        self.assertEqual(dep_s["enrollment_id"], enrollment.pk)
 
     def test_dep_enrollment_reenrollment_reenrollment_session(self):
         enrollment = force_dep_enrollment(self.mbu)

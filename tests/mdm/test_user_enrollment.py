@@ -47,6 +47,18 @@ class TestUserEnrollment(TestCase):
         self.assertIsNone(reenrollment_session.ota_enrollment)
         self.assertEqual(reenrollment_session.user_enrollment, enrollment)
         self.assertEqual(reenrollment_session.status, ReEnrollmentSession.STARTED)
+        re_s, user_s = list(session.enrolled_device.iter_enrollment_session_info())
+        self.assertEqual(re_s["session_type"], "RE")
+        self.assertEqual(re_s["id"], reenrollment_session.pk)
+        self.assertEqual(re_s["status"], "STARTED")
+        self.assertEqual(re_s["enrollment_type"], "USER")
+        self.assertEqual(re_s["enrollment_id"], enrollment.pk)
+        self.assertEqual(user_s["session_type"], "USER")
+        self.assertEqual(user_s["id"], session.pk)
+        self.assertEqual(user_s["status"], "COMPLETED")
+        self.assertEqual(user_s["realm_username"], session.realm_user.username)
+        self.assertEqual(user_s["enrollment_type"], "USER")
+        self.assertEqual(user_s["enrollment_id"], enrollment.pk)
 
     def test_user_enrollment_reenrollment_reenrollment_session(self):
         enrollment = force_user_enrollment(self.mbu, self.realm)

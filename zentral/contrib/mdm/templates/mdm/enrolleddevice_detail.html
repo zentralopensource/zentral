@@ -221,74 +221,10 @@
 </table>
 {% endif %}
 
-<h3>{{ dep_enrollment_sessions_count }} DEP enrollment session{{ dep_enrollment_sessions_count|pluralize }}</h3>
+{% if enrollment_session_info_count %}
+<h3>{{ enrollment_session_info_count }} Enrollment session{{ enrollment_session_info_count|pluralize }}</h3>
 
-{% if dep_enrollment_sessions_count %}
-<table class="table table-condensed">
-  <thead>
-    <th class="col-md-3">profile</th>
-    <th class="col-md-3">realm user</th>
-    <th class="col-md-2">status</th>
-    <th class="col-md-2">created at</th>
-    <th class="col-md-2">updated at</th>
-  </thead>
-  <tbody>
-    {% for dep_enrollment_session in dep_enrollment_sessions %}
-    <tr>
-      <td>
-        {% if perms.mdm.view_depenrollment %}
-        <a href="{{ dep_enrollment_session.dep_enrollment.get_absolute_url }}">{{ dep_enrollment_session.dep_enrollment }}</a>
-        {% else %}
-        {{ dep_enrollment_session.dep_enrollment }}
-        {% endif %}
-      </td>
-      <td>
-        {% if dep_enrollment_session.realm_user %}{{ dep_enrollment_session.realm_user }}{% else %}-{% endif %}
-      </td>
-      <td class="{% if dep_enrollment_session.is_completed %}bg-success{% else %}bg-warning{% endif %}">
-        {{ dep_enrollment_session.get_status_display }}
-      </td>
-      <td>{{ dep_enrollment_session.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-      <td>{{ dep_enrollment_session.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-
-<h3>{{ ota_enrollment_sessions_count }} OTA enrollment session{{ ota_enrollment_sessions_count|pluralize }}</h3>
-
-{% if ota_enrollment_sessions_count %}
-<table class="table table-condensed">
-  <thead>
-    <th class="col-md-3">ota enrollment</th>
-    <th class="col-md-3">realm user</th>
-    <th class="col-md-2">status</th>
-    <th class="col-md-2">created at</th>
-    <th class="col-md-2">updated at</th>
-  </thead>
-  <tbody>
-    {% for ota_enrollment_session in ota_enrollment_sessions %}
-    <tr>
-      <td>
-        {% if perms.mdm.view_otaenrollment %}
-        <a href="{{ ota_enrollment_session.ota_enrollment.get_absolute_url }}">{{ ota_enrollment_session.ota_enrollment }}</a>
-        {% else %}
-        {{ ota_enrollment_session.ota_enrollment }}
-        {% endif %}
-      </td>
-      <td>
-        {% if ota_enrollment_session.realm_user %}{{ ota_enrollment_session.realm_user }}{% else %}-{% endif %}
-      </td>
-      <td class="{% if ota_enrollment_session.is_completed %}bg-success{% else %}bg-warning{% endif %}">
-        {{ ota_enrollment_session.get_status_display }}
-      </td>
-      <td>{{ ota_enrollment_session.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-      <td>{{ ota_enrollment_session.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% include "mdm/_enrollment_session_info_list.html" %}
 {% endif %}
 
 {% endblock %}

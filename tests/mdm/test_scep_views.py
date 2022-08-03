@@ -141,9 +141,10 @@ class SCEPViewsTestCase(TestCase):
         self.assertEqual(scep_event.payload["enrollment_session"]["type"], "re")
 
     def test_user_enrollment_session_ok(self, post_event):
-        user_enrollment_session, _, serial_number = force_user_enrollment_session(self.mbu)
+        user_enrollment_session, _, _ = force_user_enrollment_session(self.mbu)
         self.assertEqual(user_enrollment_session.status, "STARTED")
         self.assertIsNone(user_enrollment_session.scep_request)
+        serial_number = get_random_string(12)
         csr_pem = self._generate_csr(user_enrollment_session, serial_number)
         response = self._post_csr(csr_pem)
         self.assertEqual(response.status_code, 200)

@@ -249,15 +249,15 @@ def force_ota_enrollment_session(mbu, phase3=False, authenticated=False, complet
 def force_user_enrollment_session(mbu, authenticated=False, completed=False):
     realm, realm_user = force_realm_user()
     user_enrollment = force_user_enrollment(mbu, realm)
-    serial_number = get_random_string(12)
-    device_udid = str(uuid.uuid4())
     session = UserEnrollmentSession.objects.create_from_user_enrollment(user_enrollment)
     session.set_account_driven_authenticated_status(realm_user)
     session.set_started_status()
     if completed:
-        complete_enrollment_session(session)
+        device_udid, serial_number = complete_enrollment_session(session)
     elif authenticated:
-        authenticate_enrollment_session(session)
+        device_udid, serial_number = authenticate_enrollment_session(session)
+    else:
+        device_udid = serial_number = None
     return session, device_udid, serial_number
 
 
