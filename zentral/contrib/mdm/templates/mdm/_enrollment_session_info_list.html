@@ -52,7 +52,7 @@
       </td>
       {% endif %}
       <td>
-        {% if session.realm_user %}{{ session.realm_user }}{% else %}-{% endif %}
+        {% if session.realm_username %}{{ session.realm_username }}{% else %}-{% endif %}
       </td>
       <td class="{% if session.status == "COMPLETED" %}bg-success{% else %}bg-warning{% endif %}">
         {{ session.status|title }}

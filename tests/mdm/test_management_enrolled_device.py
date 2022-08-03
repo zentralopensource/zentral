@@ -81,6 +81,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, serial_number)
         self.assertContains(response, "1 Enrollment session")
         self.assertContains(response, session.get_enrollment().name)
+        self.assertContains(response, session.realm_user.username)
         self.assertNotContains(response, reverse("mdm:user_enrollment", args=(session.get_enrollment().pk,)))
 
     def test_enrolled_device_enrollment_link(self):
