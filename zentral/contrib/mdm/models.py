@@ -274,6 +274,57 @@ class EnrolledDevice(models.Model):
             and self.push_magic is not None
         )
 
+    def iter_enrollment_session_info(self):
+        query = (
+            "WITH sessions AS ("
+            "  SELECT 'DEP' session_type, s.id, s.realm_user_id, s.status, s.updated_at, s.created_at,"
+            "  'DEP' enrollment_type, e.name enrollment_name, e.id enrollment_id"
+            "  FROM mdm_depenrollmentsession s"
+            "  JOIN mdm_depenrollment e ON (s.dep_enrollment_id = e.id)"
+            "  WHERE s.enrolled_device_id = %s"
+
+            "UNION"
+
+            "  SELECT 'OTA' session_type, s.id, s.realm_user_id, s.status, s.updated_at, s.created_at,"
+            "  'OTA' enrollment_type, e.name enrollment_name, e.id enrollment_id"
+            "  FROM mdm_otaenrollmentsession s"
+            "  JOIN mdm_otaenrollment e ON (s.ota_enrollment_id = e.id)"
+            "  WHERE s.enrolled_device_id = %s"
+
+            "UNION"
+
+            "  SELECT 'RE' session_type, s.id, s.realm_user_id, s.status, s.updated_at, s.created_at,"
+            "  CASE"
+            "  WHEN d.id IS NOT NULL THEN 'DEP'"
+            "  WHEN o.id IS NOT NULL THEN 'OTA'"
+            "  WHEN u.id IS NOT NULL THEN 'USER'"
+            "  END enrollment_type,"
+            "  COALESCE(d.name, o.name, u.name) enrollment_name,"
+            "  COALESCE(d.id, o.id, u.id) enrollment_id"
+            "  FROM mdm_reenrollmentsession s"
+            "  LEFT JOIN mdm_depenrollment d ON (s.dep_enrollment_id = d.id)"
+            "  LEFT JOIN mdm_otaenrollment o ON (s.ota_enrollment_id = o.id)"
+            "  LEFT JOIN mdm_userenrollment u ON (s.user_enrollment_id = u.id)"
+            "  WHERE s.enrolled_device_id = %s"
+
+            "UNION"
+
+            "  SELECT 'USER' session_type, s.id, s.realm_user_id, s.status, s.updated_at, s.created_at,"
+            "  'USER' enrollment_type, e.name enrollment_name, e.id enrollment_id"
+            "  FROM mdm_userenrollmentsession s"
+            "  JOIN mdm_userenrollment e ON (s.user_enrollment_id = e.id)"
+            "  WHERE s.enrolled_device_id = %s"
+            ") SELECT s.*,  u.username realm_username "
+            "FROM sessions s "
+            "LEFT JOIN realms_realmuser u ON (s.realm_user_id = u.uuid) "
+            "ORDER BY s.created_at DESC;"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [self.pk, self.pk, self.pk, self.pk])
+        columns = [c.name for c in cursor.description]
+        for t in cursor.fetchall():
+            yield dict(zip(columns, t))
+
 
 class EnrolledUser(models.Model):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
