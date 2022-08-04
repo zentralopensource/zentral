@@ -1218,7 +1218,8 @@ class ReEnrollmentSessionManager(models.Manager):
         new_es.tags.set(tags)
         enrollment_session = self.model(status=self.model.STARTED,
                                         enrollment_secret=new_es,
-                                        enrolled_device=enrolled_device)  # important, see _reenroll !!!
+                                        enrolled_device=enrolled_device,  # important, see _reenroll !!
+                                        realm_user=enrollment_session.realm_user)
         if isinstance(enrollment, DEPEnrollment):
             enrollment_session.dep_enrollment = enrollment
         elif isinstance(enrollment, OTAEnrollment):

@@ -5,7 +5,7 @@ from realms.models import Realm, RealmUser
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import DEPEnrollmentSession, ReEnrollmentSession
 from zentral.contrib.mdm.payloads import build_scep_payload
-from .utils import complete_enrollment_session, force_dep_enrollment
+from .utils import complete_enrollment_session, force_dep_enrollment, force_realm_user
 
 
 class TestDEPEnrollment(TestCase):
@@ -57,9 +57,13 @@ class TestDEPEnrollment(TestCase):
 
     def test_dep_enrollment_reenrollment_session(self):
         enrollment = force_dep_enrollment(self.mbu)
+        enrollment.realm, realm_user = force_realm_user()
+        enrollment.save()
         session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
             enrollment, get_random_string(12), str(uuid.uuid4())
         )
+        session.realm_user = realm_user
+        session.save()
         complete_enrollment_session(session)
         reenrollment_session = ReEnrollmentSession.objects.create_from_enrollment_session(session)
         self.assertEqual(reenrollment_session.get_enrollment(), enrollment)
@@ -67,6 +71,7 @@ class TestDEPEnrollment(TestCase):
         self.assertIsNone(reenrollment_session.ota_enrollment)
         self.assertIsNone(reenrollment_session.user_enrollment)
         self.assertEqual(reenrollment_session.status, ReEnrollmentSession.STARTED)
+        self.assertEqual(reenrollment_session.realm_user, realm_user)
         re_s, dep_s = list(session.enrolled_device.iter_enrollment_session_info())
         self.assertEqual(re_s["session_type"], "RE")
         self.assertEqual(re_s["id"], reenrollment_session.pk)
@@ -89,3 +94,4 @@ class TestDEPEnrollment(TestCase):
         complete_enrollment_session(reenrollment_session)
         reenrollment_session2 = ReEnrollmentSession.objects.create_from_enrollment_session(reenrollment_session)
         self.assertEqual(reenrollment_session2.get_enrollment(), enrollment)
+        self.assertIsNone(reenrollment_session2.realm_user)
