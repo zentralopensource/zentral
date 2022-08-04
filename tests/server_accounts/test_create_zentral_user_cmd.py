@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase
+from accounts.models import APIToken, User
 
 
 class CreateZentralUserTestCase(TestCase):
@@ -93,7 +94,10 @@ class CreateZentralUserTestCase(TestCase):
 
     def test_create_user_with_api_token_json(self):
         result = json.loads(self.call_command("yolo", "fomo@example.com", "--json", "--with-api-token"))
-        self.assertIsInstance(result["api_token"], str)
+        self.assertEqual(
+            APIToken.objects._hash_key(result["api_token"]),
+            User.objects.select_related("api_token").get(email="fomo@example.com").api_token.hashed_key
+        )
         self.assertTrue(result["api_token_created"])
 
     def test_create_user_existing_api_token(self):
@@ -104,7 +108,7 @@ class CreateZentralUserTestCase(TestCase):
     def test_create_user_existing_api_token_json(self):
         self.call_command("yolo", "fomo@example.com", "--json", "--with-api-token")
         result = json.loads(self.call_command("yolo", "fomo@example.com", "--json", "--with-api-token"))
-        self.assertIsInstance(result["api_token"], str)
+        self.assertIsNone(result["api_token"])
         self.assertFalse(result["api_token_created"])
 
     def test_create_user_send_email(self):

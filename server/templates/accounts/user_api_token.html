@@ -18,7 +18,7 @@
   <a href="#" class="secret-toggle btn btn-default btn-sm" data-secret-id="auth-token">
     <span class="glyphicon glyphicon-eye-open" aria-hidden="true"></span>
   </a>
-  <input style="font-family:monospace" hidden id="auth-token" value="{{ object.auth_token.key }}" size="{{ object.auth_token.key|length }}">
+  <input style="font-family:monospace" hidden id="auth-token" value="{{ api_key }}" size="{{ api_key|length }}">
   <button class="copy-secret btn btn-primary btn-sm" data-secret-id="auth-token">
     <span class="glyphicon glyphicon-copy" aria-hidden="true"></span>
   </button>
@@ -28,6 +28,8 @@
   <a href="{% url 'accounts:user' object.pk %}" class="btn btn-default btn-sm">Close</a>
   {% endif %}
 </p>
+
+<p><span class="text-danger">This token cannot be retrieved later on.</span> However, you can create a new one at any time.</p>
 {% endblock %}
 
 {% block extrajs %}

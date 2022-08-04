@@ -1,10 +1,12 @@
 import enum
+from hashlib import blake2b
 from itertools import chain
 from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 import pyotp
@@ -196,3 +198,31 @@ class UserWebAuthn(UserVerificationDevice):
         if self.rp_id.startswith("https://"):
             # legacy U2F registration
             return self.rp_id
+
+
+class APITokenManager(models.Manager):
+    use_in_migrations = True
+
+    @staticmethod
+    def _hash_key(key):
+        h = blake2b(digest_size=32)
+        h.update(key.encode("utf-8"))
+        return h.hexdigest()
+
+    def update_or_create_for_user(self, user):
+        key = get_random_string(64)
+        hashed_key = self._hash_key(key)
+        self.update_or_create(user=user, defaults={"hashed_key": hashed_key})
+        return key
+
+    def get_with_key(self, key):
+        hashed_key = self._hash_key(key)
+        return self.select_related("user").get(hashed_key=hashed_key)
+
+
+class APIToken(models.Model):
+    hashed_key = models.CharField(max_length=64, primary_key=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="api_token")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = APITokenManager()

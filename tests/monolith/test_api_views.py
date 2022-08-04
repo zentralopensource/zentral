@@ -7,8 +7,7 @@ from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from rest_framework.authtoken.models import Token
-from accounts.models import User
+from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.monolith.models import CacheServer, Manifest
 
@@ -24,7 +23,7 @@ class MonolithAPIViewsTestCase(TestCase):
         )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
-        Token.objects.get_or_create(user=cls.service_account)
+        cls.api_key = APIToken.objects.update_or_create_for_user(user=cls.service_account)
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()
@@ -49,7 +48,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def _post_data(self, url, data, content_type, include_token=True, ip=None):
         kwargs = {"content_type": content_type}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         if ip:
             kwargs["HTTP_X_REAL_IP"] = ip
         return self.client.post(url, data, **kwargs)

@@ -30,7 +30,7 @@
     <tr>
       <th>API Token?</th>
       <td>
-        {% if user.auth_token %}
+        {% if user.api_token %}
         yes
         <a href="{% url 'accounts:delete_user_api_token' user.pk %}" class="btn btn-sm btn-danger">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>

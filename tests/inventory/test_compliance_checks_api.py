@@ -5,9 +5,8 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
-from accounts.models import User
+from accounts.models import APIToken, User
 from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.contrib.inventory.events import JMESPathCheckCreated, JMESPathCheckDeleted, JMESPathCheckUpdated
 from zentral.contrib.inventory.models import JMESPathCheck, Tag
@@ -24,11 +23,11 @@ class JMESPathCheckAPITests(APITestCase):
         )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
-        cls.token, _ = Token.objects.get_or_create(user=cls.user)
+        cls.api_key = APIToken.objects.update_or_create_for_user(cls.user)
 
     def setUp(self):
         super().setUp()
-        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.token.key)
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.api_key)
 
     # utils
 

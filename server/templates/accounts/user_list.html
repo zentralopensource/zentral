@@ -20,7 +20,7 @@
     <th>Username</th>
     <th>Email</th>
     <th style="width:10%">Remote?</th>
-    {% if perms.authtoken.view_token %}
+    {% if perms.accounts.view_apitoken %}
     <th style="width:10%">API token</th>
     {% endif %}
     <th style="width:15%"></th>
@@ -38,8 +38,8 @@
       </td>
       <td>{{ managed_user.email }}</td>
       <td>{% if managed_user.is_remote %}yes{% endif %}</td>
-      {% if perms.authtoken.view_token %}
-      <td>{% if managed_user.auth_token %}yes{% endif %}</td>
+      {% if perms.accounts.view_apitoken %}
+      <td>{% if managed_user.api_token %}yes{% endif %}</td>
       {% endif %}
       <td>
         {% if perms.accounts.change_user and managed_user.editable %}
@@ -60,7 +60,7 @@
 
 <h3>{{ service_account_count }} Service account{{ service_account_count|pluralize }}</h3>
 
-{% if perms.accounts.add_user and perms.authtoken.add_token %}
+{% if perms.accounts.add_user and perms.accounts.add_apitoken %}
 <a href="{% url 'accounts:create_service_account' %}" class="btn btn-default">
   Create
 </a>
@@ -70,7 +70,7 @@
 <table class="table">
   <thead>
     <th>Name</th>
-    {% if perms.authtoken.view_token %}
+    {% if perms.accounts.view_apitoken %}
     <th style="width:10%">API token</th>
     {% endif %}
     <th style="width:15%"></th>
@@ -81,8 +81,8 @@
       <td>
         <a href="{% url 'accounts:user' service_account.pk %}">{{ service_account.username }}</a>
       </td>
-      {% if perms.authtoken.view_token %}
-      <td>{% if service_account.auth_token %}yes{% endif %}</td>
+      {% if perms.accounts.view_apitoken %}
+      <td>{% if service_account.api_token %}yes{% endif %}</td>
       {% endif %}
       <td>
         {% if perms.accounts.change_user and service_account.editable %}

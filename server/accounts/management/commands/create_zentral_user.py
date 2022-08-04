@@ -9,8 +9,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
-from rest_framework.authtoken.models import Token
-from accounts.models import User
+from accounts.models import APIToken, User
 from zentral.conf import settings
 
 
@@ -94,12 +93,19 @@ class Command(BaseCommand):
                 self.print("Superuser" if user.is_superuser else "User", username, email, "already exists")
 
         # API Token?
+        api_key = None
+        api_token_created = False
         if kwargs.get("with_api_token"):
-            api_token, api_token_created = Token.objects.get_or_create(user=user)
-            if not self.json:
-                self.print("Created" if api_token_created else "Existing", "API token", api_token.key)
+            if APIToken.objects.filter(user=user).exists():
+                if not self.json:
+                    self.print("Existing API token")
+            else:
+                api_token_created = True
+                api_key = APIToken.objects.update_or_create_for_user(user)
+                if not self.json:
+                    self.print("Created API token", api_key)
         else:
-            api_token = None
+            api_key = None
             api_token_created = False
 
         # generate password reset URL
@@ -137,7 +143,7 @@ class Command(BaseCommand):
                 "email": user.email,
                 "created": created,
                 "updated": updated,
-                "api_token": api_token.key if api_token else None,
+                "api_token": api_key,
                 "api_token_created": api_token_created,
                 "password_reset_url": password_reset_url,
             }, indent=2))  # lgtm[py/clear-text-logging-sensitive-data]

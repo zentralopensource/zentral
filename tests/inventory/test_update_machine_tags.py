@@ -6,8 +6,7 @@ from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from rest_framework.authtoken.models import Token
-from accounts.models import User
+from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MachineTag, Tag, Taxonomy
 
 
@@ -21,7 +20,7 @@ class InventoryAPITests(TestCase):
         )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
-        cls.token, _ = Token.objects.get_or_create(user=cls.user)
+        cls.api_key = APIToken.objects.update_or_create_for_user(cls.user)
         cls.url = reverse("inventory_api:update_machine_tags")
 
     # utility methods
@@ -46,7 +45,7 @@ class InventoryAPITests(TestCase):
     def _post_data(self, data, content_type, include_token=True):
         kwargs = {"content_type": content_type}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.user.auth_token.key}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.post(self.url, data, **kwargs)
 
     def _post_json_data(self, data, include_token=True):

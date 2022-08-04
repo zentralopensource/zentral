@@ -22,8 +22,6 @@ urlpatterns = [
          name="delete_user"),
     path('users/<int:pk>/api_token/create/', views.CreateUserAPITokenView.as_view(),
          name="create_user_api_token"),
-    path('users/<signed_pk>/view_api_token/', views.UserAPITokenView.as_view(),
-         name="user_api_token"),
     path('users/<int:pk>/api_token/delete/', views.DeleteUserAPITokenView.as_view(),
          name="delete_user_api_token"),
 

@@ -50,11 +50,11 @@
       </td>
     {% endif %}
     {% endif %}
-    {% if object == request.user or perms.authtoken.view_token %}
+    {% if object == request.user or perms.accounts.view_apitoken %}
     <tr>
       <th>API Token?</th>
       <td>
-        {% if object.auth_token %}
+        {% if object.api_token %}
         yes
         {% if can_delete_token %}
         <a href="{% url 'accounts:delete_user_api_token' object.pk %}" class="btn btn-sm btn-danger">

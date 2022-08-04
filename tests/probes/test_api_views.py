@@ -6,11 +6,10 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
-from rest_framework.authtoken.models import Token
 from zentral.core.incidents.models import Severity
 from zentral.core.probes.models import Feed
 from zentral.core.probes.feeds import sync_feed
-from accounts.models import User
+from accounts.models import APIToken, User
 from .test_feeds_views import FEED
 
 
@@ -26,7 +25,7 @@ class ProbeViewsTestCase(TestCase):
         )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
-        Token.objects.get_or_create(user=cls.service_account)
+        cls.api_key = APIToken.objects.update_or_create_for_user(cls.service_account)
 
     # utility methods
 
@@ -46,7 +45,7 @@ class ProbeViewsTestCase(TestCase):
     def put_data(self, url, data, content_type="application/json", include_token=True):
         kwargs = {"content_type": content_type}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.put(url, data, **kwargs)
 
     def force_feed(self, sync=False):

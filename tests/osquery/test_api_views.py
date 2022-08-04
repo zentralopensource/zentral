@@ -8,8 +8,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.http import http_date
 from django.test import TestCase
-from rest_framework.authtoken.models import Token
-from accounts.models import User
+from accounts.models import APIToken, User
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
@@ -28,7 +27,7 @@ class APIViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
         cls.user.groups.set([cls.group])
-        Token.objects.get_or_create(user=cls.service_account)
+        cls.api_key = APIToken.objects.update_or_create_for_user(cls.service_account)
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
@@ -78,32 +77,32 @@ class APIViewsTestCase(TestCase):
         if data is not None:
             kwargs["data"] = data
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.get(url, **kwargs)
 
     def post(self, url, include_token=True):
         kwargs = {}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.post(url, **kwargs)
 
     def post_json_data(self, url, data, include_token=True):
         kwargs = {'content_type': 'application/json',
                   'data': data}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.post(url, **kwargs)
 
     def put_data(self, url, data, content_type, include_token=True):
         kwargs = {"content_type": content_type}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.put(url, data, **kwargs)
 
     def delete(self, url, include_token=True):
         kwargs = {}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.delete(url, **kwargs)
 
     def put_json_data(self, url, data, include_token=True):

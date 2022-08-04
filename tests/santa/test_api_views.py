@@ -7,9 +7,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from rest_framework import status
-from rest_framework.authtoken.models import Token
 import yaml
-from accounts.models import User
+from accounts.models import User, APIToken
 from zentral.contrib.inventory.models import Certificate, File
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target
 
@@ -26,7 +25,7 @@ class APIViewsTestCase(TestCase):
         )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
-        Token.objects.get_or_create(user=cls.service_account)
+        cls.api_key = APIToken.objects.update_or_create_for_user(cls.service_account)
         cls.maxDiff = None
 
     def set_permissions(self, *permissions):
@@ -45,7 +44,7 @@ class APIViewsTestCase(TestCase):
     def post_data(self, url, data, content_type, include_token=True, dry_run=None):
         kwargs = {"content_type": content_type}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.service_account.auth_token.key}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         if dry_run is not None:
             url = f"{url}?{dry_run}"
         return self.client.post(url, data, **kwargs)
@@ -520,13 +519,13 @@ class APIViewsTestCase(TestCase):
 
     def test_targets_export_permission_denied(self):
         response = self.client.post(reverse("santa_api:targets_export"),
-                                    HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}")
+                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, 403)
 
     def test_targets_export(self):
         self.set_permissions("santa.view_target")
         response = self.client.post(reverse("santa_api:targets_export"),
-                                    HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}")
+                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -534,7 +533,7 @@ class APIViewsTestCase(TestCase):
     def test_team_id_targets_export(self):
         self.set_permissions("santa.view_target")
         response = self.client.post("{}?target_type=TEAMID".format(reverse("santa_api:targets_export")),
-                                    HTTP_AUTHORIZATION=f"Token {self.service_account.auth_token.key}")
+                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)

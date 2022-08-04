@@ -8,8 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 import pyotp
-from rest_framework.authtoken.models import Token
-from accounts.models import User, UserTOTP, UserWebAuthn
+from accounts.models import APIToken, User, UserTOTP, UserWebAuthn
 from zentral.conf import ConfigDict, settings
 
 
@@ -267,7 +266,7 @@ class AccountUsersViewsTestCase(TestCase):
         self.permission_denied("create_service_account")
 
     def test_create_service_account(self):
-        self.login("accounts.add_user", "accounts.view_user", "authtoken.add_token")
+        self.login("accounts.add_user", "accounts.view_user", "accounts.add_apitoken")
         username = get_random_string(12)
         response = self.client.post(reverse("accounts:create_service_account"),
                                     {"username": username},
@@ -276,8 +275,9 @@ class AccountUsersViewsTestCase(TestCase):
         service_account = response.context["object"]
         self.assertEqual(service_account.username, username)
         self.assertTrue(service_account.is_service_account)
-        token = service_account.auth_token
-        self.assertContains(response, token.key)
+        api_key = response.context["api_key"]
+        self.assertContains(response, api_key)
+        self.assertEqual(APIToken.objects._hash_key(api_key), service_account.api_token.hashed_key)
 
     # update
 
@@ -388,31 +388,31 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_self_create_api_token(self):
         self.login()
-        response = self.client.post(reverse("accounts:create_user_api_token", args=(self.ui_user.id,)),
-                                    follow=True)
+        response = self.client.post(reverse("accounts:create_user_api_token", args=(self.ui_user.id,)))
         self.assertTemplateUsed(response, "accounts/user_api_token.html")
         user = response.context["object"]
         self.assertEqual(user, self.ui_user)
-        token = user.auth_token
-        self.assertContains(response, token.key)
         self.assertContains(response, "Settings")
         self.assertNotContains(response, "Users")
+        api_key = response.context["api_key"]
+        self.assertContains(response, api_key)
+        self.assertEqual(APIToken.objects._hash_key(api_key), self.ui_user.api_token.hashed_key)
 
     def test_server_account_create_api_token(self):
         service_account = User.objects.create_user(get_random_string(19),
                                                    "{}@zentral.io".format(get_random_string(12)),
                                                    get_random_string(12),
                                                    is_service_account=True)
-        self.login("accounts.view_user", "authtoken.add_token")
+        self.login("accounts.view_user", "accounts.add_apitoken")
         response = self.client.post(reverse("accounts:create_user_api_token", args=(service_account.id,)),
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/user_api_token.html")
         user = response.context["object"]
         self.assertEqual(user, service_account)
-        token = service_account.auth_token
-        self.assertContains(response, token.key)
         self.assertNotContains(response, "Settings")
         self.assertContains(response, "Users")
+        api_key = response.context["api_key"]
+        self.assertEqual(APIToken.objects._hash_key(api_key), service_account.api_token.hashed_key)
 
     # delete API token
 
@@ -436,24 +436,24 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_delete_api_token_self(self):
         self.login()
-        token, _ = Token.objects.get_or_create(user=self.ui_user)
+        APIToken.objects.update_or_create_for_user(self.ui_user)
         response = self.client.post(reverse("accounts:delete_user_api_token", args=(self.ui_user.id,)),
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/profile.html")
-        self.assertEqual(Token.objects.filter(user=self.ui_user).count(), 0)
+        self.assertEqual(APIToken.objects.filter(user=self.ui_user).count(), 0)
 
     def test_delete_service_account_api_token(self):
         service_account = User.objects.create_user(get_random_string(19),
                                                    "{}@zentral.io".format(get_random_string(12)),
                                                    get_random_string(12),
                                                    is_service_account=True)
-        token, _ = Token.objects.get_or_create(user=service_account)
-        self.login("accounts.view_user", "authtoken.delete_token")
+        APIToken.objects.update_or_create_for_user(service_account)
+        self.login("accounts.view_user", "accounts.delete_apitoken")
         response = self.client.post(reverse("accounts:delete_user_api_token", args=(service_account.id,)),
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/user_detail.html")
         self.assertEqual(response.context["object"], service_account)
-        self.assertEqual(Token.objects.filter(user=service_account).count(), 0)
+        self.assertEqual(APIToken.objects.filter(user=service_account).count(), 0)
 
     # verification devices list
 

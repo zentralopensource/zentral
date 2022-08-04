@@ -36,7 +36,6 @@ class ZentralAuthenticationForm(AuthenticationForm):
 class GroupForm(forms.ModelForm):
     default_permission_content_types = (
         ("auth", "group"),
-        ("authtoken", "token"),
         ("probes", "feed"),
         ("probes", "feedprobe"),
         ("probes", "probesource"),

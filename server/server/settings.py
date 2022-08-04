@@ -70,7 +70,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'bootstrapform',
     'rest_framework',
-    'rest_framework.authtoken',
     'django_filters',
     'django_celery_results',
     'accounts',
@@ -80,7 +79,7 @@ INSTALLED_APPS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.TokenAuthentication',
+        'accounts.api_authentication.APITokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ),
     # disable the Browsable API Renderer
