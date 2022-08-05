@@ -179,10 +179,13 @@ class EnrolledDevice(models.Model):
     serial_number = models.TextField(db_index=True)
     platform = models.CharField(max_length=64, choices=Platform.choices())
 
-    # push
+    # notifications
     push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
     token = models.BinaryField(blank=True, null=True)
     push_magic = models.TextField(blank=True, null=True)
+    last_seen_at = models.DateTimeField(null=True)
+    last_notified_at = models.DateTimeField(null=True)
+    notification_queued_at = models.DateTimeField(null=True)
 
     # tokens
     unlock_token = models.TextField(null=True)
@@ -335,8 +338,11 @@ class EnrolledUser(models.Model):
     long_name = models.TextField()
     short_name = models.TextField()
 
-    # push
+    # notifications
     token = models.BinaryField()
+    last_seen_at = models.DateTimeField(null=True)
+    last_notified_at = models.DateTimeField(null=True)
+    notification_queued_at = models.DateTimeField(null=True)
 
     # timestamps
     created_at = models.DateTimeField(auto_now_add=True)

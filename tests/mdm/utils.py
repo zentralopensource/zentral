@@ -74,7 +74,7 @@ def force_push_certificate_material(topic=None, reduced_key_size=True):
     return cert_pem, privkey_pem, privkey_password
 
 
-def force_push_certificate(topic=None, with_material=False, reduced_key_size=True):
+def force_push_certificate(topic=None, with_material=False, reduced_key_size=True, commit=True):
     if topic is None:
         topic = get_random_string(12)
     name = get_random_string(12)
@@ -95,7 +95,8 @@ def force_push_certificate(topic=None, with_material=False, reduced_key_size=Tru
             certificate=b"1",
         )
         push_certificate.set_private_key(b"2")
-    push_certificate.save()
+    if commit:
+        push_certificate.save()
     return push_certificate
 
 

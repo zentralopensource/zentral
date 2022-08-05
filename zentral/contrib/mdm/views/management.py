@@ -41,11 +41,8 @@ from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
 from zentral.contrib.mdm.scep import SCEPChallengeType
 from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm
 from zentral.contrib.mdm.scep.static import StaticChallengeForm
-from zentral.contrib.mdm.tasks import (send_artifact_notifications,
-                                       send_blueprint_notifications,
-                                       send_blueprints_notifications,
-                                       send_enrolled_device_notification,
-                                       send_enrolled_user_notification)
+from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
+
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
 
@@ -585,8 +582,6 @@ class BaseUploadArtifactView(PermissionRequiredMixin, FormView):
         self.artifact, operation = form.save()
         if operation:
             messages.info(self.request, f"Artifact {operation}")
-            # TODO optimize
-            transaction.on_commit(lambda: send_artifact_notifications(self.artifact))
         else:
             messages.warning(self.request, "Artifact already exists")
         return redirect(self.artifact)
@@ -642,12 +637,6 @@ class UpdateArtifactView(PermissionRequiredMixin, UpdateView):
     def get_queryset(self):
         return super().get_queryset().exclude(type=ArtifactType.EnterpriseApp.name)
 
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        # TODO optimize
-        transaction.on_commit(lambda: send_artifact_notifications(self.object))
-        return response
-
 
 class TrashArtifactView(PermissionRequiredMixin, DeleteView):
     permission_required = "mdm.delete_artifact"
@@ -655,16 +644,12 @@ class TrashArtifactView(PermissionRequiredMixin, DeleteView):
 
     def delete(self, request, *args, **kwargs):
         self.object = self.get_object()
-        blueprints = list(Blueprint.objects.filter(blueprintartifact__artifact=self.object))
         try:
             self.object.delete()
         except Exception:
             # TODO verify
             self.object.trashed_at = timezone.now()
             self.object.save()
-            self.object.blueprintartifact_set.all().delete()
-        # TODO optimize
-        transaction.on_commit(lambda: send_blueprints_notifications(blueprints))
         return redirect("mdm:artifacts")
 
 
@@ -692,8 +677,6 @@ class CreateBlueprintArtifactView(PermissionRequiredMixin, CreateView):
         blueprint = self.object.blueprint
         update_blueprint_activation(blueprint, commit=False)
         update_blueprint_declaration_items(blueprint, commit=True)
-        # TODO: optimize
-        transaction.on_commit(lambda: send_blueprint_notifications(blueprint))
         return response
 
 
@@ -719,12 +702,6 @@ class UpdateBlueprintArtifactView(PermissionRequiredMixin, UpdateView):
         ctx["artifact"] = self.artifact
         return ctx
 
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        # TODO: optimize
-        transaction.on_commit(lambda: send_blueprint_notifications(self.object.blueprint))
-        return response
-
 
 class DeleteBlueprintArtifactView(PermissionRequiredMixin, DeleteView):
     permission_required = "mdm.delete_blueprintartifact"
@@ -748,8 +725,6 @@ class DeleteBlueprintArtifactView(PermissionRequiredMixin, DeleteView):
         self.object.delete()
         update_blueprint_activation(blueprint, commit=False)
         update_blueprint_declaration_items(blueprint, commit=True)
-        # TODO: optimize
-        transaction.on_commit(lambda: send_blueprint_notifications(blueprint))
         return redirect(self.artifact)
 
 

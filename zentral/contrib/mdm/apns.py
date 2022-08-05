@@ -1,26 +1,29 @@
 import logging
 import random
 import time
+import threading
+from django.utils.functional import SimpleLazyObject
 import httpx
-from zentral.core.events.base import EventMetadata
 from zentral.utils.ssl import create_client_ssl_context
-from .events import MDMDeviceNotificationEvent
+from .events import post_mdm_device_notification_event
+from .models import PushCertificate
 
 
 logger = logging.getLogger('zentral.contrib.mdm.apns')
 
 
-class APNSClient(object):
+# client
+
+
+class APNSClient:
     apns_production_base_url = "https://api.push.apple.com"
     timeout = 5
     max_retries = 2
 
-    def __init__(self, push_certificate):
-        self.push_certificate = push_certificate
-        ssl_context = create_client_ssl_context(
-            self.push_certificate.certificate,
-            self.push_certificate.get_private_key()
-        )
+    def __init__(self, topic, not_after, cert, privkey):
+        self.topic = topic
+        self.not_after = not_after
+        ssl_context = create_client_ssl_context(cert, privkey)
         self.client = httpx.Client(
             base_url=self.apns_production_base_url,
             http2=True,
@@ -28,57 +31,105 @@ class APNSClient(object):
             timeout=self.timeout
         )
 
-    def _send_notification(self, enrolled_device, target, priority, expiration_seconds):
-        logger.debug("APNS notify device %s, target %s", enrolled_device, target)
-        path = "/3/device/{}".format(target.token.hex())
-        json_data = {"mdm": enrolled_device.push_magic}
+    @classmethod
+    def from_push_certificate(cls, push_certificate):
+        return cls(
+            push_certificate.topic,
+            push_certificate.not_after,
+            push_certificate.certificate,
+            push_certificate.get_private_key(),
+        )
+
+    def send_notification(self, token, push_magic, priority=10, expiration_seconds=3600):
+        if isinstance(token, (bytes, memoryview)):
+            token = token.hex()
+
+        log_tmpl = "Notify topic %s, device %s, priority %d, expiration %ds"
+        logger.debug(log_tmpl, self.topic, token, priority, expiration_seconds)
+
+        url = f"/3/device/{token}"
+        payload = {"mdm": push_magic}
         headers = {"apns-push-type": "mdm",
                    "apns-expiration": str(int(time.time()) + expiration_seconds),
                    "apns-priority": str(priority),
-                   "apns-topic": self.push_certificate.topic}
+                   "apns-topic": self.topic}
 
-        status = "failure"
+        success = False
+
         for retry_num in range(self.max_retries + 1):
             try:
-                r = self.client.post(path, json=json_data, headers=headers)
+                r = self.client.post(url, json=payload, headers=headers)
             except Exception:
-                logger.exception("Could not send notification")
+                logger.exception(f"{log_tmpl}: error", self.topic, token, priority, expiration_seconds)
             else:
                 if r.status_code == httpx.codes.OK:
-                    status = "success"
+                    logger.debug(f"{log_tmpl}: OK", self.topic, token, priority, expiration_seconds)
+                    success = True
                     break
-                elif r.status_code < 500:
+                logger.error(f"{log_tmpl}: status %d", self.topic, token, priority, expiration_seconds, r.status_code)
+                if r.status_code < 500:
                     # only retry 500s
                     break
-                else:
-                    logger.error("Status code: %s", r.status_code)
-
             sleep_time = random.random() * 2 ** retry_num
-            logger.warning("Could not send notification. Sleep %.2f seconds before retry %s of %s.",
+            logger.warning(f"{log_tmpl}: sleep %.2f seconds before retry %s of %s.",
+                           self.topic, token, priority, expiration_seconds,
                            sleep_time, retry_num, self.max_retries)
             time.sleep(sleep_time)
 
-        event_metadata = EventMetadata(machine_serial_number=enrolled_device.serial_number)
-        event_payload = {"status": status, "udid": enrolled_device.udid,
-                         "apns_priority": priority, "apns_expiration_seconds": expiration_seconds}
-        if target != enrolled_device:
-            event_payload["user_id"] = target.user_id
-        event = MDMDeviceNotificationEvent(event_metadata, event_payload)
-        event.post()
+        return success
 
-        return status
 
-    def _verify_enrolled_device(self, enrolled_device):
-        if enrolled_device.push_certificate != self.push_certificate:
-            raise ValueError("Enrolled device {} has a different push certificate".format(enrolled_device.pk))
-        if not enrolled_device.can_be_poked():
-            raise ValueError("Cannot send notification to enrolled device {}".format(enrolled_device.pk))
+# client cache
 
-    def send_device_notification(self, enrolled_device, priority=10, expiration_seconds=3600):
-        self._verify_enrolled_device(enrolled_device)
-        return self._send_notification(enrolled_device, enrolled_device, priority, expiration_seconds)
 
-    def send_user_notification(self, enrolled_user, priority=10, expiration_seconds=3600):
-        enrolled_device = enrolled_user.enrolled_device
-        self._verify_enrolled_device(enrolled_device)
-        return self._send_notification(enrolled_device, enrolled_user, priority, expiration_seconds)
+class APNSClientCache:
+    def __init__(self):
+        self._clients = {}
+        self._lock = threading.Lock()
+
+    def get_or_create(self, topic, not_after, push_cert=None):
+        assert push_cert is None or (push_cert.topic == topic and push_cert.not_after == not_after)
+        with self._lock:
+            client = self._clients.get(topic)
+            if not client or client.not_after < not_after:
+                if push_cert is None:
+                    try:
+                        push_cert = PushCertificate.objects.get(topic=topic)
+                    except PushCertificate.DoesNotExist:
+                        logger.warning("Could not find push certificate with topic %s", topic)
+                        return
+                client = APNSClient.from_push_certificate(push_cert)
+                self._clients[topic] = client
+            return client
+
+    def get_or_create_with_push_cert(self, push_cert):
+        return self.get_or_create(push_cert.topic, push_cert.not_after, push_cert)
+
+
+apns_client_cache = SimpleLazyObject(lambda: APNSClientCache())
+
+
+# utils
+
+
+def _send_target_notification(enrolled_device, token, user_id=None, priority=10, expiration_seconds=3600):
+    target_type = "device" if user_id is None else "user"
+    target_pk = enrolled_device.pk if user_id is None else user_id
+    if not enrolled_device.can_be_poked() or not token:
+        raise ValueError(f"Enrolled {target_type} {target_pk} cannot be poked.")
+    client = apns_client_cache.get_or_create_with_push_cert(enrolled_device.push_certificate)
+    success = client.send_notification(token, enrolled_device.push_magic, priority, expiration_seconds)
+    post_mdm_device_notification_event(
+        enrolled_device.serial_number, enrolled_device.udid,
+        priority, expiration_seconds,
+        success, user_id
+    )
+    return success
+
+
+def send_enrolled_user_notification(enrolled_user):
+    return _send_target_notification(enrolled_user.enrolled_device, enrolled_user.token, enrolled_user.user_id)
+
+
+def send_enrolled_device_notification(enrolled_device):
+    return _send_target_notification(enrolled_device, enrolled_device.token)

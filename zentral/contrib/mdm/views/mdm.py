@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import logging
 import plistlib
@@ -5,7 +6,6 @@ from urllib.parse import unquote
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from django.core.files.storage import default_storage
-from django.db import transaction
 from django.http import FileResponse, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
@@ -25,7 +25,6 @@ from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
                                         ReEnrollmentSession, UserEnrollmentSession,
                                         PushCertificate)
-from zentral.contrib.mdm.tasks import send_enrolled_device_notification, send_enrolled_user_notification
 from zentral.utils.certificates import parse_dn
 from zentral.utils.storage import file_storage_has_signed_urls
 from .base import PostEventMixin
@@ -164,7 +163,8 @@ class MDMView(PostEventMixin, View):
         except PushCertificate.DoesNotExist:
             self.abort("unknown topic", topic=topic)
 
-    def get_enrolled_device(self):
+    @cached_property
+    def enrolled_device(self):
         enrolled_device = self.enrollment_session.enrolled_device
         if not enrolled_device:
             self.abort("enrollment session has no enrolled device")
@@ -173,10 +173,11 @@ class MDMView(PostEventMixin, View):
             self.abort("enrollment session enrolled device UDID missmatch")
         return enrolled_device
 
-    def get_enrolled_user(self):
+    @cached_property
+    def enrolled_user(self):
         if self.channel == Channel.Device:
             return
-        enrolled_device = self.get_enrolled_device()
+        enrolled_device = self.enrolled_device
         try:
             return (enrolled_device.enrolleduser_set.select_related("enrolled_device")
                                                     .get(user_id=self.enrolled_user_id))
@@ -186,7 +187,6 @@ class MDMView(PostEventMixin, View):
 
 class CheckinView(MDMView):
     message_type = None
-    first_notification_delay = 5  # in seconds, TODO: empirical!!!
 
     def post_event(self, *args, **kwargs):
         if self.message_type:
@@ -274,13 +274,6 @@ class CheckinView(MDMView):
             enrolled_device.set_unlock_token(unlock_token)
             enrolled_device.save()
 
-        # send first push notifications
-        if self.channel == Channel.Device and enrolled_device.can_be_poked():
-            transaction.on_commit(lambda: send_enrolled_device_notification(
-                enrolled_device,
-                delay=self.first_notification_delay
-            ))
-
         # Update enrollment session
         if enrolled_device.token and not self.enrollment_session.is_completed():
             self.enrollment_session.set_completed_status(enrolled_device)
@@ -299,10 +292,6 @@ class CheckinView(MDMView):
                 user_id=self.enrolled_user_id,
                 defaults=enrolled_user_defaults
             )
-            transaction.on_commit(lambda: send_enrolled_user_notification(
-                enrolled_user,
-                delay=self.first_notification_delay
-            ))
         self.post_event("success",
                         token_type="user" if self.channel == Channel.User else "device",
                         user_id=self.enrolled_user_id,
@@ -311,18 +300,16 @@ class CheckinView(MDMView):
 
     def do_set_bootstrap_token(self):
         # https://developer.apple.com/documentation/devicemanagement/setbootstraptokenrequest
-        enrolled_device = self.get_enrolled_device()
-        enrolled_device.awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
-        enrolled_device.set_bootstrap_token(self.payload.get("BootstrapToken", None))
-        enrolled_device.save()
+        self.enrolled_device.awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
+        self.enrolled_device.set_bootstrap_token(self.payload.get("BootstrapToken", None))
+        self.enrolled_device.save()
         self.post_event("success")
 
     def do_get_bootstrap_token(self):
         # https://developer.apple.com/documentation/devicemanagement/get_bootstrap_token
-        enrolled_device = self.get_enrolled_device()
-        bootstrap_token = enrolled_device.get_bootstrap_token()
+        bootstrap_token = self.enrolled_device.get_bootstrap_token()
         if not bootstrap_token:
-            self.abort(f"Enrolled device {enrolled_device.udid} has no bootstrap token")
+            self.abort(f"Enrolled device {self.enrolled_device.udid} has no bootstrap token")
         else:
             self.post_event("success")
             return HttpResponse(plistlib.dumps({"BootstrapToken": bootstrap_token}),
@@ -336,8 +323,7 @@ class CheckinView(MDMView):
         if data:
             json_data = json.loads(data)
             event_payload["data"] = json_data
-        enrolled_device = self.get_enrolled_device()
-        blueprint = enrolled_device.blueprint
+        blueprint = self.enrolled_device.blueprint
         if not blueprint:
             # TODO default empty configuration?
             self.abort("Missing blueprint. No declarative management possible.", **event_payload)
@@ -347,7 +333,7 @@ class CheckinView(MDMView):
         elif endpoint == "declaration-items":
             response = blueprint.declaration_items
         elif endpoint == "status":
-            update_enrolled_device_artifacts(enrolled_device, json_data)
+            update_enrolled_device_artifacts(self.enrolled_device, json_data)
             self.post_event("success", **event_payload)
             return HttpResponse(status=204)
         elif endpoint.startswith("declaration"):
@@ -366,8 +352,7 @@ class CheckinView(MDMView):
         return JsonResponse(response)
 
     def do_checkout(self):
-        enrolled_device = self.get_enrolled_device()
-        enrolled_device.do_checkout()
+        self.enrolled_device.do_checkout()
         self.post_event("success")
 
     def do_put(self):
@@ -410,13 +395,21 @@ class ConnectView(MDMView):
             command = get_command(self.channel, command_uuid)
             if command:
                 command.process_response(self.payload, self.enrollment_session, self.meta_business_unit)
+
+        # update last seen at
+        if self.channel == Channel.Device and self.enrolled_device:
+            self.enrolled_device.last_seen_at = datetime.utcnow()
+            self.enrolled_device.save()
+        elif self.channel == Channel.User and self.enrolled_user:
+            self.enrolled_user.last_seen_at = datetime.utcnow()
+            self.enrolled_user.save()
+
         if payload_status in ["Idle", "Acknowledged", "Error", "CommandFormatError"]:
             # we can send another command
             return get_next_command_response(self.channel, self.enrollment_session,
-                                             self.get_enrolled_device(), self.get_enrolled_user())
+                                             self.enrolled_device, self.enrolled_user)
         elif payload_status in ["NotNow"]:
             # we let the device contact us again
-            # TODO implement another strategy
             return HttpResponse()
         else:
             self.abort("unknown payload status {}".format(payload_status))

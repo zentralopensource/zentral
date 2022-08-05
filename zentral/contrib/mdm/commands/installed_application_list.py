@@ -1,7 +1,5 @@
 import logging
-from django.db import transaction
 from zentral.contrib.mdm.models import Channel, DeviceArtifact, Platform, TargetArtifactStatus
-from zentral.contrib.mdm.tasks import send_enrolled_device_notification
 from .base import register_command, Command
 
 
@@ -101,8 +99,6 @@ class InstalledApplicationList(Command):
                     kwargs={"retries": self.retries + 1},
                     queue=True, delay=first_delay_seconds
                 )
-                transaction.on_commit(lambda: send_enrolled_device_notification(self.enrolled_device,
-                                                                                delay=first_delay_seconds))
 
 
 register_command(InstalledApplicationList)

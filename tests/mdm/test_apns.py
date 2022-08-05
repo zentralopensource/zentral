@@ -1,9 +1,11 @@
+from datetime import datetime, timedelta
 from unittest.mock import patch, Mock
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 import httpx
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.apns import APNSClient
+from zentral.contrib.mdm.apns import (apns_client_cache, APNSClient,
+                                      send_enrolled_device_notification, send_enrolled_user_notification)
 from zentral.contrib.mdm.events import MDMDeviceNotificationEvent
 from .utils import force_dep_enrollment_session, force_enrolled_user, force_push_certificate
 
@@ -17,7 +19,7 @@ class MDMAPNSTestCase(TestCase):
 
     def test_apns_client_init_cert_bytes(self):
         self.assertIsInstance(self.push_certificate.certificate, bytes)
-        client = APNSClient(self.push_certificate)
+        client = APNSClient.from_push_certificate(self.push_certificate)
         self.assertIsInstance(client.client, httpx.Client)
         self.assertEqual(client.client.base_url, "https://api.push.apple.com")
 
@@ -25,73 +27,71 @@ class MDMAPNSTestCase(TestCase):
         push_certificate = force_push_certificate(with_material=True, reduced_key_size=False)
         push_certificate.refresh_from_db()
         self.assertIsInstance(push_certificate.certificate, memoryview)
-        client = APNSClient(push_certificate)
+        client = APNSClient.from_push_certificate(push_certificate)
+        self.assertEqual(client.topic, push_certificate.topic)
+        self.assertEqual(client.not_after, push_certificate.not_after)
         self.assertIsInstance(client.client, httpx.Client)
         self.assertEqual(client.client.base_url, "https://api.push.apple.com")
 
-    def test_apns_send_device_notification_wrong_push_certificate(self):
-        client = APNSClient(self.push_certificate)
-        # session with a different push certificate
-        session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
-        with self.assertRaises(ValueError) as cm:
-            client.send_device_notification(session.enrolled_device)
-        self.assertEqual(
-            cm.exception.args[0],
-            f"Enrolled device {session.enrolled_device.pk} has a different push certificate",
-        )
+    def test_apns_client_cache_no_client(self):
+        client = apns_client_cache.get_or_create(get_random_string(), datetime(2929, 1, 1))
+        self.assertIsNone(client)
 
-    def test_apns_send_user_notification_wrong_push_certificate(self):
-        client = APNSClient(self.push_certificate)
-        # session with a different push certificate
-        session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
-        enrolled_user = force_enrolled_user(session.enrolled_device)
-        with self.assertRaises(ValueError) as cm:
-            client.send_user_notification(enrolled_user)
-        self.assertEqual(
-            cm.exception.args[0],
-            f"Enrolled device {session.enrolled_device.pk} has a different push certificate",
-        )
+    def test_apns_client_cache_same_topic_cached(self):
+        push_certificate = force_push_certificate(with_material=True, reduced_key_size=False)
+        client1 = apns_client_cache.get_or_create_with_push_cert(push_certificate)
+        self.assertEqual(client1.not_after, push_certificate.not_after)
+        client2 = apns_client_cache.get_or_create_with_push_cert(push_certificate)
+        self.assertEqual(client1, client2)
 
-    def test_apns_send_device_notification_cannot_be_poked(self):
-        client = APNSClient(self.push_certificate)
+    def test_apns_client_cache_same_topic_too_old(self):
+        push_certificate = force_push_certificate(with_material=True, reduced_key_size=False)
+        old_not_after = push_certificate.not_after
+        client1 = apns_client_cache.get_or_create_with_push_cert(push_certificate)
+        self.assertEqual(client1.not_after, old_not_after)
+        # fake update
+        push_certificate.not_after += timedelta(days=1)
+        client2 = apns_client_cache.get_or_create_with_push_cert(push_certificate)
+        self.assertNotEqual(client1, client2)
+        self.assertEqual(client2.not_after, push_certificate.not_after)
+
+    def test_apns_send_enrolled_device_notification_cannot_be_poked(self):
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
         session.enrolled_device.token = None
         with self.assertRaises(ValueError) as cm:
-            client.send_device_notification(session.enrolled_device)
+            send_enrolled_device_notification(session.enrolled_device)
         self.assertEqual(
             cm.exception.args[0],
-            f"Cannot send notification to enrolled device {session.enrolled_device.pk}",
+            f"Enrolled device {session.enrolled_device.pk} cannot be poked.",
         )
 
-    def test_apns_send_user_notification_cannot_be_poked(self):
-        client = APNSClient(self.push_certificate)
+    def test_apns_send_enrolled_user_notification_cannot_be_poked(self):
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
         session.enrolled_device.token = None
         enrolled_user = force_enrolled_user(session.enrolled_device)
         with self.assertRaises(ValueError) as cm:
-            client.send_user_notification(enrolled_user)
+            send_enrolled_user_notification(enrolled_user)
         self.assertEqual(
             cm.exception.args[0],
-            f"Cannot send notification to enrolled device {session.enrolled_device.pk}",
+            f"Enrolled user {enrolled_user.user_id} cannot be poked."
         )
 
     @patch("zentral.contrib.mdm.apns.time.sleep")
     @patch("zentral.contrib.mdm.apns.httpx.Client.post")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_apns_send_device_notification_no_retries_failure(self, post_event, post, sleep):
+    def test_apns_send_enrolled_device_notification_no_retries_failure(self, post_event, post, sleep):
         mocked_reponse = Mock()
         mocked_reponse.status_code = 400  # no retries if < 500
         post.return_value = mocked_reponse
-        client = APNSClient(self.push_certificate)
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
-        status = client.send_device_notification(session.enrolled_device)
-        self.assertEqual(status, "failure")
+        success = send_enrolled_device_notification(session.enrolled_device)
+        self.assertFalse(success)
         sleep.assert_not_called()
         self.assertEqual(len(post_event.call_args_list), 1)
         event = post_event.call_args_list[0].args[0]
@@ -103,17 +103,16 @@ class MDMAPNSTestCase(TestCase):
     @patch("zentral.contrib.mdm.apns.time.sleep")
     @patch("zentral.contrib.mdm.apns.httpx.Client.post")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_apns_send_device_notification_retries_failure(self, post_event, post, sleep):
+    def test_apns_send_enrolled_device_notification_retries_failure(self, post_event, post, sleep):
         mocked_reponse = Mock()
         mocked_reponse.status_code = 500  # retries if >= 500
         post.return_value = mocked_reponse
-        client = APNSClient(self.push_certificate)
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
-        status = client.send_device_notification(session.enrolled_device)
-        self.assertEqual(status, "failure")
-        self.assertEqual(len(sleep.call_args), client.max_retries)
+        success = send_enrolled_device_notification(session.enrolled_device)
+        self.assertFalse(success)
+        self.assertEqual(len(sleep.call_args), APNSClient.max_retries)
         self.assertEqual(len(post_event.call_args_list), 1)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, MDMDeviceNotificationEvent)
@@ -124,16 +123,15 @@ class MDMAPNSTestCase(TestCase):
     @patch("zentral.contrib.mdm.apns.time.sleep")
     @patch("zentral.contrib.mdm.apns.httpx.Client.post")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_apns_send_device_notification_ok(self, post_event, post, sleep):
+    def test_apns_send_enrolled_device_notification_ok(self, post_event, post, sleep):
         mocked_reponse = Mock()
         mocked_reponse.status_code = 200
         post.return_value = mocked_reponse
-        client = APNSClient(self.push_certificate)
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
-        status = client.send_device_notification(session.enrolled_device)
-        self.assertEqual(status, "success")
+        success = send_enrolled_device_notification(session.enrolled_device)
+        self.assertTrue(success)
         sleep.assert_not_called()
         self.assertEqual(len(post_event.call_args_list), 1)
         event = post_event.call_args_list[0].args[0]
@@ -145,17 +143,16 @@ class MDMAPNSTestCase(TestCase):
     @patch("zentral.contrib.mdm.apns.time.sleep")
     @patch("zentral.contrib.mdm.apns.httpx.Client.post")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_apns_send_user_notification_no_retries_failure(self, post_event, post, sleep):
+    def test_apns_send_enrolled_user_notification_no_retries_failure(self, post_event, post, sleep):
         mocked_reponse = Mock()
         mocked_reponse.status_code = 400  # no retries if < 500
         post.return_value = mocked_reponse
-        client = APNSClient(self.push_certificate)
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
         enrolled_user = force_enrolled_user(session.enrolled_device)
-        status = client.send_user_notification(enrolled_user)
-        self.assertEqual(status, "failure")
+        success = send_enrolled_user_notification(enrolled_user)
+        self.assertFalse(success)
         sleep.assert_not_called()
         self.assertEqual(len(post_event.call_args_list), 1)
         event = post_event.call_args_list[0].args[0]
@@ -167,18 +164,17 @@ class MDMAPNSTestCase(TestCase):
     @patch("zentral.contrib.mdm.apns.time.sleep")
     @patch("zentral.contrib.mdm.apns.httpx.Client.post")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_apns_send_user_notification_retries_failure(self, post_event, post, sleep):
+    def test_apns_send_enrolled_user_notification_retries_failure(self, post_event, post, sleep):
         mocked_reponse = Mock()
         mocked_reponse.status_code = 500  # retries if >= 500
         post.return_value = mocked_reponse
-        client = APNSClient(self.push_certificate)
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
         enrolled_user = force_enrolled_user(session.enrolled_device)
-        status = client.send_user_notification(enrolled_user)
-        self.assertEqual(status, "failure")
-        self.assertEqual(len(sleep.call_args), client.max_retries)
+        success = send_enrolled_user_notification(enrolled_user)
+        self.assertFalse(success)
+        self.assertEqual(len(sleep.call_args), APNSClient.max_retries)
         self.assertEqual(len(post_event.call_args_list), 1)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, MDMDeviceNotificationEvent)
@@ -189,17 +185,16 @@ class MDMAPNSTestCase(TestCase):
     @patch("zentral.contrib.mdm.apns.time.sleep")
     @patch("zentral.contrib.mdm.apns.httpx.Client.post")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_apns_send_user_notification_ok(self, post_event, post, sleep):
+    def test_apns_send_enrolled_user_notification_ok(self, post_event, post, sleep):
         mocked_reponse = Mock()
         mocked_reponse.status_code = 200
         post.return_value = mocked_reponse
-        client = APNSClient(self.push_certificate)
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
         enrolled_user = force_enrolled_user(session.enrolled_device)
-        status = client.send_user_notification(enrolled_user)
-        self.assertEqual(status, "success")
+        success = send_enrolled_user_notification(enrolled_user)
+        self.assertTrue(success)
         sleep.assert_not_called()
         self.assertEqual(len(post_event.call_args_list), 1)
         event = post_event.call_args_list[0].args[0]

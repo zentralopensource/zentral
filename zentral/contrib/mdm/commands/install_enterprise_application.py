@@ -1,9 +1,7 @@
 import logging
-from django.db import transaction
 from django.urls import reverse
 from zentral.conf import settings
 from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform, TargetArtifactStatus
-from zentral.contrib.mdm.tasks import send_enrolled_device_notification
 from .base import register_command, Command
 from .installed_application_list import InstalledApplicationList
 
@@ -49,8 +47,6 @@ class InstallEnterpriseApplication(Command):
                 self.artifact_version,
                 queue=True, delay=first_delay_seconds
             )
-            transaction.on_commit(lambda: send_enrolled_device_notification(self.enrolled_device,
-                                                                            delay=first_delay_seconds))
         else:
             # cleanup
             (DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device,
