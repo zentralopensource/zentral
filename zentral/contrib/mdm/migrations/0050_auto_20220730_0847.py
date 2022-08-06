@@ -75,12 +75,12 @@ def encrypt_dep_token_secrets(apps, schema_editor):
         if dep_token.consumer_secret:
             dep_token.consumer_secret = encrypt_str(
                 dep_token.consumer_secret,
-                field="consumer_secret", pk=dep_token.pk, model="mdm.dep_token"
+                field="consumer_secret", pk=dep_token.pk, model="mdm.deptoken"
             )
         if dep_token.access_secret:
             dep_token.access_secret = encrypt_str(
                 dep_token.access_secret,
-                field="access_secret", pk=dep_token.pk, model="mdm.dep_token"
+                field="access_secret", pk=dep_token.pk, model="mdm.deptoken"
             )
         dep_token.save()
 
