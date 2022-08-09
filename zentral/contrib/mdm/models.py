@@ -1645,3 +1645,30 @@ class DeviceCommand(Command):
 
 class UserCommand(Command):
     enrolled_user = models.ForeignKey(EnrolledUser, on_delete=models.CASCADE, related_name="commands")
+
+
+# Apple software lookup service
+
+
+class SoftwareUpdate(models.Model):
+    platform = models.CharField(max_length=64, choices=Platform.choices())
+    major = models.PositiveIntegerField()
+    minor = models.PositiveIntegerField()
+    patch = models.PositiveIntegerField()
+    public = models.BooleanField()
+    posting_date = models.DateField()
+    expiration_date = models.DateField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("platform", "major", "minor", "patch", "public"),)
+
+
+class SoftwareUpdateDeviceID(models.Model):
+    software_update = models.ForeignKey(SoftwareUpdate, on_delete=models.CASCADE)
+    device_id = models.CharField(max_length=32, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (("software_update", "device_id"),)
