@@ -227,7 +227,7 @@ def macos_version_from_build(build):
             if build in ("21A558", "21A559", "21D62", "21E258"):
                 patch = 1
             else:
-                patch = 0
+                patch = None
             if minor > 0:
                 minor -= 1
             if match.group("beta"):
@@ -251,8 +251,12 @@ def macos_version_from_build(build):
                 patch = 5
             elif build == "20G624":
                 patch = 6
+            elif build == "20G630":
+                patch = 7
+            elif build == "20G730":
+                patch = 8
             else:
-                patch = 0
+                patch = None
         else:
             major = 10
         return {
