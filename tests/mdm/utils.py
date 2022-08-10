@@ -217,10 +217,18 @@ def complete_enrollment_session(session):
     return device_udid, serial_number
 
 
-def force_dep_enrollment_session(mbu, authenticated=False, completed=False, push_certificate=None):
+def force_dep_enrollment_session(
+    mbu,
+    authenticated=False, completed=False,
+    push_certificate=None,
+    device_udid=None,
+    serial_number=None
+):
     dep_enrollment = force_dep_enrollment(mbu, push_certificate)
-    serial_number = get_random_string(12)
-    device_udid = str(uuid.uuid4())
+    if serial_number is None:
+        serial_number = get_random_string(12)
+    if device_udid is None:
+        device_udid = str(uuid.uuid4())
     session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
         dep_enrollment, serial_number, device_udid
     )

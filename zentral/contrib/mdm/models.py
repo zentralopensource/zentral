@@ -255,6 +255,9 @@ class EnrolledDevice(models.Model):
     def purge_state(self):
         # TODO purge tokens?
         self.declarative_management = False
+        self.last_seen_at = None
+        self.last_notified_at = None
+        self.notification_queued_at = None
         self.save()
         self.commands.all().delete()
         self.installed_artifacts.all().delete()

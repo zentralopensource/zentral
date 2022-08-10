@@ -141,6 +141,44 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(session.enrolled_device.serial_number, serial_number)
         self.assertEqual(session.enrolled_device.cert_not_valid_after, datetime(2034, 5, 6))
 
+    def test_authenticate_new_enrollment_purged_state(self, post_event):
+        # get a fully enrolled device
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        # simulate some state
+        ed = session.enrolled_device
+        self.assertIsNone(ed.last_seen_at)
+        self.assertIsNone(ed.last_notified_at)
+        self.assertIsNone(ed.notification_queued_at)
+        ed.last_seen_at = datetime.utcnow()
+        ed.last_notified_at = datetime.utcnow()
+        ed.notification_queued_at = datetime.utcnow()
+        ed.save()
+        # new enrollment but not a re-enrollment session
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, device_udid=udid, serial_number=serial_number
+        )
+        payload = {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            # No UserID or EnrollmentUserID → Device Channel
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+        response = self._put(reverse("mdm:checkin"), payload, session)
+        self._assertSuccess(post_event, new_enrolled_device=False, reenrollment=False)
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        ed.refresh_from_db()
+        self.assertEqual(session.enrolled_device, ed)
+        self.assertIsNone(ed.last_seen_at)
+        self.assertIsNone(ed.last_notified_at)
+        self.assertIsNone(ed.notification_queued_at)
+
     def test_device_channel_token_update_no_awaiting_configuration(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True)
         self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
