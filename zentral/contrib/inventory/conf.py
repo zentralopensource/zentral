@@ -238,8 +238,6 @@ def macos_version_from_build(build):
                 patch = 0
             if minor > 0:
                 minor -= 1
-            if match.group("beta"):
-                name = "macOS Beta"
         elif minor == 16:
             major = 11
             patch_number = int(match.group("patch_number"))
