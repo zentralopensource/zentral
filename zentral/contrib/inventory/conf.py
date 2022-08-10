@@ -165,14 +165,22 @@ def has_deb_packages(machine_snapshot):
 # OSVersion utils
 
 
+def is_apple_os(os_name):
+    if not isinstance(os_name, str):
+        return False
+    os_name = os_name.lower()
+    return any(s in os_name for s in ("macos", "ios", "ipados", "os x", "tvos", "watchos"))
+
+
 def os_version_version_display(os_version_d):
     items = []
+    os_name = os_version_d.get("name")
+    drop_patch_zero = is_apple_os(os_name)
     number = ".".join(
-        str(num) for num in (os_version_d.get(attr) for attr in ("major", "minor", "patch"))
-        if num is not None
+        str(num) for num, attr in ((os_version_d.get(attr), attr) for attr in ("major", "minor", "patch"))
+        if num is not None and (attr != "patch" or not drop_patch_zero or num != 0)
     )
-    name = os_version_d.get("name")
-    if not name or number not in name:
+    if not os_name or number not in os_name:
         items.append(number)
     version = os_version_d.get("version")
     if version:
@@ -227,7 +235,7 @@ def macos_version_from_build(build):
             if build in ("21A558", "21A559", "21D62", "21E258"):
                 patch = 1
             else:
-                patch = None
+                patch = 0
             if minor > 0:
                 minor -= 1
             if match.group("beta"):
@@ -256,7 +264,7 @@ def macos_version_from_build(build):
             elif build == "20G730":
                 patch = 8
             else:
-                patch = None
+                patch = 0
         else:
             major = 10
         return {

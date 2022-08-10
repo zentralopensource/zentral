@@ -1,5 +1,5 @@
 from unittest import TestCase
-from zentral.contrib.inventory.conf import windows_version_from_build, cleanup_windows_os_version
+from zentral.contrib.inventory.conf import windows_version_from_build, cleanup_windows_os_version, os_version_display
 
 
 class WindowsBuildTestCase(TestCase):
@@ -14,14 +14,16 @@ class WindowsBuildTestCase(TestCase):
         self.assertEqual(cm.exception.args[0], "Unknown build number")
 
     def test_from_build_ok(self):
-        for build, (major, version) in (("19044", (10, "21H2")),
-                                        ("19043.1682", (10, "21H1")),
-                                        ("22000.652", (11, "21H2"))):
-            self.assertEqual(windows_version_from_build(build),
+        for build, (major, version), display in (("19044", (10, "21H2"), "Windows 10 21H2 (19044)"),
+                                                 ("19043.1682", (10, "21H1"), "Windows 10 21H1 (19043.1682)"),
+                                                 ("22000.652", (11, "21H2"), "Windows 11 21H2 (22000.652)")):
+            os_version_d = windows_version_from_build(build)
+            self.assertEqual(os_version_d,
                              {"name": f"Windows {major}",
                               "major": major,
                               "version": version,
                               "build": build})
+            self.assertEqual(os_version_display(os_version_d), display)
 
     def test_cleanup_patch_is_known_build(self):
         self.assertEqual(
