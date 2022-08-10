@@ -286,6 +286,37 @@ class MunkiAPIViewsTestCase(TestCase):
         db_profile = ms.profiles.first()
         self.assertEqual(db_profile.uuid, profile["uuid"])
 
+    def test_post_job_missing_patch_number(self):
+        enrolled_machine = self._make_enrolled_machine()
+        response = self._post_as_json(reverse("munki:post_job"),
+                                      {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
+                                                            "system_info": {"computer_name": get_random_string(12)},
+                                                            "os_version": {"name": "macOS", "major": 12, "minor": 5}},
+                                       "last_seen_report_found": True,
+                                       "reports": []},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+
+        # patch 0
+        ms = MachineSnapshot.objects.current().get(serial_number=enrolled_machine.serial_number)
+        self.assertEqual(ms.os_version.patch, 0)
+
+    def test_post_job_with_patch_number(self):
+        enrolled_machine = self._make_enrolled_machine()
+        response = self._post_as_json(reverse("munki:post_job"),
+                                      {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
+                                                            "system_info": {"computer_name": get_random_string(12)},
+                                                            "os_version": {"name": "macOS",
+                                                                           "major": 12, "minor": 3, "patch": 1}},
+                                       "last_seen_report_found": True,
+                                       "reports": []},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+
+        # patch 1
+        ms = MachineSnapshot.objects.current().get(serial_number=enrolled_machine.serial_number)
+        self.assertEqual(ms.os_version.patch, 1)
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_job_with_wipe(self, post_event):
         tag_name = get_random_string(12)

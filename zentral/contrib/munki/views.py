@@ -381,6 +381,10 @@ class PostJobView(BaseView):
                     logger.error("Duplicated profile %s for machine %s.",
                                  profile.get("uuid", "UNKNOWN UUID"), self.machine_serial_number)
             ms_tree["profiles"] = profiles
+        # cleanup OS version
+        if "os_version" in ms_tree:
+            if ms_tree["os_version"].get("patch") is None:
+                ms_tree["os_version"]["patch"] = 0
         ms = commit_machine_snapshot_and_trigger_events(ms_tree)
         if not ms:
             raise RuntimeError(f"Could not commit machine {self.machine_serial_number} snapshot")
