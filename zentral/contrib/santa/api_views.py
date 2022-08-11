@@ -1,18 +1,19 @@
 from django.db import transaction
 from django.db.models import F
+from django_filters import rest_framework as filters
 from django.urls import reverse
 from django.utils import timezone
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from zentral.contrib.inventory.models import File, Tag
-from zentral.utils.drf import DjangoPermissionRequired
+from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .events import post_santa_ruleset_update_events
-from .models import Rule, RuleSet, Target, translate_rule_policy
-from .serializers import RuleSetUpdateSerializer, build_file_tree_from_santa_fileinfo
+from .models import Configuration, Rule, RuleSet, Target, translate_rule_policy
+from .serializers import RuleSerializer, RuleSetUpdateSerializer, build_file_tree_from_santa_fileinfo
 from .tasks import export_targets
 
 
@@ -64,6 +65,23 @@ class IngestFileInfo(APIView):
                          "present": present,
                          "added": added,
                          "ignored": ignored})
+
+
+class RuleFilter(filters.FilterSet):
+    identifier = filters.CharFilter(field_name="target__identifier")
+    type = filters.ChoiceFilter(field_name="target__type", choices=Target.TYPE_CHOICES)
+    configuration = filters.ModelChoiceFilter(queryset=Configuration.objects.all())
+
+
+class RuleList(generics.ListAPIView):
+    """
+    List or search rules.
+    """
+    queryset = Rule.objects.select_related("configuration", "ruleset", "target")
+    permission_classes = (DefaultDjangoModelPermissions,)
+    serializer_class = RuleSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = RuleFilter
 
 
 class RuleSetUpdate(APIView):

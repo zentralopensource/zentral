@@ -10,6 +10,20 @@ from .forms import test_sha256, test_team_id
 logger = logging.getLogger("zentral.contrib.santa.serializers")
 
 
+class RuleTargetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Target
+        fields = ("type", "identifier")
+
+
+class RuleSerializer(serializers.ModelSerializer):
+    target = RuleTargetSerializer()
+
+    class Meta:
+        model = Rule
+        fields = '__all__'
+
+
 class RuleUpdateSerializer(serializers.Serializer):
     policy = serializers.ChoiceField(choices=["ALLOWLIST", "ALLOWLIST_COMPILER", "BLOCKLIST", "SILENT_BLOCKLIST"])
     rule_type = serializers.ChoiceField(choices=[k for k, _ in Target.TYPE_CHOICES])

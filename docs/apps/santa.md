@@ -200,7 +200,7 @@ Santa finally makes an extra request to indicate the end of the full synchroniza
 
 ## HTTP API
 
-There are two HTTP API endpoints available.
+There are three HTTP API endpoints available.
 
 ### Requests
 
@@ -226,6 +226,54 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 * `Content-Type: application/json`
 * `Content-Type: application/yaml`
+
+### /api/santa/rules/
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `santa.view_rule`
+* Optional search parameters:
+  * `type`: the type (`BINARY`, `CERTIFICATE`, …) of the rule target.
+  * `identifier`: the identifier of the rule target.
+  * `configuration`: the ID of the Zentral Santa configuration the rule is attached to.
+
+Use this endpoint to get a list of the Santa rules.
+
+Example:
+
+```
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/rules/?type=BINARY \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "target": {
+            "type": "BINARY",
+            "identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247"
+        },
+        "policy": 1,
+        "custom_msg": "",
+        "description": "Allow the yes binary on macOS 12.5",
+        "version": 1,
+        "serial_numbers": [],
+        "excluded_serial_numbers": [],
+        "primary_users": [],
+        "excluded_primary_users": [],
+        "created_at": "2022-08-11T10:55:15.497415",
+        "updated_at": "2022-08-11T11:02:43.105594",
+        "configuration": 1,
+        "ruleset": null,
+        "tags": [],
+        "excluded_tags": []
+    }
+]
+```
 
 ### /api/santa/ingest/fileinfo/
 

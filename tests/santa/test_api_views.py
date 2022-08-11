@@ -28,6 +28,8 @@ class APIViewsTestCase(TestCase):
         cls.api_key = APIToken.objects.update_or_create_for_user(cls.service_account)
         cls.maxDiff = None
 
+    # utils
+
     def set_permissions(self, *permissions):
         if permissions:
             permission_filter = reduce(operator.or_, (
@@ -58,6 +60,23 @@ class APIViewsTestCase(TestCase):
         content_type = "application/json"
         data = json.dumps(data)
         return self.post_data(url, data, content_type, include_token, dry_run)
+
+    def force_rule(self, target_type="BINARY", target_identifier=None, configuration=None):
+        if target_identifier is None:
+            target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
+        if configuration is None:
+            configuration = self.configuration
+        target = Target.objects.create(type=target_type, identifier=target_identifier)
+        return Rule.objects.create(
+            target=target,
+            policy=Rule.ALLOWLIST,
+            configuration=configuration,
+            custom_msg="custom msg",
+            description="description",
+            primary_users=["yolo@example.com"]
+        )
+
+    # ingest file info
 
     def test_ingest_fileinfo_unauthorized(self):
         url = reverse("santa_api:ingest_file_info")
@@ -543,3 +562,108 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+
+    # rules
+
+    def test_rule_list_unauthorized(self):
+        response = self.client.get(reverse("santa_api:rules"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_rule_list_permission_denied(self):
+        response = self.client.get(reverse("santa_api:rules"),
+                                   HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, 403)
+
+    def test_rule_list_post_method_not_allowed(self):
+        self.set_permissions("santa.add_rule")
+        response = self.client.post(reverse("santa_api:rules"),
+                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_rule_list_put_method_not_allowed(self):
+        self.set_permissions("santa.change_rule")
+        response = self.client.put(reverse("santa_api:rules"),
+                                   HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_rule_list_delete_method_not_allowed(self):
+        self.set_permissions("santa.delete_rule")
+        response = self.client.delete(reverse("santa_api:rules"),
+                                      HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_rule_list(self):
+        self.set_permissions("santa.view_rule")
+        rule = self.force_rule()
+        self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
+        response = self.client.get(reverse("santa_api:rules"),
+                                   HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rules = response.json()
+        self.assertEqual(len(rules), 2)
+        self.assertEqual(rules[0]["target"]["type"], "BINARY")
+        self.assertEqual(rules[0]["target"]["identifier"], rule.target.identifier)
+        self.assertEqual(rules[0]["configuration"], self.configuration.pk)
+        self.assertEqual(rules[0]["primary_users"], ["yolo@example.com"])
+
+    def test_rule_list_by_type(self):
+        self.set_permissions("santa.view_rule")
+        self.force_rule()
+        rule2 = self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
+        response = self.client.get(reverse("santa_api:rules"),
+                                   data={"type": "CERTIFICATE"},
+                                   HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rules = response.json()
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(rules[0]["id"], rule2.pk)
+
+    def test_rule_list_by_unknown_type(self):
+        self.set_permissions("santa.view_rule")
+        self.force_rule()
+        self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
+        response = self.client.get(reverse("santa_api:rules"),
+                                   data={"type": "YOLO"},
+                                   HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.json(),
+            {'type': ['Select a valid choice. YOLO is not one of the available choices.']}
+        )
+
+    def test_rule_list_by_identifier(self):
+        self.set_permissions("santa.view_rule")
+        self.force_rule()
+        rule2 = self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
+        response = self.client.get(reverse("santa_api:rules"),
+                                   data={"identifier": rule2.target.identifier},
+                                   HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rules = response.json()
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(rules[0]["id"], rule2.pk)
+
+    def test_rule_list_by_configuration(self):
+        self.set_permissions("santa.view_rule")
+        self.force_rule()
+        rule2 = self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
+        response = self.client.get(reverse("santa_api:rules"),
+                                   data={"configuration": self.configuration2.pk},
+                                   HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rules = response.json()
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(rules[0]["id"], rule2.pk)
+
+    def test_rule_list_by_unknown_configuration(self):
+        self.set_permissions("santa.view_rule")
+        self.force_rule()
+        self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
+        response = self.client.get(reverse("santa_api:rules"),
+                                   data={"configuration": 12832398912},
+                                   HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.json(),
+            {'configuration': ['Select a valid choice. That choice is not one of the available choices.']}
+        )
