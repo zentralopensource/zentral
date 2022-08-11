@@ -313,6 +313,7 @@ The rulesets can be posted in JSON or YAML format. See *Examples* below, and the
 |`identifier`|✓|The `BINARY`, `CERTIFICATE`, `BUNDLE` sha256 hex digest,<br>or the `TEAMID` of the signing certificate|
 |`policy`|✓|Either `ALLOWLIST`, `ALLOWLIST_COMPILER`, `BLOCKLIST`,<br>or `SILENT_BLOCKLIST`|
 |`custom_msg`||Optional message to show when the application is blocked.<br>Only valid for a `BLOCKLIST` policy|
+|`description`||Optional description to add context to a rule.<br>Only displayed in the Zentral GUI.|
 |`serial_numbers`||A list of machine serial numbers.<br>If set, **only** those machines will receive the rule|
 |`excluded_serial_numbers`||A list of machine serial numbers.<br>If set, those machines will **not** receive the rule|
 |`primary_users`||A list of machine owners.<br>If set, **only** the machines associated with those owners<br>(see Santa `MachineOwner`) will receive the rule|
@@ -331,7 +332,8 @@ ruleset.json
     {
       "rule_type": "BINARY",
       "identifier": "1111111111111111111111111111111111111111111111111111111111111111",
-      "policy": "ALLOWLIST"
+      "policy": "ALLOWLIST",
+      "description": "First rule of the first ruleset…"
     },
     {
       "rule_type": "BINARY",

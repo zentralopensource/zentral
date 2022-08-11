@@ -174,6 +174,7 @@ class RuleForm(RuleFormMixin, forms.Form):
     policy = forms.ChoiceField(choices=Rule.POLICY_CHOICES)
     custom_msg = forms.CharField(label="Custom message", required=False,
                                  widget=forms.Textarea(attrs={"cols": "40", "rows": "10"}))
+    description = forms.CharField(required=False, widget=forms.Textarea(attrs={"cols": "40", "rows": "10"}))
     serial_numbers = SimpleArrayField(forms.CharField(), required=False)
     excluded_serial_numbers = SimpleArrayField(forms.CharField(), required=False)
     primary_users = SimpleArrayField(forms.CharField(), required=False)
@@ -272,6 +273,7 @@ class RuleForm(RuleFormMixin, forms.Form):
                                    target=target,
                                    policy=self.cleaned_data["policy"],
                                    custom_msg=self.cleaned_data.get("custom_msg", ""),
+                                   description=self.cleaned_data.get("description", ""),
                                    serial_numbers=self.cleaned_data.get("serial_numbers") or [],
                                    excluded_serial_numbers=self.cleaned_data.get("excluded_serial_numbers") or [],
                                    primary_users=self.cleaned_data.get("primary_users") or [],
@@ -288,7 +290,7 @@ class RuleForm(RuleFormMixin, forms.Form):
 class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
     class Meta:
         model = Rule
-        fields = ("policy", "custom_msg",
+        fields = ("policy", "custom_msg", "description",
                   "serial_numbers", "excluded_serial_numbers",
                   "primary_users", "excluded_primary_users",
                   "tags", "excluded_tags")
@@ -333,6 +335,15 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
             updated = True
             if self.instance.custom_msg:
                 updates.setdefault("added", {})["custom_msg"] = self.instance.custom_msg
+        # description
+        description = self.cleaned_data["description"]
+        if self.instance.description != description:
+            if self.instance.description:
+                updates.setdefault("removed", {})["description"] = self.instance.description
+            self.instance.description = description
+            updated = True
+            if self.instance.description:
+                updates.setdefault("added", {})["description"] = self.instance.description
         # serial_numbers
         serial_numbers = set(self.cleaned_data["serial_numbers"])
         old_serial_numbers = set(self.instance.serial_numbers)

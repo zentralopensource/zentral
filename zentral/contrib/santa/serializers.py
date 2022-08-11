@@ -16,6 +16,7 @@ class RuleUpdateSerializer(serializers.Serializer):
     sha256 = serializers.RegexField(r'^[a-f0-9]{64}\Z', required=False)  # Legacy field  TODO remove eventually
     identifier = serializers.RegexField(r'^[a-zA-Z0-9]{10,64}\Z', required=False)
     custom_msg = serializers.CharField(required=False)
+    description = serializers.CharField(required=False)
     serial_numbers = serializers.ListField(
         child=serializers.CharField(min_length=1),
         required=False,

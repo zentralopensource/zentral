@@ -721,6 +721,7 @@ class Rule(models.Model):
     target = models.ForeignKey(Target, on_delete=models.PROTECT)
     policy = models.PositiveSmallIntegerField(choices=POLICY_CHOICES)
     custom_msg = models.TextField(blank=True)
+    description = models.TextField(blank=True)
     version = models.PositiveIntegerField(default=1)
 
     # scope

@@ -157,6 +157,7 @@ class APIViewsTestCase(TestCase):
                 {"rule_type": "BINARY",
                  "identifier": get_random_string(64, "0123456789abcdef"),
                  "policy": "BLOCKLIST",
+                 "description": "Description",
                  "primary_users": [get_random_string(32)],
                  "excluded_primary_users": [get_random_string(32)],
                  "serial_numbers": [get_random_string(32)],
@@ -218,6 +219,7 @@ class APIViewsTestCase(TestCase):
                 target__type=Target.BINARY,
                 target__identifier=data["rules"][0]["identifier"],
                 policy=Rule.BLOCKLIST,
+                description="Description",
                 serial_numbers=data["rules"][0]["serial_numbers"],
                 excluded_serial_numbers=data["rules"][0]["excluded_serial_numbers"],
                 primary_users=data["rules"][0]["primary_users"],
@@ -233,6 +235,7 @@ class APIViewsTestCase(TestCase):
                 target__type=Target.BINARY,
                 target__identifier=data["rules"][0]["identifier"],
                 policy=Rule.BLOCKLIST,
+                description="Description",
                 serial_numbers=data["rules"][0]["serial_numbers"],
                 excluded_serial_numbers=data["rules"][0]["excluded_serial_numbers"],
                 primary_users=data["rules"][0]["primary_users"],
@@ -276,6 +279,7 @@ class APIViewsTestCase(TestCase):
 
         # update
         data["rules"][0]["custom_msg"] = get_random_string(12)
+        data["rules"][0]["description"] = get_random_string(12)
         data["rules"][0]["serial_numbers"].append(get_random_string(12))
         data["rules"][0]["excluded_serial_numbers"].append(get_random_string(12))
         data["rules"][0]["primary_users"] = [get_random_string(12)]
@@ -326,6 +330,7 @@ class APIViewsTestCase(TestCase):
                 tags__name=data["rules"][0]["tags"][0],
                 excluded_tags__name=data["rules"][0]["excluded_tags"][0],
                 custom_msg=data["rules"][0]["custom_msg"],
+                description=data["rules"][0]["description"],
                 ruleset=ruleset,
             ).count(), 1
         )
@@ -345,6 +350,7 @@ class APIViewsTestCase(TestCase):
                 tags__name=data["rules"][0]["tags"][0],
                 excluded_tags__name=data["rules"][0]["excluded_tags"][0],
                 custom_msg=data["rules"][0]["custom_msg"],
+                description=data["rules"][0]["description"],
                 ruleset=ruleset,
             ).count(), 1
         )

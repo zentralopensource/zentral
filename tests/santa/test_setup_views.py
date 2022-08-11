@@ -410,20 +410,26 @@ class SantaSetupViewsTestCase(TestCase):
                                      "policy": Rule.ALLOWLIST}, follow=True)
         self.assertEqual(response.status_code, 403)
         self._login("santa.add_rule", "santa.view_rule")
+        description = get_random_string(12)
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
                                     {"target_type": Target.BINARY,
                                      "target_identifier": binary_hash,
-                                     "policy": Rule.ALLOWLIST}, follow=True)
+                                     "policy": Rule.ALLOWLIST,
+                                     "description": description}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, binary_hash)
+        self.assertContains(response, description)
         rule = response.context["object_list"][0]
         self.assertEqual(rule.configuration, configuration)
         self.assertEqual(rule.target.identifier, binary_hash)
         self.assertEqual(rule.target.type, Target.BINARY)
         self.assertEqual(rule.policy, Rule.ALLOWLIST)
         self.assertEqual(rule.custom_msg, "")
+        self.assertEqual(rule.description, description)
         self.assertEqual(rule.serial_numbers, [])
         self.assertEqual(rule.primary_users, [])
+        self.assertContains(response, description)
 
     def test_create_conflict_configuration_rule(self):
         self._login("santa.add_configuration", "santa.view_configuration",
@@ -481,6 +487,7 @@ class SantaSetupViewsTestCase(TestCase):
         rule = response.context["object_list"][0]
         # update
         custom_message = get_random_string(12)
+        description = get_random_string(12)
         serial_numbers = [get_random_string(12) for i in range(3)]
         primary_users = [get_random_string(12) for i in range(12)]
         response = self.client.post(reverse("santa:update_configuration_rule", args=(configuration.pk, rule.pk)),
@@ -488,6 +495,7 @@ class SantaSetupViewsTestCase(TestCase):
                                      "target_identifier": binary_hash,
                                      "policy": Rule.BLOCKLIST,
                                      "custom_msg": custom_message,
+                                     "description": description,
                                      "serial_numbers": ", ".join(serial_numbers),
                                      "primary_users": ",".join(primary_users)}, follow=True)
         self.assertEqual(response.status_code, 403)
@@ -497,6 +505,7 @@ class SantaSetupViewsTestCase(TestCase):
                                      "target_identifier": binary_hash,
                                      "policy": Rule.BLOCKLIST,
                                      "custom_msg": custom_message,
+                                     "description": description,
                                      "serial_numbers": ", ".join(serial_numbers),
                                      "primary_users": ",".join(primary_users)}, follow=True)
         self.assertTemplateUsed(response, "santa/configuration_rules.html")
@@ -506,6 +515,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(rule.target.type, Target.BINARY)
         self.assertEqual(rule.policy, Rule.BLOCKLIST)
         self.assertEqual(rule.custom_msg, custom_message)
+        self.assertEqual(rule.description, description)
         self.assertEqual(rule.serial_numbers, serial_numbers)
         self.assertEqual(rule.primary_users, primary_users)
 

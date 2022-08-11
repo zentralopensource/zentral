@@ -129,6 +129,14 @@ class RuleSetUpdate(APIView):
                             rule_updates.setdefault("added", {})["custom_msg"] = rule.custom_msg
                         rule.version = F("version") + 1
                         rule_updated = True
+                    description = rule_defaults.get("description", "")
+                    if rule.description != description:
+                        if rule.description:
+                            rule_updates.setdefault("removed", {})["description"] = rule.description
+                        rule.description = description
+                        if rule.description:
+                            rule_updates.setdefault("added", {})["description"] = rule.description
+                        rule_updated = True
                     serial_numbers = set(rule_defaults.get("serial_numbers", []))
                     old_serial_numbers = set(rule.serial_numbers)
                     if old_serial_numbers != serial_numbers:

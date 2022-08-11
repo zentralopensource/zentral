@@ -162,6 +162,12 @@
       <td>{{ rule.custom_msg }}</td>
     </tr>
     {% endif %}
+    {% if rule.description %}
+    <tr>
+      <td>Description</td>
+      <td>{{ rule.description|linebreaks }}</td>
+    </tr>
+    {% endif %}
     {% if rule.serial_numbers %}
     <tr>
       <td>Serial number{{ rule.serial_numbers|length|pluralize }}</td>
