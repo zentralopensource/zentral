@@ -375,12 +375,21 @@ def process_events(enrolled_machine, user_agent, ip, data):
     return unknown_file_bundle_hashes
 
 
-def post_preflight_event(msn, user_agent, ip, data):
-    SantaPreflightEvent.post_machine_request_payloads(msn, user_agent, ip, [data])
+def post_preflight_event(msn, user_agent, ip, data, incident_update):
+    incident_updates = []
+    if incident_update is not None:
+        incident_updates.append(incident_update)
+    event_request = EventRequest(user_agent, ip)
+    metadata = EventMetadata(incident_updates=incident_updates, request=event_request)
+    event = SantaPreflightEvent(metadata, data)
+    event.post()
 
 
-def post_enrollment_event(msn, user_agent, ip, data):
-    SantaEnrollmentEvent.post_machine_request_payloads(msn, user_agent, ip, [data])
+def post_enrollment_event(msn, user_agent, ip, data, incident_updates):
+    event_request = EventRequest(user_agent, ip)
+    metadata = EventMetadata(incident_updates=incident_updates, request=event_request)
+    event = SantaEnrollmentEvent(metadata, data)
+    event.post()
 
 
 def post_santa_rule_update_event(request, data):

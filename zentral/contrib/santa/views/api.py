@@ -11,7 +11,9 @@ from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFai
 from zentral.contrib.inventory.models import MachineTag, MetaMachine, PrincipalUserSource
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events, verify_enrollment_secret
 from zentral.contrib.santa.events import post_enrollment_event, process_events, post_preflight_event
+from zentral.contrib.santa.incidents import SyncIncident
 from zentral.contrib.santa.models import Configuration, EnrolledMachine, Enrollment, MachineRule
+from zentral.core.incidents.models import Severity
 from zentral.utils.certificates import parse_dn
 from zentral.utils.http import user_agent_and_ip_address_from_request
 
@@ -162,10 +164,12 @@ class PreflightView(BaseSyncView):
             raise PermissionDenied("Wrong enrollment secret")
 
         # get or create enrolled machine
+        defaults = self._get_enrolled_machine_defaults()
+        defaults["last_sync_ok"] = None
         enrolled_machine, _ = EnrolledMachine.objects.update_or_create(
             enrollment=enrollment,
             hardware_uuid=self.hardware_uuid,
-            defaults=self._get_enrolled_machine_defaults(),
+            defaults=defaults
         )
 
         # apply enrollment secret tags
@@ -173,19 +177,29 @@ class PreflightView(BaseSyncView):
             MachineTag.objects.get_or_create(serial_number=enrolled_machine.serial_number, tag=tag)
 
         # delete other enrolled machines
-        other_enrolled_machines = (EnrolledMachine.objects.exclude(pk=enrolled_machine.pk)
+        other_enrolled_machines = (EnrolledMachine.objects.select_related("enrollment__configuration")
+                                                          .exclude(pk=enrolled_machine.pk)
                                                           .filter(hardware_uuid=self.hardware_uuid))
-        if other_enrolled_machines.count():
+        self.enrollment_action = 'enrollment'
+        incident_updates = []
+        for other_enrolled_machine in other_enrolled_machines:
             self.enrollment_action = 're-enrollment'
-            other_enrolled_machines.delete()
-        else:
-            self.enrollment_action = 'enrollment'
+            if other_enrolled_machine.last_sync_ok is False:
+                # close machine incident
+                incident_updates.append(
+                    SyncIncident.build_incident_update(
+                        other_enrolled_machine.enrollment.configuration,
+                        Severity.NONE
+                    )
+                )
+            other_enrolled_machine.delete()
 
         # post event
         post_enrollment_event(
             enrolled_machine.serial_number, self.user_agent, self.ip,
             {'configuration': enrollment.configuration.serialize_for_event(),
-             'action': self.enrollment_action}
+             'action': self.enrollment_action},
+            incident_updates
         )
 
         return enrolled_machine
@@ -248,11 +262,6 @@ class PreflightView(BaseSyncView):
         commit_machine_snapshot_and_trigger_events(tree)
 
     def do_post(self):
-        post_preflight_event(self.enrolled_machine.serial_number,
-                             self.user_agent,
-                             self.ip,
-                             self.request_data)
-
         self._commit_machine_snapshot()
 
         response_dict = self.enrolled_machine.enrollment.configuration.get_sync_server_config(
@@ -261,9 +270,33 @@ class PreflightView(BaseSyncView):
         )
 
         # clean sync?
-        if self.request_data.get("request_clean_sync") is True or self.enrollment_action is not None:
+        clean_sync = self.request_data.get("request_clean_sync") or self.enrollment_action is not None
+        if clean_sync:
             MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).delete()
             response_dict["clean_sync"] = True
+
+        # sync incident update?
+        incident_update = None
+        configuration = self.enrolled_machine.enrollment.configuration
+        sync_incident_severity = configuration.get_sync_incident_severity()
+        if sync_incident_severity != Severity.NONE:
+            sync_ok = self.enrolled_machine.sync_ok()
+            last_sync_ok = self.enrolled_machine.last_sync_ok
+            if sync_ok != last_sync_ok:
+                if last_sync_ok is not None or not sync_ok:  # no incident update if first time and OK
+                    if sync_ok:
+                        severity = Severity.NONE
+                    else:
+                        severity = sync_incident_severity
+                    incident_update = SyncIncident.build_incident_update(configuration, severity)
+                self.enrolled_machine.last_sync_ok = sync_ok
+                self.enrolled_machine.save()
+
+        post_preflight_event(self.enrolled_machine.serial_number,
+                             self.user_agent,
+                             self.ip,
+                             self.request_data,
+                             incident_update)
 
         return response_dict
 

@@ -9,6 +9,7 @@ from django.db.models import Count, Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
+from zentral.core.incidents.models import Severity
 from zentral.contrib.inventory.models import BaseEnrollment, Certificate, File, Tag
 from zentral.utils.text import shard
 
@@ -187,6 +188,11 @@ class Configuration(models.Model):
         help_text="Restrict the upload of all execution events to Zentral, including those that were "
                   "explicitly allowed, to a percentage (0-100) of hosts"
     )
+    sync_incident_severity = models.IntegerField(
+        choices=Severity.choices(include_none=True), default=Severity.NONE.value,
+        help_text="If not 'None', incidents will be automatically opened and closed when the santa agent "
+                  "rules are out of sync."
+    )
 
     # TLS
 
@@ -253,6 +259,12 @@ class Configuration(models.Model):
 
     def get_absolute_url(self):
         return reverse("santa:configuration", args=(self.pk,))
+
+    def get_sync_incident_severity(self):
+        try:
+            return Severity(self.sync_incident_severity)
+        except ValueError:
+            return
 
     def is_monitor_mode(self):
         return self.client_mode == self.MONITOR_MODE
@@ -365,6 +377,7 @@ class EnrolledMachine(models.Model):
     compiler_rule_count = models.IntegerField(null=True)
     transitive_rule_count = models.IntegerField(null=True)
     teamid_rule_count = models.IntegerField(null=True)
+    last_sync_ok = models.BooleanField(null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -379,6 +392,30 @@ class EnrolledMachine(models.Model):
             return tuple(int(i) for i in self.santa_version.split("."))
         except ValueError:
             return ()
+
+    def sync_ok(self):
+        """
+        Compare the synced and reported rules
+        """
+        synced_rules = {
+            r["target__type"]: r["count"]
+            for r in self.machinerule_set.filter(cursor__isnull=True)
+                                         .values("target__type")
+                                         .annotate(count=Count("id"))
+        }
+        ok = True
+        for target_type, attr in ((Target.BINARY, "binary_rule_count"),
+                                  (Target.CERTIFICATE, "certificate_rule_count"),
+                                  (Target.TEAM_ID, "teamid_rule_count")):
+            synced_count = synced_rules.get(target_type, 0)
+            reported_count = getattr(self, attr) or 0
+            if synced_count != reported_count:
+                logger.error(
+                    "Enrolled machine %s: %s rules synced %s, reported %s",
+                    self.pk, target_type, synced_count, reported_count  # lgtm[py/clear-text-logging-sensitive-data]
+                )
+                ok = False
+        return ok
 
 
 # Rules

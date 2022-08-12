@@ -247,6 +247,7 @@ class SantaSetupViewsTestCase(TestCase):
                                      "full_sync_interval": 602,
                                      "allow_unknown_shard": 87,
                                      "enable_all_event_upload_shard": 65,
+                                     "sync_incident_severity": 0,
                                      }, follow=True)
         configuration = response.context["object"]
         self.assertEqual(response.status_code, 200)
@@ -254,6 +255,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(configuration.full_sync_interval, 602)
         self.assertEqual(configuration.allow_unknown_shard, 87)
         self.assertEqual(configuration.enable_all_event_upload_shard, 65)
+        self.assertEqual(configuration.sync_incident_severity, 0)
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertContains(response, configuration.name)
 
@@ -272,6 +274,7 @@ class SantaSetupViewsTestCase(TestCase):
                                      "full_sync_interval": 603,
                                      "allow_unknown_shard": 91,
                                      "enable_all_event_upload_shard": 76,
+                                     "sync_incident_severity": 300,
                                      }, follow=True)
         self.assertEqual(response.status_code, 403)
         self._login("santa.add_configuration", "santa.change_configuration", "santa.view_configuration")
@@ -287,12 +290,14 @@ class SantaSetupViewsTestCase(TestCase):
                                      "full_sync_interval": 603,
                                      "allow_unknown_shard": 91,
                                      "enable_all_event_upload_shard": 76,
+                                     "sync_incident_severity": 300,
                                      }, follow=True)
         configuration = response.context["object"]
         self.assertEqual(configuration.enable_sysx_cache, False)
         self.assertEqual(configuration.full_sync_interval, 603)
         self.assertEqual(configuration.allow_unknown_shard, 91)
         self.assertEqual(configuration.enable_all_event_upload_shard, 76)
+        self.assertEqual(configuration.sync_incident_severity, 300)
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertContains(response, "new lockdown message")
 

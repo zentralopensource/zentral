@@ -21,8 +21,8 @@ class Severity(Enum):
         return self.name.title()
 
     @classmethod
-    def choices(cls):
-        return tuple((i.value, str(i)) for i in cls if i != cls.NONE)
+    def choices(cls, include_none=False):
+        return tuple((i.value, str(i)) for i in cls if i != cls.NONE or include_none)
 
 
 class Status(Enum):

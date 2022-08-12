@@ -85,6 +85,84 @@ class SantaRuleEngineTestCase(TestCase):
             serialized_rule["custom_msg"] = rule.custom_msg
         return target, rule, serialized_rule
 
+    def test_no_rule_sync_ok(self):
+        self.assertTrue(self.enrolled_machine.sync_ok())
+        self.assertTrue(self.enrolled_machine2.sync_ok())
+
+    def test_multiple_rules_missing_reported_teamid_sync_not_ok(self):
+        for target_type, count in ((Target.BINARY, 3), (Target.CERTIFICATE, 2), (Target.TEAM_ID, 1)):
+            for i in range(count):
+                # create rule
+                target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
+                # sync rule
+                MachineRule.objects.create(
+                    enrolled_machine=self.enrolled_machine,
+                    target=target,
+                    policy=rule.policy,
+                    version=rule.version,
+                    cursor=None
+                )
+        self.enrolled_machine.binary_rule_count = 3
+        self.enrolled_machine.certificate_rule_count = 2
+        self.enrolled_machine.teamid_rule_count = 0
+        self.assertFalse(self.enrolled_machine.sync_ok())
+
+    def test_multiple_rules_missing_synced_certificate_sync_not_ok(self):
+        for target_type, count in ((Target.BINARY, 3), (Target.CERTIFICATE, 2), (Target.TEAM_ID, 1)):
+            for i in range(count):
+                # create rule
+                target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
+                # sync rule
+                if target_type == Target.CERTIFICATE:
+                    continue
+                MachineRule.objects.create(
+                    enrolled_machine=self.enrolled_machine,
+                    target=target,
+                    policy=rule.policy,
+                    version=rule.version,
+                    cursor=None
+                )
+        self.enrolled_machine.binary_rule_count = 3
+        self.enrolled_machine.certificate_rule_count = 2
+        self.enrolled_machine.teamid_rule_count = 1
+        self.assertFalse(self.enrolled_machine.sync_ok())
+
+    def test_multiple_rules_cursor_sync_not_ok(self):
+        for target_type, count in ((Target.BINARY, 3), (Target.CERTIFICATE, 2), (Target.TEAM_ID, 1)):
+            for i in range(count):
+                # create rule
+                target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
+                # sync rule
+                MachineRule.objects.create(
+                    enrolled_machine=self.enrolled_machine,
+                    target=target,
+                    policy=rule.policy,
+                    version=rule.version,
+                    cursor=get_random_string(8) if target_type == Target.BINARY else None
+                )
+        self.enrolled_machine.binary_rule_count = 3
+        self.enrolled_machine.certificate_rule_count = 2
+        self.enrolled_machine.teamid_rule_count = 1
+        self.assertFalse(self.enrolled_machine.sync_ok())
+
+    def test_multiple_rules_sync_ok(self):
+        for target_type, count in ((Target.BINARY, 3), (Target.CERTIFICATE, 2), (Target.TEAM_ID, 4)):
+            for i in range(count):
+                # create rule
+                target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
+                # sync rule
+                MachineRule.objects.create(
+                    enrolled_machine=self.enrolled_machine,
+                    target=target,
+                    policy=rule.policy,
+                    version=rule.version,
+                    cursor=None,
+                )
+        self.enrolled_machine.binary_rule_count = 3
+        self.enrolled_machine.certificate_rule_count = 2
+        self.enrolled_machine.teamid_rule_count = 4
+        self.assertTrue(self.enrolled_machine.sync_ok())
+
     def test_iter_new_rules(self):
         # create rule
         target, rule, result = self.create_and_serialize_for_iter_rule()

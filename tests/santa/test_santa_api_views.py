@@ -1,11 +1,15 @@
 import json
+from unittest.mock import patch
 import uuid
 from django.db.models import F
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, File, MachineSnapshot, MetaBusinessUnit
-from zentral.contrib.santa.models import Bundle, Configuration, EnrolledMachine, Enrollment, Rule, Target
+from zentral.contrib.santa.events import SantaEnrollmentEvent, SantaPreflightEvent
+from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
+                                          MachineRule, Rule, Target)
+from zentral.core.incidents.models import Severity
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -13,16 +17,20 @@ class SantaAPIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.configuration = Configuration.objects.create(name=get_random_string(256))
+        cls.configuration2 = Configuration.objects.create(name=get_random_string(256))
         cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit)
         cls.enrollment = Enrollment.objects.create(configuration=cls.configuration,
                                                    secret=cls.enrollment_secret)
+        cls.enrollment_secret2 = EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit)
+        cls.enrollment2 = Enrollment.objects.create(configuration=cls.configuration2,
+                                                    secret=cls.enrollment_secret2)
         cls.machine_serial_number = get_random_string(64)
         cls.enrolled_machine = EnrolledMachine.objects.create(enrollment=cls.enrollment,
                                                               hardware_uuid=uuid.uuid4(),
                                                               serial_number=cls.machine_serial_number,
                                                               client_mode=Configuration.MONITOR_MODE,
-                                                              santa_version="2022.1")
+                                                              santa_version="2022.7")
         cls.business_unit = cls.meta_business_unit.create_enrollment_business_unit()
 
     def post_as_json(self, url, data):
@@ -30,23 +38,30 @@ class SantaAPIViewsTestCase(TestCase):
                                 json.dumps(data),
                                 content_type="application/json")
 
-    def _get_preflight_data(self):
-        serial_number = get_random_string(12)
+    # preflight
+
+    def _get_preflight_data(self, enrolled=False):
+        if enrolled:
+            serial_number = self.machine_serial_number
+            hardware_uuid = self.enrolled_machine.hardware_uuid
+        else:
+            serial_number = get_random_string(12)
+            hardware_uuid = uuid.uuid4()
         data = {
             "os_build": "20C69",
             "santa_version": "2022.1",
             "hostname": "hostname",
             "transitive_rule_count": 0,
             "os_version": "11.1",
-            "certificate_rule_count": 2,
+            "certificate_rule_count": 0,
             "client_mode": "LOCKDOWN",
             "serial_num": serial_number,
-            "binary_rule_count": 1,
+            "binary_rule_count": 0,
             "primary_user": "mark.torpedo@example.com",
             "compiler_rule_count": 0,
             "teamid_rule_count": 0
         }
-        return data, serial_number, uuid.uuid4()
+        return data, serial_number, hardware_uuid
 
     def test_preflight_bad_secret(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
@@ -69,8 +84,10 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 403)
 
-    def test_preflight(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight(self, post_event):
         data, serial_number, hardware_uuid = self._get_preflight_data()
+        data["binary_rule_count"] = 17
         url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
 
         # MONITOR mode
@@ -83,12 +100,20 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertTrue(json_response["blocked_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
         self.assertTrue(json_response["allowed_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
 
+        # enrollment event
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 5)  # enrollment_secret_verification, santa_enrollment + 3 other ones
+        enrollment_event = events[1]
+        self.assertIsInstance(enrollment_event, SantaEnrollmentEvent)
+        self.assertEqual(enrollment_event.payload["action"], "enrollment")
+
         # Enrolled machine
         enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
         self.assertEqual(enrolled_machine.serial_number, serial_number)
         self.assertEqual(enrolled_machine.primary_user, data["primary_user"])
         self.assertEqual(enrolled_machine.santa_version, data["santa_version"])
         self.assertEqual(enrolled_machine.client_mode, Configuration.LOCKDOWN_MODE)
+        self.assertEqual(enrolled_machine.binary_rule_count, 17)
 
         # deprecated attributes
         data["santa_version"] = "1.13"
@@ -162,28 +187,215 @@ class SantaAPIViewsTestCase(TestCase):
         enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
         self.assertEqual(enrolled_machine.binary_rule_count, 0)
 
-    def test_preflight_clean_sync(self):
+    def test_preflight_enrollment_clean_sync(self):
+        # enrollment, clean sync not requested → clean sync
         data, serial_number, hardware_uuid = self._get_preflight_data()
         url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
-
-        # enrollment, clean sync not requested → clean sync
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertTrue(json_response["clean_sync"])
 
+    def test_preflight_no_enrollment_no_clean_sync(self):
         # no enrollment, clean sync not requested → no clean sync
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertFalse(json_response.get("clean_sync", False))
 
+    def test_preflight_no_enrollment_clean_sync_requested(self):
         # no enrollment, clean sync requested → clean sync
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         data["request_clean_sync"] = True
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertTrue(json_response["clean_sync"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_sync_not_ok_conf_without_severity_no_incident_update(self, post_event):
+        # add one synced rule
+        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        MachineRule.objects.create(
+            enrolled_machine=self.enrolled_machine,
+            target=target,
+            policy=rule.policy,
+            version=rule.version,
+            cursor=None
+        )
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        data["binary_rule_count"] = 0  # sync not OK
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.enrolled_machine.refresh_from_db()
+        self.assertFalse(self.enrolled_machine.sync_ok())
+        self.assertIsNone(self.enrolled_machine.last_sync_ok)  # not updated
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 3)  # add machine, inventory heartbeat, santa preflight
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_sync_ok_conf_with_severity_first_time_no_incident_update(self, post_event):
+        # setup the sync incidents
+        self.configuration.sync_incident_severity = Severity.CRITICAL.value
+        self.configuration.save()
+        # add one synced rule
+        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        MachineRule.objects.create(
+            enrolled_machine=self.enrolled_machine,
+            target=target,
+            policy=rule.policy,
+            version=rule.version,
+            cursor=None
+        )
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        data["binary_rule_count"] = 1
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.enrolled_machine.refresh_from_db()
+        self.assertTrue(self.enrolled_machine.sync_ok())
+        self.assertTrue(self.enrolled_machine.last_sync_ok)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 3)  # add machine, inventory heartbeat, santa preflight
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_sync_ok_conf_with_severity_resolution_incident_update_none(self, post_event):
+        # setup the sync incidents
+        self.configuration.sync_incident_severity = Severity.CRITICAL.value
+        self.configuration.save()
+        # simulate sync not ok status
+        self.enrolled_machine.last_sync_ok = False
+        self.enrolled_machine.save()
+        # add one synced rule
+        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        MachineRule.objects.create(
+            enrolled_machine=self.enrolled_machine,
+            target=target,
+            policy=rule.policy,
+            version=rule.version,
+            cursor=None
+        )
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        data["binary_rule_count"] = 1
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.enrolled_machine.refresh_from_db()
+        self.assertTrue(self.enrolled_machine.sync_ok())
+        self.assertTrue(self.enrolled_machine.last_sync_ok)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 3)  # add machine, inventory heartbeat, santa preflight
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 1)
+        incident_update = preflight_event.metadata.incident_updates[0]
+        self.assertEqual(incident_update.incident_type, "santa_sync")
+        self.assertEqual(incident_update.key, {"santa_cfg_pk": self.configuration.pk})
+        self.assertEqual(incident_update.severity, Severity.NONE)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_sync_not_ok_conf_with_severity_change_incident_update(self, post_event):
+        # setup the sync incidents
+        self.configuration.sync_incident_severity = Severity.MAJOR.value
+        self.configuration.save()
+        # add one synced rule
+        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        MachineRule.objects.create(
+            enrolled_machine=self.enrolled_machine,
+            target=target,
+            policy=rule.policy,
+            version=rule.version,
+            cursor=None
+        )
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.enrolled_machine.refresh_from_db()
+        self.assertFalse(self.enrolled_machine.sync_ok())
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 3)  # add machine, inventory heartbeat, santa preflight
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 1)
+        incident_update = preflight_event.metadata.incident_updates[0]
+        self.assertEqual(incident_update.incident_type, "santa_sync")
+        self.assertEqual(incident_update.key, {"santa_cfg_pk": self.configuration.pk})
+        self.assertEqual(incident_update.severity, Severity.MAJOR)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_sync_not_ok_conf_with_severity_no_change_no_incident_update(self, post_event):
+        # setup the sync incidents
+        self.configuration.sync_incident_severity = Severity.MAJOR.value
+        self.configuration.save()
+        # simulate sync not ok status
+        self.enrolled_machine.last_sync_ok = False
+        self.enrolled_machine.save()
+        # add one synced rule
+        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        MachineRule.objects.create(
+            enrolled_machine=self.enrolled_machine,
+            target=target,
+            policy=rule.policy,
+            version=rule.version,
+            cursor=None
+        )
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.enrolled_machine.refresh_from_db()
+        self.assertFalse(self.enrolled_machine.sync_ok())
+        self.assertFalse(self.enrolled_machine.last_sync_ok)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 3)  # add machine, inventory heartbeat, santa preflight
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_reenrollment_incident_update_none_old_config(self, post_event):
+        # simulate sync not ok status
+        self.enrolled_machine.last_sync_ok = False
+        self.enrolled_machine.save()
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        url = reverse("santa:preflight", args=(self.enrollment_secret2.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        enrolled_machine = EnrolledMachine.objects.get(serial_number=self.machine_serial_number)
+        self.assertNotEqual(enrolled_machine, self.enrolled_machine)
+        self.assertTrue(enrolled_machine.sync_ok())
+        self.assertEqual(enrolled_machine.enrollment, self.enrollment2)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 5)  # enrollment_secret_verification, santa_enrollment + 3 other ones
+        enrollment_event = events[1]
+        self.assertIsInstance(enrollment_event, SantaEnrollmentEvent)
+        self.assertEqual(enrollment_event.payload["action"], "re-enrollment")
+        self.assertEqual(len(enrollment_event.metadata.incident_updates), 1)
+        incident_update = enrollment_event.metadata.incident_updates[0]
+        self.assertEqual(incident_update.incident_type, "santa_sync")
+        self.assertEqual(incident_update.key, {"santa_cfg_pk": self.configuration.pk})
+        self.assertEqual(incident_update.severity, Severity.NONE)
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
+
+    # rule download
 
     def test_rule_download_not_enrolled(self):
         url = reverse("santa:ruledownload", args=(self.enrollment_secret.secret, uuid.uuid4()))
@@ -314,7 +526,9 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response, {"rules": []})
 
-    def test_rule_eventupload_not_enrolled(self):
+    # event upload
+
+    def test_eventupload_not_enrolled(self):
         url = reverse("santa:eventupload", args=(self.enrollment_secret.secret, uuid.uuid4()))
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 403)
@@ -389,6 +603,8 @@ class SantaAPIViewsTestCase(TestCase):
         b.refresh_from_db()
         self.assertIsNotNone(b.uploaded_at)
         self.assertEqual(list(b.binary_targets.all()), [Target.objects.get(type=Target.BINARY, identifier=f.sha_256)])
+
+    # postflight
 
     def test_rule_postflight_not_enrolled(self):
         url = reverse("santa:postflight", args=(self.enrollment_secret.secret, uuid.uuid4()))

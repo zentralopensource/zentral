@@ -128,6 +128,10 @@
         <td>{{ object.enable_all_event_upload_shard }}%</td>
       </tr>
       <tr>
+        <td>Sync incident severity</td>
+        <td>{{ object.get_sync_incident_severity|default:"Configuration error" }}</td>
+      </tr>
+      <tr>
         <td>Client certificate auth</td>
         <td>{{ object.client_certificate_auth|yesno }}</td>
       </tr>
