@@ -115,17 +115,6 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(enrolled_machine.client_mode, Configuration.LOCKDOWN_MODE)
         self.assertEqual(enrolled_machine.binary_rule_count, 17)
 
-        # deprecated attributes
-        data["santa_version"] = "1.13"
-        response = self.post_as_json(url, data)
-        self.assertEqual(response.status_code, 200)
-        json_response = response.json()
-        self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
-        self.assertTrue(json_response["blacklist_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
-        self.assertTrue(json_response["whitelist_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
-        enrolled_machine.refresh_from_db()
-        self.assertEqual(enrolled_machine.santa_version, data["santa_version"])
-
         # LOCKDOWN mode
         Configuration.objects.update(client_mode=Configuration.LOCKDOWN_MODE)
         response = self.post_as_json(url, data)

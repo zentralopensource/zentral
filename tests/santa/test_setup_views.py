@@ -8,9 +8,9 @@ from django.db.models import Q
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import MetaBusinessUnit, File, Tag
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, File, Tag
 from accounts.models import User
-from zentral.contrib.santa.models import Bundle, Configuration, Rule, Target
+from zentral.contrib.santa.models import Bundle, Configuration, Enrollment, Rule, Target
 
 
 def get_random_sha256():
@@ -25,6 +25,8 @@ class SantaSetupViewsTestCase(TestCase):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
+        # mbu
+        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         # file tree
         cls.file_sha256 = get_random_sha256()
         cls.file_name = get_random_string(12)
@@ -92,7 +94,13 @@ class SantaSetupViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_configuration(self):
-        return Configuration.objects.create(name=get_random_string(12), enable_sysx_cache=True)
+        return Configuration.objects.create(name=get_random_string(12))
+
+    def _force_enrollment(self):
+        configuration = self._force_configuration()
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
+        enrollment = Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
+        return configuration, enrollment
 
     def _force_bundle(self):
         bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=get_random_sha256())
@@ -238,12 +246,6 @@ class SantaSetupViewsTestCase(TestCase):
                                     {"name": get_random_string(64),
                                      "batch_size": 50,
                                      "client_mode": "1",
-                                     "banned_block_message": "yo",
-                                     "enable_page_zero_protection": "on",
-                                     "enable_sysx_cache": "on",
-                                     "mode_notification_lockdown": "lockdown",
-                                     "mode_notification_monitor": "monitor",
-                                     "unknown_block_message": "block",
                                      "full_sync_interval": 602,
                                      "allow_unknown_shard": 87,
                                      "enable_all_event_upload_shard": 65,
@@ -251,7 +253,6 @@ class SantaSetupViewsTestCase(TestCase):
                                      }, follow=True)
         configuration = response.context["object"]
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(configuration.enable_sysx_cache, True)
         self.assertEqual(configuration.full_sync_interval, 602)
         self.assertEqual(configuration.allow_unknown_shard, 87)
         self.assertEqual(configuration.enable_all_event_upload_shard, 65)
@@ -266,11 +267,6 @@ class SantaSetupViewsTestCase(TestCase):
                                     {"name": configuration.name,
                                      "batch_size": 50,
                                      "client_mode": "1",
-                                     "banned_block_message": "yo",
-                                     "enable_page_zero_protection": "on",
-                                     "mode_notification_lockdown": "new lockdown message",
-                                     "mode_notification_monitor": "monitor",
-                                     "unknown_block_message": "block",
                                      "full_sync_interval": 603,
                                      "allow_unknown_shard": 91,
                                      "enable_all_event_upload_shard": 76,
@@ -282,24 +278,17 @@ class SantaSetupViewsTestCase(TestCase):
                                     {"name": configuration.name,
                                      "batch_size": 50,
                                      "client_mode": "1",
-                                     "banned_block_message": "yo",
-                                     "enable_page_zero_protection": "on",
-                                     "mode_notification_lockdown": "new lockdown message",
-                                     "mode_notification_monitor": "monitor",
-                                     "unknown_block_message": "block",
                                      "full_sync_interval": 603,
                                      "allow_unknown_shard": 91,
                                      "enable_all_event_upload_shard": 76,
                                      "sync_incident_severity": 300,
                                      }, follow=True)
         configuration = response.context["object"]
-        self.assertEqual(configuration.enable_sysx_cache, False)
         self.assertEqual(configuration.full_sync_interval, 603)
         self.assertEqual(configuration.allow_unknown_shard, 91)
         self.assertEqual(configuration.enable_all_event_upload_shard, 76)
         self.assertEqual(configuration.sync_incident_severity, 300)
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
-        self.assertContains(response, "new lockdown message")
 
     def test_get_create_enrollment_view(self):
         self._login("santa.add_configuration", "santa.view_configuration")
@@ -354,35 +343,44 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, reverse("santa:enrollment_configuration_profile",
                                               args=(configuration.pk, enrollment.pk)))
 
-    def test_enrollment_configuration_view(self):
-        self._login("santa.add_configuration", "santa.view_configuration",
-                    "santa.add_enrollment", "santa.view_enrollment")
-        configuration = self._force_configuration()
-        _, enrollment = self.create_enrollment(configuration)
-        self.client.logout()
-        enrollment_configuration_plist_url = reverse(
-            "santa:enrollment_configuration_plist", args=(configuration.pk, enrollment.pk)
-        )
-        self._login_redirect(enrollment_configuration_plist_url)
-        enrollment_configuration_profile_url = reverse(
-            "santa:enrollment_configuration_profile", args=(configuration.pk, enrollment.pk)
-        )
-        self._login_redirect(enrollment_configuration_profile_url)
+    def test_enrollment_plist_redirect(self):
+        configuration, enrollment = self._force_enrollment()
+        self._login_redirect(reverse("santa:enrollment_configuration_plist", args=(configuration.pk, enrollment.pk)))
+
+    def test_enrollment_plist_permission_denied(self):
+        configuration, enrollment = self._force_enrollment()
         self._login()
-        response = self.client.get(enrollment_configuration_plist_url)
+        url = reverse("santa:enrollment_configuration_plist", args=(configuration.pk, enrollment.pk))
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
-        response = self.client.get(enrollment_configuration_profile_url)
-        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_plist(self):
+        configuration, enrollment = self._force_enrollment()
         self._login("santa.view_enrollment")
-        response = self.client.get(enrollment_configuration_plist_url)
+        url = reverse("santa:enrollment_configuration_plist", args=(configuration.pk, enrollment.pk))
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/x-plist")
         plist_config = plistlib.loads(response.content)
-        self.assertTrue(plist_config["SyncBaseURL"].endswith(
-            f"/santa/sync/{enrollment.secret.secret}/"
-        ))
-        self.assertEqual(plist_config["EnableSysxCache"], configuration.enable_sysx_cache)
-        response = self.client.get(enrollment_configuration_profile_url)
+        self.assertTrue(plist_config["SyncBaseURL"].endswith(f"/santa/sync/{enrollment.secret.secret}/"))
+        self.assertEqual(plist_config["ClientMode"], configuration.client_mode)
+
+    def test_enrollment_config_profile_redirect(self):
+        configuration, enrollment = self._force_enrollment()
+        self._login_redirect(reverse("santa:enrollment_configuration_profile", args=(configuration.pk, enrollment.pk)))
+
+    def test_enrollment_config_profile_permission_denied(self):
+        configuration, enrollment = self._force_enrollment()
+        self._login()
+        url = reverse("santa:enrollment_configuration_profile", args=(configuration.pk, enrollment.pk))
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_profile(self):
+        configuration, enrollment = self._force_enrollment()
+        self._login("santa.view_enrollment")
+        url = reverse("santa:enrollment_configuration_profile", args=(configuration.pk, enrollment.pk))
+        response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
 

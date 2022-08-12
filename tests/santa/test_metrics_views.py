@@ -52,7 +52,6 @@ class SantaMetricsViewsTestCase(TestCase):
                 sample = family.samples[0]
                 self.assertEqual(sample.value, 1)
                 self.assertEqual(sample.labels["mode"], "monitor")
-                self.assertEqual(sample.labels["sysx_cache"], "off")
                 break
         else:
             raise AssertionError("could not find expected metric family")

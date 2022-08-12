@@ -92,7 +92,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_configuration(self):
-        return Configuration.objects.create(name=get_random_string(12), enable_sysx_cache=True)
+        return Configuration.objects.create(name=get_random_string(12))
 
     def _force_bundle(self):
         bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=get_random_sha256())

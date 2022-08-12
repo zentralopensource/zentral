@@ -4,6 +4,8 @@
 
 New `zentral.core.stores.backends.opensearch` store backend to solve the connection issues with OpenSearch instances.
 
+Automatically managed out of sync incidents for the santa enrolled machines.
+
 ### Backward incompatibilities
 
 #### 🧨 AWS auth for elasticsearch
@@ -26,6 +28,12 @@ The PostgreSQL version in the docker compose configuration has been upgraded to 
 
 The URL field of the probe feeds has been removed. To update a feed, you need
 to use the API and push it.
+
+#### 🧨 Santa configuration changes
+
+The Zentral Santa configuration doesn't keep track anymore of the configuration keys that can only be set in a configuration profile. If you rely on Zentral to keep track of your Santa configuration profiles, do not forget to download them before applying the DB migrations.
+
+The support for the Santa agent pre v1.14 has been dropped.
 
 ## 2022.1 (May 16, 2022)
 

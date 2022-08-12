@@ -22,22 +22,18 @@ class MetricsView(BasePrometheusMetricsView):
 
     def add_configurations_gauge(self):
         g = Gauge('zentral_santa_configurations', 'Zentral Santa Configurations',
-                  ['mode', 'sysx_cache'], registry=self.registry)
+                  ['mode'], registry=self.registry)
         query = (
-            "select client_mode, enable_sysx_cache, count(*) "
+            "select client_mode, count(*) "
             "from santa_configuration "
-            "group by client_mode, enable_sysx_cache"
+            "group by client_mode"
         )
         cursor = connection.cursor()
         cursor.execute(query)
-        for mode, sysx_cache, count in cursor.fetchall():
+        for mode, count in cursor.fetchall():
             labels = {}
             if not self._add_mode_to_labels(mode, labels):
                 continue
-            if sysx_cache:
-                labels["sysx_cache"] = "on"
-            else:
-                labels["sysx_cache"] = "off"
             g.labels(**labels).set(count)
 
     def add_enrolled_machines_gauge(self):

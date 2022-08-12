@@ -49,154 +49,28 @@ class Configuration(models.Model):
     PREFLIGHT_LOCKDOWN_MODE = "LOCKDOWN"
     DEFAULT_BATCH_SIZE = 50
     DEFAULT_FULL_SYNC_INTERVAL = 600
-    LOCAL_CONFIGURATION_ATTRIBUTES = {
-        'client_mode',
-        'file_changes_regex',
-        'file_changes_prefix_filters',
-        'allowed_path_regex',
-        'blocked_path_regex',
-        'enable_page_zero_protection',
-        'enable_bad_signature_protection',
-        'enable_sysx_cache',
-        'more_info_url',
-        'event_detail_url',
-        'event_detail_text',
-        'unknown_block_message',
-        'banned_block_message',
-        'mode_notification_monitor',
-        'mode_notification_lockdown',
-        'machine_owner_plist',
-        'machine_owner_key',
-        'client_auth_certificate_issuer_cn',
-    }
     SYNC_SERVER_CONFIGURATION_ATTRIBUTES = {
         # 'client_mode', has to be translated to a string value
+        # 'clean_sync' managed dynamically
         'batch_size',
-        'full_sync_interval',
+        # 'upload_logs_url' not used
         'allowed_path_regex',
         'blocked_path_regex',
+        'full_sync_interval',
+        # 'fcm_token' cannot be used
+        # 'fcm_full_sync_interval' cannot be used
+        # 'fcm_global_rule_sync_deadline' cannot be used
         'enable_bundles',
         'enable_transitive_rules',
+        # 'enable_all_event_upload' sharded
         'block_usb_mass_storage',
         'remount_usb_mode',
-    }
-    DEPRECATED_ATTRIBUTES_MAPPING_1_14 = {
-        'allowed_path_regex': 'whitelist_regex',
-        'blocked_path_regex': 'blacklist_regex',
-        'enable_transitive_rules': 'enabled_transitive_whitelisting',
     }
 
     name = models.CharField(max_length=256, unique=True)
 
     client_mode = models.IntegerField(choices=CLIENT_MODE_CHOICES, default=MONITOR_MODE)
-    file_changes_regex = models.TextField(
-        blank=True,
-        help_text="The regex of paths to log file changes. Regexes are specified in ICU format."
-    )
-    file_changes_prefix_filters = models.TextField(
-        blank=True,
-        help_text=("A list of ignore prefixes which are checked in-kernel. "
-                   "This is more performant than FileChangesRegex when ignoring whole directory trees.")
-    )
-    allowed_path_regex = models.TextField(
-        blank=True,
-        help_text="Matching binaries will be allowed to run, in both modes."
-                  "Events will be logged with the 'ALLOW_SCOPE' decision."
-    )
-    blocked_path_regex = models.TextField(
-        blank=True,
-        help_text="In Monitor mode, executables whose paths are matched by this regex will be blocked."
-    )
-    enable_page_zero_protection = models.BooleanField(
-        default=True,
-        help_text="If this flag is set to YES, 32-bit binaries that are missing the __PAGEZERO segment will be blocked"
-                  " even in MONITOR mode, unless the binary is whitelisted by an explicit rule."
-    )
-    enable_bad_signature_protection = models.BooleanField(
-        default=False,
-        help_text="When enabled, a binary that is signed but has a bad signature (cert revoked, binary tampered with, "
-                  "etc.) will be blocked regardless of client-mode unless a binary whitelist."
-    )
-    enable_sysx_cache = models.BooleanField(
-        "Enable system extension cache",
-        default=False,
-        help_text="When enabled, a self-managed cache for decision responses will be used to help improve performance "
-                  "when running Santa as a system extension alongside another system extension."
-    )
-    more_info_url = models.URLField(
-        blank=True,
-        help_text='The URL to open when the user clicks "More Info..." when opening Santa.app. '
-                  'If unset, the button will not be displayed.'
-    )
-    event_detail_url = models.URLField(
-        blank=True,
-        max_length=1024,
-        help_text="When the user gets a block notification, a button can be displayed which will take them "
-                  "to a web page with more information about that event."
-                  "This property contains a kind of format string to be turned into the URL to send them to. "
-                  "The following sequences will be replaced in the final URL: "
-                  "%file_sha%, "
-                  "%machine_id%, "
-                  "%username%, "
-                  "%bundle_id%, "
-                  "%bundle_ver%."
-    )
-    event_detail_text = models.TextField(
-        blank=True,
-        help_text="Related to the above property, this string represents the text to show on the button."
-    )
-    unknown_block_message = models.TextField(
-        default="The following application has been blocked from executing<br/>\n"
-                "because its trustworthiness cannot be determined.",
-        help_text="In Lockdown mode this is the message shown to the user when an unknown binary is blocked."
-    )
-    banned_block_message = models.TextField(
-        default="The following application has been blocked from executing<br/>\n"
-                "because it has been deemed malicious.",
-        help_text="This is the message shown to the user when a binary is blocked because of a rule "
-                  "if that rule doesn't provide a custom message."
-    )
-    mode_notification_monitor = models.TextField(
-        default="Switching into Monitor mode",
-        help_text="The notification text to display when the client goes into Monitor mode."
-    )
-    mode_notification_lockdown = models.TextField(
-        default="Switching into Lockdown mode",
-        help_text="The notification text to display when the client goes into Lockdown mode."
-    )
-    machine_owner_plist = models.CharField(
-        blank=True,
-        max_length=512,
-        help_text="The path to a plist that contains the machine owner key / value pair."
-    )
-    machine_owner_key = models.CharField(
-        blank=True,
-        max_length=128,
-        help_text="The key to use on the machine owner plist."
-    )
 
-    # Zentral options
-
-    allow_unknown_shard = models.IntegerField(
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
-        default=100,
-        help_text="Restrict the reporting of 'Allow Unknown' events to a percentage (0-100) of hosts"
-    )
-    enable_all_event_upload_shard = models.IntegerField(
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
-        default=0,
-        help_text="Restrict the upload of all execution events to Zentral, including those that were "
-                  "explicitly allowed, to a percentage (0-100) of hosts"
-    )
-    sync_incident_severity = models.IntegerField(
-        choices=Severity.choices(include_none=True), default=Severity.NONE.value,
-        help_text="If not 'None', incidents will be automatically opened and closed when the santa agent "
-                  "rules are out of sync."
-    )
-
-    # TLS
-
-    # for the client cert authentication
     client_certificate_auth = models.BooleanField(
         "Client certificate authentication",
         default=False,
@@ -205,20 +79,8 @@ class Configuration(models.Model):
                   "and its private key in the System keychain, "
                   "if the TLS server advertises the accepted CA certificates. "
                   "If the CA certificates are not sent to the client, "
-                  "use the Client Auth Certificate Issuer CN setting."
+                  "use the Client Auth Certificate Issuer CN setting in the configuration profile."
     )
-    client_auth_certificate_issuer_cn = models.CharField(
-        "Client auth certificate issuer CN",
-        blank=True,
-        max_length=255,
-        help_text="If set, this is the Issuer Name of a certificate in the System keychain "
-                  "to be used for sync authentication. "
-                  "The corresponding private key must also be in the keychain."
-    )
-
-    # the extra ones only provided via server sync
-    # https://santa.readthedocs.io/en/latest/deployment/configuration/#sync-server-provided-configuration
-
     batch_size = models.IntegerField(
         default=DEFAULT_BATCH_SIZE,
         validators=[MinValueValidator(5), MaxValueValidator(100)],
@@ -239,6 +101,21 @@ class Configuration(models.Model):
         default=False,
         help_text="If set, the transitive rule feature is enabled."
     )
+
+    # Paths regular expressions
+
+    allowed_path_regex = models.TextField(
+        blank=True,
+        help_text="Matching binaries will be allowed to run, in both modes."
+                  "Events will be logged with the 'ALLOW_SCOPE' decision."
+    )
+    blocked_path_regex = models.TextField(
+        blank=True,
+        help_text="In Monitor mode, executables whose paths are matched by this regex will be blocked."
+    )
+
+    # USB
+
     block_usb_mass_storage = models.BooleanField(
         default=False,
         help_text="If set, blocking USB Mass storage feature is enabled."
@@ -247,6 +124,25 @@ class Configuration(models.Model):
         models.CharField(max_length=16, validators=[MinLengthValidator(2)]),
         blank=True,
         default=list
+    )
+
+    # Zentral options
+
+    allow_unknown_shard = models.IntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        default=100,
+        help_text="Restrict the reporting of 'Allow Unknown' events to a percentage (0-100) of hosts"
+    )
+    enable_all_event_upload_shard = models.IntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        default=0,
+        help_text="Restrict the upload of all execution events to Zentral, including those that were "
+                  "explicitly allowed, to a percentage (0-100) of hosts"
+    )
+    sync_incident_severity = models.IntegerField(
+        choices=Severity.choices(include_none=True), default=Severity.NONE.value,
+        help_text="If not 'None', incidents will be automatically opened and closed when the santa agent "
+                  "rules are out of sync."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -287,12 +183,6 @@ class Configuration(models.Model):
             if not config.get(attr):
                 config[attr] = "NON_MATCHING_PLACEHOLDER_{}".format(get_random_string(8))
 
-        # translate attributes for older santa agents
-        # TODO remove eventually
-        if comparable_santa_version < (1, 14):
-            for attr, deprecated_attr in self.DEPRECATED_ATTRIBUTES_MAPPING_1_14.items():
-                config[deprecated_attr] = config.pop(attr)
-
         # enable_all_event_upload
         config["enable_all_event_upload"] = (
             self.enable_all_event_upload_shard > 0 and
@@ -302,25 +192,14 @@ class Configuration(models.Model):
 
         return config
 
-    def get_local_config(self, min_supported_santa_version=(1, 13)):
-        config = {}
-        for k in self.LOCAL_CONFIGURATION_ATTRIBUTES:
-            v = getattr(self, k)
-            if not v:
-                continue
-            if min_supported_santa_version < (1, 14) and k in self.DEPRECATED_ATTRIBUTES_MAPPING_1_14:
-                k = self.DEPRECATED_ATTRIBUTES_MAPPING_1_14[k]
-            config_attr_items = []
-            for i in k.split("_"):
-                if i == "url":
-                    i = "URL"
-                elif i == "cn":
-                    i = "CN"
-                else:
-                    i = i.capitalize()
-                config_attr_items.append(i)
-            config_attr = "".join(config_attr_items)
-            config[config_attr] = v
+    def get_local_config(self):
+        config = {
+            "ClientMode": self.client_mode,
+        }
+        if self.allowed_path_regex:
+            config["AllowedPathRegex"] = self.allowed_path_regex
+        if self.blocked_path_regex:
+            config["BlockedPathRegex"] = self.blocked_path_regex
         return config
 
     def save(self, *args, **kwargs):

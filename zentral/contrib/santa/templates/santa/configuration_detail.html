@@ -15,7 +15,7 @@
   <div class="col-md-12">
     <table class="table">
       <thead>
-        <th>Attribute</th>
+        <th width="33%">Attribute</th>
         <th>Value</th>
       </thead>
       <tbody>
@@ -31,116 +31,10 @@
           </span>
         </td>
       </tr>
-      {% if object.file_changes_regex %}
-      <tr>
-        <td>File changes regex</td>
-        <td><code>{{ object.file_changes_regex }}</code></td>
-      </tr>
-      {% endif %}
-      {% if object.file_changes_prefix_filters %}
-      <tr>
-        <td>File changes prefix filters</td>
-        <td><code>{{ object.file_changes_prefix_filters }}</code></td>
-      </tr>
-      {% endif %}
-      {% if object.allowed_path_regex %}
-      <tr>
-        <td>Allowed path regex</td>
-        <td><code>{{ object.allowed_path_regex }}</code></td>
-      </tr>
-      {% endif %}
-      {% if object.blocked_path_regex %}
-      <tr>
-        <td>Blocked path regex</td>
-        <td><code>{{ object.blocked_path_regex }}</code></td>
-      </tr>
-      {% endif %}
-      {% if not object.enable_page_zero_protection %}
-      <tr>
-        <td>Enable page zero protection</td>
-        <td>{{ object.enable_page_zero_protection|yesno }}</td>
-      </tr>
-      {% endif %}
-      {% if object.enable_bad_signature_protection %}
-      <tr>
-        <td>Enable bad signature protection</td>
-        <td>{{ object.enable_bad_signature_protection|yesno }}</td>
-      </tr>
-      {% endif %}
-      {% if object.enable_sysx_cache %}
-      <tr>
-        <td>Enable system extension cache</td>
-        <td>{{ object.enable_sysx_cache|yesno }}</td>
-      </tr>
-      {% endif %}
-      {% if object.more_info_url %}
-      <tr>
-        <td>More info URL</td>
-        <td><code>{{ object.more_info_url }}</code></td>
-      </tr>
-      {% endif %}
-      {% if object.event_detail_url %}
-      <tr>
-        <td>Event detail URL</td>
-        <td><code>{{ object.event_detail_url }}</code></td>
-      </tr>
-      {% endif %}
-      {% if object.event_detail_text %}
-      <tr>
-        <td>Event detail text</td>
-        <td>{{ object.event_detail_text }}</td>
-      </tr>
-      {% endif %}
-      <tr>
-        <td>Unknown block message</td>
-        <td>{{ object.unknown_block_message|linebreaksbr }}</td>
-      </tr>
-      <tr>
-        <td>Banned block message</td>
-        <td>{{ object.banned_block_message|linebreaksbr }}</td>
-      </tr>
-      <tr>
-        <td>Mode notification monitor</td>
-        <td>{{ object.mode_notification_monitor|linebreaksbr }}</td>
-      </tr>
-      <tr>
-        <td>Mode notification lockdown</td>
-        <td>{{ object.mode_notification_lockdown|linebreaksbr }}</td>
-      </tr>
-      {% if object.machine_owner_plist %}
-      <tr>
-        <td>Machine owner plist</td>
-        <td>{{ object.machine_owner_plist }}</td>
-      </tr>
-      {% endif %}
-      {% if object.machine_owner_key %}
-      <tr>
-        <td>Machine owner key</td>
-        <td>{{ object.machine_owner_key }}</td>
-      </tr>
-      {% endif %}
-      <tr>
-        <td>Allow Unknown shard</td>
-        <td>{{ object.allow_unknown_shard }}%</td>
-      </tr>
-      <tr>
-        <td>Enable all event upload shard</td>
-        <td>{{ object.enable_all_event_upload_shard }}%</td>
-      </tr>
-      <tr>
-        <td>Sync incident severity</td>
-        <td>{{ object.get_sync_incident_severity|default:"Configuration error" }}</td>
-      </tr>
       <tr>
         <td>Client certificate auth</td>
         <td>{{ object.client_certificate_auth|yesno }}</td>
       </tr>
-      {% if object.client_auth_certificate_issuer_cn %}
-      <tr>
-        <td>Client auth certificate issuer CN</td>
-        <td>{{ object.client_auth_certificate_issuer_cn }}</td>
-      </tr>
-      {% endif %}
       <tr>
         <td>Batch size</td>
         <td>{{ object.batch_size }}</td>
@@ -157,6 +51,18 @@
         <td>Enable transitive rules</td>
         <td>{{ object.enable_transitive_rules|yesno }}</td>
       </tr>
+      {% if object.allowed_path_regex %}
+      <tr>
+        <td>Allowed path regex</td>
+        <td><code>{{ object.allowed_path_regex }}</code></td>
+      </tr>
+      {% endif %}
+      {% if object.blocked_path_regex %}
+      <tr>
+        <td>Blocked path regex</td>
+        <td><code>{{ object.blocked_path_regex }}</code></td>
+      </tr>
+      {% endif %}
       <tr>
         <td>Block USB mass storage</td>
         <td>{{ object.block_usb_mass_storage|yesno }}</td>
@@ -164,6 +70,18 @@
       <tr>
         <td>Remount USB mode</td>
         <td>{% if object.remount_usb_mode %}<code>{{ object.remount_usb_mode|join:" " }}</code>{% else %}-{% endif %}</td>
+      </tr>
+      <tr>
+        <td>Allow Unknown shard</td>
+        <td>{{ object.allow_unknown_shard }}%</td>
+      </tr>
+      <tr>
+        <td>Enable all event upload shard</td>
+        <td>{{ object.enable_all_event_upload_shard }}%</td>
+      </tr>
+      <tr>
+        <td>Sync incident severity</td>
+        <td>{{ object.get_sync_incident_severity|default:"Configuration error" }}</td>
       </tr>
       </tbody>
     </table>
