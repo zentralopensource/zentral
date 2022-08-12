@@ -600,6 +600,7 @@ class APIViewsTestCase(TestCase):
                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rules = response.json()
+        rules.sort(key=lambda r: r["id"])
         self.assertEqual(len(rules), 2)
         self.assertEqual(rules[0]["target"]["type"], "BINARY")
         self.assertEqual(rules[0]["target"]["identifier"], rule.target.identifier)
