@@ -1,10 +1,24 @@
-## 2022.2 (TBD)
+## 2022.2 (August 13, 2022)
+
+**IMPORTANT:** The License has changed! Most of the code stays under the Apache license, but some modules, like the SAML authentication, or the Splunk event store are licensed under a new source available license, and require a subscription when used in production.
 
 ### Features (some, not all…)
 
 New `zentral.core.stores.backends.opensearch` store backend to solve the connection issues with OpenSearch instances.
 
 Automatically managed out of sync incidents for the santa enrolled machines.
+
+API tokens are hashed before being stored in the database.
+
+Managed MDM payload renewal.
+
+Flexible MDM payload SCEP configuration.
+
+Extra API endpoints used by the new [terraform provider](https://github.com/zentralopensource/terraform-provider-zentral).
+
+Docker images upgraded to python3.10 bullseye.
+
+Add [sumo logic](https://www.sumologic.com/) event store.
 
 ### Backward incompatibilities
 
