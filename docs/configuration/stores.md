@@ -99,6 +99,146 @@ Use `included_event_filters` instead.
 
 A list of group names. Empty by default (i.e. all users will get the links). Can be used to display the links to the events in the store to only a subset of Zentral users, if not all users have direct access to the store.
 
+## Kinesis backend options
+
+This store is capable of batch operation. The maximum `batch_size` is 500. See the [`kinesis:PutRecords`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_PutRecords.html) documentation for more details.
+
+### AWS authentication and authorization
+
+When operating in AWS, it is recommended to use a role attached to the EC2 instance or to the container to authenticate the calls to the Kinesis API.
+
+Example of an IAM policy to allow Zentral to write to the Kinesis stream:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowKinesisPut"
+            "Action": [
+                "kinesis:PutRecords",
+                "kinesis:PutRecord"
+            ],
+            "Effect": "Allow",
+            "Resource": "arn:aws:kinesis:<AWS_REGION>:<AWS_ACCOUNT_ID>:stream/<KINESIS_STREAM_NAME>",
+        }
+    ]
+}
+```
+
+The `PutRecord` action can be omitted if the store is configured for batch operations.
+
+If the authentication is not possible using the environment (standard environment variable, instance metadata service, …), you can set `aws_access_key_id` and `aws_secret_access_key` in the store configuration.
+
+You can also configure an AWS IAM role to be assumed, using the `assume_role_arn` store configuration key.
+
+### `stream`
+
+**MANDATORY**
+
+The name of the Kinesis stream.
+
+### `region_name`
+
+**MANDATORY**
+
+The name of the Kinesis stream AWS region.
+
+### `serialization_format`
+
+By default, the events will be serialized using the Zentral canonical serialization.
+
+A serialization format optimized for the use with Kinesis Firehose is also available: `firehose_v1`.
+
+### Full example
+
+```json
+{
+    "backend": "zentral.core.stores.backends.kinesis",
+    "aws_access_key_id": "XXXXXXXXXXXXX",
+    "aws_secret_access_key": "YYYYYYYYYYYYY",
+    "assume_role_arn": "arn:aws:iam::<ACCOUNT_ID>:role/<NAME_OF_THE_ROLE>",
+    "stream": "name_of_the_stream",
+    "region": "us-east-1",
+    "serialization_format": "firehose_v1"
+}
+```
+
+## HTTP backend options
+
+### `endpoint_url`
+
+**MANDATORY**
+
+The URL where the Zentral events will be POSTed.
+
+For example: `https://acme.service-now.com/api/now/import/zentral_events`.
+
+### `username`
+
+**OPTIONAL**
+
+Username used for Basic Authentication. If used, `password` **MUST** be set too.
+
+### `password`
+
+**OPTIONAL**
+
+Password used for Basic Authentication. If used, `username` **MUST** be set too.
+
+### `headers`
+
+**OPTIONAL**
+
+A string / string dictionary of extra headers to be set for the HTTP requests. The `Content-Type` header is set to `application/json` by default.
+
+**WARNING** Basic Authentication via `username` and `password` conflicts with the configuration of the `Authorization` header.
+
+### `concurrency`
+
+**OPTIONAL**
+
+**WARNING** only works if the AWS SNS/SQS queues backend is used.
+
+An integer between 1 and 20, 1 by default. The number of threads to use when posting the events. This can increase the throughput of the store worker.
+
+### Full example
+
+```json
+{
+    "backend": "zentral.core.stores.backends.http",
+    "endpoint_url": "https://acme.service-now.com/api/now/import/zentral_events",
+    "username": "Zentral",
+    "password": "{{ env:SERVICE_NOW_API_PASSWORD }}",
+    "verify_tls": true,
+    "included_event_filters": [{
+      "event_type": [
+        "add_machine",
+        "add_machine_os_version",
+        "remove_machine_os_version",
+        "add_machine_system_info",
+        "remove_machine_system_info",
+        "add_machine_business_unit",
+        "remove_machine_business_unit",
+        "add_machine_group",
+        "remove_machine_group",
+        "add_machine_disk",
+        "remove_machine_disk",
+        "add_machine_network_interface",
+        "remove_machine_network_interface",
+        "add_machine_osx_app_instance",
+        "remove_machine_osx_app_instance",
+        "add_machine_deb_package",
+        "remove_machine_deb_package",
+        "add_machine_program_instance",
+        "remove_machine_program_instance",
+        "add_machine_principal_user",
+        "remove_machine_principal_user"
+      ]
+    }]
+}
+```
+
 ## Splunk backend options
 
 ### `hec_url`
@@ -224,80 +364,5 @@ In seconds. Defaults to 300s. The number of seconds to keep a search after proce
     "authentication_token": "{{ env:SPLUNK_AUTH_TOKEN }}",
     "search_source": "zentral.example.com",
     "search_timeout": 300
-}
-```
-
-## HTTP backend options
-
-### `endpoint_url`
-
-**MANDATORY**
-
-The URL where the Zentral events will be POSTed.
-
-For example: `https://acme.service-now.com/api/now/import/zentral_events`.
-
-### `username`
-
-**OPTIONAL**
-
-Username used for Basic Authentication. If used, `password` **MUST** be set too.
-
-### `password`
-
-**OPTIONAL**
-
-Password used for Basic Authentication. If used, `username` **MUST** be set too.
-
-### `headers`
-
-**OPTIONAL**
-
-A string / string dictionary of extra headers to be set for the HTTP requests. The `Content-Type` header is set to `application/json` by default.
-
-**WARNING** Basic Authentication via `username` and `password` conflicts with the configuration of the `Authorization` header.
-
-### `concurrency`
-
-**OPTIONAL**
-
-**WARNING** only works if the AWS SNS/SQS queues backend is used.
-
-An integer between 1 and 20, 1 by default. The number of threads to use when posting the events. This can increase the throughput of the store worker.
-
-### Full example
-
-```json
-{
-    "backend": "zentral.core.stores.backends.http",
-    "endpoint_url": "https://acme.service-now.com/api/now/import/zentral_events",
-    "username": "Zentral",
-    "password": "{{ env:SERVICE_NOW_API_PASSWORD }}",
-    "verify_tls": true,
-    "included_event_filters": [{
-      "event_type": [
-        "add_machine",
-        "add_machine_os_version",
-        "remove_machine_os_version",
-        "add_machine_system_info",
-        "remove_machine_system_info",
-        "add_machine_business_unit",
-        "remove_machine_business_unit",
-        "add_machine_group",
-        "remove_machine_group",
-        "add_machine_disk",
-        "remove_machine_disk",
-        "add_machine_network_interface",
-        "remove_machine_network_interface",
-        "add_machine_osx_app_instance",
-        "remove_machine_osx_app_instance",
-        "add_machine_deb_package",
-        "remove_machine_deb_package",
-        "add_machine_program_instance",
-        "remove_machine_program_instance",
-        "add_machine_principal_user",
-        "remove_machine_principal_user"
-      ]
-    }]
 }
 ```
