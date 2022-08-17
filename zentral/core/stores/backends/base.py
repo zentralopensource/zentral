@@ -3,6 +3,7 @@ from zentral.core.events.filter import EventFilterSet
 
 
 class BaseEventStore(object):
+    read_only = False  # if read only, we do not need a store worker
     max_batch_size = 1
     max_concurrency = 1
     machine_events = False

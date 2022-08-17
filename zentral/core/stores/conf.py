@@ -57,6 +57,11 @@ class Stores:
                     continue
             yield store
 
+    def iter_queue_worker_stores(self):
+        for store in self.stores.values():
+            if not store.read_only:
+                yield store
+
 
 stores = SimpleLazyObject(lambda: Stores(settings))
 frontend_store = SimpleLazyObject(lambda: stores.frontend_store)

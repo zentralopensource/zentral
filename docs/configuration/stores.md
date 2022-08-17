@@ -31,6 +31,7 @@ The python module implementing the store, as a string. Currently available:
 * `zentral.core.stores.backends.humio`
 * `zentral.core.stores.backends.kinesis`
 * `zentral.core.stores.backends.opensearch`
+* `zentral.core.stores.backends.snowflake`
 * `zentral.core.stores.backends.splunk`
 * `zentral.core.stores.backends.sumo_logic`
 * `zentral.core.stores.backends.syslog`
@@ -240,6 +241,71 @@ An integer between 1 and 20, 1 by default. The number of threads to use when pos
     }]
 }
 ```
+
+## Snowflake backend options
+
+The Snowflake backend is read-only. It can only be used as a `frontend` backend. To store the events in snowflake, you will have to setup a pipeline using the `Kinesis` backend, and `Kinesis Firehose` for example.
+
+### `account`
+
+**MANDATORY**
+
+The name of the Snowflake account
+
+### `user`
+
+**MANDATORY**
+
+The name of the Snowflake user
+
+### `password`
+
+**MANDATORY**
+
+The password of the Snowflake user
+
+### `database`
+
+**MANDATORY**
+
+The name of the Snowflake database
+
+### `schema`
+
+The name of the Snowflake schema. Defaults to `PUBLIC`.
+
+### `role`
+
+**MANDATORY**
+
+The name of the Snowflake role.
+
+### `warehouse`
+
+**MANDATORY**
+
+The name of the Snowflake warehouse.
+
+### `session_timeout`
+
+In seconds, the session timeout. After the current session has timed out, a new connection will be established if necessary. Defaults to 4 hours - 10 minutes.
+
+### Full example
+
+```json
+{
+  "backend": "zentral.core.stores.backends.snowflake",
+  "frontend": true,
+  "username": "Zentral",
+  "password": "{{ env:SNOWFLAKE_PASSWORD }}",
+  "database": "ZENTRAL",
+  "schema": "ZENTRAL",
+  "role": "ZENTRAL",
+  "warehouse": "DEFAULTWH",
+  "session_timeout": 14400
+}
+```
+
 
 ## Splunk backend options
 
