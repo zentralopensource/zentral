@@ -30,7 +30,9 @@ The python module implementing the store, as a string. Currently available:
 * `zentral.core.stores.backends.http`
 * `zentral.core.stores.backends.humio`
 * `zentral.core.stores.backends.kinesis`
+* `zentral.core.stores.backends.opensearch`
 * `zentral.core.stores.backends.splunk`
+* `zentral.core.stores.backends.sumo_logic`
 * `zentral.core.stores.backends.syslog`
 
 ### `frontend`
