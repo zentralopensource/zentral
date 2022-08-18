@@ -324,6 +324,8 @@ class APIClient(object):
         else:
             os_version.update({'name': hardware['os_name'],
                                'build': hardware['os_build']})
+            if 'patch' not in os_version:
+                os_version['patch'] = 0
         if os_version:
             ct['os_version'] = os_version
 
@@ -503,6 +505,8 @@ class APIClient(object):
         else:
             os_version.update({'name': general['os_type'],
                                'build': general['os_build']})
+            if 'patch' not in os_version:
+                os_version['patch'] = 0
             mdt['os_version'] = os_version
 
         # system info

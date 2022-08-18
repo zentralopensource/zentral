@@ -1,5 +1,8 @@
+import copy
+from unittest.mock import patch, Mock
 from django.test import SimpleTestCase
 from zentral.contrib.jamf.api_client import APIClient, APIClientError
+from .data import computer_response, mobile_device_response
 
 
 class JamfAPIClientTestCase(SimpleTestCase):
@@ -82,3 +85,63 @@ class JamfAPIClientTestCase(SimpleTestCase):
         with self.assertRaises(APIClientError) as cm:
             api_client.get_machine_d("yolo", 123)
         self.assertEqual(cm.exception.args[0], "Unknown device type: yolo")
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_patch(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["hardware"]["os_version"] = "12.5.1"  # patch
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertEqual(machine_d["os_version"]["major"], 12)
+        self.assertEqual(machine_d["os_version"]["minor"], 5)
+        self.assertEqual(machine_d["os_version"]["patch"], 1)
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_patch_zero(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["hardware"]["os_version"] = "12.5"  # no patch number
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertEqual(machine_d["os_version"]["major"], 12)
+        self.assertEqual(machine_d["os_version"]["minor"], 5)
+        self.assertEqual(machine_d["os_version"]["patch"], 0)
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_mobile_device_patch(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        mobile_device = copy.deepcopy(mobile_device_response)
+        mobile_device["general"]["os_version"] = "15.5.2"  # patch
+        response.json.return_value = {"mobile_device": mobile_device}
+        session_get.return_value = response
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        machine_d = api_client.get_machine_d("mobile_device", 2)
+        self.assertEqual(machine_d["os_version"]["major"], 15)
+        self.assertEqual(machine_d["os_version"]["minor"], 5)
+        self.assertEqual(machine_d["os_version"]["patch"], 2)
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_mobile_device_patch_zero(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        mobile_device = copy.deepcopy(mobile_device_response)
+        mobile_device["general"]["os_version"] = "15.5"  # no patch number
+        response.json.return_value = {"mobile_device": mobile_device}
+        session_get.return_value = response
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        machine_d = api_client.get_machine_d("mobile_device", 2)
+        self.assertEqual(machine_d["os_version"]["major"], 15)
+        self.assertEqual(machine_d["os_version"]["minor"], 5)
+        self.assertEqual(machine_d["os_version"]["patch"], 0)
