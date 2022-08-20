@@ -43,10 +43,6 @@
       "index": "zentral-events"
     }
   },
-  "processor_workers": {
-    "number": 1,
-    "prometheus_server_base_port": "8100"
-  },
   "actions": {
     "debug": {
       "backend": "zentral.core.actions.backends.json_file",
