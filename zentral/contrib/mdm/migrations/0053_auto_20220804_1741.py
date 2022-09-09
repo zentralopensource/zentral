@@ -23,7 +23,7 @@ def update_enrolled_users(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('mdm', '0051_reenrollmentsession'),
+        ('mdm', '0052_auto_20220908_1608'),
     ]
 
     operations = [
