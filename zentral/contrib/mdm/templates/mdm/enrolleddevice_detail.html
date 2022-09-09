@@ -170,11 +170,25 @@
 
 <h3>Last commands</h3>
 
-{% if perms.mdm.change_enrolleddevice %}
-<form style="display:inline-block" method="POST" action="{% url 'mdm:poke_enrolled_device' object.id %}">{% csrf_token %}
-  <button type="submit" class="btn btn-success" {% if not object.can_be_poked %}disabled="disabled"{% endif %}>Poke!</button>
-</form>
-{% endif %}
+<div>
+  <form style="float:left;margin-right:6px" method="POST" action="{% url 'mdm:poke_enrolled_device' object.id %}">{% csrf_token %}
+    {% if perms.mdm.change_enrolleddevice %}
+    <button type="submit" class="btn btn-success" {% if not object.can_be_poked %}disabled="disabled"{% endif %}>Poke!</button>
+    {% endif %}
+  </form>
+  {% if perms.mdm.add_devicecommand %}
+  <div class="btn-group">
+    <button class="btn btn-default dropdown-toggle" type="button" id="createCommand"
+            data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+      Create
+      <span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu" aria-labelledby="createCommand">
+      <li><a href="{% url 'mdm:create_enrolled_device_custom_command' object.pk %}">Custom command</a></li>
+    </ul>
+  </div>
+  {% endif %}
+</div>
 
 {% if commands_count %}
 <table class="table table-condensed">
@@ -214,7 +228,14 @@
       <td>
         {{ command.result_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
       </td>
-      <td>{{ command.get_status_display|default:"-" }}</td>
+      <td>
+        {{ command.get_status_display|default:"-" }}
+        {% if command.result %}
+        <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_device_command_result' command.uuid %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

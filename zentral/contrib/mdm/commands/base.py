@@ -17,6 +17,7 @@ class Command:
     allowed_platform = None
     allowed_in_user_enrollment = False
     artifact_operation = None
+    store_result = False
 
     @classmethod
     def get_db_name(cls):
@@ -141,6 +142,8 @@ class Command:
         self.db_command.result_time = timezone.now()
         self.db_command.status = response["Status"]
         self.db_command.error_chain = response.get("ErrorChain")
+        if self.store_result:
+            self.db_command.result = plistlib.dumps(response)
         self.db_command.save()
         self.response = response
         self.enrollment_session = enrollment_session

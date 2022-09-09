@@ -1,3 +1,4 @@
+import io
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib import messages
@@ -5,7 +6,7 @@ from django.core.exceptions import SuspiciousOperation
 from django.core.files.uploadhandler import TemporaryFileUploadHandler
 from django.db import transaction
 from django.db.models import Count, Max
-from django.http import HttpResponseRedirect
+from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -14,6 +15,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from realms.models import RealmUser
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
+from zentral.contrib.mdm.commands.custom import CustomCommand, CustomCommandForm
 from zentral.contrib.mdm.declarations import update_blueprint_activation, update_blueprint_declaration_items
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
@@ -27,6 +29,7 @@ from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintA
                                        UploadEnterpriseAppForm, UploadProfileForm)
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, Blueprint, BlueprintArtifact,
                                         DEPDevice, DEPEnrollment,
+                                        DeviceCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         OTAEnrollment, OTAEnrollmentSession,
                                         SCEPConfig,
@@ -1081,6 +1084,43 @@ class PokeEnrolledUserView(PermissionRequiredMixin, View):
         return redirect(enrolled_user)
 
 
+class CreateEnrolledDeviceCustomCommandView(PermissionRequiredMixin, FormView):
+    permission_required = "mdm.add_devicecommand"
+    form_class = CustomCommandForm
+    template_name = "mdm/enrolleddevice_create_custom_command.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.enrolled_device = get_object_or_404(
+            EnrolledDevice,
+            pk=kwargs["pk"]
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["enrolled_device"] = self.enrolled_device
+        return ctx
+
+    def form_valid(self, form):
+        command = form.cleaned_data["command"]
+        CustomCommand.create_for_device(self.enrolled_device, kwargs={"command": command}, queue=True)
+        messages.info(self.request, "Custom command successfully created")
+        return redirect(self.enrolled_device)
+
+
+class DownloadEnrolledDeviceCommandResultView(PermissionRequiredMixin, View):
+    permission_required = "mdm.view_devicecommand"
+
+    def get(self, request, *args, **kwargs):
+        command = get_object_or_404(DeviceCommand, uuid=kwargs["uuid"], result__isnull=False)
+        return FileResponse(
+            io.BytesIO(command.result),
+            content_type="application/x-plist",
+            as_attachment=True,
+            filename=f"device_command_{command.uuid}-result.plist"
+        )
+
+
 # DEP device
 
 
@@ -1097,7 +1137,7 @@ class AssignDEPDeviceProfileView(PermissionRequiredMixin, UpdateView):
             form.add_error(None, str(e))
             return self.form_invalid(form)
         else:
-            messages.info(self.request, "Profile {} successfully assigned to device {}.".format(
+            messages.info(self.request, "Profile {} successfully assigned to device {}.".format(
                 dep_device.enrollment, dep_device.serial_number
             ))
             return redirect(dep_device)

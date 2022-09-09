@@ -1618,6 +1618,7 @@ class Command(models.Model):
 
     not_before = models.DateTimeField(null=True)
     time = models.DateTimeField(null=True)  # no time => queued
+    result = models.BinaryField(null=True)  # to store the result of some commands
     result_time = models.DateTimeField(null=True)
     status = models.CharField(max_length=64, choices=CommandStatus.choices(), null=True)
     error_chain = models.JSONField(null=True)

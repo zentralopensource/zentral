@@ -1,4 +1,5 @@
 from .account_configuration import AccountConfiguration  # NOQA
+from .custom import CustomCommand  # NOQA
 from .declarative_management import DeclarativeManagement  # NOQA
 from .device_configured import DeviceConfigured  # NOQA
 from .device_information import DeviceInformation  # NOQA

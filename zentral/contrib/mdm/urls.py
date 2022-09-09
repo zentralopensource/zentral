@@ -177,12 +177,22 @@ urlpatterns = [
     path('enrolled_devices/<int:pk>/change_blueprint/',
          views.ChangeEnrolledDeviceBlueprintView.as_view(),
          name="change_enrolled_device_blueprint"),
+
+    # enrolled device users
     path('enrolled_devices/<int:device_pk>/enrolled_users/<int:pk>/',
          views.EnrolledUserView.as_view(),
          name="enrolled_user"),
     path('enrolled_devices/<int:device_pk>/enrolled_users/<int:pk>/poke/',
          views.PokeEnrolledUserView.as_view(),
          name="poke_enrolled_user"),
+
+    # enrolled device commands
+    path('enrolled_devices/<int:pk>/commands/custom/create/',
+         views.CreateEnrolledDeviceCustomCommandView.as_view(),
+         name="create_enrolled_device_custom_command"),
+    path('enrolled_devices/commands/<uuid:uuid>/result/',
+         views.DownloadEnrolledDeviceCommandResultView.as_view(),
+         name="download_enrolled_device_command_result"),
 
     # DEP devices
     path('dep/devices/<int:pk>/assign_profile/',
