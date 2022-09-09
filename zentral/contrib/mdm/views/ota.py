@@ -31,7 +31,7 @@ class OTAEnrollView(PostEventMixin, View):
         # find out which CA signed the certificate used to sign the payload
         # if iPhone CA: phase 2
         # if SCEP CA: phase 3
-        for certificate_i_cn, certificate_bytes, signing_certificate in certificates:
+        for certificate_i, certificate_bytes, signing_certificate in certificates:
             if verify_apple_iphone_device_ca_issuer(certificate_bytes):
                 phase = 2
                 break
@@ -39,7 +39,7 @@ class OTAEnrollView(PostEventMixin, View):
                 phase = 3
                 break
         else:
-            self.abort(f"Unknown signing certificate issuer: {certificate_i_cn}")
+            self.abort(f"Unknown signing certificate issuer: {certificate_i}")
 
         payload = plistlib.loads(payload)
         self.serial_number = payload["SERIAL"]

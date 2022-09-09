@@ -76,11 +76,8 @@ def get_signer_certificate(content, signer):
            certificate.chosen.issuer == signer_id.chosen["issuer"]:
             certificate_bytes = certificate.dump()
             certificate = x509.load_der_x509_certificate(certificate_bytes)
-            certificate_i_cn = ", ".join(
-                o.value
-                for o in certificate.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)
-            )
-            return certificate_i_cn, certificate_bytes, certificate
+            certificate_i = certificate.issuer.rfc4514_string()
+            return certificate_i, certificate_bytes, certificate
 
 
 def get_cryptography_hash_algorithm(signer):
@@ -134,10 +131,10 @@ def verify_signed_payload(data):
     payload = content['encap_content_info']['content'].native
     certificates = []
     for signer in content["signer_infos"]:
-        certificate_i_cn, certificate_bytes, certificate = get_signer_certificate(content, signer)
+        certificate_i, certificate_bytes, certificate = get_signer_certificate(content, signer)
         if not verify_certificate_signature(certificate, signer, payload):
             raise ValueError("Invalid signature")
-        certificates.append((certificate_i_cn, certificate_bytes, certificate))
+        certificates.append((certificate_i, certificate_bytes, certificate))
     return certificates, payload
 
 
