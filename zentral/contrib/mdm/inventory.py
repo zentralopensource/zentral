@@ -24,16 +24,6 @@ def commit_tree_from_payload(udid, serial_number, meta_business_unit, payload):
     except IndexError:
         pass
 
-    # OS Version
-    os_version = payload.get("OSVersion")
-    build_version = payload.get("BuildVersion")
-    if os_version:
-        d = dict(zip(('major', 'minor', 'patch'),
-                     (int(s) for s in os_version.split('.'))))
-        if build_version:
-            d["build"] = build_version
-        tree["os_version"] = d
-
     # System Info
     system_info_d = {}
     for si_attr, attr in (("computer_name", "DeviceName"),
@@ -56,6 +46,8 @@ def commit_tree_from_payload(udid, serial_number, meta_business_unit, payload):
                      (int(s) for s in os_version.split('.'))))
         if build_version:
             d["build"] = build_version
+        if "patch" not in d:
+            d["patch"] = 0
         hardware_model = system_info_d.get("hardware_model")
         if hardware_model:
             hardware_model = hardware_model.upper()
