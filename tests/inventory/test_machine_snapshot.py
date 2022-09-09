@@ -121,6 +121,23 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(cms.machine_snapshot, ms)
         self.assertEqual(cms.last_seen, msc2.last_seen)
 
+    def test_machine_snapshot_commit_system_uptime(self):
+        tree = copy.deepcopy(self.machine_snapshot)
+        tree["system_uptime"] = 180
+        msc, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        self.assertEqual(msc.system_uptime, 180)
+
+    def test_machine_snapshot_commit_system_uptime_for_display(self):
+        tree = copy.deepcopy(self.machine_snapshot)
+        tree["system_uptime"] = 3780
+        msc, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        self.assertEqual(msc.get_system_update_for_display(), "1\xa0hour, 3\xa0minutes")
+
+    def test_machine_snapshot_commit_missing_system_uptime_for_display(self):
+        tree = copy.deepcopy(self.machine_snapshot)
+        msc, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        self.assertIsNone(msc.get_system_update_for_display())
+
     def test_machine_snapshot_commit_source_error(self):
         tree = copy.deepcopy(self.machine_snapshot_source_error)
         with self.assertRaises(MTOError,

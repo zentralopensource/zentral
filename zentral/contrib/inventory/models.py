@@ -18,6 +18,7 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from django.utils.text import slugify
+from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
 from zentral.conf import settings
 from zentral.core.compliance_checks.utils import get_machine_compliance_check_statuses
@@ -729,7 +730,8 @@ class MachineSnapshotCommit(models.Model):
 
     def get_system_update_for_display(self):
         if self.system_uptime:
-            return str(timedelta(seconds=self.system_uptime)).strip(":0 ,")
+            now = datetime.utcnow()
+            return timesince(now - timedelta(seconds=self.system_uptime), now=now)
 
 
 class CurrentMachineSnapshot(models.Model):
