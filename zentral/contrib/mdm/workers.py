@@ -38,8 +38,8 @@ class BaseAPNSWorker:
         try:
             # default connect period: 4h (min 1min, max 7d)
             self.kwargs["default_period"] = min(max(60, int(connect_conf.get("default_period", 14400))), 604800)
-            # default time to wait before notifying again if no connect: 15min (min 1min, max 1d)
-            self.kwargs["retry_delay"] = min(max(60, int(connect_conf.get("retry_delay", 900))), 86400)
+            # default time to wait before notifying again if no connect: 1d (min 10m, max 7d)
+            self.kwargs["retry_delay"] = min(max(600, int(connect_conf.get("retry_delay", 86400))), 604800)
             # default time to wait before notifying again if new target: 30s (min 10s, max 1h)
             self.kwargs["enroll_retry_delay"] = min(max(10, int(connect_conf.get("enroll_retry_delay", 30))), 3600)
         except (TypeError, ValueError):
@@ -68,8 +68,8 @@ class BaseAPNSWorker:
         self.db_query_leaky_bucket = LeakyBucket(db_lb_capacity, db_lb_rate)
 
         # APNS parameters
-        # set the APNS expiration delay to the default period
-        self.apns_expiration_seconds = self.kwargs["default_period"]
+        # set the APNS expiration delay to the retry delay
+        self.apns_expiration_seconds = self.kwargs["retry_delay"]
 
     def inc_counter(self, status):
         if self.metrics_exporter:
@@ -168,7 +168,7 @@ class DevicesAPNSWorker(BaseAPNSWorker):
         # first connect not done, at least 30 seconds since last notification
         "    OR (ed.last_seen_at IS NULL AND ed.last_notified_at "
         "        < NOW() - interval '1 seconds' * %(enroll_retry_delay)s)"
-        # at least 15 minutes since last notification
+        # at least 1 day since last notification
         "    OR ed.last_notified_at < NOW() - interval '1 seconds' * %(retry_delay)s"
         "  )"
         # is not currently being notified
@@ -238,7 +238,7 @@ class UsersAPNSWorker(BaseAPNSWorker):
         # first connect not done, at least 30 seconds since last notification
         "    OR (eu.last_seen_at IS NULL AND eu.last_notified_at "
         "        < NOW() - interval '1 seconds' * %(enroll_retry_delay)s)"
-        # at least 15 minutes since last notification
+        # at least 1 day since last notification
         "    OR eu.last_notified_at < NOW() - interval '1 seconds' * %(retry_delay)s"
         "  )"
         # is not currently being notified
