@@ -11,7 +11,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         for d in EnrolledDevice.objects.select_related("push_certificate").all():
-            self.stdout.write("Device", d.serial_number, d.udid, end="…")
+            self.stdout.write(f"Device {d.serial_number} {d.udid}", ending=" ")
             if not d.can_be_poked():
                 self.stdout.write("Skipped")
                 continue
