@@ -39,13 +39,3 @@ class LeakyBucket:
                 time.sleep(delay)
             else:
                 return False
-
-
-if __name__ == "__main__":
-    from datetime import datetime
-    b = LeakyBucket(10, 2)
-    i = 0
-    while True:
-        i += 1
-        b.consume()
-        print(datetime.utcnow().isoformat(), i)
