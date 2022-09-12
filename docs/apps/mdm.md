@@ -4,7 +4,7 @@ Zentral can be used as MDM server for Apple devices.
 
 ## Push certificates
 
-To be able to send notifications to the devices, Zentral needs a push certificate (aka. APNS certificate). To get one, you first need to generate an MDM vendor certificate that you then use to sign an APNS certificate request. The `mdmcerts` Zentral management command can be used to help with this process.
+To be able to send notifications to the devices, Zentral needs a push certificate (aka. APNS certificate). To get one, you first need to generate an MDM vendor certificate. An Apple [Developer Enterprise Account](https://developer.apple.com/programs/enterprise/) with the ability to generate MDM CSRs is required. You can then use this vendor certificate to sign an APNS certificate request. The `mdmcerts` Zentral management command can be used to help with this process.
 
 ### MDM vendor certificate
 
