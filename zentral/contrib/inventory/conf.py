@@ -236,7 +236,9 @@ def macos_version_from_build(build):
                 patch = 1
             else:
                 patch = 0
-            if minor > 0:
+            if build == "21G115":
+                minor = 6
+            elif minor > 0:
                 minor -= 1
         elif minor == 16:
             major = 11
