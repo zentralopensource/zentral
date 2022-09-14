@@ -4,7 +4,7 @@ from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
-                                        Channel, CommandStatus,
+                                        Channel, CommandStatus, RequestStatus, Platform,
                                         DeviceCommand, ReEnrollmentSession, UserCommand)
 from .account_configuration import AccountConfiguration
 from .declarative_management import DeclarativeManagement
@@ -54,7 +54,7 @@ def load_command(db_command):
 # Next command
 
 
-def _get_next_queued_command(channel, enrollment_session, enrolled_device, enrolled_user):
+def _get_next_queued_command(channel, status, enrollment_session, enrolled_device, enrolled_user):
     kwargs = {}
     if channel == Channel.Device:
         command_model = DeviceCommand
@@ -62,10 +62,17 @@ def _get_next_queued_command(channel, enrollment_session, enrolled_device, enrol
     else:
         command_model = UserCommand
         kwargs["enrolled_user"] = enrolled_user
-    # TODO reschedule the NotNow commands
     queryset = (command_model.objects.select_for_update()
-                                     .filter(time__isnull=True)
                                      .filter(Q(not_before__isnull=True) | Q(not_before__lte=timezone.now())))
+    if status == RequestStatus.NotNow:
+        # only schedule new commands
+        queryset = queryset.filter(time__isnull=True)
+    else:
+        # reschedule not now commands too
+        reschedule_db_names = [db_name for db_name, cls in registered_commands.items() if cls.reschedule_notnow]
+        queryset = queryset.filter(
+            Q(time__isnull=True) | Q(status=RequestStatus.NotNow.value, name__in=reschedule_db_names)
+        )
     db_command = queryset.filter(**kwargs).order_by("created_at").first()
     if db_command:
         command = load_command(db_command)
@@ -73,8 +80,12 @@ def _get_next_queued_command(channel, enrollment_session, enrolled_device, enrol
         return command
 
 
-def _configure_dep_enrollment_accounts(channel, enrollment_session, enrolled_device, enrolled_user):
+def _configure_dep_enrollment_accounts(channel, status, enrollment_session, enrolled_device, enrolled_user):
+    if status == RequestStatus.NotNow:
+        return
     if channel != Channel.Device:
+        return
+    if enrolled_device.platform != Platform.macOS.value:
         return
     if not enrolled_device.awaiting_configuration:
         return
@@ -85,12 +96,7 @@ def _configure_dep_enrollment_accounts(channel, enrollment_session, enrolled_dev
         return
     if not dep_enrollment.requires_account_configuration():
         return
-    realm_user = enrollment_session.realm_user
-    if not realm_user:
-        # should never happen
-        logger.error("Enrolled device %s AwaintingConfiguration with missing realm user", enrolled_device.udid)
-        return
-    if DeviceCommand.objects.filter(name=AccountConfiguration.request_type,
+    if DeviceCommand.objects.filter(name=AccountConfiguration.get_db_name(),
                                     enrolled_device=enrolled_device,
                                     status=CommandStatus.Acknowledged.value).count():
         # account configuration already done
@@ -98,7 +104,9 @@ def _configure_dep_enrollment_accounts(channel, enrollment_session, enrolled_dev
     return AccountConfiguration.create_for_device(enrolled_device)
 
 
-def _reenroll(channel, enrollment_session, enrolled_device, enrolled_user):
+def _reenroll(channel, status, enrollment_session, enrolled_device, enrolled_user):
+    if status == RequestStatus.NotNow:
+        return
     if channel != Channel.Device:
         return
     # TODO configuration for the 90 days and 4 hours
@@ -116,7 +124,9 @@ def _reenroll(channel, enrollment_session, enrolled_device, enrolled_user):
                            "in the last 4 hours", enrolled_device.udid)
 
 
-def _install_artifacts(channel, enrollment_session, enrolled_device, enrolled_user):
+def _install_artifacts(channel, status, enrollment_session, enrolled_device, enrolled_user):
+    if status == RequestStatus.NotNow:
+        return
     if enrolled_device.declarative_management:
         return
     if channel == Channel.Device:
@@ -138,7 +148,9 @@ def _install_artifacts(channel, enrollment_session, enrolled_device, enrolled_us
             return command_class.create_for_user(enrolled_user, artifact_version)
 
 
-def _remove_artifacts(channel, enrollment_session, enrolled_device, enrolled_user):
+def _remove_artifacts(channel, status, enrollment_session, enrolled_device, enrolled_user):
+    if status == RequestStatus.NotNow:
+        return
     if enrolled_device.declarative_management:
         return
     if channel == Channel.Device:
@@ -158,7 +170,9 @@ def _remove_artifacts(channel, enrollment_session, enrolled_device, enrolled_use
             return command_class.create_for_user(enrolled_user, artifact_version)
 
 
-def _trigger_declarative_management(channel, enrollment_session, enrolled_device, enrolled_user):
+def _trigger_declarative_management_sync(channel, status, enrollment_session, enrolled_device, enrolled_user):
+    if status == RequestStatus.NotNow:
+        return
     if not enrolled_device.declarative_management:
         return
     if channel != Channel.Device:
@@ -170,7 +184,9 @@ def _trigger_declarative_management(channel, enrollment_session, enrolled_device
         return DeclarativeManagement.create_for_device(enrolled_device)
 
 
-def _finish_dep_enrollment_configuration(channel, enrollment_session, enrolled_device, enrolled_user):
+def _finish_dep_enrollment_configuration(channel, status, enrollment_session, enrolled_device, enrolled_user):
+    if status == RequestStatus.NotNow:
+        return
     if channel != Channel.Device:
         return
     if not enrolled_device.awaiting_configuration:
@@ -178,15 +194,15 @@ def _finish_dep_enrollment_configuration(channel, enrollment_session, enrolled_d
     return DeviceConfigured.create_for_device(enrolled_device)
 
 
-def get_next_command_response(channel, enrollment_session, enrolled_device, enrolled_user):
+def get_next_command_response(channel, status, enrollment_session, enrolled_device, enrolled_user):
     for next_command_func in (_get_next_queued_command,
-                              _configure_dep_enrollment_accounts,
                               _reenroll,
                               _install_artifacts,
                               _remove_artifacts,
-                              _trigger_declarative_management,
+                              _trigger_declarative_management_sync,
+                              _configure_dep_enrollment_accounts,
                               _finish_dep_enrollment_configuration):
-        command = next_command_func(channel, enrollment_session, enrolled_device, enrolled_user)
+        command = next_command_func(channel, status, enrollment_session, enrolled_device, enrolled_user)
         if command:
             return command.build_http_response(enrollment_session)
     return HttpResponse()

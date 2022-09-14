@@ -1,29 +1,37 @@
 import copy
 import plistlib
+from unittest.mock import Mock
 import uuid
 from datetime import datetime, timedelta
 from django.http import HttpResponse
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.mdm.declarations import update_blueprint_activation, update_blueprint_declaration_items
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         Blueprint, BlueprintArtifact,
-                                        Channel, DeviceArtifact,
+                                        Channel, CommandStatus, RequestStatus,
+                                        DeviceArtifact,
                                         DEPEnrollmentSession,
                                         EnrolledDevice, EnrolledUser,
                                         Platform, Profile, PushCertificate,
                                         ReEnrollmentSession, UserArtifact)
+from zentral.contrib.mdm.commands.account_configuration import AccountConfiguration
+from zentral.contrib.mdm.commands.custom import CustomCommand
+from zentral.contrib.mdm.commands.declarative_management import DeclarativeManagement
 from zentral.contrib.mdm.commands.device_configured import DeviceConfigured
 from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.install_profile import InstallProfile
 from zentral.contrib.mdm.commands.reenroll import Reenroll
 from zentral.contrib.mdm.commands.remove_profile import RemoveProfile
-from zentral.contrib.mdm.commands.utils import (_finish_dep_enrollment_configuration,
-                                                _install_artifacts,
+from zentral.contrib.mdm.commands.utils import (_configure_dep_enrollment_accounts,
+                                                _finish_dep_enrollment_configuration,
                                                 _get_next_queued_command,
+                                                _install_artifacts,
                                                 _reenroll,
-                                                _remove_artifacts)
-from .utils import force_dep_enrollment
+                                                _remove_artifacts,
+                                                _trigger_declarative_management_sync)
+from .utils import force_dep_enrollment, force_realm_user
 
 
 PROFILE_TEMPLATE = {
@@ -79,6 +87,8 @@ class TestMDMCommands(TestCase):
             private_key=get_random_string(64).encode("utf-8")
         )
         cls.blueprint1 = Blueprint.objects.create(name=get_random_string(32))
+        update_blueprint_activation(cls.blueprint1, commit=False)
+        update_blueprint_declaration_items(cls.blueprint1, commit=True)
 
         # Enrolled devices / user
         cls.enrolled_device_no_blueprint = EnrolledDevice.objects.create(
@@ -121,9 +131,13 @@ class TestMDMCommands(TestCase):
 
         # DEP enrollment
         cls.dep_enrollment = force_dep_enrollment(cls.meta_business_unit)
+        cls.dep_enrollment.realm, cls.realm_user = force_realm_user()
+        cls.dep_enrollment.save()
         cls.dep_enrollment_session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
             cls.dep_enrollment, cls.enrolled_device.serial_number, cls.enrolled_device.udid
         )
+        cls.dep_enrollment_session.realm_user = cls.realm_user
+        cls.dep_enrollment_session.save()
         es_request = EnrollmentSecret.objects.verify(
             "dep_enrollment_session",
             cls.dep_enrollment_session.enrollment_secret.secret,
@@ -221,20 +235,22 @@ class TestMDMCommands(TestCase):
             kwargs["enrolled_user"] = target
         return model.objects.update_or_create(**kwargs)[0]
 
+    # _get_next_queued_command
+
     def test_no_next_queues_command(self):
         self.assertIsNone(_get_next_queued_command(
-                Channel.Device,
+                Channel.Device, RequestStatus.Idle,
                 self.dep_enrollment_session,
                 self.enrolled_device,
                 None
         ))
 
-    def test_device_information(self):
+    def test_device_information_not_queued(self):
         command = DeviceInformation.create_for_device(self.enrolled_device)
         self.assertEqual(command.enrolled_device, self.enrolled_device)
         self.assertIsNotNone(command.db_command.time)
         self.assertIsNone(_get_next_queued_command(
-                Channel.Device,
+                Channel.Device, RequestStatus.Idle,
                 self.dep_enrollment_session,
                 self.enrolled_device,
                 None
@@ -244,35 +260,153 @@ class TestMDMCommands(TestCase):
         command = DeviceInformation.create_for_device(self.enrolled_device, queue=True)
         self.assertIsNone(command.db_command.time)
         fetched_command = _get_next_queued_command(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
         )
         self.assertEqual(command, fetched_command)
         self.assertIsNone(_get_next_queued_command(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device_no_blueprint,
             None
         ))
         self.assertIsNone(_get_next_queued_command(
-            Channel.User,
+            Channel.User, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             self.enrolled_user
         ))
 
-    def test_device_configured(self):
-        self.enrolled_device_awaiting_configuration.refresh_from_db()
-        self.assertIsNone(_finish_dep_enrollment_configuration(
-            Channel.Device,
+    def test_not_now_command_not_now(self):
+        cmd = CustomCommand.create_for_device(
+            self.enrolled_device,
+            kwargs={"command": plistlib.dumps({"RequestType": "InstalledApplicationList"}).decode("utf-8")},
+        )
+        cmd.db_command.status = CommandStatus.NotNow.value
+        cmd.db_command.save()
+        self.assertIsNone(_get_next_queued_command(
+            Channel.Device, RequestStatus.NotNow,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))
+
+    def test_not_now_custom_command_rescheduled(self):
+        cmd = CustomCommand.create_for_device(
+            self.enrolled_device,
+            kwargs={"command": plistlib.dumps({"RequestType": "InstalledApplicationList"}).decode("utf-8")},
+        )
+        cmd.db_command.status = CommandStatus.NotNow.value
+        cmd.db_command.save()
+        fetched_cmd = _get_next_queued_command(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        )
+        self.assertEqual(fetched_cmd, cmd)
+
+    def test_not_now_device_information_not_rescheduled(self):
+        cmd = DeviceInformation.create_for_device(self.enrolled_device)
+        cmd.db_command.status = CommandStatus.NotNow.value
+        cmd.db_command.save()
+        self.assertIsNone(_get_next_queued_command(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))
+
+    # _configure_dep_enrollment_accounts
+
+    def test_configure_dep_enrollment_accounts_not_now(self):
+        self.assertIsNone(_configure_dep_enrollment_accounts(
+            Channel.Device, RequestStatus.NotNow,
+            self.dep_enrollment_session,
+            self.enrolled_device_awaiting_configuration,
+            None
+        ))
+
+    def test_configure_dep_enrollment_accounts_user_channel(self):
+        self.assertIsNone(_configure_dep_enrollment_accounts(
+            Channel.User, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device_awaiting_configuration,
+            self.enrolled_user
+        ))
+
+    def test_configure_dep_enrollment_accounts_not_awaiting_configuration(self):
+        self.assertIsNone(_configure_dep_enrollment_accounts(
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
         ))
+
+    def test_configure_dep_enrollment_accounts_not_dep_enrollment_session(self):
+        self.assertIsNone(_configure_dep_enrollment_accounts(
+            Channel.Device, RequestStatus.Idle,
+            Mock(dep_enrollment=None),
+            self.enrolled_device_awaiting_configuration,
+            None
+        ))
+
+    def test_configure_dep_enrollment_accounts_not_requires_account_configuration(self):
+        self.assertFalse(self.dep_enrollment_session.dep_enrollment.requires_account_configuration())
+        self.assertIsNone(_configure_dep_enrollment_accounts(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device_awaiting_configuration,
+            None
+        ))
+
+    def test_configure_dep_enrollment_accounts_already_done(self):
+        self.dep_enrollment_session.dep_enrollment.use_realm_user = True
+        self.assertTrue(self.dep_enrollment_session.dep_enrollment.requires_account_configuration())
+        cmd = AccountConfiguration.create_for_device(self.enrolled_device_awaiting_configuration)
+        cmd.db_command.status = CommandStatus.Acknowledged.value
+        cmd.db_command.save()
+        self.assertIsNone(_configure_dep_enrollment_accounts(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device_awaiting_configuration,
+            None
+        ))
+
+    def test_configure_dep_enrollment_accounts(self):
+        self.dep_enrollment_session.dep_enrollment.use_realm_user = True
+        self.assertTrue(self.dep_enrollment_session.dep_enrollment.requires_account_configuration())
+        cmd = _configure_dep_enrollment_accounts(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device_awaiting_configuration,
+            None
+        )
+        self.assertIsInstance(cmd, AccountConfiguration)
+
+    # _finish_dep_enrollment_configuration
+
+    def test_device_configured_already_done(self):
+        self.assertIsNone(_finish_dep_enrollment_configuration(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None
+        ))
+
+    def test_device_configured_notnow_noop(self):
+        self.assertIsNone(_finish_dep_enrollment_configuration(
+            Channel.Device, RequestStatus.NotNow,
+            self.dep_enrollment_session,
+            self.enrolled_device_awaiting_configuration,
+            None
+        ))
+
+    def test_device_configured(self):
         command = _finish_dep_enrollment_configuration(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device_awaiting_configuration,
             None
@@ -289,9 +423,20 @@ class TestMDMCommands(TestCase):
         self.enrolled_device_awaiting_configuration.refresh_from_db()
         self.assertFalse(self.enrolled_device_awaiting_configuration.awaiting_configuration)
 
+    # _install_artifacts
+
     def test_no_device_profile(self):
         self.assertIsNone(_install_artifacts(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None
+        ))
+
+    def test_install_device_profile_notnow_noop(self):
+        artifact, artifact_versions = self._force_blueprint_artifact()
+        self.assertIsNone(_install_artifacts(
+            Channel.Device, RequestStatus.NotNow,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
@@ -300,7 +445,7 @@ class TestMDMCommands(TestCase):
     def test_install_device_profile(self):
         artifact, artifact_versions = self._force_blueprint_artifact()
         command = _install_artifacts(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
@@ -311,7 +456,7 @@ class TestMDMCommands(TestCase):
         http_response = command.build_http_response(self.dep_enrollment_session)
         self.assertIsInstance(http_response, HttpResponse)
         self.assertIsNone(_install_artifacts(
-            Channel.User,
+            Channel.User, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             self.enrolled_user
@@ -325,7 +470,7 @@ class TestMDMCommands(TestCase):
     def test_no_install_device_profile_previous_error(self):
         artifact, artifact_versions = self._force_blueprint_artifact()
         command = _install_artifacts(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
@@ -333,16 +478,25 @@ class TestMDMCommands(TestCase):
         command.process_response({"Status": "Error", "ErrorChain": [{"un": 1}]},
                                  self.dep_enrollment_session, self.meta_business_unit)
         self.assertIsNone(_install_artifacts(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
         ))
 
+    def test_install_user_profile_notnow_noop(self):
+        artifact, artifact_versions = self._force_blueprint_artifact(channel=Channel.User)
+        self.assertIsNone(_install_artifacts(
+            Channel.User, RequestStatus.NotNow,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            self.enrolled_user
+        ))
+
     def test_install_user_profile(self):
         artifact, artifact_versions = self._force_blueprint_artifact(channel=Channel.User)
         command = _install_artifacts(
-            Channel.User,
+            Channel.User, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             self.enrolled_user
@@ -353,7 +507,7 @@ class TestMDMCommands(TestCase):
         http_response = command.build_http_response(self.dep_enrollment_session)
         self.assertIsInstance(http_response, HttpResponse)
         self.assertIsNone(_install_artifacts(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
@@ -367,7 +521,7 @@ class TestMDMCommands(TestCase):
     def test_no_install_user_profile_previous_error(self):
         artifact, artifact_versions = self._force_blueprint_artifact(channel=Channel.User)
         command = _install_artifacts(
-            Channel.User,
+            Channel.User, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             self.enrolled_user
@@ -375,23 +529,38 @@ class TestMDMCommands(TestCase):
         command.process_response({"Status": "Error", "ErrorChain": [{"un": 1}]},
                                  self.dep_enrollment_session, self.meta_business_unit)
         self.assertIsNone(_install_artifacts(
-            Channel.User,
+            Channel.User, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             self.enrolled_user
         ))
 
-    def test_remove_device_profile(self):
+    # _remove_artifacts
+
+    def test_remove_device_profile_noop(self):
         artifact, artifact_versions = self._force_artifact()
         self.assertIsNone(_remove_artifacts(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
         ))
+
+    def test_remove_device_profile_notnow_noop(self):
+        artifact, artifact_versions = self._force_artifact()
+        self._force_target_artifact_version(self.enrolled_device, artifact_versions[0])
+        self.assertIsNone(_remove_artifacts(
+            Channel.Device, RequestStatus.NotNow,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None
+        ))
+
+    def test_remove_device_profile(self):
+        artifact, artifact_versions = self._force_artifact()
         device_artifact = self._force_target_artifact_version(self.enrolled_device, artifact_versions[0])
         command = _remove_artifacts(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
@@ -402,7 +571,7 @@ class TestMDMCommands(TestCase):
         http_response = command.build_http_response(self.dep_enrollment_session)
         self.assertIsInstance(http_response, HttpResponse)
         self.assertIsNone(_remove_artifacts(
-            Channel.User,
+            Channel.User, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             self.enrolled_user
@@ -417,7 +586,7 @@ class TestMDMCommands(TestCase):
         artifact, artifact_versions = self._force_artifact()
         self._force_target_artifact_version(self.enrolled_device, artifact_versions[0])
         command = _remove_artifacts(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
@@ -425,23 +594,36 @@ class TestMDMCommands(TestCase):
         command.process_response({"Status": "Error", "ErrorChain": [{"un": 1}]},
                                  self.dep_enrollment_session, self.meta_business_unit)
         self.assertIsNone(_remove_artifacts(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
         ))
 
-    def test_remove_user_profile(self):
+    def test_remove_user_profile_noop(self):
         artifact, artifact_versions = self._force_artifact()
         self.assertIsNone(_remove_artifacts(
-            Channel.User,
+            Channel.User, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             self.enrolled_user
         ))
+
+    def test_remove_user_profile_notnow_noop(self):
+        artifact, artifact_versions = self._force_artifact()
+        self._force_target_artifact_version(self.enrolled_user, artifact_versions[0])
+        self.assertIsNone(_remove_artifacts(
+            Channel.User, RequestStatus.NotNow,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            self.enrolled_user
+        ))
+
+    def test_remove_user_profile(self):
+        artifact, artifact_versions = self._force_artifact()
         user_artifact = self._force_target_artifact_version(self.enrolled_user, artifact_versions[0])
         command = _remove_artifacts(
-            Channel.User,
+            Channel.User, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             self.enrolled_user
@@ -452,7 +634,7 @@ class TestMDMCommands(TestCase):
         http_response = command.build_http_response(self.dep_enrollment_session)
         self.assertIsInstance(http_response, HttpResponse)
         self.assertIsNone(_remove_artifacts(
-            Channel.Device,
+            Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
@@ -467,7 +649,7 @@ class TestMDMCommands(TestCase):
         artifact, artifact_versions = self._force_artifact()
         self._force_target_artifact_version(self.enrolled_user, artifact_versions[0])
         command = _remove_artifacts(
-            Channel.User,
+            Channel.User, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             self.enrolled_user
@@ -475,22 +657,42 @@ class TestMDMCommands(TestCase):
         command.process_response({"Status": "Error", "ErrorChain": [{"un": 1}]},
                                  self.dep_enrollment_session, self.meta_business_unit)
         self.assertIsNone(_remove_artifacts(
-            Channel.User,
+            Channel.User, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             self.enrolled_user
         ))
 
-    # re-enrollment
+    # _reenroll
 
     def test_reenroll_user_channel_noop(self):
         self.assertIsNone(
-            _reenroll(Channel.User, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+            _reenroll(
+                Channel.User, RequestStatus.Idle,
+                self.dep_enrollment_session,
+                self.enrolled_device,
+                self.enrolled_user
+            )
+        )
+
+    def test_reenroll_device_channel_notnow_noop(self):
+        self.assertIsNone(
+            _reenroll(
+                Channel.Device, RequestStatus.NotNow,
+                self.dep_enrollment_session,
+                self.enrolled_device,
+                self.enrolled_user
+            )
         )
 
     def test_reenroll_device_channel_no_cert_not_valid_after(self):
         self.assertIsNone(self.enrolled_device.cert_not_valid_after)
-        command = _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+        command = _reenroll(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            self.enrolled_user
+        )
         self.assertIsInstance(command, Reenroll)
         self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
         self.assertEqual(command.reenrollment_session.get_enrollment(), self.dep_enrollment)
@@ -500,13 +702,23 @@ class TestMDMCommands(TestCase):
         self.assertIsNone(self.enrolled_device.cert_not_valid_after)
         ReEnrollmentSession.objects.create_from_enrollment_session(self.dep_enrollment_session)
         self.assertIsNone(
-            _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+            _reenroll(
+                Channel.Device, RequestStatus.Idle,
+                self.dep_enrollment_session,
+                self.enrolled_device,
+                self.enrolled_user
+            )
         )
 
     def test_reenroll_device_channel_cert_too_old(self):
         self.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=10)
         self.enrolled_device.save()
-        command = _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+        command = _reenroll(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            self.enrolled_user
+        )
         self.assertIsInstance(command, Reenroll)
         self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
         self.assertEqual(command.reenrollment_session.get_enrollment(), self.dep_enrollment)
@@ -517,7 +729,12 @@ class TestMDMCommands(TestCase):
         self.enrolled_device.save()
         ReEnrollmentSession.objects.create_from_enrollment_session(self.dep_enrollment_session)
         self.assertIsNone(
-            _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+            _reenroll(
+                Channel.Device, RequestStatus.Idle,
+                self.dep_enrollment_session,
+                self.enrolled_device,
+                self.enrolled_user
+            )
         )
 
     def test_reenroll_device_channel_cert_too_old_older_reenrollment_session(self):
@@ -525,7 +742,12 @@ class TestMDMCommands(TestCase):
         self.enrolled_device.save()
         rs = ReEnrollmentSession.objects.create_from_enrollment_session(self.dep_enrollment_session)
         ReEnrollmentSession.objects.filter(pk=rs.pk).update(created_at=datetime.utcnow() - timedelta(hours=8))
-        command = _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+        command = _reenroll(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            self.enrolled_user
+        )
         self.assertIsInstance(command, Reenroll)
         self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
         self.assertEqual(command.reenrollment_session.get_enrollment(), self.dep_enrollment)
@@ -535,5 +757,71 @@ class TestMDMCommands(TestCase):
         self.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=167)
         self.enrolled_device.save()
         self.assertIsNone(
-            _reenroll(Channel.Device, self.dep_enrollment_session, self.enrolled_device, self.enrolled_user)
+            _reenroll(
+                Channel.Device, RequestStatus.Idle,
+                self.dep_enrollment_session,
+                self.enrolled_device,
+                self.enrolled_user
+            )
         )
+
+    # _trigger_declarative_management_sync
+
+    def test_trigger_declarative_management_sync_notnow_noop(self):
+        self.enrolled_device.declarative_management = True
+        self.assertIsNotNone(self.enrolled_device.blueprint)
+        self.assertIsNone(
+            _trigger_declarative_management_sync(
+                Channel.Device, RequestStatus.NotNow,
+                self.dep_enrollment_session,
+                self.enrolled_device,
+                None
+            )
+        )
+
+    def test_trigger_declarative_management_sync_no_declarative_management_noop(self):
+        self.assertFalse(self.enrolled_device.declarative_management)
+        self.assertIsNotNone(self.enrolled_device.blueprint)
+        self.assertIsNone(
+            _trigger_declarative_management_sync(
+                Channel.Device, RequestStatus.Idle,
+                self.dep_enrollment_session,
+                self.enrolled_device,
+                None
+            )
+        )
+
+    def test_trigger_declarative_management_sync_user_channel_noop(self):
+        self.enrolled_device.declarative_management = True
+        self.assertIsNotNone(self.enrolled_device.blueprint)
+        self.assertIsNone(
+            _trigger_declarative_management_sync(
+                Channel.User, RequestStatus.Idle,
+                self.dep_enrollment_session,
+                self.enrolled_device,
+                self.enrolled_user
+            )
+        )
+
+    def test_trigger_declarative_management_sync_no_blueprint_noop(self):
+        self.enrolled_device.declarative_management = True
+        self.enrolled_device.blueprint = None
+        self.assertIsNone(
+            _trigger_declarative_management_sync(
+                Channel.Device, RequestStatus.Idle,
+                self.dep_enrollment_session,
+                self.enrolled_device,
+                None
+            )
+        )
+
+    def test_trigger_declarative_management_sync(self):
+        self.enrolled_device.declarative_management = True
+        self.assertIsNotNone(self.enrolled_device.blueprint)
+        cmd = _trigger_declarative_management_sync(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None
+        )
+        self.assertIsInstance(cmd, DeclarativeManagement)

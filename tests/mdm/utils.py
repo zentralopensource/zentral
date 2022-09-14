@@ -222,7 +222,8 @@ def force_dep_enrollment_session(
     authenticated=False, completed=False,
     push_certificate=None,
     device_udid=None,
-    serial_number=None
+    serial_number=None,
+    realm_user=False,
 ):
     dep_enrollment = force_dep_enrollment(mbu, push_certificate)
     if serial_number is None:
@@ -232,6 +233,11 @@ def force_dep_enrollment_session(
     session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
         dep_enrollment, serial_number, device_udid
     )
+    if realm_user:
+        session.dep_enrollment.realm, session.realm_user = force_realm_user()
+        session.dep_enrollment.use_realm_user = True
+        session.dep_enrollment.save()
+        session.save()
     if completed:
         complete_enrollment_session(session)
     elif authenticated:

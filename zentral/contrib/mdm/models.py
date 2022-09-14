@@ -867,8 +867,11 @@ class DEPEnrollment(MDMEnrollment):
                                    "created_at": self.created_at,
                                    "updated_at": self.updated_at}}
 
+    def has_hardcoded_admin(self):
+        return self.admin_full_name and self.admin_short_name and self.admin_password_hash
+
     def requires_account_configuration(self):
-        return self.use_realm_user or (self.admin_full_name and self.admin_short_name and self.admin_password_hash)
+        return self.use_realm_user or self.has_hardcoded_admin()
 
 
 class DEPDevice(models.Model):
@@ -1608,13 +1611,24 @@ class UserArtifact(TargetArtifact):
 
 class CommandStatus(enum.Enum):
     Acknowledged = "Acknowledged"
-    Error = "Error"
     CommandFormatError = "CommandFormatError"
+    Error = "Error"
     NotNow = "NotNow"
 
     @classmethod
     def choices(cls):
         return tuple((i.value[0], i.value[0]) for i in cls)
+
+
+class RequestStatus(enum.Enum):
+    Acknowledged = "Acknowledged"
+    CommandFormatError = "CommandFormatError"
+    Error = "Error"
+    Idle = "Idle"
+    NotNow = "NotNow"
+
+    def is_error(self):
+        return self in (RequestStatus.Error, RequestStatus.CommandFormatError)
 
 
 class Command(models.Model):

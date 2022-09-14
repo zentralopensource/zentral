@@ -21,7 +21,7 @@ from zentral.contrib.mdm.declarations import (build_legacy_profile,
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.inventory import commit_tree_from_payload
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
-                                        Channel, DeviceCommand, EnrolledDevice, EnrolledUser,
+                                        Channel, RequestStatus, DeviceCommand, EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
                                         ReEnrollmentSession, UserEnrollmentSession,
                                         PushCertificate)
@@ -383,15 +383,21 @@ class CheckinView(MDMView):
 
 class ConnectView(MDMView):
     def do_put(self):
+        try:
+            request_status = RequestStatus(self.payload["Status"])
+        except KeyError:
+            self.abort("missing request status")
+        except ValueError:
+            self.abort("unknown request status")
         command_uuid = self.payload.get("CommandUUID", None)
-        payload_status = self.payload["Status"]
-        self.post_event("failure" if payload_status in ("Error", "CommandFormatError") else "success",
+
+        self.post_event("failure" if request_status.is_error() else "success",
                         command_uuid=command_uuid,
-                        payload_status=payload_status,
+                        request_status=request_status.value,
                         user_id=self.enrolled_user_id)
 
         # result
-        if payload_status != "Idle":
+        if command_uuid:
             command = get_command(self.channel, command_uuid)
             if command:
                 command.process_response(self.payload, self.enrollment_session, self.meta_business_unit)
@@ -404,15 +410,12 @@ class ConnectView(MDMView):
             self.enrolled_user.last_seen_at = datetime.utcnow()
             self.enrolled_user.save()
 
-        if payload_status in ["Idle", "Acknowledged", "Error", "CommandFormatError"]:
-            # we can send another command
-            return get_next_command_response(self.channel, self.enrollment_session,
-                                             self.enrolled_device, self.enrolled_user)
-        elif payload_status in ["NotNow"]:
-            # we let the device contact us again
-            return HttpResponse()
-        else:
-            self.abort("unknown payload status {}".format(payload_status))
+        # return next command if possible
+        return get_next_command_response(
+            self.channel, request_status,
+            self.enrollment_session,
+            self.enrolled_device, self.enrolled_user
+        )
 
 
 class EnterpriseAppDownloadView(View):

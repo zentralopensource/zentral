@@ -15,6 +15,7 @@ class CustomCommand(Command):
     allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
     allowed_in_user_enrollment = True
     store_result = True
+    reschedule_notnow = True
 
     def load_kwargs(self):
         self.command = plistlib.loads(self.db_command.kwargs["command"].encode("utf-8"))

@@ -9,7 +9,7 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.declarative_management"
 class DeclarativeManagement(Command):
     request_type = "DeclarativeManagement"
     allowed_channel = Channel.Device
-    allowed_platform = (Platform.iOS, Platform.iPadOS)
+    allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
     allowed_in_user_enrollment = True
 
     def command_acknowledged(self):
