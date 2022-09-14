@@ -179,7 +179,15 @@ class Migration(migrations.Migration):
                 ('kwargs', django.contrib.postgres.fields.jsonb.JSONField(default=dict)),
                 ('time', models.DateTimeField(null=True)),
                 ('result_time', models.DateTimeField(null=True)),
-                ('status', models.CharField(choices=[('A', 'A'), ('E', 'E'), ('C', 'C'), ('N', 'N')], max_length=64, null=True)),
+                ('status', models.CharField(
+                    choices=[
+                        ('Acknowledged', 'Acknowledged'),
+                        ('CommandFormatError', 'CommandFormatError'),
+                        ('Error', 'Error'),
+                        ('NotNow', 'NotNow')
+                    ],
+                    max_length=64, null=True)
+                 ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('artifact_version', models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, to='mdm.ArtifactVersion')),
@@ -346,7 +354,15 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='devicecommand',
             name='status',
-            field=models.CharField(choices=[('A', 'A'), ('E', 'E'), ('C', 'C'), ('N', 'N')], max_length=64, null=True),
+            field=models.CharField(
+                choices=[
+                    ('Acknowledged', 'Acknowledged'),
+                    ('CommandFormatError', 'CommandFormatError'),
+                    ('Error', 'Error'),
+                    ('NotNow', 'NotNow')
+                ],
+                max_length=64, null=True
+            ),
         ),
         migrations.AddField(
             model_name='enrolleddevice',

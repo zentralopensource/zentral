@@ -1617,7 +1617,7 @@ class CommandStatus(enum.Enum):
 
     @classmethod
     def choices(cls):
-        return tuple((i.value[0], i.value[0]) for i in cls)
+        return tuple((i.name, i.value) for i in cls)
 
 
 class RequestStatus(enum.Enum):
