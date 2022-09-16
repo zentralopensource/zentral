@@ -1,3 +1,5 @@
+from base64 import b64encode
+from datetime import datetime
 import json
 import logging
 import os
@@ -6,6 +8,21 @@ from django.utils.text import get_valid_filename
 
 
 logger = logging.getLogger("zentral.utils.json")
+
+
+def prepare_loaded_plist(obj):
+    if isinstance(obj, bytes):
+        obj = b64encode(obj).decode("ascii")
+    elif isinstance(obj, datetime):
+        obj = obj.isoformat()
+    elif isinstance(obj, str):
+        obj = obj.replace("\u0000", "")
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            obj[k] = prepare_loaded_plist(v)
+    elif isinstance(obj, list):
+        obj = [prepare_loaded_plist(i) for i in obj]
+    return obj
 
 
 def remove_null_character(obj):

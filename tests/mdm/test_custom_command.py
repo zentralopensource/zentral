@@ -44,7 +44,7 @@ class CustomCommandTestCase(TestCase):
         )
         self.assertEqual(cmd.build_command(), {"ManagedAppsOnly": False})
 
-    def test_process_acknowledge_response(self):
+    def test_process_acknowledged_response(self):
         cmd_payload = {
             "RequestType": "InstalledApplicationList",
             "ManagedAppsOnly": False

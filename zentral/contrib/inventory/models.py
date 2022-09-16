@@ -24,7 +24,8 @@ from zentral.conf import settings
 from zentral.core.compliance_checks.utils import get_machine_compliance_check_statuses
 from zentral.core.incidents.models import MachineIncident, Status
 from zentral.utils.model_extras import find_all_related_objects
-from zentral.utils.mt_models import AbstractMTObject, prepare_commit_tree, MTObjectManager, MTOError
+from zentral.utils.mt_models import (cleanup_commit_tree, prepare_commit_tree,
+                                     AbstractMTObject, MTObjectManager, MTOError)
 from .conf import (has_deb_packages,
                    os_version_display, os_version_version_display,
                    update_ms_tree_platform, update_ms_tree_type,
@@ -507,9 +508,12 @@ class Profile(AbstractMTObject):
     description = models.TextField(blank=True, null=True)
     organization = models.TextField(blank=True, null=True)
     removal_disallowed = models.BooleanField(blank=True, null=True)
+    has_removal_passcode = models.BooleanField(blank=True, null=True)
+    encrypted = models.BooleanField(blank=True, null=True)
     verified = models.BooleanField(blank=True, null=True)
     install_date = models.DateTimeField(blank=True, null=True)
     payloads = models.ManyToManyField(Payload)
+    signed_by = models.ForeignKey(Certificate, on_delete=models.PROTECT, blank=True, null=True)
 
 
 class EC2InstanceMetadata(AbstractMTObject):
@@ -687,6 +691,7 @@ class MachineSnapshotCommitManager(models.Manager):
                 CurrentMachineSnapshot.objects.update_or_create(serial_number=serial_number,
                                                                 source=source,
                                                                 defaults={'machine_snapshot': machine_snapshot,
+                                                                          'tree': cleanup_commit_tree(tree),
                                                                           'last_seen': last_seen})
                 return new_msc, machine_snapshot, last_seen
         except IntegrityError:
@@ -738,6 +743,7 @@ class CurrentMachineSnapshot(models.Model):
     serial_number = models.TextField(db_index=True)
     source = models.ForeignKey(Source, on_delete=models.CASCADE)
     machine_snapshot = models.ForeignKey(MachineSnapshot, on_delete=models.CASCADE)
+    tree = models.JSONField(null=True)
     last_seen = models.DateTimeField()
 
     class Meta:

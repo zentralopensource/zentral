@@ -4,6 +4,7 @@ import logging
 import plistlib
 import uuid
 from django.contrib.postgres.fields import ArrayField
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import connection, models
 from django.urls import reverse
 from django.utils import timezone
@@ -97,10 +98,36 @@ class PushCertificate(models.Model):
 
 
 class Blueprint(models.Model):
+
+    class InventoryItemCollectionOption(models.IntegerChoices):
+        NO = 0
+        MANAGED_ONLY = 1
+        ALL = 2
+
     name = models.CharField(max_length=256, unique=True)
 
     activation = models.JSONField(default=dict, editable=False)
     declaration_items = models.JSONField(default=dict, editable=False)
+
+    # inventory
+    inventory_interval = models.IntegerField(
+        default=86400,
+        validators=[MinValueValidator(14400), MaxValueValidator(604800)],
+        help_text="In seconds, the minimum interval between two inventory collection. "
+                  "Minimum 4h, maximum 7d, default 1d."
+    )
+    collect_apps = models.IntegerField(
+        choices=InventoryItemCollectionOption.choices,
+        default=InventoryItemCollectionOption.NO
+    )
+    collect_certificates = models.IntegerField(
+        choices=InventoryItemCollectionOption.choices,
+        default=InventoryItemCollectionOption.NO
+    )
+    collect_profiles = models.IntegerField(
+        choices=InventoryItemCollectionOption.choices,
+        default=InventoryItemCollectionOption.NO
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -178,6 +205,8 @@ class EnrolledDevice(models.Model):
     enrollment_id = models.TextField(null=True)
     serial_number = models.TextField(db_index=True)
     platform = models.CharField(max_length=64, choices=Platform.choices())
+    os_version = models.CharField(max_length=64, null=True)
+    apple_silicon = models.BooleanField(null=True)
 
     # notifications
     push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
@@ -197,8 +226,31 @@ class EnrolledDevice(models.Model):
 
     blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
     awaiting_configuration = models.BooleanField(null=True)
+
+    # declarative management
     declarative_management = models.BooleanField(default=False)
     declarations_token = models.UUIDField(null=True)
+
+    # information
+    device_information = models.JSONField(null=True)
+    device_information_updated_at = models.DateTimeField(null=True)
+    security_info = models.JSONField(null=True)
+    security_info_updated_at = models.DateTimeField(null=True)
+    apps_updated_at = models.DateTimeField(null=True)
+    certificates_updated_at = models.DateTimeField(null=True)
+    profiles_updated_at = models.DateTimeField(null=True)
+    # denormalized attributes
+    # enrollment
+    dep_enrollment = models.BooleanField(null=True)
+    user_enrollment = models.BooleanField(null=True)
+    user_approved_enrollment = models.BooleanField(null=True)
+    supervised = models.BooleanField(null=True)
+    # bootstrap token
+    bootstrap_token_allowed_for_authentication = models.BooleanField(null=True)
+    bootstrap_token_required_for_software_update = models.BooleanField(null=True)
+    bootstrap_token_required_for_kext_approval = models.BooleanField(null=True)
+    # activation lock
+    activation_lock_manageable = models.BooleanField(null=True)
 
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
@@ -258,6 +310,15 @@ class EnrolledDevice(models.Model):
         self.last_seen_at = None
         self.last_notified_at = None
         self.notification_queued_at = None
+        self.device_information_updated_at = None
+        self.security_info_updated_at = None
+        self.apps_updated_at = None
+        self.certificates_updated_at = None
+        self.profiles_updated_at = None
+        self.dep_enrollment = None
+        self.user_enrollment = None
+        self.user_approved_enrollment = None
+        self.supervised = None
         self.save()
         self.commands.all().delete()
         self.installed_artifacts.all().delete()

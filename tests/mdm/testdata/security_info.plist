@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CommandUUID</key>
+	<string>9A105E87-EC35-4F65-A265-423CFB92D624</string>
+	<key>SecurityInfo</key>
+	<dict>
+		<key>AuthenticatedRootVolumeEnabled</key>
+		<true/>
+		<key>BootstrapTokenAllowedForAuthentication</key>
+		<string>disallowed</string>
+		<key>BootstrapTokenRequiredForKernelExtensionApproval</key>
+		<true/>
+		<key>BootstrapTokenRequiredForSoftwareUpdate</key>
+		<true/>
+		<key>FDE_Enabled</key>
+		<true/>
+		<key>FDE_HasInstitutionalRecoveryKey</key>
+		<false/>
+		<key>FDE_HasPersonalRecoveryKey</key>
+		<true/>
+		<key>FirewallSettings</key>
+		<dict>
+			<key>AllowSigned</key>
+			<true/>
+			<key>AllowSignedApp</key>
+			<true/>
+			<key>Applications</key>
+			<array/>
+			<key>BlockAllIncoming</key>
+			<false/>
+			<key>FirewallEnabled</key>
+			<false/>
+			<key>LoggingEnabled</key>
+			<true/>
+			<key>LoggingOption</key>
+			<string>throttled</string>
+			<key>StealthMode</key>
+			<false/>
+		</dict>
+		<key>IsRecoveryLockEnabled</key>
+		<false/>
+		<key>ManagementStatus</key>
+		<dict>
+			<key>EnrolledViaDEP</key>
+			<false/>
+			<key>IsActivationLockManageable</key>
+			<true/>
+			<key>IsUserEnrollment</key>
+			<false/>
+			<key>UserApprovedEnrollment</key>
+			<true/>
+		</dict>
+		<key>RemoteDesktopEnabled</key>
+		<false/>
+		<key>SecureBoot</key>
+		<dict>
+			<key>ExternalBootLevel</key>
+			<string>allowed</string>
+			<key>SecureBootLevel</key>
+			<string>full</string>
+			<key>WindowsBootLevel</key>
+			<string>not supported</string>
+		</dict>
+		<key>SystemIntegrityProtectionEnabled</key>
+		<true/>
+	</dict>
+	<key>Status</key>
+	<string>Acknowledged</string>
+	<key>UDID</key>
+	<string>9353BC9A-5CF9-4C9E-9AD4-8D1E41D5FE3E</string>
+</dict>
+</plist>

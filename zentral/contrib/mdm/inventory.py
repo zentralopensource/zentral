@@ -1,28 +1,34 @@
 import logging
+from zentral.contrib.inventory.models import CurrentMachineSnapshot
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from .models import Platform
+from .models import Blueprint, Platform
 
 
 logger = logging.getLogger("zentral.contrib.mdm.inventory")
 
 
-def commit_tree_from_payload(udid, serial_number, meta_business_unit, payload):
+def tree_from_payload(udid, serial_number, meta_business_unit, payload):
     tree = {"source": {"module": "zentral.contrib.mdm",
                        "name": "MDM"},
             "reference": udid,
             "serial_number": serial_number}
-
-    # Mobile device IDs
-    for attr in ("IMEI", "MEID"):
-        val = payload.get(attr)
-        if val:
-            tree[attr.lower()] = val
 
     # BU
     try:
         tree["business_unit"] = meta_business_unit.api_enrollment_business_units()[0].serialize()
     except IndexError:
         pass
+
+    # Mobile device IDs
+    for attr in ("IMEI", "MEID"):
+        val = payload.get(attr)
+        if val:
+            tree[attr.lower()] = val
+    for service_subscription in payload.get("ServiceSubscriptions", []):
+        for attr in ("IMEI", "MEID"):
+            val = service_subscription.get(attr)
+            if val:
+                tree[attr.lower()] = val
 
     # System Info
     system_info_d = {}
@@ -65,6 +71,36 @@ def commit_tree_from_payload(udid, serial_number, meta_business_unit, payload):
                 d["name"] = Platform.macOS.value
         tree["os_version"] = d
 
-    commit_machine_snapshot_and_trigger_events(tree)
+    return tree
 
+
+def commit_update_tree(enrolled_device, update_tree, missing_ok=False):
+    # get existing tree
+    try:
+        cms = (CurrentMachineSnapshot.objects.select_for_update()
+                                             .select_related("machine_snapshot")
+                                             .get(serial_number=enrolled_device.serial_number,
+                                                  source__module="zentral.contrib.mdm"))
+    except CurrentMachineSnapshot.DoesNotExist:
+        if missing_ok:
+            tree = update_tree
+        else:
+            logger.warning("Could not update tree for machine %s: missing snapshot",
+                           enrolled_device.serial_number)
+            return
+    else:
+        tree = cms.tree
+        if not tree:
+            tree = cms.machine_snapshot.serialize()
+    # update existing tree with new info
+    tree.update(update_tree)
+    # reset collected items if necessary
+    blueprint = enrolled_device.blueprint
+    for bp_attr, tree_attr in (("collect_apps", "osx_app_instances"),
+                               ("collect_certificates", "certificates"),
+                               ("collect_profiles", "profiles")):
+        if blueprint is None or getattr(blueprint, bp_attr) == Blueprint.InventoryItemCollectionOption.NO:
+            tree[tree_attr] = []
+    # commit updated tree
+    commit_machine_snapshot_and_trigger_events(tree)
     return tree

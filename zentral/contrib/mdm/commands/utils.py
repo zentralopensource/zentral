@@ -4,16 +4,22 @@ from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
-                                        Channel, CommandStatus, RequestStatus, Platform,
+                                        Blueprint, CommandStatus,
+                                        Channel, RequestStatus, Platform,
                                         DeviceCommand, ReEnrollmentSession, UserCommand)
 from .account_configuration import AccountConfiguration
+from .base import registered_commands
+from .certificate_list import CertificateList
 from .declarative_management import DeclarativeManagement
 from .device_configured import DeviceConfigured
-from .install_profile import InstallProfile
+from .device_information import DeviceInformation
 from .install_enterprise_application import InstallEnterpriseApplication
-from .remove_profile import RemoveProfile
+from .install_profile import InstallProfile
+from .installed_application_list import InstalledApplicationList
+from .profile_list import ProfileList
 from .reenroll import Reenroll
-from .base import registered_commands
+from .remove_profile import RemoveProfile
+from .security_info import SecurityInfo
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.utils")
@@ -52,6 +58,74 @@ def load_command(db_command):
 
 
 # Next command
+
+
+def _update_inventory(channel, status, enrollment_session, enrolled_device, enrolled_user):
+    if status == RequestStatus.NotNow:
+        return
+    if channel != Channel.Device:
+        return
+    blueprint = enrolled_device.blueprint
+    if not blueprint:
+        return
+    min_date = datetime.utcnow() - timedelta(seconds=blueprint.inventory_interval)
+    # device information
+    if (
+        enrolled_device.device_information_updated_at is None
+        or enrolled_device.device_information_updated_at < min_date
+    ):
+        return DeviceInformation.create_for_device(enrolled_device)
+    # security info
+    if (
+        enrolled_device.security_info_updated_at is None
+        or enrolled_device.security_info_updated_at < min_date
+    ):
+        return SecurityInfo.create_for_device(enrolled_device)
+    # apps
+    if (
+        blueprint.collect_apps > Blueprint.InventoryItemCollectionOption.NO
+        and (
+            enrolled_device.apps_updated_at is None
+            or enrolled_device.apps_updated_at < min_date
+        )
+    ):
+        return InstalledApplicationList.create_for_device(
+            enrolled_device,
+            kwargs={
+                "managed_only": blueprint.collect_apps == Blueprint.InventoryItemCollectionOption.MANAGED_ONLY,
+                "update_inventory": True
+            }
+        )
+    # certificates
+    if (
+        blueprint.collect_certificates > Blueprint.InventoryItemCollectionOption.NO
+        and (
+            enrolled_device.certificates_updated_at is None
+            or enrolled_device.certificates_updated_at < min_date
+        )
+    ):
+        return CertificateList.create_for_device(
+            enrolled_device,
+            kwargs={
+                "managed_only": blueprint.collect_certificates == Blueprint.InventoryItemCollectionOption.MANAGED_ONLY,
+                "update_inventory": True
+            }
+        )
+    # profiles
+    if (
+        blueprint.collect_profiles > Blueprint.InventoryItemCollectionOption.NO
+        and (
+            enrolled_device.profiles_updated_at is None
+            or enrolled_device.profiles_updated_at < min_date
+        )
+    ):
+        return ProfileList.create_for_device(
+            enrolled_device,
+            kwargs={
+                "managed_only": blueprint.collect_profiles == Blueprint.InventoryItemCollectionOption.MANAGED_ONLY,
+                "update_inventory": True
+            }
+        )
 
 
 def _get_next_queued_command(channel, status, enrollment_session, enrolled_device, enrolled_user):
@@ -195,13 +269,18 @@ def _finish_dep_enrollment_configuration(channel, status, enrollment_session, en
 
 
 def get_next_command_response(channel, status, enrollment_session, enrolled_device, enrolled_user):
-    for next_command_func in (_get_next_queued_command,
-                              _reenroll,
-                              _install_artifacts,
-                              _remove_artifacts,
-                              _trigger_declarative_management_sync,
-                              _configure_dep_enrollment_accounts,
-                              _finish_dep_enrollment_configuration):
+    for next_command_func in (
+        # first, take care of all the pending commands
+        _get_next_queued_command,
+        # no pending commands, we can create new ones
+        _update_inventory,
+        _reenroll,
+        _install_artifacts,
+        _remove_artifacts,
+        _trigger_declarative_management_sync,
+        _configure_dep_enrollment_accounts,
+        _finish_dep_enrollment_configuration
+    ):
         command = next_command_func(channel, status, enrollment_session, enrolled_device, enrolled_user)
         if command:
             return command.build_http_response(enrollment_session)

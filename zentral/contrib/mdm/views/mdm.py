@@ -19,7 +19,7 @@ from zentral.contrib.mdm.declarations import (build_legacy_profile,
                                               build_management_status_subscriptions,
                                               update_enrolled_device_artifacts)
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.inventory import commit_tree_from_payload
+from zentral.contrib.mdm.inventory import commit_update_tree, tree_from_payload
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         Channel, RequestStatus, DeviceCommand, EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
@@ -200,21 +200,20 @@ class CheckinView(MDMView):
         self.get_certificate()
         self.get_push_certificate()
 
-        # commit machine infos
-        ms_tree = commit_tree_from_payload(self.enrolled_device_udid,
-                                           self.serial_number,
-                                           self.meta_business_unit,
-                                           self.payload)
-
         # save the enrolled device (NOT YET ENROLLED!)
         enrolled_device_defaults = {"enrollment_id": self.enrollment_id,
                                     "serial_number": self.serial_number,
                                     "push_certificate": self.push_certificate,
+                                    "os_version": self.payload.get("OSVersion"),
                                     "token": None,
                                     "push_magic": None,
                                     "unlock_token": None,
                                     "awaiting_configuration": None,
                                     "checkout_at": None}
+        ms_tree = tree_from_payload(self.enrolled_device_udid,
+                                    self.serial_number,
+                                    self.meta_business_unit,
+                                    self.payload)
         try:
             os_name = ms_tree["os_version"]["name"]
         except KeyError:
@@ -234,6 +233,8 @@ class CheckinView(MDMView):
         if not created and not is_reenrollment:
             enrolled_device.purge_state()
         if created or not is_reenrollment:
+            # commit machine infos
+            commit_update_tree(enrolled_device, ms_tree, missing_ok=True)
             # schedule a DeviceInformation command
             DeviceInformation.create_for_device(enrolled_device, queue=True)
             # switch on declarative management if possible

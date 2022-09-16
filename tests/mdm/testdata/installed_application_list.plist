@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CommandUUID</key>
+	<string>E615AD27-A6DA-479A-AE17-FBCF754E1B31</string>
+	<key>InstalledApplicationList</key>
+	<array>
+		<dict>
+			<key>BundleSize</key>
+			<integer>1</integer>
+			<key>Identifier</key>
+			<string>com.apple.mail</string>
+			<key>Installing</key>
+			<false/>
+			<key>Name</key>
+			<string>Mail</string>
+			<key>ShortVersion</key>
+			<string>16.0</string>
+			<key>Version</key>
+			<string>16.0</string>
+		</dict>
+		<dict>
+			<key>BundleSize</key>
+			<integer>23048830844</integer>
+			<key>ExternalVersionIdentifier</key>
+			<integer>851890269</integer>
+			<key>HasUpdateAvailable</key>
+			<false/>
+			<key>Identifier</key>
+			<string>com.apple.dt.Xcode</string>
+			<key>Installing</key>
+			<false/>
+			<key>Name</key>
+			<string>Xcode</string>
+			<key>ShortVersion</key>
+			<string>14.0</string>
+			<key>Version</key>
+			<string>14.0</string>
+		</dict>
+		<dict>
+			<key>BundleSize</key>
+			<integer>819268</integer>
+			<key>Installing</key>
+			<false/>
+			<key>Name</key>
+			<string>https+++lucid</string>
+		</dict>
+	</array>
+	<key>Status</key>
+	<string>Acknowledged</string>
+	<key>UDID</key>
+	<string>9353BC9A-5CF9-4C9E-9AD4-8D1E41D5FE3E</string>
+</dict>
+</plist>

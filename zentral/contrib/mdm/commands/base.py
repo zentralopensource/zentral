@@ -48,7 +48,7 @@ class Command:
         enrolled_device, target,
         artifact_version=None,
         kwargs=None,
-        queue=False, delay=None
+        queue=False, delay=0
     ):
         if enrolled_device == target:
             channel = Channel.Device
