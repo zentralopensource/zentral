@@ -63,7 +63,7 @@ class Configuration(models.Model):
         'enable_bundles',
         'enable_transitive_rules',
         # 'enable_all_event_upload' sharded
-        'block_usb_mass_storage',
+        'block_usb_mount',
         'remount_usb_mode',
     }
 
@@ -116,14 +116,19 @@ class Configuration(models.Model):
 
     # USB
 
-    block_usb_mass_storage = models.BooleanField(
+    block_usb_mount = models.BooleanField(
         default=False,
-        help_text="If set, blocking USB Mass storage feature is enabled."
+        help_text="If set, USB mass storage devices will be blocked or remounted.",
+        verbose_name="Block USB mount",
     )
     remount_usb_mode = ArrayField(
         models.CharField(max_length=16, validators=[MinLengthValidator(2)]),
         blank=True,
-        default=list
+        default=list,
+        help_text="Comma separated list of mount options used to remount the USB mass storage devices. "
+                  "If left empty, the devices will not be remounted. "
+                  "Only available if Block USB Mount is set.",
+        verbose_name="Remount USB mode",
     )
 
     # Zentral options

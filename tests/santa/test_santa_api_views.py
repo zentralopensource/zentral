@@ -128,6 +128,25 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(ms.source.name, "Santa")
         self.assertIsNone(ms.system_info.hardware_model)
 
+    def test_preflight_default_usb_options(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertFalse(json_response["block_usb_mount"])
+        self.assertEqual(json_response["remount_usb_mode"], [])
+
+    def test_preflight_remount_usb_options(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        Configuration.objects.update(block_usb_mount=True, remount_usb_mode=["noexec", "rdonly"])
+        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertTrue(json_response["block_usb_mount"])
+        self.assertEqual(json_response["remount_usb_mode"], ["noexec", "rdonly"])
+
     def test_preflight_model_identifier(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         data["model_identifier"] = "Macmini9,1"

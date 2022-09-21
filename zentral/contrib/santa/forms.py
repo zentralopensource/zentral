@@ -40,12 +40,12 @@ class ConfigurationForm(forms.ModelForm):
                 )
 
         # block USB
-        block_usb_mass_storage = cleaned_data.get("block_usb_mass_storage")
+        block_usb_mount = cleaned_data.get("block_usb_mount")
         remount_usb_mode = cleaned_data.get("remount_usb_mode")
-        if remount_usb_mode and not block_usb_mass_storage:
+        if remount_usb_mode and not block_usb_mount:
             self.add_error(
                 "remount_usb_mode",
-                "'Block USB mass storage' must be set to use this option"
+                "'Block USB mount' must be set to use this option"
             )
 
         return cleaned_data

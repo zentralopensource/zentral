@@ -257,10 +257,12 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(configuration.allow_unknown_shard, 87)
         self.assertEqual(configuration.enable_all_event_upload_shard, 65)
         self.assertEqual(configuration.sync_incident_severity, 0)
+        self.assertFalse(configuration.block_usb_mount)
+        self.assertEqual(configuration.remount_usb_mode, [])
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertContains(response, configuration.name)
 
-    def test_post_update_configuration_view(self):
+    def test_post_update_configuration_view_permission_denied(self):
         self._login("santa.add_configuration", "santa.view_configuration")
         configuration = self._force_configuration()
         response = self.client.post(reverse("santa:update_configuration", args=(configuration.pk,)),
@@ -273,7 +275,10 @@ class SantaSetupViewsTestCase(TestCase):
                                      "sync_incident_severity": 300,
                                      }, follow=True)
         self.assertEqual(response.status_code, 403)
+
+    def test_post_update_configuration_view(self):
         self._login("santa.add_configuration", "santa.change_configuration", "santa.view_configuration")
+        configuration = self._force_configuration()
         response = self.client.post(reverse("santa:update_configuration", args=(configuration.pk,)),
                                     {"name": configuration.name,
                                      "batch_size": 50,
@@ -282,13 +287,33 @@ class SantaSetupViewsTestCase(TestCase):
                                      "allow_unknown_shard": 91,
                                      "enable_all_event_upload_shard": 76,
                                      "sync_incident_severity": 300,
+                                     "block_usb_mount": "on",
+                                     "remount_usb_mode": "rdonly, noexec"
                                      }, follow=True)
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
         configuration = response.context["object"]
         self.assertEqual(configuration.full_sync_interval, 603)
         self.assertEqual(configuration.allow_unknown_shard, 91)
         self.assertEqual(configuration.enable_all_event_upload_shard, 76)
         self.assertEqual(configuration.sync_incident_severity, 300)
-        self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertTrue(configuration.block_usb_mount)
+        self.assertEqual(configuration.remount_usb_mode, ["rdonly", "noexec"])
+
+    def test_post_update_configuration_view_remount_usb_mode_error(self):
+        self._login("santa.add_configuration", "santa.change_configuration", "santa.view_configuration")
+        configuration = self._force_configuration()
+        response = self.client.post(reverse("santa:update_configuration", args=(configuration.pk,)),
+                                    {"name": configuration.name,
+                                     "batch_size": 50,
+                                     "client_mode": "1",
+                                     "full_sync_interval": 603,
+                                     "allow_unknown_shard": 91,
+                                     "enable_all_event_upload_shard": 76,
+                                     "sync_incident_severity": 300,
+                                     "remount_usb_mode": "rdonly, noexec"
+                                     }, follow=True)
+        self.assertTemplateUsed(response, "santa/configuration_form.html")
+        self.assertFormError(response, "form", "remount_usb_mode", "'Block USB mount' must be set to use this option")
 
     def test_get_create_enrollment_view(self):
         self._login("santa.add_configuration", "santa.view_configuration")
