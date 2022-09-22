@@ -414,11 +414,11 @@
       {% for certificate in certificates %}
       <dl class="dl-horizontal">
         <dt>Common Name</dt>
-        <dd>{{ certificate.common_name }}</dd>
+        <dd style="text-overflow:ellipsis;">{{ certificate.common_name }}</dd>
         <dt>Dates</dt>
         <dd>{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
         <dt>Issuer</dt>
-        <dd>{{ certificate.signed_by.common_name }}</dd>
+        <dd style="text-overflow:ellipsis;">{{ certificate.signed_by.common_name }}</dd>
       </dl>
       {% endfor %}
       {% endif %}
