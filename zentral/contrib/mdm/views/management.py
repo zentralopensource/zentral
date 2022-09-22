@@ -746,7 +746,11 @@ class BlueprintListView(PermissionRequiredMixin, ListView):
 class CreateBlueprintView(PermissionRequiredMixin, CreateView):
     permission_required = "mdm.add_blueprint"
     model = Blueprint
-    fields = ("name",)
+    fields = ("name",
+              "inventory_interval",
+              "collect_apps",
+              "collect_certificates",
+              "collect_profiles")
 
 
 class BlueprintView(PermissionRequiredMixin, DetailView):
@@ -771,7 +775,11 @@ class BlueprintView(PermissionRequiredMixin, DetailView):
 class UpdateBlueprintView(PermissionRequiredMixin, UpdateView):
     permission_required = "mdm.change_blueprint"
     model = Blueprint
-    fields = ("name",)
+    fields = ("name",
+              "inventory_interval",
+              "collect_apps",
+              "collect_certificates",
+              "collect_profiles")
 
 
 # SCEP Configurations

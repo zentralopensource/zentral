@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 import enum
 import logging
 import plistlib
@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
+from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmUser
 from zentral.conf import settings
@@ -144,6 +145,10 @@ class Blueprint(models.Model):
     @property
     def declarations_token(self):
         return uuid.UUID(self.declaration_items["DeclarationsToken"])
+
+    def get_inventory_interval_display(self):
+        now = datetime.utcnow()
+        return timesince(now - timedelta(seconds=self.inventory_interval), now=now)
 
 
 # SCEP

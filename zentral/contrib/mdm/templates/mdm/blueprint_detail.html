@@ -8,12 +8,57 @@
   <li class="active">{{ object }}</li>
 </ol>
 
-<h3>{{ object }}</h3>
+<h3>MDM blueprint <i>{{ object }}</i></h3>
+
+
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th width="33%">Attribute</th>
+        <th>Value</th>
+      </thead>
+      <tbody>
+      <tr>
+        <td>Name</td>
+        <td>{{ object.name }}</td>
+      </tr>
+      <tr>
+        <td>Inventory interval</td>
+        <td>{{ object.get_inventory_interval_display }}</td>
+      </tr>
+      <tr>
+        <td>Collect apps</td>
+        <td>{{ object.get_collect_apps_display }}</td>
+      </tr>
+      <tr>
+        <td>Collect certificates</td>
+        <td>{{ object.get_collect_certificates_display }}</td>
+      </tr>
+      <tr>
+        <td>Collect profiles</td>
+        <td>{{ object.get_collect_profiles_display }}</td>
+      </tr>
+      </tbody>
+    </table>
+
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
+    </dl>
+
+  </div>
+</div>
 
 {% if perms.mdm.change_blueprint %}
-<p>
-  <a class="btn btn-default" href="{% url 'mdm:update_blueprint' object.pk %}">Update</a>
-</p>
+<div class="btn-group" role="group" style="margin:0 0 10px 0">
+  <a class="btn btn-default" href="{% url 'mdm:update_blueprint' object.pk %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Update
+  </a>
+</div>
 {% endif %}
 
 <h4>{{ artifacts_count }} Artifact{{ artifacts_count|pluralize }}</h4>

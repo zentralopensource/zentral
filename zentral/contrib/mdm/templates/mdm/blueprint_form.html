@@ -14,7 +14,7 @@
   {% endif %}
 </ol>
 
-<h3>{% if object %}Update {{ object }}{% else %}Create blueprint{% endif %}</h3>
+<h3>{% if object %}Update blueprint <i>{{ object }}</i>{% else %}Create blueprint{% endif %}</h3>
 
 <form class="form" method="post">{% csrf_token %}
   {{ form|bootstrap }}
