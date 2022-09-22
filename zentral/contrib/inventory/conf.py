@@ -243,7 +243,9 @@ def macos_version_from_build(build):
         elif minor == 16:
             major = 11
             patch_number = int(match.group("patch_number"))
-            if patch_letter >= "G" and patch_number >= 165:
+            if patch_letter >= "G" and patch_number >= 817:
+                minor = 7
+            elif patch_letter >= "G" and patch_number >= 165:
                 minor = 6
             else:
                 minor = max(0, patch - 1)
