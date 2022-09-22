@@ -305,16 +305,17 @@ class TestMDMCommands(TestCase):
         )
         self.assertEqual(fetched_cmd, cmd)
 
-    def test_not_now_device_information_not_rescheduled(self):
+    def test_not_now_device_information_rescheduled(self):
         cmd = DeviceInformation.create_for_device(self.enrolled_device)
         cmd.db_command.status = CommandStatus.NotNow.value
         cmd.db_command.save()
-        self.assertIsNone(_get_next_queued_command(
+        cmd2 = _get_next_queued_command(
             Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None,
-        ))
+        )
+        self.assertEqual(cmd, cmd2)
 
     # _configure_dep_enrollment_accounts
 

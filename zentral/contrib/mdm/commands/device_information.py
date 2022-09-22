@@ -14,6 +14,7 @@ class DeviceInformation(Command):
     allowed_channel = (Channel.Device, Channel.User)
     allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
     allowed_in_user_enrollment = True
+    reschedule_notnow = True
 
     # https://developer.apple.com/documentation/devicemanagement/deviceinformationcommand/command/queries
     queries = [
