@@ -728,7 +728,7 @@ class MachineSnapshotCommit(models.Model):
                 diff.setdefault("last_seen", {})["added"] = self.last_seen
             return diff
 
-    def get_system_update_for_display(self):
+    def get_system_update_display(self):
         if self.system_uptime:
             now = datetime.utcnow()
             return timesince(now - timedelta(seconds=self.system_uptime), now=now)
