@@ -51,7 +51,7 @@ Click on the _Next: Configure Security Group_ button.
 
 ## Configure security groups
 
-The required open ports are 22, 80, and 443. If you also want to be able to ship logs with filebeat, you need to open the 5044 port too.
+The required open ports are 22, 80, and 443.
 
 If you are new to this, just create a new security group for the Zentral instance:
 
@@ -59,7 +59,6 @@ If you are new to this, just create a new security group for the Zentral instanc
 2. Add a rule for SSH. (you can restrict the allowed ip ranges if you like)
 3. Add a rule for HTTP
 4. Add a custom TCP rule for port 443 (HTTPS). Do not forget the ip range – Unrestricted IPv4/v6: `0.0.0.0/0, ::/0`
-5. Add a custom TCP rule for port 5044 (HTTPS). Again, do not forget the ip range.
 
 *Here is a link to the documentation about the [Security Groups](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_SecurityGroups.html), if you want to dig deeper.*
 
@@ -81,7 +80,7 @@ Once you have a ssh key pair, click on the _Launch Instances_ button, and your i
 
 ## Setup the domain name(s) for your instance
 
-Zentral requires at leat one domain name resolving to the IP address of the launched instance. If you want to ship logs with filebeat, and experiment with the MDM, you will need a second domain name (to separate the endpoints requiring client certificate authentication).
+Zentral requires at leat one domain name resolving to the IP address of the launched instance. If you want to experiment with the MDM, you will need a second domain name (to separate the endpoints requiring client certificate authentication).
 
 1. In the AWS console, [find the public IP address of the instance](https://youtu.be/oH2kz3JOgzs?t=69) that is starting. No need to wait for the instance to be fully up.
 2. Use this IP to setup a first required A record. (_zentral.example.com_ for the rest of this tutorial)

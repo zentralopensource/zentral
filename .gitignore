@@ -14,7 +14,6 @@ __pycache__
 !/docker-compose.yml
 !/docker-compose.basic-auth.yml
 !/docker-compose.common.yml
-!/docker-compose.logstash.yml
 !/docker-compose.mdm.yml
 !/docker-compose.puppet.yml
 !/docker-compose.saml2.yml
@@ -23,7 +22,6 @@ __pycache__
 
 /conf/*
 !/conf/start
-!/conf/logstash
 !/conf/mdm
 !/conf/puppet
 !/conf/saml2

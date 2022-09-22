@@ -8,7 +8,6 @@ class TestZentralApps(SimpleTestCase):
     expected_apps = [
         "accounts",
         "compliance_checks",
-        "filebeat",
         "incidents",
         "inventory",
         "jamf",

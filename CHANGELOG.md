@@ -4,6 +4,12 @@
 
 New `zentral.core.stores.backends.snowflake` store backend.
 
+### Backward incompatibilities
+
+#### 🧨 Filebeat module removed
+
+Extra logs can still be shipped to Zentral, but Zentral doesn't need to manage the Filebeat enrollments.
+
 ## 2022.2 (August 13, 2022)
 
 **IMPORTANT:** The License has changed! Most of the code stays under the Apache license, but some modules, like the SAML authentication, or the Splunk event store are licensed under a new source available license, and require a subscription when used in production.

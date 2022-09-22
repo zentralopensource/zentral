@@ -18,7 +18,6 @@ You can deploy it on your machine with [Docker](./deployment/docker-compose), or
 
 ## Supported agents
 
-* Filebeat
 * Jamf Protect
 * Munki
 * Osquery
