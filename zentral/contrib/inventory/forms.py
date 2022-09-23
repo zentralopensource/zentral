@@ -931,7 +931,7 @@ class JMESPathCheckDevToolForm(forms.Form):
             except CurrentMachineSnapshot.DoesNotExist:
                 self.add_error("serial_number", "Current machine with this serial number for this source not found")
             else:
-                cleaned_data["tree"] = cms.machine_snapshot.serialize()
+                cleaned_data["tree"] = cms.tree or cms.machine_snapshot.serialize()
                 compiled_jmespath = cleaned_data.get("compiled_jmespath")
                 if compiled_jmespath:
                     try:
