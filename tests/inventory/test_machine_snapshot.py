@@ -47,6 +47,20 @@ class MachineSnapshotTestCase(TestCase):
                            'sha_256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
                            'valid_from': parser.parse('2006/04/25 23:40:36 +0200'),
                            'valid_until': parser.parse('2035/02/09 22:40:36 +0100')}
+        cls.certificate1 = {'common_name': 'Yolo-ID-1',
+                            'organization': 'Zentral',
+                            'organizational_unit': 'Zentral IT',
+                            'sha_1': '611e5b662c593a08ff58d14ae22452d198df6c6f',
+                            'sha_256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f023',
+                            'valid_from': parser.parse('2022/01/01 23:40:36 +0200'),
+                            'valid_until': parser.parse('2042/01/01 22:40:36 +0100')}
+        cls.certificate2 = {'common_name': 'Fomo-ID-1',
+                            'organization': 'Zentral',
+                            'organizational_unit': 'Zentral IT',
+                            'sha_1': '611e5b662c593a08ff58d14ae22452d198df6c6a',
+                            'sha_256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f022',
+                            'valid_from': parser.parse('2022/01/01 23:40:36 +0200'),
+                            'valid_until': parser.parse('2042/01/01 22:40:36 +0100')}
         cls.osx_app_instance = {'app': cls.osx_app,
                                 'bundle_path': "/Applications/Baller.app",
                                 'signed_by': cls.certificate
@@ -92,6 +106,13 @@ class MachineSnapshotTestCase(TestCase):
                                  'os_version': cls.os_version,
                                  'osx_app_instances': [cls.osx_app_instance],
                                  'extra_facts': cls.extra_facts}
+        cls.machine_snapshot5 = {'source': copy.deepcopy(cls.source),
+                                 'business_unit': cls.business_unit_tree,
+                                 'serial_number': cls.serial_number,
+                                 'os_version': cls.os_version,
+                                 'osx_app_instances': [cls.osx_app_instance],
+                                 'extra_facts': cls.extra_facts,
+                                 'certificates': [cls.certificate1, cls.certificate2]}
 
     def test_machine_snapshot_commit_create(self):
         tree = copy.deepcopy(self.machine_snapshot)
@@ -256,9 +277,30 @@ class MachineSnapshotTestCase(TestCase):
 
     def test_commit_certificate(self):
         tree = copy.deepcopy(self.certificate)
-        cert, created = Certificate.objects.commit(tree)
+        cert, _ = Certificate.objects.commit(tree)
         cert.refresh_from_db()
         self.assertEqual(cert.hash(), cert.mt_hash)
+        self.assertEqual(cert.short_repr(), "Apple Root CA")
+
+    def test_certificate_short_repr_missing_cn(self):
+        tree = copy.deepcopy(self.certificate)
+        tree.pop("common_name")
+        cert, _ = Certificate.objects.commit(tree)
+        self.assertEqual(cert.short_repr(), "Apple Inc.")
+
+    def test_certificate_short_repr_missing_cn_o(self):
+        tree = copy.deepcopy(self.certificate)
+        tree.pop("common_name")
+        tree.pop("organization")
+        cert, _ = Certificate.objects.commit(tree)
+        self.assertEqual(cert.short_repr(), "Apple Certification Authority")
+
+    def test_ordered_certificates(self):
+        tree = copy.deepcopy(self.machine_snapshot5)
+        _, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+        cert1, cert2 = [cert for cert in ms.ordered_certificates()]
+        self.assertEqual(cert1.common_name, "Fomo-ID-1")
+        self.assertEqual(cert2.common_name, "Yolo-ID-1")
 
     def test_source(self):
         tree = copy.deepcopy(self.machine_snapshot3)

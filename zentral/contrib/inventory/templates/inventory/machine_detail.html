@@ -408,17 +408,19 @@
       {% endif %}
       {% endwith %}
 
-      {% with ms.certificates.all as certificates %}
+      {% with ms.ordered_certificates as certificates %}
       {% if certificates.count %}
       <h3>Certificate{{ certificates.count|pluralize }}</h3>
       {% for certificate in certificates %}
       <dl class="dl-horizontal">
         <dt>Common Name</dt>
-        <dd style="overflow:hidden;text-overflow:ellipsis;">{{ certificate.common_name }}</dd>
+        <dd style="overflow:hidden;text-overflow:ellipsis;">{{ certificate.short_repr }}</dd>
         <dt>Dates</dt>
         <dd>{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
+        {% if certificate.signed_by %}
         <dt>Issuer</dt>
-        <dd style="overflow:hidden;text-overflow:ellipsis;">{{ certificate.signed_by.common_name }}</dd>
+        <dd style="overflow:hidden;text-overflow:ellipsis;">{{ certificate.signed_by.short_repr|default:"?" }}</dd>
+        {% endif %}
       </dl>
       {% endfor %}
       {% endif %}

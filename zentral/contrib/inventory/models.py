@@ -366,6 +366,9 @@ class Certificate(AbstractMTObject):
     valid_until = models.DateTimeField(blank=True, null=True)
     signed_by = models.ForeignKey('self', on_delete=models.SET_NULL, blank=True, null=True)
 
+    def short_repr(self):
+        return self.common_name or self.organization or self.organizational_unit
+
 
 class OSXAppInstance(AbstractMTObject):
     app = models.ForeignKey(OSXApp, on_delete=models.PROTECT)
@@ -636,6 +639,11 @@ class MachineSnapshot(AbstractMTObject):
         return self.program_instances.select_related('program').all().order_by('program__name',
                                                                                'program__version',
                                                                                'install_location')
+
+    def ordered_certificates(self):
+        return self.certificates.select_related('signed_by').all().order_by('common_name',
+                                                                            'organization',
+                                                                            'organizational_unit')
 
     def ordered_profiles(self):
         return self.profiles.all().order_by('identifier', 'uuid', 'pk')
