@@ -34,7 +34,15 @@ class InstallEnterpriseApplication(Command):
         }
 
     def command_acknowledged(self):
+        apps_to_check = None
         if self.artifact_version.enterprise_app.bundles:
+            # TODO we do not use the version, because it seems to be reported differently
+            # maybe because we get the wrong one when we analyse the Distribution
+            apps_to_check = [
+                {"Identifier": bundle["id"], "ShortVersion": bundle["version_str"]}
+                for bundle in self.artifact_version.enterprise_app.bundles
+            ]
+        if apps_to_check:
             DeviceArtifact.objects.update_or_create(
                 enrolled_device=self.enrolled_device,
                 artifact_version=self.artifact_version,
@@ -45,6 +53,7 @@ class InstallEnterpriseApplication(Command):
             InstalledApplicationList.create_for_device(
                 self.enrolled_device,
                 self.artifact_version,
+                kwargs={"apps_to_check": apps_to_check},
                 queue=True, delay=first_delay_seconds
             )
         else:

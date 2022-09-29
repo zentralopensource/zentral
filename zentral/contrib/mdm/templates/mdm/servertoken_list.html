@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="active">Server tokens</li>
+</ol>
+
+<h3>{{ object_list|length }} Server token{{ object_list|length|pluralize }}</h3>
+
+{% if perms.mdm.add_servertoken %}
+<a class="btn btn-default" href="{% url 'mdm:create_server_token' %}">
+  Add
+</a>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <th>Organization</th>
+    <th>Location</th>
+    <th>Token expiry</th>
+  </thead>
+  <tbody>
+    {% for server_token in object_list %}
+    <tr>
+      <td>{{ server_token.organization_name }}</td>
+      <td><a href="{{ server_token.get_absolute_url }}">{{ server_token.location_name }}</a></td>
+      <td>
+        {% if server_token.expires_soon %}
+        <span class="text-danger">
+          {{ server_token.token_expiration_date|date:'SHORT_DATETIME_FORMAT' }} ({{server_token.token_expiration_date|timeuntil }})
+        </span>
+        {% else %}
+        {{ server_token.token_expiration_date|date:'SHORT_DATE_FORMAT' }}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

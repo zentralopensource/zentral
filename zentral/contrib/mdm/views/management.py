@@ -27,7 +27,7 @@ from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintA
                                        UpdateArtifactForm,
                                        UserEnrollmentForm, UserEnrollmentEnrollForm,
                                        UploadEnterpriseAppForm, UploadProfileForm)
-from zentral.contrib.mdm.models import (Artifact, ArtifactType, Blueprint, BlueprintArtifact,
+from zentral.contrib.mdm.models import (Artifact, ArtifactType, Asset, Blueprint, BlueprintArtifact,
                                         DEPDevice, DEPEnrollment,
                                         DeviceCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
@@ -726,6 +726,19 @@ class DeleteBlueprintArtifactView(PermissionRequiredMixin, DeleteView):
         update_blueprint_activation(blueprint, commit=False)
         update_blueprint_declaration_items(blueprint, commit=True)
         return redirect(self.artifact)
+
+
+# Assets
+
+
+class AssetListView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_asset"
+    model = Asset
+
+
+class AssetView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_asset"
+    model = Asset
 
 
 # Blueprints

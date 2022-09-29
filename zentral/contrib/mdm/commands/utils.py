@@ -3,6 +3,7 @@ import logging
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
+from zentral.contrib.mdm.apps_books import ensure_enrolled_device_asset_association
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         Blueprint, CommandStatus,
                                         Channel, RequestStatus, Platform,
@@ -13,6 +14,7 @@ from .certificate_list import CertificateList
 from .declarative_management import DeclarativeManagement
 from .device_configured import DeviceConfigured
 from .device_information import DeviceInformation
+from .install_application import InstallApplication
 from .install_enterprise_application import InstallEnterpriseApplication
 from .install_profile import InstallProfile
 from .installed_application_list import InstalledApplicationList
@@ -147,7 +149,7 @@ def _get_next_queued_command(channel, status, enrollment_session, enrolled_devic
         queryset = queryset.filter(
             Q(time__isnull=True) | Q(status=RequestStatus.NotNow.value, name__in=reschedule_db_names)
         )
-    db_command = queryset.filter(**kwargs).order_by("created_at").first()
+    db_command = queryset.select_related("artifact_version__artifact").filter(**kwargs).order_by("created_at").first()
     if db_command:
         command = load_command(db_command)
         command.set_time()
@@ -209,17 +211,24 @@ def _install_artifacts(channel, status, enrollment_session, enrolled_device, enr
         target = enrolled_user
     artifact_version = ArtifactVersion.objects.next_to_install(target)
     if artifact_version:
+        command_class = None
         if artifact_version.artifact.type == ArtifactType.Profile.name:
             command_class = InstallProfile
         elif artifact_version.artifact.type == ArtifactType.EnterpriseApp.name:
             command_class = InstallEnterpriseApplication
+        elif artifact_version.artifact.type == ArtifactType.StoreApp.name:
+            # on-the-fly asset assignment
+            if ensure_enrolled_device_asset_association(enrolled_device, artifact_version.store_app.asset):
+                # the association is already done, we can send the command
+                command_class = InstallApplication
         else:
             # should never happen
             raise ValueError(f"Cannot install artifact type {artifact_version.artifact.type}")
-        if channel == Channel.Device:
-            return command_class.create_for_device(enrolled_device, artifact_version)
-        else:
-            return command_class.create_for_user(enrolled_user, artifact_version)
+        if command_class:
+            if channel == Channel.Device:
+                return command_class.create_for_device(enrolled_device, artifact_version)
+            else:
+                return command_class.create_for_user(enrolled_user, artifact_version)
 
 
 def _remove_artifacts(channel, status, enrollment_session, enrolled_device, enrolled_user):

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:server_tokens' %}">Server tokens</a></li>
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="active">Delete server token</li>
+</ol>
+
+<h3>Delete <i>{{ object }}</i></h3>
+
+<form class="form" method="post">{% csrf_token %}
+  <p>Do you really want to delete this server token?</p>
+  <div class="btn-group" role="group">
+    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    <button type="submit" class="btn btn-danger">Delete</button>
+  </div>
+</form>
+{% endblock %}

@@ -20,6 +20,9 @@
 {% if perms.mdm.view_artifact %}
 <p><a href="{% url 'mdm:artifacts' %}">Artifacts</a></p>
 {% endif %}
+{% if perms.mdm.view_asset %}
+<p><a href="{% url 'mdm:assets' %}">Store apps</a></p>
+{% endif %}
 {% if perms.mdm.view_blueprint %}
 <p><a href="{% url 'mdm:blueprints' %}">Blueprints</a></p>
 {% endif %}
@@ -33,6 +36,9 @@
 {% endif %}
 {% if perms.mdm.view_depvirtualserver %}
 <p><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></p>
+{% endif %}
+{% if perms.mdm.view_servertoken %}
+<p><a href="{% url 'mdm:server_tokens' %}">Server tokens</a></p>
 {% endif %}
 <p><a href="{% url 'mdm:root_ca' %}">Trusted Root CA configuration profile</a></p>
 {% endblock %}

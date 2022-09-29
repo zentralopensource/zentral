@@ -19,6 +19,7 @@ class InstalledApplicationList(Command):
         self.managed_only = self.db_command.kwargs.get("managed_only", False)
         self.retries = self.db_command.kwargs.get("retries", 0)
         self.update_inventory = self.db_command.kwargs.get("update_inventory", False)
+        self.apps_to_check = self.db_command.kwargs.get("apps_to_check", [])
         self.store_result = not self.update_inventory and not self.artifact_version
 
     def build_command(self):
@@ -38,29 +39,19 @@ class InstalledApplicationList(Command):
                              "Name",
                              "ShortVersion",
                              "Version"]}
-        if self.artifact_version:
-            identifiers = [bundle["id"] for bundle in self.artifact_version.enterprise_app.bundles]
-            if identifiers:
-                command["Identifiers"] = identifiers
-            else:
-                logger.error("Artifact version %s has no bundles.", self.artifact_version.pk)
+        if self.apps_to_check:
+            command["Identifiers"] = [app["Identifier"] for app in self.apps_to_check]
         return command
 
     def _update_device_artifact(self):
         # this command was sent to check on an install
-        # TODO we do not use the version, because it seems to be reported differently
-        # maybe because we get the wrong one when we analyse the Distribution
-        keys = set((bundle["id"], bundle["version_str"])
-                   for bundle in self.artifact_version.enterprise_app.bundles)
-        if not keys:
-            logger.error("Artifact version %s has no bundles.", self.artifact_version.pk)
-            return
         found = False
         error = False
         installed = True
+        app_key_attrs = list(self.apps_to_check[0].keys())
         for app in self.response.get("InstalledApplicationList", []):
-            key = (app["Identifier"], app["ShortVersion"])
-            if key not in keys:
+            app_key = {aka: app[aka] for aka in app_key_attrs}
+            if app_key not in self.apps_to_check:
                 continue
             found = True
             if any(app.get(attr) for attr in ("DownloadWaiting", "DownloadPaused", "Installing")):
@@ -99,7 +90,8 @@ class InstalledApplicationList(Command):
             self.create_for_device(
                 self.enrolled_device,
                 self.artifact_version,
-                kwargs={"retries": self.retries + 1},
+                kwargs={"apps_to_check": self.apps_to_check,
+                        "retries": self.retries + 1},
                 queue=True, delay=first_delay_seconds
             )
 
@@ -128,7 +120,7 @@ class InstalledApplicationList(Command):
             self.enrolled_device.save()
 
     def command_acknowledged(self):
-        if self.artifact_version:
+        if self.artifact_version and self.apps_to_check:
             self._update_device_artifact()
         elif self.update_inventory:
             self._update_inventory()

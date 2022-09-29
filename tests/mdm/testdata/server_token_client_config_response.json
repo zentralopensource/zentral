@@ -1,0 +1,19 @@
+{
+  "countryISO2ACode": "DE",
+  "defaultPlatform": "enterprisestore",
+  "locationName": "Yolo Fomo 2022",
+  "mdmInfo": {
+    "id": "29dd58b6-93fe-4791-a660-96d7339c9f54",
+    "metadata": "zentral.example.com",
+    "name": "Zentral"
+  },
+  "notificationAuthToken": "qhLNx6TXKrQPTHJLGn4yO6SjJ5Av78iYLbgSU1hujO6GJbgsseKeCazDpDBcIjGZ",
+  "notificationUrl": "https://zentral.example.com/mdm/server_tokens/9b557ea2-d72d-49af-a597-49bcbf31ec1b/notify/",
+  "subscribedNotificationTypes": [
+    "ASSET_COUNT",
+    "ASSET_MANAGEMENT"
+  ],
+  "tokenExpirationDate": "2023-09-26T08:30:39+0000",
+  "uId": "981060278089131045",
+  "websiteURL": "https://business.apple.com"
+}

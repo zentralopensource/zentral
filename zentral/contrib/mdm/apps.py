@@ -7,6 +7,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
     verbose_name = "Zentral MDM contrib app"
     permission_models = (
         "artifact",
+        "asset",
         "blueprint",
         "depdevice",
         "depenrollment",
@@ -19,6 +20,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "pushcertificate",
         "otaenrollment",
         "scepconfig",
+        "servertoken",
         "userartifact",
         "userenrollment",
     )

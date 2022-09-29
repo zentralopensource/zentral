@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="active">Store apps</li>
+</ol>
+
+<h3>{{ object_list|length }} Store app{{ object_list|length|pluralize }}</h3>
+
+<table class="table">
+  <thead>
+    <th></th>
+    <th>Platforms</th>
+    <th>Name</th>
+    <th>Bundle ID</th>
+  </thead>
+  <tbody>
+    {% for asset in object_list %}
+    <tr>
+      <td>
+        <a href="{{ asset.get_store_url }}">
+          <img style="max-width:64px;max-height:64px" src="{{ asset.get_icon_url }}">
+        </a>
+      </td>
+      <td>
+        <ul>
+          {% for platform in asset.supported_platforms %}
+          <li>{{ platform }}</li>
+          {% endfor %}
+        </ul>
+      </td>
+      <td>{{ asset.name }} ({{ asset.adam_id }})</td>
+      <td>{{ asset.bundle_id }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

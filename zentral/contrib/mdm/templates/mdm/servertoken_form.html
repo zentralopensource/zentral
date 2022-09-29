@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:server_tokens' %}">Server tokens</a></li>
+  <li class="active">{% if object %}Update{% else %}Create{% endif %} server token</li>
+</ol>
+
+<h3>{% if object %}Update{% else %}Create{% endif %} server token</h3>
+
+<form class="form" method="post" enctype="multipart/form-data">{% csrf_token %}
+  {{ form|bootstrap }}
+  <p>
+    {% if object %}
+    <a href="{{ object.get_absolute_url }}" class="btn btn-default">
+    {% else %}
+    <a href="{% url "mdm:server_tokens" %}" class="btn btn-default">
+    {% endif %}
+      Cancel
+    </a>
+    <button type="submit" class="btn btn-primary">
+      Save
+    </button>
+  </p>
+</form>
+{% endblock %}

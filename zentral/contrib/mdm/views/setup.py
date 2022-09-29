@@ -1,16 +1,21 @@
 import io
+import json
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import SuspiciousOperation
-from django.http import FileResponse, HttpResponseRedirect
+from django.http import (FileResponse, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden,
+                         HttpResponseNotFound, HttpResponseRedirect)
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
+from zentral.contrib.mdm.apps_books import server_token_cache
 from zentral.contrib.mdm.dep import add_dep_token_certificate
-from zentral.contrib.mdm.forms import EncryptedDEPTokenForm, PushCertificateForm
-from zentral.contrib.mdm.models import PushCertificate, DEPToken, DEPVirtualServer
+from zentral.contrib.mdm.events import post_apps_books_notification_event
+from zentral.contrib.mdm.forms import EncryptedDEPTokenForm, PushCertificateForm, ServerTokenForm
+from zentral.contrib.mdm.models import PushCertificate, DEPToken, DEPVirtualServer, ServerToken
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_root_ca_configuration_profile)
+from zentral.utils.http import user_agent_and_ip_address_from_request
 
 logger = logging.getLogger('zentral.contrib.mdm.views.setup')
 
@@ -186,3 +191,59 @@ class DEPVirtualServerView(PermissionRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context["setup"] = True
         return context
+
+
+# Server tokens
+
+
+class ServerTokensView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_servertoken"
+    model = ServerToken
+
+
+class CreateServerTokenView(PermissionRequiredMixin, CreateView):
+    permission_required = "mdm.add_servertoken"
+    model = ServerToken
+    form_class = ServerTokenForm
+
+
+class ServerTokenView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_servertoken"
+    model = ServerToken
+
+
+class NotifyServerTokenView(View):
+    def post(self, request, *args, **kwargs):
+        server_token, _, notification_auth_token = server_token_cache.get(kwargs["notification_auth_token_id"])
+        if not notification_auth_token:
+            logger.error("Unknown apps & books notification token")
+            return HttpResponseNotFound()
+        elif request.META.get('HTTP_AUTHORIZATION') != f"Bearer {notification_auth_token}":
+            logger.error("Bad apps & books notification token")
+            return HttpResponseForbidden()
+        try:
+            data = json.loads(request.body)
+        except ValueError:
+            logger.error("Could not read apps & books notification body")
+            return HttpResponseBadRequest()
+        user_agent, ip = user_agent_and_ip_address_from_request(request)
+        post_apps_books_notification_event(server_token, user_agent, ip, data)
+        return HttpResponse()
+
+
+class UpdateServerTokenView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_servertoken"
+    model = ServerToken
+    form_class = ServerTokenForm
+
+
+class DeleteServerTokenView(PermissionRequiredMixin, DeleteView):
+    permission_required = "mdm.delete_servertoken"
+    model = ServerToken
+    success_url = reverse_lazy("mdm:server_tokens")
+
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        if not obj.can_be_deleted():
+            raise SuspiciousOperation("This server token cannot be deleted")
+        return obj

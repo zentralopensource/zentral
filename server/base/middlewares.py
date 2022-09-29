@@ -12,6 +12,7 @@ CSP_HEADER = 'Content-Security-Policy'
 
 DEFAULT_CSP_POLICIES = {
   "default-src": "'self'",
+  "img-src": "'self' https://*.mzstatic.com",
   "script-src": "'self'",
   "base-uri": "'none'",
   "frame-ancestors": "'none'",

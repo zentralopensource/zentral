@@ -49,6 +49,19 @@ urlpatterns = [
          views.DEPVirtualServerView.as_view(),
          name="dep_virtual_server"),
 
+    # Server tokens
+    path('server_tokens/', views.ServerTokensView.as_view(),
+         name='server_tokens'),
+    path('server_tokens/create/', views.CreateServerTokenView.as_view(),
+         name='create_server_token'),
+    path('server_tokens/<int:pk>/', views.ServerTokenView.as_view(),
+         name='server_token'),
+    path('server_tokens/<int:pk>/update/', views.UpdateServerTokenView.as_view(),
+         name='update_server_token'),
+    path('server_tokens/<int:pk>/delete/', views.DeleteServerTokenView.as_view(),
+         name='delete_server_token'),
+    path('server_tokens/<uuid:notification_auth_token_id>/notify/', csrf_exempt(views.NotifyServerTokenView.as_view()),
+         name='notify_server_token'),
 
     # management views
 
@@ -134,6 +147,15 @@ urlpatterns = [
          views.DeleteBlueprintArtifactView.as_view(),
          name="delete_blueprint_artifact"),
 
+    # assets
+    path('assets/',
+         views.AssetListView.as_view(),
+         name="assets"),
+    path('assets/<int:pk>/',
+         views.AssetView.as_view(),
+         name="asset"),
+
+    # blueprints
     path('blueprints/',
          views.BlueprintListView.as_view(),
          name="blueprints"),

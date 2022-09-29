@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:server_tokens' %}">Server tokens</a></li>
+  <li class="active">{{ object }}</li>
+</ol>
+
+<h3>Server token <i>{{ object }}</i></h3>
+
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th width="33%">Attribute</th>
+        <th>Value</th>
+      </thead>
+      <tbody>
+      <tr>
+        <td>Organization</td>
+        <td>{{ object.organization_name }}</td>
+      </tr>
+      <tr>
+        <td>Location</td>
+        <td>{{ object.location_name }}</td>
+      </tr>
+      <tr>
+        <td>Token expiration date</td>
+        <td>
+          {% if object.expires_soon %}
+          <span class="text-danger">
+            {{ object.token_expiration_date|date:'SHORT_DATETIME_FORMAT'}} ({{ object.token_expiration_date|timeuntil }})
+          </span>
+          {% else %}
+          {{ object.token_expiration_date|date:'SHORT_DATE_FORMAT'}}
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Country code</td>
+        <td>{{ object.country_code }}</td>
+      </tr>
+      <tr>
+        <td>Website URL</td>
+        <td><a href="{{ object.website_url }}">{{ object.website_url }}</a></td>
+      </tr>
+      </tbody>
+    </table>
+
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+    </dl>
+
+  </div>
+</div>
+
+{% if perms.mdm.change_servertoken or perms.mdm.delete_servertoken %}
+<div class="btn-group" role="group" style="margin:0 0 10px 0">
+  {% if perms.mdm.change_servertoken %}
+  <a class="btn btn-default" href="{% url 'mdm:update_server_token' object.pk %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Update
+  </a>
+  {% endif %}
+  {% if perms.mdm.delete_servertoken %}
+  <a class="btn btn-danger{% if not object.can_be_deleted %} disabled{% endif %}" href="{% url 'mdm:delete_server_token' object.pk %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    Delete
+  </a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:assets' %}">Store apps</a></li>
+  <li class="active">{{ asset }}</li>
+</ol>
+
+<h3>{{ object }}</h3>
+
+<div class="row">
+  <div class="col-md-12">
+    <table class="table">
+      <thead>
+        <th width="33%">Attribute</th>
+        <th>Value</th>
+      </thead>
+      <tbody>
+      <tr>
+        <td>Name</td>
+        <td>{{ object }}</td>
+      </tr>
+      </tbody>
+    </table>
+
+    <dl class="dl-horizontal">
+      <dt class="small" style="opacity:0.5">Created at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+      <dt class="small" style="opacity:0.5">Updated at</dt>
+      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+    </dl>
+
+  </div>
+</div>
+{% endblock %}

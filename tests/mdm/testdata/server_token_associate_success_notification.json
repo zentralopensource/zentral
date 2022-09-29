@@ -1,0 +1,17 @@
+{
+  "notification": {
+    "assignments": [
+      {
+        "adamId": "409203825",
+        "pricingParam": "STDQ",
+        "serialNumber": "C02000000000"
+      }
+    ],
+    "eventId": "1451d195-7818-44cc-844e-efd2557084c4",
+    "result": "SUCCESS",
+    "type": "ASSOCIATE"
+  },
+  "notificationId": "6e6e51b1-9e2f-42b1-affa-cddac94c8ebc",
+  "notificationType": "ASSET_MANAGEMENT",
+  "uId": "981060278089131045"
+}

@@ -1,8 +1,15 @@
+import base64
+import hashlib
+import json
+import logging
 import plistlib
+from dateutil import parser
 from django import forms
+from django.db import transaction
 from django.db.models import Q
 from realms.utils import build_password_hash_dict
 from .app_manifest import build_enterprise_app_manifest
+from .apps_books import AppsBooksClient
 from .crypto import load_push_certificate_and_key
 from .declarations import update_blueprint_declaration_items
 from .dep import decrypt_dep_token
@@ -12,7 +19,10 @@ from .models import (Artifact, ArtifactType, ArtifactVersion, BlueprintArtifact,
                      EnrolledDevice, EnterpriseApp, Platform,
                      SCEPConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
-                     Profile)
+                     Profile, ServerToken)
+
+
+logger = logging.getLogger("zentral.contrib.mdm.forms")
 
 
 class OTAEnrollmentForm(forms.ModelForm):
@@ -463,3 +473,94 @@ class SCEPConfigForm(forms.ModelForm):
     class Meta:
         model = SCEPConfig
         fields = "__all__"
+
+
+class ServerTokenForm(forms.ModelForm):
+    token_file = forms.FileField(
+        required=True,
+        help_text="Server token (*.vpptoken), downloaded from the Apple business manager."
+    )
+
+    class Meta:
+        model = ServerToken
+        fields = []
+
+    def clean(self):
+        token_file = self.cleaned_data["token_file"]
+        if not token_file:
+            return
+        raw_token = token_file.read()
+        token = raw_token.decode("utf-8")
+        # base64 + json test
+        try:
+            token_json = json.loads(base64.b64decode(raw_token))
+        except ValueError:
+            self.add_error("token_file", "Not a valid token")
+            return
+        # token hash
+        token_hash = hashlib.sha1(raw_token).hexdigest()
+        test_qs = ServerToken.objects.filter(token_hash=token_hash)
+        if self.instance.pk:
+            test_qs = test_qs.exclude(pk=self.instance.pk)
+        if test_qs.count():
+            self.add_error("token_file", "A server token with the same token already exists.")
+            return
+        self.cleaned_data["token_hash"] = hashlib.sha1(raw_token).hexdigest()
+        try:
+            self.cleaned_data["organization_name"] = token_json["orgName"]
+        except Exception:
+            self.add_error("token_file", "Could not get organization name.")
+            return
+        ab_client = AppsBooksClient(token)
+        try:
+            config = ab_client.get_client_config()
+        except Exception:
+            msg = "Could not get client information"
+            logger.exception(msg)
+            self.add_error("token_file", msg)
+            return
+        for config_attr, model_attr in (("countryISO2ACode", "country_code"),
+                                        ("uId", "library_uid"),
+                                        ("locationName", "location_name"),
+                                        ("defaultPlatform", "platform"),
+                                        ("websiteURL", "website_url")):
+            val = config.get(config_attr)
+            if not isinstance(val, str):
+                self.add_error("token_file", f"Missing or bad {config_attr}.")
+            else:
+                self.cleaned_data[model_attr] = val
+        try:
+            self.cleaned_data["token_expiration_date"] = parser.parse(config["tokenExpirationDate"])
+        except KeyError:
+            self.add_error("token_file", "Missing tokenExpirationDate.")
+            return
+        except Exception:
+            msg = "Could not parse token expiration date."
+            logger.exception(msg)
+            self.add_error("token_file", msg)
+            return
+        self.cleaned_data["token"] = token
+        return self.cleaned_data
+
+    def save(self):
+        server_token = super().save(commit=False)
+        for attr in ("token_hash",
+                     "token_expiration_date",
+                     "organization_name",
+                     "country_code",
+                     "library_uid",
+                     "location_name",
+                     "platform",
+                     "website_url"):
+            setattr(server_token, attr, self.cleaned_data[attr])
+        server_token.save()
+        server_token.set_token(self.cleaned_data["token"])
+        server_token.set_notification_auth_token()
+        server_token.save()
+
+        def update_client_config():
+            ab_client = AppsBooksClient.from_server_token(server_token)
+            ab_client.update_client_config()
+
+        transaction.on_commit(update_client_config)
+        return server_token

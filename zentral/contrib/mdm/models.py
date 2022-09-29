@@ -4,7 +4,7 @@ import logging
 import plistlib
 import uuid
 from django.contrib.postgres.fields import ArrayField
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinLengthValidator, MinValueValidator, MaxValueValidator
 from django.db import connection, models
 from django.urls import reverse
 from django.utils import timezone
@@ -15,6 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmUser
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaMachine
+from zentral.core.incidents.models import Severity
 from zentral.core.secret_engines import decrypt, decrypt_str, encrypt, encrypt_str, rewrap
 from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
 from zentral.utils.iso_639_1 import ISO_639_1_CHOICES
@@ -201,6 +202,237 @@ class SCEPConfig(models.Model):
             and self.userenrollment_set.count() == 0
         )
 
+
+# Apps and (not!) Books
+# https://developer.apple.com/documentation/devicemanagement/app_and_book_management
+
+
+class ServerToken(models.Model):
+    # token info
+    token_hash = models.CharField(max_length=40, unique=True)
+    token = models.TextField(null=True)
+    token_expiration_date = models.DateTimeField()
+    organization_name = models.TextField()
+
+    # client info
+    country_code = models.CharField(max_length=2)
+    library_uid = models.TextField()
+    location_name = models.TextField()
+    platform = models.TextField()
+    website_url = models.URLField()
+
+    # set by Zentral, to authenticate the Apple notification requests
+    notification_auth_token_id = models.UUIDField(null=True, db_index=True)
+    notification_auth_token = models.TextField(null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("organization_name", "location_name")
+
+    def __str__(self):
+        return self.location_name
+
+    def get_absolute_url(self):
+        return reverse("mdm:server_token", args=(self.pk,))
+
+    def serialize_for_event(self, keys_only=True):
+        d = {
+            "pk": self.pk,
+            "notification_auth_token_id": self.notification_auth_token_id,
+        }
+        if not keys_only:
+            d.update({
+                "token_expiration_date": self.token_expiration_date,
+                "organization_name": self.organization_name,
+                "country_code": self.country_code,
+                "library_uid": self.library_uid,
+                "location_name": self.location_name,
+                "platform": self.platform,
+                "website_url": self.website_url,
+                "notification_auth_token_id": self.notification_auth_token_id
+            })
+        return d
+
+    def expires_soon(self):
+        # TODO: hard coded 15 days
+        return self.token_expiration_date <= timezone.now() + timedelta(days=15)
+
+    def can_be_deleted(self):
+        # TODO: optmize?
+        return (
+            self.servertokenasset_set.count() == 0
+            and self.otaenrollment_set.count() == 0
+            and self.depenrollment_set.count() == 0
+            and self.userenrollment_set.count() == 0
+            and self.enrolleddevice_set.count() == 0
+        )
+
+    # secrets
+
+    def get_token(self):
+        assert self.pk, "Location must have a PK"
+        return decrypt_str(self.token, field="token", model="mdm.location", pk=self.pk)
+
+    def set_token(self, token):
+        assert self.pk, "Location must have a PK"
+        self.token = encrypt_str(token, field="token", model="mdm.location", pk=self.pk)
+
+    def get_notification_auth_token(self):
+        assert self.pk, "Location must have a PK"
+        return decrypt_str(self.notification_auth_token, field="notification_auth_token",
+                           model="mdm.location", pk=self.pk)
+
+    def set_notification_auth_token(self):
+        assert self.pk, "Location must have a PK"
+        self.notification_auth_token_id = uuid.uuid4()
+        self.notification_auth_token = encrypt_str(get_random_string(64), field="notification_auth_token",
+                                                   model="mdm.location", pk=self.pk)
+
+    def rewrap_secrets(self):
+        assert self.pk, "Location must have a PK"
+        self.token = rewrap(self.token, field="token", model="mdm.location", pk=self.pk)
+        self.notification_auth_token = rewrap(self.notification_auth_token, field="notification_auth_token",
+                                              model="mdm.location", pk=self.pk)
+
+
+class Asset(models.Model):
+
+    class ProductType(models.TextChoices):
+        APP = "App"
+        BOOK = "Book"
+
+    adam_id = models.CharField(max_length=64)
+    pricing_param = models.CharField(max_length=16)
+
+    product_type = models.CharField(max_length=4, choices=ProductType.choices)
+    device_assignable = models.BooleanField()
+    revocable = models.BooleanField()
+    supported_platforms = ArrayField(models.CharField(max_length=64, choices=Platform.choices()))
+
+    metadata = models.JSONField(null=True)
+    name = models.TextField(null=True)
+    bundle_id = models.TextField(null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("adam_id", "pricing_param"),)
+
+    def __str__(self):
+        if self.name:
+            return f"{self.product_type} {self.name}"
+        else:
+            return f"{self.product_type} {self.adam_id} {self.pricing_param}"
+
+    def get_absolute_url(self):
+        return reverse("mdm:asset", args=(self.pk,))
+
+    def serialize_for_event(self, keys_only=True):
+        d = {
+            "pk": self.pk,
+            "adam_id": self.adam_id,
+            "pricing_param": self.pricing_param,
+        }
+        if not keys_only:
+            for attr in ("product_type", "device_assignable", "revocable", "supported_platforms", "name", "bundle_id"):
+                val = getattr(self, attr)
+                if val:
+                    d[attr] = val
+        return d
+
+    def get_icon_url(self):
+        if not self.metadata:
+            return
+        artwork = self.metadata.get("artwork")
+        if not artwork:
+            return
+        width = artwork.get("width")
+        height = artwork.get("height")
+        url = artwork.get("url")
+        if isinstance(width, int) and isinstance(height, int) and url:
+            return url.format(w=min(width, 128), h=min(height, 128), f="png")
+
+    def get_store_url(self):
+        if not self.metadata:
+            return
+        return self.metadata.get("url")
+
+
+class ServerTokenAsset(models.Model):
+    count_attrs = (
+        "assigned_count",
+        "available_count",
+        "retired_count",
+        "total_count",
+    )
+
+    server_token = models.ForeignKey(ServerToken, on_delete=models.CASCADE)
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
+
+    assigned_count = models.IntegerField(default=0)
+    available_count = models.IntegerField(default=0)
+    retired_count = models.IntegerField(default=0)
+    total_count = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("server_token", "asset"),)
+
+    def __str__(self):
+        return f"Store {self.asset} - {self.server_token}"
+
+    def get_absolute_url(self):
+        return "{}#sta-{}".format(self.asset.get_absolute_url(), self.pk)
+
+    def serialize_for_event(self, keys_only=True, server_token=None, asset=None):
+        server_token = server_token or self.server_token
+        asset = asset or self.asset
+        d = {
+            "asset": asset.serialize_for_event(keys_only=True),
+            "server_token": server_token.serialize_for_event(keys_only=True),
+        }
+        if not keys_only:
+            for attr in self.count_attrs:
+                d[attr] = getattr(self, attr)
+        return d
+
+    def get_availability_incident_severity(self):
+        if self.total_count > 0:
+            incident_update_severity = Severity.NONE
+            availability_perc = self.available_count / self.total_count
+            if availability_perc >= 0.9:  # TODO hard-coded
+                incident_update_severity = Severity.MAJOR
+            elif availability_perc >= 0.8:  # TODO hard-coded
+                incident_update_severity = Severity.MINOR
+            return incident_update_severity
+
+    def count_errors(self):
+        errors = []
+        for attr in self.count_attrs:
+            if getattr(self, attr) < 0:
+                errors.append("{} < 0".format(attr.replace("_", " ")))
+        if self.assigned_count > self.total_count:
+            errors.append("assigned count > total count")
+        if self.available_count > self.total_count:
+            errors.append("available count > total count")
+        return errors
+
+
+class DeviceAssignment(models.Model):
+    server_token_asset = models.ForeignKey(ServerTokenAsset, on_delete=models.CASCADE)
+    serial_number = models.TextField(db_index=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (("server_token_asset", "serial_number"),)
+
+
 # Enrollment
 
 
@@ -229,8 +461,12 @@ class EnrolledDevice(models.Model):
     cert_fingerprint = models.BinaryField(blank=True, null=True)
     cert_not_valid_after = models.DateTimeField(blank=True, null=True)
 
+    # artifacts
     blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
     awaiting_configuration = models.BooleanField(null=True)
+
+    # apps and books
+    server_token = models.ForeignKey(ServerToken, on_delete=models.PROTECT, blank=True, null=True)
 
     # declarative management
     declarative_management = models.BooleanField(default=False)
@@ -328,6 +564,7 @@ class EnrolledDevice(models.Model):
         self.commands.all().delete()
         self.installed_artifacts.all().delete()
         self.enrolleduser_set.all().delete()
+        #TODO https://developer.apple.com/documentation/devicemanagement/revoke_assets
 
     def do_checkout(self):
         self.token = self.push_magic = self.bootstrap_token = self.unlock_token = None
@@ -492,6 +729,7 @@ class MDMEnrollment(models.Model):
     )
 
     blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
+    server_token = models.ForeignKey(ServerToken, on_delete=models.SET_NULL, blank=True, null=True)
 
     # linked to an auth realm
     # if linked, a user has to authenticate to get the mdm payload.
@@ -625,6 +863,9 @@ class OTAEnrollmentSession(EnrollmentSession):
 
     def get_blueprint(self):
         return self.ota_enrollment.blueprint
+
+    def get_server_token(self):
+        return self.ota_enrollment.server_token
 
     # status update methods
 
@@ -1067,6 +1308,9 @@ class DEPEnrollmentSession(EnrollmentSession):
     def get_blueprint(self):
         return self.dep_enrollment.blueprint
 
+    def get_server_token(self):
+        return self.dep_enrollment.server_token
+
     # status update methods
 
     def set_scep_verified_status(self, es_request):
@@ -1215,6 +1459,9 @@ class UserEnrollmentSession(EnrollmentSession):
     def get_blueprint(self):
         return self.user_enrollment.blueprint
 
+    def get_server_token(self):
+        return self.user_enrollment.server_token
+
     # status update methods
 
     def set_account_driven_authenticated_status(self, realm_user):
@@ -1351,6 +1598,9 @@ class ReEnrollmentSession(EnrollmentSession):
     def get_blueprint(self):
         return self.get_enrollment().blueprint
 
+    def get_server_token(self):
+        return self.get_enrollment().server_token
+
     # status update methods
 
     def set_scep_verified_status(self, es_request):
@@ -1390,6 +1640,7 @@ class ReEnrollmentSession(EnrollmentSession):
 class ArtifactType(enum.Enum):
     EnterpriseApp = "Enterprise App"
     Profile = "Profile"
+    StoreApp = "Store App"
 
     @classmethod
     def choices(cls):
@@ -1455,7 +1706,7 @@ class ArtifactVersionManager(models.Manager):
 
         blueprint = enrolled_device.blueprint
         if blueprint is None and artifact_operation == ArtifactOperation.Installation:
-            return
+            return [] if fetch_all else None
 
         # Sorry… use -1 as blueprint pk when no blueprint is configured
         # will return 0 blueprint artifact versions
@@ -1502,7 +1753,7 @@ class ArtifactVersionManager(models.Manager):
         cursor = connection.cursor()
         cursor.execute(query, args)
         pk_list = [t[0] for t in cursor.fetchall()]
-        qs = self.select_related("artifact", "profile", "enterprise_app")
+        qs = self.select_related("artifact", "profile", "enterprise_app", "store_app__asset")
         if fetch_all:
             artifact_version_list = list(qs.filter(pk__in=pk_list))
             artifact_version_list.sort(key=lambda artifact_version: pk_list.index(artifact_version.pk))
@@ -1535,10 +1786,10 @@ class ArtifactVersionManager(models.Manager):
             "left join mdm_artifact as a on (tav.artifact_id = a.id) "
             "left join failed_artifact_version_operations as favo on (favo.id = tav.id) "
             "left join blueprint_artifact_versions as bav on (bav.artifact_id = tav.artifact_id) "
-            # - Only Profiles
+            # - Only Profiles or Store Apps
             # - No previous removal error AND
             # - Not present in the blueprint
-            "where a.type = 'Profile' and favo.id is null and bav.id is null "
+            "where (a.type = 'Profile' or a.type = 'StoreApp') and favo.id is null and bav.id is null "
             "order by tav.created_at asc"
         )
         return self._next_to(target, select, ArtifactOperation.Removal, fetch_all=fetch_all)
@@ -1632,6 +1883,37 @@ class EnterpriseApp(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["product_id", "product_version"])]
+
+
+class StoreApp(models.Model):
+    artifact_version = models.OneToOneField(ArtifactVersion, related_name="store_app", on_delete=models.CASCADE)
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
+
+    # attributes
+    # https://developer.apple.com/documentation/devicemanagement/installapplicationcommand/command/attributes
+    associated_domains = ArrayField(models.CharField(max_length=256, validators=[MinLengthValidator(3)]),
+                                    blank=True, default=list)
+    associated_domains_enable_direct_downloads = models.BooleanField(default=False)
+    removable = models.BooleanField(default=False)  # iOS >= 14, tvOS >= 14
+    vpn_uuid = models.TextField(blank=True, null=True)
+    content_filter_uuid = models.TextField(blank=True, null=True)
+    dns_proxy_uuid = models.TextField(blank=True, null=True)
+
+    configuration = models.BinaryField(null=True)
+    remove_on_unenroll = models.BooleanField(default=True)
+    prevent_backup = models.BooleanField(default=False)
+
+    def get_management_flags(self):
+        management_flags = 0
+        if self.remove_on_unenroll:
+            management_flags += 1
+        if self.prevent_backup:
+            management_flags += 4
+        return management_flags
+
+    def get_configuration(self):
+        if self.configuration:
+            return plistlib.loads(self.configuration)
 
 
 class TargetArtifactStatus(enum.Enum):
