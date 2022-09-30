@@ -381,6 +381,15 @@ def queue_install_application_command_if_necessary(server_token, serial_number, 
                     break
 
 
+def clear_on_the_fly_assignment_cache(server_token, serial_number, adam_id, pricing_param, reason):
+    cache_key = enrolled_device_asset_association_cache_key(
+        server_token, serial_number, adam_id, pricing_param
+    )
+    if cache.delete(cache_key):
+        logger.error("Location %s asset %s/%s: on-the-fly assignment canceled for device %s, %s",
+                     server_token.location_name, adam_id, pricing_param, serial_number, reason)
+
+
 # assets & assignments sync
 
 
@@ -705,6 +714,10 @@ def disassociate_server_token_asset(
                         EventMetadata(machine_serial_number=serial_number),
                         payload
                     )
+                # disassociated, remove the cache key if it exist for the on-the-fly assignment
+                clear_on_the_fly_assignment_cache(
+                    server_token, serial_number, adam_id, pricing_param, "disassociate success"
+                )
             try:
                 yield from _update_server_token_asset_counts(
                     server_token_asset,

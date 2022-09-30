@@ -3,6 +3,7 @@ from django.core.cache import cache
 from zentral.core.events.base import EventMetadata, EventRequest
 from zentral.core.incidents.models import Severity
 from .apps_books import (associate_server_token_asset, disassociate_server_token_asset,
+                         clear_on_the_fly_assignment_cache,
                          server_token_cache, update_server_token_asset_counts)
 from .events import (AssetCountNotificationEvent,
                      AssetAssociationEvent, AssetAssociationErrorEvent,
@@ -109,6 +110,11 @@ class AppsBooksNotificationPreprocessor:
                 continue
             if success:
                 serial_numbers.add(serial_number)
+            elif operation == "ASSOCIATE":
+                # could not associate, remove the cache key if it exists for the on-the-fly assignment
+                clear_on_the_fly_assignment_cache(
+                    server_token, serial_number, adam_id, pricing_param, "associate error"
+                )
             event_metadata.machine_serial_number = serial_number
             event_metadata.incident_updates = [
                 incident_cls.build_incident_update(
