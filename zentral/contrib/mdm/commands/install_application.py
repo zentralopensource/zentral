@@ -1,5 +1,6 @@
 import logging
 from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform, TargetArtifactStatus
+from zentral.contrib.mdm.payloads import substitute_variables
 from .base import register_command, Command
 from .installed_application_list import InstalledApplicationList
 
@@ -30,7 +31,7 @@ class InstallApplication(Command):
         # config
         configuration = store_app.get_configuration()
         if configuration:
-            cmd["Configuration"] = configuration
+            cmd["Configuration"] = substitute_variables(configuration, self.enrollment_session, self.enrolled_user)
         # attributes
         for attrs_k, sa_k in (("AssociatedDomains", "associated_domains"),
                               ("AssociatedDomainsEnableDirectDownloads", "associated_domains_enable_direct_downloads"),

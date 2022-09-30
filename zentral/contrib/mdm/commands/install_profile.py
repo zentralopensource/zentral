@@ -2,39 +2,12 @@ import logging
 import plistlib
 from zentral.utils.payloads import sign_payload
 from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform, SCEPConfig, UserArtifact
+from zentral.contrib.mdm.payloads import substitute_variables
 from zentral.contrib.mdm.scep import update_scep_payload
 from .base import register_command, Command
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.install_profile")
-
-
-def substitute_variables(obj, enrollment_session, enrolled_user=None):
-    if isinstance(obj, dict):
-        obj = {k: substitute_variables(v, enrollment_session, enrolled_user) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        obj = [substitute_variables(i, enrollment_session, enrolled_user) for i in obj]
-    elif isinstance(obj, str):
-        enrolled_device = enrollment_session.enrolled_device
-        for attr in ("serial_number", "udid"):
-            obj = obj.replace(f"$ENROLLED_DEVICE.{attr.upper()}",
-                              getattr(enrolled_device, attr))
-        if enrolled_user:
-            for attr in ("long_name", "short_name"):
-                obj = obj.replace(f"$ENROLLED_USER.{attr.upper()}",
-                                  getattr(enrolled_user, attr))
-        realm_user = enrollment_session.realm_user
-        if realm_user:
-            for attr in ("username", "device_username",
-                         "email_prefix", "email_prefix",  # WARNING order is important
-                         "email", "email",
-                         "first_name", "last_name", "full_name"):
-                obj = obj.replace(f"$REALM_USER.{attr.upper()}",
-                                  getattr(realm_user, attr))
-        managed_apple_id = getattr(enrollment_session, "managed_apple_id", None)
-        if managed_apple_id:
-            obj = obj.replace("$MANAGED_APPLE_ID.EMAIL", managed_apple_id)
-    return obj
 
 
 def process_scep_payloads(profile_payload):
