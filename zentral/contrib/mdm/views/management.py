@@ -26,7 +26,8 @@ from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintA
                                        SCEPConfigForm,
                                        UpdateArtifactForm,
                                        UserEnrollmentForm, UserEnrollmentEnrollForm,
-                                       UploadEnterpriseAppForm, UploadProfileForm)
+                                       UploadEnterpriseAppForm, UploadProfileForm,
+                                       CreateAssetArtifactForm)
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, Asset, Blueprint, BlueprintArtifact,
                                         DEPDevice, DEPEnrollment,
                                         DeviceCommand,
@@ -34,7 +35,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactType, Asset, Blueprint
                                         OTAEnrollment, OTAEnrollmentSession,
                                         SCEPConfig,
                                         UserEnrollment, UserEnrollmentSession,
-                                        Profile)
+                                        Profile, StoreApp)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_mdm_configuration_profile,
                                           build_profile_service_configuration_profile)
@@ -616,6 +617,8 @@ class ArtifactView(PermissionRequiredMixin, DetailView):
             model_class = Profile
         elif self.object.type == ArtifactType.EnterpriseApp.name:
             model_class = EnterpriseApp
+        elif self.object.type == ArtifactType.StoreApp.name:
+            model_class = StoreApp
         if model_class:
             ctx[f"{model_class._meta.model_name}_list"] = qs = (
                 model_class.objects.select_related("artifact_version")
@@ -739,6 +742,39 @@ class AssetListView(PermissionRequiredMixin, ListView):
 class AssetView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_asset"
     model = Asset
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["server_token_assets"] = list(
+            self.object.servertokenasset_set.select_related("server_token")
+                                            .order_by("server_token__location_name")
+        )
+        ctx["artifacts"] = self.object.get_artifacts_store_apps()
+        return ctx
+
+
+class CreateAssetArtifactView(PermissionRequiredMixin, FormView):
+    permission_required = ("mdm.view_asset", "mdm.add_artifact")
+    template_name = "mdm/assetartifact_form.html"
+    form_class = CreateAssetArtifactForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.asset = get_object_or_404(Asset, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["asset"] = self.asset
+        return ctx
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["asset"] = self.asset
+        return kwargs
+
+    def form_valid(self, form):
+        store_app = form.save()
+        return redirect(store_app)
 
 
 # Blueprints

@@ -149,7 +149,7 @@ def _get_next_queued_command(channel, status, enrollment_session, enrolled_devic
         queryset = queryset.filter(
             Q(time__isnull=True) | Q(status=RequestStatus.NotNow.value, name__in=reschedule_db_names)
         )
-    db_command = queryset.select_related("artifact_version__artifact").filter(**kwargs).order_by("created_at").first()
+    db_command = queryset.filter(**kwargs).order_by("created_at").first()
     if db_command:
         command = load_command(db_command)
         command.set_time()

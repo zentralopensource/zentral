@@ -101,6 +101,20 @@
     </tr>
     {% endwith %}
     {% endif %}
+    {% if storeapp_list %}
+    {% with storeapp_list|first as store_app %}
+    <tr>
+      <th>Asset</th>
+      <td>
+        {% if perms.mdm.view_asset %}
+        <a href="{{ store_app.asset.get_absolute_url }}">{{ store_app.asset.name }}</a>
+        {% else %}
+        {{ store_app.asset.name }}
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endif %}
   </tbody>
 </table>
 <dl class="dl-horizontal">
@@ -162,6 +176,25 @@
         </ul>
       </td>
       <td>{{ profile.artifact_version.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if storeapp_list %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Version</th>
+      <th>Created at</td>
+    </tr>
+  </thead>
+  <tbody>
+    {% for store_app in storeapp_list %}
+    <tr id="{{ store_app.artifact_version.pk }}">
+      <td>{{ store_app.artifact_version.version }}</td>
+      <td>{{ store_app.artifact_version.created_at }}</td>
     </tr>
     {% endfor %}
   </tbody>

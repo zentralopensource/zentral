@@ -8,6 +8,7 @@ from .install_application import InstallApplication  # NOQA
 from .install_enterprise_application import InstallEnterpriseApplication  # NOQA
 from .installed_application_list import InstalledApplicationList  # NOQA
 from .install_profile import InstallProfile  # NOQA
+from .managed_application_list import ManagedApplicationList  # NOQA
 from .profile_list import ProfileList  # NOQA
 from .reenroll import Reenroll  # NOQA
 from .remove_profile import RemoveProfile  # NOQA

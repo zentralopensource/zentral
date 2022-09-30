@@ -237,7 +237,7 @@ class AppsBooksClient:
                     raise ValueError
                 current_page = next_page
 
-    def post_device_assignment(self, serial_number, asset):
+    def post_device_association(self, serial_number, asset):
         return self.make_request(
             "assets/associate",
             json={
@@ -247,7 +247,18 @@ class AppsBooksClient:
                 }],
                 "serialNumbers": [serial_number]
             },
-            raise_for_status=False
+        )
+
+    def post_device_disassociation(self, serial_number, asset):
+        return self.make_request(
+            "assets/disassociate",
+            json={
+                "assets": [{
+                    "adamId": asset.adam_id,
+                    "pricingParam": asset.pricing_param,
+                }],
+                "serialNumbers": [serial_number]
+            },
         )
 
 
@@ -329,18 +340,18 @@ def ensure_enrolled_device_asset_association(enrolled_device, asset):
     qs = DeviceAssignment.objects.filter(
         serial_number=serial_number,
         server_token_asset__asset=asset,
-        serial_token_asset__server_token=server_token
+        server_token_asset__server_token=server_token
     )
     if qs.count():
         return True
     cache_key = enrolled_device_asset_association_cache_key(
         server_token, serial_number, asset.adam_id, asset.pricing_param
     )
-    if not cache.add(cache_key, enrolled_device.pk, timeout=3600):  # TODO hard-coded
+    if cache.add(cache_key, enrolled_device.pk, timeout=3600):  # TODO hard-coded
         _, client, _ = server_token_cache.get(server_token.notification_auth_token_id)
         ok = False
         try:
-            response = client.post_device_assignment(serial_number, asset)
+            response = client.post_device_association(serial_number, asset)
         except Exception:
             logger.exception("Could not post device assignment %s/%s => %s",
                              asset.adam_id, asset.pricing_param, serial_number)
@@ -369,14 +380,14 @@ def queue_install_application_command_if_necessary(server_token, serial_number, 
                          server_token.location_name, adam_id, pricing_param, enrolled_device_id)
         else:
             # find the latest artifact version to install for this asset
-            for artifact_version in ArtifactVersion.objects.next_to_install(enrolled_device):
+            for artifact_version in ArtifactVersion.objects.next_to_install(enrolled_device, fetch_all=True):
                 if (
                     artifact_version.artifact.type == ArtifactType.StoreApp.name
                     and artifact_version.store_app.asset.adam_id == adam_id
                     and artifact_version.store_app.asset.pricing_param == pricing_param
                 ):
                     InstallApplication.create_for_device(
-                        enrolled_device, artifact_version, queued=True
+                        enrolled_device, artifact_version, queue=True
                     )
                     break
 

@@ -2,7 +2,7 @@ import logging
 from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform, TargetArtifactStatus
 from zentral.contrib.mdm.payloads import substitute_variables
 from .base import register_command, Command
-from .installed_application_list import InstalledApplicationList
+from .managed_application_list import ManagedApplicationList
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.install_application")
@@ -18,14 +18,14 @@ class InstallApplication(Command):
     def build_command(self):
         store_app = self.artifact_version.store_app
         cmd = {
-            "iTunesStoreID": store_app.asset.adam_id,
+            "iTunesStoreID": int(store_app.asset.adam_id),
             "InstallAsManaged": True,
             "Options": {"PurchaseMethod": 1},
             "ManagementFlags": store_app.get_management_flags(),
             "Attributes": {"Removable": store_app.removable},
         }
         # change management
-        if self.enrolled_device.user_management is not None and not self.enrolled_device.user_management:
+        if self.enrolled_device.user_enrollment is not None and not self.enrolled_device.user_enrollment:
             # TODO verify
             cmd["ChangeManagementState"] = "Managed"
         # config
@@ -55,10 +55,10 @@ class InstallApplication(Command):
             )
             # queue an installed application list command
             first_delay_seconds = 15  # TODO hardcoded
-            InstalledApplicationList.create_for_device(
+            ManagedApplicationList.create_for_device(
                 self.enrolled_device,
                 self.artifact_version,
-                kwargs={"apps_to_check": [{"Identifier": identifier}]},  # TODO version will not be checked!
+                kwargs={"identifiers": [identifier]},  # TODO version will not be checked!
                 queue=True, delay=first_delay_seconds
             )
         else:

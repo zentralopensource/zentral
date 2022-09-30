@@ -19,7 +19,7 @@ from .models import (Artifact, ArtifactType, ArtifactVersion, BlueprintArtifact,
                      EnrolledDevice, EnterpriseApp, Platform,
                      SCEPConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
-                     Profile, ServerToken)
+                     Profile, ServerToken, StoreApp)
 
 
 logger = logging.getLogger("zentral.contrib.mdm.forms")
@@ -564,3 +564,104 @@ class ServerTokenForm(forms.ModelForm):
 
         transaction.on_commit(update_client_config)
         return server_token
+
+
+class StoreAppForm(forms.ModelForm):
+    configuration = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 10}),
+        help_text="The property list representation of the managed app configuration."
+    )
+
+    class Meta:
+        model = StoreApp
+        fields = (
+            "associated_domains", "associated_domains_enable_direct_downloads",
+            "removable",
+            "vpn_uuid",
+            "content_filter_uuid",
+            "dns_proxy_uuid",
+            "remove_on_unenroll",
+            "prevent_backup"
+        )
+        widgets = {
+            "vpn_uuid": forms.TextInput,
+            "content_filter_uuid": forms.TextInput,
+            "dns_proxy_uuid": forms.TextInput
+        }
+
+    def clean_configuration(self):
+        configuration = self.cleaned_data.pop("configuration")
+        if configuration:
+            if configuration.startswith("<dict>"):
+                # to make it easier for the users
+                configuration = f'<plist version="1.0">{configuration}</plist>'
+            try:
+                loaded_configuration = plistlib.loads(configuration.encode("utf-8"))
+            except Exception:
+                raise forms.ValidationError("Invalid property list")
+            if not isinstance(loaded_configuration, dict):
+                raise forms.ValidationError("Not a dictionary")
+            configuration = plistlib.dumps(loaded_configuration)
+        return configuration
+
+    def clean(self):
+        super().clean()
+        # update configuration
+        configuration = self.cleaned_data.get("configuration")
+        if configuration:
+            self.instance.configuration = configuration
+        else:
+            self.instance.configuration = None
+
+
+class CreateAssetArtifactForm(StoreAppForm):
+    name = forms.CharField(required=True)
+    field_order = (
+        "name",
+        "removable",
+        "remove_on_unenroll",
+        "prevent_backup",
+        "configuration",
+        "associated_domains",
+        "associated_domains_enable_direct_downloads",
+        "vpn_uuid",
+        "content_filter_uuid",
+        "dns_proxy_uuid"
+        "configuration",
+    )
+
+    def clean_name(self):
+        name = self.cleaned_data.get("name")
+        if Artifact.objects.filter(name=name).count():
+            raise forms.ValidationError("An artifact with this name already exists")
+        return name
+
+    def __init__(self, *args, **kwargs):
+        self.asset = kwargs.pop("asset")
+        super().__init__(*args, **kwargs)
+        name = self.asset.name
+        for i in range(1, 11):
+            if Artifact.objects.filter(name=name).count() == 0:
+                break
+            name = f"{self.asset.name} ({i})"
+        else:
+            logger.error("Could not find unique name for asset %s", self.asset.pk)
+            name = self.asset.name
+        self.fields["name"].initial = name
+
+    def save(self):
+        artifact = Artifact.objects.create(
+            name=self.cleaned_data["name"],
+            type=ArtifactType.StoreApp.name,
+            channel=Channel.Device.name,
+            platforms=self.asset.supported_platforms,
+        )
+        artifact_version = ArtifactVersion.objects.create(
+            artifact=artifact,
+        )
+        store_app = super().save(commit=False)
+        store_app.artifact_version = artifact_version
+        store_app.asset = self.asset
+        store_app.save()
+        return store_app

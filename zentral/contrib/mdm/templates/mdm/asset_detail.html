@@ -6,10 +6,10 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li><a href="{% url 'mdm:assets' %}">Store apps</a></li>
-  <li class="active">{{ asset }}</li>
+  <li class="active">{{ asset.name }}</li>
 </ol>
 
-<h3>{{ object }}</h3>
+<h3>{% if object.icon_url %}<img style="max-width:48px;max-height:48px" src="{{ object.icon_url}}">{% endif %}{{ object.name }}</h3>
 
 <div class="row">
   <div class="col-md-12">
@@ -20,9 +20,54 @@
       </thead>
       <tbody>
       <tr>
-        <td>Name</td>
-        <td>{{ object }}</td>
+        <td>Product type</td>
+        <td>{{ object.product_type }}</td>
       </tr>
+      <tr>
+        <td>Name</td>
+        <td>{{ object.name }}</td>
+      </tr>
+      <tr>
+        <td>iTunes identifier</td>
+        <td>
+          {% if object.store_url %}
+          <a href="{{ object.store_url }}">{{ object.adam_id }}</a>
+          {% else %}
+          {{ object.adam_id }}
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>iTunes pricing</td>
+        <td>{{ object.pricing_param }}</td>
+      </tr>
+      <tr>
+        <td>Device assignable</td>
+        <td>{{ object.device_assignable|yesno }}</td>
+      </tr>
+      <tr>
+        <td>Revocable</td>
+        <td>{{ object.revocable|yesno }}</td>
+      </tr>
+      <tr>
+        <td>Supported platform{{ object.supported_platforms|length|pluralize }}</td>
+        <td>{{ object.supported_platforms|join:", "|default:"-" }}</td>
+      </tr>
+      {% if object.bundle_id %}
+      <tr>
+        <td colspan="2">
+          <h4>App</h4>
+        </td>
+      </tr>
+      <tr>
+        <td>Bundle ID</td>
+        <td>{{ object.bundle_id|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Latest version</td>
+        <td>{{ object.lastest_version|default:"-" }}</td>
+      </tr>
+      {% endif %}
       </tbody>
     </table>
 
@@ -35,4 +80,77 @@
 
   </div>
 </div>
+
+<h4>Location{{ server_token_assets|length|pluralize }} licenses</h4>
+
+{% if server_token_assets %}
+<table class="table">
+  <thead>
+    <th>Location</th>
+    <th>Assigned</th>
+    <th>Available</th>
+    <th>Retired</th>
+    <th>Total</th>
+  </thead>
+  <tbody>
+    {% for server_token_asset in server_token_assets %}
+    {% with server_token_asset.server_token as server_token %}
+    <tr id="sta-{{ server_token_asset.pk }}">
+      <td>
+        {% if perms.mdm.view_servertoken %}
+        <a href="{{ server_token.get_absolute_url }}">{{ server_token }}</a>
+        {% else %}
+        {{ server_token }}
+        {% endif %}
+      </td>
+      <td>{{ server_token_asset.assigned_count }}</td>
+      <td>{{ server_token_asset.available_count }}</td>
+      <td>{{ server_token_asset.retired_count }}</td>
+      <td>{{ server_token_asset.total_count }}</td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No locations found for this asset.</p>
+{% endif %}
+
+<h4>Artifact{{ artifacts|length|pluralize }}</h4>
+
+{% if perms.mdm.add_artifact %}
+<p>
+  <a class="btn btn-default" href="{% url 'mdm:create_asset_artifact' object.pk %}">
+    Add
+  </a>
+</p>
+{% endif %}
+
+{% if artifacts %}
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Has configuration</th>
+  </thead>
+  <tbody>
+    {% for artifact, store_apps in artifacts %}
+    {% with store_apps|last as latest_store_app %}
+    <tr>
+      <td>
+        {% if perms.mdm.view_artifact %}
+        <a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a>
+        {% else %}
+        {{ artifact }}
+        {% endif %}
+      </td>
+      <td>{{ latest_store_app.has_configuration }}</td>
+      <td>{{ latest_store_app.version }}</td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No artifacts found for this asset.</p>
+{% endif %}
 {% endblock %}

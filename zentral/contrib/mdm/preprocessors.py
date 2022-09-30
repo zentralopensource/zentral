@@ -152,7 +152,6 @@ class AppsBooksNotificationPreprocessor:
             logger.warning("Notification %s already received", notification_id)
             # TODO retry on error?
             return
-        logger.error("YOLO %s", notification_id)
         server_token, client = self._get_server_token_and_client(raw_event)
         if not server_token:
             logger.error("Unknown server token")

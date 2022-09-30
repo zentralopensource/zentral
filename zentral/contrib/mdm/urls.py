@@ -154,6 +154,9 @@ urlpatterns = [
     path('assets/<int:pk>/',
          views.AssetView.as_view(),
          name="asset"),
+    path('assets/<int:pk>/create_artifact/',
+         views.CreateAssetArtifactView.as_view(),
+         name="create_asset_artifact"),
 
     # blueprints
     path('blueprints/',

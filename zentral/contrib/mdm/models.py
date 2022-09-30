@@ -343,7 +343,8 @@ class Asset(models.Model):
                     d[attr] = val
         return d
 
-    def get_icon_url(self):
+    @cached_property
+    def icon_url(self):
         if not self.metadata:
             return
         artwork = self.metadata.get("artwork")
@@ -355,10 +356,48 @@ class Asset(models.Model):
         if isinstance(width, int) and isinstance(height, int) and url:
             return url.format(w=min(width, 128), h=min(height, 128), f="png")
 
-    def get_store_url(self):
+    @cached_property
+    def store_url(self):
         if not self.metadata:
             return
         return self.metadata.get("url")
+
+    @cached_property
+    def lastest_version(self):
+        if not self.metadata:
+            return
+        max_version = None
+        for offer in self.metadata.get("offers", []):
+            try:
+                version = tuple(int(s) for s in offer["version"]["display"].split("."))
+            except (KeyError, TypeError, ValueError):
+                # TODO: better
+                pass
+            else:
+                if max_version is None or max_version < version:
+                    max_version = version
+        if max_version:
+            return ".".join(str(i) for i in max_version)
+
+    def get_artifacts_store_apps(self):
+        artifacts = []
+        current_artifact = None
+        current_store_apps = []
+        for store_app in (
+            self.storeapp_set.select_related("artifact_version__artifact")
+                             .all()
+                             .order_by("artifact_version__artifact__name",
+                                       "artifact_version__version")
+        ):
+            artifact = store_app.artifact_version.artifact
+            if current_artifact and artifact != current_artifact:
+                artifacts.append((current_artifact, current_store_apps))
+                current_store_apps = []
+            current_artifact = artifact
+            current_store_apps.append(store_app)
+        if current_store_apps:
+            artifacts.append((current_artifact, current_store_apps))
+        return artifacts
 
 
 class ServerTokenAsset(models.Model):
@@ -1914,6 +1953,12 @@ class StoreApp(models.Model):
     def get_configuration(self):
         if self.configuration:
             return plistlib.loads(self.configuration)
+
+    def has_configuration(self):
+        return self.configuration is not None
+
+    def get_absolute_url(self):
+        return self.artifact_version.get_absolute_url()
 
 
 class TargetArtifactStatus(enum.Enum):

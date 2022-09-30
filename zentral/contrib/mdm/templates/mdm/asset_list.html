@@ -21,9 +21,17 @@
     {% for asset in object_list %}
     <tr>
       <td>
-        <a href="{{ asset.get_store_url }}">
-          <img style="max-width:64px;max-height:64px" src="{{ asset.get_icon_url }}">
-        </a>
+        {% if asset.icon_url %}
+          {% if asset.store_url %}
+          <a href="{{ asset.store_url }}">
+            <img style="max-width:64px;max-height:64px" src="{{ asset.icon_url }}">
+          </a>
+          {% else %}
+          <img style="max-width:64px;max-height:64px" src="{{ asset.icon_url }}">
+          {% endif %}
+        {% else %}
+        -
+        {% endif %}
       </td>
       <td>
         <ul>
@@ -32,7 +40,7 @@
           {% endfor %}
         </ul>
       </td>
-      <td>{{ asset.name }} ({{ asset.adam_id }})</td>
+      <td><a href="{{ asset.get_absolute_url }}">{{ asset.name }}</a></td>
       <td>{{ asset.bundle_id }}</td>
     </tr>
     {% endfor %}

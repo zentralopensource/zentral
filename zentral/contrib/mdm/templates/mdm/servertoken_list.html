@@ -11,9 +11,11 @@
 <h3>{{ object_list|length }} Server token{{ object_list|length|pluralize }}</h3>
 
 {% if perms.mdm.add_servertoken %}
-<a class="btn btn-default" href="{% url 'mdm:create_server_token' %}">
-  Add
-</a>
+<p>
+  <a class="btn btn-default" href="{% url 'mdm:create_server_token' %}">
+    Add
+  </a>
+</p>
 {% endif %}
 
 <table class="table">
