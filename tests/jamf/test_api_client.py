@@ -86,6 +86,320 @@ class JamfAPIClientTestCase(SimpleTestCase):
             api_client.get_machine_d("yolo", 123)
         self.assertEqual(cm.exception.args[0], "Unknown device type: yolo")
 
+    # extension attributes → extra facts
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_extra_facts_ok(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["extension_attributes"].extend([
+            {
+                "id": 78,
+                "name": "YOLO FOMO",
+                "type": "String",
+                "multi_value": True,
+                "value": ["1", "2"],
+            }
+        ])
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient(
+            "host", 443, "/JSSResource", "user", "pwd", "sec",
+            inventory_extension_attributes=["BOOTSTRAP", "Computer Sleep", "YOLO FOMO"]  # case insensitive
+        )
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertEqual(
+            machine_d["extra_facts"],
+            {"Bootstrap": "NO", "Computer Sleep": "1", "YOLO FOMO": ["1", "2"]}
+        )
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_extra_facts_ea_missing_name(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["extension_attributes"].extend([
+            {
+                "id": 78,
+                # Missing name
+                "type": "String",
+                "multi_value": False,
+                "value": "YOLO FOMO",
+            }
+        ])
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient(
+            "host", 443, "/JSSResource", "user", "pwd", "sec",
+            inventory_extension_attributes=["YOLO FOMO"]
+        )
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertNotIn("extra_facts", machine_d)
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_extra_facts_list_too_long(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["extension_attributes"].extend([
+            {
+                "id": 78,
+                "name": "YOLO FOMO",
+                "type": "String",
+                "multi_value": True,
+                "value": ["1" for _ in range(101)],
+            }
+        ])
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient(
+            "host", 443, "/JSSResource", "user", "pwd", "sec",
+            inventory_extension_attributes=["YOLO FOMO"]
+        )
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertNotIn("extra_facts", machine_d)
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_extra_facts_str_too_long(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["extension_attributes"].extend([
+            {
+                "id": 78,
+                "name": "YOLO FOMO 1",
+                "type": "String",
+                "multi_value": True,
+                "value": ["1" * 1001],
+            },
+            {
+                "id": 79,
+                "name": "YOLO FOMO 2",
+                "type": "String",
+                "multi_value": False,
+                "value": 1001 * "1",
+            }
+        ])
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient(
+            "host", 443, "/JSSResource", "user", "pwd", "sec",
+            inventory_extension_attributes=["YOLO FOMO 1", "YOLO FOMO 2"]
+        )
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertNotIn("extra_facts", machine_d)
+
+    # extension attributes → principal user
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_principal_user_ok(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["extension_attributes"].extend([
+            {
+                "id": 78,
+                "name": "UID",
+                "type": "String",
+                "multi_value": False,
+                "value": "jane.doe",
+            },
+            {
+                "id": 79,
+                "name": "Principal Name",
+                "type": "String",
+                "multi_value": False,
+                "value": "jane.doe@example.com",
+            },
+            {
+                "id": 80,
+                "name": "User full name",
+                "type": "String",
+                "multi_value": False,
+                "value": "Jane Doe",
+            }
+        ])
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient(
+            "host", 443, "/JSSResource", "user", "pwd", "sec",
+            principal_user_uid_extension_attribute="UID",
+            principal_user_pn_extension_attribute="principal Name",  # case insensitive
+            principal_user_dn_extension_attribute="user full name",  # case insensitive
+        )
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertEqual(
+            machine_d["principal_user"],
+            {"source": {"properties": {'config': {'host': 'host', 'path': '/JSSResource', 'port': 443},
+                                       'module': 'zentral.contrib.jamf',
+                                       'name': 'jamf'},
+                        "type": "INVENTORY"},
+             "unique_id": "jane.doe",
+             "principal_name": "jane.doe@example.com",
+             "display_name": "Jane Doe"}
+        )
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_principal_user_same_ea_ok(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["extension_attributes"].extend([
+            {
+                "id": 78,
+                "name": "Email",
+                "type": "String",
+                "multi_value": False,
+                "value": "jane.doe@example.com",
+            }
+        ])
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient(
+            "host", 443, "/JSSResource", "user", "pwd", "sec",
+            principal_user_uid_extension_attribute="Email",  # case insensitive
+            principal_user_pn_extension_attribute="email",  # case insensitive
+        )
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertEqual(
+            machine_d["principal_user"],
+            {"source": {"properties": {'config': {'host': 'host', 'path': '/JSSResource', 'port': 443},
+                                       'module': 'zentral.contrib.jamf',
+                                       'name': 'jamf'},
+                        "type": "INVENTORY"},
+             "unique_id": "jane.doe@example.com",
+             "principal_name": "jane.doe@example.com"}
+        )
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_principal_user_wrong_values(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["extension_attributes"].extend([
+            {
+                "id": 78,
+                "name": "UID",
+                "type": "String",
+                "multi_value": False,
+                "value": 1000 * "jane.doe",
+            },
+            {
+                "id": 79,
+                "name": "Principal Name",
+                "type": "String",
+                "multi_value": False,
+                "value": "",
+            },
+            {
+                "id": 80,
+                "name": "User full name",
+                "type": "String",
+                "multi_value": False,
+                "value": 11,
+            }
+        ])
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient(
+            "host", 443, "/JSSResource", "user", "pwd", "sec",
+            principal_user_uid_extension_attribute="UID",
+            principal_user_pn_extension_attribute="principal Name",  # case insensitive
+            principal_user_dn_extension_attribute="user full name",  # case insensitive
+        )
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertNotIn("principal_user", machine_d)
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_principal_user_missing_ea_name(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["extension_attributes"].extend([
+            {
+                "id": 78,
+                "name": "UID",
+                "type": "String",
+                "multi_value": False,
+                "value": "jane.doe",
+            },
+            {
+                "id": 79,
+                "name": "Principal Name",
+                "type": "String",
+                "multi_value": False,
+                "value": "jane.doe@example.com",
+            },
+            {
+                "id": 80,
+                "type": "String",
+                "multi_value": False,
+                "value": 11,
+            }
+        ])
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient(
+            "host", 443, "/JSSResource", "user", "pwd", "sec",
+            principal_user_uid_extension_attribute="UID",
+            principal_user_pn_extension_attribute="principal Name",  # case insensitive
+            principal_user_dn_extension_attribute="user full name",  # case insensitive
+        )
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertEqual(
+            machine_d["principal_user"],
+            {"source": {"properties": {'config': {'host': 'host', 'path': '/JSSResource', 'port': 443},
+                                       'module': 'zentral.contrib.jamf',
+                                       'name': 'jamf'},
+                        "type": "INVENTORY"},
+             "unique_id": "jane.doe",
+             "principal_name": "jane.doe@example.com"}
+        )
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_computer_principal_user_missing_uid(self, session_get):
+        response = Mock()
+        response.status_code = 200
+        response.json = Mock()
+        computer = copy.deepcopy(computer_response)
+        computer["extension_attributes"].extend([
+            {
+                "id": 79,
+                "name": "Principal Name",
+                "type": "String",
+                "multi_value": False,
+                "value": "jane.doe@example.com",
+            },
+            {
+                "id": 80,
+                "name": "User full name",
+                "type": "String",
+                "multi_value": False,
+                "value": "Jane Doe",
+            }
+        ])
+        response.json.return_value = {"computer": computer}
+        session_get.return_value = response
+        api_client = APIClient(
+            "host", 443, "/JSSResource", "user", "pwd", "sec",
+            principal_user_uid_extension_attribute="UID",
+            principal_user_pn_extension_attribute="principal Name",  # case insensitive
+            principal_user_dn_extension_attribute="user full name",  # case insensitive
+        )
+        machine_d = api_client.get_machine_d("computer", 1)
+        self.assertNotIn("principal_user", machine_d)
+
+    # OS version patch
+
     @patch("zentral.contrib.jamf.api_client.requests.Session.get")
     def test_computer_patch(self, session_get):
         response = Mock()

@@ -105,6 +105,9 @@ class JamfSetupViewsTestCase(TestCase):
                                      "password": "pwd",
                                      "inventory_apps_shard": 86,
                                      "inventory_extension_attributes": "un, deux trois",
+                                     "principal_user_uid_extension_attribute": "UIDUIDUID",
+                                     "principal_user_pn_extension_attribute": "PNPNPN",
+                                     "principal_user_dn_extension_attribute": "DNDNDN",
                                      "checkin_heartbeat_timeout": 601,
                                      "inventory_completed_heartbeat_timeout": 5432},
                                     follow=True)
@@ -114,9 +117,35 @@ class JamfSetupViewsTestCase(TestCase):
         self.assertEqual(jamf_instance.version, 0)
         self.assertEqual(jamf_instance.get_password(), "pwd")
         self.assertEqual(sorted(jamf_instance.inventory_extension_attributes), ["deux trois", "un"])
+        self.assertEqual(jamf_instance.principal_user_uid_extension_attribute, "UIDUIDUID")
+        self.assertEqual(jamf_instance.principal_user_pn_extension_attribute, "PNPNPN")
+        self.assertEqual(jamf_instance.principal_user_dn_extension_attribute, "DNDNDN")
         self.assertContains(response, "https://yo.example.com:8443/JSSResource")
         self.assertContains(response, "godzilla")
+        self.assertContains(response, "UIDUIDUID")
+        self.assertContains(response, "PNPNPN")
+        self.assertContains(response, "DNDNDN")
         self.assertNotContains(response, "pwd")
+
+    def test_create_jamf_instance_pu_missing_uid_pn(self):
+        self._login("jamf.add_jamfinstance", "jamf.view_jamfinstance", "jamf.view_tagconfig")
+        response = self.client.post(reverse("jamf:create_jamf_instance"),
+                                    {"host": "yo.example.com",
+                                     "port": 8443,
+                                     "path": "/JSSResource",
+                                     "user": "godzilla",
+                                     "password": "pwd",
+                                     "inventory_apps_shard": 86,
+                                     "inventory_extension_attributes": "un, deux trois",
+                                     "principal_user_dn_extension_attribute": "DN",
+                                     "checkin_heartbeat_timeout": 601,
+                                     "inventory_completed_heartbeat_timeout": 5432},
+                                    follow=True)
+        self.assertEqual(response.template_name, ["jamf/jamfinstance_form.html"])
+        self.assertFormError(response, "form", "principal_user_uid_extension_attribute",
+                             "This field is required to collect the principal user information")
+        self.assertFormError(response, "form", "principal_user_pn_extension_attribute",
+                             "This field is required to collect the principal user information")
 
     # delete jamf instance
 

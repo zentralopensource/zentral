@@ -83,6 +83,13 @@ class APIClient(object):
             ea_name.lower()
             for ea_name in kwargs.get("inventory_extension_attributes", [])
         )
+        self.principal_user_extension_attribute_mapping = {}
+        for pu_attr, ea_attr in (("unique_id", "principal_user_uid_extension_attribute"),
+                                 ("principal_name", "principal_user_pn_extension_attribute"),
+                                 ("display_name", "principal_user_dn_extension_attribute")):
+            ea = kwargs.get(ea_attr)
+            if ea:
+                self.principal_user_extension_attribute_mapping.setdefault(ea.lower(), []).append(pu_attr)
         # tags from groups
         self.tag_configs = []
         for tag_config in kwargs.get("tag_configs", []):
@@ -419,17 +426,17 @@ class APIClient(object):
             extension_attributes = computer.get("extension_attributes")
             if extension_attributes:
                 extra_facts = {}
-                for extention_attribute in extension_attributes:
-                    extention_attribute_name = extention_attribute.get("name")
-                    if not extention_attribute_name:
+                for extension_attribute in extension_attributes:
+                    extension_attribute_name = extension_attribute.get("name")
+                    if not extension_attribute_name:
                         logger.warning(
                             "%s computer %s: extension attribute without name",
                             self.api_base_url, jamf_id
                         )
                         continue
-                    if extention_attribute_name.lower() not in self.inventory_extension_attribute_set:
+                    if extension_attribute_name.lower() not in self.inventory_extension_attribute_set:
                         continue
-                    value = extention_attribute.get("value")
+                    value = extension_attribute.get("value")
                     if isinstance(value, list):
                         ok = len(value) < 100 and all(not isinstance(v, str) or len(v) < 1000 for v in value)
                     else:
@@ -437,12 +444,44 @@ class APIClient(object):
                     if not ok:
                         logger.error(
                             "%s computer %s ea '%s': invalid value",
-                            self.api_base_url, jamf_id, extention_attribute_name
+                            self.api_base_url, jamf_id, extension_attribute_name
                         )
                         continue
-                    extra_facts[extention_attribute_name] = value
+                    extra_facts[extension_attribute_name] = value
                 if extra_facts:
                     ct['extra_facts'] = extra_facts
+
+        # extension attributes → principal user
+        if self.principal_user_extension_attribute_mapping:
+            extension_attributes = computer.get("extension_attributes")
+            if extension_attributes:
+                principal_user = {}
+                for extension_attribute in extension_attributes:
+                    extension_attribute_name = extension_attribute.get("name")
+                    if not extension_attribute_name:
+                        logger.warning(
+                            "%s computer %s: extension attribute without name",
+                            self.api_base_url, jamf_id
+                        )
+                        continue
+                    extension_attribute_name = extension_attribute_name.lower()
+                    if extension_attribute_name not in self.principal_user_extension_attribute_mapping:
+                        continue
+                    value = extension_attribute.get("value")
+                    if not isinstance(value, str) or len(value) == 0 or len(value) > 1000:
+                        logger.error(
+                            "%s computer %s ea '%s': invalid value",
+                            self.api_base_url, jamf_id, extension_attribute_name
+                        )
+                        continue
+                    for pu_attr in self.principal_user_extension_attribute_mapping[extension_attribute_name]:
+                        principal_user[pu_attr] = value
+                if all(principal_user.get(k) for k in ("unique_id", "principal_name")):
+                    principal_user["source"] = {
+                        "type": "INVENTORY",
+                        "properties": self.get_source_d()
+                    }
+                    ct['principal_user'] = principal_user
 
         return ct
 
@@ -530,7 +569,7 @@ class APIClient(object):
 
     def get_or_create_text_computer_extension_attribute(self, name, inventory_display):
         self.update_token_if_necessary()
-        assert(inventory_display in [s for s, _ in INVENTORY_DISPLAY_CHOICES])
+        assert inventory_display in [s for s, _ in INVENTORY_DISPLAY_CHOICES]
         cea_d = self.get_compute_extension_attribute_with_name(name)
         if cea_d:
             return cea_d["computer_extension_attribute"]["id"]

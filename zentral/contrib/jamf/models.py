@@ -44,6 +44,27 @@ class JamfInstance(models.Model):
         default=list,
         help_text="Comma separated list of the extension attributes to collect as inventory extra facts"
     )
+    principal_user_uid_extension_attribute = models.CharField(
+        verbose_name="Principal user UID extension attribute",
+        max_length=256,
+        blank=True,
+        null=True,
+        help_text="Extension attribute to use as principal user unique ID"
+    )
+    principal_user_pn_extension_attribute = models.CharField(
+        verbose_name="Principal user principal name extension attribute",
+        max_length=256,
+        blank=True,
+        null=True,
+        help_text="Extension attribute to use as principal user principal name"
+    )
+    principal_user_dn_extension_attribute = models.CharField(
+        verbose_name="Principal user display name extension attribute",
+        max_length=256,
+        blank=True,
+        null=True,
+        help_text="Extension attribute to use as principal user display name"
+    )
     checkin_heartbeat_timeout = models.IntegerField(
         validators=[MinValueValidator(600),
                     MaxValueValidator(172800)],
@@ -97,6 +118,9 @@ class JamfInstance(models.Model):
             "secret": self.secret,
             "inventory_apps_shard": self.inventory_apps_shard,
             "inventory_extension_attributes": self.inventory_extension_attributes,
+            "principal_user_uid_extension_attribute": self.principal_user_uid_extension_attribute,
+            "principal_user_pn_extension_attribute": self.principal_user_pn_extension_attribute,
+            "principal_user_dn_extension_attribute": self.principal_user_dn_extension_attribute,
             "tag_configs": [tm.serialize() for tm in self.tagconfig_set.select_related("taxonomy").all()],
         }
         if self.business_unit:

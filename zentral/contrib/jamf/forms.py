@@ -16,6 +16,9 @@ class JamfInstanceForm(forms.ModelForm):
             "bearer_token_authentication",
             "inventory_apps_shard",
             "inventory_extension_attributes",
+            "principal_user_uid_extension_attribute",
+            "principal_user_pn_extension_attribute",
+            "principal_user_dn_extension_attribute",
             "checkin_heartbeat_timeout",
             "inventory_completed_heartbeat_timeout",
         )
@@ -29,6 +32,9 @@ class JamfInstanceForm(forms.ModelForm):
             "bearer_token_authentication",
             "inventory_apps_shard",
             "inventory_extension_attributes",
+            "principal_user_uid_extension_attribute",
+            "principal_user_pn_extension_attribute",
+            "principal_user_dn_extension_attribute",
             "checkin_heartbeat_timeout",
             "inventory_completed_heartbeat_timeout",
         ])
@@ -38,6 +44,23 @@ class JamfInstanceForm(forms.ModelForm):
         )
         if self.instance.pk:
             self.fields["password"].initial = self.instance.get_password()
+
+    def clean(self):
+        super().clean()
+        pu_uid = self.cleaned_data.get("principal_user_uid_extension_attribute")
+        pu_pn = self.cleaned_data.get("principal_user_pn_extension_attribute")
+        pu_dn = self.cleaned_data.get("principal_user_dn_extension_attribute")
+        if any((pu_uid, pu_pn, pu_dn)) and not all((pu_uid, pu_pn, pu_dn)):
+            if not pu_uid:
+                self.add_error(
+                    "principal_user_uid_extension_attribute",
+                    "This field is required to collect the principal user information"
+                )
+            if not pu_pn:
+                self.add_error(
+                    "principal_user_pn_extension_attribute",
+                    "This field is required to collect the principal user information"
+                )
 
     def save(self):
         new_instance = self.instance.pk is None

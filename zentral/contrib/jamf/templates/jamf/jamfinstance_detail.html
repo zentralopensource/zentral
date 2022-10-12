@@ -51,6 +51,18 @@
       <td>{{ object.inventory_extension_attributes|join:", "|default:"-" }}</td>
     </tr>
     <tr>
+      <td>Principal user UID extension attribute</td>
+      <td>{{ object.principal_user_uid_extension_attribute|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>Principal user principal name extension attribute</td>
+      <td>{{ object.principal_user_pn_extension_attribute|default:"-" }}</td>
+    </tr>
+    <tr>
+      <td>Principal user display name extension attribute</td>
+      <td>{{ object.principal_user_dn_extension_attribute|default:"-" }}</td>
+    </tr>
+    <tr>
       <td>Check-in heartbeat timeout</td>
       <td>{{ object.checkin_heartbeat_timeout|duration_repr }}</td>
     </tr>
