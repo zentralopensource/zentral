@@ -28,6 +28,13 @@ def clean_dict(d, keys_to_keep=None):
 
 def update_os_version(tree, t):
     os_version = clean_dict(t, {"name", "major", "minor", "patch", "build"})
+    for key in ("major", "minor", "patch"):
+        value = os_version.get(key)
+        if value and isinstance(value, str):
+            try:
+                os_version[key] = int(value)
+            except ValueError:
+                pass
     name = os_version.get("name")
     build = os_version.get("build")
     if name and build:

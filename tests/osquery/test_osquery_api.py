@@ -15,6 +15,7 @@ from zentral.contrib.osquery.models import (Configuration, ConfigurationPack,
                                             DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
                                             EnrolledMachine, Enrollment, FileCarvingSession,
                                             Query, Pack, PackQuery)
+from zentral.contrib.osquery.views.utils import update_tree_with_inventory_query_snapshot
 from zentral.core.compliance_checks.models import MachineStatus, Status
 
 
@@ -216,6 +217,40 @@ class OsqueryAPIViewsTestCase(TestCase):
             )
         return query, pack, distributed_query
 
+    def get_default_inventory_query_snapshot(
+        self,
+        platform,
+        with_app=False,
+        with_ec2=False,
+        no_windows_build_data=False,
+        missing_windows_build_data=False,
+        unknown_windows_build=False,
+        macos_os_version_name=None,
+    ):
+        if platform == "macos":
+            qs = [d.copy() for d in INVENTORY_QUERY_SNAPSHOT]
+            if macos_os_version_name is not None:
+                qs[0]["name"] = macos_os_version_name
+        elif platform == "windows":
+            qs = [d.copy() for d in WIN_INVENTORY_QUERY_SNAPSHOT]
+            if no_windows_build_data:
+                qs = qs[:-2]
+            elif missing_windows_build_data:
+                qs = qs[:-1]
+            elif unknown_windows_build:
+                qs[-1]["data"] = "0000000000000000"
+        else:
+            qs = [d.copy() for d in LINUX_INVENTORY_QUERY_SNAPSHOT]
+        snapshot = list(qs)
+        if with_app:
+            snapshot.append(OSX_APP_INSTANCE.copy())
+            snapshot.append(WIN_PROGRAM_INSTANCE.copy())
+            snapshot.append(DEB_PACKAGE.copy())
+        if with_ec2:
+            snapshot.append(EC2_INSTANCE_METADATA.copy())
+            snapshot.extend(EC2_INSTANCE_TAGS.copy())
+        return snapshot
+
     def post_default_inventory_query_snapshot(
         self,
         node_key,
@@ -226,26 +261,6 @@ class OsqueryAPIViewsTestCase(TestCase):
         missing_windows_build_data=False,
         unknown_windows_build=False,
     ):
-        if platform == "macos":
-            qs = INVENTORY_QUERY_SNAPSHOT
-        elif platform == "windows":
-            qs = [d.copy() for d in WIN_INVENTORY_QUERY_SNAPSHOT]
-            if no_windows_build_data:
-                qs = qs[:-2]
-            elif missing_windows_build_data:
-                qs = qs[:-1]
-            elif unknown_windows_build:
-                qs[-1]["data"] = "0000000000000000"
-        else:
-            qs = LINUX_INVENTORY_QUERY_SNAPSHOT
-        snapshot = list(qs)
-        if with_app:
-            snapshot.append(OSX_APP_INSTANCE)
-            snapshot.append(WIN_PROGRAM_INSTANCE)
-            snapshot.append(DEB_PACKAGE)
-        if with_ec2:
-            snapshot.append(EC2_INSTANCE_METADATA)
-            snapshot.extend(EC2_INSTANCE_TAGS)
         return self.post_as_json(
             "log",
             {"node_key": node_key,
@@ -253,7 +268,14 @@ class OsqueryAPIViewsTestCase(TestCase):
              "data": [{
                  'action': 'snapshot',
                  "name": INVENTORY_QUERY_NAME,
-                 "snapshot": snapshot,
+                 "snapshot": self.get_default_inventory_query_snapshot(
+                     platform,
+                     with_app,
+                     with_ec2,
+                     no_windows_build_data,
+                     missing_windows_build_data,
+                     unknown_windows_build,
+                 ),
                  'unixTime': '1480605737',
              }]}
         )
@@ -418,6 +440,18 @@ class OsqueryAPIViewsTestCase(TestCase):
                         'query': 'select 1 from processes;',
                         'removed': False}}}}
         )
+
+    def test_os_version_with_build_numbers_cleanup(self):
+        tree = {}
+        snapshot = self.get_default_inventory_query_snapshot("macos")
+        update_tree_with_inventory_query_snapshot(tree, snapshot)
+        self.assertEqual(tree["os_version"]["major"], 10)
+
+    def test_os_version_numbers_cleanup(self):
+        tree = {}
+        snapshot = self.get_default_inventory_query_snapshot("macos", macos_os_version_name="macOS")
+        update_tree_with_inventory_query_snapshot(tree, snapshot)
+        self.assertEqual(tree["os_version"]["major"], 10)
 
     def test_osx_app_instance_schedule(self):
         em = self.force_enrolled_machine()
