@@ -2410,30 +2410,26 @@ def _export_machine_csv_zip(query, source_name, basename, window_size=5000):
     query_args = []
     if source_name:
         query_args.append(source_name.upper())
-    with transaction.atomic(), connection.cursor() as cursor:
-        cursor.execute(f"DECLARE machine_csv_zip_export_cursor CURSOR FOR {query}", query_args)
-        while True:
-            cursor.execute("FETCH %s FROM machine_csv_zip_export_cursor", [window_size])
+    with transaction.atomic(), connection.chunked_cursor() as cursor:
+        cursor.itersize = window_size
+        cursor.execute(query, query_args)
+        for row in cursor:
             if columns is None:
                 columns = [c.name for c in cursor.description]
-            rows = cursor.fetchall()
-            if not rows:
+            source_name = row[columns.index("source_name")]
+            if source_name != current_source_name:
                 if current_source_name:
                     csv_f.close()
                     csv_files.append((current_source_name, csv_p))
-                break
-            for row in rows:
-                source_name = row[columns.index("source_name")]
-                if source_name != current_source_name:
-                    if current_source_name:
-                        csv_f.close()
-                        csv_files.append((current_source_name, csv_p))
-                    current_source_name = source_name
-                    csv_fh, csv_p = tempfile.mkstemp()
-                    csv_f = os.fdopen(csv_fh, mode='w', newline='')
-                    csv_w = csv.writer(csv_f)
-                    csv_w.writerow(columns)
-                csv_w.writerow(row)
+                current_source_name = source_name
+                csv_fh, csv_p = tempfile.mkstemp()
+                csv_f = os.fdopen(csv_fh, mode='w', newline='')
+                csv_w = csv.writer(csv_f)
+                csv_w.writerow(columns)
+            csv_w.writerow(row)
+        if current_source_name:
+            csv_f.close()
+            csv_files.append((current_source_name, csv_p))
 
     zip_fh, zip_p = tempfile.mkstemp()
     with zipfile.ZipFile(zip_p, mode='w', compression=zipfile.ZIP_DEFLATED) as zip_a:
@@ -2647,30 +2643,26 @@ def export_machine_snapshots(source_name=None, window_size=5000):
         return row_d
 
     # iter all rows over a server-side cursor
-    with transaction.atomic(), connection.cursor() as cursor:
-        cursor.execute(f"DECLARE machine_snapshot_export_cursor CURSOR FOR {query}", args)
-        while True:
-            cursor.execute("FETCH %s FROM machine_snapshot_export_cursor", [window_size])
+    with transaction.atomic(), connection.chunked_cursor() as cursor:
+        cursor.itersize = window_size
+        cursor.execute(query, args)
+        for row in cursor:
             if columns is None:
                 columns = [c.name for c in cursor.description]
-            rows = cursor.fetchall()
-            if not rows:
+            row_d = dict(zip(columns, row))
+            source_name = row_d["source"]["name"]
+            if source_name != current_source_name:
                 if current_source_name:
                     json_f.close()
                     json_files.append((current_source_name, json_p))
-                break
-            for row in rows:
-                row_d = dict(zip(columns, row))
-                source_name = row_d["source"]["name"]
-                if source_name != current_source_name:
-                    if current_source_name:
-                        json_f.close()
-                        json_files.append((current_source_name, json_p))
-                    current_source_name = source_name
-                    json_fh, json_p = tempfile.mkstemp()
-                    json_f = os.fdopen(json_fh, mode='w')
-                json_f.write(json.dumps(_prepare_machine_snapshot(row_d), cls=DjangoJSONEncoder))
-                json_f.write("\n")
+                current_source_name = source_name
+                json_fh, json_p = tempfile.mkstemp()
+                json_f = os.fdopen(json_fh, mode='w')
+            json_f.write(json.dumps(_prepare_machine_snapshot(row_d), cls=DjangoJSONEncoder))
+            json_f.write("\n")
+        if current_source_name:
+            json_f.close()
+            json_files.append((current_source_name, json_p))
 
     zip_fh, zip_p = tempfile.mkstemp()
     with zipfile.ZipFile(zip_p, mode='w', compression=zipfile.ZIP_DEFLATED) as zip_a:
