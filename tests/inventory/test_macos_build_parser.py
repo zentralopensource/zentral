@@ -53,6 +53,7 @@ class MacOSBuildTestCase(TestCase):
            ("20G1008", ("macOS", 11, 7, 2), "macOS 11.7.2 (20G1008)"),
            ("21G217", ("macOS", 12, 6, 1), "macOS 12.6.1 (21G217)"),
            ("21G309", ("macOS", 12, 6, 2), "macOS 12.6.2 (21G309)"),
+           ("22A400", ("macOS", 13, 0, 1), "macOS 13.0.1 (22A400)"),
         ):
             version_d = macos_version_from_build(build)
             self.assertEqual(version_d,
