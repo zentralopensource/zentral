@@ -219,6 +219,7 @@ def macos_version_from_build(build):
     match = MACOS_BUILD_RE.match(build)
     if match:
         patch_letter = match.group("patch_letter")
+        patch_number = int(match.group("patch_number"))
         patch = ord(patch_letter) - 65
         minor = int(match.group("minor")) - 4
         if minor < 8:
@@ -232,26 +233,27 @@ def macos_version_from_build(build):
         if minor >= 17:
             major = minor - 5
             minor = patch
-            if build in ("21A558", "21A559", "21D62", "21E258", "21G83"):
+            if build in ("21A558", "21A559", "21D62", "21E258", "21G83", "21G217"):
                 patch = 1
+            elif build == "21G309":
+                patch = 2
             else:
                 patch = 0
-            if build == "21G115":
+            if patch_letter >= "G" and patch_number >= 115:
                 minor = 6
             elif minor > 0:
                 minor -= 1
         elif minor == 16:
             major = 11
-            patch_number = int(match.group("patch_number"))
             if patch_letter >= "G" and patch_number >= 817:
                 minor = 7
             elif patch_letter >= "G" and patch_number >= 165:
                 minor = 6
             else:
                 minor = max(0, patch - 1)
-            if build in ("20B29", "20B50", "20D74", "20D75", "20E241", "20G80", "20G224"):
+            if build in ("20B29", "20B50", "20D74", "20D75", "20E241", "20G80", "20G224", "20G918"):
                 patch = 1
-            elif build in ("20D80", "20G95", "20G314"):
+            elif build in ("20D80", "20G95", "20G314", "20G1008"):
                 patch = 2
             elif build in ("20D91", "20G415"):
                 patch = 3
