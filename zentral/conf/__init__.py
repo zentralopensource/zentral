@@ -115,6 +115,9 @@ class APIDict(ConfigDict):
                 deprecated_value = self.get(dest)
                 if deprecated_value:
                     self._collection[src] = urlparse(deprecated_value).netloc
+        # add webhook_fqdn
+        if not self.get("webhook_fqdn"):
+            self._collection["webhook_fqdn"] = self.get("fqdn")
 
 
 class ZentralSettings(ConfigDict):

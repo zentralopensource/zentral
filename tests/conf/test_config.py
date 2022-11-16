@@ -3,6 +3,7 @@ from tempfile import NamedTemporaryFile
 from unittest.mock import call, Mock
 from django.test import SimpleTestCase
 from zentral.conf.config import ConfigDict, ConfigList
+from zentral.conf import ZentralSettings
 
 
 class ConfTestCase(SimpleTestCase):
@@ -169,3 +170,23 @@ class ConfTestCase(SimpleTestCase):
         base_json = os.path.join(os.path.dirname(os.path.abspath(__file__)), "base.json")
         c = ConfigDict({"api": f'{{{{ file:{base_json}|jsondecode|element:api }}}}'})
         self.assertEqual(c["api"]["tls_hostname"], "https://zentral")
+
+    def test_config_file_default_webhook_fqdn(self):
+        c = ZentralSettings({"api": {"fqdn": "zentraldj2o3i2dj"}})
+        self.assertEqual(c["api"]["webhook_fqdn"], "zentraldj2o3i2dj")
+
+    def test_config_file_webhook_fqdn(self):
+        c = ZentralSettings({"api": {"fqdn": "zentraldj2o3i2dj",
+                                     "webhook_fqdn": "webhooksyolo"}})
+        self.assertEqual(c["api"]["webhook_fqdn"], "webhooksyolo")
+
+    def test_config_file_default_tls_hostnames(self):
+        c = ZentralSettings({"api": {"fqdn": "zentral", "fqdn_mtls": "zentral-mtls"}})
+        self.assertEqual(c["api"]["tls_hostname"], "https://zentral")
+        self.assertEqual(c["api"]["tls_hostname_for_client_cert_auth"], "https://zentral-mtls")
+
+    def test_config_file_legacy_tls_hostnames(self):
+        c = ZentralSettings({"api": {"tls_hostname": "https://zentral",
+                                     "tls_hostname_for_client_cert_auth": "https://zentral-mtls"}})
+        self.assertEqual(c["api"]["fqdn"], "zentral")
+        self.assertEqual(c["api"]["fqdn_mtls"], "zentral-mtls")
