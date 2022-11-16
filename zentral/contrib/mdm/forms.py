@@ -553,14 +553,15 @@ class ServerTokenForm(forms.ModelForm):
                      "platform",
                      "website_url"):
             setattr(server_token, attr, self.cleaned_data[attr])
+        notification_auth_token = server_token.set_notification_auth_token()
         server_token.save()
         server_token.set_token(self.cleaned_data["token"])
-        server_token.set_notification_auth_token()
         server_token.save()
 
         def update_client_config():
             ab_client = AppsBooksClient.from_server_token(server_token)
-            ab_client.update_client_config()
+            ab_client.update_client_config(notification_auth_token)
+            # TODO: retry
 
         transaction.on_commit(update_client_config)
         return server_token

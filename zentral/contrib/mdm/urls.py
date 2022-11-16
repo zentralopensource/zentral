@@ -60,7 +60,7 @@ urlpatterns = [
          name='update_server_token'),
     path('server_tokens/<int:pk>/delete/', views.DeleteServerTokenView.as_view(),
          name='delete_server_token'),
-    path('server_tokens/<uuid:notification_auth_token_id>/notify/', csrf_exempt(views.NotifyServerTokenView.as_view()),
+    path('server_tokens/<uuid:mdm_info_id>/notify/', csrf_exempt(views.NotifyServerTokenView.as_view()),
          name='notify_server_token'),
 
     # management views

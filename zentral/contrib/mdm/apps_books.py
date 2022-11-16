@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from itertools import islice
 import logging
 import threading
@@ -60,52 +59,59 @@ class AppsBooksClient:
     retries = 2
 
     def __init__(
-        self, token,
-        notification_auth_token_id=None, notification_auth_token=None,
+        self,
+        token=None,
+        mdm_info_id=None,
         location_name=None,
-        platform=None
+        platform=None,
+        server_token=None
     ):
         self.token = token
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": deployment_info.user_agent,
-            "Authorization": f"Bearer {token}",
+            "Authorization": "Bearer " + token
         })
         adapter = CustomHTTPAdapter(self.timeout, self.retries)
         self.session.mount("https://", adapter)
-        self.notification_auth_token_id = None
-        if notification_auth_token_id:
-            self.notification_auth_token_id = str(notification_auth_token_id)
-        self.notification_auth_token = notification_auth_token
+        self.mdm_info_id = mdm_info_id
         self.location_name = location_name
         self.platform = platform or "enterprisestore"
         self._service_config = None
-
-    def close(self):
-        self.session.close()
+        self.server_token = server_token
 
     @classmethod
     def from_server_token(cls, server_token):
         return cls(server_token.get_token(),
-                   server_token.notification_auth_token_id,
-                   server_token.get_notification_auth_token(),
+                   str(server_token.mdm_info_id),
                    server_token.location_name,
-                   server_token.platform)
+                   server_token.platform,
+                   server_token)
 
-    def make_request(self, path, **kwargs):
+    def close(self):
+        self.session.close()
+
+    def make_request(self, path, retry_if_403=True, verify_mdm_info=False, **kwargs):
         url = urljoin(self.base_url, path)
-        verify_mdm_info = kwargs.pop("verify_mdm_info", False)
         if "json" in kwargs:
             method = self.session.post
         else:
             method = self.session.get
         resp = method(url, **kwargs)
+        if resp.status_code == 403 and retry_if_403:
+            logger.debug("Location %s: refresh session token", self.location_name)
+            if not self.server_token:
+                resp.raise_for_status()
+            self.server_token.refresh_from_db()
+            self.token = self.server_token.get_token()
+            self.session.headers["Authorization"] = "Bearer " + self.token
+            return self.make_request(self, path, False, verify_mdm_info, **kwargs)
         resp.raise_for_status()
         response = resp.json()
         if (
             verify_mdm_info
-            and self.notification_auth_token_id is not None
-            and response.get("mdmInfo", {}).get("id") != self.notification_auth_token_id
+            and self.mdm_info_id is not None
+            and response.get("mdmInfo", {}).get("id") != self.mdm_info_id
         ):
             logger.error("Location %s: bad MDM id", self.location_name)
             raise MDMConflictError
@@ -114,26 +120,24 @@ class AppsBooksClient:
     # client config
 
     def get_client_config(self):
-        return self.make_request("client/config")
+        return self.make_request("client/config", verify_mdm_info=True)
 
-    def update_client_config(self):
-        assert self.notification_auth_token_id is not None and self.notification_auth_token is not None
-        fqdn = settings["api"]["fqdn"]
+    def update_client_config(self, notification_auth_token):
+        assert self.mdm_info_id is not None and notification_auth_token is not None
         return self.make_request(
             "client/config",
             json={
                 "mdmInfo": {
-                    "id": self.notification_auth_token_id,
-                    "metadata": fqdn,
+                    "id": self.mdm_info_id,
+                    "metadata": settings["api"]["fqdn"],
                     "name": "Zentral"
                 },
                 "notificationTypes": ["ASSET_MANAGEMENT", "ASSET_COUNT"],
                 "notificationUrl": "https://{}{}".format(
-                    #zentral_settings["api"]["fqdn"],
-                    "while-bird-headquarters-filters.trycloudflare.com",
-                    reverse("mdm:notify_server_token", args=(self.notification_auth_token_id,))
+                    settings["api"]["webhook_fqdn"],
+                    reverse("mdm:notify_server_token", args=(self.mdm_info_id,))
                 ),
-                "notificationAuthToken": self.notification_auth_token,
+                "notificationAuthToken": notification_auth_token,
             }
         )
 
@@ -141,7 +145,7 @@ class AppsBooksClient:
 
     def get_service_config(self):
         if not self._service_config:
-            self._service_config = self.make_request("service/config", verify_mdm_info=False)
+            self._service_config = self.make_request("service/config")
         return self._service_config
 
     # assets
@@ -269,47 +273,21 @@ class ServerTokenCache:
     def __init__(self):
         self._lock = threading.Lock()
         self._server_tokens = {}
-        self._known_bad = OrderedDict()
-        self._known_bad_capacity = 1024
 
-    def _is_known_bad(self, notification_auth_token_id):
-        test = notification_auth_token_id in self._known_bad
-        if test:
-            self._known_bad.move_to_end(notification_auth_token_id)
-        return test
-
-    def _add_known_bad(self, notification_auth_token_id):
-        if len(self._known_bad) >= self._none_bad_capacity:
-            self._known_bad.popitem(last=False)
-        self._known_bad[notification_auth_token_id] = 1
-        self._known_bad.move_to_end(notification_auth_token_id)
-
-    def get(self, notification_auth_token_id):
+    def get(self, mdm_info_id):
         with self._lock:
             try:
-                return self._server_tokens[notification_auth_token_id]
+                return self._server_tokens[mdm_info_id]
             except KeyError:
                 server_token = None
                 client = None
-                notification_auth_token = None
-                if not self._is_known_bad(notification_auth_token_id):
-                    try:
-                        server_token = ServerToken.objects.get(notification_auth_token_id=notification_auth_token_id)
-                    except ServerToken.DoesNotExist:
-                        self._add_known_bad(notification_auth_token_id)
-                    else:
-                        client = AppsBooksClient.from_server_token(server_token)
-                        notification_auth_token = server_token.get_notification_auth_token()
-                        # remove other cache entry for this server
-                        for nati, (st, cli, nat) in list(self._server_tokens.items()):
-                            if st == server_token:
-                                cli.close()
-                                del self._server_tokens[nati]
-                                break
-                        self._server_tokens[notification_auth_token_id] = (
-                            server_token, client, notification_auth_token
-                        )
-                return server_token, client, notification_auth_token
+                try:
+                    server_token = ServerToken.objects.get(mdm_info_id=mdm_info_id)
+                except ServerToken.DoesNotExist:
+                    raise KeyError
+                else:
+                    client = AppsBooksClient.from_server_token(server_token)
+                return server_token, client
 
 
 server_token_cache = SimpleLazyObject(lambda: ServerTokenCache())
@@ -348,7 +326,7 @@ def ensure_enrolled_device_asset_association(enrolled_device, asset):
         server_token, serial_number, asset.adam_id, asset.pricing_param
     )
     if cache.add(cache_key, enrolled_device.pk, timeout=3600):  # TODO hard-coded
-        _, client, _ = server_token_cache.get(server_token.notification_auth_token_id)
+        _, client = server_token_cache.get(server_token.mdm_info_id)
         ok = False
         try:
             response = client.post_device_association(serial_number, asset)

@@ -4,6 +4,7 @@ import django.contrib.postgres.fields
 import django.core.validators
 from django.db import migrations, models
 import django.db.models.deletion
+import uuid
 
 
 class Migration(migrations.Migration):
@@ -46,8 +47,8 @@ class Migration(migrations.Migration):
                 ('location_name', models.TextField()),
                 ('platform', models.TextField()),
                 ('website_url', models.URLField()),
-                ('notification_auth_token_id', models.UUIDField(db_index=True, null=True)),
-                ('notification_auth_token', models.TextField(null=True)),
+                ('mdm_info_id', models.UUIDField(default=uuid.uuid4, editable=False, unique=True)),
+                ('notification_auth_token_hash', models.CharField(editable=False, max_length=64)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import enum
+import hashlib
 import logging
 import plistlib
 import uuid
@@ -207,6 +208,18 @@ class SCEPConfig(models.Model):
 # https://developer.apple.com/documentation/devicemanagement/app_and_book_management
 
 
+def hash_server_token_token(token):
+    return hashlib.sha256(token.encode("ascii")).hexdigest()
+
+
+class ServerTokenManager(models.Manager):
+    def get_with_mdm_info_id_and_token(self, mdm_info_id, token):
+        return self.get(
+            mdm_info_id=mdm_info_id,
+            notification_auth_token_hash=hash_server_token_token(token)
+        )
+
+
 class ServerToken(models.Model):
     # token info
     token_hash = models.CharField(max_length=40, unique=True)
@@ -222,11 +235,13 @@ class ServerToken(models.Model):
     website_url = models.URLField()
 
     # set by Zentral, to authenticate the Apple notification requests
-    notification_auth_token_id = models.UUIDField(null=True, db_index=True)
-    notification_auth_token = models.TextField(null=True)
+    mdm_info_id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
+    notification_auth_token_hash = models.CharField(max_length=64, editable=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = ServerTokenManager()
 
     class Meta:
         ordering = ("organization_name", "location_name")
@@ -240,7 +255,7 @@ class ServerToken(models.Model):
     def serialize_for_event(self, keys_only=True):
         d = {
             "pk": self.pk,
-            "notification_auth_token_id": self.notification_auth_token_id,
+            "mdm_info_id": self.mdm_info_id,
         }
         if not keys_only:
             d.update({
@@ -251,7 +266,6 @@ class ServerToken(models.Model):
                 "location_name": self.location_name,
                 "platform": self.platform,
                 "website_url": self.website_url,
-                "notification_auth_token_id": self.notification_auth_token_id
             })
         return d
 
@@ -269,7 +283,7 @@ class ServerToken(models.Model):
             and self.enrolleddevice_set.count() == 0
         )
 
-    # secrets
+    # secret
 
     def get_token(self):
         assert self.pk, "Location must have a PK"
@@ -279,22 +293,16 @@ class ServerToken(models.Model):
         assert self.pk, "Location must have a PK"
         self.token = encrypt_str(token, field="token", model="mdm.location", pk=self.pk)
 
-    def get_notification_auth_token(self):
-        assert self.pk, "Location must have a PK"
-        return decrypt_str(self.notification_auth_token, field="notification_auth_token",
-                           model="mdm.location", pk=self.pk)
-
-    def set_notification_auth_token(self):
-        assert self.pk, "Location must have a PK"
-        self.notification_auth_token_id = uuid.uuid4()
-        self.notification_auth_token = encrypt_str(get_random_string(64), field="notification_auth_token",
-                                                   model="mdm.location", pk=self.pk)
-
     def rewrap_secrets(self):
         assert self.pk, "Location must have a PK"
         self.token = rewrap(self.token, field="token", model="mdm.location", pk=self.pk)
-        self.notification_auth_token = rewrap(self.notification_auth_token, field="notification_auth_token",
-                                              model="mdm.location", pk=self.pk)
+
+    # auth token
+
+    def set_notification_auth_token(self):
+        notification_auth_token = "ztl_mdm_nat_{}".format(get_random_string(22))  # 22 ~ 131 bits
+        self.notification_auth_token_hash = hash_server_token_token(notification_auth_token)
+        return notification_auth_token
 
 
 class Asset(models.Model):

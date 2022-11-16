@@ -163,7 +163,7 @@ def post_apps_books_notification_event(server_token, user_agent, ip, data):
         },
         "server_token": {
             "pk": server_token.pk,
-            "notification_auth_token_id": server_token.notification_auth_token_id,
+            "mdm_info_id": str(server_token.mdm_info_id),
         }
     }
     logger.debug("Post mdm_apps_books_notification raw event")

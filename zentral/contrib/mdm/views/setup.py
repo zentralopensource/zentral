@@ -4,11 +4,10 @@ import logging
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import SuspiciousOperation
 from django.http import (FileResponse, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden,
-                         HttpResponseNotFound, HttpResponseRedirect)
+                         HttpResponseRedirect)
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
-from zentral.contrib.mdm.apps_books import server_token_cache
 from zentral.contrib.mdm.dep import add_dep_token_certificate
 from zentral.contrib.mdm.events import post_apps_books_notification_event
 from zentral.contrib.mdm.forms import EncryptedDEPTokenForm, PushCertificateForm, ServerTokenForm
@@ -214,17 +213,27 @@ class ServerTokenView(PermissionRequiredMixin, DetailView):
 
 class NotifyServerTokenView(View):
     def post(self, request, *args, **kwargs):
-        server_token, _, notification_auth_token = server_token_cache.get(kwargs["notification_auth_token_id"])
-        if not notification_auth_token:
-            logger.error("Unknown apps & books notification token")
-            return HttpResponseNotFound()
-        elif request.META.get('HTTP_AUTHORIZATION') != f"Bearer {notification_auth_token}":
-            logger.error("Bad apps & books notification token")
+        mdm_info_id = kwargs["mdm_info_id"]
+        http_authorization = request.META.get('HTTP_AUTHORIZATION')
+        if not http_authorization:
+            logger.error("Apps & Books: Empty or missing Authorization header")
+            return HttpResponseForbidden()
+        if not http_authorization.startswith("Bearer "):
+            logger.error("Apps & Books: Malformed Authorization header")
+            return HttpResponseForbidden()
+        notification_auth_token = http_authorization[7:]
+        # TODO: cache?
+        try:
+            server_token = ServerToken.objects.get_with_mdm_info_id_and_token(
+                mdm_info_id, notification_auth_token
+            )
+        except ServerToken.DoesNotExist:
+            logger.error("Apps & Books: Unknown server token")
             return HttpResponseForbidden()
         try:
             data = json.loads(request.body)
         except ValueError:
-            logger.error("Could not read apps & books notification body")
+            logger.error("Apps & Books: Could not read notification body")
             return HttpResponseBadRequest()
         user_agent, ip = user_agent_and_ip_address_from_request(request)
         post_apps_books_notification_event(server_token, user_agent, ip, data)

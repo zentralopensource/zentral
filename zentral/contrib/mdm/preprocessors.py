@@ -19,13 +19,12 @@ class AppsBooksNotificationPreprocessor:
     routing_key = "mdm_apps_books_notification"
 
     def _get_server_token_and_client(self, raw_event):
-        server_token = client = None
-        notification_auth_token_id = raw_event.get("server_token", {}).get("notification_auth_token_id")
-        if notification_auth_token_id:
-            server_token, client, _ = server_token_cache.get(notification_auth_token_id)
+        mdm_info_id = raw_event.get("server_token", {}).get("mdm_info_id")
+        if mdm_info_id:
+            return server_token_cache.get(mdm_info_id)
         else:
-            logger.error("Missing or bad notification auth token id")
-        return server_token, client
+            logger.error("Missing or bad MDM Info ID")
+            return None, None
 
     def _get_event_metadata(self, raw_event):
         metadata = raw_event["metadata"]
