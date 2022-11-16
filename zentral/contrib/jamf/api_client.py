@@ -689,10 +689,10 @@ class APIClient(object):
         enabled = ET.SubElement(webhook, "enabled")
         enabled.text = "false" if event_name == "RestAPIOperation" else "true"
         name = ET.SubElement(webhook, "name")
-        name.text = "{} {}".format(settings["api"]["tls_hostname"], event_name)
+        name.text = "{} {}".format(settings["api"]["fqdn"], event_name)
         url = ET.SubElement(webhook, "url")
-        url.text = "{}{}".format(settings["api"]["tls_hostname"],
-                                 reverse("jamf:post_event", args=(self.secret,)))
+        url.text = "https://{}{}".format(settings["api"]["webhook_fqdn"],
+                                         reverse("jamf:post_event", args=(self.secret,)))
         content_type = ET.SubElement(webhook, "content_type")
         content_type.text = "application/json"
         return ET.tostring(webhook)
