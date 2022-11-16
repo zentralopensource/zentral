@@ -28,13 +28,17 @@ logger = logging.getLogger("zentral.contrib.mdm.forms")
 class OTAEnrollmentForm(forms.ModelForm):
     class Meta:
         model = OTAEnrollment
-        fields = ("name", "realm", "push_certificate", "scep_config", "scep_verification", "blueprint")
+        fields = ("name", "realm", "push_certificate",
+                  "scep_config", "scep_verification",
+                  "server_token", "blueprint")
 
 
 class UserEnrollmentForm(forms.ModelForm):
     class Meta:
         model = UserEnrollment
-        fields = ("name", "realm", "push_certificate", "scep_config", "scep_verification", "blueprint")
+        fields = ("name", "realm", "push_certificate",
+                  "scep_config", "scep_verification",
+                  "server_token", "blueprint")
 
 
 class UserEnrollmentEnrollForm(forms.Form):
@@ -178,7 +182,8 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         field_order = [
-            "push_certificate", "scep_config", "scep_verification", "blueprint",
+            "push_certificate", "scep_config", "scep_verification",
+            "server_token", "blueprint",
             "virtual_server", "name",
             "allow_pairing", "is_supervised", "is_mandatory", "is_mdm_removable", "is_multi_user",
             "await_device_configured", "auto_advance_setup", "include_tls_certificates",
