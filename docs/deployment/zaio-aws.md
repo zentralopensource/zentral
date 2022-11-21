@@ -1,6 +1,6 @@
 # ZAIO deployment on AWS / EC2
 
-This is a guide to run a fully functional [Zentral](https://github.com/zentralopensource/zentral) instance on **Amazon AWS**. 
+This is a guide to run a fully functional [Zentral](https://github.com/zentralopensource/zentral) instance on **Amazon AWS**.
 We will be using the **Zentral all in one** pre-build AMI (Amazon image).
 
 *Note: We also provide a guide for a Google Cloud based setup – please look [here](../zaio-gcp).*
@@ -9,90 +9,58 @@ To follow this tutorial, you will need an admin access to the AWS web console �
 
 *Note: This tutorial is only a first step toward a production deployment on AWS.*
 
-*Note: We have uploaded a [video](https://www.youtube.com/watch?v=oH2kz3JOgzs) to go along this tutorial.*
+## Start a new instance
 
-## Find the _Zentral all in one_ image
+In the AWS EC2 console, in one of the supported region (`us-east-1`, `us-west-2`, `eu-central-1`), click on the _Launch instances_ button. Pick a Name.
 
-You can find the links to start the latest images in the description of [the latest release](https://github.com/zentralopensource/zentral/releases). Pick the one in your favorite region.
+## Select the _Zentral all in one_ AMI
 
-*Note: "Zentral all in one" AMI is not available in all AWS regions*
+Click on the _Browse more AMIs_ link. Select _Community AMIs_. Use _zaio_ as search term.
+
+Owner account ID: `221790496544`
+
+AMIs name pattern: `zaio-ARCH-YYYYMMDD-HHMMSS`
 
 ## Pick an instance type
 
-You can start with a `t2.medium` instance type. We strongly advice against using any kind of "smaller" instances. A lot of software will be running on the instance (ELK, postgres, prometheus, django app, …)
+You can start with a `t4g.medium` instance type. We strongly advice against using any kind of "smaller" instances. A lot of software will be running on the instance (elasticsearch, postgres, rabbitmq, prometheus, grafana, django app, …)
 
 Then click on the _Next: Configure Instance Details_ button.
 
-## Configure instance details
+## Key pair
 
-You can skip this form to run a default instance in the default VPC.
+It will be required for the first login. You can use an existing key pair, or create a new one. The username for the login is `admin`.
 
-Click on the _Next: Add Storage_ button.
-
-If you'd like to create a new, distinct VPC:
-
-1. You'll be first prompted to create/assign a subnet (local range, smallest is 28 so may as well start with /26 for entire new VPC) 
-2. Follow the following instructions afterwards so that it gets a public IP and routing from the internet works
-
-*Here is a link to the documentation about [VPC Internet Gateway](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html#working-with-igw), if you want to dig deeper.*
-
-
-## Add storage
-
-You can start with one 8GB general purpose SSD volume. But that would be only enough to store a limited amount of events. As a rule of thumb, you will need about 7GB + 1GB for every million of events stored, but that can vary a lot depending on your inventory sources, and the kind of events you are collecting.
-
-Click on the _Next: Add Tags_ button.
-
-## Add tags
-
-You can skip this section.
-
-Click on the _Next: Configure Security Group_ button.
-
-## Configure security groups
+## Network settings
 
 The required open ports are 22, 80, and 443.
 
-If you are new to this, just create a new security group for the Zentral instance:
+If you are new to this, just create a new security group for the Zentral instance.
 
-1. Pick a name and a description
-2. Add a rule for SSH. (you can restrict the allowed ip ranges if you like)
-3. Add a rule for HTTP
-4. Add a custom TCP rule for port 443 (HTTPS). Do not forget the ip range – Unrestricted IPv4/v6: `0.0.0.0/0, ::/0`
+Select _Create security group_ and tick the three boxes for `SSH`, `HTTP` and `HTTPS` (you can restrict the allowed ip ranges if you like).
 
-*Here is a link to the documentation about the [Security Groups](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_SecurityGroups.html), if you want to dig deeper.*
+## Add storage
 
-Click on the _Next: Review and Launch_ button.
+You can start with one 10GB general purpose SSD (`gp2`) volume. But that would be only enough to store a limited amount of events. As a rule of thumb, you will need about 9GB + 1GB for every million of events stored, but that can vary a lot depending on your inventory sources, and the kind of events you are collecting.
 
-## Review and launch
+## Launch the instance
 
-You can review the settings for the new instance.
-
-Click on the _Launch_ button. A modal will popup, to pick or create a ssh key pair to be able to log into the instance. If you do not have a ssh key pair yet:
-
-1. select _Create a new key pair_
-2. give it a name
-3. click on the _Download Key Pair_ button
-4. save the file in your `$HOME/.ssh` dir for example
-5. make the file readable only for your user `chmod 0600 ~/.ssh/TheNameOfTheKeyPairFile`
-
-Once you have a ssh key pair, click on the _Launch Instances_ button, and your instance will start!
+Click on the _Launch_ button.
 
 ## Setup the domain name(s) for your instance
 
-Zentral requires at leat one domain name resolving to the IP address of the launched instance. If you want to experiment with the MDM, you will need a second domain name (to separate the endpoints requiring client certificate authentication).
+Zentral requires a domain name resolving to the IP address of the launched instance.
 
-1. In the AWS console, [find the public IP address of the instance](https://youtu.be/oH2kz3JOgzs?t=69) that is starting. No need to wait for the instance to be fully up.
-2. Use this IP to setup a first required A record. (_zentral.example.com_ for the rest of this tutorial)
-3. You can setup a second A record pointing to be able to test all the Zentral functionalities. (_zentral-clicertauth.example.com_ for the rest of this tutorial)
-4. Test the resolution of these records! You cannot move on to the next section before they are setup.
+1. In the AWS console, find the public IP address of the instance that is starting. No need to wait for the instance to be available.
+2. Use this IP to setup an A record. (_zentral.example.com_ for the rest of this tutorial)
+3. Test the resolution of this record! You cannot move on to the next section before they are setup.
 
 ## Log onto your instance
 
-You need the path to the key pair you have just setup. The default username is `ubuntu`.
+You need the path to the key pair you have just setup. The default username is `admin`.
 
 ```cmd
-ssh -i ~/.ssh/TheNameOfTheKeyPairFile ubuntu@zentral.example.com
+ssh -i ~/.ssh/TheNameOfTheKeyPairFile admin@zentral.example.com
 ```
 
 Once logged in, you can use a [command line tool to setup your instance](../zaio-setup). Because this last step is the same for a Google Cloud deployment, we have kept it on a separate wiki page.

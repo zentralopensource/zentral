@@ -3,7 +3,6 @@
 On every _Zentral all in one_ instance, there is a setup script that will automatically take care of the last steps necessary to bring your Zentral instance online. Among them:
 
 * get the server certificates and install them (letsencrypt)
-* setup the SCEP CA
 * setup unique and random app secrets
 * download and install the geo ip database
 * create the first Zentral superuser
@@ -26,7 +25,6 @@ List of the arguments:
 2. **[required]** FQDN resolving to the public IP address of the instance. It has to be setup and it has to resolve correctly before running this script.
 3. **[required]** username of the first Zentral superuser. It will be used to log into Zentral.
 4. **[required]** email of the first Zentral superuser. It can be used for password recovery (if the instance can send emails, i.e., not on Google Cloud).
-5. **[optional but recommended]** second FQDN resolving to the public IP address of the instance. It will be used if present as an extra domain in the server certificates.
 
 A lot of things will be happening. At the end of a successful run, you will get an invitation (password reset) for your superuser in the form of an URL:
 
