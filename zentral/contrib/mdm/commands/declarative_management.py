@@ -12,6 +12,29 @@ class DeclarativeManagement(Command):
     allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
     allowed_in_user_enrollment = True
 
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return (
+            (
+                enrolled_device.platform in (Platform.iOS.name, Platform.iPadOS.name)
+                and (
+                    (
+                        enrolled_device.user_enrollment
+                        and enrolled_device.comparable_os_version >= (15,)
+                    ) or (
+                        not enrolled_device.user_enrollment
+                        and enrolled_device.comparable_os_version >= (16,)
+                    )
+                )
+            ) or (
+                enrolled_device.platform == Platform.macOS.name
+                and enrolled_device.comparable_os_version >= (13,)
+            ) or (
+                enrolled_device.platform == Platform.tvOS.name
+                and enrolled_device.comparable_os_version >= (16,)
+            )
+        )
+
     def command_acknowledged(self):
         device_updated = False
         if not self.enrolled_device.declarative_management:

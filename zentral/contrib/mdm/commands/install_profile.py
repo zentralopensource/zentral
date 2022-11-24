@@ -41,10 +41,19 @@ def build_payload(profile, enrollment_session, enrolled_user=None):
 
 class InstallProfile(Command):
     request_type = "InstallProfile"
-    allowed_channel = (Channel.Device, Channel.User)
-    allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
-    allowed_in_user_enrollment = True
     artifact_operation = ArtifactOperation.Installation
+
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return (
+            (
+                channel == Channel.Device
+                or enrolled_device.platform in (Platform.iPadOS.name, Platform.macOS.name)
+            ) and (
+                not enrolled_device.user_enrollment
+                or enrolled_device.platform in (Platform.iOS.name, Platform.macOS.name)
+            )
+        )
 
     def build_command(self):
         return {"Payload": build_payload(self.artifact_version.profile, self.enrollment_session, self.enrolled_user)}

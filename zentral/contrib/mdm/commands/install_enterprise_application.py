@@ -11,10 +11,11 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.install_enterprise_appl
 
 class InstallEnterpriseApplication(Command):
     request_type = "InstallEnterpriseApplication"
-    allowed_channel = Channel.Device
-    allowed_platform = Platform.macOS
-    allowed_in_user_enrollment = True
     artifact_operation = ArtifactOperation.Installation
+
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return channel == Channel.Device and enrolled_device.platform == Platform.macOS.name
 
     def build_command(self):
         # TODO manage options

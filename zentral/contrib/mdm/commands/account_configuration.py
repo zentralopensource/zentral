@@ -9,9 +9,14 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.account_configuration")
 
 class AccountConfiguration(Command):
     request_type = "AccountConfiguration"
-    allowed_channel = Channel.Device
-    allowed_platform = Platform.macOS
-    allowed_in_user_enrollment = False
+
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return (
+            channel == Channel.Device
+            and enrolled_device.platform == Platform.macOS.name
+            and not enrolled_device.user_enrollment
+        )
 
     def build_command(self):
         if not isinstance(self.enrollment_session, DEPEnrollmentSession):

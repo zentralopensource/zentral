@@ -15,6 +15,16 @@ class SecurityInfo(Command):
     allowed_in_user_enrollment = True
     reschedule_notnow = True
 
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return (
+            channel == Channel.Device
+            and (
+                not enrolled_device.user_enrollment
+                or enrolled_device.platform in (Platform.iOS.name, Platform.macOS.name)
+            )
+        )
+
     def command_acknowledged(self):
         security_info = self.response.get("SecurityInfo")
         if not security_info:

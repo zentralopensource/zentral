@@ -1,5 +1,5 @@
 import logging
-from zentral.contrib.mdm.models import Channel, Platform
+from zentral.contrib.mdm.models import Channel
 from .base import register_command, Command
 
 
@@ -8,9 +8,14 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.device_configured")
 
 class DeviceConfigured(Command):
     request_type = "DeviceConfigured"
-    allowed_channel = (Channel.Device, Channel.User)  # TODO verify
-    allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
-    allowed_in_user_enrollment = False
+
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return (
+            channel == Channel.Device
+            and enrolled_device.dep_enrollment
+            and enrolled_device.awaiting_configuration
+        )
 
     def command_acknowledged(self):
         if self.enrolled_device.awaiting_configuration:

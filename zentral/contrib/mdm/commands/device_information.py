@@ -11,9 +11,6 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.device_information")
 
 class DeviceInformation(Command):
     request_type = "DeviceInformation"
-    allowed_channel = (Channel.Device, Channel.User)
-    allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
-    allowed_in_user_enrollment = True
     reschedule_notnow = True
 
     # https://developer.apple.com/documentation/devicemanagement/deviceinformationcommand/command/queries
@@ -83,6 +80,18 @@ class DeviceInformation(Command):
         "UserSessionTimeout",
         "WiFiMAC",
     ]
+
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return (
+            (
+                channel == Channel.Device
+                or enrolled_device.platform in (Platform.macOS.name, Platform.iPadOS.name)
+            ) and (
+                not enrolled_device.user_enrollment
+                or enrolled_device.platform in (Platform.iOS.name, Platform.macOS.name)
+            )
+        )
 
     def build_command(self):
         return {"Queries": self.queries}

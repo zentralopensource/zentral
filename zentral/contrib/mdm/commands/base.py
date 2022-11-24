@@ -4,7 +4,7 @@ import plistlib
 import uuid
 from django.http import HttpResponse
 from django.utils import timezone
-from zentral.contrib.mdm.models import Channel, CommandStatus, DeviceCommand, Platform, UserCommand
+from zentral.contrib.mdm.models import Channel, CommandStatus, DeviceCommand, UserCommand
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.base")
@@ -13,9 +13,6 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.base")
 class Command:
     request_type = None
     db_name = None
-    allowed_channel = None
-    allowed_platform = None
-    allowed_in_user_enrollment = False
     artifact_operation = None
     store_result = False
     reschedule_notnow = False
@@ -24,23 +21,9 @@ class Command:
     def get_db_name(cls):
         return cls.db_name or cls.request_type
 
-    @classmethod
-    def verify_channel_and_device(cls, channel, enrolled_device):
-        # verify channel
-        allowed_channels = cls.allowed_channel
-        if isinstance(allowed_channels, Channel):
-            allowed_channels = (allowed_channels,)
-        if channel not in allowed_channels:
-            logger.warning("Command %s: incompatible channel %s", cls.request_type, channel.name)
-            return False
-        # verify platform
-        allowed_platforms = cls.allowed_platform
-        if isinstance(allowed_platforms, Platform):
-            allowed_platforms = (allowed_platforms,)
-        if all(enrolled_device.platform != p.name for p in allowed_platforms):
-            logger.warning("Command %s: incompatible platform %s", cls.request_type, enrolled_device.platform)
-            return False
-        return True
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        raise NotImplementedError
 
     @classmethod
     def create_for_target(

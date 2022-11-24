@@ -1,5 +1,5 @@
 import logging
-from zentral.contrib.mdm.models import Channel, Platform, ReEnrollmentSession
+from zentral.contrib.mdm.models import Channel, ReEnrollmentSession
 from zentral.contrib.mdm.payloads import build_mdm_configuration_profile
 from .base import register_command, Command
 
@@ -10,9 +10,10 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.reenroll")
 class Reenroll(Command):
     request_type = "InstallProfile"
     db_name = "Reenroll"
-    allowed_channel = Channel.Device
-    allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
-    allowed_in_user_enrollment = True
+
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return channel == Channel.Device
 
     def load_kwargs(self):
         self.reenrollment_session = None

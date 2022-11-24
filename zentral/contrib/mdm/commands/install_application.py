@@ -10,10 +10,19 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.install_application")
 
 class InstallApplication(Command):
     request_type = "InstallApplication"
-    allowed_channel = Channel.Device  # TODO better?
-    allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
-    allowed_in_user_enrollment = True
     artifact_operation = ArtifactOperation.Installation
+
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return (
+            (
+                channel == Channel.Device
+                or enrolled_device.platform == Platform.macOS.name
+            ) and (
+                not enrolled_device.user_enrollment
+                or enrolled_device.platform in (Platform.iOS.name, Platform.macOS.name)
+            )
+        )
 
     def build_command(self):
         store_app = self.artifact_version.store_app

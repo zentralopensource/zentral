@@ -8,10 +8,19 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.managed_application_lis
 
 class ManagedApplicationList(Command):
     request_type = "ManagedApplicationList"
-    allowed_channel = (Channel.Device, Channel.User)
-    allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
-    allowed_in_user_enrollment = True
     reschedule_notnow = True
+
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return (
+            (
+                channel == Channel.Device
+                or enrolled_device.platform == Platform.macOS.name
+            ) and (
+                not enrolled_device.user_enrollment
+                or enrolled_device.platform in (Platform.iOS.name, Platform.macOS.name)
+            )
+        )
 
     def load_kwargs(self):
         self.identifiers = self.db_command.kwargs.get("identifiers", 0)

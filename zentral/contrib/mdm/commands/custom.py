@@ -2,7 +2,6 @@ import logging
 import plistlib
 from django import forms
 from django.core.exceptions import ValidationError
-from zentral.contrib.mdm.models import Channel, Platform
 from .base import register_command, Command
 
 
@@ -11,11 +10,12 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.custom")
 
 class CustomCommand(Command):
     db_name = "CustomCommand"
-    allowed_channel = (Channel.Device, Channel.User)
-    allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
-    allowed_in_user_enrollment = True
     store_result = True
     reschedule_notnow = True
+
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return True
 
     def load_kwargs(self):
         self.command = plistlib.loads(self.db_command.kwargs["command"].encode("utf-8"))

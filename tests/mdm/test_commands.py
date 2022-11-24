@@ -119,6 +119,7 @@ class TestMDMCommands(TestCase):
             serial_number=get_random_string(64),
             platform="macOS",
             blueprint=cls.blueprint1,
+            dep_enrollment=True,
             awaiting_configuration=True,
             udid=get_random_string(36),
             token=get_random_string(32).encode("utf-8"),
@@ -815,6 +816,7 @@ class TestMDMCommands(TestCase):
 
     def test_trigger_declarative_management_sync(self):
         self.enrolled_device.declarative_management = True
+        self.enrolled_device.os_version = "13.1.0"
         self.assertIsNotNone(self.enrolled_device.blueprint)
         cmd = _trigger_declarative_management_sync(
             Channel.Device, RequestStatus.Idle,

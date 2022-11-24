@@ -630,6 +630,14 @@ class EnrolledDevice(models.Model):
             and self.push_magic is not None
         )
 
+    @cached_property
+    def comparable_os_version(self):
+        try:
+            return tuple(int(i) for i in self.os_version.split("."))
+        except Exception:
+            logger.warning("Cannot get enrolled device %s comparable OS version", self.pk)
+            return (0,)
+
     def iter_enrollment_session_info(self):
         query = (
             "WITH sessions AS ("
