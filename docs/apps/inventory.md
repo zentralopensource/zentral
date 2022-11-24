@@ -4,7 +4,7 @@ The Zentral Inventory app is mandatory in a Zentral deployment. It is used to st
 
 ## Zentral configuration
 
-A `zentral.contrib.inventory` subsection must be present in the `apps` section in [the configuration](/configuration).
+A `zentral.contrib.inventory` subsection must be present in the `apps` section in [the configuration](../configuration).
 
 ### `metrics`
 
