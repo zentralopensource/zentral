@@ -73,14 +73,15 @@ class MetricsView(BasePrometheusMetricsView):
     def add_osx_apps(self):
         options = self.metrics_options.get("osx_apps", {})
         sources = options.get("sources")
-        bundle_ids = options.get("bundle_ids")
-        if not sources or not bundle_ids:
+        bundle_ids = options.get("bundle_ids", [])
+        bundle_names = options.get("bundle_names", [])
+        if not sources or (not bundle_ids and not bundle_names):
             return
         self.all_source_names.update(sources)
         g = Gauge('zentral_inventory_osx_apps_bucket',  'Zentral inventory OSX apps',
                   ['name', 'version', 'source_name', 'source_id', 'le'],
                   registry=self.registry)
-        for r in osx_app_count(sources, bundle_ids):
+        for r in osx_app_count(sources, bundle_ids, bundle_names):
             labels = {k: r[k] for k in ('name', 'version', 'source_name', 'source_id')}
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])

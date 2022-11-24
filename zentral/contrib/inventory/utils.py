@@ -2023,7 +2023,19 @@ class ComplianceCheckStatusFilterForm(forms.Form):
         self.disabled = queryset.count() == 0
 
 
-def osx_app_count(source_names, bundle_ids):
+def osx_app_count(source_names, bundle_ids=None, bundle_names=None):
+    assert bundle_ids is not None or bundle_names is not None
+    query_args = [tuple(n.lower() for n in source_names)]
+    bundle_filters = []
+    if bundle_ids:
+        bundle_filters.append("a.bundle_id in %s")
+        query_args.append(tuple(i for i in bundle_ids))
+    if bundle_names:
+        bundle_filters.append("a.bundle_name in %s")
+        query_args.append(tuple(n for n in bundle_names))
+    serialized_bundle_filters = " OR ".join(bundle_filters)
+    if len(bundle_filters) > 1:
+        serialized_bundle_filters = f"({serialized_bundle_filters})"
     query = (
         "with all_app_instances as ("
         "  select a.bundle_name as name, a.bundle_version_str as version, s.id as source_id, s.name as source_name,"
@@ -2033,8 +2045,7 @@ def osx_app_count(source_names, bundle_ids):
         "  join inventory_machinesnapshot_osx_app_instances as msai on (msai.osxappinstance_id = ai.id)"
         "  join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = msai.machinesnapshot_id)"
         "  join inventory_source as s on (s.id = cms.source_id)"
-        "  where LOWER(s.name) in %s"
-        "  and a.bundle_id in %s"
+        f"  where LOWER(s.name) in %s and {serialized_bundle_filters}"
         ") select name, version, source_id, source_name,"
         'count(*) filter (where age < 1) as "1",'
         'count(*) filter (where age < 7) as "7",'
@@ -2047,8 +2058,7 @@ def osx_app_count(source_names, bundle_ids):
         "group by name, version, source_id, source_name"
     )
     cursor = connection.cursor()
-    cursor.execute(query, [tuple(n.lower() for n in source_names),
-                           tuple(i for i in bundle_ids)])
+    cursor.execute(query, query_args)
     columns = [col.name for col in cursor.description]
     for row in cursor.fetchall():
         d = dict(zip(columns, row))

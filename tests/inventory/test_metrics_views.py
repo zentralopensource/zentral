@@ -37,6 +37,11 @@ class PrometheusViewsTestCase(TestCase):
                          'bundle_name': 'No',
                          'bundle_version': '123',
                          'bundle_version_str': '1.2.3'},
+                 'bundle_path': "/Applications/No.app"},
+                {'app': {'bundle_id': 'io.zentral.no',
+                         'bundle_name': 'Oui',
+                         'bundle_version': '689',
+                         'bundle_version_str': '6.8.9'},
                  'bundle_path': "/Applications/No.app"}
             ],
             "deb_packages": [
@@ -79,6 +84,11 @@ class PrometheusViewsTestCase(TestCase):
                          'bundle_name': 'No',
                          'bundle_version': '123',
                          'bundle_version_str': '2.3.4'},
+                 'bundle_path': "/Applications/No.app"},
+                {'app': {'bundle_id': 'io.zentral.no',
+                         'bundle_name': 'Oui',
+                         'bundle_version': '678',
+                         'bundle_version_str': '6.8.9'},
                  'bundle_path': "/Applications/No.app"}
             ],
             "deb_packages": [
@@ -99,7 +109,7 @@ class PrometheusViewsTestCase(TestCase):
         response = self.client.get(reverse("inventory_metrics:all"))
         self.assertEqual(response.status_code, 403)
 
-    def test_prometheus_metrics_osx_apps(self):
+    def test_prometheus_metrics_osx_apps_bundle_ids(self):
         old_config = settings._collection["apps"]["zentral.contrib.inventory"].pop("metrics_options", None)
         settings._collection["apps"]["zentral.contrib.inventory"]["metrics_options"] = ConfigDict({
             "osx_apps": {"sources": ["zentral tests"], "bundle_ids": ["io.zentral.baller"]},
@@ -121,6 +131,78 @@ class PrometheusViewsTestCase(TestCase):
                                   'source_id': str(self.ms.source.pk),
                                   'version': '1.2.3',
                                   'le': le})
+                if le == "1":  # source 1 is 2 days old
+                    self.assertEqual(sample.value, 0)
+                else:
+                    self.assertEqual(sample.value, 1)
+            self.assertFalse(seen)  # only osx apps
+            seen = True
+        self.assertTrue(seen)
+        if old_config:
+            settings._collection["apps"]["zentral.contrib.inventory"]["metrics_options"] = old_config
+
+    def test_prometheus_metrics_osx_apps_bundle_names(self):
+        old_config = settings._collection["apps"]["zentral.contrib.inventory"].pop("metrics_options", None)
+        settings._collection["apps"]["zentral.contrib.inventory"]["metrics_options"] = ConfigDict({
+            "osx_apps": {"sources": ["zentral tests"], "bundle_names": ["Baller"]},
+        })
+        response = self.client.get(reverse("inventory_metrics:all"),
+                                   HTTP_AUTHORIZATION="Bearer CHANGE ME!!!")
+        self.assertEqual(response.status_code, 200)
+        seen = False
+        for family in text_string_to_metric_families(response.content.decode('utf-8')):
+            if family.name == "zentral_inventory_active_machines_bucket":
+                continue
+            self.assertEqual(len(family.samples), 7)
+            for sample in family.samples:
+                self.assertEqual(sample.name, "zentral_inventory_osx_apps_bucket")
+                le = sample.labels["le"]
+                self.assertEqual(sample.labels,
+                                 {'name': 'Baller',
+                                  'source_name': self.ms.source.name,
+                                  'source_id': str(self.ms.source.pk),
+                                  'version': '1.2.3',
+                                  'le': le})
+                if le == "1":  # source 1 is 2 days old
+                    self.assertEqual(sample.value, 0)
+                else:
+                    self.assertEqual(sample.value, 1)
+            self.assertFalse(seen)  # only osx apps
+            seen = True
+        self.assertTrue(seen)
+        if old_config:
+            settings._collection["apps"]["zentral.contrib.inventory"]["metrics_options"] = old_config
+
+    def test_prometheus_metrics_osx_apps_all(self):
+        old_config = settings._collection["apps"]["zentral.contrib.inventory"].pop("metrics_options", None)
+        settings._collection["apps"]["zentral.contrib.inventory"]["metrics_options"] = ConfigDict({
+            "osx_apps": {"sources": ["zentral tests"], "bundle_ids": ["io.zentral.baller"], "bundle_names": ["Oui"]},
+        })
+        response = self.client.get(reverse("inventory_metrics:all"),
+                                   HTTP_AUTHORIZATION="Bearer CHANGE ME!!!")
+        self.assertEqual(response.status_code, 200)
+        seen = False
+        for family in text_string_to_metric_families(response.content.decode('utf-8')):
+            if family.name == "zentral_inventory_active_machines_bucket":
+                continue
+            self.assertEqual(len(family.samples), 14)
+            for sample in family.samples:
+                self.assertEqual(sample.name, "zentral_inventory_osx_apps_bucket")
+                le = sample.labels["le"]
+                if sample.labels.get("name") == "Baller":
+                    self.assertEqual(sample.labels,
+                                     {'name': 'Baller',
+                                      'source_name': self.ms.source.name,
+                                      'source_id': str(self.ms.source.pk),
+                                      'version': '1.2.3',
+                                      'le': le})
+                elif sample.labels.get("name") == "Oui":
+                    self.assertEqual(sample.labels,
+                                     {'name': 'Oui',
+                                      'source_name': self.ms.source.name,
+                                      'source_id': str(self.ms.source.pk),
+                                      'version': '6.8.9',
+                                      'le': le})
                 if le == "1":  # source 1 is 2 days old
                     self.assertEqual(sample.value, 0)
                 else:
