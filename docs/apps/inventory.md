@@ -10,7 +10,7 @@ A `zentral.contrib.inventory` subsection must be present in the `apps` section i
 
 **OPTIONAL**
 
-This boolean is used to toggle the inventory metrics endpoint. `false` by default.
+This boolean is used to toggle the inventory metrics endpoint for Prometheus. `false` by default.
 
 ### `metrics_options`
 
