@@ -10,6 +10,10 @@ New `zentral.core.stores.backends.snowflake` store backend.
 
 Extra logs can still be shipped to Zentral, but Zentral doesn't need to manage the Filebeat enrollments.
 
+#### 🧨 Santa event serialization
+
+The `signing_chain` of the santa events is now flattened into the `signing_cert_0`, `signing_cert_1`, `signing_cert_2` keys by default. Set the `flatten_events_signing_chain` option in the app settings to `false` to keep using the legacy serialization.
+
 ## 2022.2 (August 13, 2022)
 
 **IMPORTANT:** The License has changed! Most of the code stays under the Apache license, but some modules, like the SAML authentication, or the Splunk event store are licensed under a new source available license, and require a subscription when used in production.

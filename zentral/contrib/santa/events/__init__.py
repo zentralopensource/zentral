@@ -1,8 +1,9 @@
 from datetime import datetime
 import logging
-from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
+from zentral.conf import settings
 from zentral.contrib.inventory.models import File
 from zentral.contrib.santa.models import Bundle, EnrolledMachine, Target
+from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.utils.certificates import APPLE_DEV_ID_ISSUER_CN, parse_apple_dev_id
 from zentral.utils.text import shard
 
@@ -71,14 +72,22 @@ class SantaEventEvent(BaseEvent):
             ctx['file_path'] = self.payload['file_path']
         return ctx
 
+    def iter_signing_chain(self):
+        signing_chain = self.payload.get("signing_chain")
+        if isinstance(signing_chain, list):
+            yield from signing_chain
+            return
+        for i in range(3):
+            cert = self.payload.get(f"signing_cert_{i}")
+            if isinstance(cert, dict):
+                yield cert
+
     def get_linked_objects_keys(self):
         keys = {}
         file_sha256 = self.payload.get("file_sha256")
         if file_sha256:
             keys['file'] = [("sha256", file_sha256)]
-        signing_chain = self.payload.get("signing_chain")
-        if not signing_chain:
-            return keys
+        signing_chain = list(self.iter_signing_chain())
         team_id = self.payload.get("team_id")
         cert_sha256_list = []
         for cert_idx, cert in enumerate(signing_chain):
@@ -336,6 +345,16 @@ def _commit_files(events):
                 logger.exception("Could not commit file")
 
 
+flatten_events_signing_chain = settings["apps"]["zentral.contrib.santa"].get("flatten_events_signing_chain", True)
+
+
+def _prepare_santa_event(event_d):
+    if flatten_events_signing_chain:
+        for i, cert in enumerate(event_d.pop("signing_chain", [])):
+            event_d[f"signing_cert_{i}"] = cert
+    return event_d
+
+
 def _post_santa_events(enrolled_machine, user_agent, ip, events):
     def get_created_at(payload):
         return datetime.utcfromtimestamp(payload['execution_time'])
@@ -352,7 +371,8 @@ def _post_santa_events(enrolled_machine, user_agent, ip, events):
         ) <= allow_unknown_shard
 
     event_iterator = (
-        event_d for event_d in events
+        _prepare_santa_event(event_d)
+        for event_d in events
         if not _is_bundle_binary_pseudo_event(event_d) and (
             include_allow_unknown or not _is_allow_unknown_event(event_d)
         )

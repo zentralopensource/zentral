@@ -6,6 +6,12 @@
 
 To activate the santa module, you need to add a `zentral.contrib.santa` section to the `apps` section in `base.json`.
 
+### `flatten_events_signing_chain`
+
+**OPTIONAL**
+
+The Santa events have a `signing_chain` key that is an array of certificate objects. This can be difficult to use in some event stores, like Elasticsearch. To fix this issue, Zentral flattens the signing chain using the `signing_cert_0`, `signing_cert_1` and `signing_cert_2` keys. To prevent Zentral from altering the events (default behaviour), set this boolean option to `false`.
+
 ## Santa deployment
 
 ### Create a Santa agent configuration

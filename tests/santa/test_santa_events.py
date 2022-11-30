@@ -156,7 +156,7 @@ class SantaEventTestCase(SimpleTestCase):
         self.assertEqual(_build_file_tree_from_santa_event(event_d), file_d)
 
     @staticmethod
-    def get_event_with_linked_objects(mas_signed=False, with_team_id=True, unknown_dev_id_issuer=False):
+    def get_event_with_linked_objects(mas_signed=False, with_team_id=True, unknown_dev_id_issuer=False, flat=False):
         event_d = {
             'current_sessions': ['personne@console', 'flaco@ttys000'],
             'decision': 'ALLOW_UNKNOWN',
@@ -227,10 +227,26 @@ class SantaEventTestCase(SimpleTestCase):
             ]
         if with_team_id:
             event_d['team_id'] = '43AQ936H96'
+        if flat:
+            for i, cert in enumerate(event_d.pop('signing_chain')):
+                event_d[f"signing_cert_{i}"] = cert
         return SantaEventEvent(EventMetadata(), event_d)
 
     def test_std_event_without_team_id_known_issuer_linked_objects(self):
         event = self.get_event_with_linked_objects(mas_signed=False, with_team_id=False, unknown_dev_id_issuer=False)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b"),
+                             ("sha256", "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"),
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
+             "apple_team_id": [("43AQ936H96",)]}
+        )
+
+    def test_std_event_without_team_id_known_issuer_linked_objects_flat(self):
+        event = self.get_event_with_linked_objects(
+            mas_signed=False, with_team_id=False, unknown_dev_id_issuer=False, flat=True
+        )
         self.assertEqual(
             event.get_linked_objects_keys(),
             {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
@@ -250,8 +266,31 @@ class SantaEventTestCase(SimpleTestCase):
                              ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")]}
         )
 
+    def test_std_event_without_team_id_unknown_issuer_linked_objects_flat(self):
+        event = self.get_event_with_linked_objects(
+            mas_signed=False, with_team_id=False, unknown_dev_id_issuer=True, flat=True
+        )
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b"),
+                             ("sha256", "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"),
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")]}
+        )
+
     def test_std_event_with_team_id_linked_objects(self):
         event = self.get_event_with_linked_objects(mas_signed=False, with_team_id=True)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b"),
+                             ("sha256", "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"),
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
+             "apple_team_id": [("43AQ936H96",)]}
+        )
+
+    def test_std_event_with_team_id_linked_objects_flat(self):
+        event = self.get_event_with_linked_objects(mas_signed=False, with_team_id=True, flat=True)
         self.assertEqual(
             event.get_linked_objects_keys(),
             {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
@@ -271,8 +310,29 @@ class SantaEventTestCase(SimpleTestCase):
                              ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")]}
         )
 
+    def test_mas_event_without_team_id_linked_objects_flat(self):
+        event = self.get_event_with_linked_objects(mas_signed=True, with_team_id=False, flat=True)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "61977d6006459c4cefe9b988a453589946224957bfc07b262cd7ca1b7a61e04e"),
+                             ("sha256", "ce057691d730f89ca25e916f7335f4c8a15713dcd273a658c024023f8eb809c2"),
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")]}
+        )
+
     def test_mas_event_with_team_id_linked_objects(self):
         event = self.get_event_with_linked_objects(mas_signed=True, with_team_id=True)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "61977d6006459c4cefe9b988a453589946224957bfc07b262cd7ca1b7a61e04e"),
+                             ("sha256", "ce057691d730f89ca25e916f7335f4c8a15713dcd273a658c024023f8eb809c2"),
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
+             "apple_team_id": [("43AQ936H96",)]}
+        )
+
+    def test_mas_event_with_team_id_linked_objects_flat(self):
+        event = self.get_event_with_linked_objects(mas_signed=True, with_team_id=True, flat=True)
         self.assertEqual(
             event.get_linked_objects_keys(),
             {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],

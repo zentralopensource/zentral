@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, File, MachineSnapshot, MetaBusinessUnit
-from zentral.contrib.santa.events import SantaEnrollmentEvent, SantaPreflightEvent
+from zentral.contrib.santa.events import SantaEnrollmentEvent, SantaEventEvent, SantaPreflightEvent
 from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
                                           MachineRule, Rule, Target)
 from zentral.core.incidents.models import Severity
@@ -541,8 +541,8 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 403)
 
-    def test_eventupload(self):
-        # event without bundle
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_eventupload_without_bundle(self, post_event):
         event_d = {
             'current_sessions': [],
             'decision': 'BLOCK_UNKNOWN',
@@ -590,10 +590,59 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(Bundle.objects.count(), 0)
         f = File.objects.get(sha_256=event_d["file_sha256"])
         self.assertEqual(f.signed_by.sha_256, event_d["signing_chain"][0]["sha256"])
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        event = events[0]
+        self.assertIsInstance(event, SantaEventEvent)
+        # default to flattened signing chain
+        for i, cert in enumerate(event_d["signing_chain"]):
+            self.assertEqual(event.payload[f"signing_cert_{i}"], cert)
+        self.assertNotIn("signing_chain", event.payload)
 
-        # event with bundle
-        event_d["file_bundle_hash"] = get_random_string(64, "0123456789abcdef")
-        event_d["file_bundle_binary_count"] = 1
+    @patch("zentral.contrib.santa.events.flatten_events_signing_chain", False)
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_eventupload_with_bundle(self, post_event):
+        event_d = {
+            'current_sessions': [],
+            'decision': 'BLOCK_UNKNOWN',
+            'executing_user': 'root',
+            'execution_time': 2242783327.585212,
+            'file_bundle_id': 'servicecontroller:com.apple.stomp.transcoderx',
+            'file_bundle_name': 'CompressorTranscoderX',
+            'file_bundle_path': ('/Library/Frameworks/Compressor.framework/'
+                                 'Versions/A/Resources/CompressorTranscoderX.bundle'),
+            'file_bundle_version': '3.5.3',
+            'file_bundle_version_string': '3.5.3',
+            'file_bundle_hash': "4764c9e3305c6c749538fbfaa1704a0cb61c150453fe40f739979964361c15dd",
+            'file_bundle_binary_count': 1,
+            'file_name': 'compressord',
+            'file_path': ('/Library/Frameworks/Compressor.framework/'
+                          'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
+            'file_sha256': get_random_string(64, "0123456789abcdef"),
+            'logged_in_users': [],
+            'parent_name': 'launchd',
+            'pid': 95,
+            'ppid': 1,
+            'quarantine_timestamp': 0,
+            'signing_chain': [{'cn': 'Software Signing',
+                               'ou': get_random_string(10, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+                               'org': 'Apple Inc.',
+                               'sha256': get_random_string(64, "0123456789abcdef"),
+                               'valid_from': 1172268176,
+                               'valid_until': 1421272976},
+                              {'cn': 'Apple Code Signing Certification Authority',
+                               'org': 'Apple Inc.',
+                               'ou': 'Apple Certification Authority',
+                               'sha256': '3afa0bf5027fd0532f436b39363a680aefd6baf7bf6a4f97f17be2937b84b150',
+                               'valid_from': 1171487959,
+                               'valid_until': 1423948759},
+                              {'cn': 'Apple Root CA',
+                               'org': 'Apple Inc.',
+                               'ou': 'Apple Certification Authority',
+                               'sha256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
+                               'valid_from': 1146001236,
+                               'valid_until': 2054670036}]
+        }
+        url = reverse("santa:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -601,16 +650,73 @@ class SantaAPIViewsTestCase(TestCase):
         b = Bundle.objects.get(target__type=Target.BUNDLE, target__identifier=event_d["file_bundle_hash"])
         self.assertIsNone(b.uploaded_at)
         self.assertEqual(b.bundle_id, event_d["file_bundle_id"])
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, SantaEventEvent)
+        self.assertEqual(event.payload["signing_chain"], event_d["signing_chain"])
 
-        # bundle binary
-        event_d["decision"] = "BUNDLE_BINARY"
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_eventupload_bundle_binary(self, post_event):
+        event_d = {
+            'current_sessions': [],
+            'decision': 'BUNDLE_BINARY',
+            'executing_user': 'root',
+            'execution_time': 2242783327.585212,
+            'file_bundle_id': 'servicecontroller:com.apple.stomp.transcoderx',
+            'file_bundle_name': 'CompressorTranscoderX',
+            'file_bundle_path': ('/Library/Frameworks/Compressor.framework/'
+                                 'Versions/A/Resources/CompressorTranscoderX.bundle'),
+            'file_bundle_version': '3.5.3',
+            'file_bundle_version_string': '3.5.3',
+            'file_bundle_hash': "4764c9e3305c6c749538fbfaa1704a0cb61c150453fe40f739979964361c15dd",
+            'file_bundle_binary_count': 1,
+            'file_name': 'compressord',
+            'file_path': ('/Library/Frameworks/Compressor.framework/'
+                          'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
+            'file_sha256': get_random_string(64, "0123456789abcdef"),
+            'logged_in_users': [],
+            'parent_name': 'launchd',
+            'pid': 95,
+            'ppid': 1,
+            'quarantine_timestamp': 0,
+            'signing_chain': [{'cn': 'Software Signing',
+                               'ou': get_random_string(10, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+                               'org': 'Apple Inc.',
+                               'sha256': get_random_string(64, "0123456789abcdef"),
+                               'valid_from': 1172268176,
+                               'valid_until': 1421272976},
+                              {'cn': 'Apple Code Signing Certification Authority',
+                               'org': 'Apple Inc.',
+                               'ou': 'Apple Certification Authority',
+                               'sha256': '3afa0bf5027fd0532f436b39363a680aefd6baf7bf6a4f97f17be2937b84b150',
+                               'valid_from': 1171487959,
+                               'valid_until': 1423948759},
+                              {'cn': 'Apple Root CA',
+                               'org': 'Apple Inc.',
+                               'ou': 'Apple Certification Authority',
+                               'sha256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
+                               'valid_from': 1146001236,
+                               'valid_until': 2054670036}]
+        }
+        t, _ = Target.objects.get_or_create(type=Target.BUNDLE, identifier=event_d["file_bundle_hash"])
+        b, _ = Bundle.objects.update_or_create(
+            target=t,
+            defaults={"binary_count": event_d["file_bundle_binary_count"]}
+        )
+        url = reverse("santa:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {})
         b.refresh_from_db()
         self.assertIsNotNone(b.uploaded_at)
-        self.assertEqual(list(b.binary_targets.all()), [Target.objects.get(type=Target.BINARY, identifier=f.sha_256)])
+        self.assertEqual(
+            list(b.binary_targets.all()),
+            [Target.objects.get(type=Target.BINARY, identifier=event_d["file_sha256"])]
+        )
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 0)
 
     # postflight
 
