@@ -113,7 +113,7 @@ class AppsBooksClient:
                 self.server_token.refresh_from_db()
                 self.token = self.server_token.get_token()
                 self.session.headers["Authorization"] = "Bearer " + self.token
-                return self.make_request(self, path, False, verify_mdm_info, **kwargs)
+                return self.make_request(path, False, verify_mdm_info, **kwargs)
             else:
                 logger.error("Location %s: API error %s %s",
                              self.location_name, errorNumber, response.get("errorMessage", "-"))
@@ -123,8 +123,9 @@ class AppsBooksClient:
             and self.mdm_info_id is not None
             and response.get("mdmInfo", {}).get("id") != self.mdm_info_id
         ):
-            logger.error("Location %s: bad MDM id", self.location_name)
-            raise MDMConflictError
+            msg = f"Location {self.location_name}: mdmInfo mismatch"
+            logger.error(msg)
+            raise MDMConflictError(msg)
         return response
 
     # client config
@@ -199,22 +200,23 @@ class AppsBooksClient:
         if not url:
             logger.error("Location %s: missing or empty contentMetadataLookup", self.location_name)
             return
-        resp = requests.get(
-            url,
-            params={"version": 2,
-                    "p": "mdm-lockup",  # TODO: Really?
-                    "caller": "MDM",
-                    "platform": self.platform,
-                    "cc": "us",
-                    "l": "en",
-                    "id": adam_id},
-            cookies={"itvt": self.token}
-        )
-        if resp:
-            response = resp.json()
-            return response.get("results", {}).get(adam_id)
+        try:
+            resp = requests.get(
+                url,
+                params={"version": 2,
+                        "p": "mdm-lockup",  # TODO: Really?
+                        "caller": "MDM",
+                        "platform": self.platform,
+                        "cc": "us",
+                        "l": "en",
+                        "id": adam_id},
+                cookies={"itvt": self.token}
+            )
+            resp.raise_for_status()
+        except Exception:
+            logger.exception("Location %s: could not get asset %s metadata.", self.location_name, adam_id)
         else:
-            logger.error("Location %s: could not get asset %s metadata", self.location_name, adam_id)
+            return resp.json().get("results", {}).get(adam_id)
 
     # assignments
 
