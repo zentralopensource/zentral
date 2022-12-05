@@ -57,7 +57,6 @@ class SetupServerTokenViewsTestCase(TestCase):
             platform="enterprisestore",
             website_url="https://business.apple.com",
             mdm_info_id=uuid.uuid4(),
-            notification_auth_token_hash=get_random_string(64, allowed_chars='abcdef0123456789'),
         )
         auth_token = server_token.set_notification_auth_token()
         server_token.save()

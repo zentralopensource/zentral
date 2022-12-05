@@ -18,7 +18,7 @@ from .utils import force_dep_virtual_server
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
-class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
+class SetupDEPVirtualServerViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
