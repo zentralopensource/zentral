@@ -74,6 +74,42 @@ This boolean is used to toggle the inclusion of the principal user in the event 
 
 ## HTTP API
 
+### `/api/inventory/machines/tags/`
+
+* method: POST
+* required permissions:
+    * `inventory.add_tag`
+    * `inventory.add_taxonomy`
+    * `inventory.add_machinetag`
+    * `inventory.delete_machinetag`
+
+Use this endpoint to tag machines using principal user information (unique IDs or principal names).
+
+Example payload:
+
+```json
+{
+  "principal_names": ["janeDoe", "johnSmith"],
+  "unique_ids": ["max.mustermann@example.com"],
+  "tags": {
+    "taxonomy 1": "tag1",
+    "taxonomy 2": null
+  }
+}
+```
+
+When posting this payload, Zentral will look for all the machines having matching principal users. For those machines, it will ensure that their are tagged with `tag1` from the taxonomy `taxonomy 1`, and will remove any other tag from the taxonomy `taxonomy 1` and any tag from the taxonomy `taxonomy 2` (idempotent operation). The required taxonomies and tags are automatically created.
+
+The response format is:
+
+```json
+{
+  "machines": {"found": 3},
+  "tags": {"added": 3,
+           "removed": 1}
+}
+```
+
 ### `/api/inventory/cleanup/`
 
 * method: POST
