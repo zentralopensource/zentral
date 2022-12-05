@@ -14,6 +14,9 @@ class DeclarativeManagement(Command):
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
+        # TODO implement on user channel
+        if channel == Channel.User:
+            return False
         return (
             (
                 enrolled_device.platform in (Platform.iOS.name, Platform.iPadOS.name)

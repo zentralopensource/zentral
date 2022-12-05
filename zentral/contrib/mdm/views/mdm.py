@@ -11,7 +11,6 @@ from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
 from django.views.generic import View
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.commands.declarative_management import DeclarativeManagement
 from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.utils import get_command, get_next_command_response
@@ -237,9 +236,6 @@ class CheckinView(MDMView):
             commit_update_tree(enrolled_device, ms_tree, missing_ok=True)
             # schedule a DeviceInformation command
             DeviceInformation.create_for_device(enrolled_device, queue=True)
-            # switch on declarative management if possible
-            if DeclarativeManagement.verify_channel_and_device(Channel.Device, enrolled_device):
-                DeclarativeManagement.create_for_device(enrolled_device, queue=True)
 
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)

@@ -767,8 +767,8 @@ class TestMDMCommands(TestCase):
     # _trigger_declarative_management_sync
 
     def test_trigger_declarative_management_sync_notnow_noop(self):
-        self.enrolled_device.declarative_management = True
         self.assertIsNotNone(self.enrolled_device.blueprint)
+        self.enrolled_device.os_version = "13.1.0"
         self.assertIsNone(
             _trigger_declarative_management_sync(
                 Channel.Device, RequestStatus.NotNow,
@@ -780,18 +780,19 @@ class TestMDMCommands(TestCase):
 
     def test_trigger_declarative_management_sync_no_declarative_management_noop(self):
         self.assertFalse(self.enrolled_device.declarative_management)
+        self.enrolled_device.os_version = "13.1.0"
         self.assertIsNotNone(self.enrolled_device.blueprint)
-        self.assertIsNone(
-            _trigger_declarative_management_sync(
-                Channel.Device, RequestStatus.Idle,
-                self.dep_enrollment_session,
-                self.enrolled_device,
-                None
-            )
+        cmd = _trigger_declarative_management_sync(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None
         )
+        self.assertIsInstance(cmd, DeclarativeManagement)
 
     def test_trigger_declarative_management_sync_user_channel_noop(self):
         self.enrolled_device.declarative_management = True
+        self.enrolled_device.os_version = "13.1.0"
         self.assertIsNotNone(self.enrolled_device.blueprint)
         self.assertIsNone(
             _trigger_declarative_management_sync(
@@ -804,6 +805,7 @@ class TestMDMCommands(TestCase):
 
     def test_trigger_declarative_management_sync_no_blueprint_noop(self):
         self.enrolled_device.declarative_management = True
+        self.enrolled_device.os_version = "13.1.0"
         self.enrolled_device.blueprint = None
         self.assertIsNone(
             _trigger_declarative_management_sync(

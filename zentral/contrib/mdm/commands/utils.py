@@ -256,13 +256,14 @@ def _remove_artifacts(channel, status, enrollment_session, enrolled_device, enro
 def _trigger_declarative_management_sync(channel, status, enrollment_session, enrolled_device, enrolled_user):
     if status == RequestStatus.NotNow:
         return
-    if not enrolled_device.declarative_management:
-        return
-    if channel != Channel.Device:
+    if not DeclarativeManagement.verify_channel_and_device(channel, enrolled_device):
         return
     if (
-        enrolled_device.blueprint
-        and enrolled_device.declarations_token != enrolled_device.blueprint.declarations_token
+        not enrolled_device.declarative_management
+        or (
+            enrolled_device.blueprint
+            and enrolled_device.declarations_token != enrolled_device.blueprint.declarations_token
+        )
     ):
         return DeclarativeManagement.create_for_device(enrolled_device)
 
@@ -284,9 +285,9 @@ def get_next_command_response(channel, status, enrollment_session, enrolled_devi
         # no pending commands, we can create new ones
         _update_inventory,
         _reenroll,
+        _trigger_declarative_management_sync,
         _install_artifacts,
         _remove_artifacts,
-        _trigger_declarative_management_sync,
         _configure_dep_enrollment_accounts,
         _finish_dep_enrollment_configuration
     ):
