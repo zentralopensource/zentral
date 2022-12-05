@@ -45,6 +45,10 @@ class CustomHTTPAdapter(HTTPAdapter):
         return super().send(*args, **kwargs)
 
 
+class AppsBooksAPIError(Exception):
+    pass
+
+
 class MDMConflictError(Exception):
     pass
 
@@ -91,23 +95,29 @@ class AppsBooksClient:
     def close(self):
         self.session.close()
 
-    def make_request(self, path, retry_if_403=True, verify_mdm_info=False, **kwargs):
+    def make_request(self, path, retry_if_invalid_token=True, verify_mdm_info=False, **kwargs):
         url = urljoin(self.base_url, path)
         if "json" in kwargs:
             method = self.session.post
         else:
             method = self.session.get
         resp = method(url, **kwargs)
-        if resp.status_code == 403 and retry_if_403:
-            logger.debug("Location %s: refresh session token", self.location_name)
-            if not self.server_token:
-                resp.raise_for_status()
-            self.server_token.refresh_from_db()
-            self.token = self.server_token.get_token()
-            self.session.headers["Authorization"] = "Bearer " + self.token
-            return self.make_request(self, path, False, verify_mdm_info, **kwargs)
         resp.raise_for_status()
         response = resp.json()
+        errorNumber = response.get("errorNumber")
+        if errorNumber:
+            if errorNumber == 9622 and retry_if_invalid_token:
+                if not self.server_token:
+                    raise AppsBooksAPIError("Invalid token")
+                logger.debug("Location %s: refresh session token", self.location_name)
+                self.server_token.refresh_from_db()
+                self.token = self.server_token.get_token()
+                self.session.headers["Authorization"] = "Bearer " + self.token
+                return self.make_request(self, path, False, verify_mdm_info, **kwargs)
+            else:
+                logger.error("Location %s: API error %s %s",
+                             self.location_name, errorNumber, response.get("errorMessage", "-"))
+                raise AppsBooksAPIError(f"Error {errorNumber}")
         if (
             verify_mdm_info
             and self.mdm_info_id is not None
