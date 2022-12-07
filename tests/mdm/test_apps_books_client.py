@@ -4,7 +4,8 @@ import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.mdm.apps_books import (AppsBooksClient,
-                                            AppsBooksAPIError, FetchedDataUpdatedError, MDMConflictError)
+                                            AppsBooksAPIError, FetchedDataUpdatedError, MDMConflictError,
+                                            server_token_cache, ServerTokenCache)
 from zentral.contrib.mdm.models import ServerToken
 
 
@@ -252,3 +253,31 @@ class MDMAppsBooksClientTestCase(TestCase):
         self.assertEqual(kwargs["json"],
                          {"assets": [{"adamId": "yolo", "pricingParam": "fomo"}],
                           "serialNumbers": ["un"]})
+
+    # ServerTokenCache
+
+    def test_server_token_cache_ok(self):
+        _, server_token = self._get_client({"ok": True}, True)
+        stc = ServerTokenCache()
+        st, c = stc.get(server_token.mdm_info_id)
+        self.assertEqual(st, server_token)
+        self.assertEqual(c.server_token, server_token)
+        # cached response
+        st2, c2 = stc.get(server_token.mdm_info_id)
+        self.assertTrue(st is st2)
+        self.assertTrue(c is c2)
+        # string call
+        st3, c3 = stc.get(str(server_token.mdm_info_id))
+        self.assertTrue(st is st3)
+        self.assertTrue(c is c3)
+
+    def test_server_token_cache_key_error(self):
+        stc = ServerTokenCache()
+        with self.assertRaises(KeyError):
+            stc.get(uuid.uuid4())
+
+    def test_lazy_server_token_cache_ok(self):
+        _, server_token = self._get_client({"ok": True}, True)
+        st, c = server_token_cache.get(server_token.mdm_info_id)
+        self.assertEqual(st, server_token)
+        self.assertEqual(c.server_token, server_token)

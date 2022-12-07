@@ -287,6 +287,8 @@ class ServerTokenCache:
         self._server_tokens = {}
 
     def get(self, mdm_info_id):
+        if not isinstance(mdm_info_id, str):
+            mdm_info_id = str(mdm_info_id)
         with self._lock:
             try:
                 return self._server_tokens[mdm_info_id]
@@ -299,6 +301,7 @@ class ServerTokenCache:
                     raise KeyError
                 else:
                     client = AppsBooksClient.from_server_token(server_token)
+                self._server_tokens[mdm_info_id] = server_token, client
                 return server_token, client
 
 
