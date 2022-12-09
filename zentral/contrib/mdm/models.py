@@ -452,9 +452,9 @@ class ServerTokenAsset(models.Model):
         if self.total_count > 0:
             incident_update_severity = Severity.NONE
             availability_perc = self.available_count / self.total_count
-            if availability_perc >= 0.9:  # TODO hard-coded
+            if availability_perc <= 0.1:  # TODO hard-coded
                 incident_update_severity = Severity.MAJOR
-            elif availability_perc >= 0.8:  # TODO hard-coded
+            elif availability_perc <= 0.2:  # TODO hard-coded
                 incident_update_severity = Severity.MINOR
             return incident_update_severity
 
