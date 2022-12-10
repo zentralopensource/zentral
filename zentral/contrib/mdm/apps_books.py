@@ -330,12 +330,11 @@ def ensure_enrolled_device_asset_association(enrolled_device, asset):
         return False
     serial_number = enrolled_device.serial_number
     # no need for a lock, it will eventually converge
-    qs = DeviceAssignment.objects.filter(
+    if DeviceAssignment.objects.filter(
         serial_number=serial_number,
         server_token_asset__asset=asset,
         server_token_asset__server_token=server_token
-    )
-    if qs.count():
+    ).count():
         return True
     cache_key = enrolled_device_asset_association_cache_key(
         server_token, serial_number, asset.adam_id, asset.pricing_param
@@ -621,7 +620,8 @@ def update_server_token_asset_counts(server_token, client, adam_id, pricing_para
                 yield from _update_server_token_asset_counts(server_token_asset, updates, notification_id)
             except ValueError:
                 logger.info("location %s asset %s/%s: %s, sync required",
-                            server_token.location_name, adam_id, pricing_param, server_token_asset.count_errors())
+                            server_token.location_name, adam_id, pricing_param,
+                            ", ".join(server_token_asset.count_errors()))
             else:
                 return
     yield from sync_asset(server_token, client, adam_id, pricing_param, notification_id)
