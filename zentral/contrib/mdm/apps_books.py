@@ -1,8 +1,9 @@
+from datetime import datetime, timedelta
 from itertools import islice
 import logging
 import threading
-from django.core.cache import cache
 from django.db import transaction
+from django.db.models import F
 from django.urls import reverse
 from django.utils.functional import SimpleLazyObject
 import requests
@@ -18,7 +19,8 @@ from .events import (AssetCreatedEvent, AssetUpdatedEvent,
                      ServerTokenAssetCreatedEvent, ServerTokenAssetUpdatedEvent)
 from .incidents import MDMAssetAvailabilityIncident
 from .models import (Asset, ArtifactType, ArtifactVersion, DeviceAssignment,
-                     EnrolledDevice, ServerToken, ServerTokenAsset)
+                     EnrolledDeviceAssetAssociation,
+                     ServerToken, ServerTokenAsset)
 
 
 logger = logging.getLogger("zentral.contrib.mdm.apps_books")
@@ -311,86 +313,98 @@ server_token_cache = SimpleLazyObject(lambda: ServerTokenCache())
 #
 # on-the-fly assignment
 #
-# Instead of sending the InstallApplication command directly
-# a device asset association is triggered. The cache is used
-# when the assignment notification is received to check if there
-# is an artifact version to install.
-# The cache is also used to avoid triggering the association too often.
+# Instead of sending the InstallApplication command directly a device asset
+# association is triggered and an EnrolledDeviceAssetAssociation object is
+# created. When the assignment notification is received, the
+# EnrolledDeviceAssetAssociation is retrieved to check if there is an artifact
+# version to install.  The EnrolledDeviceAssetAssociation object is also used
+# to avoid triggering the association too often.
 #
-
-
-def enrolled_device_asset_association_cache_key(server_token, serial_number, adam_id, pricing_param):
-    return f"apps_books_edaack|{server_token.pk}|{serial_number}|{adam_id}|{pricing_param}"
 
 
 def ensure_enrolled_device_asset_association(enrolled_device, asset):
     server_token = enrolled_device.server_token
-    if not server_token:
-        logger.error("enrolled device %s has no server token", enrolled_device.serial_number)
-        return False
     serial_number = enrolled_device.serial_number
-    # no need for a lock, it will eventually converge
+    if not server_token:
+        logger.error("enrolled device %s: no server token", serial_number)
+        return False
     if DeviceAssignment.objects.filter(
         serial_number=serial_number,
         server_token_asset__asset=asset,
         server_token_asset__server_token=server_token
     ).count():
+        logger.error("enrolled device %s: no server token", serial_number)
         return True
-    cache_key = enrolled_device_asset_association_cache_key(
-        server_token, serial_number, asset.adam_id, asset.pricing_param
-    )
-    if cache.add(cache_key, enrolled_device.pk, timeout=3600):  # TODO hard-coded
-        _, client = server_token_cache.get(server_token.mdm_info_id)
-        ok = False
-        try:
-            response = client.post_device_association(serial_number, asset)
-        except Exception:
-            logger.exception("Could not post device assignment %s/%s => %s",
-                             asset.adam_id, asset.pricing_param, serial_number)
-        else:
-            event_id = response.get("eventId")
-            if event_id:
-                ok = True
-        if not ok:
-            cache.delete(cache_key)
+    with transaction.atomic():
+        edaa, created = EnrolledDeviceAssetAssociation.objects.select_for_update().get_or_create(
+            enrolled_device=enrolled_device,
+            asset=asset
+        )
+        if created or (datetime.utcnow() - edaa.last_attempted_at) > timedelta(minutes=30):  # TODO hardcoded, verify
+            _, client = server_token_cache.get(server_token.mdm_info_id)
+            ok = False
+            try:
+                response = client.post_device_association(serial_number, asset)
+            except Exception:
+                logger.exception("enrolled device %s asset %s/%s/%s: could not post association",
+                                 serial_number, server_token.location_name, asset.adam_id, asset.pricing_param)
+            else:
+                event_id = response.get("eventId")
+                if event_id:
+                    ok = True
+            if not ok:
+                edaa.delete()
+            else:
+                edaa.attempts = F("attempts") + 1
+                edaa.last_attempted_at = datetime.utcnow()
+                edaa.save()
     return False
 
 
 def queue_install_application_command_if_necessary(server_token, serial_number, adam_id, pricing_param):
-    cache_key = enrolled_device_asset_association_cache_key(
-        server_token, serial_number, adam_id, pricing_param
-    )
-    enrolled_device_id = cache.get(cache_key)
-    if enrolled_device_id:
-        cache.delete(cache_key)
+    with transaction.atomic():
         try:
-            enrolled_device = (
-                EnrolledDevice.objects.select_related("blueprint").get(pk=enrolled_device_id)
+            edaa = EnrolledDeviceAssetAssociation.objects.select_for_update().select_related(
+                "enrolled_device",
+                "asset"
+            ).get(
+                enrolled_device__serial_number=serial_number,
+                enrolled_device__server_token=server_token,
+                asset__adam_id=adam_id,
+                asset__pricing_param=pricing_param
             )
-        except EnrolledDevice.DoesNotExist:
-            logger.error("location %s asset %s/%s: cannot find enrolled device %s",
-                         server_token.location_name, adam_id, pricing_param, enrolled_device_id)
+        except EnrolledDeviceAssetAssociation.DoesNotExist:
+            logger.error("enrolled device %s asset %s/%s/%s: no awaiting association found",
+                         serial_number, server_token.location_name, adam_id, pricing_param)
         else:
+            enrolled_device = edaa.enrolled_device
             # find the latest artifact version to install for this asset
             for artifact_version in ArtifactVersion.objects.next_to_install(enrolled_device, fetch_all=True):
                 if (
                     artifact_version.artifact.type == ArtifactType.StoreApp.name
-                    and artifact_version.store_app.asset.adam_id == adam_id
-                    and artifact_version.store_app.asset.pricing_param == pricing_param
+                    and artifact_version.store_app.asset == edaa.asset
                 ):
                     InstallApplication.create_for_device(
                         enrolled_device, artifact_version, queue=True
                     )
                     break
+            else:
+                logger.error("enrolled device %s asset %s/%s/%s: no artifact version to install found",
+                             serial_number, server_token.location_name, adam_id, pricing_param)
+            # cleanup
+            edaa.delete()
 
 
-def clear_on_the_fly_assignment_cache(server_token, serial_number, adam_id, pricing_param, reason):
-    cache_key = enrolled_device_asset_association_cache_key(
-        server_token, serial_number, adam_id, pricing_param
-    )
-    if cache.delete(cache_key):
-        logger.error("Location %s asset %s/%s: on-the-fly assignment canceled for device %s, %s",
-                     server_token.location_name, adam_id, pricing_param, serial_number, reason)
+def clear_on_the_fly_assignment(server_token, serial_number, adam_id, pricing_param, reason):
+    count, _ = EnrolledDeviceAssetAssociation.objects.filter(
+        enrolled_device__serial_number=serial_number,
+        enrolled_device__server_token=server_token,
+        asset__adam_id=adam_id,
+        asset__pricing_param=pricing_param
+    ).delete()
+    if count:
+        logger.error("enrolled device %s asset %s/%s/%s: on-the-fly assignment canceled, %s",
+                     serial_number, server_token.location_name, adam_id, pricing_param, reason)
 
 
 # assets & assignments sync
@@ -575,9 +589,6 @@ def sync_assets(server_token):
     for asset_d in client.iter_assets():
         for event in _sync_asset_d(server_token, client, asset_d):
             event.post()
-    #TODO remove server token assets not found in the batch!!!
-    #make sure we are not ruining anything!!!
-    #also, make sure we are not removing the assignment on something that is installed…
 
 
 def _update_server_token_asset_counts(server_token_asset, updates, notification_id):
@@ -718,8 +729,8 @@ def disassociate_server_token_asset(
                         EventMetadata(machine_serial_number=serial_number),
                         payload
                     )
-                # disassociated, remove the cache key if it exist for the on-the-fly assignment
-                clear_on_the_fly_assignment_cache(
+                # disassociated, remove the on-the-fly assignment if it exists
+                clear_on_the_fly_assignment(
                     server_token, serial_number, adam_id, pricing_param, "disassociate success"
                 )
             try:

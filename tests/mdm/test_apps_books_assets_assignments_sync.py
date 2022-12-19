@@ -867,8 +867,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
 
     # disassociate_server_token_asset
 
-    @patch("zentral.contrib.mdm.apps_books.clear_on_the_fly_assignment_cache")
-    def test_disassociate_server_token_asset(self, clear_on_the_fly_assignment_cache):
+    @patch("zentral.contrib.mdm.apps_books.clear_on_the_fly_assignment")
+    def test_disassociate_server_token_asset(self, clear_on_the_fly_assignment):
         asset = self._force_asset()
         server_token = self._force_server_token()
         server_token_asset = ServerTokenAsset.objects.create(
@@ -908,7 +908,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         server_token_asset.refresh_from_db()
         self.assertEqual(server_token_asset.assigned_count, 9)
         self.assertEqual(server_token_asset.available_count, 2)
-        clear_on_the_fly_assignment_cache.assert_called_once_with(
+        clear_on_the_fly_assignment.assert_called_once_with(
             server_token, serial_number, asset.adam_id, asset.pricing_param, "disassociate success"
         )
 

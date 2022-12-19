@@ -593,7 +593,6 @@ class EnrolledDevice(models.Model):
             return MetaMachine(self.serial_number).get_urlsafe_serial_number()
 
     def purge_state(self):
-        # TODO purge tokens?
         self.declarative_management = False
         self.last_seen_at = None
         self.last_notified_at = None
@@ -611,7 +610,8 @@ class EnrolledDevice(models.Model):
         self.commands.all().delete()
         self.installed_artifacts.all().delete()
         self.enrolleduser_set.all().delete()
-        #TODO https://developer.apple.com/documentation/devicemanagement/revoke_assets
+        # TODO purge tokens?
+        # TODO revoke assets?
 
     def do_checkout(self):
         self.token = self.push_magic = self.bootstrap_token = self.unlock_token = None
@@ -1975,6 +1975,19 @@ class StoreApp(models.Model):
 
     def get_absolute_url(self):
         return self.artifact_version.get_absolute_url()
+
+
+class EnrolledDeviceAssetAssociation(models.Model):
+    """Used for on-the-fly asset association."""
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    attempts = models.IntegerField(default=0)
+    last_attempted_at = models.DateTimeField(null=True)
+
+    class Meta:
+        unique_together = (("enrolled_device", "asset"),)
 
 
 class TargetArtifactStatus(enum.Enum):
