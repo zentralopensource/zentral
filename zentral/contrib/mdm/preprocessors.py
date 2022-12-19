@@ -21,7 +21,11 @@ class AppsBooksNotificationPreprocessor:
     def _get_server_token_and_client(self, raw_event):
         mdm_info_id = raw_event.get("server_token", {}).get("mdm_info_id")
         if mdm_info_id:
-            return server_token_cache.get(mdm_info_id)
+            try:
+                return server_token_cache.get(mdm_info_id)
+            except KeyError:
+                logger.error("Unknown MDM Info ID")
+                return None, None
         else:
             logger.error("Missing or bad MDM Info ID")
             return None, None
