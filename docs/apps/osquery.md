@@ -240,3 +240,31 @@ You should get a response close to this one:
   }
 }
 ```
+
+### `/api/osquery/runs/<int:pk>/results/export/`
+
+* method: POST
+* required permissions:
+	* `osquery.view_distributedqueryresult`
+* optional parameter:
+	* `export_format`: One of `csv`, `ndjson` or `json`. Defaults to `csv`.
+
+Use this endpoint to trigger a Osquery run export task. The result of this task will be a file containing all the data collected during the run.
+
+#### Example
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/osquery/runs/1/results/export/\
+  |python3 -m json.tool
+```
+
+#### Response
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd3",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd3/"
+}
+```
