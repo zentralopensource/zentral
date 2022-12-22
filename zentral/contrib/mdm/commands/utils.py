@@ -20,6 +20,7 @@ from .install_profile import InstallProfile
 from .installed_application_list import InstalledApplicationList
 from .profile_list import ProfileList
 from .reenroll import Reenroll
+from .remove_application import RemoveApplication
 from .remove_profile import RemoveProfile
 from .security_info import SecurityInfo
 
@@ -244,6 +245,8 @@ def _remove_artifacts(channel, status, enrollment_session, enrolled_device, enro
     if artifact_version:
         if artifact_version.artifact.type == ArtifactType.Profile.name:
             command_class = RemoveProfile
+        elif artifact_version.artifact.type == ArtifactType.StoreApp.name:
+            command_class = RemoveApplication
         else:
             # should never happen
             raise ValueError(f"Cannot remove artifact type {artifact_version.artifact.type}")

@@ -11,5 +11,6 @@ from .install_profile import InstallProfile  # NOQA
 from .managed_application_list import ManagedApplicationList  # NOQA
 from .profile_list import ProfileList  # NOQA
 from .reenroll import Reenroll  # NOQA
+from .remove_application import RemoveApplication  # NOQA
 from .remove_profile import RemoveProfile  # NOQA
 from .security_info import SecurityInfo  # NOQA
