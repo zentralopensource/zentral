@@ -5,8 +5,9 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.commands import CertificateList
+from zentral.contrib.mdm.commands.utils import _update_inventory
 from zentral.contrib.mdm.inventory import commit_update_tree, tree_from_payload
-from zentral.contrib.mdm.models import Blueprint
+from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
 from .utils import force_dep_enrollment_session
 
 
@@ -46,6 +47,50 @@ class CertificateListCommandTestCase(TestCase):
             )
         )
 
+    # verify_channel_and_device
+
+    def test_scope_ok(self):
+        self.assertEqual(self.enrolled_device.platform, Platform.macOS.name)
+        self.assertFalse(self.enrolled_device.user_enrollment)
+        self.assertTrue(CertificateList.verify_channel_and_device(
+            Channel.Device,
+            self.enrolled_device
+        ))
+
+    def test_scope_user_channel_not_ok(self):
+        self.assertEqual(self.enrolled_device.platform, Platform.macOS.name)
+        self.assertFalse(self.enrolled_device.user_enrollment)
+        self.assertFalse(CertificateList.verify_channel_and_device(
+            Channel.User,
+            self.enrolled_device
+        ))
+
+    def test_scope_user_enrollment_macos_ok(self):
+        self.assertEqual(self.enrolled_device.platform, Platform.macOS.name)
+        self.enrolled_device.user_enrollment = True
+        self.assertTrue(CertificateList.verify_channel_and_device(
+            Channel.Device,
+            self.enrolled_device
+        ))
+
+    def test_scope_user_enrollment_ios_ok(self):
+        self.enrolled_device.platform = Platform.iOS.name
+        self.enrolled_device.user_enrollment = True
+        self.assertTrue(CertificateList.verify_channel_and_device(
+            Channel.Device,
+            self.enrolled_device
+        ))
+
+    def test_scope_user_enrollment_ipados_not_ok(self):
+        self.enrolled_device.platform = Platform.iPadOS.name
+        self.enrolled_device.user_enrollment = True
+        self.assertFalse(CertificateList.verify_channel_and_device(
+            Channel.Device,
+            self.enrolled_device
+        ))
+
+    # load_kwargs
+
     def test_load_kwargs_store_result_false(self):
         cmd = CertificateList.create_for_device(
             self.enrolled_device,
@@ -63,12 +108,16 @@ class CertificateListCommandTestCase(TestCase):
         self.assertFalse(cmd.update_inventory)
         self.assertTrue(cmd.store_result)
 
+    # build_command
+
     def test_build_command(self):
         cmd = CertificateList.create_for_device(self.enrolled_device)
         response = cmd.build_http_response(self.dep_enrollment_session)
         payload = plistlib.loads(response.content)["Command"]
         self.assertEqual(payload["RequestType"], "CertificateList")
         self.assertFalse(payload["ManagedOnly"])
+
+    # process_response
 
     def test_process_acknowledged_response_missing_cms(self):
         cmd = CertificateList.create_for_device(
@@ -161,3 +210,75 @@ class CertificateListCommandTestCase(TestCase):
                 },
             )
         self.assertEqual(i, 1)
+
+    # _update_inventory
+
+    def test_update_inventory_do_not_collect_certificates_noop(self):
+        self.enrolled_device.device_information_updated_at = datetime.utcnow()
+        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.assertEqual(self.enrolled_device.blueprint.collect_apps,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.enrolled_device.blueprint.collect_certificates = Blueprint.InventoryItemCollectionOption.NO
+        self.assertEqual(self.enrolled_device.blueprint.collect_profiles,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.assertIsNone(self.enrolled_device.certificates_updated_at)
+        self.assertIsNone(_update_inventory(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))
+
+    def test_update_inventory_managed_certificates_updated_at_none(self):
+        self.enrolled_device.device_information_updated_at = datetime.utcnow()
+        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.assertEqual(self.enrolled_device.blueprint.collect_apps,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.enrolled_device.blueprint.collect_certificates = Blueprint.InventoryItemCollectionOption.MANAGED_ONLY
+        self.assertEqual(self.enrolled_device.blueprint.collect_profiles,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.assertIsNone(self.enrolled_device.certificates_updated_at)
+        cmd = _update_inventory(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        )
+        self.assertIsInstance(cmd, CertificateList)
+        self.assertTrue(cmd.managed_only)
+        self.assertTrue(cmd.update_inventory)
+
+    def test_update_inventory_all_certificates_updated_at_old(self):
+        self.enrolled_device.device_information_updated_at = datetime.utcnow()
+        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.ALL
+        self.enrolled_device.blueprint.collect_certificates = Blueprint.InventoryItemCollectionOption.ALL
+        self.assertEqual(self.enrolled_device.blueprint.collect_profiles,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.enrolled_device.apps_updated_at = datetime.utcnow()
+        self.enrolled_device.certificates_updated_at = datetime(2000, 1, 1)
+        cmd = _update_inventory(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        )
+        self.assertIsInstance(cmd, CertificateList)
+        self.assertFalse(cmd.managed_only)
+        self.assertTrue(cmd.update_inventory)
+
+    def test_update_inventory_all_certificates_noop(self):
+        self.enrolled_device.device_information_updated_at = datetime.utcnow()
+        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.ALL
+        self.enrolled_device.blueprint.collect_certificates = Blueprint.InventoryItemCollectionOption.ALL
+        self.assertEqual(self.enrolled_device.blueprint.collect_profiles,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.enrolled_device.apps_updated_at = datetime.utcnow()
+        self.enrolled_device.certificates_updated_at = datetime.utcnow()
+        self.assertIsNone(_update_inventory(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))

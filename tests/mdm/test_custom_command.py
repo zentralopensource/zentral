@@ -19,6 +19,8 @@ class CustomCommandTestCase(TestCase):
         )
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
 
+    # load_kwargs
+
     def test_load_kwargs(self):
         cmd_payload = {
             "RequestType": "InstalledApplicationList",
@@ -32,6 +34,8 @@ class CustomCommandTestCase(TestCase):
         self.assertEqual(cmd.command, {"ManagedAppsOnly": False})
         self.assertEqual(cmd.request_type, "InstalledApplicationList")
 
+    # build_command
+
     def test_build_command(self):
         cmd_payload = {
             "RequestType": "InstalledApplicationList",
@@ -43,6 +47,8 @@ class CustomCommandTestCase(TestCase):
             queue=True
         )
         self.assertEqual(cmd.build_command(), {"ManagedAppsOnly": False})
+
+    # process_response
 
     def test_process_acknowledged_response(self):
         cmd_payload = {
