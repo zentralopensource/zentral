@@ -630,7 +630,7 @@ class EnrolledDevice(models.Model):
             and self.push_magic is not None
         )
 
-    @cached_property
+    @property
     def comparable_os_version(self):
         try:
             return tuple(int(i) for i in self.os_version.split("."))

@@ -15,7 +15,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         EnrolledDevice, EnrolledUser,
                                         Platform, Profile, PushCertificate,
                                         ReEnrollmentSession, UserArtifact)
-from zentral.contrib.mdm.commands import (CustomCommand, DeclarativeManagement,
+from zentral.contrib.mdm.commands import (CustomCommand,
                                           DeviceConfigured, DeviceInformation, InstallProfile,
                                           InstalledApplicationList, ProfileList, Reenroll,
                                           RemoveProfile, SecurityInfo)
@@ -24,7 +24,6 @@ from zentral.contrib.mdm.commands.utils import (_finish_dep_enrollment_configura
                                                 _install_artifacts,
                                                 _reenroll,
                                                 _remove_artifacts,
-                                                _trigger_declarative_management_sync,
                                                 _update_inventory)
 from .utils import force_dep_enrollment, force_realm_user
 
@@ -694,70 +693,6 @@ class TestMDMCommands(TestCase):
                 self.enrolled_user
             )
         )
-
-    # _trigger_declarative_management_sync
-
-    def test_trigger_declarative_management_sync_notnow_noop(self):
-        self.assertIsNotNone(self.enrolled_device.blueprint)
-        self.enrolled_device.os_version = "13.1.0"
-        self.assertIsNone(
-            _trigger_declarative_management_sync(
-                Channel.Device, RequestStatus.NotNow,
-                self.dep_enrollment_session,
-                self.enrolled_device,
-                None
-            )
-        )
-
-    def test_trigger_declarative_management_sync_no_declarative_management_noop(self):
-        self.assertFalse(self.enrolled_device.declarative_management)
-        self.enrolled_device.os_version = "13.1.0"
-        self.assertIsNotNone(self.enrolled_device.blueprint)
-        cmd = _trigger_declarative_management_sync(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        )
-        self.assertIsInstance(cmd, DeclarativeManagement)
-
-    def test_trigger_declarative_management_sync_user_channel_noop(self):
-        self.enrolled_device.declarative_management = True
-        self.enrolled_device.os_version = "13.1.0"
-        self.assertIsNotNone(self.enrolled_device.blueprint)
-        self.assertIsNone(
-            _trigger_declarative_management_sync(
-                Channel.User, RequestStatus.Idle,
-                self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user
-            )
-        )
-
-    def test_trigger_declarative_management_sync_no_blueprint_noop(self):
-        self.enrolled_device.declarative_management = True
-        self.enrolled_device.os_version = "13.1.0"
-        self.enrolled_device.blueprint = None
-        self.assertIsNone(
-            _trigger_declarative_management_sync(
-                Channel.Device, RequestStatus.Idle,
-                self.dep_enrollment_session,
-                self.enrolled_device,
-                None
-            )
-        )
-
-    def test_trigger_declarative_management_sync(self):
-        self.enrolled_device.declarative_management = True
-        self.enrolled_device.os_version = "13.1.0"
-        self.assertIsNotNone(self.enrolled_device.blueprint)
-        cmd = _trigger_declarative_management_sync(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        )
-        self.assertIsInstance(cmd, DeclarativeManagement)
 
     # update inventory
 
