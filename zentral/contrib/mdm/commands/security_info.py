@@ -10,9 +10,6 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.security_info")
 
 class SecurityInfo(Command):
     request_type = "SecurityInfo"
-    allowed_channel = Channel.Device
-    allowed_platform = (Platform.iOS, Platform.iPadOS, Platform.macOS, Platform.tvOS)
-    allowed_in_user_enrollment = True
     reschedule_notnow = True
 
     @staticmethod
