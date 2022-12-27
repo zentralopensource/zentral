@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import CustomCommand
-from zentral.contrib.mdm.models import CommandStatus
+from zentral.contrib.mdm.models import Channel, CommandStatus
 from .utils import force_dep_enrollment_session
 
 
@@ -18,6 +18,12 @@ class CustomCommandTestCase(TestCase):
             completed=True,
         )
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
+
+    # verify_channel_and_device
+
+    def test_verify_channel_and_device(self):
+        for channel in (Channel.Device, Channel.User):
+            self.assertTrue(CustomCommand.verify_channel_and_device(channel, self.enrolled_device))
 
     # load_kwargs
 
