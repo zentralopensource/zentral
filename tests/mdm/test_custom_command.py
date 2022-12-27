@@ -3,7 +3,8 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import CustomCommand
-from zentral.contrib.mdm.models import Channel, CommandStatus
+from zentral.contrib.mdm.commands.utils import _get_next_queued_command
+from zentral.contrib.mdm.models import Channel, CommandStatus, RequestStatus
 from .utils import force_dep_enrollment_session
 
 
@@ -129,3 +130,34 @@ class CustomCommandTestCase(TestCase):
         self.assertEqual(cmd.db_command.status, CommandStatus.Acknowledged.value)
         result = plistlib.loads(cmd.db_command.result)
         self.assertEqual(result["Status"], CommandStatus.Acknowledged.value)
+
+    # _get_next_queued_command
+
+    def test_not_now_command_not_now(self):
+        cmd = CustomCommand.create_for_device(
+            self.enrolled_device,
+            kwargs={"command": plistlib.dumps({"RequestType": "InstalledApplicationList"}).decode("utf-8")},
+        )
+        cmd.db_command.status = CommandStatus.NotNow.value
+        cmd.db_command.save()
+        self.assertIsNone(_get_next_queued_command(
+            Channel.Device, RequestStatus.NotNow,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))
+
+    def test_not_now_custom_command_rescheduled(self):
+        cmd = CustomCommand.create_for_device(
+            self.enrolled_device,
+            kwargs={"command": plistlib.dumps({"RequestType": "InstalledApplicationList"}).decode("utf-8")},
+        )
+        cmd.db_command.status = CommandStatus.NotNow.value
+        cmd.db_command.save()
+        fetched_cmd = _get_next_queued_command(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        )
+        self.assertEqual(fetched_cmd, cmd)
