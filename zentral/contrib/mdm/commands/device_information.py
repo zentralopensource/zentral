@@ -120,6 +120,8 @@ class DeviceInformation(Command):
             if platform and self.enrolled_device.platform != platform:
                 logger.warning("Enrolled device %s: platform change.", self.enrolled_device.serial_number)
                 self.enrolled_device.platform = platform
+        # Awaiting configuration
+        self.enrolled_device.awaiting_configuration = query_responses.get("AwaitingConfiguration")
         # OS version
         os_version = query_responses.get("OSVersion")
         if os_version:

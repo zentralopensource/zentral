@@ -15,11 +15,10 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         EnrolledDevice, EnrolledUser,
                                         Platform, Profile, PushCertificate,
                                         ReEnrollmentSession, UserArtifact)
-from zentral.contrib.mdm.commands import (DeviceConfigured, DeviceInformation, InstallProfile,
+from zentral.contrib.mdm.commands import (DeviceInformation, InstallProfile,
                                           InstalledApplicationList, ProfileList, Reenroll,
                                           RemoveProfile, SecurityInfo)
-from zentral.contrib.mdm.commands.utils import (_finish_dep_enrollment_configuration,
-                                                _get_next_queued_command,
+from zentral.contrib.mdm.commands.utils import (_get_next_queued_command,
                                                 _install_artifacts,
                                                 _reenroll,
                                                 _remove_artifacts,
@@ -284,43 +283,6 @@ class TestMDMCommands(TestCase):
             None,
         )
         self.assertEqual(cmd, cmd2)
-
-    # _finish_dep_enrollment_configuration
-
-    def test_device_configured_already_done(self):
-        self.assertIsNone(_finish_dep_enrollment_configuration(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        ))
-
-    def test_device_configured_notnow_noop(self):
-        self.assertIsNone(_finish_dep_enrollment_configuration(
-            Channel.Device, RequestStatus.NotNow,
-            self.dep_enrollment_session,
-            self.enrolled_device_awaiting_configuration,
-            None
-        ))
-
-    def test_device_configured(self):
-        command = _finish_dep_enrollment_configuration(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device_awaiting_configuration,
-            None
-        )
-        self.assertIsInstance(command, DeviceConfigured)
-        self.assertEqual(command.channel, Channel.Device)
-        self.assertIsNotNone(command.db_command.time)
-        self.assertIsNone(command.db_command.result_time)
-        self.assertTrue(self.enrolled_device_awaiting_configuration.awaiting_configuration)
-        command.process_response({"Status": "Acknowledged"}, self.dep_enrollment_session, self.meta_business_unit)
-        command.db_command.refresh_from_db()
-        self.assertEqual(command.db_command.status, "Acknowledged")
-        self.assertIsNotNone(command.db_command.result_time)
-        self.enrolled_device_awaiting_configuration.refresh_from_db()
-        self.assertFalse(self.enrolled_device_awaiting_configuration.awaiting_configuration)
 
     # _install_artifacts
 

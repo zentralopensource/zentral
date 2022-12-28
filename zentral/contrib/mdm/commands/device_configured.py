@@ -13,7 +13,6 @@ class DeviceConfigured(Command):
     def verify_channel_and_device(channel, enrolled_device):
         return (
             channel == Channel.Device
-            and enrolled_device.dep_enrollment
             and enrolled_device.awaiting_configuration
         )
 
