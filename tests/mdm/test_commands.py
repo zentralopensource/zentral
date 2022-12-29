@@ -17,7 +17,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         ReEnrollmentSession, UserArtifact)
 from zentral.contrib.mdm.commands import (DeviceInformation, InstallProfile,
                                           InstalledApplicationList, ProfileList, Reenroll,
-                                          RemoveProfile, SecurityInfo)
+                                          RemoveProfile)
 from zentral.contrib.mdm.commands.utils import (_get_next_queued_command,
                                                 _install_artifacts,
                                                 _reenroll,
@@ -655,32 +655,6 @@ class TestMDMCommands(TestCase):
                 self.dep_enrollment_session,
                 self.enrolled_device_no_blueprint,
                 None
-            )
-        )
-
-    def test_update_inventory_security_info_updated_at_old(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.enrolled_device.security_info_updated_at = datetime(2000, 1, 1)
-        cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
-        )
-        self.assertIsInstance(cmd, SecurityInfo)
-
-    def test_update_inventory_security_info_updated_at_ok_no_inventory_items_collection_noop(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.enrolled_device.security_info_updated_at = datetime.utcnow()
-        self.assertEqual(self.blueprint1.collect_apps, Blueprint.InventoryItemCollectionOption.NO)
-        self.assertEqual(self.blueprint1.collect_certificates, Blueprint.InventoryItemCollectionOption.NO)
-        self.assertEqual(self.blueprint1.collect_profiles, Blueprint.InventoryItemCollectionOption.NO)
-        self.assertIsNone(
-            _update_inventory(
-                Channel.Device, RequestStatus.Idle,
-                self.dep_enrollment_session,
-                self.enrolled_device,
-                None,
             )
         )
 
