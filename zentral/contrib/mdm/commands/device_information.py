@@ -14,72 +14,83 @@ class DeviceInformation(Command):
     reschedule_notnow = True
 
     # https://developer.apple.com/documentation/devicemanagement/deviceinformationcommand/command/queries
-    queries = [
-        "AccessibilitySettings",  # iOS >= 16
-        "ActiveManagedUsers",  # macOS >= 10.11
-        "AppAnalyticsEnabled",  # iOS >= 4, macOS >= 10.7
-        "AutoSetupAdminAccounts",  # macOS >= 10.11
-        "AvailableDeviceCapacity",  # iOS >= 4, macOS >= 10.7
-        "AwaitingConfiguration",
-        "BatteryLevel",  # iOS >= 5
-        "BluetoothMAC",
-        "BuildVersion",
-        "CellularTechnology",  # iOS >= 4.2.6
-        "DataRoamingEnabled",  # iOS >= 5
-        "DeviceCapacity",  # iOS >= 4, macOS >= 10.7
-        "DeviceID",  # tvOS >= 6
-        "DeviceName",
-        "DevicePropertiesAttestation",  # iOS >= 16, tvOS >= 16
-        "DiagnosticSubmissionEnabled",  # iOS >= 9.3
-        "EASDeviceIdentifier",  # iOS >= 7
-        "EstimatedResidentUsers",  # Shared iPad, iOS >= 14
-        "EthernetMAC",  # macOS >= 10.7
-        "HostName",  # macOS >= 10.11
-        "IsActivationLockSupported",  # macOS >= 10.9
-        "IsAppleSilicon",  # macOS >= 10.12
-        "IsCloudBackupEnabled",  # iOS >= 7.1
-        "IsDeviceLocatorServiceEnabled",  # iOS >= 7
-        "IsDoNotDisturbInEffect",  # iOS >= 7
-        "IsMDMLostModeEnabled",  # iOS >= 9.3
-        "IsMultiUser",  # iOS >= 9.3
-        "IsNetworkTethered",  # iOS >= 10.3
-        "IsRoaming",  # iOS >= 4.2
-        "IsSupervised",  # iOS >= 6, macOS >= 10.15, tvOS >= 9
-        "iTunesStoreAccountHash",
-        "iTunesStoreAccountIsActive",
-        "LastCloudBackupDate",  # iOS >= 8
-        "LocalHostName",  # macOS >= 10.11
-        "ManagedAppleIDDefaultDomains",  # Shared iPad, iOS >= 16
-        "MaximumResidentUsers",  # Shared iPad, iOS >= 9.3
-        "MDMOptions",
-        "Model",
-        "ModelName",
-        "ModemFirmwareVersion",  # iOS >= 4
-        "OnlineAuthenticationGracePeriod",  # Shared iPad, iOS >= 16
-        "OrganizationInfo",
-        "OSUpdateSettings",
-        "OSVersion",
-        "PersonalHotspotEnabled",
-        "PINRequiredForDeviceLock",  # macOS >= 11
-        "PINRequiredForEraseDevice",  # macOS >= 11
-        "ProductName",
-        "ProvisioningUDID",  # macOS >= 11.3
-        # "PushToken",  User channel only iOS >= 9.3, macOS >= 10.12
-        "QuotaSize",  # Shared iPad, iOS >= 13.4
-        "ResidentUsers",  # Shared iPad, iOS >= 13.4
-        "SerialNumber",
-        "ServiceSubscriptions",
-        "SoftwareUpdateDeviceID",  # iOS >= 15, macOS >= 12
-        "SupportsiOSAppInstalls",  # macOS >= 11
-        "SupportsLOMDevice",  # macOS >= 11
-        "SystemIntegrityProtectionEnabled",  # macOS >= 10.12
-        "TemporarySessionOnly",
-        "TemporarySessionTimeout",
-        "TimeZone",  # iOS >= 14, tvOS >= 14
-        "UDID",
-        "UserSessionTimeout",
-        "WiFiMAC",
-    ]
+    # Last check 2022-12-29
+    # Access rights:
+    #   16: Device information
+    #   32: Network information
+    # 4096: App management
+    # Some keys are not documented!
+    queries = (
+        # Device information queries key, Access Rights, Platforms
+        ("AccessibilitySettings", None, {"iOS": (16,)}),
+        ("ActiveManagedUsers", 16, {"macOS": (10, 11)}),
+        ("AppAnalyticsEnabled", 16, {"iOS": (4,), "macOS": (10, 7)}),
+        ("AutoSetupAdminAccounts", 16, {"macOS": (10, 11)}),
+        ("AvailableDeviceCapacity", 16, {"iOS": (4,), "macOS": (10, 7)}),
+        ("AwaitingConfiguration", None, None),
+        ("BatteryLevel", 16, {"iOS": (4,)}),
+        ("BluetoothMAC", 32, {"iOS": (5,)}),
+        ("BuildVersion", 16, None),
+        ("CellularTechnology", 16, {"iOS": (4, 2, 6)}),
+        ("DataRoamingEnabled", 32, {"iOS": (5,)}),
+        ("DeviceCapacity", 16, {"iOS": (4,), "macOS": (10, 7)}),
+        ("DeviceID", 16, {"tvOS": (6,)}),
+        ("DeviceName", 16, None),
+        ("DevicePropertiesAttestation", None, {"iOS": (16,), "tvOS": (16,)}),
+        ("DiagnosticSubmissionEnabled",  16, {"iOS": (9, 3)}),
+        ("EASDeviceIdentifier", 16, {"iOS": (7,)}),
+        ("EstimatedResidentUsers", 16, {"iOS": (14,)}),  # Shared iPad
+        ("EthernetMAC", 32, {"macOS": (10, 7)}),
+        ("HostName", None, {"macOS": (10, 11)}),
+        ("IsActivationLockSupported", None, {"macOS": (10, 9)}),
+        ("IsAppleSilicon", None, {"macOS": (12,)}),
+        ("IsCloudBackupEnabled", 16, {"iOS": (7, 1)}),
+        ("IsDeviceLocatorServiceEnabled", 16, {"iOS": (7,)}),
+        ("IsDoNotDisturbInEffect", 16, {"iOS": (7,)}),
+        ("IsMDMLostModeEnabled", 16, {"iOS": (9, 3)}),
+        ("IsMultiUser", 16, {"iOS": (9, 3)}),
+        ("IsNetworkTethered", 32, {"iOS": (10, 3)}),
+        ("IsRoaming", 32, {"iOS": (4, 2)}),
+        ("IsSupervised", 16, {"iOS": (6,), "macOS": (10, 15), "tvOS": (9,)}),
+        ("iTunesStoreAccountHash", 4096, None),
+        ("iTunesStoreAccountIsActive", 4096, None),
+        ("LastCloudBackupDate", None, {"iOS": (8,)}),
+        ("LocalHostName", None, {"macOS": (10, 11)}),
+        ("ManagedAppleIDDefaultDomains", None, {"iOS": (16,)}),  # Shared iPad
+        # MaximumResidentUsers always returns 32 since iOS 13.4
+        ("MDMOptions", None, None),
+        ("Model", 16, None),
+        ("ModelName", 16, None),
+        ("ModemFirmwareVersion", 16, {"iOS": (4,)}),
+        ("OnlineAuthenticationGracePeriod", None, {"iOS": (16,)}),  # Shared iPad
+        ("OrganizationInfo", None, None),
+        ("OSUpdateSettings", 16, {"macOS": (10, 11)}),
+        ("OSVersion", 16, None),
+        ("PersonalHotspotEnabled", 32, {"iOS": (7,)}),
+        ("PINRequiredForDeviceLock", None, {"macOS": (11,)}),
+        ("PINRequiredForEraseDevice", None, {"macOS": (11,)}),
+        ("ProductName", 16, None),
+        ("ProvisioningUDID", None, {"macOS": (11, 3)}),
+        # PushToken User channel only iOS >= 9.3, macOS >= 10.12
+        ("QuotaSize", 16, {"iOS": (13, 4)}),  # Shared iPad
+        ("ResidentUsers", 16, {"iOS": (13, 4)}),  # Shared iPad
+        ("SerialNumber", 16, None),
+        ("ServiceSubscriptions", 32, None),
+        ("SkipLanguageAndLocaleSetupForNewUsers", None, None),  # Not documented
+        ("SoftwareUpdateDeviceID", None, {"iOS": (15,), "macOS": (12,)}),
+        ("SoftwareUpdateSettings", None, None),  # Not documented
+        ("SupplementalBuildVersion", None, None),  # Not documented
+        ("SupplementalOSVersionExtra", None, None),  # Not documented
+        ("SupportsiOSAppInstalls", None, {"macOS": (11,)}),
+        ("SupportsLOMDevice", None, {"macOS": (11,)}),
+        ("SystemIntegrityProtectionEnabled", 16, {"macOS": (10, 12)}),
+        ("TemporarySessionOnly", None, None),
+        ("TemporarySessionTimeout", None, None),
+        ("TimeZone", 16, {"iOS": (14,), "tvOS": (14,)}),
+        ("UDID", None, None),
+        ("UserSessionTimeout", None, None),
+        ("WiFiMAC", 32, None),
+    )
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
@@ -94,7 +105,7 @@ class DeviceInformation(Command):
         )
 
     def build_command(self):
-        return {"Queries": self.queries}
+        return {"Queries": [k for k, _, _ in self.queries]}
 
     def command_acknowledged(self):
         query_responses = self.response.get("QueryResponses")

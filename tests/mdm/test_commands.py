@@ -658,37 +658,6 @@ class TestMDMCommands(TestCase):
             )
         )
 
-    def test_update_inventory_device_information_updated_at_none(self):
-        self.assertIsNone(self.enrolled_device.device_information_updated_at)
-        cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        )
-        self.assertIsInstance(cmd, DeviceInformation)
-
-    def test_update_inventory_device_information_updated_at_old(self):
-        self.enrolled_device.device_information_updated_at = datetime(2000, 1, 1)
-        cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        )
-        self.assertIsInstance(cmd, DeviceInformation)
-
-    def test_update_inventory_device_information_updated_at_ok(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.assertIsNone(self.enrolled_device.security_info_updated_at)
-        cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
-        )
-        self.assertIsInstance(cmd, SecurityInfo)
-
     def test_update_inventory_security_info_updated_at_old(self):
         self.enrolled_device.device_information_updated_at = datetime.utcnow()
         self.enrolled_device.security_info_updated_at = datetime(2000, 1, 1)
