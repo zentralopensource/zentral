@@ -24,15 +24,18 @@ class InstallEnterpriseApplication(Command):
         manifest["items"][0]["assets"][0]["url"] = "https://{}{}".format(settings["api"]["fqdn"],
                                                                          reverse("mdm:enterprise_app_download",
                                                                                  args=(self.db_command.uuid,)))
-        return {
+        cmd = {
             # TODO manage options
-            # App must install to /Applications
-            # App must contain a single app
-            "InstallAsManaged": True,
-            "ChangeManagementState": "Managed",
-            "ManagementFlags": 1,
             "Manifest": manifest
         }
+        if self.enrolled_device.comparable_os_version >= (11,):
+            cmd["InstallAsManaged"] = False
+            # TODO install as managed
+            # App must install to /Applications
+            # App must contain a single app
+            # ChangeManagementState
+            # ManagementFlags
+        return cmd
 
     def command_acknowledged(self):
         apps_to_check = None

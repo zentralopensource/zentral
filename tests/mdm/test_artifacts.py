@@ -159,7 +159,7 @@ class TestMDMArtifacts(TestCase):
                     filename="{}.pkg".format(get_random_string(17)),
                     product_id="{}.{}.{}".format(get_random_string(2), get_random_string(4), get_random_string(8)),
                     product_version="17",
-                    manifest={"version": version}
+                    manifest={"items": [{"assets": [{}]}]}
                 )
         return artifact, artifact_versions
 
