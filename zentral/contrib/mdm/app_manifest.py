@@ -81,7 +81,7 @@ def get_md5s(package_file, md5_size=MD5_SIZE):
 
 
 def build_enterprise_app_manifest(package_file):
-    # see https://support.apple.com/lt-lt/guide/deployment-reference-macos/ior5df10f73a/web
+    # see https://support.apple.com/lt-lt/guide/deployment/dep873c25ac4/web
     title, product_id, product_version, bundles = read_distribution_info(package_file)
     md5_size, md5s = get_md5s(package_file)
     manifest = {"items": [{"assets": [{"kind": "software-package", "md5-size": md5_size, "md5s": md5s}]}]}
