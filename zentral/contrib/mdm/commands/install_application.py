@@ -62,7 +62,7 @@ class InstallApplication(Command):
                 artifact_version=self.artifact_version,
                 defaults={"status": TargetArtifactStatus.AwaitingConfirmation.name}
             )
-            # queue an installed application list command
+            # queue a managed application list command
             first_delay_seconds = 15  # TODO hardcoded
             ManagedApplicationList.create_for_device(
                 self.enrolled_device,
