@@ -15,11 +15,10 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         EnrolledDevice, EnrolledUser,
                                         Platform, Profile, PushCertificate,
                                         ReEnrollmentSession, UserArtifact)
-from zentral.contrib.mdm.commands import (DeviceInformation, InstallProfile,
+from zentral.contrib.mdm.commands import (DeviceInformation,
                                           ProfileList, Reenroll,
                                           RemoveProfile)
 from zentral.contrib.mdm.commands.utils import (_get_next_queued_command,
-                                                _install_artifacts,
                                                 _reenroll,
                                                 _remove_artifacts,
                                                 _update_inventory)
@@ -283,118 +282,6 @@ class TestMDMCommands(TestCase):
             None,
         )
         self.assertEqual(cmd, cmd2)
-
-    # _install_artifacts
-
-    def test_no_device_profile(self):
-        self.assertIsNone(_install_artifacts(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        ))
-
-    def test_install_device_profile_notnow_noop(self):
-        artifact, artifact_versions = self._force_blueprint_artifact()
-        self.assertIsNone(_install_artifacts(
-            Channel.Device, RequestStatus.NotNow,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        ))
-
-    def test_install_device_profile(self):
-        artifact, artifact_versions = self._force_blueprint_artifact()
-        command = _install_artifacts(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        )
-        self.assertIsInstance(command, InstallProfile)
-        self.assertEqual(command.channel, Channel.Device)
-        self.assertEqual(command.db_command.artifact_version, artifact_versions[0])
-        http_response = command.build_http_response(self.dep_enrollment_session)
-        self.assertIsInstance(http_response, HttpResponse)
-        self.assertIsNone(_install_artifacts(
-            Channel.User, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user
-        ))
-        qs = DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device)
-        self.assertEqual(qs.count(), 0)
-        command.process_response({"Status": "Acknowledged"}, self.dep_enrollment_session, self.meta_business_unit)
-        self.assertEqual(qs.count(), 1)
-        self.assertEqual(qs.filter(artifact_version=artifact_versions[0]).count(), 1)
-
-    def test_no_install_device_profile_previous_error(self):
-        artifact, artifact_versions = self._force_blueprint_artifact()
-        command = _install_artifacts(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        )
-        command.process_response({"Status": "Error", "ErrorChain": [{"un": 1}]},
-                                 self.dep_enrollment_session, self.meta_business_unit)
-        self.assertIsNone(_install_artifacts(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        ))
-
-    def test_install_user_profile_notnow_noop(self):
-        artifact, artifact_versions = self._force_blueprint_artifact(channel=Channel.User)
-        self.assertIsNone(_install_artifacts(
-            Channel.User, RequestStatus.NotNow,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user
-        ))
-
-    def test_install_user_profile(self):
-        artifact, artifact_versions = self._force_blueprint_artifact(channel=Channel.User)
-        command = _install_artifacts(
-            Channel.User, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user
-        )
-        self.assertIsInstance(command, InstallProfile)
-        self.assertEqual(command.channel, Channel.User)
-        self.assertEqual(command.db_command.artifact_version, artifact_versions[0])
-        http_response = command.build_http_response(self.dep_enrollment_session)
-        self.assertIsInstance(http_response, HttpResponse)
-        self.assertIsNone(_install_artifacts(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None
-        ))
-        qs = UserArtifact.objects.filter(enrolled_user=self.enrolled_user)
-        self.assertEqual(qs.count(), 0)
-        command.process_response({"Status": "Acknowledged"}, self.dep_enrollment_session, self.meta_business_unit)
-        self.assertEqual(qs.count(), 1)
-        self.assertEqual(qs.filter(artifact_version=artifact_versions[0]).count(), 1)
-
-    def test_no_install_user_profile_previous_error(self):
-        artifact, artifact_versions = self._force_blueprint_artifact(channel=Channel.User)
-        command = _install_artifacts(
-            Channel.User, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user
-        )
-        command.process_response({"Status": "Error", "ErrorChain": [{"un": 1}]},
-                                 self.dep_enrollment_session, self.meta_business_unit)
-        self.assertIsNone(_install_artifacts(
-            Channel.User, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user
-        ))
 
     # _remove_artifacts
 

@@ -352,7 +352,7 @@ class InstallProfileCommandTestCase(TestCase):
 
     # _install_artifacts
 
-    def test_install_artifacts_device_noop(self):
+    def test_install_device_profile_already_installed_noop(self):
         artifact_version0, _ = self._force_profile(installed=True)
         self.assertIsNone(
             _install_artifacts(
@@ -364,7 +364,40 @@ class InstallProfileCommandTestCase(TestCase):
             )
         )
 
-    def test_install_artifacts_device(self):
+    def test_install_device_profile_notnow_noop(self):
+        artifact_version0, _ = self._force_profile(installed=True)
+        artifact_version1, _ = self._force_profile(
+            artifact=artifact_version0.artifact, version=1
+        )
+        self.assertIsNone(_install_artifacts(
+            Channel.Device,
+            RequestStatus.NotNow,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))
+
+    def test_install_device_profile_previous_error_noop(self):
+        artifact_version, _ = self._force_profile()
+        command = _install_artifacts(
+            Channel.Device,
+            RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        )
+        self.assertIsInstance(command, InstallProfile)
+        command.process_response({"Status": "Error", "ErrorChain": [{"un": 1}]},
+                                 self.dep_enrollment_session, self.mbu)
+        self.assertIsNone(_install_artifacts(
+            Channel.Device,
+            RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))
+
+    def test_install_device_profile(self):
         artifact_version0, _ = self._force_profile(installed=True)
         artifact_version1, _ = self._force_profile(
             artifact=artifact_version0.artifact, version=1
@@ -379,7 +412,7 @@ class InstallProfileCommandTestCase(TestCase):
         self.assertIsInstance(cmd, InstallProfile)
         self.assertEqual(cmd.artifact_version, artifact_version1)
 
-    def test_install_artifacts_user_noop(self):
+    def test_install_user_profile_already_installed_noop(self):
         artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
         self.assertIsNone(
             _install_artifacts(
@@ -391,7 +424,40 @@ class InstallProfileCommandTestCase(TestCase):
             )
         )
 
-    def test_install_artifacts_user(self):
+    def test_install_user_profile_notnow_noop(self):
+        artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
+        artifact_version1, _ = self._force_profile(
+            channel=Channel.User, artifact=artifact_version0.artifact, version=1
+        )
+        self.assertIsNone(_install_artifacts(
+            Channel.User,
+            RequestStatus.NotNow,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            self.enrolled_user,
+        ))
+
+    def test_install_user_profile_previous_error_noop(self):
+        artifact_version, _ = self._force_profile(channel=Channel.User)
+        command = _install_artifacts(
+            Channel.User,
+            RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            self.enrolled_user
+        )
+        self.assertIsInstance(command, InstallProfile)
+        command.process_response({"Status": "Error", "ErrorChain": [{"un": 1}]},
+                                 self.dep_enrollment_session, self.mbu)
+        self.assertIsNone(_install_artifacts(
+            Channel.User,
+            RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            self.enrolled_user
+        ))
+
+    def test_install_user_profile(self):
         artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
         artifact_version1, _ = self._force_profile(
             channel=Channel.User, artifact=artifact_version0.artifact, version=1
