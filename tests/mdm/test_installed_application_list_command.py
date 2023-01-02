@@ -6,7 +6,7 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.commands import InstalledApplicationList
 from zentral.contrib.mdm.inventory import commit_update_tree, tree_from_payload
-from zentral.contrib.mdm.models import Blueprint
+from zentral.contrib.mdm.models import Blueprint, Channel, Platform
 from .utils import force_dep_enrollment_session
 
 
@@ -43,6 +43,36 @@ class InstalledApplicationListCommandTestCase(TestCase):
                  "rb")
         )
 
+    # verify_channel_and_device
+
+    def test_scope(self):
+        for channel, platform, user_enrollment, result in (
+            (Channel.Device, Platform.iOS, False, True),
+            (Channel.Device, Platform.iPadOS, False, True),
+            (Channel.Device, Platform.macOS, False, True),
+            (Channel.Device, Platform.tvOS, False, True),
+            (Channel.User, Platform.iOS, False, False),
+            (Channel.User, Platform.iPadOS, False, False),
+            (Channel.User, Platform.macOS, False, True),
+            (Channel.User, Platform.tvOS, False, False),
+            (Channel.Device, Platform.iOS, True, True),
+            (Channel.Device, Platform.iPadOS, True, False),
+            (Channel.Device, Platform.macOS, True, False),
+            (Channel.Device, Platform.tvOS, True, False),
+            (Channel.User, Platform.iOS, True, False),
+            (Channel.User, Platform.iPadOS, True, False),
+            (Channel.User, Platform.macOS, True, False),
+            (Channel.User, Platform.tvOS, True, False),
+        ):
+            self.enrolled_device.platform = platform.name
+            self.enrolled_device.user_enrollment = user_enrollment
+            self.assertEqual(
+                result,
+                InstalledApplicationList.verify_channel_and_device(channel, self.enrolled_device),
+            )
+
+    # load_kwargs
+
     def test_load_kwargs_store_result_false(self):
         cmd = InstalledApplicationList.create_for_device(
             self.enrolled_device,
@@ -61,6 +91,8 @@ class InstalledApplicationListCommandTestCase(TestCase):
         self.assertFalse(cmd.update_inventory)
         self.assertTrue(cmd.store_result)
 
+    # build_command
+
     def test_build_command(self):
         cmd = InstalledApplicationList.create_for_device(
             self.enrolled_device
@@ -69,6 +101,8 @@ class InstalledApplicationListCommandTestCase(TestCase):
         payload = plistlib.loads(response.content)["Command"]
         self.assertEqual(payload["RequestType"], "InstalledApplicationList")
         self.assertFalse(payload["ManagedAppsOnly"])
+
+    # process_response
 
     def test_process_acknowledged_response_missing_cms(self):
         cmd = InstalledApplicationList.create_for_device(
