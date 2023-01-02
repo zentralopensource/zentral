@@ -5,8 +5,9 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.commands import InstalledApplicationList
+from zentral.contrib.mdm.commands.utils import _update_inventory
 from zentral.contrib.mdm.inventory import commit_update_tree, tree_from_payload
-from zentral.contrib.mdm.models import Blueprint, Channel, Platform
+from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
 from .utils import force_dep_enrollment_session
 
 
@@ -169,3 +170,75 @@ class InstalledApplicationListCommandTestCase(TestCase):
         m = MetaMachine(self.enrolled_device.serial_number)
         ms = m.snapshots[0]
         self.assertEqual(ms.osx_app_instances.count(), 3)
+
+    # _update_inventory
+
+    def test_update_inventory_do_not_collect_apps_noop(self):
+        self.enrolled_device.device_information_updated_at = datetime.utcnow()
+        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.NO
+        self.assertEqual(self.enrolled_device.blueprint.collect_certificates,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.assertEqual(self.enrolled_device.blueprint.collect_profiles,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.assertIsNone(self.enrolled_device.apps_updated_at)
+        self.assertIsNone(_update_inventory(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))
+
+    def test_update_inventory_managed_apps_updated_at_none(self):
+        self.enrolled_device.device_information_updated_at = datetime.utcnow()
+        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.MANAGED_ONLY
+        self.assertEqual(self.enrolled_device.blueprint.collect_certificates,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.assertEqual(self.enrolled_device.blueprint.collect_profiles,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.assertIsNone(self.enrolled_device.apps_updated_at)
+        cmd = _update_inventory(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        )
+        self.assertIsInstance(cmd, InstalledApplicationList)
+        self.assertTrue(cmd.managed_only)
+        self.assertTrue(cmd.update_inventory)
+
+    def test_update_inventory_all_apps_updated_at_old(self):
+        self.enrolled_device.device_information_updated_at = datetime.utcnow()
+        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.ALL
+        self.assertEqual(self.enrolled_device.blueprint.collect_certificates,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.assertEqual(self.enrolled_device.blueprint.collect_profiles,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.enrolled_device.apps_updated_at = datetime(2000, 1, 1)
+        cmd = _update_inventory(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        )
+        self.assertIsInstance(cmd, InstalledApplicationList)
+        self.assertFalse(cmd.managed_only)
+        self.assertTrue(cmd.update_inventory)
+
+    def test_update_inventory_managed_apps_noop(self):
+        self.enrolled_device.device_information_updated_at = datetime.utcnow()
+        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.MANAGED_ONLY
+        self.assertEqual(self.enrolled_device.blueprint.collect_certificates,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.assertEqual(self.enrolled_device.blueprint.collect_profiles,
+                         Blueprint.InventoryItemCollectionOption.NO)
+        self.enrolled_device.apps_updated_at = datetime.utcnow()
+        self.assertIsNone(_update_inventory(
+            Channel.Device, RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))
