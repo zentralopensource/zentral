@@ -57,7 +57,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
             name=get_random_string(12),
             url="https://example.com/{}".format(get_random_string(12)),
             challenge_type="STATIC",
-            challenge_kwargs={"challenge": get_random_string(12)}
         )
         scep_config.set_challenge_kwargs({"challenge": get_random_string(12)})
         scep_config.save()

@@ -13,20 +13,22 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.install_profile")
 def process_scep_payloads(profile_payload):
     for payload in profile_payload.get("PayloadContent", []):
         if payload.get("PayloadType") == "com.apple.security.scep":
-            # does the payload have a name?
-            name = payload.get("Name")
+            # does the payload have a PayloadContent?
+            payload_content = payload.get("PayloadContent")
+            if not payload_content:
+                continue
+            # does the PayloadContent have a name?
+            name = payload_content.get("Name")
             if not name:
                 # nothing to do
                 continue
-
             # do we have a matching config in the DB?
             try:
                 scep_config = SCEPConfig.objects.get(name=name)
             except SCEPConfig.DoesNotExist:
                 # nothing to do
                 continue
-
-            update_scep_payload(payload, scep_config)
+            update_scep_payload(payload_content, scep_config)
 
 
 def build_payload(profile, enrollment_session, enrolled_user=None):
