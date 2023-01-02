@@ -21,6 +21,8 @@ def build_management_status_subscriptions(blueprint):
         "Identifier": get_declaration_identifier(blueprint, "management-status-subscriptions"),
         "Payload": {
             "StatusItems": [
+                {"Name": "device.identifier.serial-number"},
+                {"Name": "device.identifier.udid"},
                 {"Name": "device.model.family"},
                 {"Name": "device.model.identifier"},
                 {"Name": "device.model.marketing-name"},
@@ -28,12 +30,15 @@ def build_management_status_subscriptions(blueprint):
                 {"Name": "device.operating-system.family"},
                 {"Name": "device.operating-system.marketing-name"},
                 {"Name": "device.operating-system.version"},
+                {"Name": "mdm.app"},
+                {"Name": "passcode.is-compliant"},
+                {"Name": "passcode.is-present"},
                 {"Name": "management.client-capabilities"},
                 {"Name": "management.declarations"},
                 {"Name": "management.push-token"},
             ]
         },
-        "ServerToken": "1",  # We start with hard-coded one, because it will not change at first
+        "ServerToken": "2",  # We start with hard-coded one, because it will not change at first
         "Type": "com.apple.configuration.management.status-subscriptions"
     }
 
