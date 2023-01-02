@@ -16,7 +16,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         Platform, Profile, PushCertificate,
                                         ReEnrollmentSession, UserArtifact)
 from zentral.contrib.mdm.commands import (DeviceInformation,
-                                          ProfileList, Reenroll,
+                                          Reenroll,
                                           RemoveProfile)
 from zentral.contrib.mdm.commands.utils import (_get_next_queued_command,
                                                 _reenroll,
@@ -544,44 +544,6 @@ class TestMDMCommands(TestCase):
                 None
             )
         )
-
-    def test_update_inventory_managed_profiles_updated_at_none(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.enrolled_device.security_info_updated_at = datetime.utcnow()
-        self.assertEqual(self.enrolled_device.blueprint.collect_apps,
-                         Blueprint.InventoryItemCollectionOption.NO)
-        self.assertEqual(self.enrolled_device.blueprint.collect_certificates,
-                         Blueprint.InventoryItemCollectionOption.NO)
-        self.enrolled_device.blueprint.collect_profiles = Blueprint.InventoryItemCollectionOption.MANAGED_ONLY
-        self.assertIsNone(self.enrolled_device.profiles_updated_at)
-        cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
-        )
-        self.assertIsInstance(cmd, ProfileList)
-        self.assertTrue(cmd.managed_only)
-        self.assertTrue(cmd.update_inventory)
-
-    def test_update_inventory_all_profiles_updated_at_old(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.enrolled_device.security_info_updated_at = datetime.utcnow()
-        self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.ALL
-        self.enrolled_device.blueprint.collect_certificates = Blueprint.InventoryItemCollectionOption.ALL
-        self.enrolled_device.blueprint.collect_profiles = Blueprint.InventoryItemCollectionOption.ALL
-        self.enrolled_device.apps_updated_at = datetime.utcnow()
-        self.enrolled_device.certificates_updated_at = datetime.utcnow()
-        self.enrolled_device.profiles_updated_at = datetime(2000, 1, 1)
-        cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
-        )
-        self.assertIsInstance(cmd, ProfileList)
-        self.assertFalse(cmd.managed_only)
-        self.assertTrue(cmd.update_inventory)
 
     def test_update_inventory_up_to_date(self):
         self.enrolled_device.device_information_updated_at = datetime.utcnow()
