@@ -4,7 +4,8 @@ from django.db.models import Count, F, Q
 from django.utils.text import slugify
 from .compliance_checks import sync_query_compliance_check
 from .models import (AutomaticTableConstruction, Configuration, ConfigurationPack,
-                     DistributedQuery, DistributedQueryMachine, Enrollment, FileCategory, Pack, PackQuery, Platform, Query)
+                     DistributedQuery, DistributedQueryMachine, Enrollment, FileCategory,
+                     Pack, PackQuery, Platform, Query)
 from .releases import get_osquery_versions
 
 
@@ -127,7 +128,7 @@ class DistributedQueryMachineSearchForm(forms.Form):
         super().__init__(*args, **kwargs)
 
     def get_queryset(self):
-        qs = (DistributedQueryMachine.objects.filter(distributed_query=self.distributed_query))
+        qs = DistributedQueryMachine.objects.filter(distributed_query=self.distributed_query)
         serial_number = self.cleaned_data.get("serial_number")
         status = self.cleaned_data.get("status")
 
@@ -137,8 +138,8 @@ class DistributedQueryMachineSearchForm(forms.Form):
             qs = qs.filter(status__gt=0)
         return qs
 
-# Enrollment
 
+# Enrollment
 
 class EnrollmentForm(forms.ModelForm):
     osquery_release = forms.ChoiceField(
