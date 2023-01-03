@@ -152,7 +152,7 @@ class DistributedQueryMachineListView(PermissionRequiredMixin, ListView):
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        return self.form.get_queryset()
+        return self.form.get_queryset().order_by("-updated_at", "-created_at", "-pk")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
