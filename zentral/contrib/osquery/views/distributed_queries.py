@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from zentral.utils.sql import tables_in_query
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView
-from zentral.contrib.osquery.forms import DistributedQueryForm
+from zentral.contrib.osquery.forms import DistributedQueryForm, DistributedQueryMachineSearchForm
 from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
                                             FileCarvingSession, Query)
 
@@ -143,19 +143,21 @@ class DistributedQueryMachineListView(PermissionRequiredMixin, ListView):
     model = DistributedQueryMachine
     paginate_by = 50
 
-    def get_queryset(self):
+    def get(self, request, *args, **kwargs):
         self.distributed_query = get_object_or_404(
             DistributedQuery.objects.select_related("query"), pk=self.kwargs["pk"]
         )
-        return (
-            super().get_queryset()
-                   .filter(distributed_query=self.distributed_query)
-                   .order_by("-updated_at", "-created_at", "-pk")
-        )
+        self.form = DistributedQueryMachineSearchForm(request.GET, distributed_query=self.distributed_query)
+        self.form.is_valid()
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return self.form.get_queryset()
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["distributed_query"] = self.distributed_query
+        ctx["form"] = self.form
         page = ctx["page_obj"]
         if page.has_next():
             qd = self.request.GET.copy()
