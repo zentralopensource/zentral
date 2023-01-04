@@ -330,6 +330,61 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertContains(response, "Error")
         self.assertContains(response, err_msgs[-1])
 
+    # distributed query search
+
+    def test_distributed_query_machines_serial_search(self):
+        distributed_query = self._force_distributed_query()
+        dqm_count = 3
+        serial_numbers = [get_random_string(12) for _ in range(dqm_count)]
+        serial_search = serial_numbers[0]
+        err_msgs = [f"Error Message {_}" if _ > 0 else "-" for _ in range(dqm_count)]
+        dqm_gen = (
+            DistributedQueryMachine(
+                distributed_query=distributed_query,
+                serial_number=serial_numbers[i],
+                status=i,
+                error_message=err_msgs[i],
+            ) for i in range(dqm_count)
+        )
+        DistributedQueryMachine.objects.bulk_create(dqm_gen)
+        self._login("osquery.view_distributedquery")
+        response = self.client.get(
+            reverse("osquery:distributed_query_machines", args=(distributed_query.pk,)),
+            {'serial_number': f'{serial_search}'}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/distributedquerymachine_list.html")
+        self.assertContains(response, "1 Machine")
+        self.assertContains(response, serial_search)
+        self.assertContains(response, err_msgs[0])
+
+    def test_distributed_query_machines_serial_search_error(self):
+        distributed_query = self._force_distributed_query()
+        dqm_count = 3
+        serial_numbers = [get_random_string(12) for _ in range(dqm_count)]
+        err_msgs = [f"Error Message {_}" if _ > 0 else '-' for _ in range(dqm_count)]
+        dqm_gen = (
+            DistributedQueryMachine(
+                distributed_query=distributed_query,
+                serial_number=serial_numbers[i],
+                status=i,
+                error_message=err_msgs[i],
+            ) for i in range(dqm_count)
+        )
+        DistributedQueryMachine.objects.bulk_create(dqm_gen)
+        self._login("osquery.view_distributedquery")
+        response = self.client.get(
+            reverse("osquery:distributed_query_machines", args=(distributed_query.pk,)),
+            {'serial_number': '', 'status': 'on'}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/distributedquerymachine_list.html")
+        self.assertContains(response, f"{dqm_count -1} Machines")
+        for serial_number in serial_numbers[1:]:
+            self.assertContains(response, serial_number)
+        self.assertContains(response, err_msgs[-1])
+        self.assertNotEqual(response, err_msgs[0])
+
     # distributed query results
 
     def test_distributed_query_results_redirect(self):
