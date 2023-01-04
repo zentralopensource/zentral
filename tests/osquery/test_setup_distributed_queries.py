@@ -330,7 +330,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertContains(response, "Error")
         self.assertContains(response, err_msgs[-1])
 
-    # distributed query search
+    # distributed query machines search
 
     def test_distributed_query_machines_serial_search(self):
         distributed_query = self._force_distributed_query()
