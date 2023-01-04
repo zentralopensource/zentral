@@ -22,9 +22,10 @@ class RemoveApplication(Command):
 
     def build_command(self):
         store_app = self.artifact_version.store_app
-        if not store_app.bundle_id:
-            raise ValueError(f"Store app {store_app.pk} without bundle ID")
-        return {"Identifier": store_app.bundle_id}
+        asset = store_app.asset
+        if not asset.bundle_id:
+            raise ValueError(f"Store app {store_app.pk} linked to asset without bundle ID")
+        return {"Identifier": asset.bundle_id}
 
     def command_acknowledged(self):
         DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device,
