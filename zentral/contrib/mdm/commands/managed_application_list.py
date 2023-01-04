@@ -23,7 +23,7 @@ class ManagedApplicationList(Command):
         )
 
     def load_kwargs(self):
-        self.identifiers = self.db_command.kwargs.get("identifiers", 0)
+        self.identifiers = self.db_command.kwargs.get("identifiers", [])
         self.retries = self.db_command.kwargs.get("retries", 0)
         self.store_result = not self.identifiers
 
@@ -42,14 +42,14 @@ class ManagedApplicationList(Command):
             app = application_list.get(identifier)
             if not app:
                 found = False
+                installed = False
                 continue
             status = app.get("Status")
             if status in ("Managed", "UserInstalledApp"):
-                pass
-            elif status in ("Failed", "ManagedButUninstalled", "UserRejected", "UpdateRejected"):
+                continue
+            installed = False
+            if status in ("Failed", "ManagedButUninstalled", "UserRejected", "UpdateRejected"):
                 error = True
-            else:
-                installed = False
 
         if found and installed:
             # cleanup
@@ -69,22 +69,24 @@ class ManagedApplicationList(Command):
             # cleanup
             DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device,
                                           artifact_version=self.artifact_version).delete()
+        elif self.retries >= 10:  # TODO hardcoded
+            logger.warning("Stop rescheduling %s command on device %s for artifact version %s.",
+                           self.request_type,
+                           self.enrolled_device.serial_number,
+                           self.artifact_version.pk)
         else:
             if not found:
-                logger.warning("Artifact version %s was not found.", self.artifact_version.pk)
-            if self.retries >= 10:  # TODO hardcoded
-                logger.warning("Stop rescheduling %s command for artifact version %s",
-                               self.request_type,
-                               self.artifact_version.pk)
-                return
-            # queue a new installed application list command
-            first_delay_seconds = 15  # TODO hardcoded
+                logger.warning("Artifact version %s was not found on device %s.",
+                               self.artifact_version.pk, self.enrolled_device.serial_number)
+            # found, without error, retries <= max
+            # queue a new managed application list command
+            delay_seconds = 15  # TODO hardcoded
             self.create_for_device(
                 self.enrolled_device,
                 self.artifact_version,
                 kwargs={"identifiers": self.identifiers,
                         "retries": self.retries + 1},
-                queue=True, delay=first_delay_seconds
+                queue=True, delay=delay_seconds
             )
 
     def command_acknowledged(self):

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CommandUUID</key>
+	<string>79AEDFB0-686C-45AD-9F44-E92D36E4EEE0</string>
+	<key>ManagedApplicationList</key>
+	<dict>
+		<key>com.acme.myenterpriseapp</key>
+		<dict>
+			<key>ExternalVersionIdentifier</key>
+			<integer>0</integer>
+			<key>HasConfiguration</key>
+			<false/>
+			<key>HasFeedback</key>
+			<false/>
+			<key>IsValidated</key>
+			<true/>
+			<key>ManagementFlags</key>
+			<integer>0</integer>
+			<key>Status</key>
+			<string>Managed</string>
+		</dict>
+	</dict>
+	<key>Status</key>
+	<string>Acknowledged</string>
+	<key>UDID</key>
+	<string>B79EE23C-F5C1-489E-ADC2-DB4A7B3D54FF</string>
+</dict>
+</plist>
