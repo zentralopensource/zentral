@@ -1,7 +1,7 @@
 import copy
 import plistlib
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from django.http import HttpResponse
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -14,12 +14,9 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         DEPEnrollmentSession,
                                         EnrolledDevice, EnrolledUser,
                                         Platform, Profile, PushCertificate,
-                                        ReEnrollmentSession, UserArtifact)
-from zentral.contrib.mdm.commands import (DeviceInformation,
-                                          Reenroll,
-                                          RemoveProfile)
+                                        UserArtifact)
+from zentral.contrib.mdm.commands import DeviceInformation, RemoveProfile
 from zentral.contrib.mdm.commands.utils import (_get_next_queued_command,
-                                                _reenroll,
                                                 _remove_artifacts,
                                                 _update_inventory)
 from .utils import force_dep_enrollment, force_realm_user
@@ -410,108 +407,6 @@ class TestMDMCommands(TestCase):
             self.enrolled_device,
             self.enrolled_user
         ))
-
-    # _reenroll
-
-    def test_reenroll_user_channel_noop(self):
-        self.assertIsNone(
-            _reenroll(
-                Channel.User, RequestStatus.Idle,
-                self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user
-            )
-        )
-
-    def test_reenroll_device_channel_notnow_noop(self):
-        self.assertIsNone(
-            _reenroll(
-                Channel.Device, RequestStatus.NotNow,
-                self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user
-            )
-        )
-
-    def test_reenroll_device_channel_no_cert_not_valid_after(self):
-        self.assertIsNone(self.enrolled_device.cert_not_valid_after)
-        command = _reenroll(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user
-        )
-        self.assertIsInstance(command, Reenroll)
-        self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
-        self.assertEqual(command.reenrollment_session.get_enrollment(), self.dep_enrollment)
-        self.assertEqual(command.reenrollment_session.enrolled_device, self.enrolled_device)
-
-    def test_reenroll_device_channel_no_cert_not_valid_after_recent_reenrollment_session_noop(self):
-        self.assertIsNone(self.enrolled_device.cert_not_valid_after)
-        ReEnrollmentSession.objects.create_from_enrollment_session(self.dep_enrollment_session)
-        self.assertIsNone(
-            _reenroll(
-                Channel.Device, RequestStatus.Idle,
-                self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user
-            )
-        )
-
-    def test_reenroll_device_channel_cert_too_old(self):
-        self.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=10)
-        self.enrolled_device.save()
-        command = _reenroll(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user
-        )
-        self.assertIsInstance(command, Reenroll)
-        self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
-        self.assertEqual(command.reenrollment_session.get_enrollment(), self.dep_enrollment)
-        self.assertEqual(command.reenrollment_session.enrolled_device, self.enrolled_device)
-
-    def test_reenroll_device_channel_cert_too_old_recent_reenrollment_session_noop(self):
-        self.enrolled_device.cert_not_valid_after = datetime.utcnow()
-        self.enrolled_device.save()
-        ReEnrollmentSession.objects.create_from_enrollment_session(self.dep_enrollment_session)
-        self.assertIsNone(
-            _reenroll(
-                Channel.Device, RequestStatus.Idle,
-                self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user
-            )
-        )
-
-    def test_reenroll_device_channel_cert_too_old_older_reenrollment_session(self):
-        self.enrolled_device.cert_not_valid_after = datetime.utcnow()
-        self.enrolled_device.save()
-        rs = ReEnrollmentSession.objects.create_from_enrollment_session(self.dep_enrollment_session)
-        ReEnrollmentSession.objects.filter(pk=rs.pk).update(created_at=datetime.utcnow() - timedelta(hours=8))
-        command = _reenroll(
-            Channel.Device, RequestStatus.Idle,
-            self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user
-        )
-        self.assertIsInstance(command, Reenroll)
-        self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
-        self.assertEqual(command.reenrollment_session.get_enrollment(), self.dep_enrollment)
-        self.assertEqual(command.reenrollment_session.enrolled_device, self.enrolled_device)
-
-    def test_reenroll_device_channel_cert_ok_noop(self):
-        self.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=167)
-        self.enrolled_device.save()
-        self.assertIsNone(
-            _reenroll(
-                Channel.Device, RequestStatus.Idle,
-                self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user
-            )
-        )
 
     # update inventory
 

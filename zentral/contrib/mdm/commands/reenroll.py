@@ -20,8 +20,7 @@ class Reenroll(Command):
         try:
             session_id = int(self.db_command.kwargs["session_id"])
         except Exception:
-            logger.exception("Could not find session id")
-            return
+            raise ValueError(f"Command {self.uuid}: could not find session id")
         try:
             self.reenrollment_session = (
                 ReEnrollmentSession.objects.select_related("enrolled_device",
@@ -34,7 +33,7 @@ class Reenroll(Command):
                                            .get(pk=session_id)
             )
         except ReEnrollmentSession.DoesNotExist:
-            logger.warning("Could not find re-enrollment session %s", session_id)
+            raise ValueError(f"Command {self.uuid}: could not find re-enrollment session {session_id}")
 
     def build_command(self):
         return {"Payload": build_mdm_configuration_profile(self.reenrollment_session)}
