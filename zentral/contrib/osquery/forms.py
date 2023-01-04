@@ -4,7 +4,8 @@ from django.db.models import Count, F, Q
 from django.utils.text import slugify
 from .compliance_checks import sync_query_compliance_check
 from .models import (AutomaticTableConstruction, Configuration, ConfigurationPack,
-                     DistributedQuery, Enrollment, FileCategory, Pack, PackQuery, Platform, Query)
+                     DistributedQuery, DistributedQueryMachine, Enrollment, FileCategory,
+                     Pack, PackQuery, Platform, Query)
 from .releases import get_osquery_versions
 
 
@@ -111,6 +112,31 @@ class DistributedQueryForm(forms.ModelForm):
         if not self.instance.pk and self.cleaned_data.get("halt_current_runs"):
             self.query.distributedquery_set.active().update(valid_until=datetime.utcnow())
         return super().save(*args, **kwargs)
+
+
+class DistributedQueryMachineSearchForm(forms.Form):
+    serial_number = forms.CharField(
+        label="Serial number", required=False,
+        widget=forms.TextInput(attrs={"autofocus": True,
+                                      "size": 36,
+                                      "placeholder": "Serial number"})
+    )
+    status = forms.BooleanField(label="Contains errors", required=False)
+
+    def __init__(self, *args, **kwargs):
+        self.distributed_query = kwargs.pop("distributed_query")
+        super().__init__(*args, **kwargs)
+
+    def get_queryset(self):
+        qs = DistributedQueryMachine.objects.filter(distributed_query=self.distributed_query)
+        serial_number = self.cleaned_data.get("serial_number")
+        status = self.cleaned_data.get("status")
+
+        if serial_number:
+            qs = qs.filter(serial_number__icontains=serial_number)
+        if status:
+            qs = qs.filter(status__gt=0)
+        return qs
 
 
 # Enrollment
