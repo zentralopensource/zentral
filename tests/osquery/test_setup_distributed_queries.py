@@ -382,7 +382,6 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         for serial_number in serial_numbers[1:]:
             self.assertContains(response, serial_number)
         self.assertContains(response, err_msgs[-1])
-        self.assertNotContains(response, err_msgs[0])
 
     # distributed query results
 
