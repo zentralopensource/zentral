@@ -342,7 +342,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
                 distributed_query=distributed_query,
                 serial_number=serial_numbers[i],
                 status=i,
-                error_message='',
+                error_message=None,
             ) for i in range(dqm_count)
         )
         DistributedQueryMachine.objects.bulk_create(dqm_gen)
@@ -362,7 +362,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         distributed_query = self._force_distributed_query()
         dqm_count = 3
         serial_numbers = [get_random_string(12) for _ in range(dqm_count)]
-        err_msgs = [f"Error Message {i}" if i > 0 else '-' for i in range(dqm_count)]
+        err_msgs = [f"Error Message {i}" if i > 0 else None for i in range(dqm_count)]
         dqm_gen = (
             DistributedQueryMachine(
                 distributed_query=distributed_query,
