@@ -58,8 +58,31 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:enrolled_devices"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
+        self.assertNotContains(response, '<li class="active">Search</li>')
         self.assertContains(response, device_udid)
         self.assertContains(response, serial_number)
+
+    def test_enrolled_devices_serial_number_search(self):
+        _, _, serial_number1 = force_dep_enrollment_session(self.mbu, completed=True)
+        _, _, serial_number2 = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_devices"), {"q": serial_number1[3:-1]})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<li class="active">Search</li>')
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
+        self.assertContains(response, serial_number1)
+        self.assertNotContains(response, serial_number2)
+
+    def test_enrolled_devices_udid_search(self):
+        _, device_udid1, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        _, device_udid2, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_devices"), {"q": device_udid2[3:-1].upper()})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
+        self.assertContains(response, '<li class="active">Search</li>')
+        self.assertNotContains(response, device_udid1)
+        self.assertContains(response, device_udid2)
 
     # test enrolled device
 
