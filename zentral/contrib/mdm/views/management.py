@@ -1032,6 +1032,7 @@ class EnrolledDeviceListView(PermissionRequiredMixin, ListView):
 class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_enrolleddevice"
     model = EnrolledDevice
+    max_command_number = 10
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -1045,13 +1046,52 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
                                                  .all()
                                                  .order_by("-updated_at"))
         ctx["installed_artifacts_count"] = ctx["installed_artifacts"].count()
-        ctx["commands"] = (self.object.commands
-                                      .select_related("artifact_version__artifact")
-                                      .all()
-                                      .order_by("-created_at"))
-        ctx["commands_count"] = ctx["commands"].count()
+        commands_qs = (
+            self.object.commands
+                       .select_related("artifact_version__artifact")
+                       .all()
+                       .order_by("-created_at")
+        )
+        ctx["commands"] = commands_qs[:self.max_command_number]
+        ctx["commands_count"] = commands_qs.count()
         ctx["enrollment_session_info_list"] = list(self.object.iter_enrollment_session_info())
         ctx["enrollment_session_info_count"] = len(ctx["enrollment_session_info_list"])
+        return ctx
+
+
+class EnrolledDeviceCommandsView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_enrolleddevice"
+    model = DeviceCommand
+    paginate_by = 50
+
+    def get(self, request, *args, **kwargs):
+        self.enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return (
+            self.enrolled_device.commands
+                                .select_related("artifact_version__artifact")
+                                .all()
+                                .order_by("-created_at")
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["enrolled_device"] = self.enrolled_device
+        page = ctx["page_obj"]
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            ctx['reset_link'] = "?{}".format(qd.urlencode())
         return ctx
 
 

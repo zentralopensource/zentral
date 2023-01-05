@@ -240,6 +240,11 @@
     {% endfor %}
   </tbody>
 </table>
+
+{% if commands_count > 1 %}
+<p><a href="{% url 'mdm:enrolled_device_commands' object.pk %}">See all commands</a></p>
+{% endif %}
+
 {% endif %}
 
 {% if enrollment_session_info_count %}

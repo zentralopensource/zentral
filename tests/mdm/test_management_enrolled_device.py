@@ -1,6 +1,7 @@
 from functools import reduce
 import operator
 import plistlib
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase, override_settings
@@ -108,6 +109,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, session.get_enrollment().name)
         self.assertContains(response, session.realm_user.username)
         self.assertNotContains(response, reverse("mdm:user_enrollment", args=(session.get_enrollment().pk,)))
+        self.assertEqual(response.context["commands_count"], 0)
+        self.assertNotContains(response, "See all commands")
 
     def test_enrolled_device_enrollment_link(self):
         session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, completed=True)
@@ -120,6 +123,68 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, "1 Enrollment session")
         self.assertContains(response, session.get_enrollment().name)
         self.assertContains(response, reverse("mdm:ota_enrollment", args=(session.get_enrollment().pk,)))
+
+    def test_enrolled_device_one_command(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        CustomCommand.create_for_device(
+            session.enrolled_device,
+            kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
+            queue=True
+        )
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertEqual(response.context["commands_count"], 1)
+        self.assertEqual(response.context["commands"].count(), 1)
+        self.assertNotContains(response, "See all commands")
+
+    def test_enrolled_device_top_10_command(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        for i in range(11):
+            CustomCommand.create_for_device(
+                session.enrolled_device,
+                kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
+                queue=True
+            )
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertEqual(response.context["commands_count"], 11)
+        self.assertEqual(response.context["commands"].count(), 10)
+        self.assertContains(response, "See all commands")
+
+    # test enrolled device commands
+
+    def test_enrolled_device_commands_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login_redirect(reverse("mdm:enrolled_device_commands", args=(session.enrolled_device.pk,)))
+
+    def test_enrolled_device_commands_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login()
+        response = self.client.get(reverse("mdm:enrolled_device_commands", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.mdm.views.management.EnrolledDeviceCommandsView.get_paginate_by")
+    def test_enrolled_device_commands(self, get_paginate_by):
+        get_paginate_by.return_value = 2
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        for i in range(5):
+            CustomCommand.create_for_device(
+                session.enrolled_device,
+                kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
+                queue=True
+            )
+        response = self.client.get(
+            reverse("mdm:enrolled_device_commands", args=(session.enrolled_device.pk,)),
+            {"page": 2}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/devicecommand_list.html")
+        self.assertContains(response, "page 2 of 3")
 
     # create custom command
 
