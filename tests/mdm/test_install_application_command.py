@@ -4,7 +4,8 @@ from django.utils.crypto import get_random_string
 from unittest.mock import patch
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import InstallApplication, ManagedApplicationList
-from zentral.contrib.mdm.commands.utils import _install_artifacts, load_command
+from zentral.contrib.mdm.commands.base import load_command
+from zentral.contrib.mdm.commands.scheduling import _install_artifacts
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         Asset, Blueprint, BlueprintArtifact, DeviceArtifact, DeviceCommand, Channel,
                                         Platform, RequestStatus, StoreApp,
@@ -271,7 +272,7 @@ class InstallApplicationCommandTestCase(TestCase):
 
     # _install_artifacts
 
-    @patch("zentral.contrib.mdm.commands.utils.ensure_enrolled_device_asset_association")
+    @patch("zentral.contrib.mdm.commands.scheduling.ensure_enrolled_device_asset_association")
     def test_install_artifacts_noop(self, ensure_enrolled_device_asset_association):
         ensure_enrolled_device_asset_association.return_value = False
         self.assertIsNone(_install_artifacts(
@@ -282,7 +283,7 @@ class InstallApplicationCommandTestCase(TestCase):
         ))
         ensure_enrolled_device_asset_association.assert_called_once_with(self.enrolled_device, self.asset)
 
-    @patch("zentral.contrib.mdm.commands.utils.ensure_enrolled_device_asset_association")
+    @patch("zentral.contrib.mdm.commands.scheduling.ensure_enrolled_device_asset_association")
     def test_install_artifacts(self, ensure_enrolled_device_asset_association):
         ensure_enrolled_device_asset_association.return_value = True
         cmd = _install_artifacts(

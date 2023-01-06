@@ -80,6 +80,8 @@ class Command:
 
     def __init__(self, channel, db_command):
         self.channel = channel
+        self.response = None
+        self.result_time = None
         self.status = None
         self.db_command = db_command
         if not self.db_command.pk:
@@ -91,6 +93,9 @@ class Command:
             self.db_command.save()
         elif self.db_command.status:
             self.uuid = self.db_command.uuid
+            if self.db_command.result:
+                self.response = plistlib.loads(self.db_command.result)
+            self.result_time = self.db_command.result_time
             self.status = CommandStatus(self.db_command.status)
         # enrolled objects
         self.enrolled_device = getattr(db_command, "enrolled_device", None)
@@ -127,7 +132,7 @@ class Command:
         if self.db_command.result_time and (not self.reschedule_notnow or not self.status == CommandStatus.NotNow):
             logger.error("Command {self.db_command.uuid} has already been processed")
             return
-        self.db_command.result_time = timezone.now()
+        self.result_time = self.db_command.result_time = timezone.now()
         self.status = CommandStatus(response["Status"])
         self.db_command.status = self.status.value
         self.db_command.error_chain = response.get("ErrorChain")
@@ -156,3 +161,30 @@ registered_commands = {}
 
 def register_command(command_cls):
     registered_commands[command_cls.get_db_name()] = command_cls
+
+
+def load_command(db_command):
+    try:
+        model_class = registered_commands[db_command.name]
+    except KeyError:
+        raise ValueError(f"Unknown command model class: {db_command.name}")
+    if isinstance(db_command, DeviceCommand):
+        return model_class(Channel.Device, db_command)
+    else:
+        return model_class(Channel.User, db_command)
+
+
+def get_command(channel, uuid):
+    if channel == Channel.Device:
+        db_model_class = DeviceCommand
+    else:
+        db_model_class = UserCommand
+    try:
+        db_command = (db_model_class.objects.select_related("artifact_version__artifact",
+                                                            "artifact_version__enterprise_app",
+                                                            "artifact_version__profile")
+                                            .get(uuid=uuid))
+    except db_model_class.DoesNotExist:
+        logger.error("Unknown command: %s %s", channel.name, uuid)
+        return
+    return load_command(db_command)

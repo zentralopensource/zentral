@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import DeviceConfigured
-from zentral.contrib.mdm.commands.utils import _finish_dep_enrollment_configuration
+from zentral.contrib.mdm.commands.scheduling import _finish_dep_enrollment_configuration
 from zentral.contrib.mdm.models import Channel, CommandStatus, RequestStatus
 from .utils import force_dep_enrollment_session
 

@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import CustomCommand
-from zentral.contrib.mdm.commands.utils import _get_next_queued_command
+from zentral.contrib.mdm.commands.scheduling import _get_next_queued_command
 from zentral.contrib.mdm.models import Channel, CommandStatus, RequestStatus
 from .utils import force_dep_enrollment_session
 
