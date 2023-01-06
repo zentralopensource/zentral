@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import DeclarativeManagement
-from zentral.contrib.mdm.commands.utils import _trigger_declarative_management_sync
+from zentral.contrib.mdm.commands.scheduling import _trigger_declarative_management_sync
 from zentral.contrib.mdm.declarations import update_blueprint_activation, update_blueprint_declaration_items
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
 from .utils import force_dep_enrollment_session, force_enrolled_user

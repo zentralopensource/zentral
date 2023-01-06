@@ -11,14 +11,14 @@ from zentral.contrib.mdm.models import (
     EnrolledUser,
 )
 from zentral.contrib.mdm.commands import DeviceInformation
-from zentral.contrib.mdm.commands.utils import (
+from zentral.contrib.mdm.commands.scheduling import (
     _get_next_queued_command,
     _update_inventory,
 )
 from .utils import force_dep_enrollment_session
 
 
-class TestMDMCommands(TestCase):
+class TestMDMCommandsScheduling(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))

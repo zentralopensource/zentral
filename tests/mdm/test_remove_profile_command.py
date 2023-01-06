@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import RemoveProfile
-from zentral.contrib.mdm.commands.utils import _remove_artifacts
+from zentral.contrib.mdm.commands.scheduling import _remove_artifacts
 from zentral.contrib.mdm.models import (
     Artifact,
     ArtifactType,

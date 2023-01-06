@@ -5,7 +5,7 @@ from django.utils.crypto import get_random_string
 from realms.utils import serialize_password_hash_dict
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import AccountConfiguration
-from zentral.contrib.mdm.commands.utils import _configure_dep_enrollment_accounts
+from zentral.contrib.mdm.commands.scheduling import _configure_dep_enrollment_accounts
 from zentral.contrib.mdm.models import Channel, CommandStatus, Platform, RequestStatus
 from .utils import force_dep_enrollment_session, force_enrolled_user
 

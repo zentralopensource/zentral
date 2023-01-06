@@ -3,7 +3,8 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import InstalledApplicationList, InstallEnterpriseApplication
-from zentral.contrib.mdm.commands.utils import _install_artifacts, load_command
+from zentral.contrib.mdm.commands.base import load_command
+from zentral.contrib.mdm.commands.scheduling import _install_artifacts
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         Blueprint, BlueprintArtifact, Channel,
                                         DeviceArtifact, DeviceCommand, EnterpriseApp,

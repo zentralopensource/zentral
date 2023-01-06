@@ -9,7 +9,7 @@ from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         Channel, RequestStatus, Platform,
                                         DeviceCommand, ReEnrollmentSession, UserCommand)
 from .account_configuration import AccountConfiguration
-from .base import registered_commands
+from .base import registered_commands, load_command
 from .certificate_list import CertificateList
 from .declarative_management import DeclarativeManagement
 from .device_configured import DeviceConfigured
@@ -25,39 +25,7 @@ from .remove_profile import RemoveProfile
 from .security_info import SecurityInfo
 
 
-logger = logging.getLogger("zentral.contrib.mdm.commands.utils")
-
-
-def get_command(channel, uuid):
-    if channel == Channel.Device:
-        db_model_class = DeviceCommand
-    else:
-        db_model_class = UserCommand
-    try:
-        db_command = (db_model_class.objects.select_related("artifact_version__artifact",
-                                                            "artifact_version__enterprise_app",
-                                                            "artifact_version__profile")
-                                            .get(uuid=uuid))
-    except db_model_class.DoesNotExist:
-        logger.error("Unknown command: %s %s", channel.name, uuid)
-        return
-    try:
-        model_class = registered_commands[db_command.name]
-    except KeyError:
-        logger.error("Unknown command model class: %s", db_command.name)
-    else:
-        return model_class(channel, db_command)
-
-
-def load_command(db_command):
-    try:
-        model_class = registered_commands[db_command.name]
-    except KeyError:
-        raise ValueError(f"Unknown command model class: {db_command.name}")
-    if isinstance(db_command, DeviceCommand):
-        return model_class(Channel.Device, db_command)
-    else:
-        return model_class(Channel.User, db_command)
+logger = logging.getLogger("zentral.contrib.mdm.commands.scheduling")
 
 
 # Next command

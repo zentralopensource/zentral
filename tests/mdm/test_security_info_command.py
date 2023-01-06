@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import SecurityInfo
-from zentral.contrib.mdm.commands.utils import _update_inventory
+from zentral.contrib.mdm.commands.scheduling import _update_inventory
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
 from .utils import force_dep_enrollment_session
 

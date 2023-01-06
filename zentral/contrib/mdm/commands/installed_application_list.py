@@ -1,6 +1,5 @@
-from datetime import datetime
 import logging
-from zentral.contrib.mdm.inventory import commit_update_tree
+from zentral.contrib.mdm.inventory import update_inventory_tree
 from zentral.contrib.mdm.models import Channel, DeviceArtifact, Platform, TargetArtifactStatus
 from .base import register_command, Command
 
@@ -29,7 +28,7 @@ class InstalledApplicationList(Command):
         self.retries = self.db_command.kwargs.get("retries", 0)
         self.update_inventory = self.db_command.kwargs.get("update_inventory", False)
         self.apps_to_check = self.db_command.kwargs.get("apps_to_check", [])
-        self.store_result = not self.update_inventory and not self.artifact_version
+        self.store_result = not self.artifact_version and not self.apps_to_check
 
     def build_command(self):
         command = {"ManagedAppsOnly": self.managed_only,
@@ -104,7 +103,7 @@ class InstalledApplicationList(Command):
                 queue=True, delay=first_delay_seconds
             )
 
-    def _update_inventory(self):
+    def get_inventory_partial_tree(self):
         osx_app_instances = []
         for item in self.response.get("InstalledApplicationList", []):
             if any(item.get(k, False) for k in ("DownloadCancelled",
@@ -123,16 +122,13 @@ class InstalledApplicationList(Command):
             }
             if osx_app_instance_tree not in osx_app_instances:
                 osx_app_instances.append(osx_app_instance_tree)
-        tree = commit_update_tree(self.enrolled_device, {"osx_app_instances": osx_app_instances})
-        if tree is not None:
-            self.enrolled_device.apps_updated_at = datetime.utcnow()
-            self.enrolled_device.save()
+        return {"osx_app_instances": osx_app_instances}
 
     def command_acknowledged(self):
         if self.artifact_version and self.apps_to_check:
             self._update_device_artifact()
         elif self.update_inventory:
-            self._update_inventory()
+            update_inventory_tree(self)
 
 
 register_command(InstalledApplicationList)

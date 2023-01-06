@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.commands import DeviceInformation, SecurityInfo
-from zentral.contrib.mdm.commands.utils import _update_inventory
+from zentral.contrib.mdm.commands.scheduling import _update_inventory
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
 from .utils import force_dep_enrollment_session
 
@@ -96,7 +96,8 @@ class DeviceInformationCommandTestCase(TestCase):
         )
         cmd.process_response(self.device_information, self.dep_enrollment_session, self.mbu)
         cmd.db_command.refresh_from_db()
-        self.assertIsNone(cmd.db_command.result)
+        self.assertIsNotNone(cmd.db_command.result)
+        self.assertIn("QueryResponses", cmd.response)
         m = MetaMachine(enrolled_device.serial_number)
         self.assertEqual(len(m.snapshots), 1)
         ms = m.snapshots[0]

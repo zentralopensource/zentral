@@ -7,7 +7,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.apps_books import (ensure_enrolled_device_asset_association,
                                             queue_install_application_command_if_necessary,
                                             clear_on_the_fly_assignment)
-from zentral.contrib.mdm.commands.utils import load_command
+from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.commands.install_application import InstallApplication
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         Asset, Blueprint, BlueprintArtifact, DeviceAssignment, DeviceCommand,

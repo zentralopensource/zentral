@@ -1,7 +1,6 @@
-from datetime import datetime
 import logging
-from zentral.contrib.mdm.inventory import commit_update_tree, tree_from_payload
 from zentral.contrib.mdm.models import Channel, Platform
+from zentral.contrib.mdm.inventory import ms_tree_from_payload, update_inventory_tree
 from zentral.utils.json import prepare_loaded_plist
 from .base import register_command, Command
 
@@ -12,6 +11,7 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.device_information")
 class DeviceInformation(Command):
     request_type = "DeviceInformation"
     reschedule_notnow = True
+    store_result = True
 
     # https://developer.apple.com/documentation/devicemanagement/deviceinformationcommand/command/queries
     # Last check 2022-12-29
@@ -107,21 +107,20 @@ class DeviceInformation(Command):
     def build_command(self):
         return {"Queries": [k for k, _, _ in self.queries]}
 
+    def get_inventory_partial_tree(self):
+        payload = self.response["QueryResponses"]
+        return ms_tree_from_payload(payload)
+
     def command_acknowledged(self):
         query_responses = self.response.get("QueryResponses")
         if not query_responses:
-            logger.warning("Enrolled device %s: absent or empty QueryResponses in DeviceInformation response.",
-                           self.enrolled_device.serial_number)
+            logger.error("Enrolled device %s: absent or empty QueryResponses in DeviceInformation response.",
+                         self.enrolled_device.serial_number)
             return
         # inventory tree
-        ms_tree = tree_from_payload(self.enrolled_device.udid,
-                                    self.enrolled_device.serial_number,
-                                    self.meta_business_unit,
-                                    query_responses)
-        commit_update_tree(self.enrolled_device, ms_tree, missing_ok=True)
+        ms_tree = update_inventory_tree(self, commit_enrolled_device=False)
         # enrolled device
         self.enrolled_device.device_information = prepare_loaded_plist(query_responses)
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
         # platform
         try:
             platform = ms_tree["os_version"]["name"]

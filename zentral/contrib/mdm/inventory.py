@@ -1,34 +1,25 @@
 import logging
-from zentral.contrib.inventory.models import CurrentMachineSnapshot
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from .models import Blueprint, Platform
+from zentral.contrib.mdm.models import Blueprint, CommandStatus, DeviceCommand, Platform
+from zentral.contrib.mdm.commands.base import load_command
 
 
 logger = logging.getLogger("zentral.contrib.mdm.inventory")
 
 
-def tree_from_payload(udid, serial_number, meta_business_unit, payload):
-    tree = {"source": {"module": "zentral.contrib.mdm",
-                       "name": "MDM"},
-            "reference": udid,
-            "serial_number": serial_number}
-
-    # BU
-    try:
-        tree["business_unit"] = meta_business_unit.api_enrollment_business_units()[0].serialize()
-    except IndexError:
-        pass
+def ms_tree_from_payload(payload):
+    ms_tree = {}
 
     # Mobile device IDs
     for attr in ("IMEI", "MEID"):
         val = payload.get(attr)
         if val:
-            tree[attr.lower()] = val
+            ms_tree[attr.lower()] = val
     for service_subscription in payload.get("ServiceSubscriptions", []):
         for attr in ("IMEI", "MEID"):
             val = service_subscription.get(attr)
             if val:
-                tree[attr.lower()] = val
+                ms_tree[attr.lower()] = val
 
     # System Info
     system_info_d = {}
@@ -42,7 +33,7 @@ def tree_from_payload(udid, serial_number, meta_business_unit, payload):
         if val:
             system_info_d[si_attr] = val
     if system_info_d:
-        tree["system_info"] = system_info_d
+        ms_tree["system_info"] = system_info_d
 
     # OS Version
     os_version = payload.get("OSVersion")
@@ -69,38 +60,63 @@ def tree_from_payload(udid, serial_number, meta_business_unit, payload):
             else:
                 # No watchOS
                 d["name"] = Platform.macOS.value
-        tree["os_version"] = d
+        ms_tree["os_version"] = d
 
-    return tree
+    return ms_tree
 
 
-def commit_update_tree(enrolled_device, update_tree, missing_ok=False):
-    # get existing tree
-    try:
-        cms = (CurrentMachineSnapshot.objects.select_for_update()
-                                             .select_related("machine_snapshot")
-                                             .get(serial_number=enrolled_device.serial_number,
-                                                  source__module="zentral.contrib.mdm"))
-    except CurrentMachineSnapshot.DoesNotExist:
-        if missing_ok:
-            tree = update_tree
-        else:
-            logger.warning("Could not update tree for machine %s: missing snapshot",
-                           enrolled_device.serial_number)
-            return
-    else:
-        tree = cms.tree
-        if not tree:
-            tree = cms.machine_snapshot.serialize()
-    # update existing tree with new info
-    tree.update(update_tree)
-    # reset collected items if necessary
+def update_inventory_tree(command, commit_enrolled_device=True):
+    """Used in the inventory MDM commands to update the inventory tree
+
+    Search for the other latest inventory MDM command to build a complete machine snapshot tree."""
+    enrolled_device = command.enrolled_device
     blueprint = enrolled_device.blueprint
-    for bp_attr, tree_attr in (("collect_apps", "osx_app_instances"),
-                               ("collect_certificates", "certificates"),
-                               ("collect_profiles", "profiles")):
-        if blueprint is None or getattr(blueprint, bp_attr) == Blueprint.InventoryItemCollectionOption.NO:
-            tree[tree_attr] = []
-    # commit updated tree
-    commit_machine_snapshot_and_trigger_events(tree)
-    return tree
+    ms_tree = {
+        "source": {"module": "zentral.contrib.mdm",
+                   "name": "MDM"},
+        "reference": enrolled_device.udid,
+        "serial_number": enrolled_device.serial_number
+    }
+    try:
+        ms_tree["business_unit"] = command.meta_business_unit.api_enrollment_business_units()[0].serialize()
+    except IndexError:
+        pass
+
+    for bp_attr, cmd_db_name, ts_attr in (
+        (None, "DeviceInformation", "device_information_updated_at"),
+        ("collect_apps", "InstalledApplicationList", "apps_updated_at"),
+        ("collect_certificates", "CertificateList", "certificates_updated_at"),
+        ("collect_profiles", "ProfileList", "profiles_updated_at")
+    ):
+        if (
+            bp_attr is not None
+            and (
+                blueprint is None
+                or getattr(blueprint, bp_attr) == Blueprint.InventoryItemCollectionOption.NO
+            )
+        ):
+            # Skip inventory information
+            continue
+
+        latest_command = None
+        if command.get_db_name() == cmd_db_name:
+            latest_command = command
+        else:
+            latest_db_command = DeviceCommand.objects.filter(
+                enrolled_device=enrolled_device,
+                name=cmd_db_name,
+                result__isnull=False,
+                status=CommandStatus.Acknowledged.value
+            ).order_by("-created_at").first()
+            if latest_db_command:
+                latest_command = load_command(latest_db_command)
+        if latest_command:
+            ms_tree.update(latest_command.get_inventory_partial_tree())
+            setattr(enrolled_device, ts_attr, latest_command.result_time)
+
+    commit_machine_snapshot_and_trigger_events(ms_tree)
+
+    if commit_enrolled_device:
+        enrolled_device.save()
+
+    return ms_tree

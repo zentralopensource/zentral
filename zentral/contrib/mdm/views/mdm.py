@@ -11,14 +11,14 @@ from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
 from django.views.generic import View
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.install_profile import build_payload
-from zentral.contrib.mdm.commands.utils import get_command, get_next_command_response
+from zentral.contrib.mdm.commands.base import get_command
+from zentral.contrib.mdm.commands.scheduling import get_next_command_response
 from zentral.contrib.mdm.declarations import (build_legacy_profile,
                                               build_management_status_subscriptions,
                                               update_enrolled_device_artifacts)
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.inventory import commit_update_tree, tree_from_payload
+from zentral.contrib.mdm.inventory import ms_tree_from_payload
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         Channel, RequestStatus, DeviceCommand, EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
@@ -209,16 +209,11 @@ class CheckinView(MDMView):
                                     "unlock_token": None,
                                     "awaiting_configuration": None,
                                     "checkout_at": None}
-        ms_tree = tree_from_payload(self.enrolled_device_udid,
-                                    self.serial_number,
-                                    self.meta_business_unit,
-                                    self.payload)
+        ms_tree = ms_tree_from_payload(self.payload)
         try:
-            os_name = ms_tree["os_version"]["name"]
+            enrolled_device_defaults["platform"] = ms_tree["os_version"]["name"]
         except KeyError:
             pass
-        else:
-            enrolled_device_defaults["platform"] = os_name
         if self.certificate:
             enrolled_device_defaults.update({
                 "cert_fingerprint": self.certificate.fingerprint(hashes.SHA256()),
@@ -231,11 +226,6 @@ class CheckinView(MDMView):
         # purge the installed artifacts and sent commands, if it is not a re-enrollment
         if not created and not is_reenrollment:
             enrolled_device.purge_state()
-        if created or not is_reenrollment:
-            # commit machine infos
-            commit_update_tree(enrolled_device, ms_tree, missing_ok=True)
-            # schedule a DeviceInformation command
-            DeviceInformation.create_for_device(enrolled_device, queue=True)
 
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)

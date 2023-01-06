@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import Reenroll
-from zentral.contrib.mdm.commands.utils import _reenroll
+from zentral.contrib.mdm.commands.scheduling import _reenroll
 from zentral.contrib.mdm.models import (
     Channel,
     EnrolledUser,
