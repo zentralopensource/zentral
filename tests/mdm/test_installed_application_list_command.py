@@ -30,13 +30,6 @@ class InstalledApplicationListCommandTestCase(TestCase):
         )
         cls.enrolled_device.blueprint = cls.blueprint
         cls.enrolled_device.save()
-        cls.device_information = plistlib.load(
-            open(os.path.join(os.path.dirname(__file__),
-                              "testdata/device_information.plist"),
-                 "rb")
-        )
-        cls.device_information["UDID"] = cls.enrolled_device.udid
-        cls.device_information["SerialNumber"] = cls.enrolled_device.serial_number
         cls.installed_application_list = plistlib.load(
             open(os.path.join(os.path.dirname(__file__),
                               "testdata/installed_application_list.plist"),
