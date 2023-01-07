@@ -137,7 +137,7 @@ class Command:
         self.db_command.status = self.status.value
         self.db_command.error_chain = response.get("ErrorChain")
         if self.store_result and self.status != CommandStatus.NotNow:
-            self.db_command.result = plistlib.dumps(response)
+            self.db_command.result = plistlib.dumps(response, fmt=plistlib.FMT_BINARY)
         self.db_command.save()
         self.response = response
         self.enrollment_session = enrollment_session
