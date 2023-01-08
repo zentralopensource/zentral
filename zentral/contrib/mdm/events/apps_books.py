@@ -22,10 +22,10 @@ class BaseAppsBooksEvent(BaseEvent):
         pricing_param = asset.get("pricing_param")
         if adam_id and pricing_param:
             keys["mdm_asset"] = [(adam_id, pricing_param)]
-        # server token
-        server_token_pk = self.payload.get("server_token", {}).get("pk")
-        if server_token_pk:
-            keys["mdm_server_token"] = [(server_token_pk,)]
+        # location
+        location_pk = self.payload.get("location", {}).get("pk")
+        if location_pk:
+            keys["mdm_location"] = [(location_pk,)]
         return keys
 
 
@@ -106,18 +106,18 @@ class AssetUpdatedEvent(BaseAssetEvent):
 register_event_type(AssetUpdatedEvent)
 
 
-class ServerTokenAssetCreatedEvent(BaseAssetEvent):
-    event_type = "mdm_server_token_asset_created"
+class LocationAssetCreatedEvent(BaseAssetEvent):
+    event_type = "mdm_location_asset_created"
 
 
-register_event_type(ServerTokenAssetCreatedEvent)
+register_event_type(LocationAssetCreatedEvent)
 
 
-class ServerTokenAssetUpdatedEvent(BaseAssetEvent):
-    event_type = "mdm_server_token_asset_updated"
+class LocationAssetUpdatedEvent(BaseAssetEvent):
+    event_type = "mdm_location_asset_updated"
 
 
-register_event_type(ServerTokenAssetUpdatedEvent)
+register_event_type(LocationAssetUpdatedEvent)
 
 
 class DeviceAssignmentRequestEvent(BaseAssetEvent):
@@ -151,7 +151,7 @@ register_event_type(DeviceAssignmentDeletedEvent)
 # notification raw event
 
 
-def post_apps_books_notification_event(server_token, user_agent, ip, data):
+def post_apps_books_notification_event(location, user_agent, ip, data):
     raw_event = {
         "data": data,
         "metadata": {
@@ -161,9 +161,9 @@ def post_apps_books_notification_event(server_token, user_agent, ip, data):
             },
             "created_at": datetime.utcnow().isoformat(),
         },
-        "server_token": {
-            "pk": server_token.pk,
-            "mdm_info_id": str(server_token.mdm_info_id),
+        "location": {
+            "pk": location.pk,
+            "mdm_info_id": str(location.mdm_info_id),
         }
     }
     logger.debug("Post mdm_apps_books_notification raw event")

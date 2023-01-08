@@ -1,4 +1,6 @@
+import datetime
 import plistlib
+import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
@@ -11,8 +13,10 @@ from zentral.contrib.mdm.models import (
     Asset,
     Blueprint,
     BlueprintArtifact,
-    DeviceArtifact,
     Channel,
+    DeviceArtifact,
+    Location,
+    LocationAsset,
     Platform,
     RequestStatus,
     StoreApp,
@@ -60,13 +64,31 @@ class RemoveApplicationCommandTestCase(TestCase):
                 revocable=True,
                 supported_platforms=[Platform.macOS.name],
             )
+            location = Location(
+                server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
+                server_token=get_random_string(12),
+                server_token_expiration_date=datetime.date(2050, 1, 1),
+                organization_name=get_random_string(12),
+                country_code="DE",
+                library_uid=str(uuid.uuid4()),
+                name=get_random_string(12),
+                platform="enterprisestore",
+                website_url="https://business.apple.com",
+                mdm_info_id=uuid.uuid4(),
+            )
+            location.set_notification_auth_token()
+            location.save()
+            location_asset = LocationAsset.objects.create(
+                asset=asset,
+                location=location
+            )
         else:
-            asset = artifact.artifactversion_set.first().store_app.asset
+            location_asset = artifact.artifactversion_set.first().store_app.location_asset
         artifact_version = ArtifactVersion.objects.create(
             artifact=artifact, version=version or 0
         )
         store_app = StoreApp.objects.create(
-            artifact_version=artifact_version, asset=asset
+            artifact_version=artifact_version, location_asset=location_asset
         )
         if status:
             DeviceArtifact.objects.create(
@@ -127,13 +149,13 @@ class RemoveApplicationCommandTestCase(TestCase):
             payload,
             {
                 "RequestType": "RemoveApplication",
-                "Identifier": store_app.asset.bundle_id,
+                "Identifier": store_app.location_asset.asset.bundle_id,
             },
         )
 
     def test_build_command_error(self):
         artifact_version, store_app = self._force_store_app()
-        store_app.asset.bundle_id = None
+        store_app.location_asset.asset.bundle_id = None
         cmd = RemoveApplication.create_for_device(
             self.enrolled_device, artifact_version
         )

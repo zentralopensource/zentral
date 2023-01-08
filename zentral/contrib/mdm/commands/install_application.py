@@ -27,7 +27,7 @@ class InstallApplication(Command):
     def build_command(self):
         store_app = self.artifact_version.store_app
         cmd = {
-            "iTunesStoreID": int(store_app.asset.adam_id),
+            "iTunesStoreID": int(store_app.location_asset.asset.adam_id),
             "InstallAsManaged": True,
             "Options": {"PurchaseMethod": 1},
             "ManagementFlags": store_app.get_management_flags(),
@@ -55,7 +55,7 @@ class InstallApplication(Command):
     def command_acknowledged(self):
         identifier = self.response.get("Identifier")
         if not identifier:
-            identifier = self.artifact_version.store_app.asset.bundle_id
+            identifier = self.artifact_version.store_app.location_asset.asset.bundle_id
         if identifier:
             DeviceArtifact.objects.update_or_create(
                 enrolled_device=self.enrolled_device,

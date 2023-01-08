@@ -103,16 +103,55 @@
     {% endif %}
     {% if storeapp_list %}
     {% with storeapp_list|first as store_app %}
+    {% with store_app.location_asset as location_asset %}
+    {% with location_asset.asset as asset %}
+    {% with location_asset.location as location %}
     <tr>
       <th>Asset</th>
       <td>
         {% if perms.mdm.view_asset %}
-        <a href="{{ store_app.asset.get_absolute_url }}">{{ store_app.asset.name }}</a>
+        <a href="{{ store_app.location_asset.get_absolute_url }}">{{ asset.name }}</a>
         {% else %}
-        {{ store_app.asset.name }}
+        {{ asset.name }}
         {% endif %}
       </td>
     </tr>
+    <tr>
+      <th>Location</th>
+      <td>
+        {% if perms.mdm.view_location %}
+        <a href="{{ location.get_absolute_url }}">{{ location }}</a>
+        {% else %}
+        {{ location }}
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Availability</th>
+      <td>
+        <table>
+          <tr>
+            <th style="padding:0 5px 5px 0">assigned</th>
+            <td style="padding:0 5px 5px 0">{{ location_asset.assigned_count }}</td>
+          </tr>
+          <tr>
+            <th style="padding:0 5px 5px 0">available</th>
+            <td style="padding:0 5px 5px 0">{{ location_asset.available_count }}</td>
+          </tr>
+          <tr>
+            <th style="padding:0 5px 5px 0">retired</th>
+            <td style="padding:0 5px 5px 0">{{ location_asset.retired_count }}</td>
+          </tr>
+          <tr>
+            <th style="padding:0 5px 5px 0">total</th>
+            <td style="padding:0 5px 5px 0">{{ location_asset.total_count }}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    {% endwith %}
+    {% endwith %}
+    {% endwith %}
     {% endwith %}
     {% endif %}
   </tbody>

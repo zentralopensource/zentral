@@ -1,27 +1,27 @@
 from django.core.management.base import BaseCommand
-from zentral.contrib.mdm.models import ServerToken
+from zentral.contrib.mdm.models import Location
 from zentral.contrib.mdm.apps_books import sync_assets
 
 
 class Command(BaseCommand):
-    help = 'Sync apps & books'
+    help = 'Sync apps & books locations assets'
 
     def add_arguments(self, parser):
-        parser.add_argument('--list-server-tokens', action='store_true', dest='list_server_tokens', default=False,
-                            help='list existing server tokens')
-        parser.add_argument('--server', dest='server_token_ids', type=int, nargs=1,
-                            help='sync DEP virtual server devices')
+        parser.add_argument('--list-locations', action='store_true', dest='list_locations', default=False,
+                            help='list existing apps & books locations')
+        parser.add_argument('--server', dest='location_ids', type=int, nargs=1,
+                            help='sync apps & books locations assets')
 
     def handle(self, *args, **kwargs):
-        if kwargs.get('list_server_tokens'):
-            print("Existing server tokens:")
-            for server_token in ServerToken.objects.all():
-                print(server_token.pk, server_token)
+        if kwargs.get('list_locations'):
+            print("Existing locations:")
+            for location in Location.objects.all():
+                print(location.pk, location)
             return
-        server_token_qs = ServerToken.objects.all()
-        server_token_ids = kwargs.get("server_token_ids")
-        if server_token_ids:
-            server_token_qs = server_token_qs.filter(pk__in=server_token_ids)
-        for server_token in server_token_qs:
-            print("Sync apps & books for server", server_token.pk, server_token)
-            sync_assets(server_token)
+        location_qs = Location.objects.all()
+        location_ids = kwargs.get("location_ids")
+        if location_ids:
+            location_qs = location_qs.filter(pk__in=location_ids)
+        for location in location_qs:
+            print("Sync apps & books for location", location.pk, location)
+            sync_assets(location)

@@ -10,8 +10,8 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.mdm.dep import add_dep_token_certificate
 from zentral.contrib.mdm.events import post_apps_books_notification_event
-from zentral.contrib.mdm.forms import EncryptedDEPTokenForm, PushCertificateForm, ServerTokenForm
-from zentral.contrib.mdm.models import PushCertificate, DEPToken, DEPVirtualServer, ServerToken
+from zentral.contrib.mdm.forms import EncryptedDEPTokenForm, PushCertificateForm, LocationForm
+from zentral.contrib.mdm.models import PushCertificate, DEPToken, DEPVirtualServer, Location
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_root_ca_configuration_profile)
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -192,26 +192,26 @@ class DEPVirtualServerView(PermissionRequiredMixin, DetailView):
         return context
 
 
-# Server tokens
+# Locations
 
 
-class ServerTokensView(PermissionRequiredMixin, ListView):
-    permission_required = "mdm.view_servertoken"
-    model = ServerToken
+class LocationsView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_location"
+    model = Location
 
 
-class CreateServerTokenView(PermissionRequiredMixin, CreateView):
-    permission_required = "mdm.add_servertoken"
-    model = ServerToken
-    form_class = ServerTokenForm
+class CreateLocationView(PermissionRequiredMixin, CreateView):
+    permission_required = "mdm.add_location"
+    model = Location
+    form_class = LocationForm
 
 
-class ServerTokenView(PermissionRequiredMixin, DetailView):
-    permission_required = "mdm.view_servertoken"
-    model = ServerToken
+class LocationView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_location"
+    model = Location
 
 
-class NotifyServerTokenView(View):
+class NotifyLocationView(View):
     def post(self, request, *args, **kwargs):
         mdm_info_id = kwargs["mdm_info_id"]
         http_authorization = request.META.get('HTTP_AUTHORIZATION')
@@ -224,11 +224,11 @@ class NotifyServerTokenView(View):
         notification_auth_token = http_authorization[7:]
         # TODO: cache?
         try:
-            server_token = ServerToken.objects.get_with_mdm_info_id_and_token(
+            location = Location.objects.get_with_mdm_info_id_and_token(
                 mdm_info_id, notification_auth_token
             )
-        except ServerToken.DoesNotExist:
-            logger.error("Apps & Books: Unknown server token")
+        except Location.DoesNotExist:
+            logger.error("Apps & Books: Unknown location")
             return HttpResponseForbidden()
         try:
             data = json.loads(request.body)
@@ -236,23 +236,23 @@ class NotifyServerTokenView(View):
             logger.error("Apps & Books: Could not read notification body")
             return HttpResponseBadRequest()
         user_agent, ip = user_agent_and_ip_address_from_request(request)
-        post_apps_books_notification_event(server_token, user_agent, ip, data)
+        post_apps_books_notification_event(location, user_agent, ip, data)
         return HttpResponse()
 
 
-class UpdateServerTokenView(PermissionRequiredMixin, UpdateView):
-    permission_required = "mdm.change_servertoken"
-    model = ServerToken
-    form_class = ServerTokenForm
+class UpdateLocationView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_location"
+    model = Location
+    form_class = LocationForm
 
 
-class DeleteServerTokenView(PermissionRequiredMixin, DeleteView):
-    permission_required = "mdm.delete_servertoken"
-    model = ServerToken
-    success_url = reverse_lazy("mdm:server_tokens")
+class DeleteLocationView(PermissionRequiredMixin, DeleteView):
+    permission_required = "mdm.delete_location"
+    model = Location
+    success_url = reverse_lazy("mdm:locations")
 
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)
         if not obj.can_be_deleted():
-            raise SuspiciousOperation("This server token cannot be deleted")
+            raise SuspiciousOperation("This location cannot be deleted")
         return obj

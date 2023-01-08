@@ -5,11 +5,11 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:server_tokens' %}">Server tokens</a></li>
+  <li><a href="{% url 'mdm:locations' %}">Locations</a></li>
   <li class="active">{{ object }}</li>
 </ol>
 
-<h3>Server token <i>{{ object }}</i></h3>
+<h3>Location <i>{{ object }}</i></h3>
 
 <div class="row">
   <div class="col-md-12">
@@ -24,18 +24,18 @@
         <td>{{ object.organization_name }}</td>
       </tr>
       <tr>
-        <td>Location</td>
-        <td>{{ object.location_name }}</td>
+        <td>Name</td>
+        <td>{{ object.name }}</td>
       </tr>
       <tr>
         <td>Token expiration date</td>
         <td>
-          {% if object.expires_soon %}
+          {% if object.server_token_expires_soon %}
           <span class="text-danger">
-            {{ object.token_expiration_date|date:'SHORT_DATETIME_FORMAT'}} ({{ object.token_expiration_date|timeuntil }})
+            {{ object.server_token_expiration_date|date:'SHORT_DATETIME_FORMAT'}} ({{ object.server_token_expiration_date|timeuntil }})
           </span>
           {% else %}
-          {{ object.token_expiration_date|date:'SHORT_DATE_FORMAT'}}
+          {{ object.server_token_expiration_date|date:'SHORT_DATE_FORMAT'}}
           {% endif %}
         </td>
       </tr>
@@ -60,16 +60,16 @@
   </div>
 </div>
 
-{% if perms.mdm.change_servertoken or perms.mdm.delete_servertoken %}
+{% if perms.mdm.change_location or perms.mdm.delete_location %}
 <div class="btn-group" role="group" style="margin:0 0 10px 0">
-  {% if perms.mdm.change_servertoken %}
-  <a class="btn btn-default" href="{% url 'mdm:update_server_token' object.pk %}">
+  {% if perms.mdm.change_location %}
+  <a class="btn btn-default" href="{% url 'mdm:update_location' object.pk %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
   {% endif %}
-  {% if perms.mdm.delete_servertoken %}
-  <a class="btn btn-danger{% if not object.can_be_deleted %} disabled{% endif %}" href="{% url 'mdm:delete_server_token' object.pk %}">
+  {% if perms.mdm.delete_location %}
+  <a class="btn btn-danger{% if not object.can_be_deleted %} disabled{% endif %}" href="{% url 'mdm:delete_location' object.pk %}">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     Delete
   </a>

@@ -21,13 +21,13 @@ from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, 
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
                                        CreateDEPEnrollmentForm, UpdateDEPEnrollmentForm,
+                                       CreateAssetArtifactForm,
                                        EnrolledDeviceSearchForm,
                                        OTAEnrollmentForm,
                                        SCEPConfigForm,
                                        UpdateArtifactForm,
                                        UserEnrollmentForm, UserEnrollmentEnrollForm,
-                                       UploadEnterpriseAppForm, UploadProfileForm,
-                                       CreateAssetArtifactForm)
+                                       UploadEnterpriseAppForm, UploadProfileForm)
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, Asset, Blueprint, BlueprintArtifact,
                                         DEPDevice, DEPEnrollment,
                                         DeviceCommand,
@@ -745,9 +745,9 @@ class AssetView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["server_token_assets"] = list(
-            self.object.servertokenasset_set.select_related("server_token")
-                                            .order_by("server_token__location_name")
+        ctx["location_assets"] = list(
+            self.object.locationasset_set.select_related("location")
+                                         .order_by("location__name")
         )
         ctx["artifacts"] = self.object.get_artifacts_store_apps()
         return ctx

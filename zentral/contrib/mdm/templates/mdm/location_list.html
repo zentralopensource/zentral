@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="active">Locations</li>
+</ol>
+
+<h3>{{ object_list|length }} Location{{ object_list|length|pluralize }}</h3>
+
+{% if perms.mdm.add_location %}
+<p>
+  <a class="btn btn-default" href="{% url 'mdm:create_location' %}">
+    Add
+  </a>
+</p>
+{% endif %}
+
+<table class="table">
+  <thead>
+    <th>Organization</th>
+    <th>Location</th>
+    <th>Token expiry</th>
+  </thead>
+  <tbody>
+    {% for location in object_list %}
+    <tr>
+      <td>{{ location.organization_name }}</td>
+      <td><a href="{{ location.get_absolute_url }}">{{ location.name }}</a></td>
+      <td>
+        {% if location.server_token_expires_soon %}
+        <span class="text-danger">
+          {{ location.server_token_expiration_date|date:'SHORT_DATETIME_FORMAT' }} ({{location.server_token_expiration_date|timeuntil }})
+        </span>
+        {% else %}
+        {{ location.server_token_expiration_date|date:'SHORT_DATE_FORMAT' }}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

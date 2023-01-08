@@ -1,6 +1,8 @@
+import datetime
 import copy
 import os.path
 import plistlib
+import uuid
 from unittest.mock import patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -17,6 +19,8 @@ from zentral.contrib.mdm.models import (
     Channel,
     DeviceArtifact,
     DeviceCommand,
+    Location,
+    LocationAsset,
     Platform,
     StoreApp,
     TargetArtifactStatus,
@@ -85,13 +89,31 @@ class ManagedApplicationListCommandTestCase(TestCase):
                 revocable=True,
                 supported_platforms=[Platform.macOS.name],
             )
+            location = Location(
+                server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
+                server_token=get_random_string(12),
+                server_token_expiration_date=datetime.date(2050, 1, 1),
+                organization_name=get_random_string(12),
+                country_code="DE",
+                library_uid=str(uuid.uuid4()),
+                name=get_random_string(12),
+                platform="enterprisestore",
+                website_url="https://business.apple.com",
+                mdm_info_id=uuid.uuid4(),
+            )
+            location.set_notification_auth_token()
+            location.save()
+            location_asset = LocationAsset.objects.create(
+                asset=asset,
+                location=location
+            )
         else:
-            asset = artifact.artifactversion_set.first().store_app.asset
+            location_asset = artifact.artifactversion_set.first().store_app.location_asset
         artifact_version = ArtifactVersion.objects.create(
             artifact=artifact, version=version or 0
         )
         store_app = StoreApp.objects.create(
-            artifact_version=artifact_version, asset=asset
+            artifact_version=artifact_version, location_asset=location_asset
         )
         if status:
             DeviceArtifact.objects.create(
@@ -145,9 +167,9 @@ class ManagedApplicationListCommandTestCase(TestCase):
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
             artifact_version,
-            kwargs={"identifiers": [store_app.asset.bundle_id]}
+            kwargs={"identifiers": [store_app.location_asset.asset.bundle_id]}
         )
-        self.assertEqual(cmd.identifiers, [store_app.asset.bundle_id])
+        self.assertEqual(cmd.identifiers, [store_app.location_asset.asset.bundle_id])
         self.assertEqual(cmd.retries, 0)
         self.assertFalse(cmd.store_result)
 
@@ -175,12 +197,12 @@ class ManagedApplicationListCommandTestCase(TestCase):
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
             artifact_version,
-            kwargs={"identifiers": [store_app.asset.bundle_id]}
+            kwargs={"identifiers": [store_app.location_asset.asset.bundle_id]}
         )
         response = cmd.build_http_response(self.dep_enrollment_session)
         payload = plistlib.loads(response.content)["Command"]
         self.assertEqual(payload["RequestType"], "ManagedApplicationList")
-        self.assertEqual(payload["Identifiers"], [store_app.asset.bundle_id])
+        self.assertEqual(payload["Identifiers"], [store_app.location_asset.asset.bundle_id])
 
     # process_response
 
@@ -226,7 +248,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
             artifact_version,
-            kwargs={"identifiers": [store_app.asset.bundle_id]}
+            kwargs={"identifiers": [store_app.location_asset.asset.bundle_id]}
         )
         response = self._get_response(cmd, status="Managed")
         cmd.process_response(response, self.dep_enrollment_session, self.mbu)
@@ -255,7 +277,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
             artifact_version,
-            kwargs={"identifiers": [store_app.asset.bundle_id]}
+            kwargs={"identifiers": [store_app.location_asset.asset.bundle_id]}
         )
         response = self._get_response(cmd, status="Failed")
         cmd.process_response(response, self.dep_enrollment_session, self.mbu)
@@ -286,7 +308,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
             artifact_version,
-            kwargs={"identifiers": [store_app.asset.bundle_id]}
+            kwargs={"identifiers": [store_app.location_asset.asset.bundle_id]}
         )
         self.assertEqual(cmd.retries, 0)
         response = self._get_response(cmd, status="Managed")
@@ -307,7 +329,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         cmd = load_command(dcmd_qs.first())
         self.assertIsInstance(cmd, ManagedApplicationList)
         self.assertEqual(cmd.artifact_version, artifact_version)
-        self.assertEqual(cmd.identifiers, [store_app.asset.bundle_id])
+        self.assertEqual(cmd.identifiers, [store_app.location_asset.asset.bundle_id])
         self.assertEqual(cmd.retries, 1)
 
     @patch("zentral.contrib.mdm.commands.managed_application_list.logger.warning")
@@ -326,7 +348,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
             artifact_version,
-            kwargs={"identifiers": [store_app.asset.bundle_id]}
+            kwargs={"identifiers": [store_app.location_asset.asset.bundle_id]}
         )
         self.assertEqual(cmd.retries, 0)
         response = self._get_response(cmd, status="Installing")
@@ -344,7 +366,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         cmd = load_command(dcmd_qs.first())
         self.assertIsInstance(cmd, ManagedApplicationList)
         self.assertEqual(cmd.artifact_version, artifact_version)
-        self.assertEqual(cmd.identifiers, [store_app.asset.bundle_id])
+        self.assertEqual(cmd.identifiers, [store_app.location_asset.asset.bundle_id])
         self.assertEqual(cmd.retries, 1)
 
     @patch("zentral.contrib.mdm.commands.managed_application_list.logger.warning")
@@ -364,7 +386,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
             artifact_version,
-            kwargs={"identifiers": [store_app.asset.bundle_id],
+            kwargs={"identifiers": [store_app.location_asset.asset.bundle_id],
                     "retries": 10}
         )
         self.assertEqual(cmd.retries, 10)

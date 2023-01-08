@@ -55,20 +55,6 @@
       </td>
     </tr>
     <tr>
-      <th>Server token</th>
-      <td>
-        {% if object.server_token %}
-        {% if perms.mdm.view_servertoken %}
-        <a href="{{ object.server_token.get_absolute_url }}">{{ object.server_token }}</a>
-        {% else %}
-        {{ object.server_token }}
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
       <th>Blueprint</th>
       <td>
         {% if object.blueprint %}

@@ -81,9 +81,9 @@
   </div>
 </div>
 
-<h4>Location{{ server_token_assets|length|pluralize }} licenses</h4>
+<h4>Location{{ location_assets|length|pluralize }}</h4>
 
-{% if server_token_assets %}
+{% if location_assets %}
 <table class="table">
   <thead>
     <th>Location</th>
@@ -93,20 +93,20 @@
     <th>Total</th>
   </thead>
   <tbody>
-    {% for server_token_asset in server_token_assets %}
-    {% with server_token_asset.server_token as server_token %}
-    <tr id="sta-{{ server_token_asset.pk }}">
+    {% for location_asset in location_assets %}
+    {% with location_asset.location as location %}
+    <tr id="la-{{ location_asset.pk }}">
       <td>
-        {% if perms.mdm.view_servertoken %}
-        <a href="{{ server_token.get_absolute_url }}">{{ server_token }}</a>
+        {% if perms.mdm.view_location %}
+        <a href="{{ location.get_absolute_url }}">{{ location }}</a>
         {% else %}
-        {{ server_token }}
+        {{ location }}
         {% endif %}
       </td>
-      <td>{{ server_token_asset.assigned_count }}</td>
-      <td>{{ server_token_asset.available_count }}</td>
-      <td>{{ server_token_asset.retired_count }}</td>
-      <td>{{ server_token_asset.total_count }}</td>
+      <td>{{ location_asset.assigned_count }}</td>
+      <td>{{ location_asset.available_count }}</td>
+      <td>{{ location_asset.retired_count }}</td>
+      <td>{{ location_asset.total_count }}</td>
     </tr>
     {% endwith %}
     {% endfor %}
@@ -130,11 +130,13 @@
 <table class="table">
   <thead>
     <th>Name</th>
+    <th>Location</th>
     <th>Has configuration</th>
   </thead>
   <tbody>
     {% for artifact, store_apps in artifacts %}
     {% with store_apps|last as latest_store_app %}
+    {% with latest_store_app.location_asset.location as location %}
     <tr>
       <td>
         {% if perms.mdm.view_artifact %}
@@ -143,9 +145,17 @@
         {{ artifact }}
         {% endif %}
       </td>
+      <td>
+        {% if perms.mdm.view_location %}
+        <a href="{{ location.get_absolute_url }}">{{ location }}</a>
+        {% else %}
+        {{ location }}
+        {% endif %}
+      </td>
       <td>{{ latest_store_app.has_configuration }}</td>
       <td>{{ latest_store_app.version }}</td>
     </tr>
+    {% endwith %}
     {% endwith %}
     {% endfor %}
   </tbody>

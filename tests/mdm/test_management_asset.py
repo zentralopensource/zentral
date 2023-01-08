@@ -1,3 +1,4 @@
+import datetime
 from functools import reduce
 import operator
 import plistlib
@@ -8,7 +9,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from zentral.contrib.mdm.models import Artifact, Asset, StoreApp
+from zentral.contrib.mdm.models import Artifact, Asset, Location, LocationAsset, StoreApp
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -49,6 +50,27 @@ class AssetManagementViewsTestCase(TestCase):
             supported_platforms=["iOS", "macOS"],
             name=get_random_string(12),
             bundle_id="pro.zentral.tests"
+        )
+
+    def _force_location_asset(self):
+        asset = self._force_asset()
+        location = Location(
+            server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
+            server_token=get_random_string(12),
+            server_token_expiration_date=datetime.date(2050, 1, 1),
+            organization_name=get_random_string(12),
+            country_code="DE",
+            library_uid=str(uuid.uuid4()),
+            name=get_random_string(12),
+            platform="enterprisestore",
+            website_url="https://business.apple.com",
+            mdm_info_id=uuid.uuid4(),
+        )
+        location.set_notification_auth_token()
+        location.save()
+        return LocationAsset.objects.create(
+            asset=asset,
+            location=location
         )
 
     # assets
@@ -126,7 +148,8 @@ class AssetManagementViewsTestCase(TestCase):
 
     def test_create_asset_artifact_post_name_error(self):
         self._login("mdm.view_asset", "mdm.add_artifact")
-        asset = self._force_asset()
+        location_asset = self._force_location_asset()
+        asset = location_asset.asset
         artifact = Artifact.objects.create(
             name=get_random_string(12),
             type="Profile",
@@ -135,7 +158,7 @@ class AssetManagementViewsTestCase(TestCase):
         )
         response = self.client.post(reverse("mdm:create_asset_artifact", args=(asset.pk,)),
                                     {"name": artifact.name,
-                                     "asset": asset.pk,
+                                     "location_asset": location_asset.pk,
                                      "associated_domains": ["un.deux.fr", "ein.zwei.de"],
                                      "associated_domains_enable_direct_downloads": "on",
                                      "removable": "on",
@@ -152,10 +175,11 @@ class AssetManagementViewsTestCase(TestCase):
 
     def test_create_asset_artifact_post_invalid_plist(self):
         self._login("mdm.view_asset", "mdm.add_artifact")
-        asset = self._force_asset()
+        location_asset = self._force_location_asset()
+        asset = location_asset.asset
         response = self.client.post(reverse("mdm:create_asset_artifact", args=(asset.pk,)),
                                     {"name": get_random_string(12),
-                                     "asset": asset.pk,
+                                     "location_asset": location_asset.pk,
                                      "associated_domains": ["un.deux.fr", "ein.zwei.de"],
                                      "associated_domains_enable_direct_downloads": "on",
                                      "removable": "on",
@@ -172,10 +196,11 @@ class AssetManagementViewsTestCase(TestCase):
 
     def test_create_asset_artifact_post_plist_not_a_dict(self):
         self._login("mdm.view_asset", "mdm.add_artifact")
-        asset = self._force_asset()
+        location_asset = self._force_location_asset()
+        asset = location_asset.asset
         response = self.client.post(reverse("mdm:create_asset_artifact", args=(asset.pk,)),
                                     {"name": get_random_string(12),
-                                     "asset": asset.pk,
+                                     "location_asset": location_asset.pk,
                                      "associated_domains": ["un.deux.fr", "ein.zwei.de"],
                                      "associated_domains_enable_direct_downloads": "on",
                                      "removable": "on",
@@ -192,11 +217,12 @@ class AssetManagementViewsTestCase(TestCase):
 
     def test_create_asset_artifact_post(self):
         self._login("mdm.view_asset", "mdm.add_artifact", "mdm.view_artifact")
-        asset = self._force_asset()
+        location_asset = self._force_location_asset()
+        asset = location_asset.asset
         name = get_random_string(12)
         response = self.client.post(reverse("mdm:create_asset_artifact", args=(asset.pk,)),
                                     {"name": name,
-                                     "asset": asset.pk,
+                                     "location_asset": location_asset.pk,
                                      "associated_domains": ["un.deux.fr", "ein.zwei.de"],
                                      "associated_domains_enable_direct_downloads": "on",
                                      "removable": "on",
@@ -211,14 +237,15 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/artifact_detail.html")
         artifact = response.context["object"]
         self.assertEqual(artifact.name, name)
-        store_app = StoreApp.objects.get(artifact_version__artifact=artifact, asset=asset)
+        store_app = StoreApp.objects.get(artifact_version__artifact=artifact, location_asset=location_asset)
         self.assertEqual(store_app.get_management_flags(), 5)
         self.assertTrue(store_app.has_configuration())
         self.assertEqual(store_app.get_configuration(), {"un": 1})
 
     def test_create_asset_artifact_get_default_name_collision_avoided(self):
         self._login("mdm.view_asset", "mdm.add_artifact")
-        asset = self._force_asset()
+        location_asset = self._force_location_asset()
+        asset = location_asset.asset
         for i in range(0, 4):
             if i > 0:
                 suffix = f" ({i})"

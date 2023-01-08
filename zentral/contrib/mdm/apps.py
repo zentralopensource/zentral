@@ -16,11 +16,11 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "enrolleddevice",
         "enrolleduser",
         "enterpriseapp",
+        "location",
         "profile",
         "pushcertificate",
         "otaenrollment",
         "scepconfig",
-        "servertoken",
         "userartifact",
         "userenrollment",
     )

@@ -1,4 +1,6 @@
+import datetime
 import plistlib
+import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from unittest.mock import patch
@@ -8,6 +10,7 @@ from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.commands.scheduling import _install_artifacts
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
                                         Asset, Blueprint, BlueprintArtifact, DeviceArtifact, DeviceCommand, Channel,
+                                        Location, LocationAsset,
                                         Platform, RequestStatus, StoreApp,
                                         TargetArtifactStatus)
 from .utils import force_dep_enrollment_session
@@ -64,13 +67,31 @@ class InstallApplicationCommandTestCase(TestCase):
             revocable=True,
             supported_platforms=[Platform.macOS.name]
         )
+        location = Location(
+            server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
+            server_token=get_random_string(12),
+            server_token_expiration_date=datetime.date(2050, 1, 1),
+            organization_name=get_random_string(12),
+            country_code="DE",
+            library_uid=str(uuid.uuid4()),
+            name=get_random_string(12),
+            platform="enterprisestore",
+            website_url="https://business.apple.com",
+            mdm_info_id=uuid.uuid4(),
+        )
+        location.set_notification_auth_token()
+        location.save()
+        cls.location_asset = LocationAsset.objects.create(
+            asset=cls.asset,
+            location=location
+        )
         cls.store_app0 = StoreApp.objects.create(
             artifact_version=cls.artifact_version0,
-            asset=cls.asset
+            location_asset=cls.location_asset
         )
         cls.store_app = StoreApp.objects.create(
             artifact_version=cls.artifact_version,
-            asset=cls.asset,
+            location_asset=cls.location_asset,
             associated_domains=["un.example.com", "deux.example.com"],
             associated_domains_enable_direct_downloads=True,
             removable=True,
@@ -272,20 +293,21 @@ class InstallApplicationCommandTestCase(TestCase):
 
     # _install_artifacts
 
-    @patch("zentral.contrib.mdm.commands.scheduling.ensure_enrolled_device_asset_association")
-    def test_install_artifacts_noop(self, ensure_enrolled_device_asset_association):
-        ensure_enrolled_device_asset_association.return_value = False
+    @patch("zentral.contrib.mdm.commands.scheduling.ensure_enrolled_device_location_asset_association")
+    def test_install_artifacts_noop(self, ensure_enrolled_device_location_asset_association):
+        ensure_enrolled_device_location_asset_association.return_value = False
         self.assertIsNone(_install_artifacts(
             Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
             self.enrolled_device,
             None
         ))
-        ensure_enrolled_device_asset_association.assert_called_once_with(self.enrolled_device, self.asset)
+        ensure_enrolled_device_location_asset_association.assert_called_once_with(self.enrolled_device,
+                                                                                  self.location_asset)
 
-    @patch("zentral.contrib.mdm.commands.scheduling.ensure_enrolled_device_asset_association")
-    def test_install_artifacts(self, ensure_enrolled_device_asset_association):
-        ensure_enrolled_device_asset_association.return_value = True
+    @patch("zentral.contrib.mdm.commands.scheduling.ensure_enrolled_device_location_asset_association")
+    def test_install_artifacts(self, ensure_enrolled_device_location_asset_association):
+        ensure_enrolled_device_location_asset_association.return_value = True
         cmd = _install_artifacts(
             Channel.Device, RequestStatus.Idle,
             self.dep_enrollment_session,
@@ -294,4 +316,5 @@ class InstallApplicationCommandTestCase(TestCase):
         )
         self.assertIsInstance(cmd, InstallApplication)
         self.assertEqual(cmd.artifact_version, self.artifact_version)
-        ensure_enrolled_device_asset_association.assert_called_once_with(self.enrolled_device, self.asset)
+        ensure_enrolled_device_location_asset_association.assert_called_once_with(self.enrolled_device,
+                                                                                  self.location_asset)

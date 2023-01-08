@@ -19,7 +19,7 @@ from .models import (Artifact, ArtifactType, ArtifactVersion, BlueprintArtifact,
                      EnrolledDevice, EnterpriseApp, Platform,
                      SCEPConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
-                     Profile, ServerToken, StoreApp)
+                     Profile, Location, LocationAsset, StoreApp)
 
 
 logger = logging.getLogger("zentral.contrib.mdm.forms")
@@ -30,7 +30,7 @@ class OTAEnrollmentForm(forms.ModelForm):
         model = OTAEnrollment
         fields = ("name", "realm", "push_certificate",
                   "scep_config", "scep_verification",
-                  "server_token", "blueprint")
+                  "blueprint")
 
 
 class UserEnrollmentForm(forms.ModelForm):
@@ -38,7 +38,7 @@ class UserEnrollmentForm(forms.ModelForm):
         model = UserEnrollment
         fields = ("name", "realm", "push_certificate",
                   "scep_config", "scep_verification",
-                  "server_token", "blueprint")
+                  "blueprint")
 
 
 class UserEnrollmentEnrollForm(forms.Form):
@@ -183,7 +183,7 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         field_order = [
             "push_certificate", "scep_config", "scep_verification",
-            "server_token", "blueprint",
+            "blueprint",
             "virtual_server", "name",
             "allow_pairing", "is_supervised", "is_mandatory", "is_mdm_removable", "is_multi_user",
             "await_device_configured", "auto_advance_setup", "include_tls_certificates",
@@ -480,96 +480,96 @@ class SCEPConfigForm(forms.ModelForm):
         fields = "__all__"
 
 
-class ServerTokenForm(forms.ModelForm):
-    token_file = forms.FileField(
+class LocationForm(forms.ModelForm):
+    server_token_file = forms.FileField(
         required=True,
         help_text="Server token (*.vpptoken), downloaded from the Apple business manager."
     )
 
     class Meta:
-        model = ServerToken
+        model = Location
         fields = []
 
     def clean(self):
-        token_file = self.cleaned_data["token_file"]
-        if not token_file:
+        server_token_file = self.cleaned_data["server_token_file"]
+        if not server_token_file:
             return
-        raw_token = token_file.read()
-        token = raw_token.decode("utf-8")
+        raw_server_token = server_token_file.read()
+        server_token = raw_server_token.decode("utf-8")
         # base64 + json test
         try:
-            token_json = json.loads(base64.b64decode(raw_token))
+            server_token_json = json.loads(base64.b64decode(raw_server_token))
         except ValueError:
-            self.add_error("token_file", "Not a valid token")
+            self.add_error("server_token_file", "Not a valid server token")
             return
         # token hash
-        token_hash = hashlib.sha1(raw_token).hexdigest()
-        test_qs = ServerToken.objects.filter(token_hash=token_hash)
+        server_token_hash = hashlib.sha1(raw_server_token).hexdigest()
+        test_qs = Location.objects.filter(server_token_hash=server_token_hash)
         if self.instance.pk:
             test_qs = test_qs.exclude(pk=self.instance.pk)
         if test_qs.count():
-            self.add_error("token_file", "A server token with the same token already exists.")
+            self.add_error("server_token_file", "A location with the same server token already exists.")
             return
-        self.cleaned_data["token_hash"] = hashlib.sha1(raw_token).hexdigest()
+        self.cleaned_data["server_token_hash"] = server_token_hash
         try:
-            self.cleaned_data["organization_name"] = token_json["orgName"]
+            self.cleaned_data["organization_name"] = server_token_json["orgName"]
         except Exception:
-            self.add_error("token_file", "Could not get organization name.")
+            self.add_error("server_token_file", "Could not get organization name.")
             return
-        ab_client = AppsBooksClient(token)
+        ab_client = AppsBooksClient(server_token)
         try:
             config = ab_client.get_client_config()
         except Exception:
             msg = "Could not get client information"
             logger.exception(msg)
-            self.add_error("token_file", msg)
+            self.add_error("server_token_file", msg)
             return
         for config_attr, model_attr in (("countryISO2ACode", "country_code"),
                                         ("uId", "library_uid"),
-                                        ("locationName", "location_name"),
+                                        ("locationName", "name"),
                                         ("defaultPlatform", "platform"),
                                         ("websiteURL", "website_url")):
             val = config.get(config_attr)
             if not isinstance(val, str):
-                self.add_error("token_file", f"Missing or bad {config_attr}.")
+                self.add_error("server_token_file", f"Missing or bad {config_attr}.")
             else:
                 self.cleaned_data[model_attr] = val
         try:
-            self.cleaned_data["token_expiration_date"] = parser.parse(config["tokenExpirationDate"])
+            self.cleaned_data["server_token_expiration_date"] = parser.parse(config["tokenExpirationDate"])
         except KeyError:
-            self.add_error("token_file", "Missing tokenExpirationDate.")
+            self.add_error("server_token_file", "Missing tokenExpirationDate.")
             return
         except Exception:
-            msg = "Could not parse token expiration date."
+            msg = "Could not parse server token expiration date."
             logger.exception(msg)
-            self.add_error("token_file", msg)
+            self.add_error("server_token_file", msg)
             return
-        self.cleaned_data["token"] = token
+        self.cleaned_data["server_token"] = server_token
         return self.cleaned_data
 
     def save(self):
-        server_token = super().save(commit=False)
-        for attr in ("token_hash",
-                     "token_expiration_date",
+        location = super().save(commit=False)
+        for attr in ("server_token_hash",
+                     "server_token_expiration_date",
                      "organization_name",
                      "country_code",
                      "library_uid",
-                     "location_name",
+                     "name",
                      "platform",
                      "website_url"):
-            setattr(server_token, attr, self.cleaned_data[attr])
-        notification_auth_token = server_token.set_notification_auth_token()
-        server_token.save()
-        server_token.set_token(self.cleaned_data["token"])
-        server_token.save()
+            setattr(location, attr, self.cleaned_data[attr])
+        notification_auth_token = location.set_notification_auth_token()
+        location.save()
+        location.set_server_token(self.cleaned_data["server_token"])
+        location.save()
 
         def update_client_config():
-            ab_client = AppsBooksClient.from_server_token(server_token)
+            ab_client = AppsBooksClient.from_location(location)
             ab_client.update_client_config(notification_auth_token)
             # TODO: retry
 
         transaction.on_commit(update_client_config)
-        return server_token
+        return location
 
 
 class StoreAppForm(forms.ModelForm):
@@ -621,9 +621,16 @@ class StoreAppForm(forms.ModelForm):
             self.instance.configuration = None
 
 
+class LocationAssetChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return str(obj.location)
+
+
 class CreateAssetArtifactForm(StoreAppForm):
+    location_asset = LocationAssetChoiceField(label="Location", queryset=LocationAsset.objects.none(), required=True)
     name = forms.CharField(required=True)
     field_order = (
+        "location_asset",
         "name",
         "removable",
         "remove_on_unenroll",
@@ -637,6 +644,18 @@ class CreateAssetArtifactForm(StoreAppForm):
         "configuration",
     )
 
+    class Meta(StoreAppForm.Meta):
+        fields = (
+            "location_asset",
+            "associated_domains", "associated_domains_enable_direct_downloads",
+            "removable",
+            "vpn_uuid",
+            "content_filter_uuid",
+            "dns_proxy_uuid",
+            "remove_on_unenroll",
+            "prevent_backup"
+        )
+
     def clean_name(self):
         name = self.cleaned_data.get("name")
         if Artifact.objects.filter(name=name).count():
@@ -646,6 +665,9 @@ class CreateAssetArtifactForm(StoreAppForm):
     def __init__(self, *args, **kwargs):
         self.asset = kwargs.pop("asset")
         super().__init__(*args, **kwargs)
+        # location qs
+        self.fields["location_asset"].queryset = self.asset.locationasset_set.all()
+        # default name
         name = self.asset.name
         for i in range(1, 11):
             if Artifact.objects.filter(name=name).count() == 0:
@@ -668,6 +690,5 @@ class CreateAssetArtifactForm(StoreAppForm):
         )
         store_app = super().save(commit=False)
         store_app.artifact_version = artifact_version
-        store_app.asset = self.asset
         store_app.save()
         return store_app

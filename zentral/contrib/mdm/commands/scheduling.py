@@ -3,7 +3,7 @@ import logging
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
-from zentral.contrib.mdm.apps_books import ensure_enrolled_device_asset_association
+from zentral.contrib.mdm.apps_books import ensure_enrolled_device_location_asset_association
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         Blueprint, CommandStatus,
                                         Channel, RequestStatus, Platform,
@@ -187,7 +187,10 @@ def _install_artifacts(channel, status, enrollment_session, enrolled_device, enr
             command_class = InstallEnterpriseApplication
         elif artifact_version.artifact.type == ArtifactType.StoreApp.name:
             # on-the-fly asset assignment
-            if ensure_enrolled_device_asset_association(enrolled_device, artifact_version.store_app.asset):
+            if ensure_enrolled_device_location_asset_association(
+                enrolled_device,
+                artifact_version.store_app.location_asset
+            ):
                 # the association is already done, we can send the command
                 command_class = InstallApplication
         else:

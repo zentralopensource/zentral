@@ -22,7 +22,7 @@ class RemoveApplication(Command):
 
     def build_command(self):
         store_app = self.artifact_version.store_app
-        asset = store_app.asset
+        asset = store_app.location_asset.asset
         if not asset.bundle_id:
             raise ValueError(f"Store app {store_app.pk} linked to asset without bundle ID")
         return {"Identifier": asset.bundle_id}

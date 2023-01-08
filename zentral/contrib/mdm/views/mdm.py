@@ -238,7 +238,6 @@ class CheckinView(MDMView):
         awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
         enrolled_device_defaults = {"enrollment_id": self.enrollment_id,
                                     "blueprint": self.enrollment_session.get_blueprint(),
-                                    "server_token": self.enrollment_session.get_server_token(),
                                     "awaiting_configuration": awaiting_configuration,
                                     "serial_number": self.serial_number,
                                     "push_certificate": self.push_certificate,

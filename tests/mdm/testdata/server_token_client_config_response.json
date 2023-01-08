@@ -8,7 +8,7 @@
     "name": "Zentral"
   },
   "notificationAuthToken": "qhLNx6TXKrQPTHJLGn4yO6SjJ5Av78iYLbgSU1hujO6GJbgsseKeCazDpDBcIjGZ",
-  "notificationUrl": "https://zentral.example.com/mdm/server_tokens/9b557ea2-d72d-49af-a597-49bcbf31ec1b/notify/",
+  "notificationUrl": "https://zentral.example.com/mdm/locations/9b557ea2-d72d-49af-a597-49bcbf31ec1b/notify/",
   "subscribedNotificationTypes": [
     "ASSET_COUNT",
     "ASSET_MANAGEMENT"

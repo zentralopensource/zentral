@@ -49,19 +49,19 @@ urlpatterns = [
          views.DEPVirtualServerView.as_view(),
          name="dep_virtual_server"),
 
-    # Server tokens
-    path('server_tokens/', views.ServerTokensView.as_view(),
-         name='server_tokens'),
-    path('server_tokens/create/', views.CreateServerTokenView.as_view(),
-         name='create_server_token'),
-    path('server_tokens/<int:pk>/', views.ServerTokenView.as_view(),
-         name='server_token'),
-    path('server_tokens/<int:pk>/update/', views.UpdateServerTokenView.as_view(),
-         name='update_server_token'),
-    path('server_tokens/<int:pk>/delete/', views.DeleteServerTokenView.as_view(),
-         name='delete_server_token'),
-    path('server_tokens/<uuid:mdm_info_id>/notify/', csrf_exempt(views.NotifyServerTokenView.as_view()),
-         name='notify_server_token'),
+    # Locations
+    path('locations/', views.LocationsView.as_view(),
+         name='locations'),
+    path('locations/create/', views.CreateLocationView.as_view(),
+         name='create_location'),
+    path('locations/<int:pk>/', views.LocationView.as_view(),
+         name='location'),
+    path('locations/<int:pk>/update/', views.UpdateLocationView.as_view(),
+         name='update_location'),
+    path('locations/<int:pk>/delete/', views.DeleteLocationView.as_view(),
+         name='delete_location'),
+    path('locations/<uuid:mdm_info_id>/notify/', csrf_exempt(views.NotifyLocationView.as_view()),
+         name='notify_location'),
 
     # management views
 

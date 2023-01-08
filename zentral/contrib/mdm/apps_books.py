@@ -16,11 +16,11 @@ from zentral.core.events.base import EventMetadata
 from .commands.install_application import InstallApplication
 from .events import (AssetCreatedEvent, AssetUpdatedEvent,
                      DeviceAssignmentCreatedEvent, DeviceAssignmentDeletedEvent,
-                     ServerTokenAssetCreatedEvent, ServerTokenAssetUpdatedEvent)
+                     LocationAssetCreatedEvent, LocationAssetUpdatedEvent)
 from .incidents import MDMAssetAvailabilityIncident
 from .models import (Asset, ArtifactType, ArtifactVersion, DeviceAssignment,
-                     EnrolledDeviceAssetAssociation,
-                     ServerToken, ServerTokenAsset)
+                     EnrolledDeviceLocationAssetAssociation,
+                     Location, LocationAsset)
 
 
 logger = logging.getLogger("zentral.contrib.mdm.apps_books")
@@ -66,17 +66,17 @@ class AppsBooksClient:
 
     def __init__(
         self,
-        token=None,
+        server_token=None,
         mdm_info_id=None,
         location_name=None,
         platform=None,
-        server_token=None
+        location=None
     ):
-        self.token = token
+        self.server_token = server_token
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": deployment_info.user_agent,
-            "Authorization": "Bearer " + token
+            "Authorization": "Bearer " + server_token
         })
         adapter = CustomHTTPAdapter(self.timeout, self.retries)
         self.session.mount("https://", adapter)
@@ -84,15 +84,15 @@ class AppsBooksClient:
         self.location_name = location_name
         self.platform = platform or "enterprisestore"
         self._service_config = None
-        self.server_token = server_token
+        self.location = location
 
     @classmethod
-    def from_server_token(cls, server_token):
-        return cls(server_token.get_token(),
-                   str(server_token.mdm_info_id),
-                   server_token.location_name,
-                   server_token.platform,
-                   server_token)
+    def from_location(cls, location):
+        return cls(location.get_server_token(),
+                   str(location.mdm_info_id),
+                   location.name,
+                   location.platform,
+                   location)
 
     def close(self):
         self.session.close()
@@ -109,12 +109,12 @@ class AppsBooksClient:
         errorNumber = response.get("errorNumber")
         if errorNumber:
             if errorNumber == 9622 and retry_if_invalid_token:
-                if not self.server_token:
-                    raise AppsBooksAPIError("Invalid token")
+                if not self.location:
+                    raise AppsBooksAPIError("Invalid server token")
                 logger.debug("Location %s: refresh session token", self.location_name)
-                self.server_token.refresh_from_db()
-                self.token = self.server_token.get_token()
-                self.session.headers["Authorization"] = "Bearer " + self.token
+                self.location.refresh_from_db()
+                self.server_token = self.location.get_server_token()
+                self.session.headers["Authorization"] = "Bearer " + self.server_token
                 return self.make_request(path, False, verify_mdm_info, **kwargs)
             else:
                 logger.error("Location %s: API error %s %s",
@@ -148,7 +148,7 @@ class AppsBooksClient:
                 "notificationTypes": ["ASSET_MANAGEMENT", "ASSET_COUNT"],
                 "notificationUrl": "https://{}{}".format(
                     settings["api"]["webhook_fqdn"],
-                    reverse("mdm:notify_server_token", args=(self.mdm_info_id,))
+                    reverse("mdm:notify_location", args=(self.mdm_info_id,))
                 ),
                 "notificationAuthToken": notification_auth_token,
             }
@@ -212,7 +212,7 @@ class AppsBooksClient:
                         "cc": "us",
                         "l": "en",
                         "id": adam_id},
-                cookies={"itvt": self.token}
+                cookies={"itvt": self.server_token}
             )
             resp.raise_for_status()
         except Exception:
@@ -280,109 +280,105 @@ class AppsBooksClient:
         )
 
 
-# server token cache
+# location cache
 
 
-class ServerTokenCache:
+class LocationCache:
     def __init__(self):
         self._lock = threading.Lock()
-        self._server_tokens = {}
+        self._locations = {}
 
     def get(self, mdm_info_id):
         if not isinstance(mdm_info_id, str):
             mdm_info_id = str(mdm_info_id)
         with self._lock:
             try:
-                return self._server_tokens[mdm_info_id]
+                return self._locations[mdm_info_id]
             except KeyError:
-                server_token = None
+                location = None
                 client = None
                 try:
-                    server_token = ServerToken.objects.get(mdm_info_id=mdm_info_id)
-                except ServerToken.DoesNotExist:
+                    location = Location.objects.get(mdm_info_id=mdm_info_id)
+                except Location.DoesNotExist:
                     raise KeyError
                 else:
-                    client = AppsBooksClient.from_server_token(server_token)
-                self._server_tokens[mdm_info_id] = server_token, client
-                return server_token, client
+                    client = AppsBooksClient.from_location(location)
+                self._locations[mdm_info_id] = location, client
+                return location, client
 
 
-server_token_cache = SimpleLazyObject(lambda: ServerTokenCache())
+location_cache = SimpleLazyObject(lambda: LocationCache())
 
 
 #
 # on-the-fly assignment
 #
 # Instead of sending the InstallApplication command directly a device asset
-# association is triggered and an EnrolledDeviceAssetAssociation object is
+# association is triggered and an EnrolledDeviceLocationAssetAssociation object is
 # created. When the assignment notification is received, the
-# EnrolledDeviceAssetAssociation is retrieved to check if there is an artifact
-# version to install.  The EnrolledDeviceAssetAssociation object is also used
+# EnrolledDeviceLocationAssetAssociation is retrieved to check if there is an artifact
+# version to install.  The EnrolledDeviceLocationAssetAssociation object is also used
 # to avoid triggering the association too often.
 #
 
 
-def ensure_enrolled_device_asset_association(enrolled_device, asset):
-    server_token = enrolled_device.server_token
+def ensure_enrolled_device_location_asset_association(enrolled_device, location_asset):
     serial_number = enrolled_device.serial_number
-    if not server_token:
-        logger.error("enrolled device %s: no server token", serial_number)
-        return False
     if DeviceAssignment.objects.filter(
         serial_number=serial_number,
-        server_token_asset__asset=asset,
-        server_token_asset__server_token=server_token
+        location_asset=location_asset,
     ).count():
-        logger.error("enrolled device %s: no server token", serial_number)
         return True
     with transaction.atomic():
-        edaa, created = EnrolledDeviceAssetAssociation.objects.select_for_update().get_or_create(
+        edlaa, created = EnrolledDeviceLocationAssetAssociation.objects.select_for_update().get_or_create(
             enrolled_device=enrolled_device,
-            asset=asset
+            location_asset=location_asset
         )
-        if created or (datetime.utcnow() - edaa.last_attempted_at) > timedelta(minutes=30):  # TODO hardcoded, verify
-            _, client = server_token_cache.get(server_token.mdm_info_id)
+        if created or (datetime.utcnow() - edlaa.last_attempted_at) > timedelta(minutes=30):  # TODO hardcoded, verify
+            location = location_asset.location
+            asset = location_asset.asset
+            _, client = location_cache.get(location.mdm_info_id)
             ok = False
             try:
                 response = client.post_device_association(serial_number, asset)
             except Exception:
                 logger.exception("enrolled device %s asset %s/%s/%s: could not post association",
-                                 serial_number, server_token.location_name, asset.adam_id, asset.pricing_param)
+                                 serial_number, location.name, asset.adam_id, asset.pricing_param)
             else:
                 event_id = response.get("eventId")
                 if event_id:
                     ok = True
             if not ok:
-                edaa.delete()
+                edlaa.delete()
             else:
-                edaa.attempts = F("attempts") + 1
-                edaa.last_attempted_at = datetime.utcnow()
-                edaa.save()
+                edlaa.attempts = F("attempts") + 1
+                edlaa.last_attempted_at = datetime.utcnow()
+                edlaa.save()
     return False
 
 
-def queue_install_application_command_if_necessary(server_token, serial_number, adam_id, pricing_param):
+def queue_install_application_command_if_necessary(location, serial_number, adam_id, pricing_param):
     with transaction.atomic():
         try:
-            edaa = EnrolledDeviceAssetAssociation.objects.select_for_update().select_related(
+            edlaa = EnrolledDeviceLocationAssetAssociation.objects.select_for_update().select_related(
                 "enrolled_device",
-                "asset"
+                "location_asset__asset",
             ).get(
                 enrolled_device__serial_number=serial_number,
-                enrolled_device__server_token=server_token,
-                asset__adam_id=adam_id,
-                asset__pricing_param=pricing_param
+                location_asset__location=location,
+                location_asset__asset__adam_id=adam_id,
+                location_asset__asset__pricing_param=pricing_param
             )
-        except EnrolledDeviceAssetAssociation.DoesNotExist:
+        except EnrolledDeviceLocationAssetAssociation.DoesNotExist:
             logger.error("enrolled device %s asset %s/%s/%s: no awaiting association found",
-                         serial_number, server_token.location_name, adam_id, pricing_param)
+                         serial_number, location.name, adam_id, pricing_param)
         else:
-            enrolled_device = edaa.enrolled_device
+            enrolled_device = edlaa.enrolled_device
             # find the latest artifact version to install for this asset
             for artifact_version in ArtifactVersion.objects.next_to_install(enrolled_device, fetch_all=True):
                 if (
                     artifact_version.artifact.type == ArtifactType.StoreApp.name
-                    and artifact_version.store_app.asset == edaa.asset
+                    and artifact_version.store_app.location_asset == edlaa.location_asset
                 ):
                     InstallApplication.create_for_device(
                         enrolled_device, artifact_version, queue=True
@@ -390,21 +386,21 @@ def queue_install_application_command_if_necessary(server_token, serial_number, 
                     break
             else:
                 logger.error("enrolled device %s asset %s/%s/%s: no artifact version to install found",
-                             serial_number, server_token.location_name, adam_id, pricing_param)
+                             serial_number, location.name, adam_id, pricing_param)
             # cleanup
-            edaa.delete()
+            edlaa.delete()
 
 
-def clear_on_the_fly_assignment(server_token, serial_number, adam_id, pricing_param, reason):
-    count, _ = EnrolledDeviceAssetAssociation.objects.filter(
+def clear_on_the_fly_assignment(location, serial_number, adam_id, pricing_param, reason):
+    count, _ = EnrolledDeviceLocationAssetAssociation.objects.filter(
         enrolled_device__serial_number=serial_number,
-        enrolled_device__server_token=server_token,
-        asset__adam_id=adam_id,
-        asset__pricing_param=pricing_param
+        location_asset__location=location,
+        location_asset__asset__adam_id=adam_id,
+        location_asset__asset__pricing_param=pricing_param
     ).delete()
     if count:
         logger.error("enrolled device %s asset %s/%s/%s: on-the-fly assignment canceled, %s",
-                     serial_number, server_token.location_name, adam_id, pricing_param, reason)
+                     serial_number, location.name, adam_id, pricing_param, reason)
 
 
 # assets & assignments sync
@@ -437,72 +433,72 @@ def _update_or_create_asset(adam_id, pricing_param, defaults, notification_id, c
             yield AssetUpdatedEvent(EventMetadata(), payload)
 
 
-def _get_server_token_asset_event_metadata(server_token_asset):
+def _get_location_asset_event_metadata(location_asset):
     incident_updates = []
-    incident_update_severity = server_token_asset.get_availability_incident_severity()
+    incident_update_severity = location_asset.get_availability_incident_severity()
     if incident_update_severity is not None:
         incident_updates.append(
             MDMAssetAvailabilityIncident.build_incident_update(
-                server_token_asset, incident_update_severity
+                location_asset, incident_update_severity
             )
         )
     return EventMetadata(incident_updates=incident_updates)
 
 
-def _update_or_create_server_token_asset(server_token, defaults, notification_id, collected_objects):
+def _update_or_create_location_asset(location, defaults, notification_id, collected_objects):
     asset = collected_objects["asset"]
-    server_token_asset, created = ServerTokenAsset.objects.select_for_update().get_or_create(
-        server_token=server_token,
+    location_asset, created = LocationAsset.objects.select_for_update().get_or_create(
+        location=location,
         asset=asset,
         defaults=defaults
     )
-    collected_objects["server_token_asset"] = server_token_asset
+    collected_objects["location_asset"] = location_asset
     if created:
-        payload = server_token_asset.serialize_for_event(
-            keys_only=False, server_token=server_token, asset=asset
+        payload = location_asset.serialize_for_event(
+            keys_only=False, location=location, asset=asset
         )
         if notification_id:
             payload["notification_id"] = notification_id
-        yield ServerTokenAssetCreatedEvent(
-            _get_server_token_asset_event_metadata(server_token_asset),
+        yield LocationAssetCreatedEvent(
+            _get_location_asset_event_metadata(location_asset),
             payload
         )
     else:
         updated = False
         for attr, new_val in defaults.items():
-            old_val = getattr(server_token_asset, attr)
+            old_val = getattr(location_asset, attr)
             if old_val != new_val:
-                setattr(server_token_asset, attr, new_val)
+                setattr(location_asset, attr, new_val)
                 updated = True
         if updated:
-            server_token_asset.save()
-            payload = server_token_asset.serialize_for_event(
-                    keys_only=False, server_token=server_token, asset=asset
+            location_asset.save()
+            payload = location_asset.serialize_for_event(
+                    keys_only=False, location=location, asset=asset
             )
             if notification_id:
                 payload["notification_id"] = notification_id
-            yield ServerTokenAssetUpdatedEvent(
-                _get_server_token_asset_event_metadata(server_token_asset),
+            yield LocationAssetUpdatedEvent(
+                _get_location_asset_event_metadata(location_asset),
                 payload
             )
 
 
-def _update_assignments(server_token, all_serial_numbers, notification_id, collected_objects):
+def _update_assignments(location, all_serial_numbers, notification_id, collected_objects):
     asset = collected_objects["asset"]
-    server_token_asset = collected_objects["server_token_asset"]
-    existing_serial_numbers = set(server_token_asset.deviceassignment_set.values_list("serial_number", flat=True))
+    location_asset = collected_objects["location_asset"]
+    existing_serial_numbers = set(location_asset.deviceassignment_set.values_list("serial_number", flat=True))
     if all_serial_numbers == existing_serial_numbers:
         return
 
     # prepare common event payload
-    payload = server_token_asset.serialize_for_event(keys_only=False, server_token=server_token, asset=asset)
+    payload = location_asset.serialize_for_event(keys_only=False, location=location, asset=asset)
     if notification_id:
         payload["notification_id"] = notification_id
 
     # prune assignments
     removed_serial_numbers = existing_serial_numbers - all_serial_numbers
     if removed_serial_numbers:
-        DeviceAssignment.objects.filter(server_token_asset=server_token_asset,
+        DeviceAssignment.objects.filter(location_asset=location_asset,
                                         serial_number__in=removed_serial_numbers).delete()
         for serial_number in removed_serial_numbers:
             yield DeviceAssignmentDeletedEvent(EventMetadata(machine_serial_number=serial_number), payload)
@@ -512,7 +508,7 @@ def _update_assignments(server_token, all_serial_numbers, notification_id, colle
     if not added_serial_numbers:
         return
     batch_size = 1000  # TODO: hard-coded
-    assignments_to_create = (DeviceAssignment(server_token_asset=server_token_asset,
+    assignments_to_create = (DeviceAssignment(location_asset=location_asset,
                                               serial_number=serial_number)
                              for serial_number in added_serial_numbers)
     while True:
@@ -524,7 +520,7 @@ def _update_assignments(server_token, all_serial_numbers, notification_id, colle
         yield DeviceAssignmentCreatedEvent(EventMetadata(machine_serial_number=serial_number), payload)
 
 
-def _sync_asset_d(server_token, client, asset_d, notification_id=None):
+def _sync_asset_d(location, client, asset_d, notification_id=None):
     adam_id = asset_d["adamId"]
     pricing_param = asset_d["pricingParam"]
 
@@ -540,7 +536,7 @@ def _sync_asset_d(server_token, client, asset_d, notification_id=None):
         asset_defaults["name"] = metadata.get("name")
         asset_defaults["bundle_id"] = metadata.get("bundleId")
 
-    server_token_asset_defaults = {
+    location_asset_defaults = {
         "assigned_count": asset_d["assignedCount"],
         "available_count": asset_d["availableCount"],
         "retired_count": asset_d["retiredCount"],
@@ -560,105 +556,104 @@ def _sync_asset_d(server_token, client, asset_d, notification_id=None):
             collected_objects
         )
 
-        # server token asset
-        yield from _update_or_create_server_token_asset(
-            server_token,
-            server_token_asset_defaults,
+        # location asset
+        yield from _update_or_create_location_asset(
+            location,
+            location_asset_defaults,
             notification_id,
             collected_objects
         )
 
         # device assignments
         yield from _update_assignments(
-            server_token, all_serial_numbers,
+            location, all_serial_numbers,
             notification_id,
             collected_objects
         )
 
 
-def sync_asset(server_token, client, adam_id, pricing_param, notification_id):
+def sync_asset(location, client, adam_id, pricing_param, notification_id):
     asset_d = client.get_asset(adam_id, pricing_param)
     if not asset_d:
         logger.error("Unknown asset %s/%s", adam_id, pricing_param)
         return
-    yield from _sync_asset_d(server_token, client, asset_d, notification_id)
+    yield from _sync_asset_d(location, client, asset_d, notification_id)
 
 
-def sync_assets(server_token):
-    client = AppsBooksClient.from_server_token(server_token)
+def sync_assets(location):
+    client = AppsBooksClient.from_location(location)
     for asset_d in client.iter_assets():
-        for event in _sync_asset_d(server_token, client, asset_d):
+        for event in _sync_asset_d(location, client, asset_d):
             event.post()
 
 
-def _update_server_token_asset_counts(server_token_asset, updates, notification_id):
+def _update_location_asset_counts(location_asset, updates, notification_id):
     updated = False
     for attr, count_delta in updates.items():
         if count_delta != 0:
             updated = True
-        setattr(server_token_asset, attr, getattr(server_token_asset, attr) + count_delta)
+        setattr(location_asset, attr, getattr(location_asset, attr) + count_delta)
     if not updated:
         return
-    if server_token_asset.count_errors():
+    if location_asset.count_errors():
         raise ValueError
     else:
-        server_token_asset.save()
-        event_payload = server_token_asset.serialize_for_event(keys_only=False)
+        location_asset.save()
+        event_payload = location_asset.serialize_for_event(keys_only=False)
         event_payload["notification_id"] = notification_id
-        yield ServerTokenAssetUpdatedEvent(
-            _get_server_token_asset_event_metadata(server_token_asset),
+        yield LocationAssetUpdatedEvent(
+            _get_location_asset_event_metadata(location_asset),
             event_payload
         )
 
 
-def update_server_token_asset_counts(server_token, client, adam_id, pricing_param, updates, notification_id):
+def update_location_asset_counts(location, client, adam_id, pricing_param, updates, notification_id):
     logger.debug("location %s asset %s/%s: update counts",
-                 server_token.location_name, adam_id, pricing_param)
+                 location.name, adam_id, pricing_param)
     with transaction.atomic():
         try:
-            server_token_asset = (
-                server_token.servertokenasset_set
-                            .select_for_update()
-                            .select_related("asset", "server_token")
-                            .get(asset__adam_id=adam_id,
-                                 asset__pricing_param=pricing_param)
+            location_asset = (
+                location.locationasset_set
+                        .select_for_update()
+                        .select_related("asset", "location")
+                        .get(asset__adam_id=adam_id,
+                             asset__pricing_param=pricing_param)
             )
-        except ServerTokenAsset.DoesNotExist:
+        except LocationAsset.DoesNotExist:
             logger.info("location %s asset %s/%s: unknown, could not update counts, sync required",
-                        server_token.location_name, adam_id, pricing_param)
+                        location.name, adam_id, pricing_param)
         else:
             try:
-                yield from _update_server_token_asset_counts(server_token_asset, updates, notification_id)
+                yield from _update_location_asset_counts(location_asset, updates, notification_id)
             except ValueError:
                 logger.info("location %s asset %s/%s: %s, sync required",
-                            server_token.location_name, adam_id, pricing_param,
-                            ", ".join(server_token_asset.count_errors()))
+                            location.name, adam_id, pricing_param,
+                            ", ".join(location_asset.count_errors()))
             else:
                 return
-    yield from sync_asset(server_token, client, adam_id, pricing_param, notification_id)
+    yield from sync_asset(location, client, adam_id, pricing_param, notification_id)
 
 
-def associate_server_token_asset(
-    server_token, client,
+def associate_location_asset(
+    location, client,
     adam_id, pricing_param, serial_numbers,
     event_id, notification_id
 ):
     with transaction.atomic():
         try:
-            server_token_asset = (
-                ServerTokenAsset.objects
-                                .select_for_update()
-                                .select_related("asset", "server_token")
-                                .get(server_token=server_token,
-                                     asset__adam_id=adam_id,
-                                     asset__pricing_param=pricing_param)
+            location_asset = (
+                LocationAsset.objects.select_for_update()
+                                     .select_related("asset", "location")
+                                     .get(location=location,
+                                          asset__adam_id=adam_id,
+                                          asset__pricing_param=pricing_param)
             )
-        except ServerTokenAsset.DoesNotExist:
+        except LocationAsset.DoesNotExist:
             logger.error("location %s asset %s/%s: unknown asset, cannot associate, sync required",
-                         server_token.location_name, adam_id, pricing_param)
-            yield from sync_asset(server_token, client, adam_id, pricing_param, notification_id)
+                         location.name, adam_id, pricing_param)
+            yield from sync_asset(location, client, adam_id, pricing_param, notification_id)
         else:
-            payload = server_token_asset.serialize_for_event(server_token=server_token)
+            payload = location_asset.serialize_for_event(location=location)
             if event_id:
                 payload["event_id"] = event_id
             if notification_id:
@@ -666,7 +661,7 @@ def associate_server_token_asset(
             assigned_count_delta = 0
             for serial_number in serial_numbers:
                 _, created = DeviceAssignment.objects.get_or_create(
-                    server_token_asset=server_token_asset,
+                    location_asset=location_asset,
                     serial_number=serial_number
                 )
                 if created:
@@ -677,42 +672,41 @@ def associate_server_token_asset(
                     )
                     # on-the-fly asset assignment done?
                     queue_install_application_command_if_necessary(
-                        server_token, serial_number, adam_id, pricing_param
+                        location, serial_number, adam_id, pricing_param
                     )
             try:
-                yield from _update_server_token_asset_counts(
-                    server_token_asset,
+                yield from _update_location_asset_counts(
+                    location_asset,
                     {"assigned_count": assigned_count_delta,
                      "available_count": -1 * assigned_count_delta},
                     notification_id
                 )
             except ValueError:
                 logger.error("location %s asset %s/%s: bad assigned count after associations, sync required",
-                             server_token.location_name, adam_id, pricing_param)
-                yield from sync_asset(server_token, client, adam_id, pricing_param, notification_id)
+                             location.name, adam_id, pricing_param)
+                yield from sync_asset(location, client, adam_id, pricing_param, notification_id)
 
 
-def disassociate_server_token_asset(
-    server_token, client,
+def disassociate_location_asset(
+    location, client,
     adam_id, pricing_param, serial_numbers,
     event_id, notification_id
 ):
     with transaction.atomic():
         try:
-            server_token_asset = (
-                ServerTokenAsset.objects
-                                .select_for_update()
-                                .select_related("asset", "server_token")
-                                .get(server_token=server_token,
-                                     asset__adam_id=adam_id,
-                                     asset__pricing_param=pricing_param)
+            location_asset = (
+                LocationAsset.objects.select_for_update()
+                                     .select_related("asset", "location")
+                                     .get(location=location,
+                                          asset__adam_id=adam_id,
+                                          asset__pricing_param=pricing_param)
             )
-        except ServerTokenAsset.DoesNotExist:
+        except LocationAsset.DoesNotExist:
             logger.error("location %s asset %s/%s: unknown asset, cannot disassociate, sync required",
-                         server_token.location_name, adam_id, pricing_param)
-            yield from sync_asset(server_token, client, adam_id, pricing_param, notification_id)
+                         location.name, adam_id, pricing_param)
+            yield from sync_asset(location, client, adam_id, pricing_param, notification_id)
         else:
-            payload = server_token_asset.serialize_for_event(server_token=server_token)
+            payload = location_asset.serialize_for_event(location=location)
             if event_id:
                 payload["event_id"] = event_id
             if notification_id:
@@ -720,7 +714,7 @@ def disassociate_server_token_asset(
             assigned_count_delta = 0
             for serial_number in serial_numbers:
                 deleted = DeviceAssignment.objects.filter(
-                    server_token_asset=server_token_asset,
+                    location_asset=location_asset,
                     serial_number=serial_number
                 ).delete()
                 if deleted:
@@ -731,16 +725,16 @@ def disassociate_server_token_asset(
                     )
                 # disassociated, remove the on-the-fly assignment if it exists
                 clear_on_the_fly_assignment(
-                    server_token, serial_number, adam_id, pricing_param, "disassociate success"
+                    location, serial_number, adam_id, pricing_param, "disassociate success"
                 )
             try:
-                yield from _update_server_token_asset_counts(
-                    server_token_asset,
+                yield from _update_location_asset_counts(
+                    location_asset,
                     {"assigned_count": assigned_count_delta,
                      "available_count": -1 * assigned_count_delta},
                     notification_id
                 )
             except ValueError:
                 logger.error("location %s asset %s/%s: bad assigned count after disassociations, sync required",
-                             server_token.location_name, adam_id, pricing_param)
-                yield from sync_asset(server_token, client, adam_id, pricing_param, notification_id)
+                             location.name, adam_id, pricing_param)
+                yield from sync_asset(location, client, adam_id, pricing_param, notification_id)
