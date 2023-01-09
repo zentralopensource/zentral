@@ -1,6 +1,7 @@
 import datetime
 import plistlib
 import uuid
+from unittest.mock import patch, Mock
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
@@ -168,8 +169,12 @@ class RemoveApplicationCommandTestCase(TestCase):
 
     # process_response
 
-    def test_process_acknowledged_response(self):
-        artifact_version, _ = self._force_store_app(
+    @patch("zentral.contrib.mdm.commands.remove_application.location_cache.get")
+    def test_process_acknowledged_response(self, location_cache_get):
+        client = Mock()
+        client.post_device_disassociation.return_value = {"eventId": str(uuid.uuid4())}
+        location_cache_get.return_value = (None, client)
+        artifact_version, store_app = self._force_store_app(
             status=TargetArtifactStatus.Installed
         )
         qs = DeviceArtifact.objects.filter(
@@ -185,6 +190,73 @@ class RemoveApplicationCommandTestCase(TestCase):
             {"Status": "Acknowledged"}, self.dep_enrollment_session, self.mbu
         )
         self.assertEqual(qs.count(), 0)
+        location_cache_get.assert_called_once_with(store_app.location_asset.location.mdm_info_id)
+        client.post_device_disassociation.assert_called_once_with(self.enrolled_device.serial_number,
+                                                                  store_app.location_asset.asset)
+
+    @patch("zentral.contrib.mdm.commands.remove_application.location_cache.get")
+    @patch("zentral.contrib.mdm.commands.remove_application.logger.exception")
+    def test_process_acknowledged_response_client_exception(self, logger_exception, location_cache_get):
+        client = Mock()
+        client.post_device_disassociation.side_effect = KeyError
+        location_cache_get.return_value = (None, client)
+        artifact_version, store_app = self._force_store_app(
+            status=TargetArtifactStatus.Installed
+        )
+        qs = DeviceArtifact.objects.filter(
+            enrolled_device=self.enrolled_device,
+            artifact_version__artifact=artifact_version.artifact,
+        )
+        self.assertEqual(qs.count(), 1)
+        self.assertEqual(qs.first().artifact_version, artifact_version)
+        cmd = RemoveApplication.create_for_device(
+            self.enrolled_device, artifact_version
+        )
+        cmd.process_response(
+            {"Status": "Acknowledged"}, self.dep_enrollment_session, self.mbu
+        )
+        self.assertEqual(qs.count(), 0)
+        location_asset = store_app.location_asset
+        location = location_asset.location
+        asset = location_asset.asset
+        location_cache_get.assert_called_once_with(location.mdm_info_id)
+        client.post_device_disassociation.assert_called_once_with(self.enrolled_device.serial_number, asset)
+        logger_exception.assert_called_once_with(
+            "enrolled device %s asset %s/%s/%s: could not post disassociation",
+            self.enrolled_device.serial_number, location.name, asset.adam_id, asset.pricing_param
+        )
+
+    @patch("zentral.contrib.mdm.commands.remove_application.location_cache.get")
+    @patch("zentral.contrib.mdm.commands.remove_application.logger.warning")
+    def test_process_acknowledged_response_no_event_id(self, logger_warning, location_cache_get):
+        client = Mock()
+        client.post_device_disassociation.return_value = {}
+        location_cache_get.return_value = (None, client)
+        artifact_version, store_app = self._force_store_app(
+            status=TargetArtifactStatus.Installed
+        )
+        qs = DeviceArtifact.objects.filter(
+            enrolled_device=self.enrolled_device,
+            artifact_version__artifact=artifact_version.artifact,
+        )
+        self.assertEqual(qs.count(), 1)
+        self.assertEqual(qs.first().artifact_version, artifact_version)
+        cmd = RemoveApplication.create_for_device(
+            self.enrolled_device, artifact_version
+        )
+        cmd.process_response(
+            {"Status": "Acknowledged"}, self.dep_enrollment_session, self.mbu
+        )
+        self.assertEqual(qs.count(), 0)
+        location_asset = store_app.location_asset
+        location = location_asset.location
+        asset = location_asset.asset
+        location_cache_get.assert_called_once_with(location.mdm_info_id)
+        client.post_device_disassociation.assert_called_once_with(self.enrolled_device.serial_number, asset)
+        logger_warning.assert_called_once_with(
+            "enrolled device %s asset %s/%s/%s: disassociation response without eventId",
+            self.enrolled_device.serial_number, location.name, asset.adam_id, asset.pricing_param
+        )
 
     # _remove_artifacts
 

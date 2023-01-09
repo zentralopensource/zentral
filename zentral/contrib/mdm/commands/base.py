@@ -182,7 +182,9 @@ def get_command(channel, uuid):
     try:
         db_command = (db_model_class.objects.select_related("artifact_version__artifact",
                                                             "artifact_version__enterprise_app",
-                                                            "artifact_version__profile")
+                                                            "artifact_version__profile",
+                                                            "artifact_version__store_app__location_asset__asset",
+                                                            "artifact_version__store_app__location_asset__location")
                                             .get(uuid=uuid))
     except db_model_class.DoesNotExist:
         logger.error("Unknown command: %s %s", channel.name, uuid)
