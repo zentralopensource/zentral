@@ -51,8 +51,10 @@ class MacOSBuildTestCase(TestCase):
            ("20G817", ("macOS", 11, 7, 0), "macOS 11.7 (20G817)"),
            ("20G918", ("macOS", 11, 7, 1), "macOS 11.7.1 (20G918)"),
            ("20G1008", ("macOS", 11, 7, 2), "macOS 11.7.2 (20G1008)"),
+           ("20G1020", ("macOS", 11, 7, 2), "macOS 11.7.2 (20G1020)"),
            ("21G217", ("macOS", 12, 6, 1), "macOS 12.6.1 (21G217)"),
            ("21G309", ("macOS", 12, 6, 2), "macOS 12.6.2 (21G309)"),
+           ("21G320", ("macOS", 12, 6, 2), "macOS 12.6.2 (21G320)"),
            ("22A400", ("macOS", 13, 0, 1), "macOS 13.0.1 (22A400)"),
         ):
             version_d = macos_version_from_build(build)
