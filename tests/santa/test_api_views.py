@@ -772,6 +772,16 @@ class APIViewsTestCase(TestCase):
              "updated_at": config.updated_at.isoformat()}
         )
 
+    # create configuration
+
+    def test_create_configuration(self):
+        self.set_permissions("santa.add_configuration")
+        response = self.post_json_data(reverse('osquery_api:configurations'), {'name': 'Configuration0'})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Configuration.objects.filter(name='Configuration0').count(), 1)
+        configuration = Configuration.objects.get(name="Configuration0")
+        self.assertEqual(configuration.name, 'Configuration0')
+
     # update configuration
 
     def test_update_configuration_unauthorized(self):
