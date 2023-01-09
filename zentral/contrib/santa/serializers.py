@@ -10,6 +10,17 @@ from .forms import test_sha256, test_team_id
 logger = logging.getLogger("zentral.contrib.santa.serializers")
 
 
+class ConfigurationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Configuration
+        fields = ("id", "name", "client_mode", "client_certificate_auth", "batch_size", "full_sync_interval",
+                  "enable_bundles", "enable_transitive_rules",
+                  "allowed_path_regex", "blocked_path_regex",
+                  "block_usb_mount", "remount_usb_mode",
+                  "allow_unknown_shard", "enable_all_event_upload_shard", "sync_incident_severity", "created_at",
+                  "updated_at")
+
+
 class RuleTargetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Target
