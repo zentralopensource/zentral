@@ -632,6 +632,12 @@ class EnrolledDevice(models.Model):
             logger.warning("Cannot get enrolled device %s comparable OS version", self.pk)
             return (0,)
 
+    def get_architecture_for_display(self):
+        if self.apple_silicon:
+            return "Apple silicon"
+        elif self.apple_silicon is False and self.platform == Platform.macOS.name:
+            return "Intel"
+
     def iter_enrollment_session_info(self):
         query = (
             "WITH sessions AS ("

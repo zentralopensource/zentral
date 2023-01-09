@@ -155,6 +155,38 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertEqual(response.context["commands"].count(), 10)
         self.assertContains(response, "See all commands")
 
+    def test_enrolled_device_apple_silicon_none(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        self.assertIsNone(session.enrolled_device.apple_silicon)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(response, "Intel")
+        self.assertNotContains(response, "Apple silicon")
+
+    def test_enrolled_device_apple_silicon_true(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(response, "Intel")
+        self.assertContains(response, "Apple silicon")
+
+    def test_enrolled_device_apple_silicon_false(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = False
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Intel")
+        self.assertNotContains(response, "Apple silicon")
+
     # test enrolled device commands
 
     def test_enrolled_device_commands_redirect(self):

@@ -15,7 +15,7 @@
 <table class="table table-condensed">
   <tbody>
     <tr>
-      <th style="width:160px">UDID</th>
+      <th style="width:220px">UDID</th>
       <td><code>{{ object.udid }}</code></th>
     </tr>
     <tr>
@@ -35,24 +35,41 @@
       </td>
     </tr>
     <tr>
-      <th>DEP assignment</th>
+      <th>Platform</th>
       <td>
-        {% if dep_device %}
-        {% if perms.mdm.view_depvirtualserver %}
-        <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
-        {% else %}
-        {{ dep_device.virtual_server }}
-        {% endif %}
+        {% with object.get_architecture_for_display as architecture %}
+        {{ object.get_platform_display }}
+        {% if object.os_version %} - {{ object.os_version }}{% endif %}
+        {% if architecture %} - {{ architecture }}{% endif %}
+        {% endwith %}
+      </td>
+    </tr>
+    {% with object.enrolleduser_set.count as users_count %}
+    <tr>
+      <th>MDM user{{ users_count|pluralize }}</th>
+      <td>
+        {% if users_count %}
+        <ul class="list-unstyled">
+          {% for user in object.enrolleduser_set.all %}
+          <li>
+            {% if perms.mdm.view_enrolleduser %}
+            <a href="{{ user.get_absolute_url }}">{{ user.long_name }}</a>
+            {% else %}
+            {{ user.long_name }}
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
         {% else %}
         -
         {% endif %}
       </td>
     </tr>
-    </tr>
+    {% endwith %}
     <tr>
-      <th>Platform</th>
-      <td>{{ object.get_platform_display }}</th>
+      <td colspan="2"><h4>Management status</h4></td>
     </tr>
+    {% with object.security_info.ManagementStatus as management_status %}
     <tr>
       <th>Push certificate</th>
       <td>
@@ -87,6 +104,20 @@
       <td>{{ object.declarative_management|yesno }}</td>
     </tr>
     <tr>
+      <th>DEP assignment</th>
+      <td>
+        {% if dep_device %}
+        {% if perms.mdm.view_depvirtualserver %}
+        <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
+        {% else %}
+        {{ dep_device.virtual_server }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
       <th>Certificate fingerprint</th>
       <td><code>{{ object.cert_fingerprint.hex }}</code></td>
     </tr>
@@ -94,32 +125,113 @@
       <th>Certificate expiry</th>
       <td>{{ object.cert_not_valid_after|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
+    {% if management_status %}
+    <tr>
+      <th>DEP enrollment?</th>
+      <td>{{ management_status.EnrolledViaDEP|yesno }}</td>
+    </tr>
+    <tr>
+      <th>User enrollment?</th>
+      <td>{{ management_status.IsUserEnrollment|yesno }}</td>
+    </tr>
+    <tr>
+      <th>User approved?</th>
+      <td>{{ management_status.UserApprovedEnrollment|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Activation lock manageable?</th>
+      <td>{{ management_status.IsActivationLockManageable|yesno }}</td>
+    </tr>
+    {% endif %}
+    {% endwith %}
     <tr>
       <th>Checkout</th>
       <td>{{ object.checkout_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
     </tr>
-    {% with object.enrolleduser_set.count as users_count %}
+    {% if object.platform == "macOS" %}
     <tr>
-      <th>MDM user{{ users_count|pluralize }}</th>
+      <td colspan="2"><h4>Bootstrap token</h4></td>
+    </tr>
+    <tr>
+      <th>Set?</th>
+      <td>{{ object.bootstrap_token|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Allowed for authentication?</th>
       <td>
-        {% if users_count %}
-        <ul class="list-unstyled">
-          {% for user in object.enrolleduser_set.all %}
-          <li>
-            {% if perms.mdm.view_enrolleduser %}
-            <a href="{{ user.get_absolute_url }}">{{ user.long_name }}</a>
-            {% else %}
-            {{ user.long_name }}
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
+        {% if object.bootstrap_token_allowed_for_authentication is None %}
+        ?
         {% else %}
-        -
+        {{ object.bootstrap_token_allowed_for_authentication|yesno }}
         {% endif %}
       </td>
     </tr>
+    <tr>
+      <th>Required for software update?</th>
+      <td>
+        {% if object.bootstrap_token_required_for_software_update is None %}
+        ?
+        {% else %}
+        {{ object.bootstrap_token_required_for_software_update|yesno }}
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Required for kext approval?</th>
+      <td>
+        {% if object.bootstrap_token_required_for_kext_approval is None %}
+        ?
+        {% else %}
+        {{ object.bootstrap_token_required_for_kext_approval|yesno }}
+        {% endif %}
+      </td>
+    </tr>
+    {% with object.security_info as security_info %}
+    {% if security_info %}
+    <tr>
+      <td colspan="2"><h4>SIP</h4></td>
+    </tr>
+    <tr>
+      <th>Enabled?</th>
+      <td>{{ security_info.SystemIntegrityProtectionEnabled|yesno }}</td>
+    </tr>
+    <tr>
+      <td colspan="2"><h4>FDE</h4></td>
+    </tr>
+    <tr>
+      <th>Enabled?</th>
+      <td>{{ security_info.FDE_Enabled|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Personal recovery key?</th>
+      <td>{{ security_info.FDE_HasPersonalRecoveryKey|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Institutional recovery key?</th>
+      <td>{{ security_info.FDE_HasInstitutionalRecoveryKey|yesno }}</td>
+    </tr>
+    {% endif %}
     {% endwith %}
+    {% with object.security_info.SecureBoot as secure_boot %}
+    {% if secure_boot %}
+    <tr>
+      <td colspan="2"><h4>Secure boot</h4></td>
+    </tr>
+    <tr>
+      <th>Level</th>
+      <td>{{ secure_boot.SecureBootLevel }}</td>
+    </tr>
+    <tr>
+      <th>Windows boot level</th>
+      <td>{{ secure_boot.WindowsBootLevel }}</td>
+    </tr>
+    <tr>
+      <th>External boot level</th>
+      <td>{{ secure_boot.ExternalBootLevel }}</td>
+    </tr>
+    {% endif %}
+    {% endwith %}
+    {% endif %}
   </tbody>
 </table>
 
