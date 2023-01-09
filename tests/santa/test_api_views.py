@@ -774,6 +774,23 @@ class APIViewsTestCase(TestCase):
 
     # update configuration
 
+    def test_update_configuration_unauthorized(self):
+        config = self.force_configuration()
+        data = {'name': get_random_string(12)}
+        self.set_permissions("santa.change_configuration")
+        response = self.put_json_data(
+            reverse("santa_api:configuration", args=(config.pk,)),
+            data, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_configuration_permission_denied(self):
+        config = self.force_configuration()
+        data = {'name': get_random_string(12)}
+        response = self.put_json_data(
+            reverse("santa_api:configuration", args=(config.pk,)),
+            data)
+        self.assertEqual(response.status_code, 403)
+
     def test_update_configuration(self):
         config = self.force_configuration()
         new_name = get_random_string(12)
@@ -795,6 +812,17 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response_j["name"][0], "configuration with this name already exists.")
 
     # delete configuration
+
+    def test_delete_configuration_unauthorized(self):
+        config = self.force_configuration()
+        self.set_permissions("santa.delete_configuration")
+        response = self.delete(reverse("santa_api:configuration", args=(config.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_configuration_permission_denied(self):
+        config = self.force_configuration()
+        response = self.delete(reverse("santa_api:configuration", args=(config.pk,)))
+        self.assertEqual(response.status_code, 403)
 
     def test_delete_configuration(self):
         config = self.force_configuration()
