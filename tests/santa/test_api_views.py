@@ -776,11 +776,23 @@ class APIViewsTestCase(TestCase):
 
     def test_create_configuration(self):
         self.set_permissions("santa.add_configuration")
-        response = self.post_json_data(reverse('santa_api:configurations'), {'name': 'Configuration0'})
+        data = {'name': 'Configuration0'}
+        response = self.post_json_data(reverse('santa_api:configurations'), data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Configuration.objects.filter(name='Configuration0').count(), 1)
         configuration = Configuration.objects.get(name="Configuration0")
         self.assertEqual(configuration.name, 'Configuration0')
+
+    def test_create_configuration_unauthorized(self):
+        data = {'name': 'Configuration0'}
+        self.set_permissions("santa.configurations")
+        response = self.post_json_data(reverse('santa_api:configurations'), data, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_configuration_permission_denied(self):
+        data = {'name': 'Configuration0'}
+        response = self.post_json_data(reverse('santa_api:configurations'), data)
+        self.assertEqual(response.status_code, 403)
 
     # update configuration
 
