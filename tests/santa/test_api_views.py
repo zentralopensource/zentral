@@ -776,7 +776,7 @@ class APIViewsTestCase(TestCase):
 
     def test_create_configuration(self):
         self.set_permissions("santa.add_configuration")
-        response = self.post_json_data(reverse('osquery_api:configurations'), {'name': 'Configuration0'})
+        response = self.post_json_data(reverse('santa_api:configurations'), {'name': 'Configuration0'})
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Configuration.objects.filter(name='Configuration0').count(), 1)
         configuration = Configuration.objects.get(name="Configuration0")
