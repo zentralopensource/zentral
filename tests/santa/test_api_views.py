@@ -9,8 +9,8 @@ from django.utils.crypto import get_random_string
 from rest_framework import status
 import yaml
 from accounts.models import User, APIToken
-from zentral.contrib.inventory.models import Certificate, File
-from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target
+from zentral.contrib.inventory.models import Certificate, File, EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment
 
 
 class APIViewsTestCase(TestCase):
@@ -27,8 +27,13 @@ class APIViewsTestCase(TestCase):
         cls.service_account.groups.set([cls.group])
         cls.api_key = APIToken.objects.update_or_create_for_user(cls.service_account)
         cls.maxDiff = None
+        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        cls.mbu.create_enrollment_business_unit()
 
     # utils
+
+    def force_configuration(self):
+        return Configuration.objects.create(name=get_random_string(12))
 
     def set_permissions(self, *permissions):
         if permissions:
@@ -55,6 +60,31 @@ class APIViewsTestCase(TestCase):
         content_type = "application/yaml"
         data = yaml.dump(data)
         return self.post_data(url, data, content_type, include_token)
+
+    def get(self, url, data=None, include_token=True):
+        kwargs = {}
+        if data is not None:
+            kwargs["data"] = data
+        if include_token:
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
+        return self.client.get(url, **kwargs)
+
+    def delete(self, url, include_token=True):
+        kwargs = {}
+        if include_token:
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
+        return self.client.delete(url, **kwargs)
+
+    def put_data(self, url, data, content_type, include_token=True):
+        kwargs = {"content_type": content_type}
+        if include_token:
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
+        return self.client.put(url, data, **kwargs)
+
+    def put_json_data(self, url, data, include_token=True):
+        content_type = "application/json"
+        data = json.dumps(data)
+        return self.put_data(url, data, content_type, include_token)
 
     def post_json_data(self, url, data, include_token=True, dry_run=None):
         content_type = "application/json"
@@ -668,3 +698,115 @@ class APIViewsTestCase(TestCase):
             response.json(),
             {'configuration': ['Select a valid choice. That choice is not one of the available choices.']}
         )
+
+    # list configuration
+
+    def test_get_configurations_unauthorized(self):
+        response = self.get(reverse("santa_api:configurations"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_configurations_permission_denied(self):
+        response = self.get(reverse("santa_api:configurations"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_configurations(self):
+        config = self.force_configuration()
+        self.set_permissions("santa.view_configuration")
+        response = self.get(reverse('santa_api:configurations'), data={"name": config.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data,
+                         [{"id": config.pk,
+                           "name": config.name,
+                           'client_mode': 1,
+                           "client_certificate_auth": False,
+                           "batch_size": 50,
+                           "full_sync_interval": 600,
+                           "enable_bundles": False,
+                           "enable_transitive_rules": False,
+                           "allowed_path_regex": '',
+                           "blocked_path_regex": '',
+                           "block_usb_mount": False,
+                           "remount_usb_mode": [],
+                           "allow_unknown_shard": 100,
+                           "enable_all_event_upload_shard": 0,
+                           "sync_incident_severity": 0,
+                           "created_at": config.created_at.isoformat(),
+                           "updated_at": config.updated_at.isoformat()
+                           }])
+
+    # get configuration
+
+    def test_get_configuration_unauthorized(self):
+        configuration = self.force_configuration()
+        response = self.get(reverse("santa_api:configuration", args=(configuration.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_configuration_permission_denied(self):
+        configuration = self.force_configuration()
+        response = self.get(reverse("santa_api:configuration", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_configuration(self):
+        config = self.force_configuration()
+        self.set_permissions("santa.view_configuration")
+        response = self.get(reverse('santa_api:configuration', args=(config.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertDictEqual(
+            response.json(),
+            {"id": config.pk,
+             "name": config.name,
+             'client_mode': 1,
+             "client_certificate_auth": False,
+             "batch_size": 50,
+             "full_sync_interval": 600,
+             "enable_bundles": False,
+             "enable_transitive_rules": False,
+             "allowed_path_regex": "",
+             "blocked_path_regex": "",
+             "block_usb_mount": False,
+             "remount_usb_mode": [],
+             "allow_unknown_shard": 100,
+             "enable_all_event_upload_shard": 0,
+             "sync_incident_severity": 0,
+             "created_at": config.created_at.isoformat(),
+             "updated_at": config.updated_at.isoformat()}
+        )
+
+    # update configuration
+
+    def test_update_configuration(self):
+        config = self.force_configuration()
+        new_name = get_random_string(12)
+        data = {'name': new_name}
+        self.set_permissions("santa.change_configuration")
+        response = self.put_json_data(reverse('santa_api:configuration', args=(config.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        config.refresh_from_db()
+        self.assertEqual(config.name, new_name)
+
+    def test_update_configuration_name_exists(self):
+        config0 = self.force_configuration()
+        config1 = self.force_configuration()
+        data = {'name': config0.name}
+        self.set_permissions("santa.change_configuration")
+        response = self.put_json_data(reverse('santa_api:configuration', args=(config1.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        response_j = response.json()
+        self.assertEqual(response_j["name"][0], "configuration with this name already exists.")
+
+    # delete configuration
+
+    def test_delete_configuration(self):
+        config = self.force_configuration()
+        self.set_permissions("santa.delete_configuration")
+        response = self.delete(reverse('santa_api:configuration', args=(config.pk,)))
+        self.assertEqual(response.status_code, 204)
+
+    def test_delete_configuration_error(self):
+        config = self.force_configuration()
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
+        Enrollment.objects.create(configuration=config, secret=enrollment_secret)
+        self.set_permissions("santa.delete_configuration")
+        response = self.delete(reverse('santa_api:configuration', args=(config.pk,)))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), ["This configuration cannot be deleted"])
