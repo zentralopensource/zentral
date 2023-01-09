@@ -1,4 +1,5 @@
 import logging
+from zentral.contrib.mdm.apps_books import location_cache
 from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform
 from .base import register_command, Command
 
@@ -28,8 +29,24 @@ class RemoveApplication(Command):
         return {"Identifier": asset.bundle_id}
 
     def command_acknowledged(self):
+        # cleanup
         DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device,
                                       artifact_version__artifact=self.artifact).delete()
+        # disassociate asset
+        # TODO async?
+        location_asset = self.artifact_version.store_app.location_asset
+        location = location_asset.location
+        asset = location_asset.asset
+        _, client = location_cache.get(location.mdm_info_id)
+        try:
+            response = client.post_device_disassociation(self.enrolled_device.serial_number, asset)
+        except Exception:
+            logger.exception("enrolled device %s asset %s/%s/%s: could not post disassociation",
+                             self.enrolled_device.serial_number, location.name, asset.adam_id, asset.pricing_param)
+        else:
+            if not response.get("eventId"):
+                logger.warning("enrolled device %s asset %s/%s/%s: disassociation response without eventId",
+                               self.enrolled_device.serial_number, location.name, asset.adam_id, asset.pricing_param)
 
 
 register_command(RemoveApplication)
