@@ -13,8 +13,8 @@ from zentral.contrib.inventory.models import File, Tag
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .events import post_santa_ruleset_update_events
 from .models import Configuration, Rule, RuleSet, Target, translate_rule_policy
-from .serializers import (RuleSerializer, RuleSetUpdateSerializer, build_file_tree_from_santa_fileinfo,
-                          ConfigurationSerializer)
+from .serializers import (RuleSerializer, RuleSetUpdateSerializer, ConfigurationSerializer,
+                          build_file_tree_from_santa_fileinfo)
 from .tasks import export_targets
 
 
