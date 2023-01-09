@@ -1789,7 +1789,13 @@ class ArtifactVersionManager(models.Manager):
         cursor = connection.cursor()
         cursor.execute(query, args)
         pk_list = [t[0] for t in cursor.fetchall()]
-        qs = self.select_related("artifact", "profile", "enterprise_app", "store_app__location_asset__asset")
+        qs = self.select_related(
+            "artifact",
+            "profile",
+            "enterprise_app",
+            "store_app__location_asset__asset",
+            "store_app__location_asset__location"
+        )
         if fetch_all:
             artifact_version_list = list(qs.filter(pk__in=pk_list))
             artifact_version_list.sort(key=lambda artifact_version: pk_list.index(artifact_version.pk))
