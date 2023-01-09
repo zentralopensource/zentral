@@ -10,6 +10,12 @@ from .forms import test_sha256, test_team_id
 logger = logging.getLogger("zentral.contrib.santa.serializers")
 
 
+class ConfigurationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Configuration
+        fields = '__all__'
+
+
 class RuleTargetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Target
