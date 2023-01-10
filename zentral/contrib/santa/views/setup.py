@@ -2,7 +2,7 @@ import logging
 from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db import transaction
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
@@ -12,8 +12,7 @@ from zentral.contrib.inventory.models import Certificate, File
 from zentral.contrib.santa.events import post_santa_rule_update_event
 from zentral.contrib.santa.forms import (BinarySearchForm, BundleSearchForm, CertificateSearchForm, TeamIDSearchForm,
                                          ConfigurationForm, EnrollmentForm, RuleForm, RuleSearchForm, UpdateRuleForm)
-from zentral.contrib.santa.models import Bundle, Configuration, Enrollment, Rule, Target
-from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
+from zentral.contrib.santa.models import Bundle, Configuration, Rule, Target
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
@@ -178,25 +177,6 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
             return self.forms_valid(secret_form, enrollment_form)
         else:
             return self.forms_invalid(secret_form, enrollment_form)
-
-
-class EnrollmentConfigurationView(PermissionRequiredMixin, View):
-    permission_required = "santa.view_enrollment"
-    response_type = None
-
-    def get(self, request, *args, **kwargs):
-        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], configuration__pk=kwargs["configuration_pk"])
-        if self.response_type == "plist":
-            filename, content = build_configuration_plist(enrollment)
-            content_type = "application/x-plist"
-        elif self.response_type == "configuration_profile":
-            filename, content = build_configuration_profile(enrollment)
-            content_type = "application/octet-stream"
-        else:
-            raise ValueError("Unknown enrollment configuration response type: {}".format(self.response_type))
-        response = HttpResponse(content, content_type)
-        response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
-        return response
 
 
 # rules

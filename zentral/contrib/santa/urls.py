@@ -32,12 +32,6 @@ urlpatterns = [
     path('configurations/<int:pk>/enrollments/create/',
          views.CreateEnrollmentView.as_view(),
          name='create_enrollment'),
-    path('configurations/<int:configuration_pk>/enrollments/<int:pk>/configuration_plist/',
-         views.EnrollmentConfigurationView.as_view(response_type="plist"),
-         name='enrollment_configuration_plist'),
-    path('configurations/<int:configuration_pk>/enrollments/<int:pk>/configuration_profile/',
-         views.EnrollmentConfigurationView.as_view(response_type="configuration_profile"),
-         name='enrollment_configuration_profile'),
 
     # rules
     path('configurations/<int:configuration_pk>/rules/',
