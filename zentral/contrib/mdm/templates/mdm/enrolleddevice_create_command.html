@@ -7,10 +7,10 @@
   <li><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
   <li><a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a></li>
-  <li class="active">Create custom command</li>
+  <li class="active">Create {{ command_class_display }} command</li>
 </ol>
 
-<h3>Create custom command</h3>
+<h3>Create {{ command_class_display }} command</h3>
 
 <form method="post">{% csrf_token %}
   {{ form|bootstrap }}

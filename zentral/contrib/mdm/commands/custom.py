@@ -2,33 +2,13 @@ import logging
 import plistlib
 from django import forms
 from django.core.exceptions import ValidationError
-from .base import register_command, Command
+from .base import register_command, Command, CommandBaseForm
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.custom")
 
 
-class CustomCommand(Command):
-    db_name = "CustomCommand"
-    store_result = True
-    reschedule_notnow = True
-
-    @staticmethod
-    def verify_channel_and_device(channel, enrolled_device):
-        return True
-
-    def load_kwargs(self):
-        self.command = plistlib.loads(self.db_command.kwargs["command"].encode("utf-8"))
-        self.request_type = self.command.pop("RequestType")
-
-    def build_command(self):
-        return self.command
-
-
-register_command(CustomCommand)
-
-
-class CustomCommandForm(forms.Form):
+class CustomCommandForm(CommandBaseForm):
     command = forms.CharField(
         widget=forms.Textarea(attrs={"rows": 10}),
         help_text="The property list representation of the command (RequestType and optional keyword arguments)."
@@ -51,3 +31,28 @@ class CustomCommandForm(forms.Form):
                 raise ValidationError("Missing or empty RequestType")
             cmd = plistlib.dumps(loaded_cmd).decode("utf-8")
         return cmd
+
+    def get_command_kwargs(self):
+        return {"command": self.cleaned_data["command"]}
+
+
+class CustomCommand(Command):
+    db_name = "CustomCommand"
+    display_name = "Custom"
+    store_result = True
+    reschedule_notnow = True
+    form_class = CustomCommandForm
+
+    @staticmethod
+    def verify_channel_and_device(channel, enrolled_device):
+        return True
+
+    def load_kwargs(self):
+        self.command = plistlib.loads(self.db_command.kwargs["command"].encode("utf-8"))
+        self.request_type = self.command.pop("RequestType")
+
+    def build_command(self):
+        return self.command
+
+
+register_command(CustomCommand)

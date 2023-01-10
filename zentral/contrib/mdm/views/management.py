@@ -15,8 +15,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from realms.models import RealmUser
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
-from zentral.contrib.mdm.commands.base import load_command
-from zentral.contrib.mdm.commands.custom import CustomCommand, CustomCommandForm
+from zentral.contrib.mdm.commands.base import load_command, registered_commands
 from zentral.contrib.mdm.declarations import update_blueprint_activation, update_blueprint_declaration_items
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
@@ -30,6 +29,7 @@ from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintA
                                        UserEnrollmentForm, UserEnrollmentEnrollForm,
                                        UploadEnterpriseAppForm, UploadProfileForm)
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, Asset, Blueprint, BlueprintArtifact,
+                                        Channel,
                                         DEPDevice, DEPEnrollment,
                                         DeviceCommand, UserCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
@@ -1222,27 +1222,45 @@ class PokeEnrolledUserView(PermissionRequiredMixin, View):
         return redirect(enrolled_user)
 
 
-class CreateEnrolledDeviceCustomCommandView(PermissionRequiredMixin, FormView):
+class CreateEnrolledDeviceCommandView(PermissionRequiredMixin, FormView):
     permission_required = "mdm.add_devicecommand"
-    form_class = CustomCommandForm
-    template_name = "mdm/enrolleddevice_create_custom_command.html"
+    command_name = None
+    template_name = "mdm/enrolleddevice_create_command.html"
 
     def dispatch(self, request, *args, **kwargs):
         self.enrolled_device = get_object_or_404(
             EnrolledDevice,
             pk=kwargs["pk"]
         )
+        try:
+            self.command_class = registered_commands[self.command_name]
+        except KeyError:
+            # should not happen
+            raise SuspiciousOperation("Unknown command model class: %s", self.command_name)
         return super().dispatch(request, *args, **kwargs)
+
+    def get_form_class(self):
+        return self.command_class.form_class
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["channel"] = Channel.Device
+        kwargs["enrolled_device"] = self.enrolled_device
+        return kwargs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx["command_class_display"] = self.command_class.get_display_name().lower()
         ctx["enrolled_device"] = self.enrolled_device
         return ctx
 
     def form_valid(self, form):
-        command = form.cleaned_data["command"]
-        CustomCommand.create_for_device(self.enrolled_device, kwargs={"command": command}, queue=True)
-        messages.info(self.request, "Custom command successfully created")
+        self.command_class.create_for_device(
+            self.enrolled_device,
+            kwargs=form.get_command_kwargs(),
+            queue=True,
+        )
+        messages.info(self.request, f"{self.command_class.get_display_name()} command successfully created")
         return redirect(self.enrolled_device)
 
 

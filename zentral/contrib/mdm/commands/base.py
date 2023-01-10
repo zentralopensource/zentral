@@ -2,6 +2,7 @@ from datetime import timedelta
 import logging
 import plistlib
 import uuid
+from django import forms
 from django.http import HttpResponse
 from django.utils import timezone
 from zentral.contrib.mdm.models import Channel, CommandStatus, DeviceCommand, UserCommand
@@ -13,13 +14,19 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.base")
 class Command:
     request_type = None
     db_name = None
+    display_name = None
     artifact_operation = None
     store_result = False
     reschedule_notnow = False
+    form_class = None
 
     @classmethod
     def get_db_name(cls):
         return cls.db_name or cls.request_type
+
+    @classmethod
+    def get_display_name(cls):
+        return cls.display_name or cls.get_db_name()
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
@@ -190,3 +197,14 @@ def get_command(channel, uuid):
         logger.error("Unknown command: %s %s", channel.name, uuid)
         return
     return load_command(db_command)
+
+
+class CommandBaseForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        self.channel = kwargs.pop("channel")
+        self.enrolled_device = kwargs.pop("enrolled_device")
+        self.enrolled_user = kwargs.pop("enrolled_user", None)
+        super().__init__(*args, **kwargs)
+
+    def get_command_kwargs(self):
+        return {}
