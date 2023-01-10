@@ -146,7 +146,7 @@
 </table>
 
 {% if commands_count > 1 %}
-<p><a href="{% url 'mdm:enrolled_device_commands' object.pk %}">See all commands</a></p>
+<p><a href="{% url 'mdm:enrolled_user_commands' enrolled_device.pk object.pk %}">See all commands</a></p>
 {% endif %}
 
 {% endif %}
