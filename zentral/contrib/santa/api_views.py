@@ -2,6 +2,7 @@ import base64
 
 from django.db import transaction
 from django.db.models import F
+from django.http import HttpResponse
 from django_filters import rest_framework as filters
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -91,15 +92,11 @@ class EnrollmentConfiguration(APIView):
         else:
             raise ValidationError("Unknown enrollment configuration response type: {}".format(self.configuration))
 
-        content_base64 = base64.b64encode(content)
+        response = HttpResponse(content, content_type=content_type)
+        response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
+        response["Content-Length"] = len(content)
 
-        return Response({
-            "configuration": self.configuration,
-            "filename": filename,
-            "content_type": content_type,
-            "base64_content_length": len(content_base64),
-            "base64_content": content_base64
-        })
+        return response
 
 
 class EnrollmentConfigurationPlist(EnrollmentConfiguration):
