@@ -3,7 +3,9 @@ from itertools import chain
 import logging
 import os.path
 from rest_framework import serializers
-from .models import Bundle, Configuration, Rule, Target
+from zentral.contrib.inventory.models import EnrollmentSecret
+from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from .models import Bundle, Configuration, Rule, Target, Enrollment
 from .forms import test_sha256, test_team_id
 
 
@@ -14,6 +16,30 @@ class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
         fields = '__all__'
+
+
+class EnrollmentSerializer(serializers.ModelSerializer):
+    secret = EnrollmentSecretSerializer(many=False)
+    enrolled_machines_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Enrollment
+        fields = '__all__'
+
+    def get_enrolled_machines_count(self, obj):
+        return obj.enrolledmachine_set.count()
+
+    def create(self, validated_data):
+        secret_data = validated_data.pop('secret')
+        secret = EnrollmentSecret.objects.create(**secret_data)
+        enrollment = Enrollment.objects.create(secret=secret, **validated_data)
+        return enrollment
+
+    def update(self, instance, validated_data):
+        secret_serializer = self.fields["secret"]
+        secret_data = validated_data.pop('secret')
+        secret_serializer.update(instance.secret, secret_data)
+        return super().update(instance, validated_data)
 
 
 class RuleTargetSerializer(serializers.ModelSerializer):
