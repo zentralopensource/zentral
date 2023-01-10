@@ -15,6 +15,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from realms.models import RealmUser
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
+from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.commands.custom import CustomCommand, CustomCommandForm
 from zentral.contrib.mdm.declarations import update_blueprint_activation, update_blueprint_declaration_items
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
@@ -30,7 +31,7 @@ from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintA
                                        UploadEnterpriseAppForm, UploadProfileForm)
 from zentral.contrib.mdm.models import (Artifact, ArtifactType, Asset, Blueprint, BlueprintArtifact,
                                         DEPDevice, DEPEnrollment,
-                                        DeviceCommand,
+                                        DeviceCommand, UserCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         OTAEnrollment, OTAEnrollmentSession,
                                         SCEPConfig,
@@ -1052,7 +1053,10 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
                        .all()
                        .order_by("-created_at")
         )
-        ctx["commands"] = commands_qs[:self.max_command_number]
+        ctx["loaded_commands"] = [
+            load_command(cmd)
+            for cmd in commands_qs[:self.max_command_number]
+        ]
         ctx["commands_count"] = commands_qs.count()
         ctx["enrollment_session_info_list"] = list(self.object.iter_enrollment_session_info())
         ctx["enrollment_session_info_count"] = len(ctx["enrollment_session_info_list"])
@@ -1080,6 +1084,7 @@ class EnrolledDeviceCommandsView(PermissionRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["enrolled_device"] = self.enrolled_device
         page = ctx["page_obj"]
+        ctx["loaded_commands"] = (load_command(cmd) for cmd in page)
         if page.has_next():
             qd = self.request.GET.copy()
             qd['page'] = page.next_page_number()
@@ -1122,6 +1127,7 @@ class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateView):
 class EnrolledUserView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_enrolleduser"
     model = EnrolledUser
+    max_command_number = 10
 
     def get_queryset(self):
         return (super().get_queryset().select_related("enrolled_device")
@@ -1135,11 +1141,59 @@ class EnrolledUserView(PermissionRequiredMixin, DetailView):
                                                  .all()
                                                  .order_by("-updated_at"))
         ctx["installed_artifacts_count"] = ctx["installed_artifacts"].count()
-        ctx["commands"] = (self.object.commands
-                                      .select_related("artifact_version__artifact")
-                                      .all()
-                                      .order_by("-created_at"))
-        ctx["commands_count"] = ctx["commands"].count()
+        commands_qs = (
+            self.object.commands
+                       .select_related("artifact_version__artifact")
+                       .all()
+                       .order_by("-created_at")
+        )
+        ctx["loaded_commands"] = [
+            load_command(cmd)
+            for cmd in commands_qs[:self.max_command_number]
+        ]
+        ctx["commands_count"] = commands_qs.count()
+        return ctx
+
+
+class EnrolledUserCommandsView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_enrolleduser"
+    model = UserCommand
+    paginate_by = 50
+
+    def get(self, request, *args, **kwargs):
+        self.enrolled_user = get_object_or_404(
+            EnrolledUser.objects.select_related("enrolled_device"),
+            enrolled_device__pk=kwargs["device_pk"],
+            pk=kwargs["pk"]
+        )
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return (
+            self.enrolled_user.commands
+                              .select_related("artifact_version__artifact")
+                              .all()
+                              .order_by("-created_at")
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["enrolled_user"] = self.enrolled_user
+        ctx["enrolled_device"] = self.enrolled_user.enrolled_device
+        page = ctx["page_obj"]
+        ctx["loaded_commands"] = (load_command(cmd) for cmd in page)
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            ctx['reset_link'] = "?{}".format(qd.urlencode())
         return ctx
 
 
@@ -1190,6 +1244,19 @@ class DownloadEnrolledDeviceCommandResultView(PermissionRequiredMixin, View):
             content_type="application/x-plist",
             as_attachment=True,
             filename=f"device_command_{command.uuid}-result.plist"
+        )
+
+
+class DownloadEnrolledUserCommandResultView(PermissionRequiredMixin, View):
+    permission_required = "mdm.view_usercommand"
+
+    def get(self, request, *args, **kwargs):
+        command = get_object_or_404(UserCommand, uuid=kwargs["uuid"], result__isnull=False)
+        return FileResponse(
+            io.BytesIO(command.result),
+            content_type="application/x-plist",
+            as_attachment=True,
+            filename=f"user_command_{command.uuid}-result.plist"
         )
 
 

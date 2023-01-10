@@ -7,6 +7,7 @@
   <li><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
   <li><a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device }}</a></li>
+  <li><a href="{% url 'mdm:enrolled_user' enrolled_device.pk enrolled_user.pk %}">User {{ enrolled_user }}</a></li>
   {% if reset_link %}
   <li><a href="{{ reset_link }}">Commands</a></li>
   {% else %}
@@ -15,7 +16,7 @@
   <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h3>Device command{{ page_obj.paginator.count|pluralize }}</h3>
+<h3>User command{{ page_obj.paginator.count|pluralize }}</h3>
 
 {% if next_url or previous_url %}
 <nav>
@@ -72,7 +73,7 @@
       <td>
         {{ command.get_status_display|default:"-" }}
         {% if command.result %}
-        <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_device_command_result' command.uuid %}">
+        <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_user_command_result' command.uuid %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
         </a>
         {% endif %}

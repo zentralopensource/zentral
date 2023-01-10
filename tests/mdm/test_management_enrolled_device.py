@@ -135,25 +135,47 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "CustomCommand (DeviceInformation)")
         self.assertEqual(response.context["commands_count"], 1)
-        self.assertEqual(response.context["commands"].count(), 1)
+        self.assertEqual(len(response.context["loaded_commands"]), 1)
         self.assertNotContains(response, "See all commands")
 
     def test_enrolled_device_top_10_command(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
         self._login("mdm.view_enrolleddevice")
+        first_command = second_command = None
         for i in range(11):
-            CustomCommand.create_for_device(
+            cmd = CustomCommand.create_for_device(
                 session.enrolled_device,
                 kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
                 queue=True
             )
+            if i == 10:
+                first_command = cmd
+                result = {
+                    "CommandUUID": str(cmd.uuid),
+                    "Status": "Acknowledged",
+                    "UDID": device_udid
+                }
+                cmd.db_command.result = plistlib.dumps(result)
+                cmd.db_command.save()
+            elif i == 9:
+                second_command = cmd
         response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "CustomCommand (DeviceInformation)")
         self.assertEqual(response.context["commands_count"], 11)
-        self.assertEqual(response.context["commands"].count(), 10)
+        self.assertEqual(len(response.context["loaded_commands"]), 10)
         self.assertContains(response, "See all commands")
+        self.assertContains(
+            response,
+            reverse("mdm:download_enrolled_device_command_result", args=(first_command.db_command.uuid,))
+        )
+        self.assertNotContains(
+            response,
+            reverse("mdm:download_enrolled_device_command_result", args=(second_command.db_command.uuid,))
+        )
 
     def test_enrolled_device_apple_silicon_none(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
@@ -204,19 +226,40 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         get_paginate_by.return_value = 2
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
         self._login("mdm.view_enrolleddevice")
+        first_command = second_command = None
         for i in range(5):
-            CustomCommand.create_for_device(
+            cmd = CustomCommand.create_for_device(
                 session.enrolled_device,
                 kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
                 queue=True
             )
+            if i == 2:
+                first_command = cmd
+                result = {
+                    "CommandUUID": str(cmd.uuid),
+                    "Status": "Acknowledged",
+                    "UDID": device_udid
+                }
+                cmd.db_command.result = plistlib.dumps(result)
+                cmd.db_command.save()
+            elif i == 1:
+                second_command = cmd
         response = self.client.get(
             reverse("mdm:enrolled_device_commands", args=(session.enrolled_device.pk,)),
             {"page": 2}
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/devicecommand_list.html")
+        self.assertContains(response, "CustomCommand (DeviceInformation)")
         self.assertContains(response, "page 2 of 3")
+        self.assertContains(
+            response,
+            reverse("mdm:download_enrolled_device_command_result", args=(first_command.db_command.uuid,))
+        )
+        self.assertNotContains(
+            response,
+            reverse("mdm:download_enrolled_device_command_result", args=(second_command.db_command.uuid,))
+        )
 
     # create custom command
 

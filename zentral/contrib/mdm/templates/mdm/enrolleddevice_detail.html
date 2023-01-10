@@ -314,10 +314,11 @@
     </tr>
   </thead>
   <tbody>
-    {% for command in commands %}
+    {% for loaded_command in loaded_commands %}
+    {% with loaded_command.db_command as command %}
     <tr>
       <td>
-        {{ command.name }}
+        {{ command.name }}{% if command.name != loaded_command.request_type %} ({{ loaded_command.request_type }}){% endif %}
       </td>
       <td>
         {% if command.artifact_version %}
@@ -349,6 +350,7 @@
         {% endif %}
       </td>
     </tr>
+    {% endwith %}
     {% endfor %}
   </tbody>
 </table>

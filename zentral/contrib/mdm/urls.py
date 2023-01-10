@@ -190,37 +190,45 @@ urlpatterns = [
          name="delete_scep_config"),
 
     # enrolled devices
-    path('enrolled_devices/',
+    path('devices/',
          views.EnrolledDeviceListView.as_view(),
          name="enrolled_devices"),
-    path('enrolled_devices/<int:pk>/',
+    path('devices/<int:pk>/',
          views.EnrolledDeviceView.as_view(),
          name="enrolled_device"),
-    path('enrolled_devices/<int:pk>/commands/',
+    path('devices/<int:pk>/commands/',
          views.EnrolledDeviceCommandsView.as_view(),
          name="enrolled_device_commands"),
-    path('enrolled_devices/<int:pk>/poke/',
+    path('devices/<int:pk>/poke/',
          views.PokeEnrolledDeviceView.as_view(),
          name="poke_enrolled_device"),
-    path('enrolled_devices/<int:pk>/change_blueprint/',
+    path('devices/<int:pk>/change_blueprint/',
          views.ChangeEnrolledDeviceBlueprintView.as_view(),
          name="change_enrolled_device_blueprint"),
 
+    # enrolled device commands
+    path('devices/<int:pk>/commands/custom/create/',
+         views.CreateEnrolledDeviceCustomCommandView.as_view(),
+         name="create_enrolled_device_custom_command"),
+    path('devices/commands/<uuid:uuid>/result/',
+         views.DownloadEnrolledDeviceCommandResultView.as_view(),
+         name="download_enrolled_device_command_result"),
+
     # enrolled device users
-    path('enrolled_devices/<int:device_pk>/enrolled_users/<int:pk>/',
+    path('devices/<int:device_pk>/users/<int:pk>/',
          views.EnrolledUserView.as_view(),
          name="enrolled_user"),
-    path('enrolled_devices/<int:device_pk>/enrolled_users/<int:pk>/poke/',
+    path('devices/<int:device_pk>/users/<int:pk>/commands/',
+         views.EnrolledUserCommandsView.as_view(),
+         name="enrolled_user_commands"),
+    path('devices/<int:device_pk>/users/<int:pk>/poke/',
          views.PokeEnrolledUserView.as_view(),
          name="poke_enrolled_user"),
 
-    # enrolled device commands
-    path('enrolled_devices/<int:pk>/commands/custom/create/',
-         views.CreateEnrolledDeviceCustomCommandView.as_view(),
-         name="create_enrolled_device_custom_command"),
-    path('enrolled_devices/commands/<uuid:uuid>/result/',
-         views.DownloadEnrolledDeviceCommandResultView.as_view(),
-         name="download_enrolled_device_command_result"),
+    # enrolled user commands
+    path('users/commands/<uuid:uuid>/result/',
+         views.DownloadEnrolledUserCommandResultView.as_view(),
+         name="download_enrolled_user_command_result"),
 
     # DEP devices
     path('dep/devices/<int:pk>/assign_profile/',

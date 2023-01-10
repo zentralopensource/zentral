@@ -104,10 +104,11 @@
     </tr>
   </thead>
   <tbody>
-    {% for command in commands %}
+    {% for loaded_command in loaded_commands %}
+    {% with loaded_command.db_command as command %}
     <tr>
       <td>
-        {{ command.name }}
+        {{ command.name }}{% if command.name != loaded_command.request_type %} ({{ loaded_command.request_type }}){% endif %}
       </td>
       <td>
         {% if command.artifact_version %}
@@ -130,11 +131,24 @@
       <td>
         {{ command.result_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
       </td>
-      <td>{{ command.get_status_display }}</td>
+      <td>
+        {{ command.get_status_display|default:"-" }}
+        {% if command.result %}
+        <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_user_command_result' command.uuid %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+      </td>
     </tr>
+    {% endwith %}
     {% endfor %}
   </tbody>
 </table>
+
+{% if commands_count > 1 %}
+<p><a href="{% url 'mdm:enrolled_device_commands' object.pk %}">See all commands</a></p>
+{% endif %}
+
 {% endif %}
 
 {% endblock %}
