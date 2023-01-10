@@ -802,6 +802,12 @@ class CreateBlueprintView(PermissionRequiredMixin, CreateView):
               "collect_certificates",
               "collect_profiles")
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        update_blueprint_activation(self.object, commit=False)
+        update_blueprint_declaration_items(self.object, commit=True)
+        return response
+
 
 class BlueprintView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_blueprint"
@@ -830,6 +836,12 @@ class UpdateBlueprintView(PermissionRequiredMixin, UpdateView):
               "collect_apps",
               "collect_certificates",
               "collect_profiles")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        update_blueprint_activation(self.object, commit=False)
+        update_blueprint_declaration_items(self.object, commit=True)
+        return response
 
 
 # SCEP Configurations
