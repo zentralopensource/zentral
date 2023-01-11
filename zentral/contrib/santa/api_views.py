@@ -56,6 +56,7 @@ class EnrollmentList(generics.ListCreateAPIView):
     queryset = Enrollment.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
+    filterset_fields = ('configuration_id',)
 
 
 class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -79,23 +80,18 @@ class EnrollmentConfiguration(APIView):
     """
     permission_required = "santa.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
-    configuration = None
+    content_type = None
+
+    def get_content(self, enrollment):
+        filename, content = build_configuration_plist(enrollment)
+        return filename, self.content_type, content
 
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"])
-        if self.configuration == "configuration_plist":
-            filename, content = build_configuration_plist(enrollment)
-            content_type = "application/x-plist"
-        elif self.configuration == "configuration_profile":
-            filename, content = build_configuration_profile(enrollment)
-            content_type = "application/octet-stream"
-        else:
-            raise ValidationError("Unknown enrollment configuration response type: {}".format(self.configuration))
-
+        filename, content_type, content = self.get_content(enrollment)
         response = HttpResponse(content, content_type=content_type)
         response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
         response["Content-Length"] = len(content)
-
         return response
 
 
@@ -103,14 +99,20 @@ class EnrollmentConfigurationPlist(EnrollmentConfiguration):
     """
     Download enrollment plist file
     """
-    configuration = "configuration_plist"
+
+    def get_content(self, enrollment):
+        filename, content = build_configuration_plist(enrollment)
+        return filename, "application/x-plist", content
 
 
 class EnrollmentConfigurationProfile(EnrollmentConfiguration):
     """
     Download enrollment configuration_profile
     """
-    configuration = "configuration_profile"
+
+    def get_content(self, enrollment):
+        filename, content = build_configuration_profile(enrollment)
+        return filename, "application/octet-stream", content
 
 
 class IngestFileInfo(APIView):
