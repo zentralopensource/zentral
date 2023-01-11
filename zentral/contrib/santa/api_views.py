@@ -1,6 +1,10 @@
+import base64
+
 from django.db import transaction
 from django.db.models import F
+from django.http import HttpResponse
 from django_filters import rest_framework as filters
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import generics, status
@@ -10,11 +14,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from zentral.contrib.inventory.models import File, Tag
+from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .events import post_santa_ruleset_update_events
-from .models import Configuration, Rule, RuleSet, Target, translate_rule_policy
+from .models import Configuration, Rule, RuleSet, Target, Enrollment, translate_rule_policy
 from .serializers import (RuleSerializer, RuleSetUpdateSerializer, ConfigurationSerializer,
-                          build_file_tree_from_santa_fileinfo)
+                          EnrollmentSerializer, build_file_tree_from_santa_fileinfo)
 from .tasks import export_targets
 
 
@@ -42,6 +47,71 @@ class ConfigurationDetail(generics.RetrieveUpdateDestroyAPIView):
             raise ValidationError('This configuration cannot be deleted')
         else:
             return super().perform_destroy(instance)
+
+
+class EnrollmentList(generics.ListCreateAPIView):
+    """
+    List all Enrollments or create a new Enrollment
+    """
+    queryset = Enrollment.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = EnrollmentSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ('configuration_id',)
+
+
+class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update or delete an Enrollment instance.
+    """
+    queryset = Enrollment.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = EnrollmentSerializer
+
+    def perform_destroy(self, instance):
+        if not instance.can_be_deleted():
+            raise ValidationError('This enrollment cannot be deleted')
+        else:
+            return super().perform_destroy(instance)
+
+
+class EnrollmentConfiguration(APIView):
+    """
+    base enrollment configuration class. To be subclassed.
+    """
+    permission_required = "santa.view_enrollment"
+    permission_classes = [DjangoPermissionRequired]
+
+    def get_content(self, enrollment):
+        raise NotImplementedError
+
+    def get(self, request, *args, **kwargs):
+        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"])
+        filename, content_type, content = self.get_content(enrollment)
+        response = HttpResponse(content, content_type=content_type)
+        response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
+        response["Content-Length"] = len(content)
+        return response
+
+
+class EnrollmentConfigurationPlist(EnrollmentConfiguration):
+    """
+    Download enrollment plist file
+    """
+
+    def get_content(self, enrollment):
+        filename, content = build_configuration_plist(enrollment)
+        return filename, "application/x-plist", content
+
+
+class EnrollmentConfigurationProfile(EnrollmentConfiguration):
+    """
+    Download enrollment configuration_profile
+    """
+
+    def get_content(self, enrollment):
+        filename, content = build_configuration_profile(enrollment)
+        return filename, "application/octet-stream", content
 
 
 class IngestFileInfo(APIView):

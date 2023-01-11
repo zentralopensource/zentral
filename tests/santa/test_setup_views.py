@@ -352,60 +352,44 @@ class SantaSetupViewsTestCase(TestCase):
         # response does not contain enrollment secret meta business unit name
         self.assertNotContains(response, enrollment.secret.meta_business_unit.name)
         # response does not contain link to download enrollment configuration plist
-        self.assertNotContains(response, reverse("santa:enrollment_configuration_plist",
-                                                 args=(configuration.pk, enrollment.pk)))
+        self.assertNotContains(response, reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
         # response does not contain link to download enrollment configuration profile
-        self.assertNotContains(response, reverse("santa:enrollment_configuration_profile",
-                                                 args=(configuration.pk, enrollment.pk)))
+        self.assertNotContains(response, reverse("santa_api:enrollment_profile", args=(enrollment.pk,)))
         self._login("santa.view_configuration", "santa.view_enrollment")
         response = self.client.get(configuration.get_absolute_url())
         # response contains enrollment secret meta business unit name
         self.assertContains(response, enrollment.secret.meta_business_unit.name)
         # response contains link to download enrollment configuration plist
-        self.assertContains(response, reverse("santa:enrollment_configuration_plist",
-                                              args=(configuration.pk, enrollment.pk)))
+        self.assertContains(response, reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
         # response contains link to download enrollment configuration profile
-        self.assertContains(response, reverse("santa:enrollment_configuration_profile",
-                                              args=(configuration.pk, enrollment.pk)))
-
-    def test_enrollment_plist_redirect(self):
-        configuration, enrollment = self._force_enrollment()
-        self._login_redirect(reverse("santa:enrollment_configuration_plist", args=(configuration.pk, enrollment.pk)))
+        self.assertContains(response, reverse("santa_api:enrollment_profile", args=(enrollment.pk,)))
 
     def test_enrollment_plist_permission_denied(self):
-        configuration, enrollment = self._force_enrollment()
+        _, enrollment = self._force_enrollment()
         self._login()
-        url = reverse("santa:enrollment_configuration_plist", args=(configuration.pk, enrollment.pk))
-        response = self.client.get(url)
+        response = self.client.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_plist(self):
         configuration, enrollment = self._force_enrollment()
         self._login("santa.view_enrollment")
-        url = reverse("santa:enrollment_configuration_plist", args=(configuration.pk, enrollment.pk))
-        response = self.client.get(url)
+        response = self.client.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/x-plist")
         plist_config = plistlib.loads(response.content)
         self.assertTrue(plist_config["SyncBaseURL"].endswith(f"/santa/sync/{enrollment.secret.secret}/"))
         self.assertEqual(plist_config["ClientMode"], configuration.client_mode)
 
-    def test_enrollment_config_profile_redirect(self):
-        configuration, enrollment = self._force_enrollment()
-        self._login_redirect(reverse("santa:enrollment_configuration_profile", args=(configuration.pk, enrollment.pk)))
-
     def test_enrollment_config_profile_permission_denied(self):
-        configuration, enrollment = self._force_enrollment()
+        _, enrollment = self._force_enrollment()
         self._login()
-        url = reverse("santa:enrollment_configuration_profile", args=(configuration.pk, enrollment.pk))
-        response = self.client.get(url)
+        response = self.client.get(reverse("santa_api:enrollment_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_profile(self):
-        configuration, enrollment = self._force_enrollment()
+        _, enrollment = self._force_enrollment()
         self._login("santa.view_enrollment")
-        url = reverse("santa:enrollment_configuration_profile", args=(configuration.pk, enrollment.pk))
-        response = self.client.get(url)
+        response = self.client.get(reverse("santa_api:enrollment_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
 

@@ -166,14 +166,14 @@
         <a class="btn btn-default download-tool"
            aria-label="Download Santa configuration plist"
            title="Santa configuration plist"
-           href="{% url 'santa:enrollment_configuration_plist' enrollment.configuration.id enrollment.id %}">
+           href="{% url 'santa_api:enrollment_plist' enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
           plist
         </a>
         <a class="btn btn-default download-tool"
            aria-label="Download Santa configuration profile"
            title="Santa configuration profile"
-           href="{% url 'santa:enrollment_configuration_profile' enrollment.configuration.id enrollment.id %}">
+           href="{% url 'santa_api:enrollment_profile' enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
           configuration profile
         </a>

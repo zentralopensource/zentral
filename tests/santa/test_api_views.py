@@ -10,7 +10,9 @@ from rest_framework import status
 import yaml
 from accounts.models import User, APIToken
 from zentral.contrib.inventory.models import Certificate, File, EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment
+from zentral.utils.payloads import get_payload_identifier
 
 
 class APIViewsTestCase(TestCase):
@@ -34,6 +36,11 @@ class APIViewsTestCase(TestCase):
 
     def force_configuration(self):
         return Configuration.objects.create(name=get_random_string(12))
+
+    def force_enrollment(self):
+        configuration = self.force_configuration()
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
+        return Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
 
     def set_permissions(self, *permissions):
         if permissions:
@@ -860,3 +867,297 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse('santa_api:configuration', args=(config.pk,)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ["This configuration cannot be deleted"])
+
+    # list enrollments
+
+    def test_get_enrollments_unauthorized(self):
+        self.set_permissions("santa.view_enrollments")
+        response = self.get(reverse("santa_api:enrollments"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollments_permission_denied(self):
+        response = self.get(reverse("santa_api:enrollments"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollments(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollments'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            {'id': enrollment.pk,
+             'configuration': enrollment.configuration.pk,
+             'enrolled_machines_count': 0,
+             'distributor_content_type': None,
+             'distributor_pk': None,
+             'secret': {
+                 'id': enrollment.secret.pk,
+                 'secret': enrollment.secret.secret,
+                 'meta_business_unit': self.mbu.pk,
+                 'tags': [],
+                 'serial_numbers': None,
+                 'udids': None,
+                 'quota': None,
+                 'request_count': 0
+             },
+             'version': 1,
+             'created_at': enrollment.created_at.isoformat(),
+             'updated_at': enrollment.updated_at.isoformat()},
+            response.json()
+        )
+
+    # filter enrollments
+
+    def test_get_enrollments_search(self):
+        enrollment1 = self.force_enrollment()
+        enrollment2 = self.force_enrollment()
+        enrollment3 = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollments'), {'configuration_id': enrollment2.configuration.pk})
+        self.assertEqual(response.status_code, 200)
+        for enrollment in response.json():
+            self.assertNotEqual(enrollment['configuration'], enrollment1.configuration.pk)
+            self.assertEqual(enrollment['configuration'], enrollment2.configuration.pk)
+            self.assertNotEqual(enrollment['configuration'], enrollment3.configuration.pk)
+
+    def test_get_enrollments_search_bad_request(self):
+        for i in range(3):
+            self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollments'), {'configuration_id': 4})
+        self.assertEqual(response.status_code, 400)
+
+    def test_get_enrollments_search_unauthorized(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollments'), {'configuration_id': enrollment.configuration.pk},
+                            include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollments_search_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.get(reverse('santa_api:enrollments'), {'configuration_id': enrollment.configuration.pk})
+        self.assertEqual(response.status_code, 403)
+
+    # get enrollment
+
+    def test_get_enrollment_unauthorized(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse("santa_api:enrollment", args=(enrollment.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollment_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.get(reverse("santa_api:enrollment", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollment_not_found(self):
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse("santa_api:enrollment", args=(1213028133,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_enrollment(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollment', args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'id': enrollment.pk,
+             'configuration': enrollment.configuration.pk,
+             'enrolled_machines_count': 0,
+             'distributor_content_type': None,
+             'distributor_pk': None,
+             'secret': {
+                 'id': enrollment.secret.pk,
+                 'secret': enrollment.secret.secret,
+                 'meta_business_unit': self.mbu.pk,
+                 'tags': [],
+                 'serial_numbers': None,
+                 'udids': None,
+                 'quota': None,
+                 'request_count': 0
+             },
+             'version': 1,
+             'created_at': enrollment.created_at.isoformat(),
+             'updated_at': enrollment.updated_at.isoformat()},
+        )
+
+    # get enrollment configuration
+
+    def test_get_enrollment_plist_unauthorized(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollment_plist_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollment_plist_not_found(self):
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse("santa_api:enrollment_plist", args=(1213028133,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_enrollment_plist(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollment_plist', args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/x-plist')
+        self.assertEqual(response['Content-Disposition'],
+                         f'attachment; filename="zentral_santa_configuration.enrollment_{enrollment.pk}.plist"')
+        self.assertEqual(int(response['Content-Length']), len(response.content))
+
+    def test_get_enrollment_profile_unauthorized(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse("santa_api:enrollment_profile", args=(enrollment.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollment_profile_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.get(reverse("santa_api:enrollment_profile", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollment_profile_not_found(self):
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse("santa_api:enrollment_profile", args=(1213028133,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_enrollment_profile(self):
+        identifier = get_payload_identifier("santa_configuration")
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollment_profile', args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/octet-stream')
+        self.assertEqual(response['Content-Disposition'], f'attachment; filename="{identifier}.mobileconfig"')
+        self.assertEqual(int(response['Content-Length']), len(response.content))
+
+    # create enrollment
+
+    def test_create_enrollment(self):
+        config = self.force_configuration()
+        self.set_permissions("santa.add_enrollment")
+        response = self.post_json_data(
+            reverse('santa_api:enrollments'),
+            {'configuration': config.pk,
+             'secret': {"meta_business_unit": self.mbu.pk}}
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Enrollment.objects.filter(configuration__name=config.name).count(), 1)
+        enrollment = Enrollment.objects.get(configuration__name=config.name)
+        self.assertEqual(enrollment.secret.meta_business_unit, self.mbu)
+
+    def test_create_enrollment_unauthorized(self):
+        data = {'name': 'Configuration0'}
+        self.set_permissions("santa.add_enrollments")
+        response = self.post_json_data(reverse('santa_api:enrollments'), data, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_enrollment_permission_denied(self):
+        data = {'name': 'Configuration0'}
+        response = self.post_json_data(reverse('santa_api:enrollments'), data)
+        self.assertEqual(response.status_code, 403)
+
+    # update enrollment
+
+    def test_update_enrollment(self):
+        enrollment = self.force_enrollment()
+        enrollment_secret = enrollment.secret
+        self.assertEqual(enrollment.secret.quota, None)
+        self.assertEqual(enrollment.secret.serial_numbers, None)
+        secret_data = EnrollmentSecretSerializer(enrollment_secret).data
+        secret_data["id"] = 233333  # to check that there is no enrollment secret creation
+        secret_data["quota"] = 23
+        secret_data["request_count"] = 2331983  # to check that it cannot be updated
+        serial_numbers = [get_random_string(12) for i in range(13)]
+        secret_data["serial_numbers"] = serial_numbers
+        data = {"configuration": enrollment.configuration.pk,
+                "secret": secret_data}
+        self.set_permissions("santa.change_enrollment")
+        response = self.put_json_data(reverse('santa_api:enrollment', args=(enrollment.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.secret, enrollment_secret)
+        self.assertEqual(enrollment.secret.quota, 23)
+        self.assertEqual(enrollment.secret.request_count, 0)
+        self.assertEqual(enrollment.secret.serial_numbers, serial_numbers)
+
+    def test_update_enrollment_unauthorized(self):
+        enrollment = self.force_enrollment()
+        enrollment_secret = enrollment.secret
+        self.assertEqual(enrollment.secret.quota, None)
+        self.assertEqual(enrollment.secret.serial_numbers, None)
+        secret_data = EnrollmentSecretSerializer(enrollment_secret).data
+        secret_data["id"] = 233333  # to check that there is no enrollment secret creation
+        secret_data["quota"] = 23
+        secret_data["request_count"] = 2331983  # to check that it cannot be updated
+        serial_numbers = [get_random_string(12) for i in range(13)]
+        secret_data["serial_numbers"] = serial_numbers
+        data = {"configuration": enrollment.configuration.pk,
+                "secret": secret_data}
+        self.set_permissions("santa.change_enrollment")
+        response = self.put_json_data(reverse('santa_api:enrollment', args=(enrollment.pk,)), data, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_enrollment_permission_denied(self):
+        enrollment = self.force_enrollment()
+        enrollment_secret = enrollment.secret
+        self.assertEqual(enrollment.secret.quota, None)
+        self.assertEqual(enrollment.secret.serial_numbers, None)
+        secret_data = EnrollmentSecretSerializer(enrollment_secret).data
+        secret_data["id"] = 233333  # to check that there is no enrollment secret creation
+        secret_data["quota"] = 23
+        secret_data["request_count"] = 2331983  # to check that it cannot be updated
+        serial_numbers = [get_random_string(12) for i in range(13)]
+        secret_data["serial_numbers"] = serial_numbers
+        data = {"configuration": enrollment.configuration.pk,
+                "secret": secret_data}
+        response = self.put_json_data(reverse('santa_api:enrollment', args=(enrollment.pk,)), data)
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_enrollment_not_found(self):
+        enrollment = self.force_enrollment()
+        enrollment_secret = enrollment.secret
+        self.assertEqual(enrollment.secret.quota, None)
+        self.assertEqual(enrollment.secret.serial_numbers, None)
+        secret_data = EnrollmentSecretSerializer(enrollment_secret).data
+        secret_data["id"] = 233333  # to check that there is no enrollment secret creation
+        secret_data["quota"] = 23
+        secret_data["request_count"] = 2331983  # to check that it cannot be updated
+        serial_numbers = [get_random_string(12) for i in range(13)]
+        secret_data["serial_numbers"] = serial_numbers
+        data = {"configuration": enrollment.configuration.pk,
+                "secret": secret_data}
+        self.set_permissions("santa.change_enrollment")
+        response = self.put_json_data(reverse("santa_api:enrollment", args=(1213028133,)), data)
+        self.assertEqual(response.status_code, 404)
+
+    # delete enrollment
+
+    def test_delete_enrollment(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.delete_enrollment")
+        response = self.delete(reverse('santa_api:enrollment', args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 204)
+
+    def test_delete_enrollment_unauthorized(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.delete_enrollment")
+        response = self.delete(reverse('santa_api:enrollment', args=(enrollment.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_enrollment_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.delete(reverse('santa_api:enrollment', args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_enrollment_not_found(self):
+        self.set_permissions("santa.delete_enrollment")
+        response = self.delete(reverse('santa_api:enrollment', args=(1213028133,)))
+        self.assertEqual(response.status_code, 404)
