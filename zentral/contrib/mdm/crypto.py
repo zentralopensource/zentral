@@ -16,7 +16,7 @@ from OpenSSL import crypto
 # CA verification
 
 
-IPHONE_DEVICE_CA_CN = "Apple iPhone Device CA"
+IPHONE_DEVICE_CA_RFC_4514 = 'CN=Apple iPhone Device CA,OU=Apple iPhone,O=Apple Inc.,C=US'
 IPHONE_DEVICE_CA_FULLCHAIN = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "assets",
@@ -140,8 +140,8 @@ def verify_signed_payload(data):
 
 def verify_iphone_ca_signed_payload(data):
     certificates, payload = verify_signed_payload(data)
-    for certificate_i_cn, certificate_bytes, certificate in certificates:
-        if certificate_i_cn == IPHONE_DEVICE_CA_CN and verify_apple_iphone_device_ca_issuer(certificate_bytes):
+    for certificate_i, certificate_bytes, certificate in certificates:
+        if certificate_i == IPHONE_DEVICE_CA_RFC_4514 and verify_apple_iphone_device_ca_issuer(certificate_bytes):
             return payload
     raise ValueError("Untrusted CA")
 
