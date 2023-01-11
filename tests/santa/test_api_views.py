@@ -906,6 +906,39 @@ class APIViewsTestCase(TestCase):
             response.json()
         )
 
+    # filter enrollments
+
+    def test_get_enrollments_search(self):
+        enrollment1 = self.force_enrollment()
+        enrollment2 = self.force_enrollment()
+        enrollment3 = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollments'), {'configuration_id': enrollment2.configuration.pk})
+        self.assertEqual(response.status_code, 200)
+        for enrollment in response.json():
+            self.assertNotEqual(enrollment['configuration'], enrollment1.configuration.pk)
+            self.assertEqual(enrollment['configuration'], enrollment2.configuration.pk)
+            self.assertNotEqual(enrollment['configuration'], enrollment3.configuration.pk)
+
+    def test_get_enrollments_search_bad_request(self):
+        for i in range(3):
+            self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollments'), {'configuration_id': 4})
+        self.assertEqual(response.status_code, 400)
+
+    def test_get_enrollments_search_unauthorized(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollments'), {'configuration_id': enrollment.configuration.pk},
+                            include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollments_search_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.get(reverse('santa_api:enrollments'), {'configuration_id': enrollment.configuration.pk})
+        self.assertEqual(response.status_code, 403)
+
     # get enrollment
 
     def test_get_enrollment_unauthorized(self):
