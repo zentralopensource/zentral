@@ -56,6 +56,7 @@ class EnrollmentList(generics.ListCreateAPIView):
     queryset = Enrollment.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('configuration_id',)
 
 
@@ -80,11 +81,9 @@ class EnrollmentConfiguration(APIView):
     """
     permission_required = "santa.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
-    content_type = None
 
     def get_content(self, enrollment):
-        filename, content = build_configuration_plist(enrollment)
-        return filename, self.content_type, content
+        raise NotImplementedError
 
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"])
