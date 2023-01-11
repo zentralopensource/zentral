@@ -297,6 +297,7 @@
     </button>
     <ul class="dropdown-menu" aria-labelledby="createCommand">
       <li><a href="{% url 'mdm:create_enrolled_device_custom_command' object.pk %}">Custom command</a></li>
+      <li><a href="{% url 'mdm:create_enrolled_device_device_information_command' object.pk %}">Device information</a></li>
     </ul>
   </div>
   {% endif %}

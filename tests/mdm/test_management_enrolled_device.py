@@ -306,7 +306,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
                     args=(session.enrolled_device.pk,))
         )
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_custom_command.html")
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
 
     def test_create_enrolled_device_custom_command_invalid_property_list(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -362,6 +362,68 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
             {"RequestType": "InstalledApplicationList",
              "ManagedAppsOnly": False}
         )
+
+    # create device information
+
+    def test_enrolled_device_no_device_information_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_device_information_command", args=(session.enrolled_device.pk,))
+        )
+
+    def test_enrolled_device_device_information_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(
+            response,
+            reverse("mdm:create_enrolled_device_device_information_command", args=(session.enrolled_device.pk,))
+        )
+
+    def test_create_enrolled_device_device_information_command_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login_redirect(reverse("mdm:create_enrolled_device_device_information_command",
+                                     args=(session.enrolled_device.pk,)))
+
+    def test_create_enrolled_device_device_information_command_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_device_information_command",
+                    args=(session.enrolled_device.pk,))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enrolled_device_device_information_command_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_device_information_command",
+                    args=(session.enrolled_device.pk,))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+
+    def test_create_enrolled_device_device_information_command_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_device_information_command",
+                    args=(session.enrolled_device.pk,)),
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Device information command successfully created")
+        command = session.enrolled_device.commands.first()
+        self.assertEqual(command.name, "DeviceInformation")
 
     # download custom command result
 

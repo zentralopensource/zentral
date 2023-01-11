@@ -121,6 +121,8 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertEqual(blueprint.collect_apps, 2)
         self.assertEqual(blueprint.collect_certificates, 1)
         self.assertEqual(blueprint.collect_profiles, 0)
+        self.assertIn("Identifier", blueprint.activation)
+        self.assertIn("DeclarationsToken", blueprint.declaration_items)
 
     # blueprint
 
@@ -187,3 +189,5 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertEqual(blueprint2.collect_apps, 1)
         self.assertEqual(blueprint2.collect_certificates, 1)
         self.assertEqual(blueprint2.collect_profiles, 2)
+        self.assertIn("Identifier", blueprint2.activation)
+        self.assertIn("DeclarationsToken", blueprint2.declaration_items)

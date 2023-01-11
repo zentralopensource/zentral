@@ -2,16 +2,22 @@ import logging
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.contrib.mdm.inventory import ms_tree_from_payload, update_inventory_tree
 from zentral.utils.json import prepare_loaded_plist
-from .base import register_command, Command
+from .base import register_command, Command, CommandBaseForm
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.device_information")
 
 
+class DeviceInformationForm(CommandBaseForm):
+    pass
+
+
 class DeviceInformation(Command):
     request_type = "DeviceInformation"
+    display_name = "Device information"
     reschedule_notnow = True
     store_result = True
+    form_class = DeviceInformationForm
 
     # https://developer.apple.com/documentation/devicemanagement/deviceinformationcommand/command/queries
     # Last check 2022-12-29

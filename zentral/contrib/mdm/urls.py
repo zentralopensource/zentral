@@ -208,8 +208,11 @@ urlpatterns = [
 
     # enrolled device commands
     path('devices/<int:pk>/commands/custom/create/',
-         views.CreateEnrolledDeviceCustomCommandView.as_view(),
+         views.CreateEnrolledDeviceCommandView.as_view(command_name="CustomCommand"),
          name="create_enrolled_device_custom_command"),
+    path('devices/<int:pk>/commands/device_information/create/',
+         views.CreateEnrolledDeviceCommandView.as_view(command_name="DeviceInformation"),
+         name="create_enrolled_device_device_information_command"),
     path('devices/commands/<uuid:uuid>/result/',
          views.DownloadEnrolledDeviceCommandResultView.as_view(),
          name="download_enrolled_device_command_result"),
