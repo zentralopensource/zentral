@@ -595,7 +595,7 @@ Nothing was changed:
 * Optional filter parameters:
   * `name`: the name of the configuration target.
 
-Examples:
+Examples
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
@@ -641,7 +641,7 @@ Response:
 * Content-Type: application/json
 * Required permission: `santa.add_configuration`
 
-Example:
+Example
 
 configuration.json
 
@@ -701,7 +701,7 @@ Response:
 
 ### /api/santa/configurations/`<int:pk>`/
 
-#### List Santa configuration.
+#### Get Santa configuration.
 
 * method: GET
 * Content-Type: application/json
@@ -830,7 +830,7 @@ $ curl -X DELETE \
 * Optional filter parameters:
   * `configuration_id`: the id from the configuration target.
 
-Examples:
+Example
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
@@ -880,7 +880,7 @@ Response:
 * Content-Type: application/json
 * Required permission: `santa.add_enrollment`
 
-Example:
+Example
 
 enrollment.json
 
@@ -930,7 +930,7 @@ Response:
 
 ### /api/santa/enrollments/`<int:pk>`/
 
-#### List Santa enrollment.
+#### Get Santa enrollment.
 
 * method: GET
 * Content-Type: application/json
