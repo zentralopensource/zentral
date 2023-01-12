@@ -482,7 +482,7 @@ class DeviceAssignment(models.Model):
 
 class EnrolledDevice(models.Model):
     # device info
-    udid = models.CharField(max_length=36, unique=True)
+    udid = models.CharField(max_length=255, unique=True)
     enrollment_id = models.TextField(null=True)
     serial_number = models.TextField(db_index=True)
     platform = models.CharField(max_length=64, choices=Platform.choices())
@@ -694,7 +694,7 @@ class EnrolledUser(models.Model):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
 
     # user info
-    user_id = models.CharField(max_length=36, unique=True)
+    user_id = models.CharField(max_length=255, unique=True)
     enrollment_id = models.TextField(null=True)
     long_name = models.TextField()
     short_name = models.TextField()
