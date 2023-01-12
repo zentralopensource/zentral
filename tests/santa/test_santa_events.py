@@ -156,7 +156,13 @@ class SantaEventTestCase(SimpleTestCase):
         self.assertEqual(_build_file_tree_from_santa_event(event_d), file_d)
 
     @staticmethod
-    def get_event_with_linked_objects(mas_signed=False, with_team_id=True, unknown_dev_id_issuer=False, flat=False):
+    def get_event_with_linked_objects(
+        mas_signed=False,
+        with_team_id=True,
+        unknown_dev_id_issuer=False,
+        flat=False,
+        short_chain=False,
+    ):
         event_d = {
             'current_sessions': ['personne@console', 'flaco@ttys000'],
             'decision': 'ALLOW_UNKNOWN',
@@ -227,6 +233,8 @@ class SantaEventTestCase(SimpleTestCase):
             ]
         if with_team_id:
             event_d['team_id'] = '43AQ936H96'
+        if short_chain:
+            event_d["signing_chain"] = event_d.pop("signing_chain")[:1]
         if flat:
             for i, cert in enumerate(event_d.pop('signing_chain')):
                 event_d[f"signing_cert_{i}"] = cert
@@ -254,6 +262,16 @@ class SantaEventTestCase(SimpleTestCase):
                              ("sha256", "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"),
                              ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
              "apple_team_id": [("43AQ936H96",)]}
+        )
+
+    def test_std_event_without_team_id_short_chain(self):
+        event = self.get_event_with_linked_objects(
+            mas_signed=False, with_team_id=False, unknown_dev_id_issuer=False, flat=True, short_chain=True
+        )
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57")],
+             "certificate": [("sha256", "96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b")]}
         )
 
     def test_std_event_without_team_id_unknown_issuer_linked_objects(self):

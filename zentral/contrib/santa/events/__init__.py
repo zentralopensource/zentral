@@ -99,7 +99,7 @@ class SantaEventEvent(BaseEvent):
             if not team_id and cert_idx == 0:
                 try:
                     issuer_cn = signing_chain[cert_idx + 1]["cn"]
-                except KeyError:
+                except (IndexError, KeyError):
                     continue
                 if issuer_cn != APPLE_DEV_ID_ISSUER_CN:
                     continue

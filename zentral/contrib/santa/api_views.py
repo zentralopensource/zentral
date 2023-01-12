@@ -94,7 +94,7 @@ class EnrollmentConfiguration(APIView):
         return response
 
 
-class EnrollmentConfigurationPlist(EnrollmentConfiguration):
+class EnrollmentPlist(EnrollmentConfiguration):
     """
     Download enrollment plist file
     """
