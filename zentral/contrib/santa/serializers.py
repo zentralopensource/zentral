@@ -2,7 +2,9 @@ from datetime import datetime
 from itertools import chain
 import logging
 import os.path
+from django.urls import reverse
 from rest_framework import serializers
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .models import Bundle, Configuration, Rule, Target, Enrollment
@@ -24,10 +26,20 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Enrollment
-        fields = '__all__'
+        exclude = ('distributor_content_type', 'distributor_pk',)
 
     def get_enrolled_machines_count(self, obj):
         return obj.enrolledmachine_set.count()
+
+    def get_artifact_download_url(self, view_name, obj):
+        path = reverse(f"santa_api:{view_name}", args=(obj.pk,))
+        return f'https://{settings["api"]["fqdn"]}{path}'
+
+    def get_plist_download_url(self, obj):
+        return self.get_artifact_download_url("enrollment_plist", obj)
+
+    def get_configuration_profile_download_url(self, obj):
+        return self.get_artifact_download_url("enrollment_configuration_profile", obj)
 
     def create(self, validated_data):
         secret_data = validated_data.pop('secret')
