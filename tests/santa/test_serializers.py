@@ -1,9 +1,13 @@
-from django.test import SimpleTestCase
+from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
-from zentral.contrib.santa.serializers import RuleUpdateSerializer
+from zentral.conf import settings
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.santa.models import Configuration, Enrollment
+from zentral.contrib.santa.serializers import RuleUpdateSerializer, EnrollmentSerializer
 
 
-class SantaSerializersTestCase(SimpleTestCase):
+class SantaSerializersTestCase(TestCase):
     def test_rule_wrong_policy_for_bundle_rule(self):
         data = {"rule_type": "BUNDLE",
                 "identifier": get_random_string(64, "0123456789abcdef"),
@@ -100,3 +104,32 @@ class SantaSerializersTestCase(SimpleTestCase):
         self.assertFalse(serializer.is_valid())
         ed = serializer.errors["non_field_errors"][0]
         self.assertEqual(str(ed), "Conflict between primary_users and excluded_primary_users")
+
+    # Enrollment serializer
+
+    def test_enrollment_plist_download_url(self):
+        base_url = f'https://{settings["api"]["fqdn"]}'
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        mbu.create_enrollment_business_unit()
+        configuration = Configuration.objects.create(name=get_random_string(12))
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=mbu)
+        enrollment = Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
+        serializer = EnrollmentSerializer(instance=enrollment)
+
+        self.assertEqual(
+            serializer.get_plist_download_url(enrollment),
+            f'{base_url}{reverse("santa_api:enrollment_plist", args=(enrollment.pk,))}'
+        )
+
+    def test_enrollment_configuration_profile_download_url(self):
+        base_url = f'https://{settings["api"]["fqdn"]}'
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        mbu.create_enrollment_business_unit()
+        configuration = Configuration.objects.create(name=get_random_string(12))
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=mbu)
+        enrollment = Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
+        serializer = EnrollmentSerializer(instance=enrollment)
+        self.assertEqual(
+            serializer.get_configuration_profile_download_url(enrollment),
+            f'{base_url}{reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,))}'
+        )
