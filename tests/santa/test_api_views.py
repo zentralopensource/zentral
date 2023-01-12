@@ -1012,27 +1012,28 @@ class APIViewsTestCase(TestCase):
                          f'attachment; filename="zentral_santa_configuration.enrollment_{enrollment.pk}.plist"')
         self.assertEqual(int(response['Content-Length']), len(response.content))
 
-    def test_get_enrollment_profile_unauthorized(self):
+    def test_get_enrollment_configuration_profile_unauthorized(self):
         enrollment = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
-        response = self.get(reverse("santa_api:enrollment_profile", args=(enrollment.pk,)), include_token=False)
+        response = self.get(reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,)),
+                            include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_get_enrollment_profile_permission_denied(self):
+    def test_get_enrollment_configuration_profile_permission_denied(self):
         enrollment = self.force_enrollment()
-        response = self.get(reverse("santa_api:enrollment_profile", args=(enrollment.pk,)))
+        response = self.get(reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_enrollment_profile_not_found(self):
+    def test_get_enrollment_configuration_profile_not_found(self):
         self.set_permissions("santa.view_enrollment")
-        response = self.get(reverse("santa_api:enrollment_profile", args=(1213028133,)))
+        response = self.get(reverse("santa_api:enrollment_configuration_profile", args=(1213028133,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_get_enrollment_profile(self):
+    def test_get_enrollment_configuration_profile(self):
         identifier = get_payload_identifier("santa_configuration")
         enrollment = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
-        response = self.get(reverse('santa_api:enrollment_profile', args=(enrollment.pk,)))
+        response = self.get(reverse('santa_api:enrollment_configuration_profile', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
         self.assertEqual(response['Content-Disposition'], f'attachment; filename="{identifier}.mobileconfig"')
@@ -1102,7 +1103,8 @@ class APIViewsTestCase(TestCase):
         data = {"configuration": enrollment.configuration.pk,
                 "secret": secret_data}
         self.set_permissions("santa.change_enrollment")
-        response = self.put_json_data(reverse('santa_api:enrollment', args=(enrollment.pk,)), data, include_token=False)
+        response = self.put_json_data(reverse('santa_api:enrollment', args=(enrollment.pk,)), data,
+                                      include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_enrollment_permission_denied(self):
