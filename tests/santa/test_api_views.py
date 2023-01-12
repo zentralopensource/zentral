@@ -9,6 +9,7 @@ from django.utils.crypto import get_random_string
 from rest_framework import status
 import yaml
 from accounts.models import User, APIToken
+from zentral.conf import settings
 from zentral.contrib.inventory.models import Certificate, File, EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment
@@ -899,6 +900,11 @@ class APIViewsTestCase(TestCase):
                  'request_count': 0
              },
              'version': 1,
+             "configuration_profile_download_url":
+                 f'https://{settings["api"]["fqdn"]}'
+                 f'{reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,))}',
+             "plist_download_url": f'https://{settings["api"]["fqdn"]}'
+                                   f'{reverse("santa_api:enrollment_plist", args=(enrollment.pk,))}',
              'created_at': enrollment.created_at.isoformat(),
              'updated_at': enrollment.updated_at.isoformat()},
             response.json()
@@ -976,6 +982,11 @@ class APIViewsTestCase(TestCase):
                  'request_count': 0
              },
              'version': 1,
+             "configuration_profile_download_url":
+                 f'https://{settings["api"]["fqdn"]}'
+                 f'{reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,))}',
+             "plist_download_url": f'https://{settings["api"]["fqdn"]}'
+                                   f'{reverse("santa_api:enrollment_plist", args=(enrollment.pk,))}',
              'created_at': enrollment.created_at.isoformat(),
              'updated_at': enrollment.updated_at.isoformat()},
         )

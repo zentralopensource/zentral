@@ -23,6 +23,8 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 class EnrollmentSerializer(serializers.ModelSerializer):
     secret = EnrollmentSecretSerializer(many=False)
     enrolled_machines_count = serializers.SerializerMethodField()
+    plist_download_url = serializers.SerializerMethodField()
+    configuration_profile_download_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Enrollment
