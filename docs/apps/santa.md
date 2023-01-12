@@ -206,7 +206,7 @@ Santa finally makes an extra request to indicate the end of the full synchroniza
 
 ## HTTP API
 
-There are three HTTP API endpoints available.
+There are five HTTP API endpoints available.
 
 ### Requests
 
@@ -583,4 +583,489 @@ Nothing was changed:
         }
     ]
 }
+```
+
+### /api/santa/configurations/
+
+#### List all Santa configurations.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `santa.view_configuration`
+* Optional filter parameter:
+    * `name`: the name of the configuration target.
+
+Examples
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/configurations/ \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/configurations/?name=Default \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Default",
+    "client_mode": 1,
+    "client_certificate_auth": false,
+    "batch_size": 50,
+    "full_sync_interval": 600,
+    "enable_bundles": true,
+    "enable_transitive_rules": false,
+    "allowed_path_regex": "",
+    "blocked_path_regex": "",
+    "block_usb_mount": false,
+    "remount_usb_mode": [],
+    "allow_unknown_shard": 100,
+    "enable_all_event_upload_shard": 0,
+    "sync_incident_severity": 0,
+    "created_at": "2023-01-06T13:07:23.768829",
+    "updated_at": "2023-01-12T12:15:30.457577"
+  }
+]
+```
+
+#### Add new Santa configuration.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `santa.add_configuration`
+
+Example
+
+configuration.json
+
+```json
+{
+  "blocked_path_regex": "",
+  "client_mode": 1,
+  "enable_bundles": true,
+  "batch_size": 50,
+  "block_usb_mount": false,
+  "client_certificate_auth": false,
+  "full_sync_interval": 600,
+  "allowed_path_regex": "",
+  "allow_unknown_shard": 100,
+  "sync_incident_severity": 0,
+  "remount_usb_mode": [
+  ],
+  "enable_transitive_rules": false,
+  "enable_all_event_upload_shard": 0,
+  "name": "test"
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @configuration.json \
+  https://zentral.example.com/api/santa/configurations/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 3,
+  "blocked_path_regex": "",
+  "client_mode": 1,
+  "enable_bundles": true,
+  "batch_size": 50,
+  "block_usb_mount": false,
+  "client_certificate_auth": false,
+  "full_sync_interval": 600,
+  "allowed_path_regex": "",
+  "allow_unknown_shard": 100,
+  "sync_incident_severity": 0,
+  "created_at": "2023-01-12T12:04:53.124658",
+  "remount_usb_mode": [
+  ],
+  "enable_transitive_rules": false,
+  "updated_at": "2023-01-12T12:04:53.124667",
+  "enable_all_event_upload_shard": 0,
+  "name": "test"
+}
+```
+
+### /api/santa/configurations/`<int:pk>`/
+
+#### Get Santa configuration.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `santa.view_configuration`
+* `<int:pk>`: the primary key of the configuration.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/configurations/1/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "blocked_path_regex": "",
+  "client_mode": 1,
+  "enable_bundles": true,
+  "batch_size": 50,
+  "block_usb_mount": false,
+  "client_certificate_auth": false,
+  "full_sync_interval": 600,
+  "allowed_path_regex": "",
+  "allow_unknown_shard": 100,
+  "sync_incident_severity": 0,
+  "created_at": "2023-01-06T13:07:23.768829",
+  "remount_usb_mode": [
+  ],
+  "enable_transitive_rules": false,
+  "updated_at": "2023-01-06T13:07:23.768838",
+  "enable_all_event_upload_shard": 0,
+  "name": "Default"
+}
+```
+
+#### Update Santa configuration.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `santa.change_configuration`
+* `<int:pk>`: the primary key of the configuration.
+
+Example
+
+configuration.json
+
+```json
+{
+  "blocked_path_regex": "",
+  "client_mode": 1,
+  "enable_bundles": true,
+  "batch_size": 50,
+  "block_usb_mount": false,
+  "client_certificate_auth": false,
+  "full_sync_interval": 600,
+  "allowed_path_regex": "",
+  "allow_unknown_shard": 100,
+  "sync_incident_severity": 0,
+  "remount_usb_mode": [
+  ],
+  "enable_transitive_rules": false,
+  "enable_all_event_upload_shard": 0,
+  "name": "configuration-renamed"
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @configuration.json \
+  https://zentral.example.com/api/santa/configurations/1/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "blocked_path_regex": "",
+  "client_mode": 1,
+  "enable_bundles": true,
+  "batch_size": 50,
+  "block_usb_mount": false,
+  "client_certificate_auth": false,
+  "full_sync_interval": 600,
+  "allowed_path_regex": "",
+  "allow_unknown_shard": 100,
+  "sync_incident_severity": 0,
+  "created_at": "2023-01-06T13:07:23.768829",
+  "remount_usb_mode": [
+  ],
+  "enable_transitive_rules": false,
+  "updated_at": "2023-01-12T12:14:19.952299",
+  "enable_all_event_upload_shard": 0,
+  "name": "configuration-renamed"
+}
+```
+
+#### Delete Santa configuration.
+
+* method: DELETE
+* Required permission: `santa.delete_configuration`
+* `<int:pk>`: the primary key of the configuration.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/configurations/1/
+```
+
+### /api/santa/enrollments/
+
+#### List all Santa enrollments.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `santa.view_enrollment`
+* Optional filter parameter:
+    * `configuration_id`: the id of the configuration target.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/enrollments/ \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/enrollments/?configuration_id=1 \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+  {
+    "secret": {
+      "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
+      "request_count": 0,
+      "id": 3,
+      "serial_numbers": [
+      ],
+      "meta_business_unit": 1,
+      "quota": null,
+      "tags": [
+      ],
+      "udids": [
+      ]
+    },
+    "id": 2,
+    "configuration_profile_download_url": "https://zentral.example.com/api/santa/enrollments/1/configuration_profile/",
+    "created_at": "2023-01-10T11:02:51.831544",
+    "configuration": 1,
+    "enrolled_machines_count": 0,
+    "version": 1,
+    "updated_at": "2023-01-10T11:02:51.831553",
+    "plist_download_url": "https://zentral.example.com/api/santa/enrollments/1/plist/"
+  }
+]
+```
+
+#### Add new Santa enrollment.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `santa.add_enrollment`
+
+Example
+
+enrollment.json
+
+```json
+{
+  "secret": {
+    "meta_business_unit": 1
+  },
+  "configuration": 1
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @enrollment.json \
+  https://zentral.example.com/api/santa/enrollments/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "secret": {
+    "secret": "DfuWkO8aFPFABUAkbu2SuYxlKbChHxeEdU2cXelxnui7lZaeVuRjrlzYT3YPNu2P",
+    "request_count": 0,
+    "id": 6,
+    "serial_numbers": null,
+    "meta_business_unit": 1,
+    "quota": null,
+    "tags": [
+    ],
+    "udids": null
+  },
+  "id": 5,
+  "configuration_profile_download_url": "https://zentral.example.com/api/santa/enrollments/5/configuration_profile/",
+  "created_at": "2023-01-12T12:47:17.030386",
+  "configuration": 1,
+  "enrolled_machines_count": 0,
+  "version": 1,
+  "updated_at": "2023-01-12T12:47:17.030394",
+  "plist_download_url": "https://zentral.example.com/api/santa/enrollments/5/plist/"
+}
+```
+
+### /api/santa/enrollments/`<int:pk>`/
+
+#### Get Santa enrollment.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `santa.view_enrollment`
+* `<int:pk>`: the primary key of the enrollments.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/enrollments/1/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "secret": {
+    "id": 2,
+    "secret": "HN3kfyxq3UuLYleRonGgHcttjer4rldR3GGgCKWU6YbdKLs565eHks7bHhpISCz9",
+    "meta_business_unit": 1,
+    "tags": [],
+    "serial_numbers": [],
+    "udids": [],
+    "quota": null,
+    "request_count": 1
+  },
+  "enrolled_machines_count": 1,
+  "plist_download_url": "https://zentral.example.com/api/santa/enrollments/1/plist/",
+  "configuration_profile_download_url": "https://zentral.example.com/api/santa/enrollments/1/configuration_profile/",
+  "version": 3,
+  "created_at": "2023-01-06T13:07:31.933243",
+  "updated_at": "2023-01-12T12:15:30.459785",
+  "configuration": 1
+}
+```
+
+#### Update Santa enrollment.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `santa.change_enrollment`
+* `<int:pk>`: the primary key of the configuration.
+
+Example
+
+enrollment.json
+
+```json
+{
+  "secret": {
+    "meta_business_unit": 1
+  },
+  "configuration": 2
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @configuration.json \
+  https://zentral.example.com/api/santa/enrollments/1/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "secret": {
+    "id": 2,
+    "secret": "HN3kfyxq3UuLYleRonGgHcttjer4rldR3GGgCKWU6YbdKLs565eHks7bHhpISCz9",
+    "meta_business_unit": 1,
+    "tags": [],
+    "serial_numbers": [],
+    "udids": [],
+    "quota": null,
+    "request_count": 1
+  },
+  "enrolled_machines_count": 1,
+  "plist_download_url": "https://zentral.example.com/api/santa/enrollments/1/plist/",
+  "configuration_profile_download_url": "https://zentral.example.com/api/santa/enrollments/1/configuration_profile/",
+  "version": 3,
+  "created_at": "2023-01-06T13:07:31.933243",
+  "updated_at": "2023-01-12T12:15:30.459785",
+  "configuration": 2
+}
+```
+
+#### Delete Santa enrollment.
+
+* method: DELETE
+* Required permission: `santa.delete_enrollment`
+* `<int:pk>`: the primary key of the configuration.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/enrollments/5/
+```
+
+### /api/santa/enrollments/`<int:pk>`/plist/
+
+#### Download Santa enrollment plist file.
+
+* method: GET
+* Required permission: `santa.view_enrollment`
+* `<int:pk>`: the primary key of the configuration.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/enrollments/1/plist/ \
+  --output zentral_santa_configuration.enrollment.plist
+```
+
+### /api/santa/enrollments/`<int:pk>`/configuration_profile/
+
+#### Download Santa enrollment configuration profile file.
+
+* method: GET
+* Required permission: `santa.view_enrollment`
+* `<int:pk>`: the primary key of the enrollment.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/santa/enrollments/1/configuration_profile/ \
+  --output com.example.zentral.santa_configuration.mobileconfig
 ```
