@@ -888,8 +888,6 @@ class APIViewsTestCase(TestCase):
             {'id': enrollment.pk,
              'configuration': enrollment.configuration.pk,
              'enrolled_machines_count': 0,
-             'distributor_content_type': None,
-             'distributor_pk': None,
              'secret': {
                  'id': enrollment.secret.pk,
                  'secret': enrollment.secret.secret,
@@ -967,8 +965,6 @@ class APIViewsTestCase(TestCase):
             {'id': enrollment.pk,
              'configuration': enrollment.configuration.pk,
              'enrolled_machines_count': 0,
-             'distributor_content_type': None,
-             'distributor_pk': None,
              'secret': {
                  'id': enrollment.secret.pk,
                  'secret': enrollment.secret.secret,
