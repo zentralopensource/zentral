@@ -592,8 +592,8 @@ Nothing was changed:
 * method: GET
 * Content-Type: application/json
 * Required permission: `santa.view_configuration`
-* Optional filter parameters:
-  * `name`: the name of the configuration target.
+* Optional filter parameter:
+    * `name`: the name of the configuration target.
 
 Examples
 
@@ -827,8 +827,8 @@ $ curl -X DELETE \
 * method: GET
 * Content-Type: application/json
 * Required permission: `santa.view_enrollment`
-* Optional filter parameters:
-  * `configuration_id`: the id from the configuration target.
+* Optional filter parameter:
+    * `configuration_id`: the id of the configuration target.
 
 Example
 
