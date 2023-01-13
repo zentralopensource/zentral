@@ -137,7 +137,7 @@ class Command:
 
     def process_response(self, response, enrollment_session, meta_business_unit):
         if self.db_command.result_time and (not self.reschedule_notnow or not self.status == CommandStatus.NotNow):
-            logger.error("Command {self.db_command.uuid} has already been processed")
+            logger.error("Command %s has already been processed", self.uuid)
             return
         self.result_time = self.db_command.result_time = timezone.now()
         self.status = CommandStatus(response["Status"])

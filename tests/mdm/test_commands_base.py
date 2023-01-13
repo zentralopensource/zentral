@@ -100,3 +100,33 @@ class TestMDMCommandsBase(TestCase):
             "User",
             unknown_uuid
         )
+
+    # process_response
+
+    @patch("zentral.contrib.mdm.commands.base.logger.error")
+    def test_process_response_already_processed(self, logger_error):
+        cmd = ProfileList.create_for_device(
+            self.dep_enrollment_session.enrolled_device,
+            kwargs={"update_inventory": True},
+        )
+        cmd.process_response(
+            {"CommandUUID": str(cmd.uuid),
+             "Status": "Acknowledged",
+             "ProfileList": [],
+             "UDID": self.dep_enrollment_session.enrolled_device.udid},
+            self.dep_enrollment_session,
+            self.mbu
+        )
+        logger_error.assert_not_called()
+        cmd.process_response(
+            {"CommandUUID": str(cmd.uuid),
+             "Status": "Acknowledged",
+             "ProfileList": [],
+             "UDID": self.dep_enrollment_session.enrolled_device.udid},
+            self.dep_enrollment_session,
+            self.mbu
+        )
+        logger_error.assert_called_once_with(
+            "Command %s has already been processed",
+            cmd.uuid
+        )
