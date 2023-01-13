@@ -22,6 +22,7 @@ from zentral.contrib.mdm.inventory import ms_tree_from_payload
 from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
                                         Channel, RequestStatus, DeviceCommand, EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
+                                        Platform,
                                         ReEnrollmentSession, UserEnrollmentSession,
                                         PushCertificate)
 from zentral.utils.certificates import parse_dn
@@ -210,10 +211,26 @@ class CheckinView(MDMView):
                                     "awaiting_configuration": None,
                                     "checkout_at": None}
         ms_tree = ms_tree_from_payload(self.payload)
+        platform = None
         try:
-            enrolled_device_defaults["platform"] = ms_tree["os_version"]["name"]
+            platform = ms_tree["os_version"]["name"]
         except KeyError:
             pass
+        else:
+            enrolled_device_defaults["platform"] = platform
+        if isinstance(self.enrollment_session, DEPEnrollmentSession):
+            enrolled_device_defaults["dep_enrollment"] = True
+            enrolled_device_defaults["user_enrollment"] = False
+            enrolled_device_defaults["supervised"] = True
+            if platform == Platform.macOS.value:
+                enrolled_device_defaults["user_approved_enrollment"] = True
+        elif isinstance(self.enrollment_session, OTAEnrollmentSession):
+            enrolled_device_defaults["dep_enrollment"] = False
+            enrolled_device_defaults["user_enrollment"] = False
+        elif isinstance(self.enrollment_session, UserEnrollmentSession):
+            enrolled_device_defaults["dep_enrollment"] = False
+            enrolled_device_defaults["user_enrollment"] = True
+            enrolled_device_defaults["supervised"] = False
         if self.certificate:
             enrolled_device_defaults.update({
                 "cert_fingerprint": self.certificate.fingerprint(hashes.SHA256()),

@@ -15,8 +15,11 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.models import (DEPEnrollmentSession, DeviceCommand, EnrolledDevice,
-                                        OTAEnrollmentSession, ReEnrollmentSession)
-from .utils import force_dep_enrollment_session, force_enrolled_user
+                                        OTAEnrollmentSession, UserEnrollmentSession, ReEnrollmentSession)
+from .utils import (force_dep_enrollment_session,
+                    force_enrolled_user,
+                    force_ota_enrollment_session,
+                    force_user_enrollment_session)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -29,13 +32,14 @@ class MDMViewsTestCase(TestCase):
 
     # utility methods
 
-    def _put(self, url, payload, session=None, certificate=True):
+    def _put(self, url, payload, session=None, certificate=True, serial_number=None):
         kwargs = {}
         if payload:
             kwargs["data"] = plistlib.dumps(payload)
         if session:
             secret = session.enrollment_secret.secret
-            serial_number = session.enrollment_secret.serial_numbers[0]
+            if serial_number is None:
+                serial_number = session.enrollment_secret.serial_numbers[0]
             if isinstance(session, DEPEnrollmentSession):
                 enrollment_type = "DEP"
             elif isinstance(session, OTAEnrollmentSession):
@@ -116,7 +120,7 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self._assertAbort(post_event, "unknown topic", topic=topic)
 
-    def test_authenticate(self, post_event):
+    def test_authenticate_dep_enrollment_session_macos(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu)
         self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
         self.assertIsNone(session.enrolled_device)
@@ -140,6 +144,103 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(session.enrolled_device.udid, udid)
         self.assertEqual(session.enrolled_device.serial_number, serial_number)
         self.assertEqual(session.enrolled_device.cert_not_valid_after, datetime(2034, 5, 6))
+        self.assertEqual(session.enrolled_device.platform, "macOS")
+        self.assertTrue(session.enrolled_device.dep_enrollment)
+        self.assertTrue(session.enrolled_device.user_enrollment is False)
+        self.assertTrue(session.enrolled_device.user_approved_enrollment)
+        self.assertTrue(session.enrolled_device.supervised)
+
+    def test_authenticate_dep_enrollment_session_ios(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
+        self.assertIsNone(session.enrolled_device)
+        payload = {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            # No UserID or EnrollmentUserID → Device Channel
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(),
+            "Model": "iPhone13",
+            "ModelName": "iPhone",
+            "OSVersion": "16.2",
+            "BuildVersion": "20C65",
+        }
+        response = self._put(reverse("mdm:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
+        self.assertEqual(session.enrolled_device.udid, udid)
+        self.assertEqual(session.enrolled_device.serial_number, serial_number)
+        self.assertEqual(session.enrolled_device.cert_not_valid_after, datetime(2034, 5, 6))
+        self.assertEqual(session.enrolled_device.platform, "iOS")
+        self.assertTrue(session.enrolled_device.dep_enrollment)
+        self.assertTrue(session.enrolled_device.user_enrollment is False)
+        self.assertIsNone(session.enrolled_device.user_approved_enrollment)
+        self.assertTrue(session.enrolled_device.supervised)
+
+    def test_authenticate_ota_enrollment_session_macos(self, post_event):
+        session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, phase3=True)
+        self.assertEqual(session.status, OTAEnrollmentSession.PHASE_3)
+        self.assertIsNone(session.enrolled_device)
+        payload = {
+            "UDID": device_udid,
+            "SerialNumber": serial_number,
+            # No UserID or EnrollmentUserID → Device Channel
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+        response = self._put(reverse("mdm:checkin"), payload, session, serial_number=serial_number)
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
+        session.refresh_from_db()
+        self.assertEqual(session.status, OTAEnrollmentSession.AUTHENTICATED)
+        self.assertEqual(session.enrolled_device.udid, device_udid)
+        self.assertEqual(session.enrolled_device.serial_number, serial_number)
+        self.assertEqual(session.enrolled_device.cert_not_valid_after, datetime(2034, 5, 6))
+        self.assertEqual(session.enrolled_device.platform, "macOS")
+        self.assertTrue(session.enrolled_device.dep_enrollment is False)
+        self.assertTrue(session.enrolled_device.user_enrollment is False)
+        self.assertIsNone(session.enrolled_device.user_approved_enrollment)
+        self.assertIsNone(session.enrolled_device.supervised)
+
+    def test_authenticate_user_enrollment_session_macos(self, post_event):
+        session, _, _ = force_user_enrollment_session(self.mbu)
+        self.assertEqual(session.status, UserEnrollmentSession.STARTED)
+        self.assertIsNone(session.enrolled_device)
+        device_udid = get_random_string(12)
+        serial_number = get_random_string(12)
+        payload = {
+            "UDID": device_udid,
+            "SerialNumber": serial_number,
+            # No UserID or EnrollmentUserID → Device Channel
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+        response = self._put(reverse("mdm:checkin"), payload, session, serial_number=serial_number)
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
+        session.refresh_from_db()
+        self.assertEqual(session.status, UserEnrollmentSession.AUTHENTICATED)
+        self.assertEqual(session.enrolled_device.udid, device_udid)
+        self.assertEqual(session.enrolled_device.serial_number, serial_number)
+        self.assertEqual(session.enrolled_device.cert_not_valid_after, datetime(2034, 5, 6))
+        self.assertEqual(session.enrolled_device.platform, "macOS")
+        self.assertTrue(session.enrolled_device.dep_enrollment is False)
+        self.assertTrue(session.enrolled_device.user_enrollment)
+        self.assertIsNone(session.enrolled_device.user_approved_enrollment)
+        self.assertTrue(session.enrolled_device.supervised is False)
 
     def test_authenticate_new_enrollment_purged_state(self, post_event):
         # get a fully enrolled device
