@@ -69,7 +69,6 @@
     <tr>
       <td colspan="2"><h4>Management status</h4></td>
     </tr>
-    {% with object.security_info.ManagementStatus as management_status %}
     <tr>
       <th>Push certificate</th>
       <td>
@@ -125,25 +124,26 @@
       <th>Certificate expiry</th>
       <td>{{ object.cert_not_valid_after|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>
-    {% if management_status %}
     <tr>
       <th>DEP enrollment?</th>
-      <td>{{ management_status.EnrolledViaDEP|yesno }}</td>
+      <td>{{ object.dep_enrollment|yesno }}</td>
     </tr>
     <tr>
       <th>User enrollment?</th>
-      <td>{{ management_status.IsUserEnrollment|yesno }}</td>
+      <td>{{ object.user_enrollment|yesno }}</td>
     </tr>
     <tr>
       <th>User approved?</th>
-      <td>{{ management_status.UserApprovedEnrollment|yesno }}</td>
+      <td>{{ object.user_approved_enrollment|yesno }}</td>
     </tr>
     <tr>
       <th>Activation lock manageable?</th>
-      <td>{{ management_status.IsActivationLockManageable|yesno }}</td>
+      <td>{{ object.activation_lock_manageable|yesno }}</td>
     </tr>
-    {% endif %}
-    {% endwith %}
+    <tr>
+      <th>Supervised?</th>
+      <td>{{ object.supervised|yesno }}</td>
+    </tr>
     <tr>
       <th>Checkout</th>
       <td>{{ object.checkout_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
