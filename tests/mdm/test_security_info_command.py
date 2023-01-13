@@ -30,6 +30,12 @@ class SecurityInfoCommandTestCase(TestCase):
                               "testdata/security_info.plist"),
                  "rb")
         )
+        cls.security_info_ios = plistlib.load(
+            open(os.path.join(os.path.dirname(__file__),
+                              "testdata/security_info_ios.plist"),
+                 "rb")
+        )
+
         cls.blueprint = Blueprint.objects.create(name=get_random_string(12))
         cls.enrolled_device.blueprint = cls.blueprint
         cls.enrolled_device.save()
@@ -122,6 +128,26 @@ class SecurityInfoCommandTestCase(TestCase):
         self.enrolled_device.refresh_from_db()
         self.assertTrue(self.enrolled_device.security_info_updated_at > start)
         self.assertIsNone(self.enrolled_device.bootstrap_token_allowed_for_authentication)
+
+    def test_process_acknowledged_ios_response(self):
+        start = datetime.utcnow()
+        self.assertIsNone(self.enrolled_device.security_info)
+        self.assertIsNone(self.enrolled_device.security_info_updated_at)
+        self.enrolled_device.dep_enrollment = True
+        self.enrolled_device.user_enrollment = False
+        self.enrolled_device.user_approved_enrollment = True
+        self.enrolled_device.save()
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        cmd.process_response(self.security_info_ios, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertTrue(self.enrolled_device.security_info_updated_at > start)
+        self.assertTrue(self.enrolled_device.dep_enrollment)
+        self.assertIsNone(self.enrolled_device.activation_lock_manageable)
+        self.assertFalse(self.enrolled_device.user_enrollment)
+        self.assertTrue(self.enrolled_device.user_approved_enrollment)
+        self.assertIsNone(self.enrolled_device.bootstrap_token_allowed_for_authentication)
+        self.assertIsNone(self.enrolled_device.bootstrap_token_required_for_software_update)
+        self.assertIsNone(self.enrolled_device.bootstrap_token_required_for_kext_approval)
 
     # _update_inventory
 

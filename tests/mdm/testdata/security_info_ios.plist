@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CommandUUID</key>
+	<string>9A105E87-EC35-4F65-A265-423CFB92D624</string>
+	<key>SecurityInfo</key>
+	<dict>
+		<key>HardwareEncryptionCaps</key>
+		<integer>3</integer>
+		<key>ManagementStatus</key>
+		<dict>
+			<key>IsUserEnrollment</key>
+			<false/>
+		</dict>
+		<key>PasscodeCompliant</key>
+		<true/>
+		<key>PasscodeCompliantWithProfiles</key>
+		<true/>
+		<key>PasscodeLockGracePeriod</key>
+		<integer>0</integer>
+		<key>PasscodeLockGracePeriodEnforced</key>
+		<integer>0</integer>
+		<key>PasscodePresent</key>
+		<false/>
+	</dict>
+	<key>Status</key>
+	<string>Acknowledged</string>
+	<key>UDID</key>
+	<string>cb48a725986c8b4e23b6ca68e5b6941d073c990f</string>
+</dict>
+</plist>

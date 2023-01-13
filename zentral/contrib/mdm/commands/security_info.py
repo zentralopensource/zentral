@@ -38,9 +38,8 @@ class SecurityInfo(Command):
                                       ("user_enrollment", "IsUserEnrollment"),
                                       ("user_approved_enrollment", "UserApprovedEnrollment")):
                 val = management_status.get(status_attr)
-                if not isinstance(val, bool):
-                    val = None
-                setattr(self.enrolled_device, attr, val)
+                if isinstance(val, bool):
+                    setattr(self.enrolled_device, attr, val)
         # bootstrap token
         for attr, info_attr in (("bootstrap_token_allowed_for_authentication",
                                  "BootstrapTokenAllowedForAuthentication"),
