@@ -398,6 +398,7 @@ class InstallProfileCommandTestCase(TestCase):
         ))
 
     def test_install_device_profile(self):
+        self.assertFalse(self.enrolled_device.declarative_management)
         artifact_version0, _ = self._force_profile(installed=True)
         artifact_version1, _ = self._force_profile(
             artifact=artifact_version0.artifact, version=1
@@ -411,6 +412,17 @@ class InstallProfileCommandTestCase(TestCase):
         )
         self.assertIsInstance(cmd, InstallProfile)
         self.assertEqual(cmd.artifact_version, artifact_version1)
+
+    def test_install_device_profile_declarative_management_noop(self):
+        self.enrolled_device.declarative_management = True
+        artifact_version, _ = self._force_profile()
+        self.assertIsNone(_install_artifacts(
+            Channel.Device,
+            RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))
 
     def test_install_user_profile_already_installed_noop(self):
         artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
@@ -458,6 +470,23 @@ class InstallProfileCommandTestCase(TestCase):
         ))
 
     def test_install_user_profile(self):
+        self.assertFalse(self.enrolled_device.declarative_management)
+        artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
+        artifact_version1, _ = self._force_profile(
+            channel=Channel.User, artifact=artifact_version0.artifact, version=1
+        )
+        cmd = _install_artifacts(
+            Channel.User,
+            RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            self.enrolled_user,
+        )
+        self.assertIsInstance(cmd, InstallProfile)
+        self.assertEqual(cmd.artifact_version, artifact_version1)
+
+    def test_install_user_profile_declarative_management(self):
+        self.enrolled_device.declarative_management = True
         artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
         artifact_version1, _ = self._force_profile(
             channel=Channel.User, artifact=artifact_version0.artifact, version=1

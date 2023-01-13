@@ -1730,7 +1730,15 @@ class BlueprintArtifact(models.Model):
 
 
 class ArtifactVersionManager(models.Manager):
-    def _next_to(self, target, select, artifact_operation, fetch_all=False):
+    def _next_to(
+        self,
+        target,
+        select,
+        artifact_operation,
+        fetch_all=False,
+        extra_args=None,
+        included_types=None,
+    ):
         if isinstance(target, EnrolledDevice):
             enrolled_device = target
             channel = Channel.Device
@@ -1758,8 +1766,13 @@ class ArtifactVersionManager(models.Manager):
         if enrolled_device.awaiting_configuration:
             args.append(True)
             ba_where_list.append("ba.install_before_setup_assistant = %s")
+        if included_types:
+            args.append(tuple(t.name for t in included_types))
+            ba_where_list.append("a.type IN %s")
         ba_wheres = " and ".join(ba_where_list)
         args.extend([target.pk, target.pk, artifact_operation.name])
+        if extra_args:
+            args.extend(extra_args)
         query = (
             "with all_blueprint_artifact_versions as ("  # All blueprint artifact versions, ranked by version
             "  select av.id, av.version, av.artifact_id, av.created_at,"
@@ -1810,7 +1823,7 @@ class ArtifactVersionManager(models.Manager):
             if pk_list:
                 return qs.get(pk=pk_list[0])
 
-    def next_to_install(self, target, fetch_all=False):
+    def next_to_install(self, target, fetch_all=False, included_types=None):
         select = (
             # Present in the blueprint
             "select bav.id from blueprint_artifact_versions as bav "
@@ -1825,22 +1838,36 @@ class ArtifactVersionManager(models.Manager):
             "where favo.id is null and (tav.id is null or (bav.id <> tav.id and bav.auto_update)) "
             "order by bav.priority desc, bav.created_at asc"
         )
-        return self._next_to(target, select, ArtifactOperation.Installation, fetch_all=fetch_all)
+        return self._next_to(
+            target, select, ArtifactOperation.Installation,
+            fetch_all=fetch_all, included_types=included_types
+        )
 
-    def next_to_remove(self, target, fetch_all=False):
+    def next_to_remove(self, target, fetch_all=False, included_types=None):
+        # Only profiles and store apps can be removed
+        removable_types = {
+            ArtifactType.Profile,
+            ArtifactType.StoreApp
+        }
+        if included_types:
+            removable_types.intersection_update(included_types)
+        extra_args = [tuple(t.name for t in removable_types)]
         select = (
             # Installed on the target
             "select tav.id from target_artifact_versions as tav "
             "left join mdm_artifact as a on (tav.artifact_id = a.id) "
             "left join failed_artifact_version_operations as favo on (favo.id = tav.id) "
             "left join blueprint_artifact_versions as bav on (bav.artifact_id = tav.artifact_id) "
-            # - Only Profiles or Store Apps
+            # - Only removable types
             # - No previous removal error AND
             # - Not present in the blueprint
-            "where (a.type = 'Profile' or a.type = 'StoreApp') and favo.id is null and bav.id is null "
+            "where a.type IN %s and favo.id is null and bav.id is null "
             "order by tav.created_at asc"
         )
-        return self._next_to(target, select, ArtifactOperation.Removal, fetch_all=fetch_all)
+        return self._next_to(
+            target, select, ArtifactOperation.Removal,
+            fetch_all=fetch_all, extra_args=extra_args
+        )
 
     def latest_for_blueprint(self, blueprint, artifact_type=None):
         ba_where_list = ["ba.blueprint_id = %s"]

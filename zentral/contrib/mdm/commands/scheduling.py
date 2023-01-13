@@ -172,13 +172,15 @@ def _reenroll(channel, status, enrollment_session, enrolled_device, enrolled_use
 def _install_artifacts(channel, status, enrollment_session, enrolled_device, enrolled_user):
     if status == RequestStatus.NotNow:
         return
-    if enrolled_device.declarative_management:
-        return
     if channel == Channel.Device:
         target = enrolled_device
     else:
         target = enrolled_user
-    artifact_version = ArtifactVersion.objects.next_to_install(target)
+    included_types = None
+    if channel == Channel.Device and enrolled_device.declarative_management:
+        # device profiles managed using declarative management
+        included_types = (ArtifactType.EnterpriseApp, ArtifactType.StoreApp)
+    artifact_version = ArtifactVersion.objects.next_to_install(target, included_types=included_types)
     if artifact_version:
         command_class = None
         if artifact_version.artifact.type == ArtifactType.Profile.name:
@@ -206,13 +208,15 @@ def _install_artifacts(channel, status, enrollment_session, enrolled_device, enr
 def _remove_artifacts(channel, status, enrollment_session, enrolled_device, enrolled_user):
     if status == RequestStatus.NotNow:
         return
-    if enrolled_device.declarative_management:
-        return
     if channel == Channel.Device:
         target = enrolled_device
     else:
         target = enrolled_user
-    artifact_version = ArtifactVersion.objects.next_to_remove(target)
+    included_types = None
+    if channel == Channel.Device and enrolled_device.declarative_management:
+        # device profiles managed using declarative management
+        included_types = (ArtifactType.EnterpriseApp, ArtifactType.StoreApp)
+    artifact_version = ArtifactVersion.objects.next_to_remove(target, included_types=included_types)
     if artifact_version:
         if artifact_version.artifact.type == ArtifactType.Profile.name:
             command_class = RemoveProfile

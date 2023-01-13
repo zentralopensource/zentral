@@ -4,7 +4,8 @@ from django.http import Http404
 from django.urls import reverse
 from zentral.conf import settings
 from zentral.utils.payloads import get_payload_identifier
-from zentral.contrib.mdm.models import Artifact, ArtifactType, ArtifactVersion, DeviceArtifact, TargetArtifactStatus
+from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion, Channel,
+                                        DeviceArtifact, TargetArtifactStatus)
 
 
 logger = logging.getLogger("zentral.contrib.mdm.declarations")
@@ -76,7 +77,11 @@ def update_blueprint_activation(blueprint, commit=True):
             get_declaration_identifier(blueprint, "management-status-subscriptions"),
         ]
     }
-    for artifact in Artifact.objects.filter(type=ArtifactType.Profile.name, blueprintartifact__blueprint=blueprint):
+    for artifact in Artifact.objects.filter(
+        type=ArtifactType.Profile.name,
+        channel=Channel.Device.name,
+        blueprintartifact__blueprint=blueprint
+    ):
         payload["StandardConfigurations"].append(get_legacy_profile_identifier(artifact.pk))
     payload["StandardConfigurations"].sort()
     if not blueprint.activation or blueprint.activation["Payload"] != payload:

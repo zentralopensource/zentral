@@ -218,6 +218,7 @@ class RemoveProfileCommandTestCase(TestCase):
         )
 
     def test_remove_device_profile(self):
+        self.assertFalse(self.enrolled_device.declarative_management)
         artifact_version, _ = self._force_profile(status=TargetArtifactStatus.Installed)
         command = _remove_artifacts(
             Channel.Device,
@@ -229,6 +230,17 @@ class RemoveProfileCommandTestCase(TestCase):
         self.assertIsInstance(command, RemoveProfile)
         self.assertEqual(command.channel, Channel.Device)
         self.assertEqual(command.artifact_version, artifact_version)
+
+    def test_remove_device_profile_declarative_management_noop(self):
+        self.enrolled_device.declarative_management = True
+        artifact_version, _ = self._force_profile(status=TargetArtifactStatus.Installed)
+        self.assertIsNone(_remove_artifacts(
+            Channel.Device,
+            RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            None,
+        ))
 
     def test_remove_device_profile_previous_error_noop(self):
         self._force_profile(status=TargetArtifactStatus.Installed)
@@ -285,6 +297,23 @@ class RemoveProfileCommandTestCase(TestCase):
         )
 
     def test_remove_user_profile(self):
+        self.assertFalse(self.enrolled_device.declarative_management)
+        artifact_version, _ = self._force_profile(
+            channel=Channel.User, status=TargetArtifactStatus.Installed
+        )
+        command = _remove_artifacts(
+            Channel.User,
+            RequestStatus.Idle,
+            self.dep_enrollment_session,
+            self.enrolled_device,
+            self.enrolled_user,
+        )
+        self.assertIsInstance(command, RemoveProfile)
+        self.assertEqual(command.channel, Channel.User)
+        self.assertEqual(command.artifact_version, artifact_version)
+
+    def test_remove_user_profile_declarative_management(self):
+        self.enrolled_device.declarative_management = True
         artifact_version, _ = self._force_profile(
             channel=Channel.User, status=TargetArtifactStatus.Installed
         )

@@ -1,16 +1,17 @@
 import copy
 import plistlib
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.models import (Artifact, ArtifactOperation, ArtifactType, ArtifactVersion,
+from zentral.contrib.mdm.models import (Asset, Artifact, ArtifactOperation, ArtifactType, ArtifactVersion,
                                         Blueprint, BlueprintArtifact,
                                         Channel, DeviceArtifact, DeviceCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
+                                        Location, LocationAsset,
                                         Platform, Profile, PushCertificate,
-                                        TargetArtifactStatus,
+                                        StoreApp, TargetArtifactStatus,
                                         UserArtifact, UserCommand)
 
 
@@ -161,6 +162,38 @@ class TestMDMArtifacts(TestCase):
                     product_version="17",
                     manifest={"items": [{"assets": [{}]}]}
                 )
+            elif artifact_type == ArtifactType.StoreApp:
+                asset = Asset.objects.create(
+                    adam_id="1234567890",
+                    pricing_param="STDQ",
+                    product_type=Asset.ProductType.APP,
+                    device_assignable=True,
+                    revocable=True,
+                    supported_platforms=[Platform.macOS.name]
+                )
+                location = Location(
+                    server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
+                    server_token=get_random_string(12),
+                    server_token_expiration_date=date(2050, 1, 1),
+                    organization_name=get_random_string(12),
+                    country_code="DE",
+                    library_uid=str(uuid.uuid4()),
+                    name=get_random_string(12),
+                    platform="enterprisestore",
+                    website_url="https://business.apple.com",
+                    mdm_info_id=uuid.uuid4(),
+                )
+                location.set_notification_auth_token()
+                location.save()
+                location_asset = LocationAsset.objects.create(
+                    asset=asset,
+                    location=location
+                )
+                StoreApp.objects.create(
+                    artifact_version=artifact_version,
+                    location_asset=location_asset
+                )
+
         return artifact, artifact_versions
 
     def _force_blueprint_artifact(
@@ -330,6 +363,33 @@ class TestMDMArtifacts(TestCase):
                                               defaults={"artifact_version": artifact_versions[1]})
         self.assertEqual(ArtifactVersion.objects.next_to_install(self.enrolled_user), None)
 
+    def test_blueprint_install_one_enterprise_app_exclude_profile(self):
+        _, profile_avs = self._force_blueprint_artifact(
+            artifact_type=ArtifactType.Profile,
+            priority=100,
+            version_count=1
+        )
+        _, enterprise_app_avs = self._force_blueprint_artifact(
+            artifact_type=ArtifactType.EnterpriseApp,
+            priority=1,
+            version_count=1,
+        )
+        # no included_types, priority → profile
+        self.assertEqual(
+            ArtifactVersion.objects.next_to_install(
+                self.enrolled_device,
+            ),
+            profile_avs[0]
+        )
+        # included_types set, profile not included → enterprise app
+        self.assertEqual(
+            ArtifactVersion.objects.next_to_install(
+                self.enrolled_device,
+                included_types=(ArtifactType.EnterpriseApp, ArtifactType.StoreApp)
+            ),
+            enterprise_app_avs[0]
+        )
+
     # ArtifactVersion.objects.next_to_remove
 
     def test_no_blueprint_nothing_to_remove(self):
@@ -386,3 +446,32 @@ class TestMDMArtifacts(TestCase):
         artifact, artifact_versions = self._force_blueprint_artifact(version_count=2)
         self._force_target_artifact_version(self.enrolled_device, artifact_versions[1])
         self.assertEqual(ArtifactVersion.objects.next_to_remove(self.enrolled_device), None)
+
+    def test_empty_blueprint_remove_one_store_app_exclude_profile(self):
+        _, profile_avs = self._force_artifact(
+            artifact_type=ArtifactType.Profile,
+            priority=1,
+            version_count=1
+        )
+        _, store_app_avs = self._force_artifact(
+            artifact_type=ArtifactType.StoreApp,
+            priority=1,
+            version_count=1,
+        )
+        self._force_target_artifact_version(self.enrolled_device, profile_avs[0])
+        self._force_target_artifact_version(self.enrolled_device, store_app_avs[0])
+        # no included_types, first ArtifactVersion created → profile
+        self.assertEqual(
+            ArtifactVersion.objects.next_to_remove(
+                self.enrolled_device,
+            ),
+            profile_avs[0]
+        )
+        # included_types set, profile not included → enterprise app
+        self.assertEqual(
+            ArtifactVersion.objects.next_to_remove(
+                self.enrolled_device,
+                included_types=(ArtifactType.EnterpriseApp, ArtifactType.StoreApp)
+            ),
+            store_app_avs[0]
+        )
