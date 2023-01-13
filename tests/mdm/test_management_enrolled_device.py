@@ -10,6 +10,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import CustomCommand
+from zentral.contrib.mdm.models import Blueprint
 from .utils import force_dep_enrollment_session, force_ota_enrollment_session, force_user_enrollment_session
 
 
@@ -482,3 +483,43 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
             f'attachment; filename="device_command_{cmd.db_command.uuid}-result.plist"'
         )
         self.assertEqual(plistlib.loads(b"".join(response.streaming_content)), result)
+
+    # change blueprint
+
+    def test_change_enrolled_device_blueprint_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login_redirect(reverse("mdm:change_enrolled_device_blueprint", args=(session.enrolled_device.pk,)))
+
+    def test_change_enrolled_device_blueprint_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login()
+        response = self.client.get(reverse("mdm:change_enrolled_device_blueprint", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_change_enrolled_device_blueprint_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.change_enrolleddevice")
+        response = self.client.get(reverse("mdm:change_enrolled_device_blueprint", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_form.html")
+        self.assertContains(response, "Change blueprint")
+
+    @patch("zentral.contrib.mdm.views.management.send_enrolled_device_notification")
+    def test_change_enrolled_device_blueprint_post(self, send_enrolled_device_notification):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.assertIsNone(session.enrolled_device.blueprint)
+        self._login("mdm.change_enrolleddevice", "mdm.view_enrolleddevice")
+        blueprint = Blueprint.objects.create(name=get_random_string(12))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("mdm:change_enrolled_device_blueprint", args=(session.enrolled_device.pk,)),
+                {"blueprint": blueprint.pk},
+                follow=True
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertEqual(len(callbacks), 1)
+        send_enrolled_device_notification.assert_called_once_with(session.enrolled_device)
+        session.enrolled_device.refresh_from_db()
+        self.assertEqual(session.enrolled_device.blueprint, blueprint)
+        self.assertContains(response, blueprint.name)

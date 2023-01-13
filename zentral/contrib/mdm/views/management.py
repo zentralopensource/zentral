@@ -1130,9 +1130,7 @@ class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateView):
     def form_valid(self, form):
         old_blueprint = EnrolledDevice.objects.get(pk=self.object.pk).blueprint
         if self.object.blueprint != old_blueprint:
-            transaction.on_commit(lambda: send_enrolled_device_notification(
-                self.object, notify_users=True
-            ))
+            transaction.on_commit(lambda: send_enrolled_device_notification(self.object))
         return super().form_valid(form)
 
 
