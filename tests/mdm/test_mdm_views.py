@@ -13,8 +13,11 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
+from zentral.contrib.mdm.declarations import (get_blueprint_tokens_response,
+                                              update_blueprint_activation,
+                                              update_blueprint_declaration_items)
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.models import (DEPEnrollmentSession, DeviceCommand, EnrolledDevice,
+from zentral.contrib.mdm.models import (Blueprint, DEPEnrollmentSession, DeviceCommand, EnrolledDevice,
                                         OTAEnrollmentSession, UserEnrollmentSession, ReEnrollmentSession)
 from .utils import (force_dep_enrollment_session,
                     force_enrolled_user,
@@ -93,7 +96,15 @@ class MDMViewsTestCase(TestCase):
         for k, v in kwargs.items():
             self.assertEqual(last_event.payload.get(k), v)
 
-    # checkin
+    def _add_blueprint(self, session):
+        blueprint = Blueprint.objects.create(name=get_random_string(12))
+        update_blueprint_activation(blueprint, commit=False)
+        update_blueprint_declaration_items(blueprint)
+        session.enrolled_device.blueprint = blueprint
+        session.enrolled_device.save()
+        return blueprint
+
+    # checkin - authenticate
 
     def test_unknown_message_type(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu)
@@ -280,6 +291,8 @@ class MDMViewsTestCase(TestCase):
         self.assertIsNone(ed.last_notified_at)
         self.assertIsNone(ed.notification_queued_at)
 
+    # checkin - token update
+
     def test_device_channel_token_update_no_awaiting_configuration(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True)
         self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
@@ -335,6 +348,8 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(enrolled_user.long_name, user_long_name)
         self.assertEqual(enrolled_user.short_name, user_short_name)
 
+    # checkin - set bootstrap token
+
     def test_set_bootstrap_token_no_awaiting_configuration(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         bootstrap_token = get_random_string(12).encode("utf-8")
@@ -349,6 +364,8 @@ class MDMViewsTestCase(TestCase):
         self._assertSuccess(post_event)
         session.refresh_from_db()
         self.assertEqual(session.enrolled_device.get_bootstrap_token(), bootstrap_token)
+
+    # checkin - get bootstrap token
 
     def test_get_bootstrap_token_error(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
@@ -375,6 +392,8 @@ class MDMViewsTestCase(TestCase):
         data = plistlib.loads(response.content)
         self.assertEqual(data["BootstrapToken"], bootstrap_token)
 
+    # checkin - declarative management
+
     def test_declarative_management_no_blueprint_error(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         payload = {
@@ -387,6 +406,26 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self._assertAbort(post_event, "Missing blueprint. No declarative management possible.",
                           data={"un": 2}, endpoint="declaration-items")
+
+    def test_declarative_management_tokens(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        blueprint = self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "tokens"
+        }
+        response = self._put(reverse("mdm:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        json_response = json.loads(response.content)
+        tokens_response, declarations_token = get_blueprint_tokens_response(blueprint)
+        self.assertEqual(json_response, tokens_response)
+        self._assertSuccess(post_event, endpoint="tokens")
+        session.enrolled_device.refresh_from_db()
+        self.assertEqual(session.enrolled_device.declarations_token, declarations_token)
+
+    # checking - checkout
 
     def test_checkout(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
@@ -406,6 +445,8 @@ class MDMViewsTestCase(TestCase):
         self.assertIsNone(enrolled_device.get_bootstrap_token())
         self.assertIsNone(enrolled_device.get_unlock_token())
         self.assertIsNotNone(enrolled_device.checkout_at)
+
+    # connect
 
     def test_device_channel_connect_idle_no_command(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)

@@ -1,9 +1,14 @@
+import json
+import plistlib
+import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import DeclarativeManagement
 from zentral.contrib.mdm.commands.scheduling import _trigger_declarative_management_sync
-from zentral.contrib.mdm.declarations import update_blueprint_activation, update_blueprint_declaration_items
+from zentral.contrib.mdm.declarations import (get_blueprint_tokens_response,
+                                              update_blueprint_activation,
+                                              update_blueprint_declaration_items)
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
 from .utils import force_dep_enrollment_session, force_enrolled_user
 
@@ -20,6 +25,7 @@ class DeclarativeManagementCommandTestCase(TestCase):
             realm_user=True
         )
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
+        cls.enrolled_device.os_version = "13.1"
         cls.blueprint = Blueprint.objects.create(name=get_random_string(32))
         update_blueprint_activation(cls.blueprint, commit=False)
         update_blueprint_declaration_items(cls.blueprint, commit=True)
@@ -58,6 +64,76 @@ class DeclarativeManagementCommandTestCase(TestCase):
                     channel, self.enrolled_device
                 )
             )
+        # no blueprint
+        self.enrolled_device.platform = Platform.macOS.name
+        self.enrolled_device.user_enrollment = False
+        self.enrolled_device.os_version = "13.1.0"
+        self.enrolled_device.blueprint = None
+        self.assertTrue(
+            DeclarativeManagement.verify_channel_and_device(Channel.Device, self.enrolled_device) is False
+        )
+
+    # load_kwargs
+
+    def test_load_empty_kwargs(self):
+        cmd = DeclarativeManagement.create_for_device(
+            self.enrolled_device
+        )
+        self.assertIsNone(cmd.blueprint_pk)
+        self.assertIsNone(cmd.declarations_token)
+
+    def test_load_kwargs(self):
+        cmd = DeclarativeManagement.create_for_device(
+            self.enrolled_device
+        )
+        # kwargs/state added when the command in built
+        cmd.build_http_response(self.dep_enrollment_session)
+        self.assertEqual(cmd.blueprint_pk, self.blueprint.pk)
+        self.assertEqual(cmd.declarations_token, uuid.UUID(self.blueprint.declaration_items["DeclarationsToken"]))
+
+    # build_command
+
+    def test_build_command(self):
+        cmd = DeclarativeManagement.create_for_device(
+            self.enrolled_device
+        )
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        loaded_payload_data = json.loads(payload["Data"])
+        tokens_response, declarations_token = get_blueprint_tokens_response(self.blueprint)
+        self.assertEqual(loaded_payload_data, tokens_response)
+        cmd.db_command.refresh_from_db()
+        self.assertEqual(
+            cmd.db_command.kwargs,
+            {"blueprint_pk": self.blueprint.pk,
+             "declarations_token": str(declarations_token)}
+        )
+
+    # process_response
+
+    def test_process_acknowledged_response(self):
+        self.assertFalse(self.enrolled_device.declarative_management)
+        self.assertIsNone(self.enrolled_device.declarations_token)
+        cmd = DeclarativeManagement.create_for_device(
+            self.enrolled_device
+        )
+        # kwargs/state added when the command in built
+        cmd.build_http_response(self.dep_enrollment_session)
+        cmd.process_response(
+            {"UDID": self.enrolled_device.udid,
+             "Status": "Acknowledged",
+             "CommandUUID": str(cmd.uuid).upper()},
+            self.dep_enrollment_session,
+            self.mbu
+        )
+        cmd.db_command.refresh_from_db()
+        self.assertIsNone(cmd.db_command.result)
+        self.enrolled_device.refresh_from_db()
+        self.assertTrue(self.enrolled_device.declarative_management)
+        self.assertEqual(
+            self.enrolled_device.declarations_token,
+            uuid.UUID(self.blueprint.declaration_items["DeclarationsToken"])
+        )
 
     # _trigger_declarative_management_sync
 

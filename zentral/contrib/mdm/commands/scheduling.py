@@ -238,10 +238,7 @@ def _trigger_declarative_management_sync(channel, status, enrollment_session, en
         return
     if (
         not enrolled_device.declarative_management
-        or (
-            enrolled_device.blueprint
-            and enrolled_device.declarations_token != enrolled_device.blueprint.declarations_token
-        )
+        or enrolled_device.declarations_token != enrolled_device.blueprint.declarations_token
     ):
         return DeclarativeManagement.create_for_device(enrolled_device)
 

@@ -130,6 +130,17 @@ def update_blueprint_declaration_items(blueprint, commit=True):
     return False
 
 
+def get_blueprint_tokens_response(blueprint):
+    declarations_token = blueprint.declaration_items["DeclarationsToken"]
+    tokens_response = {
+        "SyncTokens": {
+            "Timestamp": blueprint.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "DeclarationsToken": declarations_token
+        }
+    }
+    return tokens_response, uuid.UUID(declarations_token)
+
+
 def update_enrolled_device_artifacts(enrolled_device, status_report):
     try:
         configurations = status_report["StatusItems"]["management"]["declarations"]["configurations"]

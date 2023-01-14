@@ -16,6 +16,7 @@ from zentral.contrib.mdm.commands.base import get_command
 from zentral.contrib.mdm.commands.scheduling import get_next_command_response
 from zentral.contrib.mdm.declarations import (build_legacy_profile,
                                               build_management_status_subscriptions,
+                                              get_blueprint_tokens_response,
                                               update_enrolled_device_artifacts)
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.inventory import ms_tree_from_payload
@@ -332,8 +333,10 @@ class CheckinView(MDMView):
             # TODO default empty configuration?
             self.abort("Missing blueprint. No declarative management possible.", **event_payload)
         if endpoint == "tokens":
-            logger.warning("Declarative management tokens endpoint not implemented")
-            response = {}
+            response, declarations_token = get_blueprint_tokens_response(blueprint)
+            if self.enrolled_device.declarations_token != declarations_token:
+                self.enrolled_device.declarations_token = declarations_token
+                self.enrolled_device.save()
         elif endpoint == "declaration-items":
             response = blueprint.declaration_items
         elif endpoint == "status":
