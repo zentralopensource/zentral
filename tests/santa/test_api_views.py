@@ -10,7 +10,7 @@ from rest_framework import status
 import yaml
 from accounts.models import User, APIToken
 from zentral.conf import settings
-from zentral.contrib.inventory.models import Certificate, File, EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.inventory.models import Certificate, File, EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment
 from zentral.utils.payloads import get_payload_identifier
@@ -38,10 +38,16 @@ class APIViewsTestCase(TestCase):
     def force_configuration(self):
         return Configuration.objects.create(name=get_random_string(12))
 
-    def force_enrollment(self):
+    def force_enrollment(self, tag_count=0):
         configuration = self.force_configuration()
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
-        return Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(tag_count)]
+        if tags:
+            enrollment_secret.tags.set(tags)
+        return (
+            Enrollment.objects.create(configuration=configuration, secret=enrollment_secret),
+            tags
+        )
 
     def set_permissions(self, *permissions):
         if permissions:
@@ -881,7 +887,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_enrollments(self):
-        enrollment = self.force_enrollment()
+        enrollment, tags = self.force_enrollment(tag_count=1)
         self.set_permissions("santa.view_enrollment")
         response = self.get(reverse('santa_api:enrollments'))
         self.assertEqual(response.status_code, 200)
@@ -893,7 +899,7 @@ class APIViewsTestCase(TestCase):
                  'id': enrollment.secret.pk,
                  'secret': enrollment.secret.secret,
                  'meta_business_unit': self.mbu.pk,
-                 'tags': [],
+                 'tags': [tags[0].pk],
                  'serial_numbers': None,
                  'udids': None,
                  'quota': None,
@@ -913,9 +919,9 @@ class APIViewsTestCase(TestCase):
     # filter enrollments
 
     def test_get_enrollments_search(self):
-        enrollment1 = self.force_enrollment()
-        enrollment2 = self.force_enrollment()
-        enrollment3 = self.force_enrollment()
+        enrollment1, _ = self.force_enrollment()
+        enrollment2, _ = self.force_enrollment()
+        enrollment3, _ = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
         response = self.get(reverse('santa_api:enrollments'), {'configuration_id': enrollment2.configuration.pk})
         self.assertEqual(response.status_code, 200)
@@ -932,27 +938,27 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_get_enrollments_search_unauthorized(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
         response = self.get(reverse('santa_api:enrollments'), {'configuration_id': enrollment.configuration.pk},
                             include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_enrollments_search_permission_denied(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         response = self.get(reverse('santa_api:enrollments'), {'configuration_id': enrollment.configuration.pk})
         self.assertEqual(response.status_code, 403)
 
     # get enrollment
 
     def test_get_enrollment_unauthorized(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
         response = self.get(reverse("santa_api:enrollment", args=(enrollment.pk,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_enrollment_permission_denied(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         response = self.get(reverse("santa_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -962,7 +968,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_get_enrollment(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
         response = self.get(reverse('santa_api:enrollment', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -994,13 +1000,13 @@ class APIViewsTestCase(TestCase):
     # get enrollment configuration
 
     def test_get_enrollment_plist_unauthorized(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
         response = self.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_enrollment_plist_permission_denied(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         response = self.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -1010,7 +1016,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_get_enrollment_plist(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
         response = self.get(reverse('santa_api:enrollment_plist', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -1020,14 +1026,14 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(int(response['Content-Length']), len(response.content))
 
     def test_get_enrollment_configuration_profile_unauthorized(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
         response = self.get(reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,)),
                             include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_enrollment_configuration_profile_permission_denied(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         response = self.get(reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -1038,7 +1044,7 @@ class APIViewsTestCase(TestCase):
 
     def test_get_enrollment_configuration_profile(self):
         identifier = get_payload_identifier("santa_configuration")
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
         response = self.get(reverse('santa_api:enrollment_configuration_profile', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -1051,15 +1057,21 @@ class APIViewsTestCase(TestCase):
     def test_create_enrollment(self):
         config = self.force_configuration()
         self.set_permissions("santa.add_enrollment")
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
         response = self.post_json_data(
             reverse('santa_api:enrollments'),
             {'configuration': config.pk,
-             'secret': {"meta_business_unit": self.mbu.pk}}
+             'secret': {"meta_business_unit": self.mbu.pk,
+                        "tags": [t.id for t in tags]}}
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Enrollment.objects.filter(configuration__name=config.name).count(), 1)
         enrollment = Enrollment.objects.get(configuration__name=config.name)
         self.assertEqual(enrollment.secret.meta_business_unit, self.mbu)
+        self.assertEqual(
+            set(enrollment.secret.tags.all()),
+            set(tags)
+        )
 
     def test_create_enrollment_unauthorized(self):
         data = {'name': 'Configuration0'}
@@ -1075,16 +1087,19 @@ class APIViewsTestCase(TestCase):
     # update enrollment
 
     def test_update_enrollment(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment(tag_count=2)
         enrollment_secret = enrollment.secret
         self.assertEqual(enrollment.secret.quota, None)
         self.assertEqual(enrollment.secret.serial_numbers, None)
+        self.assertEqual(enrollment.secret.tags.count(), 2)
         secret_data = EnrollmentSecretSerializer(enrollment_secret).data
         secret_data["id"] = 233333  # to check that there is no enrollment secret creation
         secret_data["quota"] = 23
         secret_data["request_count"] = 2331983  # to check that it cannot be updated
         serial_numbers = [get_random_string(12) for i in range(13)]
         secret_data["serial_numbers"] = serial_numbers
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
+        secret_data["tags"] = [t.id for t in tags]
         data = {"configuration": enrollment.configuration.pk,
                 "secret": secret_data}
         self.set_permissions("santa.change_enrollment")
@@ -1095,9 +1110,13 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(enrollment.secret.quota, 23)
         self.assertEqual(enrollment.secret.request_count, 0)
         self.assertEqual(enrollment.secret.serial_numbers, serial_numbers)
+        self.assertEqual(
+            set(enrollment.secret.tags.all()),
+            set(tags)
+        )
 
     def test_update_enrollment_unauthorized(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         enrollment_secret = enrollment.secret
         self.assertEqual(enrollment.secret.quota, None)
         self.assertEqual(enrollment.secret.serial_numbers, None)
@@ -1115,7 +1134,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_update_enrollment_permission_denied(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         enrollment_secret = enrollment.secret
         self.assertEqual(enrollment.secret.quota, None)
         self.assertEqual(enrollment.secret.serial_numbers, None)
@@ -1131,7 +1150,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_update_enrollment_not_found(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         enrollment_secret = enrollment.secret
         self.assertEqual(enrollment.secret.quota, None)
         self.assertEqual(enrollment.secret.serial_numbers, None)
@@ -1150,19 +1169,19 @@ class APIViewsTestCase(TestCase):
     # delete enrollment
 
     def test_delete_enrollment(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.set_permissions("santa.delete_enrollment")
         response = self.delete(reverse('santa_api:enrollment', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 204)
 
     def test_delete_enrollment_unauthorized(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.set_permissions("santa.delete_enrollment")
         response = self.delete(reverse('santa_api:enrollment', args=(enrollment.pk,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_delete_enrollment_permission_denied(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         response = self.delete(reverse('santa_api:enrollment', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 

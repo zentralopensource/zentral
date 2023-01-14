@@ -45,7 +45,10 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         secret_data = validated_data.pop('secret')
+        secret_tags = secret_data.pop("tags", [])
         secret = EnrollmentSecret.objects.create(**secret_data)
+        if secret_tags:
+            secret.tags.set(secret_tags)
         enrollment = Enrollment.objects.create(secret=secret, **validated_data)
         return enrollment
 
