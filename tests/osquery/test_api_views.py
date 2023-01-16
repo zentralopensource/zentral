@@ -1129,7 +1129,7 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:queries"))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_queries_filter(self):
+    def test_get_queries_filter_by_name(self):
         query = self.force_query()
         for i in range(3):
             self.force_query()
@@ -1190,14 +1190,29 @@ class APIViewsTestCase(TestCase):
                          {'non_field_errors': ["{compliance_check_enabled: true} only if query contains ztl_status"]})
 
     def test_create_query_validate_success(self):
+        query_name = get_random_string(12)
         data = {
-            "name": get_random_string(12),
+            "name": query_name,
             "sql": "ztl_status;",
             "compliance_check_enabled": True
         }
         self.set_permissions("osquery.add_query")
         response = self.post_json_data(reverse("osquery_api:queries"), data)
+        query = Query.objects.get(name=query_name)
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json(),
+                         {"id": query.pk,
+                          "name": query_name,
+                          "version": 1,
+                          "compliance_check_enabled": True,
+                          "sql": query.sql,
+                          "minimum_osquery_version": None,
+                          "description": query.description,
+                          "value": '',
+                          "platforms": [],
+                          "created_at": query.created_at.isoformat(),
+                          "updated_at": query.updated_at.isoformat()
+                          })
 
     def test_create_query_unauthorized(self):
         data = {
@@ -1228,6 +1243,35 @@ class APIViewsTestCase(TestCase):
                           "name": query.name,
                           "version": 1,
                           "compliance_check_enabled": False,
+                          "sql": query.sql,
+                          "minimum_osquery_version": None,
+                          "description": query.description,
+                          "value": '',
+                          "platforms": [],
+                          "created_at": query.created_at.isoformat(),
+                          "updated_at": query.updated_at.isoformat()
+                          })
+
+    def test_get_query_compliance_check_enabled(self):
+        query_name = get_random_string(12)
+        data = {
+            "name": query_name,
+            "sql": "ztl_status;",
+            "compliance_check_enabled": True
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 201)
+        self.set_permissions("osquery.view_query")
+        query = Query.objects.get(name=query_name)
+        response = self.get(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(query.compliance_check_enabled, True)
+        self.assertEqual(response.json(),
+                         {"id": query.pk,
+                          "name": query_name,
+                          "version": 1,
+                          "compliance_check_enabled": True,
                           "sql": query.sql,
                           "minimum_osquery_version": None,
                           "description": query.description,
@@ -1291,6 +1335,20 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("osquery.change_query")
         response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(query.compliance_check_enabled, True)
+        self.assertEqual(response.json(),
+                         {"id": query.pk,
+                          "name": query.name,
+                          "version": 1,
+                          "compliance_check_enabled": True,
+                          "sql": query.sql,
+                          "minimum_osquery_version": None,
+                          "description": query.description,
+                          "value": '',
+                          "platforms": [],
+                          "created_at": query.created_at.isoformat(),
+                          "updated_at": query.updated_at.isoformat()
+                          })
 
     # delete query
 
