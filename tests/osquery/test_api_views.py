@@ -1266,7 +1266,6 @@ class APIViewsTestCase(TestCase):
         query = Query.objects.get(name=query_name)
         response = self.get(reverse("osquery_api:query", args=(query.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(query.compliance_check_enabled, True)
         self.assertEqual(response.json(),
                          {"id": query.pk,
                           "name": query_name,
@@ -1335,11 +1334,11 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("osquery.change_query")
         response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(query.compliance_check_enabled, True)
+        query.refresh_from_db()
         self.assertEqual(response.json(),
                          {"id": query.pk,
                           "name": query.name,
-                          "version": 1,
+                          "version": query.version,
                           "compliance_check_enabled": True,
                           "sql": query.sql,
                           "minimum_osquery_version": None,
@@ -1349,6 +1348,18 @@ class APIViewsTestCase(TestCase):
                           "created_at": query.created_at.isoformat(),
                           "updated_at": query.updated_at.isoformat()
                           })
+
+    def test_update_query_increment_version(self):
+        query = self.force_query()
+        self.assertEqual(query.version, 1)
+        new_sql = "changed sql line;"
+        data = {"name": query.name, "sql": new_sql}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["version"], 2)
+        query.refresh_from_db()
+        self.assertEqual(query.version, 2)
 
     # delete query
 

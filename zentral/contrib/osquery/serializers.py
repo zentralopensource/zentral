@@ -1,4 +1,3 @@
-from django.db.models import F
 from django.urls import reverse
 from rest_framework import serializers
 from zentral.conf import settings
@@ -191,7 +190,7 @@ class QuerySerializer(serializers.ModelSerializer):
         if instance.pk:
             sql = validated_data.get("sql")
             if sql and sql != instance.sql:
-                instance.version = F("version") + 1
+                instance.version += 1
         query = super().update(instance, validated_data)
         _, _, compliance_check_deleted = sync_query_compliance_check(query, compliance_check_enabled)
         if not compliance_check_enabled and compliance_check_deleted:
