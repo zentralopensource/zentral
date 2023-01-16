@@ -45,6 +45,13 @@ class APIViewsTestCase(TestCase):
             tags
         )
 
+    def force_query(self):
+        sql = "SELECT * FROM osquery_schedule;"
+        return Query.objects.create(
+            name=get_random_string(12),
+            sql=sql,
+        )
+
     def set_permissions(self, *permissions):
         if permissions:
             permission_filter = reduce(operator.or_, (
@@ -1091,3 +1098,218 @@ class APIViewsTestCase(TestCase):
         response = self.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)),
                              include_token=True)
         self.assertEqual(response.status_code, 201)
+
+    # list queries
+
+    def test_get_queries(self):
+        query = self.force_query()
+        self.set_permissions("osquery.view_query")
+        response = self.get(reverse("osquery_api:queries"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(),
+                         [{"id": query.pk,
+                           "name": query.name,
+                           "version": 1,
+                           "compliance_check_enabled": False,
+                           "sql": query.sql,
+                           "minimum_osquery_version": None,
+                           "description": query.description,
+                           "value": '',
+                           "platforms": [],
+                           "created_at": query.created_at.isoformat(),
+                           "updated_at": query.updated_at.isoformat()
+                           }])
+
+    def test_get_queries_unauthorized(self):
+        self.set_permissions("osquery.view_query")
+        response = self.get(reverse("osquery_api:queries"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_queries_permission_denied(self):
+        response = self.get(reverse("osquery_api:queries"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_queries_filter(self):
+        query = self.force_query()
+        for i in range(3):
+            self.force_query()
+        self.set_permissions("osquery.view_query")
+        response = self.get(reverse("osquery_api:queries"), {"name": query.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(),
+                         [{"id": query.pk,
+                           "name": query.name,
+                           "version": 1,
+                           "compliance_check_enabled": False,
+                           "sql": query.sql,
+                           "minimum_osquery_version": None,
+                           "description": query.description,
+                           "value": '',
+                           "platforms": [],
+                           "created_at": query.created_at.isoformat(),
+                           "updated_at": query.updated_at.isoformat()
+                           }])
+
+    # create queries
+
+    def test_create_query(self):
+        data = {
+            "name": "test_query01",
+            "sql": "select * from osquery_info;",
+            "compliance_check_enabled": False
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Query.objects.filter(name='test_query01').count(), 1)
+        query = Query.objects.get(name='test_query01')
+        self.assertEqual(response.json(),
+                         {"id": query.pk,
+                          "name": query.name,
+                          "version": 1,
+                          "compliance_check_enabled": False,
+                          "sql": "select * from osquery_info;",
+                          "minimum_osquery_version": None,
+                          "description": "",
+                          "value": '',
+                          "platforms": [],
+                          "created_at": query.created_at.isoformat(),
+                          "updated_at": query.updated_at.isoformat()
+                          })
+
+    def test_create_query_validate_error(self):
+        data = {
+            "name": get_random_string(12),
+            "sql": "select * from osquery_info;",
+            "compliance_check_enabled": True
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(),
+                         {'non_field_errors': ["{compliance_check_enabled: true} only if query contains ztl_status"]})
+
+    def test_create_query_validate_success(self):
+        data = {
+            "name": get_random_string(12),
+            "sql": "ztl_status;",
+            "compliance_check_enabled": True
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 201)
+
+    def test_create_query_unauthorized(self):
+        data = {
+            "name": "test_query01",
+            "sql": "select * from osquery_info;"
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_query_permission_denied(self):
+        data = {
+            "name": "test_query01",
+            "sql": "select * from osquery_info;"
+        }
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 403)
+
+    # get query
+
+    def test_get_query(self):
+        query = self.force_query()
+        self.set_permissions("osquery.view_query")
+        response = self.get(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(),
+                         {"id": query.pk,
+                          "name": query.name,
+                          "version": 1,
+                          "compliance_check_enabled": False,
+                          "sql": query.sql,
+                          "minimum_osquery_version": None,
+                          "description": query.description,
+                          "value": '',
+                          "platforms": [],
+                          "created_at": query.created_at.isoformat(),
+                          "updated_at": query.updated_at.isoformat()
+                          })
+
+    def test_get_query_unauthorized(self):
+        query = self.force_query()
+        self.set_permissions("osquery.view_query")
+        response = self.get(reverse("osquery_api:query", args=(query.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_query_permission_denied(self):
+        query = self.force_query()
+        response = self.get(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    # update query
+
+    def test_update_query(self):
+        query = self.force_query()
+        new_name = get_random_string(12)
+        data = {"name": new_name, "sql": query.sql}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        query.refresh_from_db()
+        self.assertEqual(Query.objects.filter(name=new_name).count(), 1)
+        self.assertEqual(query.name, new_name)
+
+    def test_update_query_unauthorized(self):
+        query = self.force_query()
+        new_name = get_random_string(12)
+        data = {"name": new_name, "sql": query.sql}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_query_permission_denied(self):
+        query = self.force_query()
+        new_name = get_random_string(12)
+        data = {"name": new_name, "sql": query.sql}
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_query_validate_error(self):
+        query = self.force_query()
+        data = {"name": query.name, "sql": query.sql, "compliance_check_enabled": True}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(),
+                         {'non_field_errors': ["{compliance_check_enabled: true} only if query contains ztl_status"]})
+
+    def test_update_query_validate_success(self):
+        query = self.force_query()
+        data = {"name": query.name, "sql": "ztl_status;", "compliance_check_enabled": True}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+
+    # delete query
+
+    def test_delete_query(self):
+        query = self.force_query()
+        self.set_permissions("osquery.delete_query")
+        response = self.delete(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(Query.objects.filter(pk=query.pk).count(), 0)
+
+    def test_delete_query_unauthorized(self):
+        query = self.force_query()
+        self.set_permissions("osquery.delete_query")
+        response = self.delete(reverse("osquery_api:query", args=(query.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_query_permission_denied(self):
+        query = self.force_query()
+        response = self.delete(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+
