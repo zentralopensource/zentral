@@ -30,6 +30,7 @@
     <tr>
       <th>Name</th>
       <th>Type</th>
+      <th>Platforms</th>
       <th>Blueprints</th>
       <th>created at</th>
       <th>updated at</th>
@@ -40,6 +41,7 @@
     <tr>
       <td><a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a></td>
       <td>{{ artifact.get_type_display }}</td>
+      <td>{{ artifact.platforms|join:", " }}</td>
       <td>{{ artifact.blueprintartifact__count }}</td>
       <td>{{ artifact.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>{{ artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
