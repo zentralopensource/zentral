@@ -277,7 +277,7 @@ curl -XPOST \
 * Content-Type: application/json
 * Required permission: `osquery.view_query`
 * Optional filter parameter:
-    * `name`: the name of the query target.
+    * `name`: name of the query.
 
 Examples
 

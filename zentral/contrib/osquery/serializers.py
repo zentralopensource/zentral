@@ -1,3 +1,4 @@
+from django.db.models import F
 from django.urls import reverse
 from rest_framework import serializers
 from zentral.conf import settings
@@ -166,17 +167,15 @@ class QuerySerializer(serializers.ModelSerializer):
         if data.get("compliance_check_enabled"):
             sql = data.get("sql")
             if sql is not None and 'ztl_status' not in sql:
-                raise serializers.ValidationError('{compliance_check_enabled: true} '
-                                                  'only if query contains ztl_status')
+                raise serializers.ValidationError({'sql': 'ztl_status not in sql'})
             try:
                 pack_query = data.instance.packquery
             except AttributeError:
                 pass
             else:
                 if not pack_query.snapshot_mode:
-                    raise serializers.ValidationError('{compliance_check_enabled: true} '
-                                                      'This query is scheduled in diff mode in '
-                                                      f'the {pack_query.pack} pack')
+                    raise serializers.ValidationError(
+                        {'compliance_check_enabled': f'query is scheduled in diff mode in {pack_query.pack} pack'})
         return data
 
     def create(self, validated_data):
@@ -187,12 +186,13 @@ class QuerySerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         compliance_check_enabled = validated_data.pop("compliance_check_enabled")
-        if instance.pk:
-            sql = validated_data.get("sql")
-            if sql and sql != instance.sql:
-                instance.version += 1
+        sql = validated_data.get("sql")
+        if sql and sql != instance.sql:
+            instance.version = F('version') + 1
+            instance.save(update_fields=["version"])
+            instance.refresh_from_db()
         query = super().update(instance, validated_data)
         _, _, compliance_check_deleted = sync_query_compliance_check(query, compliance_check_enabled)
-        if not compliance_check_enabled and compliance_check_deleted:
+        if compliance_check_deleted:
             query.refresh_from_db()
         return query

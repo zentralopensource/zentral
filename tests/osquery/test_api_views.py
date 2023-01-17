@@ -14,6 +14,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit,
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query
+from zentral.core.compliance_checks.models import ComplianceCheck
 
 
 class APIViewsTestCase(TestCase):
@@ -1125,7 +1126,6 @@ class APIViewsTestCase(TestCase):
                            }])
 
     def test_get_queries_unauthorized(self):
-        self.set_permissions("osquery.view_query")
         response = self.get(reverse("osquery_api:queries"), include_token=False)
         self.assertEqual(response.status_code, 401)
 
@@ -1190,8 +1190,7 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("osquery.add_query")
         response = self.post_json_data(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(),
-                         {'non_field_errors': ["{compliance_check_enabled: true} only if query contains ztl_status"]})
+        self.assertEqual(response.json(), {'sql': ['ztl_status not in sql']})
 
     def test_create_query_validate_success(self):
         query_name = get_random_string(12)
@@ -1206,13 +1205,13 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
         self.assertEqual(response.json()["id"], query.pk)
+        self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
 
     def test_create_query_unauthorized(self):
         data = {
             "name": "test_query01",
             "sql": "select * from osquery_info;"
         }
-        self.set_permissions("osquery.add_query")
         response = self.post_json_data(reverse("osquery_api:queries"), data, include_token=False)
         self.assertEqual(response.status_code, 401)
 
@@ -1251,10 +1250,10 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:query", args=(query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
+        self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
 
     def test_get_query_unauthorized(self):
         query = self.force_query()
-        self.set_permissions("osquery.view_query")
         response = self.get(reverse("osquery_api:query", args=(query.pk,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
@@ -1280,7 +1279,6 @@ class APIViewsTestCase(TestCase):
         query = self.force_query()
         new_name = get_random_string(12)
         data = {"name": new_name, "sql": query.sql}
-        self.set_permissions("osquery.change_query")
         response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data, include_token=False)
         self.assertEqual(response.status_code, 401)
 
@@ -1297,8 +1295,7 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("osquery.change_query")
         response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(),
-                         {'non_field_errors': ["{compliance_check_enabled: true} only if query contains ztl_status"]})
+        self.assertEqual(response.json(), {'sql': ['ztl_status not in sql']})
 
     def test_update_query_validate_success(self):
         query = self.force_query()
@@ -1331,7 +1328,6 @@ class APIViewsTestCase(TestCase):
 
     def test_delete_query_unauthorized(self):
         query = self.force_query()
-        self.set_permissions("osquery.delete_query")
         response = self.delete(reverse("osquery_api:query", args=(query.pk,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
@@ -1339,5 +1335,3 @@ class APIViewsTestCase(TestCase):
         query = self.force_query()
         response = self.delete(reverse("osquery_api:query", args=(query.pk,)))
         self.assertEqual(response.status_code, 403)
-
-
