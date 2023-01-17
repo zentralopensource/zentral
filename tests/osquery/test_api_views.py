@@ -12,6 +12,7 @@ from accounts.models import APIToken, User
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query
 
 
@@ -45,12 +46,15 @@ class APIViewsTestCase(TestCase):
             tags
         )
 
-    def force_query(self):
-        sql = "SELECT * FROM osquery_schedule;"
-        return Query.objects.create(
-            name=get_random_string(12),
-            sql=sql,
-        )
+    def force_query(self, compliance_check=False):
+        if compliance_check:
+            sql = "ztl_status;"
+        else:
+            sql = "SELECT * FROM osquery_schedule;"
+        query = Query.objects.create(name=get_random_string(12), sql=sql)
+        sync_query_compliance_check(query, compliance_check)
+        query.refresh_from_db()
+        return query
 
     def set_permissions(self, *permissions):
         if permissions:
@@ -1242,17 +1246,8 @@ class APIViewsTestCase(TestCase):
                           })
 
     def test_get_query_compliance_check_enabled(self):
-        query_name = get_random_string(12)
-        data = {
-            "name": query_name,
-            "sql": "ztl_status;",
-            "compliance_check_enabled": True
-        }
-        self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
-        self.assertEqual(response.status_code, 201)
+        query = self.force_query(compliance_check=True)
         self.set_permissions("osquery.view_query")
-        query = Query.objects.get(name=query_name)
         response = self.get(reverse("osquery_api:query", args=(query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
