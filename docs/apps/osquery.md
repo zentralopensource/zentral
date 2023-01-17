@@ -268,3 +268,188 @@ curl -XPOST \
   "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd3/"
 }
 ```
+
+### /api/osquery/queries/
+
+#### List all queries.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_query`
+* Optional filter parameter:
+    * `name`: the name of the query target.
+
+Examples
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/osquery/queries/ \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/osquery/queries/?name=GetApps \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "compliance_check_enabled": false,
+        "name": "GetApps",
+        "sql": "SELECT * FROM apps;",
+        "platforms": [],
+        "minimum_osquery_version": null,
+        "description": "Get list of Apps",
+        "value": "",
+        "version": 2,
+        "created_at": "2023-01-13T07:10:12.571288",
+        "updated_at": "2023-01-13T09:24:39.779067"
+    }
+]
+```
+
+#### Add a new query.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `osquery.add_query`
+
+> **_NOTE:_** `compliance_check_enabled: true` only possible if sql query contains `ztl_status`.
+
+Example
+
+query.json
+
+```json
+{
+	"compliance_check_enabled": false,
+	"name": "GetApps",
+	"sql": "SELECT * FROM apps;"
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @query.json \
+  https://zentral.example.com/api/osquery/queries/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+	"id": 1,
+	"compliance_check_enabled": false,
+	"name": "GetApps",
+	"sql": "SELECT * FROM apps;",
+	"platforms": [],
+	"minimum_osquery_version": null,
+	"description": "Get list of Apps",
+	"value": "",
+	"version": 1,
+	"created_at": "2023-01-13T07:10:12.571288",
+	"updated_at": "2023-01-13T09:24:39.779067"
+}
+```
+
+### /api/osquery/queries/`<int:pk>`/
+
+#### Get a query.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_query`
+* `<int:pk>`: the primary key of the query.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/osquery/queries/1/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+	"id": 1,
+	"compliance_check_enabled": false,
+	"name": "GetApps",
+	"sql": "SELECT * FROM apps;",
+	"platforms": [],
+	"minimum_osquery_version": null,
+	"description": "Get list of Apps",
+	"value": "",
+	"version": 1,
+	"created_at": "2023-01-13T07:10:12.571288",
+	"updated_at": "2023-01-13T09:24:39.779067"
+}
+```
+
+#### Update a query.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `osquery.update_query`
+* `<int:pk>`: the primary key of the query.
+
+Example
+
+query_update.json
+
+```json
+{
+	"name": "GetUsers",
+	"sql": "SELECT * FROM users;"
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @query_update.json \
+  https://zentral.example.com/api/osquery/queries/1/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+	"id": 1,
+	"compliance_check_enabled": false,
+	"name": "GetUsers",
+	"sql": "SELECT * FROM users;",
+	"platforms": [],
+	"minimum_osquery_version": null,
+	"description": "Get list of Apps",
+	"value": "",
+	"version": 2,
+	"created_at": "2023-01-14T07:10:12.571288",
+	"updated_at": "2023-01-14T09:24:39.779067"
+}
+```
+
+#### Delete a query.
+
+* method: DELETE
+* Required permission: `osquery.delete_query`
+* `<int:pk>`: the primary key of the query.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/osquery/queries/1/
+```
