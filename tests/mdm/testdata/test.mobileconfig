@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadDisplayName</key>
+			<string>Restrictions</string>
+			<key>PayloadIdentifier</key>
+			<string>com.example.my-profile.0</string>
+			<key>PayloadType</key>
+			<string>com.apple.applicationaccess</string>
+			<key>PayloadUUID</key>
+			<string>6FEB0D43-2F60-4F1C-9FA1-C9B8DE308819</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>allowAirPrint</key>
+			<false/>
+			<key>allowAssistant</key>
+			<false/>
+			<key>allowFilesNetworkDriveAccess</key>
+			<false/>
+			<key>allowFilesUSBDriveAccess</key>
+			<false/>
+			<key>allowGameCenter</key>
+			<false/>
+			<key>allowInAppPurchases</key>
+			<false/>
+			<key>allowOpenFromManagedToUnmanaged</key>
+			<false/>
+			<key>allowPasswordAutoFill</key>
+			<false/>
+			<key>allowSiriServerLogging</key>
+			<false/>
+			<key>allowSpotlightInternetResults</key>
+			<false/>
+			<key>forceAutomaticDateAndTime</key>
+			<true/>
+		</dict>
+	</array>
+	<key>PayloadDescription</key>
+	<string>Auto-date&amp;time, no in-app purchase, for test purpose blocked: no Siri no siri suggestions, no AirPrint</string>
+	<key>PayloadDisplayName</key>
+	<string>iOS Restrictions</string>
+	<key>PayloadIdentifier</key>
+	<string>com.example.my-profile</string>
+	<key>PayloadOrganization</key>
+	<string>Zentral Pro Services</string>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadUUID</key>
+	<string>8846C027-9F51-4574-9042-33C118F3D43E</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+	<key>TargetDeviceType</key>
+	<integer>1</integer>
+</dict>
+</plist>

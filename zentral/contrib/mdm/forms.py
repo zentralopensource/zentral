@@ -361,35 +361,61 @@ class UploadProfileForm(forms.Form):
             try:
                 payload = plistlib.load(source_file)
             except Exception:
-                raise forms.ValidationError("This file is not a plist.")
+                self.add_error("source_file", "This file is not a plist.")
+                return self.cleaned_data
+            # identifier
             try:
-                self.cleaned_data["payload_identifier"] = payload["PayloadIdentifier"]
+                self.cleaned_data["payload_identifier"] = payload_identifier = payload["PayloadIdentifier"]
             except KeyError:
-                raise forms.ValidationError("Missing PayloadIdentifier")
+                self.add_error("source_file", "Missing PayloadIdentifier.")
+                return self.cleaned_data
+            # existing profile
+            self.cleaned_data["profile"] = profile = (
+                Profile.objects.select_for_update()
+                               .filter(payload_identifier=payload_identifier)
+                               .select_related("artifact_version__artifact")
+                               .first()
+            )
+            # channel
+            payload_scope = payload.get("PayloadScope", "User")
+            if payload_scope == "System":
+                channel = Channel.Device.name
+            elif payload_scope == "User":
+                channel = Channel.User.name
+            else:
+                self.add_error("source_file", f"Unknown PayloadScope: {payload_scope}.")
+                return self.cleaned_data
+            if profile and channel != profile.artifact_version.artifact.channel:
+                self.add_error(
+                    "source_file",
+                    "Existing profile with same payload identifier has a different channel."
+                )
+                return self.cleaned_data
+            self.cleaned_data["channel"] = channel
+            # uuid
             try:
                 self.cleaned_data["payload_uuid"] = payload["PayloadUUID"]
             except KeyError:
-                raise forms.ValidationError("Missing PayloadUUID")
-            payload_scope = payload.get("PayloadScope", "User")
-            if payload_scope == "System":
-                self.cleaned_data["channel"] = Channel.Device.value
-            elif payload_scope == "User":
-                self.cleaned_data["channel"] = Channel.User.value
-            else:
-                raise forms.ValidationError(f"Unknown PayloadScope: {payload_scope}")
+                self.add_error("source_file", "Missing PayloadUUID.")
+                return self.cleaned_data
+            # other keys
             for payload_key, obj_key in (("PayloadDisplayName", "payload_display_name"),
                                          ("PayloadDescription", "payload_description")):
                 self.cleaned_data[obj_key] = payload.get(payload_key) or ""
+            # name check
             name = self.cleaned_data.get("payload_display_name") or self.cleaned_data["payload_uuid"]
             if (
                 Artifact.objects.exclude(
                     artifactversion__profile__payload_identifier=self.cleaned_data["payload_identifier"]
                 ).filter(name=name).count()
             ):
-                raise forms.ValidationError(
-                    "An artifact with the same name but a different payload identifier already exists"
+                self.add_error(
+                    "source_file",
+                    "An artifact with the same name but a different payload identifier already exists."
                 )
+                return self.cleaned_data
             self.cleaned_data["name"] = name
+            # source
             source_file = self.cleaned_data.pop("source_file")
             source_file.seek(0)
             self.cleaned_data["source"] = source_file.read()
@@ -398,14 +424,10 @@ class UploadProfileForm(forms.Form):
 
     def save(self):
         cleaned_data = self.cleaned_data
-        payload_identifier = cleaned_data["payload_identifier"]
         name = cleaned_data.pop("name")
         channel = cleaned_data.pop("channel")
+        profile = cleaned_data.pop("profile")
         operation = None
-        profiles = (Profile.objects.select_for_update()
-                                   .filter(payload_identifier=payload_identifier)
-                                   .select_related("artifact_version__artifact"))
-        profile = profiles.order_by("-artifact_version__version").first()
         if profile is None:
             operation = "created"
             artifact = Artifact.objects.create(name=name,
