@@ -1238,6 +1238,38 @@ class APIViewsTestCase(TestCase):
         response = self.post_json_data(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 403)
 
+    def test_create_query_with_platforms(self):
+        name = get_random_string(12)
+        data = {
+            "name": name,
+            "sql": "select * from osquery_info;",
+            "platforms": [
+                "darwin",
+                "linux"
+            ]
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["platforms"], ["darwin", "linux"])
+        query = Query.objects.get(name=name)
+        self.assertEqual(query.platforms, ["darwin", "linux"])
+        self.assertEqual(len(query.platforms), 2)
+
+    def test_create_query_with_unsupported_platform(self):
+        name = get_random_string(12)
+        data = {
+            "name": name,
+            "sql": "select * from osquery_info;",
+            "platforms": ["haiku"]
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'platforms': {'0': ['"haiku" is not a valid choice.']}})
+        with self.assertRaises(Query.DoesNotExist):
+            Query.objects.get(name=name)
+
     # get query
 
     def test_get_query(self):
@@ -1357,6 +1389,40 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(
             response.json(),
             {'compliance_check_enabled': [f'query scheduled in diff mode in {pack_query.pack} pack']})
+
+    def test_update_query_add_platforms(self):
+        query = self.force_query()
+        data = {
+            "name": query.name,
+            "sql": query.sql,
+            "platforms": [
+                "darwin",
+                "freebsd",
+                "linux",
+                "posix",
+                "windows"
+            ]
+        }
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        query.refresh_from_db()
+        self.assertEqual(query.platforms, ["darwin", "freebsd", "linux", "posix", "windows"])
+        self.assertEqual(len(query.platforms), 5)
+
+    def test_update_query_add_unsupported_platform(self):
+        query = self.force_query()
+        data = {
+            "name": query.name,
+            "sql": query.sql,
+            "platforms": ["beOS"]
+        }
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'platforms': {'0': ['"beOS" is not a valid choice.']}})
+        query.refresh_from_db()
+        self.assertEqual(query.platforms, [])
 
     # delete query
 
