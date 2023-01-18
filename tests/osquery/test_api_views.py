@@ -1336,10 +1336,14 @@ class APIViewsTestCase(TestCase):
 
     def test_update_query_with_pack_query_snapshot_mode_validate_success(self):
         query = self.force_query(pack_query_mode="snapshot", compliance_check=False)
+        pack_query = PackQuery.objects.get(slug=slugify(query.name))
         data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
         response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["compliance_check_enabled"], True)
+        self.assertEqual(pack_query.slug, slugify(query.name))
+        self.assertIs(pack_query.snapshot_mode, True)
 
     def test_update_query_with_pack_query_diff_mode_validation_error(self):
         query = self.force_query(pack_query_mode="diff", compliance_check=False)
