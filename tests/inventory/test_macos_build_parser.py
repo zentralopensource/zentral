@@ -55,6 +55,7 @@ class MacOSBuildTestCase(TestCase):
            ("21G217", ("macOS", 12, 6, 1), "macOS 12.6.1 (21G217)"),
            ("21G309", ("macOS", 12, 6, 2), "macOS 12.6.2 (21G309)"),
            ("21G320", ("macOS", 12, 6, 2), "macOS 12.6.2 (21G320)"),
+           ("21G417", ("macOS", 12, 6, 3), "macOS 12.6.3 (21G417)"),
            ("22A400", ("macOS", 13, 0, 1), "macOS 13.0.1 (22A400)"),
         ):
             version_d = macos_version_from_build(build)
