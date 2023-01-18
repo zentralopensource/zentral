@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from django.utils.text import slugify
 from django.utils.http import http_date
 from django.test import TestCase
 from accounts.models import APIToken, User
@@ -46,13 +47,29 @@ class APIViewsTestCase(TestCase):
             Enrollment.objects.create(configuration=configuration, secret=enrollment_secret),
             tags
         )
+    
+    def force_pack(self):
+        name = get_random_string(12)
+        return Pack.objects.create(name=name, slug=slugify(name))
 
-    def force_query(self, compliance_check=False):
+    def force_query(self, pack_query_mode=None, compliance_check=False):
         if compliance_check:
-            sql = "ztl_status;"
+            sql = "select 'OK' as ztl_status;"
         else:
             sql = "SELECT * FROM osquery_schedule;"
         query = Query.objects.create(name=get_random_string(12), sql=sql)
+        if pack_query_mode is not None:
+            pack = self.force_pack()
+            if pack_query_mode == "diff":
+                PackQuery.objects.create(
+                    pack=pack, query=query, interval=60, slug=slugify(query.name), log_removed_actions=False,
+                    snapshot_mode=False)
+            elif pack_query_mode == "snapshot":
+                PackQuery.objects.create(
+                    pack=pack, query=query, interval=60, slug=slugify(query.name), log_removed_actions=False,
+                    snapshot_mode=True)
+            else:
+                raise ValueError("Invalid pack_query value: {}".format(pack_query_mode))
         sync_query_compliance_check(query, compliance_check)
         query.refresh_from_db()
         return query
@@ -1181,7 +1198,7 @@ class APIViewsTestCase(TestCase):
                           "updated_at": query.updated_at.isoformat()
                           })
 
-    def test_create_query_validate_error(self):
+    def test_create_query_ztl_status_validate_error(self):
         data = {
             "name": get_random_string(12),
             "sql": "select * from osquery_info;",
@@ -1190,9 +1207,9 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("osquery.add_query")
         response = self.post_json_data(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {'sql': ['ztl_status not in sql']})
+        self.assertEqual(response.json(), {'compliance_check_enabled': ['ztl_status not in sql']})
 
-    def test_create_query_validate_success(self):
+    def test_create_query_ztl_status_validate_success(self):
         query_name = get_random_string(12)
         data = {
             "name": query_name,
@@ -1289,15 +1306,15 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 403)
 
-    def test_update_query_validate_error(self):
+    def test_update_query_ztl_status_validate_error(self):
         query = self.force_query()
         data = {"name": query.name, "sql": query.sql, "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
         response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {'sql': ['ztl_status not in sql']})
+        self.assertEqual(response.json(), {'compliance_check_enabled': ['ztl_status not in sql']})
 
-    def test_update_query_validate_success(self):
+    def test_update_query_ztl_status_validate_success(self):
         query = self.force_query()
         data = {"name": query.name, "sql": "ztl_status;", "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
@@ -1316,6 +1333,24 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json()["version"], 2)
         query.refresh_from_db()
         self.assertEqual(query.version, 2)
+
+    def test_update_query_with_pack_query_snapshot_mode_validate_success(self):
+        query = self.force_query(pack_query_mode="snapshot", compliance_check=False)
+        data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+
+    def test_update_query_with_pack_query_diff_mode_validation_error(self):
+        query = self.force_query(pack_query_mode="diff", compliance_check=False)
+        pack_query = PackQuery.objects.get(slug=slugify(query.name))
+        data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'compliance_check_enabled': [f'query scheduled in diff mode in {pack_query.pack} pack']})
 
     # delete query
 

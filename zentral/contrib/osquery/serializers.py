@@ -167,15 +167,15 @@ class QuerySerializer(serializers.ModelSerializer):
         if data.get("compliance_check_enabled"):
             sql = data.get("sql")
             if sql is not None and 'ztl_status' not in sql:
-                raise serializers.ValidationError({'sql': 'ztl_status not in sql'})
+                raise serializers.ValidationError({'compliance_check_enabled': 'ztl_status not in sql'})
             try:
-                pack_query = data.instance.packquery
+                pack_query = self.instance.packquery
             except AttributeError:
                 pass
             else:
                 if not pack_query.snapshot_mode:
                     raise serializers.ValidationError(
-                        {'compliance_check_enabled': f'query is scheduled in diff mode in {pack_query.pack} pack'})
+                        {'compliance_check_enabled': f'query scheduled in diff mode in {pack_query.pack} pack'})
         return data
 
     def create(self, validated_data):
