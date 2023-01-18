@@ -1870,8 +1870,8 @@ class ArtifactVersionManager(models.Manager):
         )
 
     def latest_for_blueprint(self, blueprint, artifact_type=None):
-        ba_where_list = ["ba.blueprint_id = %s"]
-        args = [blueprint.pk]
+        ba_where_list = ["ba.blueprint_id = %s", "a.channel = %s"]
+        args = [blueprint.pk, Channel.Device.name]
         if artifact_type:
             ba_where_list.append("a.type = %s")
             args.append(artifact_type.name)

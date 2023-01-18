@@ -1,3 +1,4 @@
+import copy
 from functools import reduce
 from io import BytesIO
 import operator
@@ -238,8 +239,10 @@ class ProfileManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/artifact_detail.html")
         self.assertContains(response, "Artifact already exists")
 
-    def test_upload_profile_post_update_profile(self):
-        self._force_profile()
+    def test_upload_profile_post_update_user_profile(self):
+        blueprint, _, _ = self._force_profile()
+        self.assertEqual(len(blueprint.activation["Payload"]["StandardConfigurations"]), 1)  # no User profiles
+        self.assertEqual(len(blueprint.declaration_items["Declarations"]["Configurations"]), 1)  # no User profiles
         payload_uuid = str(uuid.uuid4()).upper()
         mobileconfig = self._build_mobileconfig(payload_uuid=payload_uuid)  # new UUID → new version
         self._login("mdm.add_artifact", "mdm.view_artifact")
@@ -255,6 +258,50 @@ class ProfileManagementViewsTestCase(TestCase):
         self.assertEqual(artifact_version.version, 2)
         profile = artifact_version.profile
         self.assertEqual(profile.payload_uuid, payload_uuid)
+        blueprint.refresh_from_db()
+        self.assertEqual(len(blueprint.activation["Payload"]["StandardConfigurations"]), 1)  # no User profiles
+        self.assertEqual(len(blueprint.declaration_items["Declarations"]["Configurations"]), 1)  # no User profiles
+
+    def test_upload_profile_post_update_device_profile(self):
+        blueprint, _, profile = self._force_profile(channel=Channel.Device)
+        server_token = str(profile.artifact_version.pk)
+        blueprint_activation = copy.deepcopy(blueprint.activation)
+        self.assertEqual(len(blueprint.activation["Payload"]["StandardConfigurations"]), 2)  # one device profile
+        self.assertEqual(
+            len([cfg for cfg in blueprint.declaration_items["Declarations"]["Configurations"]
+                 if cfg["ServerToken"] == server_token]),
+            1
+        )  # one device profile
+        payload_uuid = str(uuid.uuid4()).upper()
+        mobileconfig = self._build_mobileconfig(channel=Channel.Device, payload_uuid=payload_uuid)
+        self._login("mdm.add_artifact", "mdm.view_artifact")
+        response = self.client.post(reverse("mdm:upload_profile"),
+                                    {"source_file": mobileconfig},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_detail.html")
+        self.assertContains(response, "Artifact updated")
+        artifact = response.context["object"]
+        self.assertEqual(artifact.channel, Channel.Device.name)
+        self.assertEqual(artifact.artifactversion_set.count(), 2)
+        artifact_version = artifact.artifactversion_set.order_by("-version").first()
+        self.assertEqual(artifact_version.version, 2)
+        profile = artifact_version.profile
+        self.assertEqual(profile.payload_uuid, payload_uuid)
+        blueprint.refresh_from_db()
+        self.assertEqual(blueprint.activation, blueprint_activation)  # no changes in scope
+        # blueprint declaration items updated
+        self.assertEqual(len(blueprint.declaration_items["Declarations"]["Configurations"]), 2)  # one device profile
+        self.assertEqual(
+            len([cfg for cfg in blueprint.declaration_items["Declarations"]["Configurations"]
+                 if cfg["ServerToken"] == str(artifact_version.pk)]),
+            1
+        )
+        self.assertEqual(
+            len([cfg for cfg in blueprint.declaration_items["Declarations"]["Configurations"]
+                 if cfg["ServerToken"] == str(server_token)]),
+            0
+        )
 
     def test_upload_profile_post_existing_profile_different_channel(self):
         self._force_profile(channel=Channel.Device)
