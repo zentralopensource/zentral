@@ -1317,6 +1317,7 @@ class APIViewsTestCase(TestCase):
         data = {"name": query.name, "sql": "ztl_status;", "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
         response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        query.refresh_from_db()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
         self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
@@ -1340,6 +1341,7 @@ class APIViewsTestCase(TestCase):
         data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
         response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        query.refresh_from_db()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
         self.assertEqual(query.sql, "select 'OK' as ztl_status;")
