@@ -6,13 +6,16 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from django.utils.text import slugify
 from django.utils.http import http_date
 from django.test import TestCase
 from accounts.models import APIToken, User
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query
+from zentral.core.compliance_checks.models import ComplianceCheck
 
 
 class APIViewsTestCase(TestCase):
@@ -44,6 +47,30 @@ class APIViewsTestCase(TestCase):
             Enrollment.objects.create(configuration=configuration, secret=enrollment_secret),
             tags
         )
+    
+    def force_pack(self):
+        name = get_random_string(12)
+        return Pack.objects.create(name=name, slug=slugify(name))
+
+    def force_query(self, pack_query_mode=None, compliance_check=False):
+        if compliance_check:
+            sql = "select 'OK' as ztl_status;"
+        else:
+            sql = "SELECT * FROM osquery_schedule;"
+        query = Query.objects.create(name=get_random_string(12), sql=sql)
+        if pack_query_mode is not None:
+            pack = self.force_pack()
+            if pack_query_mode == "diff":
+                PackQuery.objects.create(
+                    pack=pack, query=query, interval=60, slug=slugify(query.name), log_removed_actions=False,
+                    snapshot_mode=False)
+            elif pack_query_mode == "snapshot":
+                PackQuery.objects.create(
+                    pack=pack, query=query, interval=60, slug=slugify(query.name), log_removed_actions=False,
+                    snapshot_mode=True)
+        sync_query_compliance_check(query, compliance_check)
+        query.refresh_from_db()
+        return query
 
     def set_permissions(self, *permissions):
         if permissions:
@@ -1091,3 +1118,327 @@ class APIViewsTestCase(TestCase):
         response = self.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)),
                              include_token=True)
         self.assertEqual(response.status_code, 201)
+
+    # list queries
+
+    def test_get_queries(self):
+        query = self.force_query()
+        self.set_permissions("osquery.view_query")
+        response = self.get(reverse("osquery_api:queries"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(),
+                         [{"id": query.pk,
+                           "name": query.name,
+                           "version": 1,
+                           "compliance_check_enabled": False,
+                           "sql": query.sql,
+                           "minimum_osquery_version": None,
+                           "description": query.description,
+                           "value": '',
+                           "platforms": [],
+                           "created_at": query.created_at.isoformat(),
+                           "updated_at": query.updated_at.isoformat()
+                           }])
+
+    def test_get_queries_unauthorized(self):
+        response = self.get(reverse("osquery_api:queries"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_queries_permission_denied(self):
+        response = self.get(reverse("osquery_api:queries"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_queries_filter_by_name(self):
+        query = self.force_query()
+        for i in range(3):
+            self.force_query()
+        self.set_permissions("osquery.view_query")
+        response = self.get(reverse("osquery_api:queries"), {"name": query.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(),
+                         [{"id": query.pk,
+                           "name": query.name,
+                           "version": 1,
+                           "compliance_check_enabled": False,
+                           "sql": query.sql,
+                           "minimum_osquery_version": None,
+                           "description": query.description,
+                           "value": '',
+                           "platforms": [],
+                           "created_at": query.created_at.isoformat(),
+                           "updated_at": query.updated_at.isoformat()
+                           }])
+
+    # create queries
+
+    def test_create_query(self):
+        data = {
+            "name": "test_query01",
+            "sql": "select * from osquery_info;",
+            "compliance_check_enabled": False
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Query.objects.filter(name='test_query01').count(), 1)
+        query = Query.objects.get(name='test_query01')
+        self.assertEqual(response.json(),
+                         {"id": query.pk,
+                          "name": query.name,
+                          "version": 1,
+                          "compliance_check_enabled": False,
+                          "sql": "select * from osquery_info;",
+                          "minimum_osquery_version": None,
+                          "description": "",
+                          "value": '',
+                          "platforms": [],
+                          "created_at": query.created_at.isoformat(),
+                          "updated_at": query.updated_at.isoformat()
+                          })
+
+    def test_create_query_ztl_status_validate_error(self):
+        data = {
+            "name": get_random_string(12),
+            "sql": "select * from osquery_info;",
+            "compliance_check_enabled": True
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'compliance_check_enabled': ['ztl_status not in sql']})
+
+    def test_create_query_ztl_status_validate_success(self):
+        query_name = get_random_string(12)
+        data = {
+            "name": query_name,
+            "sql": "ztl_status;",
+            "compliance_check_enabled": True
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        query = Query.objects.get(name=query_name)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["compliance_check_enabled"], True)
+        self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
+        self.assertEqual(query.sql, "ztl_status;")
+
+    def test_create_query_unauthorized(self):
+        data = {
+            "name": "test_query01",
+            "sql": "select * from osquery_info;"
+        }
+        response = self.post_json_data(reverse("osquery_api:queries"), data, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_query_permission_denied(self):
+        data = {
+            "name": "test_query01",
+            "sql": "select * from osquery_info;"
+        }
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_query_with_platforms(self):
+        name = get_random_string(12)
+        data = {
+            "name": name,
+            "sql": "select * from osquery_info;",
+            "platforms": [
+                "darwin",
+                "linux"
+            ]
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["platforms"], ["darwin", "linux"])
+        query = Query.objects.get(name=name)
+        self.assertEqual(query.platforms, ["darwin", "linux"])
+        self.assertEqual(len(query.platforms), 2)
+
+    def test_create_query_with_unsupported_platform(self):
+        name = get_random_string(12)
+        data = {
+            "name": name,
+            "sql": "select * from osquery_info;",
+            "platforms": ["haiku"]
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'platforms': {'0': ['"haiku" is not a valid choice.']}})
+        with self.assertRaises(Query.DoesNotExist):
+            Query.objects.get(name=name)
+
+    # get query
+
+    def test_get_query(self):
+        query = self.force_query()
+        self.set_permissions("osquery.view_query")
+        response = self.get(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(),
+                         {"id": query.pk,
+                          "name": query.name,
+                          "version": 1,
+                          "compliance_check_enabled": False,
+                          "sql": query.sql,
+                          "minimum_osquery_version": None,
+                          "description": query.description,
+                          "value": '',
+                          "platforms": [],
+                          "created_at": query.created_at.isoformat(),
+                          "updated_at": query.updated_at.isoformat()
+                          })
+
+    def test_get_query_compliance_check_enabled(self):
+        query = self.force_query(compliance_check=True)
+        self.set_permissions("osquery.view_query")
+        response = self.get(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["compliance_check_enabled"], True)
+        self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
+
+    def test_get_query_unauthorized(self):
+        query = self.force_query()
+        response = self.get(reverse("osquery_api:query", args=(query.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_query_permission_denied(self):
+        query = self.force_query()
+        response = self.get(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    # update query
+
+    def test_update_query(self):
+        query = self.force_query()
+        new_name = get_random_string(12)
+        data = {"name": new_name, "sql": query.sql}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        query.refresh_from_db()
+        self.assertEqual(Query.objects.filter(name=new_name).count(), 1)
+        self.assertEqual(query.name, new_name)
+
+    def test_update_query_unauthorized(self):
+        query = self.force_query()
+        new_name = get_random_string(12)
+        data = {"name": new_name, "sql": query.sql}
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_query_permission_denied(self):
+        query = self.force_query()
+        new_name = get_random_string(12)
+        data = {"name": new_name, "sql": query.sql}
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_query_ztl_status_validate_error(self):
+        query = self.force_query()
+        data = {"name": query.name, "sql": query.sql, "compliance_check_enabled": True}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'compliance_check_enabled': ['ztl_status not in sql']})
+
+    def test_update_query_ztl_status_validate_success(self):
+        query = self.force_query()
+        data = {"name": query.name, "sql": "ztl_status;", "compliance_check_enabled": True}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        query.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["compliance_check_enabled"], True)
+        self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
+        self.assertEqual(query.sql, "ztl_status;")
+
+    def test_update_query_increment_version(self):
+        query = self.force_query()
+        self.assertEqual(query.version, 1)
+        new_sql = "changed sql line;"
+        data = {"name": query.name, "sql": new_sql}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["version"], 2)
+        query.refresh_from_db()
+        self.assertEqual(query.version, 2)
+        self.assertEqual(query.sql, "changed sql line;")
+
+    def test_update_query_with_pack_query_snapshot_mode_validate_success(self):
+        query = self.force_query(pack_query_mode="snapshot", compliance_check=False)
+        data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        query.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["compliance_check_enabled"], True)
+        self.assertEqual(query.sql, "select 'OK' as ztl_status;")
+        self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
+
+    def test_update_query_with_pack_query_diff_mode_validation_error(self):
+        query = self.force_query(pack_query_mode="diff", compliance_check=False)
+        pack_query = PackQuery.objects.get(slug=slugify(query.name))
+        data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'compliance_check_enabled': [f'query scheduled in diff mode in {pack_query.pack} pack']})
+
+    def test_update_query_add_platforms(self):
+        query = self.force_query()
+        data = {
+            "name": query.name,
+            "sql": query.sql,
+            "platforms": [
+                "darwin",
+                "freebsd",
+                "linux",
+                "posix",
+                "windows"
+            ]
+        }
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        query.refresh_from_db()
+        self.assertEqual(query.platforms, ["darwin", "freebsd", "linux", "posix", "windows"])
+        self.assertEqual(len(query.platforms), 5)
+
+    def test_update_query_add_unsupported_platform(self):
+        query = self.force_query()
+        data = {
+            "name": query.name,
+            "sql": query.sql,
+            "platforms": ["beOS"]
+        }
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'platforms': {'0': ['"beOS" is not a valid choice.']}})
+        query.refresh_from_db()
+        self.assertEqual(query.platforms, [])
+
+    # delete query
+
+    def test_delete_query(self):
+        query = self.force_query()
+        self.set_permissions("osquery.delete_query")
+        response = self.delete(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(Query.objects.filter(pk=query.pk).count(), 0)
+
+    def test_delete_query_unauthorized(self):
+        query = self.force_query()
+        response = self.delete(reverse("osquery_api:query", args=(query.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_query_permission_denied(self):
+        query = self.force_query()
+        response = self.delete(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 403)

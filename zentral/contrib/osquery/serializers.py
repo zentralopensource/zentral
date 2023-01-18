@@ -1,9 +1,11 @@
+from django.db.models import F
 from django.urls import reverse
 from rest_framework import serializers
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
-from .models import Configuration, Enrollment, Pack, Platform
+from .compliance_checks import sync_query_compliance_check
+from .models import Configuration, Enrollment, Pack, Platform, Query
 
 
 class ConfigurationSerializer(serializers.ModelSerializer):
@@ -152,3 +154,45 @@ class OsqueryPackSerializer(serializers.Serializer):
                 "compliance_check": query_data.get("compliance_check") or False
             }
             yield query_slug, pack_query_defaults, query_defaults
+
+
+class QuerySerializer(serializers.ModelSerializer):
+    compliance_check_enabled = serializers.BooleanField(default=False)
+
+    class Meta:
+        model = Query
+        exclude = ("compliance_check",)
+
+    def validate(self, data):
+        if data.get("compliance_check_enabled"):
+            sql = data.get("sql")
+            if sql is not None and 'ztl_status' not in sql:
+                raise serializers.ValidationError({'compliance_check_enabled': 'ztl_status not in sql'})
+            try:
+                pack_query = self.instance.packquery
+            except AttributeError:
+                pass
+            else:
+                if not pack_query.snapshot_mode:
+                    raise serializers.ValidationError(
+                        {'compliance_check_enabled': f'query scheduled in diff mode in {pack_query.pack} pack'})
+        return data
+
+    def create(self, validated_data):
+        compliance_check_enabled = validated_data.pop("compliance_check_enabled")
+        query = super().create(validated_data)
+        sync_query_compliance_check(query, compliance_check_enabled)
+        return query
+
+    def update(self, instance, validated_data):
+        compliance_check_enabled = validated_data.pop("compliance_check_enabled")
+        sql = validated_data.get("sql")
+        if sql and sql != instance.sql:
+            instance.version = F('version') + 1
+            instance.save(update_fields=["version"])
+            instance.refresh_from_db()
+        query = super().update(instance, validated_data)
+        _, _, compliance_check_deleted = sync_query_compliance_check(query, compliance_check_enabled)
+        if compliance_check_deleted:
+            query.refresh_from_db()
+        return query

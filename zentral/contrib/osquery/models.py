@@ -127,6 +127,9 @@ class Query(models.Model):
             self.compliance_check.delete()
         return super().delete(*args, **kwargs)
 
+    def compliance_check_enabled(self):
+        return True if self.compliance_check else False
+
 
 class Pack(models.Model):
     DELIMITER = "/"
