@@ -74,6 +74,16 @@ class MonolithSetupViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
+    def _force_sub_manifest(self, condition=None):
+        submanifest = SubManifest.objects.create(name=get_random_string(12))
+        submanifest_pkginfo = SubManifestPkgInfo.objects.create(
+            sub_manifest=submanifest,
+            key="managed_installs",
+            pkg_info_name=self.pkginfo_name_1,
+            condition=condition
+        )
+        return submanifest, submanifest_pkginfo
+
     # pkg infos
 
     def test_pkg_infos_login_redirect(self):
@@ -237,14 +247,8 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertContains(response, reverse("monolith:delete_condition", args=(condition.pk,)))
 
     def test_condition_cannot_delete(self):
-        submanifest = SubManifest.objects.create(name=get_random_string(12))
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        SubManifestPkgInfo.objects.create(
-            sub_manifest=submanifest,
-            key="managed_installs",
-            pkg_info_name=self.pkginfo_name_1,
-            condition=condition
-        )
+        submanifest, _ = self._force_sub_manifest(condition=condition)
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -278,14 +282,8 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(Condition.objects.filter(pk=condition.pk).count(), 0)
 
     def test_delete_condition_get_blocked(self):
-        submanifest = SubManifest.objects.create(name=get_random_string(12))
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        SubManifestPkgInfo.objects.create(
-            sub_manifest=submanifest,
-            key="managed_installs",
-            pkg_info_name=self.pkginfo_name_1,
-            condition=condition
-        )
+        submanifest, _ = self._force_sub_manifest(condition=condition)
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -293,14 +291,8 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertContains(response, "cannot be deleted")
 
     def test_delete_condition_post_blocked(self):
-        submanifest = SubManifest.objects.create(name=get_random_string(12))
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        SubManifestPkgInfo.objects.create(
-            sub_manifest=submanifest,
-            key="managed_installs",
-            pkg_info_name=self.pkginfo_name_1,
-            condition=condition
-        )
+        submanifest, _ = self._force_sub_manifest(condition=condition)
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.post(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -319,8 +311,60 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_sub_manifests(self):
         self._login("monolith.view_submanifest")
+        submanifest, _ = self._force_sub_manifest()
         response = self.client.get(reverse("monolith:sub_manifests"))
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, submanifest.name)
+
+    # sub manifest
+
+    def test_sub_manifest_login_redirect(self):
+        submanifest, _ = self._force_sub_manifest()
+        self._login_redirect(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
+
+    def test_sub_manifest_permission_denied(self):
+        submanifest, _ = self._force_sub_manifest()
+        self._login()
+        response = self.client.get(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_sub_manifest_no_pkginfo_edit_link(self):
+        submanifest, submanifest_pkginfo = self._force_sub_manifest()
+        self._login("monolith.view_submanifest")
+        response = self.client.get(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        self.assertNotContains(response, 'class="danger"')
+        self.assertNotContains(
+            response,
+            reverse("monolith:update_sub_manifest_pkg_info",
+                    args=(submanifest.pk, submanifest_pkginfo.pk))
+        )
+
+    def test_sub_manifest_pkginfo_edit_link(self):
+        submanifest, submanifest_pkginfo = self._force_sub_manifest()
+        self._login("monolith.view_submanifest", "monolith.change_submanifestpkginfo")
+        response = self.client.get(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        self.assertNotContains(response, 'class="danger"')
+        self.assertContains(
+            response,
+            reverse("monolith:update_sub_manifest_pkg_info",
+                    args=(submanifest.pk, submanifest_pkginfo.pk))
+        )
+
+    def test_sub_manifest_pkginfo_archived_no_edit_link(self):
+        submanifest, submanifest_pkginfo = self._force_sub_manifest()
+        self.pkginfo_1_1.archived_at = datetime.utcnow()
+        self.pkginfo_1_1.save()
+        self._login("monolith.view_submanifest", "monolith.change_submanifestpkginfo")
+        response = self.client.get(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        self.assertContains(response, 'class="danger"')
+        self.assertNotContains(
+            response,
+            reverse("monolith:update_sub_manifest_pkg_info",
+                    args=(submanifest.pk, submanifest_pkginfo.pk))
+        )
 
     # create submanifest
 

@@ -89,7 +89,7 @@
     </td>
   </tr>
   {% for name, smo in key_list %}
-  <tr{% if smo.type and smo.trashed_at %} class="warning"{% endif %}>
+  <tr{% if smo.type and smo.trashed_at %} class="warning"{% endif %}{% if smo.pkg_info_name and not smo.pkg_info_name.has_active_pkginfos %} class="danger"{% endif %}>
     <td>
       {% if smo.pkg_info_name %}
       {% if perms.monolith.view_pkginfoname %}
@@ -187,7 +187,7 @@
     </td>
     {% else %}
     <td>
-      {% if perms.monolith.change_submanifestpkginfo %}
+      {% if smo.pkg_info_name.has_active_pkginfos and perms.monolith.change_submanifestpkginfo %}
       <a class="btn btn-default" href="{% url 'monolith:update_sub_manifest_pkg_info' object.id smo.id %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
       </a>

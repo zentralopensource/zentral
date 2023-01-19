@@ -62,6 +62,7 @@ class MonolithModelsTestCase(TestCase):
                                                  data={"name": cls.pkginfo_name_2.name,
                                                        "version": "1.0"})
         cls.pkginfo_2_1.catalogs.set([cls.catalog_1, cls.catalog_2])
+        cls.pkginfo_name_3 = PkgInfoName.objects.create(name="bbbb third name")
         # simulate 1 install of 1v1 and 3 installs of 1v2, 1 install of 2v1
         ManagedInstall.objects.create(
             machine_serial_number=get_random_string(12),
@@ -82,6 +83,11 @@ class MonolithModelsTestCase(TestCase):
             installed_version=cls.pkginfo_2_1.version,
             installed_at=datetime.utcnow()
         )
+
+    def test_pkg_info_name_has_active_pkginfos(self):
+        self.assertTrue(self.pkginfo_name_1.has_active_pkginfos)
+        self.assertTrue(self.pkginfo_name_2.has_active_pkginfos)
+        self.assertFalse(self.pkginfo_name_3.has_active_pkginfos)
 
     def test_manifest_sub_manifest(self):
         self.assertEqual(self.manifest.sub_manifest(self.sub_manifest_1.pk),

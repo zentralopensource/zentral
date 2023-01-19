@@ -117,8 +117,9 @@ class PkgInfoName(models.Model):
     def __str__(self):
         return self.name
 
-    def active_pkginfos(self):
-        return self.pkginfo_set.filter(archived_at__isnull=True)
+    @cached_property
+    def has_active_pkginfos(self):
+        return self.pkginfo_set.filter(archived_at__isnull=True).count() > 0
 
 
 class PkgInfoManager(models.Manager):
