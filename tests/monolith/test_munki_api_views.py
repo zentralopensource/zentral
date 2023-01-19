@@ -8,7 +8,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaB
 from zentral.contrib.monolith.models import (Catalog, Enrollment,
                                              Manifest, ManifestCatalog, ManifestSubManifest,
                                              PkgInfo, PkgInfoName,
-                                             SubManifest, SubManifestPkgInfo)
+                                             SubManifest, SubManifestAttachment, SubManifestPkgInfo)
 
 
 pkginfo_src = """<?xml version="1.0" encoding="UTF-8"?>
@@ -96,56 +96,84 @@ class MonolithAPIViewsTestCase(TestCase):
             kwargs["HTTP_AUTHORIZATION"] = f"Bearer {self.enrollment.secret.secret}"
         return self.client.get(url, **kwargs)
 
-    def _force_pkg_info(
+    def _force_smo(
         self,
         name=None,
         version=None,
         catalog=None,
         sub_manifest=None,
+        sub_manifest_key=None,
         zentral_monolith=None,
-        smpi_options=None
+        smo_class=SubManifestPkgInfo,
+        smo_options=None
     ):
         if catalog is None:
             catalog = Catalog.objects.create(name=get_random_string(12))
         ManifestCatalog.objects.create(manifest=self.manifest, catalog=catalog)
-        if name is None:
-            name = get_random_string(12)
-        if version is None:
-            version = "1.2.3"
-        data = copy.deepcopy(self.pkginfo_data)
-        data["name"] = name
-        data["version"] = version
-        data["installs"][0]["CFBundleShortVersionString"] = version
-        data["receipts"][0]["version"] = version
-        if zentral_monolith:
-            data["zentral_monolith"] = zentral_monolith
-        pkg_info_name, _ = PkgInfoName.objects.get_or_create(name=name)
-        pkg_info = PkgInfo.objects.create(
-            name=pkg_info_name,
-            version=version,
-            data=data
-        )
-        pkg_info.catalogs.set([catalog])
         if sub_manifest is None:
             sub_manifest, _ = SubManifest.objects.get_or_create(name=get_random_string(12))
-        if smpi_options is None:
-            smpi_options = {}
-        SubManifestPkgInfo.objects.get_or_create(
-            sub_manifest=sub_manifest,
-            pkg_info_name=pkg_info_name,
-            defaults={"key": "managed_installs",
-                      "options": smpi_options}
-        )
         ManifestSubManifest.objects.get_or_create(
             manifest=self.manifest,
             sub_manifest=sub_manifest
         )
+        if name is None:
+            name = get_random_string(12)
+        if smo_options is None:
+            smo_options = {}
+        pkg_info = None
+        if smo_class == SubManifestPkgInfo:
+            if version is None:
+                version = "1.2.3"
+            data = copy.deepcopy(self.pkginfo_data)
+            data["name"] = name
+            data["version"] = version
+            data["installs"][0]["CFBundleShortVersionString"] = version
+            data["receipts"][0]["version"] = version
+            if zentral_monolith:
+                data["zentral_monolith"] = zentral_monolith
+            pkg_info_name, _ = PkgInfoName.objects.get_or_create(name=name)
+            pkg_info = PkgInfo.objects.create(
+                name=pkg_info_name,
+                version=version,
+                data=data
+            )
+            pkg_info.catalogs.set([catalog])
+            SubManifestPkgInfo.objects.get_or_create(
+                sub_manifest=sub_manifest,
+                pkg_info_name=pkg_info_name,
+                defaults={"key": sub_manifest_key or "managed_installs",
+                          "options": smo_options}
+            )
+        else:
+            if version is None:
+                version = 1
+            data = {
+                'display_name': name,
+                'description': "description of the script",
+                'autoremove': False,
+                'unattended_install': True,
+                'installer_type': 'nopkg',
+                'uninstallable': True,
+                'unattended_uninstall': True,
+                'minimum_munki_version': '2.2',
+                'minimum_os_version': '10.6.0',  # TODO: HARDCODED !!!
+                'installcheck_script': "#!/bin/bash\ntrue",
+                'postinstall_script': "#!/bin/bash\ntrue",
+            }
+            SubManifestAttachment.objects.get_or_create(
+                sub_manifest=sub_manifest,
+                type="script",
+                name=name,
+                version=version,
+                pkg_info=data,
+                defaults={"key": sub_manifest_key or "managed_installs"}
+            )
         return pkg_info, catalog, sub_manifest
 
     # catalogs
 
     def test_get_catalog(self):
-        pkg_info, catalog, _ = self._force_pkg_info()
+        pkg_info, catalog, _ = self._force_smo()
         response = self._make_munki_request(
             reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),))
         )
@@ -157,8 +185,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(cat_pkg_info["version"], pkg_info.version)
 
     def test_get_catalog_two_pkgsinfo_no_shards(self):
-        pkg_info1, catalog, sub_manifest = self._force_pkg_info()
-        pkg_info2, _, _ = self._force_pkg_info(
+        pkg_info1, catalog, sub_manifest = self._force_smo()
+        pkg_info2, _, _ = self._force_smo(
             name=pkg_info1.name.name,
             version="1.2.4",
             catalog=catalog,
@@ -173,8 +201,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(len(catalog), 2)
 
     def test_get_catalog_two_pkgsinfo_default_shard_filtered_out(self):
-        pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
-        pkg_info2, _, _ = self._force_pkg_info(
+        pkg_info1, catalog, sub_manifest = self._force_smo(name="ceci_n_est_pas_un_nom", version="1.2.3")
+        pkg_info2, _, _ = self._force_smo(
             name=pkg_info1.name.name,
             version="1.2.4",
             catalog=catalog,
@@ -197,8 +225,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(catalog[0]["version"], "1.2.3")
 
     def test_get_catalog_two_pkgsinfo_default_shard_included(self):
-        pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
-        pkg_info2, _, _ = self._force_pkg_info(
+        pkg_info1, catalog, sub_manifest = self._force_smo(name="ceci_n_est_pas_un_nom", version="1.2.3")
+        pkg_info2, _, _ = self._force_smo(
             name=pkg_info1.name.name,
             version="1.2.4",
             catalog=catalog,
@@ -219,8 +247,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(len(catalog), 2)
 
     def test_get_catalog_two_pkgsinfo_default_shard_out_of_bounds_excluded(self):
-        pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
-        pkg_info2, _, _ = self._force_pkg_info(
+        pkg_info1, catalog, sub_manifest = self._force_smo(name="ceci_n_est_pas_un_nom", version="1.2.3")
+        pkg_info2, _, _ = self._force_smo(
             name=pkg_info1.name.name,
             version="1.2.4",
             catalog=catalog,
@@ -241,8 +269,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(catalog[0]["version"], "1.2.3")
 
     def test_get_catalog_two_pkgsinfo_tag_shard_included(self):
-        pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
-        pkg_info2, _, _ = self._force_pkg_info(
+        pkg_info1, catalog, sub_manifest = self._force_smo(name="ceci_n_est_pas_un_nom", version="1.2.3")
+        pkg_info2, _, _ = self._force_smo(
             name=pkg_info1.name.name,
             version="1.2.4",
             catalog=catalog,
@@ -264,8 +292,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(len(catalog), 2)
 
     def test_get_catalog_two_pkgsinfo_tag_shard_excluded(self):
-        pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
-        pkg_info2, _, _ = self._force_pkg_info(
+        pkg_info1, catalog, sub_manifest = self._force_smo(name="ceci_n_est_pas_un_nom", version="1.2.3")
+        pkg_info2, _, _ = self._force_smo(
             name=pkg_info1.name.name,
             version="1.2.4",
             catalog=catalog,
@@ -288,8 +316,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(catalog[0]["version"], "1.2.3")
 
     def test_get_catalog_two_pkgsinfo_excluded_tag(self):
-        pkg_info1, catalog, sub_manifest = self._force_pkg_info(name="ceci_n_est_pas_un_nom", version="1.2.3")
-        pkg_info2, _, _ = self._force_pkg_info(
+        pkg_info1, catalog, sub_manifest = self._force_smo(name="ceci_n_est_pas_un_nom", version="1.2.3")
+        pkg_info2, _, _ = self._force_smo(
             name=pkg_info1.name.name,
             version="1.2.4",
             catalog=catalog,
@@ -313,7 +341,7 @@ class MonolithAPIViewsTestCase(TestCase):
     # manifest
 
     def test_manifest(self):
-        _, catalog, sub_manifest = self._force_pkg_info(
+        _, catalog, sub_manifest = self._force_smo(
             name="ceci_n_est_pas_un_nom_aussi"
         )
         response = self._make_munki_request(
@@ -332,7 +360,7 @@ class MonolithAPIViewsTestCase(TestCase):
     # sub manifests
 
     def test_sub_manifest_no_options_included(self):
-        _, _, sub_manifest = self._force_pkg_info(
+        _, _, sub_manifest = self._force_smo(
             name="ceci_n_est_pas_un_nom_aussi"
         )
         response = self._make_munki_request(
@@ -345,11 +373,62 @@ class MonolithAPIViewsTestCase(TestCase):
             {'managed_installs': ['ceci_n_est_pas_un_nom_aussi'], 'managed_uninstalls': []}
         )
 
+    def test_sub_manifest_script_included(self):
+        _, _, sub_manifest = self._force_smo(
+            name="ceci_n_est_pas_un_nom_aussi",
+            smo_class=SubManifestAttachment
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+        )
+        self.assertEqual(response.status_code, 200)
+        serialized_sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            serialized_sub_manifest,
+            {'managed_installs': [f'sub manifest {sub_manifest.pk} script ceci_n_est_pas_un_nom_aussi'],
+             'managed_uninstalls': []}
+        )
+
+    def test_sub_manifest_no_options_default_installs_included_twice(self):
+        _, _, sub_manifest = self._force_smo(
+            name="ceci_n_est_pas_un_nom_aussi",
+            sub_manifest_key="default_installs"
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'default_installs': ['ceci_n_est_pas_un_nom_aussi'],
+             'optional_installs': ['ceci_n_est_pas_un_nom_aussi'],
+             'managed_uninstalls': []}
+        )
+
+    def test_sub_manifest_script_default_installs_included_twice(self):
+        _, _, sub_manifest = self._force_smo(
+            name="ceci_n_est_pas_un_nom_aussi",
+            sub_manifest_key="default_installs",
+            smo_class=SubManifestAttachment
+        )
+        response = self._make_munki_request(
+            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+        )
+        self.assertEqual(response.status_code, 200)
+        serialized_sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            serialized_sub_manifest,
+            {'default_installs': [f'sub manifest {sub_manifest.pk} script ceci_n_est_pas_un_nom_aussi'],
+             'optional_installs': [f'sub manifest {sub_manifest.pk} script ceci_n_est_pas_un_nom_aussi'],
+             'managed_uninstalls': []}
+        )
+
     def test_sub_manifest_default_shard_included(self):
-        _, _, sub_manifest = self._force_pkg_info(
+        _, _, sub_manifest = self._force_smo(
             name="deuxième nom",
-            smpi_options={"excluded_tags": ["EXCL1", "EXCL2"],
-                          "shards": {"default": 100, "tags": {"INCL1": 100, "INCL2": 100}}}
+            smo_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                         "shards": {"default": 100, "tags": {"INCL1": 100, "INCL2": 100}}}
         )
         response = self._make_munki_request(
             reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
@@ -362,13 +441,13 @@ class MonolithAPIViewsTestCase(TestCase):
         )
 
     def test_sub_manifest_one_excluded_tag(self):
-        _, catalog, sub_manifest = self._force_pkg_info(name="premier nom")
-        self._force_pkg_info(
+        _, catalog, sub_manifest = self._force_smo(name="premier nom")
+        self._force_smo(
             name="deuxième nom",
             catalog=catalog,
             sub_manifest=sub_manifest,
-            smpi_options={"excluded_tags": ["EXCL1", "EXCL2"],
-                          "shards": {"default": 100, "tags": {"INCL1": 100, "INCL2": 100}}}
+            smo_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                         "shards": {"default": 100, "tags": {"INCL1": 100, "INCL2": 100}}}
         )
         response = self._make_munki_request(
             reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
@@ -383,13 +462,13 @@ class MonolithAPIViewsTestCase(TestCase):
         )
 
     def test_sub_manifest_one_tag_shard_excluded(self):
-        _, catalog, sub_manifest = self._force_pkg_info(name="premier nom")
-        self._force_pkg_info(
+        _, catalog, sub_manifest = self._force_smo(name="premier nom")
+        self._force_smo(
             name="deuxième nom",
             catalog=catalog,
             sub_manifest=sub_manifest,
-            smpi_options={"excluded_tags": ["EXCL1", "EXCL2"],
-                          "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 76}}}  # NAME + SN → 77
+            smo_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                         "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 76}}}  # NAME + SN → 77
         )
         response = self._make_munki_request(
             reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
@@ -404,10 +483,10 @@ class MonolithAPIViewsTestCase(TestCase):
         )
 
     def test_sub_manifest_one_tag_shard_included(self):
-        _, _, sub_manifest = self._force_pkg_info(
+        _, _, sub_manifest = self._force_smo(
             name="deuxième nom",
-            smpi_options={"excluded_tags": ["EXCL1", "EXCL2"],
-                          "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 78}}}  # NAME + SN → 77
+            smo_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                         "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 78}}}  # NAME + SN → 77
         )
         response = self._make_munki_request(
             reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),

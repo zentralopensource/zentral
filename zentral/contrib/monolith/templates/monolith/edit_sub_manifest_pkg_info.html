@@ -58,7 +58,7 @@
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
   function toggleOptionalFields(val) {
-    var toggle = val === "managed_installs" || val === "optional_installs";
+    var toggle = val === "managed_installs" || val === "default_installs" || val === "optional_installs";
     $(".hide-if-not-install").parents(".form-group").toggle(toggle);
   }
 

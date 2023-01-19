@@ -280,9 +280,11 @@ class PkgInfo(models.Model):
 SUB_MANIFEST_PKG_INFO_KEY_CHOICES = (
     ('managed_installs', 'Managed Installs'),
     ('managed_uninstalls', 'Managed Uninstalls'),
+    ('default_installs', 'Default Installs'),
     ('optional_installs', 'Optional Installs'),
     ('managed_updates', 'Managed Updates'),
 )
+SUB_MANIFEST_PKG_INFO_KEY_CHOICES_DICT = dict(SUB_MANIFEST_PKG_INFO_KEY_CHOICES)
 
 
 class SubManifest(models.Model):
@@ -314,23 +316,31 @@ class SubManifest(models.Model):
     def pkg_info_dict(self, include_trashed_attachments=False):
         pkg_info_d = {'keys': {},
                       'total': {'pkginfo': 0}}
+
+        def iter_keys(key):
+            yield key, SUB_MANIFEST_PKG_INFO_KEY_CHOICES_DICT[key]
+            if key == "default_installs":
+                yield "optional_installs", SUB_MANIFEST_PKG_INFO_KEY_CHOICES_DICT["optional_installs"]
+
         for sma_type in SUB_MANIFEST_ATTACHMENT_TYPES:
             pkg_info_d['total'][sma_type] = 0
         for smpi in self.submanifestpkginfo_set.select_related('pkg_info_name', 'condition'):
-            key_dict = pkg_info_d['keys'].setdefault(smpi.key,
-                                                     {'key_display': smpi.get_key_display(),
-                                                      'key_list': []})
-            key_dict['key_list'].append((smpi.pkg_info_name.name, smpi))
+            for key, key_display in iter_keys(smpi.key):
+                key_dict = pkg_info_d['keys'].setdefault(key,
+                                                         {'key_display': key_display,
+                                                          'key_list': []})
+                key_dict['key_list'].append((smpi.pkg_info_name.name, smpi))
             pkg_info_d['total']['pkginfo'] += 1
         if not include_trashed_attachments:
             sma_qs = SubManifestAttachment.objects.active()
         else:
             sma_qs = SubManifestAttachment.objects.all()
         for sma in sma_qs.select_related('condition').filter(sub_manifest=self):
-            key_dict = pkg_info_d['keys'].setdefault(sma.key,
-                                                     {'key_display': sma.get_key_display(),
-                                                      'key_list': []})
-            key_dict['key_list'].append((sma.name, sma))
+            for key, key_display in iter_keys(sma.key):
+                key_dict = pkg_info_d['keys'].setdefault(key,
+                                                         {'key_display': key_display,
+                                                          'key_list': []})
+                key_dict['key_list'].append((sma.name, sma))
             pkg_info_d['total'][sma.type] += 1
         for key, key_d in pkg_info_d['keys'].items():
             key_d['key_list'].sort(key=lambda t: (t[0], -1 * t[1].pk))
