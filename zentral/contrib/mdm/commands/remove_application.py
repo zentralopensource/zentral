@@ -1,5 +1,4 @@
 import logging
-from zentral.contrib.mdm.apps_books import location_cache
 from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform
 from .base import register_command, Command
 
@@ -37,6 +36,7 @@ class RemoveApplication(Command):
         location_asset = self.artifact_version.store_app.location_asset
         location = location_asset.location
         asset = location_asset.asset
+        from zentral.contrib.mdm.apps_books import location_cache
         _, client = location_cache.get(location.mdm_info_id)
         try:
             response = client.post_device_disassociation(self.enrolled_device.serial_number, asset)

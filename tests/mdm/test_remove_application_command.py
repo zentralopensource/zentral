@@ -169,7 +169,7 @@ class RemoveApplicationCommandTestCase(TestCase):
 
     # process_response
 
-    @patch("zentral.contrib.mdm.commands.remove_application.location_cache.get")
+    @patch("zentral.contrib.mdm.apps_books.location_cache.get")
     def test_process_acknowledged_response(self, location_cache_get):
         client = Mock()
         client.post_device_disassociation.return_value = {"eventId": str(uuid.uuid4())}
@@ -194,7 +194,7 @@ class RemoveApplicationCommandTestCase(TestCase):
         client.post_device_disassociation.assert_called_once_with(self.enrolled_device.serial_number,
                                                                   store_app.location_asset.asset)
 
-    @patch("zentral.contrib.mdm.commands.remove_application.location_cache.get")
+    @patch("zentral.contrib.mdm.apps_books.location_cache.get")
     @patch("zentral.contrib.mdm.commands.remove_application.logger.exception")
     def test_process_acknowledged_response_client_exception(self, logger_exception, location_cache_get):
         client = Mock()
@@ -226,7 +226,7 @@ class RemoveApplicationCommandTestCase(TestCase):
             self.enrolled_device.serial_number, location.name, asset.adam_id, asset.pricing_param
         )
 
-    @patch("zentral.contrib.mdm.commands.remove_application.location_cache.get")
+    @patch("zentral.contrib.mdm.apps_books.location_cache.get")
     @patch("zentral.contrib.mdm.commands.remove_application.logger.warning")
     def test_process_acknowledged_response_no_event_id(self, logger_warning, location_cache_get):
         client = Mock()
