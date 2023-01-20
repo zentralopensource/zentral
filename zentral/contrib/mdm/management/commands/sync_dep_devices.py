@@ -15,26 +15,29 @@ class Command(BaseCommand):
                             help='force a full sync')
 
     def handle(self, *args, **kwargs):
+        depvs_qs = DEPVirtualServer.objects.all().order_by("pk")
         if kwargs.get('list_servers'):
-            print("Existing DEP virtual servers:")
-            for server in DEPVirtualServer.objects.all():
-                print(server.id, server)
+            self.stdout.write("Existing DEP virtual servers:")
+            for server in depvs_qs:
+                self.stdout.write(f"{server.id} {server}")
             return
         server_ids = kwargs.get("server_ids")
         if server_ids:
             depvs_qs = DEPVirtualServer.objects.filter(pk__in=server_ids)
-        else:
-            depvs_qs = DEPVirtualServer.objects.all()
         full_sync = kwargs.get("full_sync")
         for server in depvs_qs:
-            print("Sync server", server.pk, server)
+            self.stdout.write(f"Sync server {server.pk} {server}")
             try:
                 for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
-                    print("Created" if created else "Updated", dep_device)
+                    operation = "Created" if created else "Updated"
+                    self.stdout.write(f"{operation} {dep_device}")
             except DEPClientError as e:
                 if e.error_code == "EXPIRED_CURSOR":
-                    print("Expired cursor => full sync")
+                    self.stdout.write("Expired cursor → full sync")
                     for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=True):
-                        print("Created" if created else "Updated", dep_device)
+                        operation = "Created" if created else "Updated"
+                        self.stdout.write(f"{operation} {dep_device}")
                 else:
-                    raise
+                    self.stderr.write(f"DEP client error: {e}")
+            except Exception as e:
+                self.stderr.write(f"Unknown error: {e}")

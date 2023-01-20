@@ -9,19 +9,19 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--list-locations', action='store_true', dest='list_locations', default=False,
                             help='list existing apps & books locations')
-        parser.add_argument('--server', dest='location_ids', type=int, nargs=1,
+        parser.add_argument('--location', dest='location_ids', type=int, nargs=1,
                             help='sync apps & books locations assets')
 
     def handle(self, *args, **kwargs):
+        location_qs = Location.objects.all().order_by("name")
         if kwargs.get('list_locations'):
-            print("Existing locations:")
-            for location in Location.objects.all():
-                print(location.pk, location)
+            self.stdout.write("Existing locations:")
+            for location in location_qs:
+                self.stdout.write(f"{location.pk} {location}")
             return
-        location_qs = Location.objects.all()
         location_ids = kwargs.get("location_ids")
         if location_ids:
             location_qs = location_qs.filter(pk__in=location_ids)
         for location in location_qs:
-            print("Sync apps & books for location", location.pk, location)
+            self.stdout.write(f"Sync apps & books for location {location.pk} {location}")
             sync_assets(location)
