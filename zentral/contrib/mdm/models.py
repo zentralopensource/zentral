@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
 import enum
 import hashlib
+from itertools import zip_longest
 import logging
 import plistlib
 import uuid
-from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.fields import ArrayField, DateRangeField
 from django.core.validators import MinLengthValidator, MinValueValidator, MaxValueValidator
 from django.db import connection, models
 from django.urls import reverse
@@ -627,10 +628,15 @@ class EnrolledDevice(models.Model):
     @property
     def comparable_os_version(self):
         try:
-            return tuple(int(i) for i in self.os_version.split("."))
+            return tuple(
+                i or j for i, j in zip_longest(
+                  (int(i) for i in self.os_version.split(".")),
+                  (0, 0, 0)
+                )
+            )
         except Exception:
             logger.warning("Cannot get enrolled device %s comparable OS version", self.pk)
-            return (0,)
+            return (0, 0, 0)
 
     def get_architecture_for_display(self):
         if self.apple_silicon:
@@ -2115,13 +2121,23 @@ class SoftwareUpdate(models.Model):
     minor = models.PositiveIntegerField()
     patch = models.PositiveIntegerField()
     public = models.BooleanField()
-    posting_date = models.DateField()
-    expiration_date = models.DateField(null=True)
+    availability = DateRangeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (("platform", "major", "minor", "patch", "public"),)
+        unique_together = (("platform", "major", "minor", "patch", "public", "availability"),)
+
+    @property
+    def comparable_os_version(self):
+        return (self.major, self.minor, self.patch)
+
+    def __str__(self):
+        return ".".join(
+            str(i)
+            for a, i in ((a, getattr(self, a)) for a in ("major", "minor", "patch"))
+            if i or a != "patch"
+        )
 
 
 class SoftwareUpdateDeviceID(models.Model):

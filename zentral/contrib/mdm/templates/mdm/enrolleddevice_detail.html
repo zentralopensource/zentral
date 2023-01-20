@@ -44,6 +44,10 @@
         {% endwith %}
       </td>
     </tr>
+    <tr>
+      <th>Available update{{ available_software_updates|length|pluralize }}</th>
+      <td>{% if available_software_updates %}{{ available_software_updates|join:", " }}{% else %}-{% endif %}</td>
+    </tr>
     {% with object.enrolleduser_set.count as users_count %}
     <tr>
       <th>MDM user{{ users_count|pluralize }}</th>

@@ -75,13 +75,6 @@ class MDMManagementCommandsTest(TestCase):
         )
         sync_assets.assert_called_once_with(location)
 
-    # sync_software_updates
-
-    @patch("zentral.contrib.mdm.management.commands.sync_software_updates.sync_software_updates")
-    def test_sync_software_updates(self, sync_software_updates):
-        call_command('sync_software_updates')
-        sync_software_updates.assert_called_once()
-
     # sync_dep_devices
 
     @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.sync_dep_virtual_server_devices")

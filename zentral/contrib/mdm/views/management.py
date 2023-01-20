@@ -43,6 +43,7 @@ from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
 from zentral.contrib.mdm.scep import SCEPChallengeType
 from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm
 from zentral.contrib.mdm.scep.static import StaticChallengeForm
+from zentral.contrib.mdm.software_updates import iter_available_software_updates
 from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
 
 
@@ -1049,6 +1050,7 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx["available_software_updates"] = list(iter_available_software_updates(self.object))
         try:
             ctx["dep_device"] = (DEPDevice.objects.select_related("virtual_server", "enrollment")
                                                   .get(serial_number=self.object.serial_number))

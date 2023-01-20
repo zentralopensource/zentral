@@ -19,24 +19,25 @@ class DeclarativeManagement(Command):
             return False
         if not enrolled_device.blueprint:
             return False
+        comparable_os_version = enrolled_device.comparable_os_version
         return (
             (
                 enrolled_device.platform in (Platform.iOS.name, Platform.iPadOS.name)
                 and (
                     (
                         enrolled_device.user_enrollment
-                        and enrolled_device.comparable_os_version >= (15,)
+                        and comparable_os_version >= (15,)
                     ) or (
                         not enrolled_device.user_enrollment
-                        and enrolled_device.comparable_os_version >= (16,)
+                        and comparable_os_version >= (16,)
                     )
                 )
             ) or (
                 enrolled_device.platform == Platform.macOS.name
-                and enrolled_device.comparable_os_version >= (13,)
+                and comparable_os_version >= (13,)
             ) or (
                 enrolled_device.platform == Platform.tvOS.name
-                and enrolled_device.comparable_os_version >= (16,)
+                and comparable_os_version >= (16,)
             )
         )
 
