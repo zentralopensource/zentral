@@ -238,7 +238,7 @@ def macos_version_from_build(build):
                 patch = 1
             elif build in ("21G309", "21G320"):
                 patch = 2
-            elif build == "21G417":
+            elif build in ("21G417", "21G419"):
                 patch = 3
             else:
                 patch = 0
