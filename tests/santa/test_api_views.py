@@ -1032,7 +1032,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json()["description"], "Description Text Updated")
         self.assertEqual(rule.description, "Description Text Updated")
 
-    def test_update_rule_change_target_identifier_error(self):
+    def test_update_rule_change_target_identifier(self):
         configuration = self.force_configuration()
         rule = self.force_rule(configuration=configuration)
         self.set_permissions("santa.change_rule")
@@ -1043,27 +1043,20 @@ class APIViewsTestCase(TestCase):
             "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789')
         }
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json(), {
-            "target": ["does not exist!"]
-        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_update_rule_change_target_type_error(self):
-        target_identifier = '1234567890'
+    def test_update_rule_change_target_type(self):
         configuration = self.force_configuration()
-        rule = self.force_rule(configuration=configuration, target_identifier=target_identifier)
+        rule = self.force_rule(configuration=configuration)
         self.set_permissions("santa.change_rule")
         data = {
             "configuration": configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.TEAM_ID,
-            "target_identifier": rule.target.identifier
+            "target_identifier": '1234567890'
         }
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json(), {
-            "target": ["does not exist!"]
-        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_update_rule_change_config(self):
         configuration = self.force_configuration()
@@ -1268,20 +1261,19 @@ class APIViewsTestCase(TestCase):
         self.assertNotIn(tag_conflicts, rule.tags.all())
         self.assertNotIn(tag_conflicts, rule.excluded_tags.all())
 
-    def test_update_rule_target_does_not_exist_error(self):
+    def test_update_rule_target_does_not_exist(self):
         configuration = self.force_configuration()
         target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
-        rule = self.force_rule(configuration=configuration, target_identifier=target_identifier)
+        rule = self.force_rule(configuration=configuration)
         self.set_permissions("santa.change_rule")
         data = {
             "configuration": self.configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BINARY,
-            "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789')
+            "target_identifier": target_identifier
         }
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json(), {'target': ['does not exist!']})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         rule.refresh_from_db()
         self.assertEqual(rule.target.identifier, target_identifier)
 

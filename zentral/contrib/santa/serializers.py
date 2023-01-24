@@ -62,9 +62,17 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
-class RuleMixin:
+class RuleSerializer(serializers.ModelSerializer):
+    target_type = serializers.ChoiceField(choices=[c[0] for c in Target.TYPE_CHOICES], source="target.type")
+    target_identifier = serializers.CharField(source="target.identifier")
+    ruleset = serializers.PrimaryKeyRelatedField(read_only=True)
 
-    def validate_scope(self, data):
+    class Meta:
+        model = Rule
+        exclude = ("target",)
+
+    @staticmethod
+    def validate_conflicts(data):
 
         # primary user conflicts
         primary_users = data.get("primary_users", [])
@@ -93,20 +101,13 @@ class RuleMixin:
         if tag_conflicts:
             raise serializers.ValidationError({"tags": f"{tag_conflicts} in both included and excluded"})
 
-
-class RuleSerializer(serializers.ModelSerializer, RuleMixin):
-    target_type = serializers.ChoiceField(choices=[c[0] for c in Target.TYPE_CHOICES], source="target.type")
-    target_identifier = serializers.CharField(source="target.identifier")
-    ruleset = serializers.PrimaryKeyRelatedField(read_only=True)
-
-    class Meta:
-        model = Rule
-        exclude = ("target",)
+        return data
 
     def validate(self, data):
-        target_type = data["target"].get("type")
-        target_identifier = data["target"].get("identifier")
-        configuration = data.get("configuration")
+        target_type = data["target_type"] = data["target"].get("type")
+        target_identifier = data["target_identifier"] = data["target"].get("identifier")
+        data.pop("target")
+        self.validate_conflicts(data)
 
         # identifier
         if target_identifier:
@@ -119,20 +120,19 @@ class RuleSerializer(serializers.ModelSerializer, RuleMixin):
                 if not test_sha256(target_identifier):
                     raise serializers.ValidationError({"target_identifier": "Invalid sha256"})
 
-        # duplicated rule
-        if not self.instance:
-            if target_type and target_identifier and Rule.objects.filter(
-                    configuration=configuration,
-                    target__type=target_type,
-                    target__identifier=target_identifier).count():
-                raise serializers.ValidationError({"target": "rule already exists for this target"})
-        else:
-            # target does not exist on update
-            if not Target.objects.filter(type=target_type, identifier=target_identifier).exists():
-                raise serializers.ValidationError({"target": "does not exist!"})
+        # Only one rule per target allowed for a given configuration
+        test_qs = Rule.objects.filter(
+            configuration=data["configuration"],
+            target__type=target_type,
+            target__identifier=target_identifier
+        )
+        if self.instance:
+            test_qs = test_qs.exclude(pk=self.instance.pk)
+        if test_qs.count():
+            raise serializers.ValidationError({"target": "rule already exists for this target"})
 
         # bundle target checks
-        if target_type == Target.BUNDLE:
+        if target_type is Target.BUNDLE:
             try:
                 bundle = Bundle.objects.get(target__identifier=target_identifier)
             except Bundle.DoesNotExist:
@@ -151,175 +151,29 @@ class RuleSerializer(serializers.ModelSerializer, RuleMixin):
             if policy is not Rule.BLOCKLIST:
                 if data.get("custom_msg"):
                     raise serializers.ValidationError({"custom_msg": "Can only be set on BLOCKLIST rules"})
-            if target_type is Target.BUNDLE:
-                if policy not in Rule.BUNDLE_POLICIES:
-                    raise serializers.ValidationError({"policy": f"Policy {policy} not allowed for bundles."})
-        
-        # add target_type, target_identifier for create
-        if not self.instance:
-            data["target_type"] = target_type
-            data["target_identifier"] = target_identifier
-
-        # remove target
-        data.pop("target")
-
-        # validate scope
-        self.validate_scope(data)
+            if policy not in Rule.BUNDLE_POLICIES and target_type is Target.BUNDLE:
+                raise serializers.ValidationError({"policy": f"Policy {policy} not allowed for bundles."})
         return data
 
     def create(self, validated_data):
-        # create the target from target_type and target_identifier
-        target_type = validated_data.pop("target_type")
-        target_identifier = validated_data.pop("target_identifier")
-        target, _ = Target.objects.get_or_create(type=target_type, identifier=target_identifier)
-
-        rule = Rule.objects.create(
-            configuration=validated_data["configuration"],
-            target=target,
-            policy=validated_data["policy"],
-            custom_msg=validated_data.get("custom_msg", ""),
-            description=validated_data.get("description", ""),
-            serial_numbers=validated_data.get("serial_numbers") or [],
-            excluded_serial_numbers=validated_data.get("excluded_serial_numbers") or [],
-            primary_users=validated_data.get("primary_users") or [],
-            excluded_primary_users=validated_data.get("excluded_primary_users") or []
+        target, _ = Target.objects.get_or_create(
+            type=validated_data.pop("target_type"),
+            identifier=validated_data.pop("target_identifier")
         )
-        tags = validated_data.get("tags")
-        if tags:
-            rule.tags.set(tags)
-        excluded_tags = validated_data.get("excluded_tags")
-        if excluded_tags:
-            rule.excluded_tags.set(excluded_tags)
-        return rule
+        validated_data["target"] = target
+        return super().create(validated_data)
 
     def update(self, instance, validated_data):
-
-        updates = {}
-        updated = False
-        rule = instance
-
-        # policy
-        policy = validated_data["policy"]
-        if policy != instance.policy:
-            updates.setdefault("removed", {})["policy"] = translate_rule_policy(instance.policy)
-            updated = True
-            updates.setdefault("added", {})["policy"] = translate_rule_policy(policy)
-
-        # custom_msg
-        custom_msg = validated_data.get("custom_msg")
-        if custom_msg != instance.custom_msg:
+        target, _ = Target.objects.update_or_create(
+            type=validated_data.pop("target_type"),
+            identifier=validated_data.pop("target_identifier")
+        )
+        validated_data["target"] = target
+        if validated_data.get("custom_msg") != instance.custom_msg:
             instance.version = F("version") + 1
             instance.save()
             instance.refresh_from_db()
-            updated = True
-            updates.setdefault("removed", {})["custom_msg"] = instance.custom_msg
-            if custom_msg:
-                updates.setdefault("added", {})["custom_msg"] = custom_msg
-
-        # description
-        description = validated_data.get("description")
-        if description != instance.description:
-            updates.setdefault("removed", {})["description"] = instance.description
-            updated = True
-            if description:
-                updates.setdefault("added", {})["description"] = description
-
-        # serial_numbers
-        if validated_data.get("serial_numbers"):
-            serial_numbers = set(validated_data.get("serial_numbers"))
-            old_serial_numbers = set(instance.serial_numbers)
-            if serial_numbers != instance.serial_numbers:
-                updated = True
-                added_serial_numbers = serial_numbers - old_serial_numbers
-                if added_serial_numbers:
-                    updates.setdefault("added", {})["serial_numbers"] = sorted(added_serial_numbers)
-                removed_serial_numbers = old_serial_numbers - serial_numbers
-                if removed_serial_numbers:
-                    updates.setdefault("removed", {})["serial_numbers"] = sorted(removed_serial_numbers)
-
-        # excluded_serial_numbers
-        if validated_data.get("excluded_serial_numbers"):
-            excluded_serial_numbers = set(validated_data.get("excluded_serial_numbers"))
-            old_excluded_serial_numbers = set(instance.excluded_serial_numbers)
-            if excluded_serial_numbers != instance.excluded_serial_numbers:
-                updated = True
-                added_excluded_serial_numbers = excluded_serial_numbers - old_excluded_serial_numbers
-                if added_excluded_serial_numbers:
-                    updates.setdefault("added", {})["excluded_serial_numbers"] = \
-                        sorted(added_excluded_serial_numbers)
-                removed_excluded_serial_numbers = old_excluded_serial_numbers - excluded_serial_numbers
-                if removed_excluded_serial_numbers:
-                    updates.setdefault("removed", {})["excluded_serial_numbers"] = \
-                        sorted(removed_excluded_serial_numbers)
-
-        # primary_users
-        if validated_data.get("primary_users"):
-            primary_users = set(validated_data.get("primary_users"))
-            old_primary_users = set(instance.primary_users)
-            if primary_users != instance.primary_users:
-                updated = True
-                added_primary_users = primary_users - old_primary_users
-                if added_primary_users:
-                    updates.setdefault("added", {})["primary_users"] = sorted(added_primary_users)
-                removed_primary_users = old_primary_users - primary_users
-                if removed_primary_users:
-                    updates.setdefault("removed", {})["primary_users"] = sorted(removed_primary_users)
-
-        # excluded_primary_users
-        if validated_data.get("excluded_primary_users"):
-            excluded_primary_users = set(validated_data.get("excluded_primary_users"))
-            old_excluded_primary_users = set(instance.excluded_primary_users)
-            if excluded_primary_users != instance.excluded_primary_users:
-                updated = True
-                added_excluded_primary_users = excluded_primary_users - old_excluded_primary_users
-                if added_excluded_primary_users:
-                    updates.setdefault("added", {})["excluded_primary_users"] = sorted(added_excluded_primary_users)
-                removed_excluded_primary_users = old_excluded_primary_users - excluded_primary_users
-                if removed_excluded_primary_users:
-                    updates.setdefault("removed", {})["excluded_primary_users"] = \
-                        sorted(removed_excluded_primary_users)
-
-        if updated:
-            rule = super().update(instance, validated_data)
-
-        # tags
-        if validated_data.get("tags"):
-            tags = set(validated_data.get("tags"))
-            old_tags = set(instance.tags.all())
-            if tags != old_tags:
-                instance.tags.set(tags)
-                instance.save()
-                instance.refresh_from_db()
-                added_tags = tags - old_tags
-                if added_tags:
-                    updates.setdefault("added", {})["tags"] = [{"pk": t.pk, "name": t.name} for t in added_tags]
-                removed_tags = old_tags - tags
-                if removed_tags:
-                    updates.setdefault("removed", {})["tags"] = [{"pk": t.pk, "name": t.name} for t in removed_tags]
-
-        # excluded_tags
-        if validated_data.get("excluded_tags"):
-            excluded_tags = set(validated_data.get("excluded_tags"))
-            old_excluded_tags = set(instance.excluded_tags.all())
-            if excluded_tags != list(instance.excluded_tags.all()):
-                instance.excluded_tags.set(excluded_tags)
-                instance.save()
-                instance.refresh_from_db()
-                added_excluded_tags = excluded_tags - old_excluded_tags
-                if added_excluded_tags:
-                    updates.setdefault("added", {})["excluded_tags"] = [{"pk": t.pk, "name": t.name}
-                                                                        for t in added_excluded_tags]
-                removed_excluded_tags = old_excluded_tags - excluded_tags
-                if removed_excluded_tags:
-                    updates.setdefault("removed", {})["excluded_tags"] = [{"pk": t.pk, "name": t.name}
-                                                                          for t in removed_excluded_tags]
-        if updates:
-            rule_update_data = {"rule": instance.serialize_for_event(),
-                                "result": "updated",
-                                "updates": updates}
-            transaction.on_commit(lambda: post_santa_rule_update_event(self.context.get("request"), rule_update_data))
-
-        return rule
+        return super().update(instance, validated_data)
 
 
 class RuleUpdateSerializer(serializers.Serializer):
