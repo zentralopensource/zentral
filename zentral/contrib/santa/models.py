@@ -646,7 +646,7 @@ class Rule(models.Model):
     policy = models.PositiveSmallIntegerField(choices=POLICY_CHOICES)
     custom_msg = models.TextField(blank=True)
     description = models.TextField(blank=True)
-    version = models.PositiveIntegerField(default=1)
+    version = models.PositiveIntegerField(default=1, editable=False)
 
     # scope
     serial_numbers = ArrayField(models.TextField(), blank=True, default=list)

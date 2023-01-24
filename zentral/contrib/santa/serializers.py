@@ -64,6 +64,7 @@ class RuleSerializer(serializers.ModelSerializer):
     target_type = serializers.ChoiceField(choices=[c[0] for c in Target.TYPE_CHOICES], source="target.type")
     target_identifier = serializers.CharField(source="target.identifier")
     ruleset = serializers.PrimaryKeyRelatedField(read_only=True)
+    version = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Rule
@@ -167,10 +168,10 @@ class RuleSerializer(serializers.ModelSerializer):
             identifier=validated_data.pop("target_identifier")
         )
         validated_data["target"] = target
-        instance.version = F("version") + 1
-        instance.save()
-        instance.refresh_from_db()
-        return super().update(instance, validated_data)
+        validated_data["version"] = F("version") + 1
+        rule = super().update(instance, validated_data)
+        rule.refresh_from_db()
+        return rule
 
 
 class RuleUpdateSerializer(serializers.Serializer):
