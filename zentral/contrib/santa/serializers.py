@@ -2,15 +2,12 @@ from datetime import datetime
 from itertools import chain
 import logging
 import os.path
-from django.db import transaction
-from django.db.models import F
 from django.urls import reverse
 from rest_framework import serializers
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
-from .events import post_santa_rule_update_event
-from .models import Bundle, Configuration, Rule, Target, Enrollment, translate_rule_policy
+from .models import Bundle, Configuration, Rule, Target, Enrollment
 from .forms import test_sha256, test_team_id
 
 
