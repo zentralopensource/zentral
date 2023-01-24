@@ -169,10 +169,6 @@ class RuleSerializer(serializers.ModelSerializer):
             identifier=validated_data.pop("target_identifier")
         )
         validated_data["target"] = target
-        if validated_data.get("custom_msg") != instance.custom_msg:
-            instance.version = F("version") + 1
-            instance.save()
-            instance.refresh_from_db()
         return super().update(instance, validated_data)
 
 
