@@ -158,7 +158,18 @@ class RuleSerializer(serializers.ModelSerializer):
             identifier=validated_data.pop("target_identifier")
         )
         validated_data["target"] = target
-        validated_data["version"] = F("version") + 1
+        changed = False
+        for attr, value in validated_data.items():
+            if attr == 'tags' or attr == 'excluded_tags':
+                if set(value) != set(getattr(instance, attr).all()):
+                    changed = True
+                    break
+            else:
+                if getattr(instance, attr) != value:
+                    changed = True
+                    break
+        if changed:
+            validated_data["version"] = F("version") + 1
         rule = super().update(instance, validated_data)
         rule.refresh_from_db()
         return rule
