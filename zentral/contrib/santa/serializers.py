@@ -64,7 +64,7 @@ class RuleSerializer(serializers.ModelSerializer):
     target_type = serializers.ChoiceField(choices=[c[0] for c in Target.TYPE_CHOICES], source="target.type")
     target_identifier = serializers.CharField(source="target.identifier")
     ruleset = serializers.PrimaryKeyRelatedField(read_only=True)
-    version = serializers.IntegerField(read_only=True)
+    version = serializers.IntegerField(default=1, read_only=True)
 
     class Meta:
         model = Rule
