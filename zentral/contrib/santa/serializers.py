@@ -70,43 +70,33 @@ class RuleSerializer(serializers.ModelSerializer):
         model = Rule
         exclude = ("target",)
 
-    @staticmethod
-    def validate_conflicts(data):
+    def validate(self, data):
+        target_type = data["target_type"] = data["target"].get("type")
+        target_identifier = data["target_identifier"] = data["target"].get("identifier")
+        data.pop("target")
 
-        # primary user conflicts
+        # users conflicts
         primary_users = data.get("primary_users", [])
         excluded_primary_users = data.get("excluded_primary_users", [])
-        primary_user_conflicts = ", ".join(f"'{u}'" for u in primary_users
-                                           if u in excluded_primary_users)
+        primary_user_conflicts = ", ".join(f"'{u}'" for u in primary_users if u in excluded_primary_users)
         if primary_user_conflicts:
             raise serializers.ValidationError(
                 {"primary_users": f"{primary_user_conflicts} in both included and excluded"}
             )
-
         # serial number conflicts
         serial_numbers = data.get("serial_numbers", [])
         excluded_serial_numbers = data.get("excluded_serial_numbers", [])
-        serial_number_conflicts = ", ".join(f"'{sn}'" for sn in serial_numbers
-                                            if sn in excluded_serial_numbers)
+        serial_number_conflicts = ", ".join(f"'{sn}'" for sn in serial_numbers if sn in excluded_serial_numbers)
         if serial_number_conflicts:
             raise serializers.ValidationError(
                 {"serial_numbers": f"{serial_number_conflicts} in both included and excluded"}
             )
-
         # tag conflicts
         tags = data.get("tags", [])
         excluded_tags = data.get("excluded_tags", [])
         tag_conflicts = ", ".join(f"'{t.name}'" for t in tags if t in excluded_tags)
         if tag_conflicts:
             raise serializers.ValidationError({"tags": f"{tag_conflicts} in both included and excluded"})
-
-        return data
-
-    def validate(self, data):
-        target_type = data["target_type"] = data["target"].get("type")
-        target_identifier = data["target_identifier"] = data["target"].get("identifier")
-        data.pop("target")
-        self.validate_conflicts(data)
 
         # identifier
         if target_identifier:
