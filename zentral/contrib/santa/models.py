@@ -5,7 +5,7 @@ import logging
 from django.core.validators import MaxValueValidator, MinLengthValidator, MinValueValidator
 from django.contrib.postgres.fields import ArrayField
 from django.db import connection, models
-from django.db.models import Count, Q, F
+from django.db.models import Count, Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
@@ -695,12 +695,6 @@ class Rule(models.Model):
             d["excluded_tags"] = [{"pk": t.pk, "name": t.name} for t in excluded_tags]
             d["excluded_tags"].sort(key=lambda t: t["pk"])
         return d
-
-    def save(self, *args, **kwargs):
-        if self.pk:
-            self.version = F("version") + 1
-        super().save(*args, **kwargs)
-        self.refresh_from_db()
 
 
 class MachineRuleManager(models.Manager):
