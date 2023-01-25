@@ -914,7 +914,7 @@ class APIViewsTestCase(TestCase):
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        rule = Rule.objects.first()
+        rule = Rule.objects.select_related('target').first()
         self.assertEqual(Rule.objects.count(), 1)
         self.assertEqual(response.json(), {
             "id": rule.id,
