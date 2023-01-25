@@ -741,7 +741,6 @@ class APIViewsTestCase(TestCase):
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        rule.refresh_from_db()
         self.assertEqual(response.json(), {'target': ['rule already exists for this target']})
         self.assertEqual(Rule.objects.count(), 1)
 
