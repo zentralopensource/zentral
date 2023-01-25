@@ -170,8 +170,10 @@ class RuleSerializer(serializers.ModelSerializer):
                     break
         if changed:
             validated_data["version"] = F("version") + 1
-        rule = super().update(instance, validated_data)
-        rule.refresh_from_db()
+            rule = super().update(instance, validated_data)
+            rule.refresh_from_db()
+        else:
+            rule = instance
         return rule
 
 
