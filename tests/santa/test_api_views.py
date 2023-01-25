@@ -1441,8 +1441,8 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json(),
                          {'tags': [f"'{[t.name for t in tag_conflicts][0]}' in both included and excluded"]})
         rule.refresh_from_db()
-        self.assertEqual(rule.tags, [])
-        self.assertEqual(rule.excluded_tags, [])
+        self.assertEqual([t for t in rule.tags.all()], [])
+        self.assertEqual([t for t in rule.excluded_tags.all()], [])
         self.assertEqual(rule.version, 1)
 
     def test_update_rule_target_does_not_exist(self):
