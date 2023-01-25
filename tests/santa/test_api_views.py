@@ -966,6 +966,20 @@ class APIViewsTestCase(TestCase):
             "version": rule.version
         })
 
+    def test_rule_create_with_policy_error(self):
+        configuration = self.force_configuration()
+        self.set_permissions("santa.add_rule")
+        data = {
+            "configuration": configuration.pk,
+            "policy": "invalid",
+            "target_type": Target.BINARY,
+            "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789')
+        }
+        response = self.post_json_data(reverse("santa_api:rules"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), {'policy': ['"invalid" is not a valid choice.']})
+        self.assertEqual(Rule.objects.count(), 0)
+
     def test_rule_create_with_custom_msg(self):
         configuration = self.force_configuration()
         self.set_permissions("santa.add_rule")

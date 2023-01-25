@@ -131,17 +131,13 @@ class RuleSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError({"bundle": "This bundle has not been uploaded yet."})
 
         # policy
-        try:
-            policy = int(data.get("policy"))
-        except (TypeError, ValueError):
-            pass
-        else:
-            # use custom message only on blocklist rules
-            if policy is not Rule.BLOCKLIST:
-                if data.get("custom_msg"):
-                    raise serializers.ValidationError({"custom_msg": "Can only be set on BLOCKLIST rules"})
-            if policy not in Rule.BUNDLE_POLICIES and target_type is Target.BUNDLE:
-                raise serializers.ValidationError({"policy": f"Policy {policy} not allowed for bundles."})
+        policy = int(data.get("policy"))
+        if policy is not Rule.BLOCKLIST:
+            if data.get("custom_msg"):
+                raise serializers.ValidationError({"custom_msg": "Can only be set on BLOCKLIST rules"})
+        if policy not in Rule.BUNDLE_POLICIES and target_type is Target.BUNDLE:
+            raise serializers.ValidationError({"policy": f"Policy {policy} not allowed for bundles."})
+
         return data
 
     def create(self, validated_data):
