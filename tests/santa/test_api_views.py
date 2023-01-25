@@ -1329,6 +1329,41 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(rule.policy, Rule.BLOCKLIST)
         self.assertEqual(rule.version, 1)
 
+    def test_update_change_version_readonly(self):
+        configuration = self.force_configuration()
+        rule = self.force_rule(configuration=configuration)
+        self.set_permissions("santa.change_rule")
+        data = {
+            "configuration": configuration.pk,
+            "policy": rule.policy,
+            "target_type": rule.target.type,
+            "target_identifier": rule.target.identifier,
+            "version": 95
+        }
+        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rule.refresh_from_db()
+        self.assertNotEqual(rule.version, 95)
+        self.assertEqual(rule.version, 1)
+
+    def test_update_change_ruleset_readonly(self):
+        ruleset = RuleSet.objects.create(name="Test")
+        configuration = self.force_configuration()
+        rule = self.force_rule(configuration=configuration)
+        self.set_permissions("santa.change_rule")
+        data = {
+            "configuration": configuration.pk,
+            "policy": rule.policy,
+            "target_type": rule.target.type,
+            "target_identifier": rule.target.identifier,
+            "ruleset": ruleset.pk
+        }
+        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rule.refresh_from_db()
+        self.assertEqual(rule.ruleset, None)
+        self.assertEqual(rule.version, 1)
+
     def test_update_rule_bundle_not_bundle_policy_error(self):
         target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
         configuration = self.force_configuration()
