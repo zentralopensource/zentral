@@ -914,7 +914,7 @@ class APIViewsTestCase(TestCase):
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        rule = Rule.objects.select_related('target').first()
+        rule = Rule.objects.first()
         self.assertEqual(Rule.objects.count(), 1)
         self.assertEqual(response.json(), {
             "id": rule.id,
@@ -983,7 +983,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Rule.objects.count(), 1)
         self.assertEqual(response.json()["custom_msg"], "Custom message")
-        rule = Rule.objects.select_related('target').first()
+        rule = Rule.objects.first()
         self.assertEqual(rule.custom_msg, "Custom message")
 
     def test_rule_create_unauthorized(self):
