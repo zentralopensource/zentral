@@ -1335,7 +1335,6 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rule.refresh_from_db()
-        self.assertNotEqual(rule.version, 95)
         self.assertEqual(rule.version, 1)
 
     def test_update_change_ruleset_readonly(self):
