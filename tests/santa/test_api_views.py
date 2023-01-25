@@ -1210,7 +1210,8 @@ class APIViewsTestCase(TestCase):
     def test_update_rule_team_id_error(self):
         configuration = self.force_configuration()
         target_identifier = "1234567890"
-        rule = self.force_rule(configuration=configuration, target_identifier=target_identifier, target_type=Target.TEAM_ID)
+        rule = self.force_rule(configuration=configuration, target_identifier=target_identifier,
+                               target_type=Target.TEAM_ID)
         self.set_permissions("santa.change_rule")
         data = {
             "configuration": configuration.pk,
