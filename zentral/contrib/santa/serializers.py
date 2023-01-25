@@ -2,6 +2,7 @@ from datetime import datetime
 from itertools import chain
 import logging
 import os.path
+from django.db.models import F
 from django.urls import reverse
 from rest_framework import serializers
 from zentral.conf import settings
@@ -59,18 +60,117 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
-class RuleTargetSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Target
-        fields = ("type", "identifier")
-
-
 class RuleSerializer(serializers.ModelSerializer):
-    target = RuleTargetSerializer()
+    target_type = serializers.ChoiceField(choices=[c[0] for c in Target.TYPE_CHOICES], source="target.type")
+    target_identifier = serializers.CharField(source="target.identifier")
+    ruleset = serializers.PrimaryKeyRelatedField(read_only=True)
+    version = serializers.IntegerField(default=1, read_only=True)
 
     class Meta:
         model = Rule
-        fields = '__all__'
+        exclude = ("target",)
+
+    def validate(self, data):
+        target_type = data["target_type"] = data["target"].get("type")
+        target_identifier = data["target_identifier"] = data["target"].get("identifier")
+        data.pop("target")
+
+        # users conflicts
+        primary_users = data.get("primary_users", [])
+        excluded_primary_users = data.get("excluded_primary_users", [])
+        primary_user_conflicts = ", ".join(f"'{u}'" for u in primary_users if u in excluded_primary_users)
+        if primary_user_conflicts:
+            raise serializers.ValidationError(
+                {"primary_users": f"{primary_user_conflicts} in both included and excluded"}
+            )
+        # serial number conflicts
+        serial_numbers = data.get("serial_numbers", [])
+        excluded_serial_numbers = data.get("excluded_serial_numbers", [])
+        serial_number_conflicts = ", ".join(f"'{sn}'" for sn in serial_numbers if sn in excluded_serial_numbers)
+        if serial_number_conflicts:
+            raise serializers.ValidationError(
+                {"serial_numbers": f"{serial_number_conflicts} in both included and excluded"}
+            )
+        # tag conflicts
+        tags = data.get("tags", [])
+        excluded_tags = data.get("excluded_tags", [])
+        tag_conflicts = ", ".join(f"'{t.name}'" for t in tags if t in excluded_tags)
+        if tag_conflicts:
+            raise serializers.ValidationError({"tags": f"{tag_conflicts} in both included and excluded"})
+
+        # identifier
+        if target_identifier:
+            if target_type is Target.TEAM_ID:
+                target_identifier = target_identifier.upper()
+                if not test_team_id(target_identifier):
+                    raise serializers.ValidationError({"target_identifier": "Invalid Team ID"})
+            else:
+                target_identifier = target_identifier.lower()
+                if not test_sha256(target_identifier):
+                    raise serializers.ValidationError({"target_identifier": "Invalid sha256"})
+
+        # Only one rule per target allowed for a given configuration
+        test_qs = Rule.objects.filter(
+            configuration=data["configuration"],
+            target__type=target_type,
+            target__identifier=target_identifier
+        )
+        if self.instance:
+            test_qs = test_qs.exclude(pk=self.instance.pk)
+        if test_qs.count():
+            raise serializers.ValidationError({"target": "rule already exists for this target"})
+
+        # bundle target checks
+        if target_type is Target.BUNDLE:
+            try:
+                bundle = Bundle.objects.get(target__identifier=target_identifier)
+            except Bundle.DoesNotExist:
+                raise serializers.ValidationError({"target_type": f'Bundle for {target_identifier} does not exist.'})
+            else:
+                if not bundle.uploaded_at:
+                    raise serializers.ValidationError({"bundle": "This bundle has not been uploaded yet."})
+
+        # policy
+        policy = int(data.get("policy"))
+        if policy is not Rule.BLOCKLIST:
+            if data.get("custom_msg"):
+                raise serializers.ValidationError({"custom_msg": "Can only be set on BLOCKLIST rules"})
+        if policy not in Rule.BUNDLE_POLICIES and target_type is Target.BUNDLE:
+            raise serializers.ValidationError({"policy": f"Policy {policy} not allowed for bundles."})
+
+        return data
+
+    def create(self, validated_data):
+        target, _ = Target.objects.get_or_create(
+            type=validated_data.pop("target_type"),
+            identifier=validated_data.pop("target_identifier")
+        )
+        validated_data["target"] = target
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        target, _ = Target.objects.update_or_create(
+            type=validated_data.pop("target_type"),
+            identifier=validated_data.pop("target_identifier")
+        )
+        validated_data["target"] = target
+        changed = False
+        for attr, value in validated_data.items():
+            if attr == 'tags' or attr == 'excluded_tags':
+                if set(value) != set(getattr(instance, attr).all()):
+                    changed = True
+                    break
+            else:
+                if getattr(instance, attr) != value:
+                    changed = True
+                    break
+        if changed:
+            validated_data["version"] = F("version") + 1
+            rule = super().update(instance, validated_data)
+            rule.refresh_from_db()
+        else:
+            rule = instance
+        return rule
 
 
 class RuleUpdateSerializer(serializers.Serializer):

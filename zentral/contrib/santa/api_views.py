@@ -170,15 +170,24 @@ class RuleFilter(filters.FilterSet):
     configuration = filters.ModelChoiceFilter(queryset=Configuration.objects.all())
 
 
-class RuleList(generics.ListAPIView):
+class RuleList(generics.ListCreateAPIView):
     """
-    List or search rules.
+    List, Create or search rules.
     """
     queryset = Rule.objects.select_related("configuration", "ruleset", "target")
     permission_classes = (DefaultDjangoModelPermissions,)
     serializer_class = RuleSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = RuleFilter
+
+
+class RuleDetail(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update or delete a Rule instance.
+    """
+    queryset = Rule.objects.select_related("configuration", "ruleset", "target")
+    permission_classes = (DefaultDjangoModelPermissions,)
+    serializer_class = RuleSerializer
 
 
 class RuleSetUpdate(APIView):
