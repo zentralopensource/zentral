@@ -121,11 +121,15 @@ class APIViewsTestCase(TestCase):
         data = json.dumps(data)
         return self.post_data(url, data, content_type, include_token, dry_run)
 
-    def force_rule(self, target_type="BINARY", policy=Rule.ALLOWLIST, target_identifier=None, configuration=None):
+    def force_rule(self, target_type="BINARY", policy=Rule.ALLOWLIST, target_identifier=None, configuration=None,
+                   bundle=False):
         if target_identifier is None:
             target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
         if configuration is None:
             configuration = self.configuration
+        if bundle:
+            target_type = Target.BUNDLE
+            self.force_bundle(target_identifier=target_identifier, fake_upload=True)
         target, _ = Target.objects.get_or_create(type=target_type, identifier=target_identifier)
         return Rule.objects.create(
             target=target,
@@ -725,23 +729,15 @@ class APIViewsTestCase(TestCase):
 
     # rules create
 
-    def test_create_rule_existing_error(self):
+    def test_create_rule_that_exist_failed(self):
         configuration = self.force_configuration()
         rule = self.force_rule(configuration=configuration)
         self.set_permissions("santa.add_rule")
         data = {
             "configuration": configuration.pk,
-            "policy": Rule.ALLOWLIST,
+            "policy": rule.policy,
             "target_type": rule.target.type,
-            "target_identifier": rule.target.identifier,
-            "description": "Description",
-            "primary_users": [get_random_string(32)],
-            "excluded_primary_users": [get_random_string(32)],
-            "serial_numbers": [get_random_string(32)],
-            "excluded_serial_numbers": [get_random_string(32)],
-            "tags": [t.id for t in self.force_tags(3)],
-            "excluded_tags": [t.id for t in self.force_tags(3)],
-            "custom_msg": get_random_string(32)
+            "target_identifier": rule.target.identifier
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -749,20 +745,13 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {'target': ['rule already exists for this target']})
         self.assertEqual(Rule.objects.count(), 1)
 
-    def test_create_rule_team_id_error(self):
+    def test_create_rule_team_id_failed(self):
         self.set_permissions("santa.add_rule")
         data = {
             "configuration": self.configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.TEAM_ID,
-            "target_identifier": get_random_string(32),
-            "description": "Description",
-            "primary_users": [get_random_string(32)],
-            "excluded_primary_users": [get_random_string(32)],
-            "serial_numbers": [get_random_string(32)],
-            "excluded_serial_numbers": [get_random_string(32)],
-            "tags": [t.id for t in self.force_tags(3)],
-            "excluded_tags": [t.id for t in self.force_tags(3)]
+            "target_identifier": get_random_string(32)
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -775,34 +764,20 @@ class APIViewsTestCase(TestCase):
             "configuration": self.configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BINARY,
-            "target_identifier": get_random_string(5),
-            "description": "Description",
-            "primary_users": [get_random_string(32)],
-            "excluded_primary_users": [get_random_string(32)],
-            "serial_numbers": [get_random_string(32)],
-            "excluded_serial_numbers": [get_random_string(32)],
-            "tags": [t.id for t in self.force_tags(3)],
-            "excluded_tags": [t.id for t in self.force_tags(3)]
+            "target_identifier": get_random_string(5)
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target_identifier': ['Invalid sha256']})
         self.assertEqual(Rule.objects.count(), 0)
 
-    def test_create_rule_bundle_not_exist_error(self):
+    def test_create_rule_bundle_does_not_exist(self):
         self.set_permissions("santa.add_rule")
         data = {
             "configuration": self.configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BUNDLE,
-            "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789'),
-            "description": "Description",
-            "primary_users": [get_random_string(32)],
-            "excluded_primary_users": [get_random_string(32)],
-            "serial_numbers": [get_random_string(32)],
-            "excluded_serial_numbers": [get_random_string(32)],
-            "tags": [t.id for t in self.force_tags(3)],
-            "excluded_tags": [t.id for t in self.force_tags(3)]
+            "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789')
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -810,7 +785,7 @@ class APIViewsTestCase(TestCase):
                          {'target_type': [f'Bundle for {data["target_identifier"]} does not exist.']})
         self.assertEqual(Rule.objects.count(), 0)
 
-    def test_create_rule_bundle_not_uploaded_error(self):
+    def test_create_rule_with_bundle_not_uploaded(self):
         target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
         self.force_bundle(target_identifier=target_identifier)
         self.set_permissions("santa.add_rule")
@@ -818,21 +793,14 @@ class APIViewsTestCase(TestCase):
             "configuration": self.configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BUNDLE,
-            "target_identifier": target_identifier,
-            "description": "Description",
-            "primary_users": [get_random_string(32)],
-            "excluded_primary_users": [get_random_string(32)],
-            "serial_numbers": [get_random_string(32)],
-            "excluded_serial_numbers": [get_random_string(32)],
-            "tags": [t.id for t in self.force_tags(3)],
-            "excluded_tags": [t.id for t in self.force_tags(3)]
+            "target_identifier": target_identifier
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'bundle': ['This bundle has not been uploaded yet.']})
         self.assertEqual(Rule.objects.count(), 0)
 
-    def test_create_rule_bundle_success(self):
+    def test_create_rule_with_target_bundle(self):
         target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
         self.force_bundle(target_identifier=target_identifier, fake_upload=True)
         self.set_permissions("santa.add_rule")
@@ -845,6 +813,9 @@ class APIViewsTestCase(TestCase):
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Rule.objects.count(), 1)
+        rule = Rule.objects.first()
+        self.assertEqual(rule.target.type, Target.BUNDLE)
+        self.assertEqual(rule.target.identifier, target_identifier)
 
     def test_create_rule_policy_custom_msg_error(self):
         self.set_permissions("santa.add_rule")
@@ -939,18 +910,37 @@ class APIViewsTestCase(TestCase):
             "excluded_primary_users": [get_random_string(12)],
             "serial_numbers": [get_random_string(12)],
             "excluded_serial_numbers": [get_random_string(12)],
-            "tags": [t.id for t in self.force_tags(3)],
-            "excluded_tags": [t.id for t in self.force_tags(3)]
+            "tags": [t.id for t in self.force_tags(1)],
+            "excluded_tags": [t.id for t in self.force_tags(1)],
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Rule.objects.count(), 1)
         rule = Rule.objects.first()
+        self.assertEqual(Rule.objects.count(), 1)
+        self.assertEqual(response.json(), {
+            "id": rule.id,
+            "configuration": configuration.pk,
+            "policy": 1,
+            "target_type": Target.BINARY,
+            "target_identifier": data["target_identifier"],
+            "description": "Description",
+            "custom_msg": '',
+            "ruleset": None,
+            "primary_users": data["primary_users"],
+            "excluded_primary_users": data["excluded_primary_users"],
+            "serial_numbers": data["serial_numbers"],
+            "excluded_serial_numbers": data["excluded_serial_numbers"],
+            "tags": data["tags"],
+            "excluded_tags": data["excluded_tags"],
+            "created_at": rule.created_at.isoformat(),
+            "updated_at": rule.updated_at.isoformat(),
+            "version": 1
+        })
         self.assertEqual(response.json(), {
             "id": rule.pk,
             "configuration": configuration.pk,
-            "policy": Rule.ALLOWLIST,
-            "target_type": Target.BINARY,
+            "policy": rule.policy,
+            "target_type": rule.target.type,
             "target_identifier": rule.target.identifier,
             "description": rule.description,
             "primary_users": rule.primary_users,
@@ -993,26 +983,9 @@ class APIViewsTestCase(TestCase):
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Rule.objects.count(), 1)
+        self.assertEqual(response.json()["custom_msg"], "Custom message")
         rule = Rule.objects.first()
-        self.assertEqual(response.json(), {
-            "id": rule.pk,
-            "configuration": configuration.pk,
-            "policy": Rule.BLOCKLIST,
-            "target_type": Target.TEAM_ID,
-            "target_identifier": rule.target.identifier,
-            "description": rule.description,
-            "primary_users": rule.primary_users,
-            "ruleset": None,
-            "custom_msg": 'Custom message',
-            "excluded_primary_users": rule.excluded_primary_users,
-            "serial_numbers": rule.serial_numbers,
-            "excluded_serial_numbers": rule.excluded_serial_numbers,
-            "tags": [t.pk for t in rule.tags.all()],
-            "excluded_tags": [t.pk for t in rule.excluded_tags.all()],
-            "created_at": rule.created_at.isoformat(),
-            "updated_at": rule.updated_at.isoformat(),
-            "version": rule.version
-        })
+        self.assertEqual(rule.custom_msg, "Custom message")
 
     def test_rule_create_unauthorized(self):
         response = self.client.post(reverse("santa_api:rules"))
@@ -1176,7 +1149,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(rule.target.identifier, data["target_identifier"])
         self.assertEqual(rule.version, 2)
 
-    def test_update_rule_change_target_type(self):
+    def test_update_rule_change_target_type_and_target_identifier(self):
         configuration = self.force_configuration()
         rule = self.force_rule(configuration=configuration)
         self.set_permissions("santa.change_rule")
@@ -1189,8 +1162,10 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["target_type"], Target.TEAM_ID)
+        self.assertEqual(response.json()["target_identifier"], '1234567890')
         rule.refresh_from_db()
         self.assertEqual(rule.target.type, Target.TEAM_ID)
+        self.assertEqual(rule.target.identifier, '1234567890')
         self.assertEqual(rule.version, 2)
 
     def test_update_rule_change_config(self):
@@ -1201,16 +1176,15 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("santa.change_rule")
         data = {
             "configuration": configuration2.pk,
-            "policy": Rule.ALLOWLIST,
+            "policy": rule.policy,
             "target_type": rule.target.type,
             "target_identifier": rule.target.identifier,
         }
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["configuration"], configuration2.pk)
         rule.refresh_from_db()
-        self.assertEqual(rule.configuration.pk, response.json()["configuration"])
-        self.assertEqual(rule.target.type, response.json()["target_type"])
-        self.assertEqual(rule.target.identifier, response.json()["target_identifier"])
+        self.assertEqual(rule.configuration.pk, configuration2.pk)
         self.assertEqual(rule.version, 2)
 
     def test_update_rule_target_exists_error(self):
@@ -1236,27 +1210,29 @@ class APIViewsTestCase(TestCase):
 
     def test_update_rule_team_id_error(self):
         configuration = self.force_configuration()
-        rule = self.force_rule(configuration=configuration)
+        target_identifier = "1234567890"
+        rule = self.force_rule(configuration=configuration, target_identifier=target_identifier, target_type=Target.TEAM_ID)
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
+            "configuration": configuration.pk,
             "policy": rule.policy,
-            "target_type": Target.TEAM_ID,
+            "target_type": rule.target.type,
             "target_identifier": get_random_string(32)
         }
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target_identifier': ['Invalid Team ID']})
         rule.refresh_from_db()
-        self.assertNotEqual(rule.target.identifier, data["target_identifier"])
+        self.assertEqual(rule.target.identifier, target_identifier)
         self.assertEqual(rule.version, 1)
 
     def test_update_rule_sha256_error(self):
         configuration = self.force_configuration()
-        rule = self.force_rule(configuration=configuration)
+        target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
+        rule = self.force_rule(configuration=configuration, target_identifier=target_identifier)
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
+            "configuration": configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BINARY,
             "target_identifier": get_random_string(5)
@@ -1265,7 +1241,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target_identifier': ['Invalid sha256']})
         rule.refresh_from_db()
-        self.assertNotEqual(rule.target.identifier, data["target_identifier"])
+        self.assertEqual(rule.target.identifier, target_identifier)
         self.assertEqual(rule.version, 1)
 
     def test_update_rule_bundle_not_exist_error(self):
@@ -1275,7 +1251,7 @@ class APIViewsTestCase(TestCase):
                                target_type=Target.BUNDLE)
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
+            "configuration": configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BUNDLE,
             "target_identifier": target_identifier
@@ -1294,7 +1270,7 @@ class APIViewsTestCase(TestCase):
         self.force_bundle(target_identifier=target_identifier)
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
+            "configuration": configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BUNDLE,
             "target_identifier": target_identifier
@@ -1305,21 +1281,24 @@ class APIViewsTestCase(TestCase):
         rule.refresh_from_db()
         self.assertEqual(rule.version, 1)
 
-    def test_update_rule_bundle_success(self):
-        target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
+    def test_update_rule_bundle_change_to_new_bundle(self):
+        bundle_target_identifier1 = get_random_string(length=64, allowed_chars='abcdef0123456789')
+        bundle_target_identifier2 = get_random_string(length=64, allowed_chars='abcdef0123456789')
         configuration = self.force_configuration()
-        rule = self.force_rule(configuration=configuration, target_identifier=target_identifier)
-        bundle = self.force_bundle(target_identifier=target_identifier, fake_upload=True)
+        rule = self.force_rule(configuration=configuration, target_identifier=bundle_target_identifier1, bundle=True)
+        new_bundle = self.force_bundle(target_identifier=bundle_target_identifier2, fake_upload=True)
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
-            "policy": Rule.ALLOWLIST,
-            "target_type": Target.BUNDLE,
-            "target_identifier": target_identifier
+            "configuration": configuration.pk,
+            "policy": rule.policy,
+            "target_type": rule.target.type,
+            "target_identifier": bundle_target_identifier2
         }
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["target_identifier"], bundle_target_identifier2)
         rule.refresh_from_db()
+        self.assertEqual(rule.target.identifier, bundle_target_identifier2)
         self.assertEqual(rule.version, 2)
 
     def test_update_rule_policy_custom_msg_error(self):
@@ -1329,7 +1308,7 @@ class APIViewsTestCase(TestCase):
                                policy=Rule.BLOCKLIST)
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
+            "configuration": configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BINARY,
             "target_identifier": target_identifier,
@@ -1385,7 +1364,7 @@ class APIViewsTestCase(TestCase):
         bundle = self.force_bundle(target_identifier=target_identifier, fake_upload=True)
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
+            "configuration": configuration.pk,
             "policy": Rule.BLOCKLIST,
             "target_type": Target.BUNDLE,
             "target_identifier": target_identifier
@@ -1405,7 +1384,7 @@ class APIViewsTestCase(TestCase):
         primary_user_conflicts = f"{get_random_string(5)}@@corp.com"
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
+            "configuration": configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BINARY,
             "target_identifier": target_identifier,
@@ -1451,7 +1430,7 @@ class APIViewsTestCase(TestCase):
         tag_conflicts = self.force_tags(1)
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
+            "configuration": configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BINARY,
             "target_identifier": target_identifier,
@@ -1473,7 +1452,7 @@ class APIViewsTestCase(TestCase):
         rule = self.force_rule(configuration=configuration)
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
+            "configuration": configuration.pk,
             "policy": Rule.ALLOWLIST,
             "target_type": Target.BINARY,
             "target_identifier": target_identifier
@@ -1489,7 +1468,7 @@ class APIViewsTestCase(TestCase):
         rule = self.force_rule(configuration=configuration, target_type=Target.BINARY, policy=Rule.BLOCKLIST)
         self.set_permissions("santa.change_rule")
         data = {
-            "configuration": self.configuration.pk,
+            "configuration": configuration.pk,
             "policy": rule.policy,
             "target_type": rule.target.type,
             "target_identifier": rule.target.identifier,
