@@ -1,6 +1,7 @@
 from functools import reduce
 import json
 import operator
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase
@@ -13,6 +14,7 @@ from accounts.models import User, APIToken
 from zentral.conf import settings
 from zentral.contrib.inventory.models import Certificate, File, EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.contrib.santa.events import SantaRuleUpdateEvent
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment, Bundle
 from zentral.utils.payloads import get_payload_identifier
 
@@ -896,7 +898,8 @@ class APIViewsTestCase(TestCase):
                          {'tags': [f"'{[t.name for t in tag_conflicts][0]}' in both included and excluded"]})
         self.assertEqual(Rule.objects.count(), 0)
 
-    def test_rule_create(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_rule_create(self, post_event):
         configuration = self.force_configuration()
         self.set_permissions("santa.add_rule")
         data = {
@@ -912,7 +915,8 @@ class APIViewsTestCase(TestCase):
             "tags": [t.id for t in self.force_tags(1)],
             "excluded_tags": [t.id for t in self.force_tags(1)],
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         rule = Rule.objects.select_related('target').first()
         self.assertEqual(Rule.objects.count(), 1)
@@ -953,6 +957,28 @@ class APIViewsTestCase(TestCase):
             "created_at": rule.created_at.isoformat(),
             "updated_at": rule.updated_at.isoformat(),
             "version": rule.version
+        })
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        self.assertIsInstance(events[0], SantaRuleUpdateEvent)
+        self.assertEqual(events[0].payload, {
+            'rule': {
+                'configuration': {
+                    'pk': configuration.pk,
+                    'name': configuration.name,
+                },
+                'target': {
+                    'type': 'BINARY',
+                    'sha256': rule.target.identifier,
+                },
+                'policy': 'ALLOWLIST',
+                'serial_numbers': data['serial_numbers'],
+                'excluded_serial_numbers': data['excluded_serial_numbers'],
+                'primary_users': data['primary_users'],
+                'excluded_primary_users': data['excluded_primary_users'],
+                'tags': [{'pk': t.pk, 'name': t.name} for t in rule.tags.all()],
+                'excluded_tags': [{'pk': t.pk, 'name': t.name} for t in rule.excluded_tags.all()]},
+            'result': 'created'
         })
 
     def test_rule_create_with_policy_error(self):
