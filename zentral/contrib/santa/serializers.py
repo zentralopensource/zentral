@@ -194,9 +194,9 @@ class RuleSerializer(serializers.ModelSerializer):
                     added_items = added
                     removed_items = removed
 
-            if removed and removed_items:
+            if removed_items:
                 updates.setdefault("removed", {})[attr] = removed_items
-            if added and added_items:
+            if added_items:
                 updates.setdefault("added", {})[attr] = added_items
 
         if updates:
