@@ -392,6 +392,77 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertEqual(response.context["object"].name, name)
 
+    # add submanifest pkginfo
+
+    def test_add_sub_manifest_pkg_info_redirect(self):
+        submanifest, _ = self._force_sub_manifest()
+        self._login_redirect(reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)))
+
+    def test_add_sub_manifest_pkg_info_permission_denied(self):
+        submanifest, _ = self._force_sub_manifest()
+        self._login()
+        response = self.client.get(reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_add_sub_manifest_pkg_info_get(self):
+        submanifest, _ = self._force_sub_manifest()
+        self._login("monolith.add_submanifestpkginfo")
+        response = self.client.get(reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/edit_sub_manifest_pkg_info.html")
+
+    def test_add_sub_manifest_pkg_info_post_pkg_info_name_already_included(self):
+        submanifest, _ = self._force_sub_manifest()
+        self._login("monolith.add_submanifestpkginfo")
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)),
+            {"pkg_info_name": self.pkginfo_name_1.pk,
+             "key": "managed_installs"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/edit_sub_manifest_pkg_info.html")
+        self.assertFormError(
+            response, "form", "pkg_info_name",
+            "Select a valid choice. That choice is not one of the available choices."
+        )
+
+    def test_add_sub_manifest_pkg_info_post_featured_item_error(self):
+        submanifest, _ = self._force_sub_manifest()
+        self._login("monolith.add_submanifestpkginfo")
+        pkginfo_name = PkgInfoName.objects.create(name=get_random_string(12))
+        PkgInfo.objects.create(name=pkginfo_name, version="1.0",
+                               data={"name": pkginfo_name.name,
+                                     "version": "1.0"})
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)),
+            {"pkg_info_name": pkginfo_name.pk,
+             "key": "managed_installs",
+             "featured_item": "on"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/edit_sub_manifest_pkg_info.html")
+        self.assertFormError(response, "form", "featured_item", "Only optional install items can be featured")
+
+    def test_add_sub_manifest_pkg_info_post(self):
+        submanifest, _ = self._force_sub_manifest()
+        self._login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        pkginfo_name = PkgInfoName.objects.create(name=get_random_string(12))
+        PkgInfo.objects.create(name=pkginfo_name, version="1.0",
+                               data={"name": pkginfo_name.name,
+                                     "version": "1.0"})
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)),
+            {"pkg_info_name": pkginfo_name.pk,
+             "key": "optional_installs",
+             "featured_item": "on"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        self.assertContains(response, pkginfo_name.name)
+
     # manifests
 
     def test_manifests_login_redirect(self):

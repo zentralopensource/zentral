@@ -135,6 +135,12 @@ class SubManifestPkgInfoForm(forms.ModelForm):
 
     def clean(self):
         super().clean()
+        # featured
+        featured_item = self.cleaned_data.get("featured_item")
+        key = self.cleaned_data.get("key")
+        if featured_item and key not in ("default_installs", "optional_installs"):
+            self.add_error("featured_item", "Only optional install items can be featured")
+        # shards
         default_shard = self.cleaned_data.get("default_shard")
         shard_modulo = self.cleaned_data.get("shard_modulo")
         if default_shard and shard_modulo and shard_modulo < default_shard:
@@ -474,7 +480,7 @@ class EnrollmentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.meta_business_unit = kwargs.pop("meta_business_unit", None)
         self.manifest = kwargs.pop("manifest", None)
-        assert(self.manifest is None or self.meta_business_unit is None)
+        assert self.manifest is None or self.meta_business_unit is None
         self.standalone = kwargs.pop("standalone", False)
         super().__init__(*args, **kwargs)
         # hide manifest dropdown if manifest is fixed
