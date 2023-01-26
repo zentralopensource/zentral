@@ -1550,8 +1550,7 @@ class APIViewsTestCase(TestCase):
             "excluded_serial_numbers": [get_random_string(12)],
             "primary_users": [get_random_string(12)],
             "excluded_primary_users": [get_random_string(12)],
-            "tags": [t.id for t in self.force_tags(1)],
-            "excluded_tags": [t.id for t in self.force_tags(1)]
+            "tags": [t.id for t in self.force_tags(1)]
         }
         with self.captureOnCommitCallbacks(execute=True):
             response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
@@ -1571,7 +1570,7 @@ class APIViewsTestCase(TestCase):
             "serial_numbers": data["serial_numbers"],
             "excluded_serial_numbers": data["excluded_serial_numbers"],
             "tags": data["tags"],
-            "excluded_tags": data["excluded_tags"],
+            "excluded_tags": [t.pk for t in initial_excluded_tags],
             "created_at": rule.created_at.isoformat(),
             "updated_at": rule.updated_at.isoformat(),
             "version": 2
@@ -1596,7 +1595,7 @@ class APIViewsTestCase(TestCase):
                 'primary_users': rule.primary_users,
                 'excluded_primary_users': rule.excluded_primary_users,
                 'tags': [{'pk': t.pk, 'name': t.name} for t in rule.tags.all()],
-                'excluded_tags': [{'pk': t.pk, 'name': t.name} for t in rule.excluded_tags.all()],
+                'excluded_tags': [{'pk': t.pk, 'name': t.name} for t in initial_excluded_tags],
             },
             'result': 'updated',
             'updates': {
@@ -1610,7 +1609,6 @@ class APIViewsTestCase(TestCase):
                         'name': configuration.name
                     },
                     'tags': [{'pk': t.pk, 'name': t.name} for t in initial_tags],
-                    'excluded_tags': [{'pk': t.pk, 'name': t.name} for t in initial_excluded_tags],
                     'target': {
                         'type': 'BINARY',
                         'sha256': target_identifier
@@ -1629,7 +1627,6 @@ class APIViewsTestCase(TestCase):
                         'name': configuration2.name
                     },
                     'tags': [{'pk': t.pk, 'name': t.name} for t in rule.tags.all()],
-                    'excluded_tags': [{'pk': t.pk, 'name': t.name} for t in rule.excluded_tags.all()],
                     'target': {
                         'type': 'TEAMID',
                         'team_id': '0123456789'
