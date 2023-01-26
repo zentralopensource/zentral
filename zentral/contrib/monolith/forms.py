@@ -86,7 +86,16 @@ class SubManifestForm(forms.ModelForm):
         self.fields['meta_business_unit'].queryset = MetaBusinessUnit.objects.available_for_api_enrollment()
 
 
-class SubManifestPkgInfoForm(forms.ModelForm):
+class SubManifestItemFormMixin:
+    def clean(self):
+        super().clean()
+        featured_item = self.cleaned_data.get("featured_item")
+        key = self.cleaned_data.get("key")
+        if featured_item and key not in ("default_installs", "optional_installs"):
+            self.add_error("featured_item", "Only optional install items can be featured")
+
+
+class SubManifestPkgInfoForm(SubManifestItemFormMixin, forms.ModelForm):
     excluded_tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.all(), required=False,
                                                    widget=forms.SelectMultiple(attrs={"class": "hide-if-not-install"}))
     default_shard = forms.IntegerField(min_value=0, max_value=1000, required=False, initial=100,
@@ -135,6 +144,7 @@ class SubManifestPkgInfoForm(forms.ModelForm):
 
     def clean(self):
         super().clean()
+        # shards
         default_shard = self.cleaned_data.get("default_shard")
         shard_modulo = self.cleaned_data.get("shard_modulo")
         if default_shard and shard_modulo and shard_modulo < default_shard:
@@ -167,7 +177,7 @@ class SubManifestPkgInfoForm(forms.ModelForm):
         fields = ('pkg_info_name', 'key', 'condition', 'featured_item')
 
 
-class SubManifestAttachmentForm(forms.ModelForm):
+class SubManifestAttachmentForm(SubManifestItemFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.sub_manifest = kwargs.pop('sub_manifest')
         super().__init__(*args, **kwargs)
@@ -260,13 +270,6 @@ class SubManifestScriptForm(forms.Form):
         self.sub_manifest = kwargs.pop('sub_manifest')
         self.script = kwargs.pop('script', None)
         super().__init__(*args, **kwargs)
-
-    def clean(self):
-        super().clean()
-        key = self.cleaned_data["key"]
-        if key == "managed_uninstalls" and not self.cleaned_data["uninstall_script"]:
-            self.add_error("uninstall_script", "Can't be empty if managed uninstalls")
-        return self.cleaned_data
 
     def save(self, *args, **kwargs):
         name = self.cleaned_data["name"]
@@ -474,7 +477,7 @@ class EnrollmentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.meta_business_unit = kwargs.pop("meta_business_unit", None)
         self.manifest = kwargs.pop("manifest", None)
-        assert(self.manifest is None or self.meta_business_unit is None)
+        assert self.manifest is None or self.meta_business_unit is None
         self.standalone = kwargs.pop("standalone", False)
         super().__init__(*args, **kwargs)
         # hide manifest dropdown if manifest is fixed
