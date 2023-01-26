@@ -156,7 +156,6 @@ class RuleSerializer(serializers.ModelSerializer):
         return rule
 
     def update(self, instance, validated_data):
-        #print("WHOAMI", self.context["request"], flush=True)
         target, _ = Target.objects.update_or_create(
             type=validated_data.pop("target_type"),
             identifier=validated_data.pop("target_identifier")
