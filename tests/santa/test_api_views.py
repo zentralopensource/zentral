@@ -124,7 +124,7 @@ class APIViewsTestCase(TestCase):
         return self.post_data(url, data, content_type, include_token, dry_run)
 
     def force_rule(self, target_type="BINARY", policy=Rule.ALLOWLIST, target_identifier=None, configuration=None,
-                   bundle=False):
+                   bundle=False, force_tags=False):
         if target_identifier is None:
             target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
         if configuration is None:
@@ -133,7 +133,7 @@ class APIViewsTestCase(TestCase):
             target_type = Target.BUNDLE
             self.force_bundle(target_identifier=target_identifier, fake_upload=True)
         target, _ = Target.objects.get_or_create(type=target_type, identifier=target_identifier)
-        return Rule.objects.create(
+        rule = Rule.objects.create(
             target=target,
             policy=policy,
             configuration=configuration,
@@ -141,6 +141,15 @@ class APIViewsTestCase(TestCase):
             description="description",
             primary_users=["yolo@example.com"]
         )
+        if force_tags:
+            tags = self.force_tags(1)
+            excluded_tags = self.force_tags(1)
+            if tags:
+                rule.tags.set(tags)
+            if excluded_tags:
+                rule.excluded_tags.set(excluded_tags)
+            return rule, tags, excluded_tags
+        return rule
 
     # ingest file info
 
@@ -1522,6 +1531,112 @@ class APIViewsTestCase(TestCase):
         rule = self.force_rule(configuration=configuration)
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), {}, include_token=False)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_rule(self, post_event):
+        configuration = self.force_configuration()
+        configuration2 = self.force_configuration()
+        rule, initial_tags, initial_excluded_tags = self.force_rule(configuration=configuration, force_tags=True)
+        target_identifier = rule.target.identifier
+        self.set_permissions("santa.change_rule")
+        data = {
+            "configuration": configuration2.pk,
+            "policy": Rule.BLOCKLIST,
+            "target_type": Target.TEAM_ID,
+            "target_identifier": "0123456789",
+            "description": "new description",
+            "custom_msg": "new custom block message",
+            "serial_numbers": [get_random_string(12)],
+            "excluded_serial_numbers": [get_random_string(12)],
+            "primary_users": [get_random_string(12)],
+            "excluded_primary_users": [get_random_string(12)],
+            "tags": [t.id for t in self.force_tags(1)],
+            "excluded_tags": [t.id for t in self.force_tags(1)]
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rule = Rule.objects.select_related('target').first()
+        self.assertEqual(response.json(), {
+            "id": rule.id,
+            "configuration": configuration2.pk,
+            "policy": Rule.BLOCKLIST,
+            "target_type": Target.TEAM_ID,
+            "target_identifier": data["target_identifier"],
+            "description": "new description",
+            "custom_msg": "new custom block message",
+            "ruleset": None,
+            "primary_users": data["primary_users"],
+            "excluded_primary_users": data["excluded_primary_users"],
+            "serial_numbers": data["serial_numbers"],
+            "excluded_serial_numbers": data["excluded_serial_numbers"],
+            "tags": data["tags"],
+            "excluded_tags": data["excluded_tags"],
+            "created_at": rule.created_at.isoformat(),
+            "updated_at": rule.updated_at.isoformat(),
+            "version": 2
+        })
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        self.assertIsInstance(events[0], SantaRuleUpdateEvent)
+        self.assertEqual(events[0].payload, {
+            'rule': {
+                'configuration': {
+                    'pk': configuration2.pk,
+                    'name': configuration2.name,
+                },
+                'target': {
+                    'type': 'TEAMID',
+                    'team_id': '0123456789'
+                },
+                'policy': 'BLOCKLIST',
+                'custom_msg': 'new custom block message',
+                'serial_numbers': rule.serial_numbers,
+                'excluded_serial_numbers': rule.excluded_serial_numbers,
+                'primary_users': rule.primary_users,
+                'excluded_primary_users': rule.excluded_primary_users,
+                'tags': [{'pk': t.pk, 'name': t.name} for t in rule.tags.all()],
+                'excluded_tags': [{'pk': t.pk, 'name': t.name} for t in rule.excluded_tags.all()],
+            },
+            'result': 'updated',
+            'updates': {
+                'removed': {
+                    'policy': 'ALLOWLIST',
+                    'custom_msg': 'custom msg',
+                    'description': 'description',
+                    'primary_users': ['yolo@example.com'],
+                    'configuration': {
+                        'pk': configuration.pk,
+                        'name': configuration.name
+                    },
+                    'tags': [{'pk': t.pk, 'name': t.name} for t in initial_tags],
+                    'excluded_tags': [{'pk': t.pk, 'name': t.name} for t in initial_excluded_tags],
+                    'target': {
+                        'type': 'BINARY',
+                        'sha256': target_identifier
+                    }
+                },
+                'added': {
+                    'policy': 'BLOCKLIST',
+                    'custom_msg': 'new custom block message',
+                    'description': 'new description',
+                    'serial_numbers': data['serial_numbers'],
+                    'excluded_serial_numbers': data['excluded_serial_numbers'],
+                    'primary_users': data['primary_users'],
+                    'excluded_primary_users': data['excluded_primary_users'],
+                    'configuration': {
+                        'pk': configuration2.pk,
+                        'name': configuration2.name
+                    },
+                    'tags': [{'pk': t.pk, 'name': t.name} for t in rule.tags.all()],
+                    'excluded_tags': [{'pk': t.pk, 'name': t.name} for t in rule.excluded_tags.all()],
+                    'target': {
+                        'type': 'TEAMID',
+                        'team_id': '0123456789'
+                    }
+                }
+            }
+        })
 
     # rule delete
 

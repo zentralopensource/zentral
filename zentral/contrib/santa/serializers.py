@@ -176,7 +176,8 @@ class RuleSerializer(serializers.ModelSerializer):
             else:
                 if instance_value != value:
                     if attr == "policy":
-                        updates.setdefault("removed", {})[attr] = translate_rule_policy(instance_value)
+                        if instance_value:
+                            updates.setdefault("removed", {})[attr] = translate_rule_policy(instance_value)
                         if value:
                             updates.setdefault("added", {})[attr] = translate_rule_policy(value)
                     elif attr in ("primary_users", "excluded_primary_users", "serial_numbers",
