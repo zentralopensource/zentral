@@ -1640,14 +1640,20 @@ class APIViewsTestCase(TestCase):
 
     # rule delete
 
-    def test_rule_delete(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_rule_delete(self, post_event):
         configuration = self.force_configuration()
         target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
         rule = self.force_rule(configuration=configuration, target_identifier=target_identifier)
         self.set_permissions("santa.delete_rule")
-        response = self.delete(reverse("santa_api:rule", args=(rule.pk,)))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(reverse("santa_api:rule", args=(rule.pk,)))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Rule.objects.count(), 0)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        self.assertIsInstance(events[0], SantaRuleUpdateEvent)
+        self.assertEqual(events[0].payload["result"], "deleted")
 
     def test_rule_delete_not_found(self):
         self.set_permissions("santa.delete_rule")

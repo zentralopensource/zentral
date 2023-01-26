@@ -16,7 +16,7 @@ from rest_framework_yaml.parsers import YAMLParser
 from zentral.contrib.inventory.models import File, Tag
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
-from .events import post_santa_ruleset_update_events
+from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
 from .models import Configuration, Rule, RuleSet, Target, Enrollment, translate_rule_policy
 from .serializers import (RuleSerializer, RuleSetUpdateSerializer, ConfigurationSerializer,
                           EnrollmentSerializer, build_file_tree_from_santa_fileinfo)
@@ -188,6 +188,13 @@ class RuleDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Rule.objects.select_related("configuration", "ruleset", "target")
     permission_classes = (DefaultDjangoModelPermissions,)
     serializer_class = RuleSerializer
+
+    def delete(self, request, *args, **kwargs):
+        instance = self.get_object()
+        transaction.on_commit(lambda: post_santa_rule_update_event(request,
+                                                                   {"rule": instance.serialize_for_event(),
+                                                                    "result": "deleted"}))
+        return super().delete(request, *args, **kwargs)
 
 
 class RuleSetUpdate(APIView):
