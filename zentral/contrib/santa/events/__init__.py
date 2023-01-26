@@ -400,14 +400,22 @@ def post_preflight_event(msn, user_agent, ip, data, incident_update):
     if incident_update is not None:
         incident_updates.append(incident_update)
     event_request = EventRequest(user_agent, ip)
-    metadata = EventMetadata(incident_updates=incident_updates, request=event_request)
+    metadata = EventMetadata(
+        machine_serial_number=msn,
+        incident_updates=incident_updates,
+        request=event_request
+    )
     event = SantaPreflightEvent(metadata, data)
     event.post()
 
 
 def post_enrollment_event(msn, user_agent, ip, data, incident_updates):
     event_request = EventRequest(user_agent, ip)
-    metadata = EventMetadata(incident_updates=incident_updates, request=event_request)
+    metadata = EventMetadata(
+        machine_serial_number=msn,
+        incident_updates=incident_updates,
+        request=event_request
+    )
     event = SantaEnrollmentEvent(metadata, data)
     event.post()
 

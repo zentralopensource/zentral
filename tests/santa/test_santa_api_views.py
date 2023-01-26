@@ -105,6 +105,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(len(events), 5)  # enrollment_secret_verification, santa_enrollment + 3 other ones
         enrollment_event = events[1]
         self.assertIsInstance(enrollment_event, SantaEnrollmentEvent)
+        self.assertEqual(enrollment_event.metadata.machine_serial_number, serial_number)
         self.assertEqual(enrollment_event.payload["action"], "enrollment")
 
         # Enrolled machine
@@ -247,6 +248,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(len(events), 3)  # add machine, inventory heartbeat, santa preflight
         preflight_event = events[-1]
         self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(preflight_event.metadata.machine_serial_number, self.enrolled_machine.serial_number)
         self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -276,6 +278,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(len(events), 3)  # add machine, inventory heartbeat, santa preflight
         preflight_event = events[-1]
         self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(preflight_event.metadata.machine_serial_number, self.enrolled_machine.serial_number)
         self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
