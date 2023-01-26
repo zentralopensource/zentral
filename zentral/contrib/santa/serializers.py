@@ -11,7 +11,7 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .events import post_santa_rule_update_event
-from .models import Bundle, Configuration, Rule, Target, Enrollment
+from .models import Bundle, Configuration, Rule, Target, Enrollment, translate_rule_policy
 from .forms import test_sha256, test_team_id
 
 
@@ -161,20 +161,51 @@ class RuleSerializer(serializers.ModelSerializer):
             identifier=validated_data.pop("target_identifier")
         )
         validated_data["target"] = target
-        changed = False
+        updates = {}
+
         for attr, value in validated_data.items():
-            if attr == 'tags' or attr == 'excluded_tags':
-                if set(value) != set(getattr(instance, attr).all()):
-                    changed = True
-                    break
+            instance_value = getattr(instance, attr)
+            if attr in ("tags", "excluded_tags"):
+                if set(value) != set(instance_value.all()):
+                    removed = set(instance_value.all()) - set(value)
+                    if removed:
+                        updates.setdefault("removed", {})[attr] = [{"pk": t.pk, "name": t.name} for t in removed]
+                    added = set(value) - set(instance_value.all())
+                    if added:
+                        updates.setdefault("added", {})[attr] = [{"pk": t.pk, "name": t.name} for t in added]
             else:
-                if getattr(instance, attr) != value:
-                    changed = True
-                    break
-        if changed:
+                if instance_value != value:
+                    if attr == "policy":
+                        updates.setdefault("removed", {})[attr] = translate_rule_policy(instance_value)
+                        if value:
+                            updates.setdefault("added", {})[attr] = translate_rule_policy(value)
+                    elif attr in ("primary_users", "excluded_primary_users", "serial_numbers",
+                                  "excluded_serial_numbers"):
+                        removed = set(instance_value) - set(value)
+                        if removed:
+                            updates.setdefault("removed", {})[attr] = sorted(removed)
+                        added = set(value) - set(instance_value)
+                        if added:
+                            updates.setdefault("added", {})[attr] = sorted(added)
+                    elif attr in ("target", "configuration"):
+                        if instance_value:
+                            updates.setdefault("removed", {})[attr] = instance_value.serialize_for_event()
+                        if value:
+                            updates.setdefault("added", {})[attr] = value.serialize_for_event()
+                    else:
+                        if instance_value:
+                            updates.setdefault("removed", {})[attr] = instance_value
+                        if value:
+                            updates.setdefault("added", {})[attr] = value
+        if updates:
             validated_data["version"] = F("version") + 1
             rule = super().update(instance, validated_data)
             rule.refresh_from_db()
+            transaction.on_commit(lambda: post_santa_rule_update_event(self.context["request"], {
+                "rule": instance.serialize_for_event(),
+                "result": "updated",
+                "updates": updates
+            }))
         else:
             rule = instance
         return rule
