@@ -195,17 +195,18 @@
   <thead>
     <tr>
       <th>Version</th>
-      <th>File</th>
+      <th>Filename</th>
       <th>Payload UUID</th>
       <th>Payload Content</th>
-      <th>Created at</td>
+      <th>Created at</th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     {% for profile in profile_list %}
     <tr id="{{ profile.artifact_version.pk }}">
       <td>{{ profile.artifact_version.version }}</td>
-      <td><a href="{% url "mdm:download_profile" profile.artifact_version.pk %}">{{ profile.filename|default:"-" }}</a></td>
+      <td>{{ profile.filename|default:"-" }}</td>
       <td><code>{{ profile.payload_uuid }}</code></td>
       <td>
         <ul class="list-unstyled">
@@ -215,6 +216,11 @@
         </ul>
       </td>
       <td>{{ profile.artifact_version.created_at }}</td>
+      <td>
+        <a class="btn btn-default btn-xs" href="{% url "mdm:download_profile" profile.artifact_version.pk %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+        </a>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
