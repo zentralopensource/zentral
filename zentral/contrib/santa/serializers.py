@@ -2,13 +2,16 @@ from datetime import datetime
 from itertools import chain
 import logging
 import os.path
+
+from django.db import transaction
 from django.db.models import F
 from django.urls import reverse
 from rest_framework import serializers
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
-from .models import Bundle, Configuration, Rule, Target, Enrollment
+from .events import post_santa_rule_update_event
+from .models import Bundle, Configuration, Rule, Target, Enrollment, translate_rule_policy
 from .forms import test_sha256, test_team_id
 
 
@@ -146,28 +149,65 @@ class RuleSerializer(serializers.ModelSerializer):
             identifier=validated_data.pop("target_identifier")
         )
         validated_data["target"] = target
-        return super().create(validated_data)
+        rule = super().create(validated_data)
+        transaction.on_commit(lambda: post_santa_rule_update_event(self.context["request"],
+                                                                   {"rule": rule.serialize_for_event(),
+                                                                    "result": "created"}))
+        return rule
 
     def update(self, instance, validated_data):
-        target, _ = Target.objects.update_or_create(
+        target, _ = Target.objects.get_or_create(
             type=validated_data.pop("target_type"),
             identifier=validated_data.pop("target_identifier")
         )
         validated_data["target"] = target
-        changed = False
+        updates = {}
+
         for attr, value in validated_data.items():
-            if attr == 'tags' or attr == 'excluded_tags':
-                if set(value) != set(getattr(instance, attr).all()):
-                    changed = True
-                    break
+            removed_items = added_items = None
+            instance_value = getattr(instance, attr)
+
+            if attr in ("tags", "excluded_tags"):
+                updated_value, initial_value = set(value), set(instance_value.all())
+                removed, added = initial_value.difference(updated_value), updated_value.difference(initial_value)
+            elif attr in ("primary_users", "excluded_primary_users", "serial_numbers", "excluded_serial_numbers"):
+                updated_value, initial_value = set(value), set(instance_value)
+                removed, added = initial_value.difference(updated_value), updated_value.difference(initial_value)
             else:
-                if getattr(instance, attr) != value:
-                    changed = True
-                    break
-        if changed:
+                updated_value, initial_value = value, instance_value
+                removed, added = initial_value, updated_value
+
+            if updated_value != initial_value:
+                if attr in ("tags", "excluded_tags"):
+                    added_items = [{"pk": t.pk, "name": t.name} for t in added]
+                    removed_items = [{"pk": t.pk, "name": t.name} for t in removed]
+                elif attr in ("primary_users", "excluded_primary_users", "serial_numbers", "excluded_serial_numbers"):
+                    added_items = sorted(added)
+                    removed_items = sorted(removed)
+                elif attr in ("target", "configuration"):
+                    added_items = added.serialize_for_event()
+                    removed_items = removed.serialize_for_event()
+                elif attr == "policy":
+                    added_items = translate_rule_policy(added)
+                    removed_items = translate_rule_policy(removed)
+                else:
+                    added_items = added
+                    removed_items = removed
+
+            if removed_items:
+                updates.setdefault("removed", {})[attr] = removed_items
+            if added_items:
+                updates.setdefault("added", {})[attr] = added_items
+
+        if updates:
             validated_data["version"] = F("version") + 1
             rule = super().update(instance, validated_data)
             rule.refresh_from_db()
+            transaction.on_commit(lambda: post_santa_rule_update_event(self.context["request"], {
+                "rule": instance.serialize_for_event(),
+                "result": "updated",
+                "updates": updates
+            }))
         else:
             rule = instance
         return rule
