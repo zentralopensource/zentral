@@ -227,6 +227,7 @@ class ProfileManagementViewsTestCase(TestCase):
             profile.payload_description,
             "Auto-date&time, no in-app purchase, for test purpose blocked: no Siri no siri suggestions, no AirPrint"
         )
+        self.assertContains(response, reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
 
     def test_upload_profile_post_existing_profile(self):
         self._force_profile()
@@ -332,3 +333,39 @@ class ProfileManagementViewsTestCase(TestCase):
             response, "form", "source_file",
             "An artifact with the same name but a different payload identifier already exists."
         )
+
+    # download profile
+
+    def test_download_profile_login_redirect(self):
+        _, _, profile = self._force_profile(channel=Channel.Device)
+        self._login_redirect(reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
+
+    def test_download_profile_permission_denied(self):
+        _, _, profile = self._force_profile(channel=Channel.Device)
+        self._login()
+        response = self.client.get(reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_download_profile(self):
+        _, _, profile = self._force_profile(channel=Channel.Device)
+        self._login("mdm.view_artifact")
+        response = self.client.get(reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Disposition"],
+            f'attachment; filename="{profile.filename}"'
+        )
+        self.assertEqual(b"".join(response.streaming_content), profile.source)
+
+    def test_download_profile_no_filename(self):
+        _, _, profile = self._force_profile(channel=Channel.Device)
+        profile.filename = ""
+        profile.save()
+        self._login("mdm.view_artifact")
+        response = self.client.get(reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Disposition"],
+            f'attachment; filename="profile_{profile.artifact_version.pk}.mobileconfig"'
+        )
+        self.assertEqual(b"".join(response.streaming_content), profile.source)

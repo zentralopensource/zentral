@@ -198,7 +198,8 @@
       <th>Filename</th>
       <th>Payload UUID</th>
       <th>Payload Content</th>
-      <th>Created at</td>
+      <th>Created at</th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
@@ -215,6 +216,11 @@
         </ul>
       </td>
       <td>{{ profile.artifact_version.created_at }}</td>
+      <td>
+        <a class="btn btn-default btn-xs" href="{% url "mdm:download_profile" profile.artifact_version.pk %}">
+          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+        </a>
+      </td>
     </tr>
     {% endfor %}
   </tbody>
