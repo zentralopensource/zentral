@@ -681,7 +681,7 @@ class APIViewsTestCase(TestCase):
         self.force_rule()
         rule2 = self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
         response = self.client.get(reverse("santa_api:rules"),
-                                   data={"type": "CERTIFICATE"},
+                                   data={"target_type": "CERTIFICATE"},
                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rules = response.json()
@@ -693,12 +693,12 @@ class APIViewsTestCase(TestCase):
         self.force_rule()
         self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
         response = self.client.get(reverse("santa_api:rules"),
-                                   data={"type": "YOLO"},
+                                   data={"target_type": "YOLO"},
                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
             response.json(),
-            {'type': ['Select a valid choice. YOLO is not one of the available choices.']}
+            {'target_type': ['Select a valid choice. YOLO is not one of the available choices.']}
         )
 
     def test_rule_list_by_identifier(self):
@@ -706,7 +706,7 @@ class APIViewsTestCase(TestCase):
         self.force_rule()
         rule2 = self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
         response = self.client.get(reverse("santa_api:rules"),
-                                   data={"identifier": rule2.target.identifier},
+                                   data={"target_identifier": rule2.target.identifier},
                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rules = response.json()
@@ -718,7 +718,7 @@ class APIViewsTestCase(TestCase):
         self.force_rule()
         rule2 = self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
         response = self.client.get(reverse("santa_api:rules"),
-                                   data={"configuration": self.configuration2.pk},
+                                   data={"configuration_id": self.configuration2.pk},
                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rules = response.json()
@@ -730,12 +730,12 @@ class APIViewsTestCase(TestCase):
         self.force_rule()
         self.force_rule(target_type=Target.CERTIFICATE, configuration=self.configuration2)
         response = self.client.get(reverse("santa_api:rules"),
-                                   data={"configuration": 12832398912},
+                                   data={"configuration_id": 12832398912},
                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
             response.json(),
-            {'configuration': ['Select a valid choice. That choice is not one of the available choices.']}
+            {'configuration_id': ['Select a valid choice. That choice is not one of the available choices.']}
         )
 
     # rules create
@@ -1650,7 +1650,19 @@ class APIViewsTestCase(TestCase):
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 1)
         self.assertIsInstance(events[0], SantaRuleUpdateEvent)
-        self.assertEqual(events[0].payload["result"], "deleted")
+        self.assertEqual(events[0].payload, {
+            'rule': {
+                'configuration': {
+                    'pk': configuration.pk,
+                    'name': configuration.name
+                }, 'target': {
+                    'type': 'BINARY',
+                    'sha256': rule.target.identifier
+                }, 'policy': 'ALLOWLIST',
+                'custom_msg': 'custom msg',
+                'primary_users': ['yolo@example.com']},
+            'result': 'deleted'
+        })
 
     def test_rule_delete_not_found(self):
         self.set_permissions("santa.delete_rule")

@@ -165,9 +165,9 @@ class IngestFileInfo(APIView):
 
 
 class RuleFilter(filters.FilterSet):
-    identifier = filters.CharFilter(field_name="target__identifier")
-    type = filters.ChoiceFilter(field_name="target__type", choices=Target.TYPE_CHOICES)
-    configuration = filters.ModelChoiceFilter(queryset=Configuration.objects.all())
+    target_identifier = filters.CharFilter(field_name="target__identifier")
+    target_type = filters.ChoiceFilter(field_name="target__type", choices=Target.TYPE_CHOICES)
+    configuration_id = filters.ModelChoiceFilter(queryset=Configuration.objects.all())
 
 
 class RuleList(generics.ListCreateAPIView):
