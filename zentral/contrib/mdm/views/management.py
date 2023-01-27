@@ -608,6 +608,19 @@ class UploadProfileView(BaseUploadArtifactView):
     template_name = "mdm/profile_form.html"
 
 
+class DownloadProfileView(PermissionRequiredMixin, View):
+    permission_required = "mdm.view_artifact"
+
+    def get(self, request, **kwargs):
+        profile = get_object_or_404(Profile, artifact_version__pk=kwargs["artifact_version_pk"])
+        return FileResponse(
+            io.BytesIO(profile.source),
+            content_type="application/x-plist",
+            as_attachment=True,
+            filename=profile.filename or f"profile_{profile.artifact_version.pk}.mobileconfig"
+        )
+
+
 class ArtifactView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_artifact"
     model = Artifact

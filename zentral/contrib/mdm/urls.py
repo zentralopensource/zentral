@@ -146,6 +146,9 @@ urlpatterns = [
     path('artifacts/<uuid:artifact_pk>/blueprint_artifact/<int:pk>/delete/',
          views.DeleteBlueprintArtifactView.as_view(),
          name="delete_blueprint_artifact"),
+    path('profiles/<uuid:artifact_version_pk>/download/',
+         views.DownloadProfileView.as_view(),
+         name="download_profile"),
 
     # assets
     path('assets/',

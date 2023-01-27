@@ -205,7 +205,7 @@
     {% for profile in profile_list %}
     <tr id="{{ profile.artifact_version.pk }}">
       <td>{{ profile.artifact_version.version }}</td>
-      <td>{{ profile.filename|default:"-" }}</td>
+      <td><a href="{% url "mdm:download_profile" profile.artifact_version.pk %}">{{ profile.filename|default:"-" }}</a></td>
       <td><code>{{ profile.payload_uuid }}</code></td>
       <td>
         <ul class="list-unstyled">
