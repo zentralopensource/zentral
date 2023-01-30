@@ -162,6 +162,7 @@ class RuleSerializer(serializers.ModelSerializer):
         )
         validated_data["target"] = target
         updates = {}
+        bump_version = False
 
         for attr, value in validated_data.items():
             removed_items = added_items = None
@@ -193,6 +194,8 @@ class RuleSerializer(serializers.ModelSerializer):
                 else:
                     added_items = added
                     removed_items = removed
+                    if attr == "custom_msg":
+                        bump_version = True
 
             if removed_items:
                 updates.setdefault("removed", {})[attr] = removed_items
@@ -200,7 +203,8 @@ class RuleSerializer(serializers.ModelSerializer):
                 updates.setdefault("added", {})[attr] = added_items
 
         if updates:
-            validated_data["version"] = F("version") + 1
+            if bump_version:
+                validated_data["version"] = F("version") + 1
             rule = super().update(instance, validated_data)
             rule.refresh_from_db()
             transaction.on_commit(lambda: post_santa_rule_update_event(self.context["request"], {
