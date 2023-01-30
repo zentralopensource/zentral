@@ -249,7 +249,7 @@ Use this endpoint to get a list of the Santa rules.
 
 Example:
 
-```
+```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/santa/rules/?type=BINARY \
   |python3 -m json.tool
@@ -301,41 +301,41 @@ rule.json:
     "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
     "policy": 1,
     "description": "Allow the yes binary on macOS 12.5",
-    "configuration": 1,
+    "configuration": 1
 }
 ```
 
-
 ```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/rules/ \
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @rule.json \
+  https://zentral.example.com/api/santa/rules/\
   |python3 -m json.tool
 ```
 
 Response:
 
 ```json
-[
-    {
-        "id": 1,
-        "target_type": "BINARY",
-        "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
-        "policy": 1,
-        "custom_msg": "",
-        "description": "Allow the yes binary on macOS 12.5",
-        "version": 1,
-        "serial_numbers": [],
-        "excluded_serial_numbers": [],
-        "primary_users": [],
-        "excluded_primary_users": [],
-        "created_at": "2022-08-11T10:55:15.497415",
-        "updated_at": "2022-08-11T11:02:43.105594",
-        "configuration": 1,
-        "ruleset": null,
-        "tags": [],
-        "excluded_tags": []
-    }
-]
+{
+    "id": 7,
+    "target_type": "BINARY",
+    "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
+    "ruleset": null,
+    "version": 1,
+    "policy": 1,
+    "custom_msg": "",
+    "description": "Allow the yes binary on macOS 12.5",
+    "serial_numbers": [],
+    "excluded_serial_numbers": [],
+    "primary_users": [],
+    "excluded_primary_users": [],
+    "created_at": "2023-01-30T08:13:54.212602",
+    "updated_at": "2023-01-30T08:13:54.212610",
+    "configuration": 1,
+    "tags": [],
+    "excluded_tags": []
+}
 ```
 
 ### /api/santa/rules/`<int: pk>`/
@@ -360,22 +360,26 @@ Response:
 ```json
 {
     "id": 1,
-    "target_type": "BINARY",
-    "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
+    "target_type": "TEAMID",
+    "target_identifier": "9BNSXJN65R",
+    "ruleset": null,
+    "version": 1,
     "policy": 1,
     "custom_msg": "",
-    "description": "Allow the yes binary on macOS 12.5",
-    "version": 1,
+    "description": "",
     "serial_numbers": [],
     "excluded_serial_numbers": [],
     "primary_users": [],
     "excluded_primary_users": [],
-    "created_at": "2022-08-11T10:55:15.497415",
-    "updated_at": "2022-08-11T11:02:43.105594",
+    "created_at": "2023-01-17T13:08:19.503831",
+    "updated_at": "2023-01-17T13:08:19.503837",
     "configuration": 1,
-    "ruleset": null,
-    "tags": [],
-    "excluded_tags": []
+    "tags": [
+        2
+    ],
+    "excluded_tags": [
+        1
+    ]
 }
 ```
 
@@ -400,37 +404,44 @@ rule_update.json:
     "policy": 2,
     "description": "Block the yes binary on macOS 12.5",
     "configuration": 1,
-    "custom_msg": "This binary is not allowed on this machine"
+    "custom_msg": "This binary is not allowed on this machine",
+    "tags": [1]
 }
 ```
 
 
 ```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/rules/1/ \
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @rule_update.json \
+  https://zentral.example.com/api/santa/rules/7/\
   |python3 -m json.tool
 ```
+
 
 Response:
 
 ```json
 {
-    "id": 1,
+    "id": 7,
     "target_type": "BINARY",
     "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
+    "ruleset": null,
+    "version": 2,
     "policy": 2,
     "custom_msg": "This binary is not allowed on this machine",
     "description": "Block the yes binary on macOS 12.5",
-    "version": 1,
     "serial_numbers": [],
     "excluded_serial_numbers": [],
     "primary_users": [],
     "excluded_primary_users": [],
-    "created_at": "2022-08-11T10:55:15.497415",
-    "updated_at": "2022-08-11T11:02:43.105594",
+    "created_at": "2023-01-30T08:13:54.212602",
+    "updated_at": "2023-01-30T08:17:18.635949",
     "configuration": 1,
-    "ruleset": null,
-    "tags": [],
+    "tags": [
+        1
+    ],
     "excluded_tags": []
 }
 ```
@@ -448,7 +459,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/rules/1/
+  https://zentral.example.com/api/santa/rules/7/
 ```
 
 ### /api/santa/ingest/fileinfo/
