@@ -1047,7 +1047,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json()["description"], "Description Text Updated")
         rule.refresh_from_db()
         self.assertEqual(rule.description, "Description Text Updated")
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_change_tags(self):
         tags = [t.id for t in self.force_tags(3)]
@@ -1066,7 +1066,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(set(response.json()["tags"]), set(tags))
         rule.refresh_from_db()
         self.assertEqual(set([t.id for t in rule.tags.all()]), set(tags))
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_change_excluded_tags(self):
         tags = [t.id for t in self.force_tags(3)]
@@ -1085,7 +1085,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(set(response.json()["excluded_tags"]), set(tags))
         rule.refresh_from_db()
         self.assertEqual(set([t.id for t in rule.excluded_tags.all()]), set(tags))
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_change_description(self):
         configuration = self.force_configuration()
@@ -1103,7 +1103,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json()["description"], "I was added recently")
         rule.refresh_from_db()
         self.assertEqual(rule.description, "I was added recently")
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_change_excluded_primary_users(self):
         users = [f"{get_random_string(5)}@@corp.com" for _ in range(5)]
@@ -1122,7 +1122,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(set(response.json()["excluded_primary_users"]), set(users))
         rule.refresh_from_db()
         self.assertEqual(set([u for u in rule.excluded_primary_users]), set(users))
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_change_primary_users_and_excluded_primary_users(self):
         users = [f"{get_random_string(5)}@@corp.com" for _ in range(5)]
@@ -1145,7 +1145,7 @@ class APIViewsTestCase(TestCase):
         rule.refresh_from_db()
         self.assertEqual(set([u for u in rule.primary_users]), set(users))
         self.assertEqual(set([u for u in rule.excluded_primary_users]), set(users2))
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_change_primary_users(self):
         users = [f"{get_random_string(5)}@@corp.com" for _ in range(5)]
@@ -1164,7 +1164,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(set(response.json()["primary_users"]), set(users))
         rule.refresh_from_db()
         self.assertEqual(set([u for u in rule.primary_users]), set(users))
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_change_target_identifier(self):
         configuration = self.force_configuration()
@@ -1181,7 +1181,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json()["target_identifier"], data["target_identifier"])
         rule.refresh_from_db()
         self.assertEqual(rule.target.identifier, data["target_identifier"])
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_change_target_type_and_target_identifier(self):
         configuration = self.force_configuration()
@@ -1200,7 +1200,7 @@ class APIViewsTestCase(TestCase):
         rule.refresh_from_db()
         self.assertEqual(rule.target.type, Target.TEAM_ID)
         self.assertEqual(rule.target.identifier, '1234567890')
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_change_config(self):
         configuration = self.force_configuration()
@@ -1219,7 +1219,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json()["configuration"], configuration2.pk)
         rule.refresh_from_db()
         self.assertEqual(rule.configuration.pk, configuration2.pk)
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_target_exists_error(self):
         target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
@@ -1334,7 +1334,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json()["target_identifier"], bundle_target_identifier2)
         rule.refresh_from_db()
         self.assertEqual(rule.target.identifier, bundle_target_identifier2)
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_policy_custom_msg_error(self):
         configuration = self.force_configuration()
@@ -1495,7 +1495,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rule.refresh_from_db()
         self.assertEqual(rule.target.identifier, target_identifier)
-        self.assertEqual(rule.version, 2)
+        self.assertEqual(rule.version, 1)
 
     def test_update_rule_change_custom_msg(self):
         configuration = self.force_configuration()
