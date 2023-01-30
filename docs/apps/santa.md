@@ -252,7 +252,7 @@ Example:
 ```bash
 curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://devj1.zentral.software/api/santa/rules/" \
+  "https://zentral.example.com/api/santa/rules/" \
   |python3 -m json.tool
 ```
 
