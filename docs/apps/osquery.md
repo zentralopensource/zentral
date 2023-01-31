@@ -453,3 +453,245 @@ $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/osquery/queries/1/
 ```
+
+### /api/osquery/atcs/
+
+#### List all ATCs.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_atc`
+* Optional filter parameter:
+	* `name`: name of the ATC.
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/atcs/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/atcs/?name=Santa+rules" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "name": "Santa rules",
+        "description": "Access the Google Santa rules.db",
+        "table_name": "santa_rules",
+        "query": "SELECT * FROM rules;",
+        "path": "/var/db/santa/rules.db",
+        "columns": [
+            "identifier",
+            "state",
+            "type",
+            "custommsg",
+            "timestamp"
+        ],
+        "platforms": [
+            "darwin"
+        ],
+        "created_at": "2023-01-30T09:39:35.965003",
+        "updated_at": "2023-01-30T09:39:35.965011"
+    }
+]
+```
+
+#### Add a new ATC.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `osquery.add_atc`
+
+Example:
+
+atc.json
+
+```json
+{
+	"name": "Access example",
+	"description": "Access the example example.db",
+	"table_name": "example_table",
+	"query": "SELECT * FROM example;",
+	"path": "/var/db/example/example.db",
+	"columns": [
+		"one",
+		"two",
+		"three"
+	],
+	"platforms": [
+		"darwin",
+        "linux"
+	]
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/atcs/" \
+  -d @atc.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "Access example",
+    "description": "Access the example example.db",
+    "table_name": "example_table",
+    "query": "SELECT * FROM example;",
+    "path": "/var/db/example/example.db",
+    "columns": [
+        "one",
+        "two",
+        "three"
+    ],
+    "platforms": [
+        "darwin",
+        "linux"
+    ],
+    "created_at": "2023-01-31T08:59:14.097316",
+    "updated_at": "2023-01-31T08:59:14.097333"
+}
+```
+
+### /api/osquery/atcs/`<int:pk>`/
+
+#### Get an ATC.
+
+method: GET
+Content-Type: application/json
+Required permission: `osquery.view_atc`
+`<int:pk>`: the primary key of the ATC.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/atcs/2/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "Access example",
+    "description": "Access the example example.db",
+    "table_name": "example_table",
+    "query": "SELECT * FROM example;",
+    "path": "/var/db/example/example.db",
+    "columns": [
+        "one",
+        "two",
+        "three"
+    ],
+    "platforms": [
+        "darwin",
+        "linux"
+    ],
+    "created_at": "2023-01-31T08:59:14.097316",
+    "updated_at": "2023-01-31T08:59:14.097333"
+}
+```
+
+#### Update an ATC.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `osquery.update_atc`
+* `<int:pk>`: the primary key of the ATC.
+
+Example
+
+atc_update.json
+
+```json
+{
+	"name": "Access example",
+	"description": "Access the example example.db on all platforms",
+	"table_name": "example_table",
+	"query": "SELECT * FROM example;",
+	"path": "/var/db/example/example.db",
+	"columns": [
+		"one",
+		"two",
+		"three",
+		"four"
+	],
+	"platforms": [
+		"darwin",
+        "linux",
+        "windows",
+        "freebsd"
+	]
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/atcs/1/" \
+  -d @atc_update.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "Access example",
+    "description": "Access the example example.db on all platforms",
+    "table_name": "example_table",
+    "query": "SELECT * FROM example;",
+    "path": "/var/db/example/example.db",
+    "columns": [
+        "one",
+        "two",
+        "three",
+        "four"
+    ],
+    "platforms": [
+        "darwin",
+        "linux",
+        "windows",
+        "freebsd"
+    ],
+    "created_at": "2023-01-31T08:59:14.097316",
+    "updated_at": "2023-01-31T09:05:08.326755"
+}
+```
+
+#### Delete an ATC.
+
+* method: DELETE
+* Required permission: `osquery.delete_atc`
+* `<int:pk>`: the primary key of the ATC.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/atcs/1/" 
+```
+
+Response (204 No Content)

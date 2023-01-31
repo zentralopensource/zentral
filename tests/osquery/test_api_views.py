@@ -14,7 +14,8 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
-from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query
+from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query, \
+    AutomaticTableConstruction
 from zentral.core.compliance_checks.models import ComplianceCheck
 
 
@@ -34,7 +35,12 @@ class APIViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
-    def force_configuration(self):
+    def force_configuration(self, force_atc=False):
+        if force_atc:
+            atc = self.force_atc()
+            conf = Configuration.objects.create(name=get_random_string(12))
+            conf.automatic_table_constructions.set([atc])
+            return conf, atc
         return Configuration.objects.create(name=get_random_string(12))
 
     def force_enrollment(self, tag_count=0):
@@ -47,6 +53,19 @@ class APIViewsTestCase(TestCase):
             Enrollment.objects.create(configuration=configuration, secret=enrollment_secret),
             tags
         )
+
+    def force_atc(self, **kwargs):
+        atc = {
+            "name": get_random_string(12),
+            "description": get_random_string(12),
+            "table_name": get_random_string(length=12, allowed_chars="abcd_"),
+            "query": "select 1 from yo;",
+            "path": "/home/yolo",
+            "columns": ["un", "deux"],
+            "platforms": ["darwin", "windows"],
+        }
+        atc.update(**kwargs)
+        return AutomaticTableConstruction.objects.create(**atc)
     
     def force_pack(self):
         name = get_random_string(12)
@@ -142,6 +161,253 @@ class APIViewsTestCase(TestCase):
         content_type = "application/json"
         data = json.dumps(data)
         return self.put_data(url, data, content_type, include_token)
+
+    # list atcs
+
+    def test_get_atcs_unauthorized(self):
+        response = self.get(reverse("osquery_api:atcs"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_atcs_permission_denied(self):
+        response = self.get(reverse("osquery_api:atcs"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_atcs_by_name(self):
+        atc = self.force_atc()
+        self.set_permissions("osquery.view_automatictableconstruction")
+        response = self.get(reverse('osquery_api:atcs'), data={"name": atc.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(response.json(), [{
+            "platforms": ["darwin", "windows"],
+            "updated_at": atc.updated_at.isoformat(),
+            "columns": ["un", "deux"],
+            "id": atc.id,
+            "created_at": atc.created_at.isoformat(),
+            "table_name": atc.table_name,
+            "query": "select 1 from yo;",
+            "description": atc.description,
+            "path": "/home/yolo",
+            "name": atc.name
+        }])
+
+    def test_get_atcs_by_configuration(self):
+        configuration, atc = self.force_configuration(force_atc=True)
+        configuration2, atc2 = self.force_configuration(force_atc=True)
+        self.set_permissions("osquery.view_automatictableconstruction")
+        response = self.get(reverse('osquery_api:atcs'), data={"configuration": configuration.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(response.json(), [{
+            "platforms": ["darwin", "windows"],
+            "updated_at": atc.updated_at.isoformat(),
+            "columns": ["un", "deux"],
+            "id": atc.id,
+            "created_at": atc.created_at.isoformat(),
+            "table_name": atc.table_name,
+            "query": "select 1 from yo;",
+            "description": atc.description,
+            "path": "/home/yolo",
+            "name": atc.name
+        }])
+
+    def test_get_atcs(self):
+        atc = self.force_atc()
+        self.set_permissions("osquery.view_automatictableconstruction")
+        response = self.get(reverse('osquery_api:atcs'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(response.json(), [{
+            "platforms": ["darwin", "windows"],
+            "updated_at": atc.updated_at.isoformat(),
+            "columns": ["un", "deux"],
+            "id": atc.id,
+            "created_at": atc.created_at.isoformat(),
+            "table_name": atc.table_name,
+            "query": "select 1 from yo;",
+            "description": atc.description,
+            "path": "/home/yolo",
+            "name": atc.name
+        }])
+
+    # get atc
+
+    def test_get_atc_unauthorized(self):
+        response = self.get(reverse("osquery_api:atc", args=[1]), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_atc_permission_denied(self):
+        response = self.get(reverse("osquery_api:atc", args=[1]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_atc(self):
+        atc = self.force_atc()
+        self.set_permissions("osquery.view_automatictableconstruction")
+        response = self.get(reverse("osquery_api:atc", args=[atc.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "platforms": ["darwin", "windows"],
+            "updated_at": atc.updated_at.isoformat(),
+            "columns": ["un", "deux"],
+            "id": atc.id,
+            "created_at": atc.created_at.isoformat(),
+            "table_name": atc.table_name,
+            "query": "select 1 from yo;",
+            "description": atc.description,
+            "path": "/home/yolo",
+            "name": atc.name
+        })
+
+    # update atc
+
+    def test_update_atc_unauthorized(self):
+        response = self.put_json_data(reverse("osquery_api:atc", args=[1]), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_atc_permission_denied(self):
+        response = self.put_json_data(reverse("osquery_api:atc", args=[1]), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_atc_already_exists(self):
+        configuration, atc = self.force_configuration(force_atc=True)
+        configuration2, atc2 = self.force_configuration(force_atc=True)
+        self.set_permissions("osquery.change_automatictableconstruction")
+        data = {
+            "name": atc.name,
+            "description": "yolo changed",
+            "path": "/home/yolo/new",
+            "query": "select new from yolo;",
+            "table_name": "yolo_new",
+            "columns": ["un", "deux", "trois"],
+            "platforms": ["darwin"]
+        }
+        response = self.put_json_data(reverse("osquery_api:atc", args=[atc2.id]), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["automatic table construction with this name already exists."]
+        })
+
+    def test_update_atc(self):
+        atc = self.force_atc()
+        self.set_permissions("osquery.change_automatictableconstruction")
+        data = {
+            "name": "yolo",
+            "description": "yolo changed",
+            "path": "/home/yolo/new",
+            "query": "select new from yolo;",
+            "table_name": "yolo_new",
+            "columns": ["un", "deux", "trois"],
+            "platforms": ["darwin"]
+        }
+        response = self.put_json_data(reverse("osquery_api:atc", args=[atc.id]), data)
+        self.assertEqual(response.status_code, 200)
+        atc.refresh_from_db()
+        self.assertEqual(response.json(), {
+            "platforms": ["darwin"],
+            "updated_at": atc.updated_at.isoformat(),
+            "columns": ["un", "deux", "trois"],
+            "id": atc.id,
+            "created_at": atc.created_at.isoformat(),
+            "table_name": "yolo_new",
+            "query": "select new from yolo;",
+            "description": "yolo changed",
+            "path": "/home/yolo/new",
+            "name": atc.name
+        })
+        self.assertEqual(response.data, {
+            "platforms": atc.platforms,
+            "updated_at": atc.updated_at.isoformat(),
+            "columns": atc.columns,
+            "id": atc.id,
+            "created_at": atc.created_at.isoformat(),
+            "table_name": atc.table_name,
+            "query": atc.query,
+            "description": atc.description,
+            "path": atc.path,
+            "name": atc.name
+        })
+
+    # create atc
+
+    def test_create_atc_unauthorized(self):
+        response = self.post(reverse("osquery_api:atcs"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_atc_permission_denied(self):
+        response = self.post(reverse("osquery_api:atcs"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_atc_already_exists(self):
+        atc = self.force_atc()
+        self.set_permissions("osquery.add_automatictableconstruction")
+        response = self.post_json_data(reverse("osquery_api:atcs"), {
+            "name": atc.name,
+            "description": "yolo",
+            "table_name": "yolo",
+            "query": "select 1 from yo;",
+            "columns": ["un", "deux"],
+            "platforms": ["darwin", "windows"],
+            "path": "/home/yolo"
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["automatic table construction with this name already exists."]
+        })
+
+    def test_create_atc(self):
+        self.set_permissions("osquery.add_automatictableconstruction")
+        response = self.post_json_data(reverse("osquery_api:atcs"), {
+            "name": "yolo",
+            "description": "yolo",
+            "table_name": "yolo",
+            "query": "select 1 from yo;",
+            "columns": ["un", "deux"],
+            "platforms": ["darwin", "windows"],
+            "path": "/home/yolo"
+        })
+        self.assertEqual(response.status_code, 201)
+        atc = AutomaticTableConstruction.objects.first()
+        self.assertEqual(response.json(), {
+            "platforms": ["darwin", "windows"],
+            "updated_at": atc.updated_at.isoformat(),
+            "columns": ["un", "deux"],
+            "id": response.json()["id"],
+            "created_at": atc.created_at.isoformat(),
+            "table_name": "yolo",
+            "query": "select 1 from yo;",
+            "description": "yolo",
+            "path": "/home/yolo",
+            "name": "yolo"
+        })
+        self.assertEqual(response.data, {
+            "platforms": atc.platforms,
+            "updated_at": atc.updated_at.isoformat(),
+            "columns": atc.columns,
+            "id": atc.id,
+            "created_at": atc.created_at.isoformat(),
+            "table_name": atc.table_name,
+            "query": atc.query,
+            "description": atc.description,
+            "path": atc.path,
+            "name": atc.name
+        })
+
+    # delete atc
+
+    def test_delete_atc_unauthorized(self):
+        response = self.delete(reverse("osquery_api:atc", args=[1]), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_atc_permission_denied(self):
+        response = self.delete(reverse("osquery_api:atc", args=[1]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_atc(self):
+        atc = self.force_atc()
+        self.set_permissions("osquery.delete_automatictableconstruction")
+        response = self.delete(reverse("osquery_api:atc", args=[atc.id]))
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(AutomaticTableConstruction.objects.exists())
 
     # list configurations
 
