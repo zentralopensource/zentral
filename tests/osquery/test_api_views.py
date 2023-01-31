@@ -15,7 +15,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit,
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query, \
-    AutomaticTableConstruction
+    AutomaticTableConstruction, FileCategory
 from zentral.core.compliance_checks.models import ComplianceCheck
 
 
@@ -66,7 +66,21 @@ class APIViewsTestCase(TestCase):
         }
         atc.update(**kwargs)
         return AutomaticTableConstruction.objects.create(**atc)
-    
+
+    def force_file_category(self):
+        name = get_random_string(12)
+        slug = slugify(name)
+
+        return FileCategory.objects.create(
+            name=name,
+            slug=slug,
+            file_paths=['/home/yo'],
+            description='description of the file category',
+            exclude_paths=['/home/yo/exclude1', '/home/yo/exclude2'],
+            access_monitoring=False,
+            file_paths_queries=['select * from file_paths where path like "/home/yo/";'],
+        )
+
     def force_pack(self):
         name = get_random_string(12)
         return Pack.objects.create(name=name, slug=slugify(name))
@@ -96,9 +110,9 @@ class APIViewsTestCase(TestCase):
             permission_filter = reduce(operator.or_, (
                 Q(content_type__app_label=app_label, codename=codename)
                 for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
+                permission.split(".")
+                for permission in permissions
+            )
             ))
             self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
         else:
@@ -394,7 +408,6 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(atc.platforms, ["darwin", "windows"])
         self.assertEqual(atc.path, "/home/yolo")
 
-
     # delete atc
 
     def test_delete_atc_unauthorized(self):
@@ -411,6 +424,232 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse("osquery_api:atc", args=[atc.id]))
         self.assertEqual(response.status_code, 204)
         self.assertFalse(AutomaticTableConstruction.objects.exists())
+
+    # list file categories
+
+    def test_get_file_categories_unauthorized(self):
+        response = self.get(reverse("osquery_api:file_categories"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_file_categories_permission_denied(self):
+        response = self.get(reverse("osquery_api:file_categories"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_file_categories(self):
+        file_category = self.force_file_category()
+        self.set_permissions("osquery.view_filecategory")
+        response = self.get(reverse('osquery_api:file_categories'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(response.json(), [{
+            "name": file_category.name,
+            "slug": file_category.slug,
+            "id": file_category.id,
+            "file_paths": ['/home/yo'],
+            "exclude_paths": ['/home/yo/exclude1', '/home/yo/exclude2'],
+            "access_monitoring": False,
+            "description": "description of the file category",
+            "file_paths_queries": ['select * from file_paths where path like "/home/yo/";'],
+            "updated_at": file_category.updated_at.isoformat(),
+            "created_at": file_category.created_at.isoformat(),
+        }])
+
+    def test_get_file_categories_by_name(self):
+        file_category = self.force_file_category()
+        file_category2 = self.force_file_category()
+        self.set_permissions("osquery.view_filecategory")
+        response = self.get(reverse('osquery_api:file_categories'), data={"name": file_category2.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(response.json(), [{
+            "name": file_category2.name,
+            "slug": file_category2.slug,
+            "id": file_category2.id,
+            "file_paths": ['/home/yo'],
+            "exclude_paths": ['/home/yo/exclude1', '/home/yo/exclude2'],
+            "access_monitoring": False,
+            "description": "description of the file category",
+            "file_paths_queries": ['select * from file_paths where path like "/home/yo/";'],
+            "updated_at": file_category2.updated_at.isoformat(),
+            "created_at": file_category2.created_at.isoformat(),
+        }])
+
+    def test_get_file_categories_by_name_unknown(self):
+        self.set_permissions("osquery.view_filecategory")
+        response = self.get(reverse('osquery_api:file_categories'), data={"name": get_random_string(35)})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(response.json(), [])
+
+    # create file category
+
+    def test_create_file_category_unauthorized(self):
+        response = self.post(reverse("osquery_api:file_categories"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_file_category_permission_denied(self):
+        response = self.post(reverse("osquery_api:file_categories"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_file_category(self):
+        self.set_permissions("osquery.add_filecategory")
+        data = {
+            "name": "file category name",
+            "file_paths": ['/home/yo/bin'],
+            "exclude_paths": ['/home/you/exclude', '/home/me/exclude'],
+            "description": "description of the example file category",
+            "file_paths_queries": ['select * from file_paths where path like "/home/yo/*.bin";'],
+        }
+        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        file_category = FileCategory.objects.first()
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json(), {
+            "name": "file category name",
+            "slug": slugify("file category name"),
+            "id": file_category.id,
+            "file_paths": ['/home/yo/bin'],
+            "exclude_paths": ['/home/you/exclude', '/home/me/exclude'],
+            "access_monitoring": False,
+            "description": "description of the example file category",
+            "file_paths_queries": ['select * from file_paths where path like "/home/yo/*.bin";'],
+            "updated_at": file_category.updated_at.isoformat(),
+            "created_at": file_category.created_at.isoformat(),
+        })
+        self.assertEqual(file_category.name, "file category name")
+        self.assertEqual(file_category.slug, slugify("file category name"))
+        self.assertEqual(file_category.file_paths, ['/home/yo/bin'])
+        self.assertEqual(file_category.exclude_paths, ['/home/you/exclude', '/home/me/exclude'])
+        self.assertEqual(file_category.access_monitoring, False)
+        self.assertEqual(file_category.description, "description of the example file category")
+        self.assertEqual(file_category.file_paths_queries,
+                         ['select * from file_paths where path like "/home/yo/*.bin";'])
+
+    def test_create_file_category_slug_exist(self):
+        file_category = self.force_file_category()
+        self.set_permissions("osquery.add_filecategory")
+        data = {"name": file_category.name}
+        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": [f"file category with this name already exists."]
+        })
+
+    # update file category
+
+    def test_update_file_category_unauthorized(self):
+        response = self.put_json_data(reverse("osquery_api:file_category", args=[1]), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_file_category_permission_denied(self):
+        response = self.put_json_data(reverse("osquery_api:file_category", args=[1]), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_file_category(self):
+        file_category = self.force_file_category()
+        self.set_permissions("osquery.change_filecategory")
+        data = {
+            "name": "file category name",
+            "file_paths": ['/home/yo/bin'],
+            "exclude_paths": ['/home/you/exclude', '/home/me/exclude'],
+            "description": "description of the example file category",
+            "file_paths_queries": [],
+            "access_monitoring": True
+        }
+        response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category.id]), data=data)
+        self.assertEqual(response.status_code, 200)
+        file_category.refresh_from_db()
+        self.assertEqual(response.json(), {
+            "name": "file category name",
+            "slug": slugify("file category name"),
+            "id": file_category.id,
+            "file_paths": ['/home/yo/bin'],
+            "exclude_paths": ['/home/you/exclude', '/home/me/exclude'],
+            "access_monitoring": True,
+            "description": "description of the example file category",
+            "file_paths_queries": [],
+            "updated_at": file_category.updated_at.isoformat(),
+            "created_at": file_category.created_at.isoformat(),
+        })
+        self.assertEqual(file_category.name, "file category name")
+        self.assertEqual(file_category.slug, slugify("file category name"))
+        self.assertEqual(file_category.file_paths, ['/home/yo/bin'])
+        self.assertEqual(file_category.exclude_paths, ['/home/you/exclude', '/home/me/exclude'])
+        self.assertEqual(file_category.access_monitoring, True)
+        self.assertEqual(file_category.description, "description of the example file category")
+        self.assertEqual(file_category.file_paths_queries, [])
+
+    def test_update_file_category_slug_exist(self):
+        file_category = self.force_file_category()
+        file_category2 = self.force_file_category()
+        self.set_permissions("osquery.change_filecategory")
+        data = {"name": file_category.name}
+        response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category2.id]), data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": [f"file category with this name already exists."]
+        })
+
+    def test_update_file_category_not_exist(self):
+        self.set_permissions("osquery.change_filecategory")
+        data = {"name": "file category name"}
+        response = self.put_json_data(reverse("osquery_api:file_category", args=[9999]), data=data)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    # delete file category
+
+    def test_delete_file_category_unauthorized(self):
+        response = self.delete(reverse("osquery_api:file_category", args=[1]), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_file_category_permission_denied(self):
+        response = self.delete(reverse("osquery_api:file_category", args=[1]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_file_category(self):
+        file_category = self.force_file_category()
+        self.set_permissions("osquery.delete_filecategory")
+        response = self.delete(reverse("osquery_api:file_category", args=[file_category.id]))
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(FileCategory.objects.count(), 0)
+
+    # get file category
+
+    def test_get_file_category_unauthorized(self):
+        response = self.get(reverse("osquery_api:file_category", args=[1]), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_file_category_permission_denied(self):
+        response = self.get(reverse("osquery_api:file_category", args=[1]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_file_category(self):
+        file_category = self.force_file_category()
+        self.set_permissions("osquery.view_filecategory")
+        response = self.get(reverse("osquery_api:file_category", args=[file_category.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "name": file_category.name,
+            "slug": file_category.slug,
+            "id": file_category.id,
+            "file_paths": ['/home/yo'],
+            "exclude_paths": ['/home/yo/exclude1', '/home/yo/exclude2'],
+            "access_monitoring": False,
+            "description": "description of the file category",
+            "file_paths_queries": ['select * from file_paths where path like "/home/yo/";'],
+            "updated_at": file_category.updated_at.isoformat(),
+            "created_at": file_category.created_at.isoformat(),
+        })
+
+    def test_get_file_category_not_exist(self):
+        self.set_permissions("osquery.view_filecategory")
+        response = self.get(reverse("osquery_api:file_category", args=[9999]))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
 
     # list configurations
 
@@ -1057,7 +1296,7 @@ class APIViewsTestCase(TestCase):
             "platform": "posix",
             "version": "1.2.3",
             "discovery": [
-              "select 1 from users where username='root'",
+                "select 1 from users where username='root'",
             ],
             "event_routing_key": "123ABC",
             "queries": {
@@ -1258,18 +1497,18 @@ class APIViewsTestCase(TestCase):
         url = reverse("osquery_api:pack", args=(slug,))
 
         pack = (
-          "---\n"
-          "# Do not use this query in production!!!\n\n"
-          'platform: "darwin"\n'
-          'queries:\n'
-          '  WireLurker:\n'
-          '    query: >-\n'
-          '      select * from launchd where\n'
-          "      name = 'com.apple.periodic-dd-mm-yy.plist';\n"
-          "    interval: 3600\n"
-          "    version: 1.4.5\n"
-          "    description: (https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)\n"
-          "    value: Artifact used by this malware - 🔥\n"
+            "---\n"
+            "# Do not use this query in production!!!\n\n"
+            'platform: "darwin"\n'
+            'queries:\n'
+            '  WireLurker:\n'
+            '    query: >-\n'
+            '      select * from launchd where\n'
+            "      name = 'com.apple.periodic-dd-mm-yy.plist';\n"
+            "    interval: 3600\n"
+            "    version: 1.4.5\n"
+            "    description: (https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)\n"
+            "    value: Artifact used by this malware - 🔥\n"
         )
 
         response = self.put_data(url, pack.encode("utf-8"), "application/yaml", include_token=True)
@@ -1307,7 +1546,7 @@ class APIViewsTestCase(TestCase):
         pack = {
             "platform": "darwin",
             "discovery": [
-              "select 1 from users where username='root'",
+                "select 1 from users where username='root'",
             ],
             "queries": {
                 "Leverage-A_1": {

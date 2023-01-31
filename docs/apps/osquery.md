@@ -696,3 +696,213 @@ $ curl -X DELETE \
 ```
 
 Response (204 No Content)
+
+### /api/osquery/file_categories/
+
+#### List all FileCategories.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_filecategory`
+* Optional filter parameter:
+	* `name`: name of the FileCategory.
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/file_categories/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/file_categories/?name=example" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "name": "example",
+        "slug": "example",
+        "description": "example description",
+        "file_paths": [],
+        "exclude_paths": [],
+        "file_paths_queries": [],
+        "access_monitoring": false,
+        "created_at": "2023-01-31T11:48:53.014319",
+        "updated_at": "2023-01-31T11:48:53.014332"
+    }
+]
+```
+
+#### Add a new FileCategory.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `osquery.add_filecategory`
+
+Example:
+
+file_category.json
+
+```json
+{
+	"name": "example2",
+	"slug": "example2",
+	"description": "example2 description",
+	"file_paths": ["/usr/example2"],
+	"exclude_paths": ["/home/you/exclude1", "/home/me/exclude2"],
+	"file_paths_queries": [],
+	"access_monitoring": true
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/file_categories/" \
+  -d @file_category.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "example2",
+    "slug": "example2",
+    "description": "example2 description",
+    "file_paths": [
+        "/usr/example2"
+    ],
+    "exclude_paths": [
+        "/home/you/exclude1",
+        "/home/me/exclude2"
+    ],
+    "file_paths_queries": [],
+    "access_monitoring": true,
+    "created_at": "2023-01-31T14:09:46.079654",
+    "updated_at": "2023-01-31T14:09:46.079664"
+}
+```
+
+### /api/osquery/file_categories/`<int:pk>`/
+
+#### Get an FileCategory.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_filecategory`
+* `<int:pk>`: the primary key of the FileCategory.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/file_categories/2/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "example2",
+    "slug": "example2",
+    "description": "example2 description",
+    "file_paths": [
+        "/usr/example2"
+    ],
+    "exclude_paths": [
+        "/home/you/exclude1",
+        "/home/me/exclude2"
+    ],
+    "file_paths_queries": [],
+    "access_monitoring": true,
+    "created_at": "2023-01-31T14:09:46.079654",
+    "updated_at": "2023-01-31T14:09:46.079664"
+}
+```
+
+#### Update an FileCategory.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `osquery.update_filecategory`
+* `<int:pk>`: the primary key of the FileCategory.
+
+Example
+
+file_category_update.json
+
+```json
+{
+    "name": "example2 updated",
+    "description": "example2 description updated",
+    "file_paths": [
+        "/usr/bin/example2"
+    ],
+    "exclude_paths": [
+        "/home/you/exclude1"
+    ],
+    "file_paths_queries": [],
+    "access_monitoring": false
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/file_categories/2/" \
+  -d @file_categories_update.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "example2 updated",
+    "slug": "example2-updated",
+    "description": "example2 description updated",
+    "file_paths": [
+        "/usr/bin/example2"
+    ],
+    "exclude_paths": [
+        "/home/you/exclude1"
+    ],
+    "file_paths_queries": [],
+    "access_monitoring": false,
+    "created_at": "2023-01-31T11:48:53.014319",
+    "updated_at": "2023-01-31T14:13:39.306239"
+}
+```
+
+#### Delete an FileCategory.
+
+* method: DELETE
+* Required permission: `osquery.delete_filecategory`
+* `<int:pk>`: the primary key of the FileCategory.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/file_categories/2/" 
+```
+
+Response (204 No Content)

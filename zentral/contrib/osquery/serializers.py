@@ -1,11 +1,12 @@
 from django.db.models import F
 from django.urls import reverse
+from django.utils.text import slugify
 from rest_framework import serializers
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .compliance_checks import sync_query_compliance_check
-from .models import Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction
+from .models import Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction, FileCategory
 
 
 class AutomaticTableConstructionSerializer(serializers.ModelSerializer):
@@ -70,6 +71,21 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         secret_serializer.update(instance.secret, secret_data)
         return super().update(instance, validated_data)
 
+
+# FileCategory
+
+class FileCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FileCategory
+        fields = '__all__'
+
+    def create(self, validated_data):
+        validated_data['slug'] = slugify(validated_data['name'])
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data['slug'] = slugify(validated_data['name'])
+        return super().update(instance, validated_data)
 
 # Standard Osquery packs
 

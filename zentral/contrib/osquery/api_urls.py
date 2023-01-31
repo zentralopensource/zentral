@@ -4,7 +4,7 @@ from .api_views import (ConfigurationDetail, ConfigurationList,
                         EnrollmentPackage, EnrollmentPowershellScript, EnrollmentScript,
                         ExportDistributedQueryResults,
                         PackView, QueryList, QueryDetail, AutomaticTableConstructionList,
-                        AutomaticTableConstructionDetail)
+                        AutomaticTableConstructionDetail, FileCategoryList, FileCategoryDetail)
 
 
 app_name = "osquery_api"
@@ -21,6 +21,8 @@ urlpatterns = [
          name="enrollment_script"),
     path('enrollments/<int:pk>/powershell_script/', EnrollmentPowershellScript.as_view(),
          name="enrollment_powershell_script"),
+    path('file_categories/', FileCategoryList.as_view(), name="file_categories"),
+    path('file_categories/<int:pk>/', FileCategoryDetail.as_view(), name="file_category"),
     path('packs/<slug:slug>/', PackView.as_view(), name="pack"),
     path('queries/', QueryList.as_view(), name="queries"),
     path('queries/<int:pk>/', QueryDetail.as_view(), name="query"),
