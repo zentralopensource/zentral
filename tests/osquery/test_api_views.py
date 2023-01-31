@@ -460,7 +460,6 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("osquery.view_filecategory")
         response = self.get(reverse('osquery_api:file_categories'), data={"name": file_category2.name})
         self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(response.json(), list)
         self.assertEqual(response.json(), [{
             "name": file_category2.name,
             "slug": file_category2.slug,
@@ -543,7 +542,7 @@ class APIViewsTestCase(TestCase):
             "name": ["This field may not be blank."]
         })
 
-    def test_create_file_category_slug_exist(self):
+    def test_create_file_category_slug_conflict(self):
         file_category = self.force_file_category()
         self.set_permissions("osquery.add_filecategory")
         data = {"name": file_category.name.upper()}
@@ -573,6 +572,17 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["This field may not be blank."]
+        })
+
+    def test_update_file_category_slug_conflict(self):
+        file_category = self.force_file_category()
+        file_category2 = self.force_file_category()
+        self.set_permissions("osquery.change_filecategory")
+        data = {"name": file_category.name.upper()}
+        response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category2.id]), data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": [f"file category with this slug {file_category.slug} already exists."]
         })
 
     def test_update_file_category(self):
@@ -609,7 +619,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(file_category.description, "description of the example file category")
         self.assertEqual(file_category.file_paths_queries, [])
 
-    def test_update_file_category_slug_exist(self):
+    def test_update_file_category_name_exist(self):
         file_category = self.force_file_category()
         file_category2 = self.force_file_category()
         self.set_permissions("osquery.change_filecategory")
