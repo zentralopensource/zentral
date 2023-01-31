@@ -649,7 +649,7 @@ atc_update.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/atcs/1/" \
+  "https://zentral.example.com/api/osquery/atcs/2/" \
   -d @atc_update.json \
   |python3 -m json.tool
 ```
@@ -692,7 +692,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/atcs/1/" 
+  "https://zentral.example.com/api/osquery/atcs/2/" 
 ```
 
 Response (204 No Content)
