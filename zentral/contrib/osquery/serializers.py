@@ -81,15 +81,14 @@ class FileCategorySerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         name = data.get("name")
-        if name:
-            slug = slugify(name)
-            fc_qs = FileCategory.objects.all()
-            if self.instance:
-                fc_qs = fc_qs.exclude(pk=self.instance.pk)
-            if fc_qs.filter(slug=slug).exists():
-                raise serializers.ValidationError({"name": f"file category with this slug {slug} already exists."})
-            else:
-                data["slug"] = slug
+        slug = slugify(name)
+        fc_qs = FileCategory.objects.all()
+        if self.instance:
+            fc_qs = fc_qs.exclude(pk=self.instance.pk)
+        if fc_qs.filter(slug=slug).exists():
+            raise serializers.ValidationError({"name": f"file category with this slug {slug} already exists."})
+        else:
+            data["slug"] = slug
         return data
 
 

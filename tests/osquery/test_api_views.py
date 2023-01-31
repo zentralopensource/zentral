@@ -534,6 +534,15 @@ class APIViewsTestCase(TestCase):
             "name": [f"file category with this name already exists."]
         })
 
+    def test_create_file_category_no_name(self):
+        self.set_permissions("osquery.add_filecategory")
+        data = {"name": ""}
+        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field may not be blank."]
+        })
+
     def test_create_file_category_slug_exist(self):
         file_category = self.force_file_category()
         self.set_permissions("osquery.add_filecategory")
@@ -553,6 +562,18 @@ class APIViewsTestCase(TestCase):
     def test_update_file_category_permission_denied(self):
         response = self.put_json_data(reverse("osquery_api:file_category", args=[1]), {})
         self.assertEqual(response.status_code, 403)
+
+    def test_update_file_category_without_name(self):
+        file_category = self.force_file_category()
+        self.set_permissions("osquery.change_filecategory")
+        data = {
+            "name": "",
+        }
+        response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category.id]), data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field may not be blank."]
+        })
 
     def test_update_file_category(self):
         file_category = self.force_file_category()
