@@ -68,7 +68,7 @@ class APIViewsTestCase(TestCase):
         return AutomaticTableConstruction.objects.create(**atc)
 
     def force_file_category(self):
-        name = get_random_string(12)
+        name = get_random_string(12).lower()
         slug = slugify(name)
 
         return FileCategory.objects.create(
@@ -524,7 +524,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(file_category.file_paths_queries,
                          ['select * from file_paths where path like "/home/yo/*.bin";'])
 
-    def test_create_file_category_slug_exist(self):
+    def test_create_file_category_name_exist(self):
         file_category = self.force_file_category()
         self.set_permissions("osquery.add_filecategory")
         data = {"name": file_category.name}
@@ -532,6 +532,16 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": [f"file category with this name already exists."]
+        })
+
+    def test_create_file_category_slug_exist(self):
+        file_category = self.force_file_category()
+        self.set_permissions("osquery.add_filecategory")
+        data = {"name": file_category.name.upper()}
+        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": [f"file category with this slug {file_category.slug} already exists."]
         })
 
     # update file category

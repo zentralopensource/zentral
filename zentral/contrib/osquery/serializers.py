@@ -79,13 +79,19 @@ class FileCategorySerializer(serializers.ModelSerializer):
         model = FileCategory
         fields = '__all__'
 
-    def create(self, validated_data):
-        validated_data['slug'] = slugify(validated_data['name'])
-        return super().create(validated_data)
+    def validate(self, data):
+        name = data.get("name")
+        if name:
+            slug = slugify(name)
+            fc_qs = FileCategory.objects.all()
+            if self.instance:
+                fc_qs = fc_qs.exclude(pk=self.instance.pk)
+            if fc_qs.filter(slug=slug).exists():
+                raise serializers.ValidationError({"name": f"file category with this slug {slug} already exists."})
+            else:
+                data["slug"] = slug
+        return data
 
-    def update(self, instance, validated_data):
-        validated_data['slug'] = slugify(validated_data['name'])
-        return super().update(instance, validated_data)
 
 # Standard Osquery packs
 

@@ -146,6 +146,10 @@ class EnrollmentScript(EnrollmentArtifact):
 
 # File categories
 
+class FileCategoryFilter(filters.FilterSet):
+    configuration_id = filters.ModelChoiceFilter(field_name='configuration', queryset=Configuration.objects.all())
+    name = filters.CharFilter()
+
 
 class FileCategoryList(generics.ListCreateAPIView):
     """
@@ -155,7 +159,7 @@ class FileCategoryList(generics.ListCreateAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = FileCategorySerializer
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_fields = ('name',)
+    filterset_class = FileCategoryFilter
 
 
 class FileCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
