@@ -460,7 +460,7 @@ $ curl -X DELETE \
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_atc`
+* Required permission: `osquery.view_automatictableconstruction`
 * Optional filter parameter:
 	* `name`: name of the ATC.
     * `configuration_id`: primary key of the configuration.
@@ -512,7 +512,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `osquery.add_atc`
+* Required permission: `osquery.add_automatictableconstruction`
 
 Example:
 
@@ -576,7 +576,7 @@ Response:
 
 method: GET
 Content-Type: application/json
-Required permission: `osquery.view_atc`
+Required permission: `osquery.view_automatictableconstruction`
 `<int:pk>`: the primary key of the ATC.
 
 Example
@@ -616,7 +616,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `osquery.update_atc`
+* Required permission: `osquery.update_automatictableconstruction`
 * `<int:pk>`: the primary key of the ATC.
 
 Example
@@ -684,7 +684,7 @@ Response:
 #### Delete an ATC.
 
 * method: DELETE
-* Required permission: `osquery.delete_atc`
+* Required permission: `osquery.delete_automatictableconstruction`
 * `<int:pk>`: the primary key of the ATC.
 
 Example
