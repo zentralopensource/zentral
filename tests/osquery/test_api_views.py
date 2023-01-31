@@ -211,6 +211,19 @@ class APIViewsTestCase(TestCase):
             "name": atc.name
         }])
 
+    def test_get_atcs_by_configuration_not_found(self):
+        self.set_permissions("osquery.view_automatictableconstruction")
+        response = self.get(reverse('osquery_api:atcs'), data={"configuration_id": 99999})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"configuration_id": ["Select a valid choice. That choice is not one of the "
+                                                                "available choices."]})
+
+    def test_get_atcs_by_name_not_found(self):
+        self.set_permissions("osquery.view_automatictableconstruction")
+        response = self.get(reverse('osquery_api:atcs'), data={"name": get_random_string(24)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
     def test_get_atcs(self):
         atc = self.force_atc()
         self.set_permissions("osquery.view_automatictableconstruction")

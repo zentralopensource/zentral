@@ -26,8 +26,8 @@ from .tasks import export_distributed_query_results
 
 
 class AutomaticTableConstructionFilter(filters.FilterSet):
-    configuration_id = filters.NumberFilter(field_name='configuration__id')
-    name = filters.CharFilter(field_name='name')
+    configuration_id = filters.ModelChoiceFilter(field_name='configuration', queryset=Configuration.objects.all())
+    name = filters.CharFilter()
 
 
 class AutomaticTableConstructionList(generics.ListCreateAPIView):
