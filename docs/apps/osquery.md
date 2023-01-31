@@ -463,6 +463,7 @@ $ curl -X DELETE \
 * Required permission: `osquery.view_atc`
 * Optional filter parameter:
 	* `name`: name of the ATC.
+    * `configuration`: primary key of the configuration.
 
 Examples:
 
