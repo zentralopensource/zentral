@@ -706,6 +706,7 @@ Response (204 No Content)
 * Required permission: `osquery.view_filecategory`
 * Optional filter parameter:
 	* `name`: name of the FileCategory.
+    * `configuration_id`: primary key of the configuration.
 
 Examples:
 
