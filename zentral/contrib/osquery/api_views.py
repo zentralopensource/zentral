@@ -25,6 +25,11 @@ from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryP
 from .tasks import export_distributed_query_results
 
 
+class AutomaticTableConstructionFilter(filters.FilterSet):
+    configuration_id = filters.NumberFilter(field_name='configuration__id')
+    name = filters.CharFilter(field_name='name')
+
+
 class AutomaticTableConstructionList(generics.ListCreateAPIView):
     """
     List all AutomaticTableConstructions or create a new AutomaticTableConstruction
@@ -33,7 +38,7 @@ class AutomaticTableConstructionList(generics.ListCreateAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = AutomaticTableConstructionSerializer
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_fields = ('name', 'configuration')
+    filterset_class = AutomaticTableConstructionFilter
 
 
 class AutomaticTableConstructionDetail(generics.RetrieveUpdateDestroyAPIView):

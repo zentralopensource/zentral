@@ -195,7 +195,7 @@ class APIViewsTestCase(TestCase):
         configuration, atc = self.force_configuration(force_atc=True)
         configuration2, atc2 = self.force_configuration(force_atc=True)
         self.set_permissions("osquery.view_automatictableconstruction")
-        response = self.get(reverse('osquery_api:atcs'), data={"configuration": configuration.id})
+        response = self.get(reverse('osquery_api:atcs'), data={"configuration_id": configuration.id})
         self.assertEqual(response.status_code, 200)
         self.assertIsInstance(response.json(), list)
         self.assertEqual(response.json(), [{
@@ -314,18 +314,12 @@ class APIViewsTestCase(TestCase):
             "path": "/home/yolo/new",
             "name": atc.name
         })
-        self.assertEqual(response.data, {
-            "platforms": atc.platforms,
-            "updated_at": atc.updated_at.isoformat(),
-            "columns": atc.columns,
-            "id": atc.id,
-            "created_at": atc.created_at.isoformat(),
-            "table_name": atc.table_name,
-            "query": atc.query,
-            "description": atc.description,
-            "path": atc.path,
-            "name": atc.name
-        })
+        self.assertEqual(atc.path, "/home/yolo/new")
+        self.assertEqual(atc.query, "select new from yolo;")
+        self.assertEqual(atc.table_name, "yolo_new")
+        self.assertEqual(atc.columns, ["un", "deux", "trois"])
+        self.assertEqual(atc.platforms, ["darwin"])
+        self.assertEqual(atc.description, "yolo changed")
 
     # create atc
 
@@ -371,7 +365,7 @@ class APIViewsTestCase(TestCase):
             "platforms": ["darwin", "windows"],
             "updated_at": atc.updated_at.isoformat(),
             "columns": ["un", "deux"],
-            "id": response.json()["id"],
+            "id": atc.id,
             "created_at": atc.created_at.isoformat(),
             "table_name": "yolo",
             "query": "select 1 from yo;",
@@ -379,18 +373,14 @@ class APIViewsTestCase(TestCase):
             "path": "/home/yolo",
             "name": "yolo"
         })
-        self.assertEqual(response.data, {
-            "platforms": atc.platforms,
-            "updated_at": atc.updated_at.isoformat(),
-            "columns": atc.columns,
-            "id": atc.id,
-            "created_at": atc.created_at.isoformat(),
-            "table_name": atc.table_name,
-            "query": atc.query,
-            "description": atc.description,
-            "path": atc.path,
-            "name": atc.name
-        })
+        self.assertEqual(atc.name, "yolo")
+        self.assertEqual(atc.description, "yolo")
+        self.assertEqual(atc.table_name, "yolo")
+        self.assertEqual(atc.query, "select 1 from yo;")
+        self.assertEqual(atc.columns, ["un", "deux"])
+        self.assertEqual(atc.platforms, ["darwin", "windows"])
+        self.assertEqual(atc.path, "/home/yolo")
+
 
     # delete atc
 
