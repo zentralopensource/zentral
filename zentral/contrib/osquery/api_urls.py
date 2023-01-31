@@ -3,11 +3,14 @@ from .api_views import (ConfigurationDetail, ConfigurationList,
                         EnrollmentDetail, EnrollmentList,
                         EnrollmentPackage, EnrollmentPowershellScript, EnrollmentScript,
                         ExportDistributedQueryResults,
-                        PackView, QueryList, QueryDetail)
+                        PackView, QueryList, QueryDetail, AutomaticTableConstructionList,
+                        AutomaticTableConstructionDetail)
 
 
 app_name = "osquery_api"
 urlpatterns = [
+    path('atcs/', AutomaticTableConstructionList.as_view(), name="atcs"),
+    path('atcs/<int:pk>/', AutomaticTableConstructionDetail.as_view(), name="atc"),
     path('configurations/', ConfigurationList.as_view(), name="configurations"),
     path('configurations/<int:pk>/', ConfigurationDetail.as_view(), name="configuration"),
     path('enrollments/', EnrollmentList.as_view(), name="enrollments"),

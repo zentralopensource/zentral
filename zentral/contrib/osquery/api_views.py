@@ -16,12 +16,38 @@ from rest_framework_yaml.parsers import YAMLParser
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .compliance_checks import sync_query_compliance_check
 from .events import post_osquery_pack_update_events
-from .models import Configuration, Enrollment, Pack, PackQuery, Query
+from .models import Configuration, Enrollment, Pack, PackQuery, Query, AutomaticTableConstruction
 from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 from .powershell_script.builder import OsqueryZentralEnrollPowershellScriptBuilder
-from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryPackSerializer, QuerySerializer
+from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryPackSerializer, QuerySerializer, \
+    AutomaticTableConstructionSerializer
 from .tasks import export_distributed_query_results
+
+
+class AutomaticTableConstructionFilter(filters.FilterSet):
+    configuration_id = filters.ModelChoiceFilter(field_name='configuration', queryset=Configuration.objects.all())
+    name = filters.CharFilter()
+
+
+class AutomaticTableConstructionList(generics.ListCreateAPIView):
+    """
+    List all AutomaticTableConstructions or create a new AutomaticTableConstruction
+    """
+    queryset = AutomaticTableConstruction.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = AutomaticTableConstructionSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = AutomaticTableConstructionFilter
+
+
+class AutomaticTableConstructionDetail(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update or delete an AutomaticTableConstruction instance.
+    """
+    queryset = AutomaticTableConstruction.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = AutomaticTableConstructionSerializer
 
 
 class ConfigurationList(generics.ListCreateAPIView):
