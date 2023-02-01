@@ -1073,6 +1073,60 @@ class APIViewsTestCase(TestCase):
             "file_categories": ['Invalid pk "9999" - object does not exist.']
         })
 
+    def test_update_configuration_change_atc(self):
+        configuration, atc = self.force_configuration(force_atc=True)
+        atc2 = self.force_atc()
+        self.set_permissions("osquery.change_configuration")
+        data = {
+            'name': configuration.name,
+            'automatic_table_constructions': [atc2.pk]
+        }
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
+        self.assertEqual(response.status_code, 200)
+        configuration.refresh_from_db()
+        self.assertEqual(response.json(), {
+            'id': configuration.pk,
+            'name': configuration.name,
+            'description': '',
+            'inventory': True,
+            'inventory_apps': False,
+            'inventory_interval': 86400,
+            'inventory_ec2': False,
+            'automatic_table_constructions': [atc2.pk],
+            'file_categories': [],
+            'options': {},
+            'created_at': configuration.created_at.isoformat(),
+            'updated_at': configuration.updated_at.isoformat()
+        })
+        self.assertEqual(configuration.automatic_table_constructions.all()[0], atc2)
+
+    def test_update_configuration_change_file_category(self):
+        configuration, file_category = self.force_configuration(force_file_categories=True)
+        file_category2 = self.force_file_category()
+        self.set_permissions("osquery.change_configuration")
+        data = {
+            'name': configuration.name,
+            'file_categories': [file_category2.pk]
+        }
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
+        self.assertEqual(response.status_code, 200)
+        configuration.refresh_from_db()
+        self.assertEqual(response.json(), {
+            "id": configuration.pk,
+            "name": configuration.name,
+            "description": "",
+            "inventory": True,
+            "inventory_apps": False,
+            "inventory_interval": 86400,
+            "inventory_ec2": False,
+            "automatic_table_constructions": [],
+            "file_categories": [file_category2.pk],
+            "options": {},
+            "created_at": configuration.created_at.isoformat(),
+            "updated_at": configuration.updated_at.isoformat()
+        })
+        self.assertEqual(configuration.file_categories.all()[0], file_category2)
+
     def test_update_configuration(self):
         configuration = self.force_configuration()
         new_name = get_random_string(12)
