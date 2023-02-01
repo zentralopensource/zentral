@@ -88,7 +88,7 @@ class APIViewsTestCase(TestCase):
 
     def force_pack(self):
         name = get_random_string(12)
-        return Pack.objects.create(name=name, slug=slugify(name))
+        return Pack.objects.create(name=name.lower(), slug=slugify(name))
 
     def force_query(self, pack_query_mode=None, compliance_check=False):
         if compliance_check:
@@ -512,7 +512,6 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("osquery.view_filecategory")
         response = self.get(reverse('osquery_api:file_categories'), data={"name": get_random_string(35)})
         self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(response.json(), list)
         self.assertEqual(response.json(), [])
 
     def test_get_file_categories_filter_by_configuration_id_not_found(self):
@@ -1540,7 +1539,317 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse('osquery_api:enrollment', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 204)
 
-    # put pack
+    # list packs
+
+    def test_get_packs_unauthorized(self):
+        response = self.get(reverse("osquery_api:packs"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_packs_permission_denied(self):
+        response = self.get(reverse("osquery_api:packs"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_packs_filter_by_name_not_found(self):
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:packs"), {"name": get_random_string(12)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_packs_filter_by_name(self):
+        for _ in range(3):
+            self.force_pack()
+        pack = self.force_pack()
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:packs"), {"name": pack.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            "id": pack.pk,
+            "name": pack.name,
+            "slug": slugify(pack.name),
+            "slug": slugify(pack.name),
+            "description": "",
+            "discovery_queries": [],
+            "shard": None,
+            "event_routing_key": "",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        }])
+
+    def test_get_packs(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:packs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            "id": pack.pk,
+            "name": pack.name,
+            "slug": slugify(pack.name),
+            "description": "",
+            "discovery_queries": [],
+            "shard": None,
+            "event_routing_key": "",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        }])
+
+    # get pack <int:pk>
+
+    def test_get_pack_unauthorized(self):
+        response = self.get(reverse("osquery_api:pack", args=(1,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_pack_permission_denied(self):
+        response = self.get(reverse("osquery_api:pack", args=(1,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_pack_not_found(self):
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:pack", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    def test_get_pack(self):
+        self.set_permissions("osquery.view_pack")
+        pack = self.force_pack()
+        response = self.get(reverse("osquery_api:pack", args=(pack.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "id": pack.pk,
+            "name": pack.name,
+            "slug": slugify(pack.name),
+            "description": "",
+            "discovery_queries": [],
+            "shard": None,
+            "event_routing_key": "",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        })
+
+    # update pack <int:pk>
+
+    def test_update_pack_unauthorized(self):
+        response = self.put_json_data(reverse("osquery_api:pack", args=(1,)), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_pack_permission_denied(self):
+        response = self.put_json_data(reverse("osquery_api:pack", args=(1,)), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_pack_not_found(self):
+        self.set_permissions("osquery.change_pack")
+        response = self.put_json_data(reverse("osquery_api:pack", args=(9999,)), {})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    def test_update_pack_slug_conflict(self):
+        pack = self.force_pack()
+        pack2 = self.force_pack()
+        self.set_permissions("osquery.change_pack")
+        data = {"name": pack.name.upper()}
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack2.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": [f"Pack with this slug {pack.slug} already exists"]
+        })
+
+    def test_update_pack_slug_not_editable(self):
+        pack = self.force_pack()
+        pack_name = "Packed"
+        new_slug = slugify(get_random_string(45))
+        self.set_permissions("osquery.change_pack")
+        data = {
+            "name": pack_name,
+            "slug": new_slug
+        }
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["slug"], 'packed')
+
+    def test_update_pack_name_conflict(self):
+        pack = self.force_pack()
+        pack2 = self.force_pack()
+        self.set_permissions("osquery.change_pack")
+        data = {"name": pack.name}
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack2.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["pack with this name already exists."]
+        })
+
+    def test_update_pack_fields_empty(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.change_pack")
+        data = {"name": ""}
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field may not be blank."]
+        })
+
+    def test_update_pack_not_found(self):
+        self.set_permissions("osquery.change_pack")
+        response = self.put_json_data(reverse("osquery_api:pack", args=(9999,)), {})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    def test_update_pack_shard_invalid(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.change_pack")
+        data = {
+            "name": pack.name,
+            "shard": 101
+        }
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "shard": ["Ensure this value is less than or equal to 100."]
+        })
+
+    def test_update_pack(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.change_pack")
+        data = {
+            "name": "pack updated",
+            "description": "pack description updated",
+            "discovery_queries": ["select * from osquery_info"],
+            "shard": 1,
+            "event_routing_key": "pack_updated"
+        }
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        pack.refresh_from_db()
+        self.assertEqual(response.json(), {
+            "id": pack.pk,
+            "name": "pack updated",
+            "slug": "pack-updated",
+            "description": "pack description updated",
+            "discovery_queries": ["select * from osquery_info"],
+            "shard": 1,
+            "event_routing_key": "pack_updated",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        })
+        self.assertEqual(pack.name, "pack updated")
+        self.assertEqual(pack.slug, "pack-updated")
+        self.assertEqual(pack.description, "pack description updated")
+        self.assertEqual(pack.discovery_queries, ["select * from osquery_info"])
+        self.assertEqual(pack.shard, 1)
+        self.assertEqual(pack.event_routing_key, "pack_updated")
+
+    # create pack
+
+    def test_create_pack_unauthorized(self):
+        response = self.post_json_data(reverse("osquery_api:packs"), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_pack_permission_denied(self):
+        response = self.post_json_data(reverse("osquery_api:packs"), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_pack_fields_empty(self):
+        self.set_permissions("osquery.add_pack")
+        data = {"name": ""}
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field may not be blank."]
+        })
+
+    def test_create_pack_name_conflict(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.add_pack")
+        data = {"name": pack.name}
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["pack with this name already exists."]
+        })
+
+    def test_create_pack_slug_conflict(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.add_pack")
+        data = {"name": pack.name.upper()}
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": [f"Pack with this slug {pack.slug} already exists"]
+        })
+
+    def test_create_slug_not_editable(self):
+        self.set_permissions("osquery.add_pack")
+        data = {"name": "pack created", "slug": "slug-created"}
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["slug"], "pack-created")
+
+    def test_create_pack_shard_invalid(self):
+        self.set_permissions("osquery.add_pack")
+        data = {"name": "pack created", "shard": 101}
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "shard": ["Ensure this value is less than or equal to 100."]
+        })
+
+    def test_create_pack(self):
+        self.set_permissions("osquery.add_pack")
+        data = {
+            "name": "pack created",
+            "description": "pack description created",
+            "discovery_queries": ["select * from osquery_info"],
+            "shard": 1,
+            "event_routing_key": "pack_created"
+        }
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 201)
+        pack = Pack.objects.first()
+        self.assertEqual(response.json(), {
+            "id": pack.pk,
+            "name": "pack created",
+            "slug": "pack-created",
+            "description": "pack description created",
+            "discovery_queries": ["select * from osquery_info"],
+            "shard": 1,
+            "event_routing_key": "pack_created",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        })
+        self.assertEqual(pack.name, "pack created")
+        self.assertEqual(pack.slug, "pack-created")
+        self.assertEqual(pack.description, "pack description created")
+        self.assertEqual(pack.discovery_queries, ["select * from osquery_info"])
+        self.assertEqual(pack.shard, 1)
+        self.assertEqual(pack.event_routing_key, "pack_created")
+
+    # delete pack <int:pk>
+
+    def test_delete_pack_unauthorized(self):
+        response = self.delete(reverse("osquery_api:pack", args=(1,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_pack_permission_denied(self):
+        response = self.delete(reverse("osquery_api:pack", args=(1,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_pack_not_found(self):
+        self.set_permissions("osquery.delete_pack")
+        response = self.delete(reverse("osquery_api:pack", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_pack(self):
+        self.set_permissions("osquery.delete_pack")
+        pack = self.force_pack()
+        response = self.delete(reverse("osquery_api:pack", args=(pack.pk,)))
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Pack.objects.filter(pk=pack.pk).exists())
+
+    # put pack <slug:slug>
 
     def test_put_pack_unauthorized(self):
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
@@ -1551,6 +1860,8 @@ class APIViewsTestCase(TestCase):
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(url, {}, include_token=True)
         self.assertEqual(response.status_code, 403)
+
+    # delete pack <slug:slug>
 
     def test_delete_pack_unauthorized(self):
         url = reverse("osquery_api:pack", args=(get_random_string(12),))

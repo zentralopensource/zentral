@@ -36,7 +36,200 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * `Content-Type: application/x-osquery-conf`
 * `Content-Type: application/yaml`
 
-### /api/osquery/packs/`slug`/
+### /api/osquery/packs/
+
+#### List all Packs.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_pack`
+* Optional filter parameter:
+	* `name`: Name of the pack.
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packs/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packs/?name=Default" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "name": "Default",
+        "slug": "default",
+        "description": "",
+        "discovery_queries": [],
+        "shard": null,
+        "event_routing_key": "",
+        "created_at": "2023-01-13T07:06:51.000733",
+        "updated_at": "2023-01-13T07:06:51.000743"
+    }
+]
+```
+
+#### Add a new Pack.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `osquery.add_pack`
+* Required fields:
+    * `name`: Name of the pack.
+
+Example:
+
+pack.json
+
+```json
+{
+	"name": "Example",
+	"description": "description of the example",
+	"discovery_queries": ["select * from example"],
+	"shard": 50
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packs/" \
+  -d @pack.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "Example",
+    "slug": "example",
+    "description": "description of the example",
+    "discovery_queries": [
+        "select * from example"
+    ],
+    "shard": 50,
+    "event_routing_key": "",
+    "created_at": "2023-02-02T07:30:42.133421",
+    "updated_at": "2023-02-02T07:30:42.133434"
+}
+```
+
+### /api/osquery/packs/`<int:pk>`/
+
+#### Get a Pack.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_pack`
+* `<int:pk>`: The primary key of the pack.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packs/2/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "Example",
+    "slug": "example",
+    "description": "description of the example",
+    "discovery_queries": [
+        "select * from example"
+    ],
+    "shard": 50,
+    "event_routing_key": "",
+    "created_at": "2023-02-02T07:30:42.133421",
+    "updated_at": "2023-02-02T07:30:42.133434"
+}
+```
+
+#### Update a Pack.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `osquery.update_pack`
+* `<int:pk>`: The primary key of the pack.
+* Required fields:
+    * `name`: Name of the pack.
+
+Example
+
+pack_update.json
+
+```json
+{
+	"name": "Example Updated",
+	"description": "description of the example updated",
+	"discovery_queries": ["select * from example"],
+	"shard": 30
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packs/2/" \
+  -d @pack_update.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "Example Updated",
+    "slug": "example-updated",
+    "description": "description of the example updated",
+    "discovery_queries": [
+        "select * from example"
+    ],
+    "shard": 30,
+    "event_routing_key": "",
+    "created_at": "2023-02-02T07:30:42.133421",
+    "updated_at": "2023-02-02T07:32:55.258776"
+}
+```
+
+#### Delete a Pack.
+
+* method: DELETE
+* Required permission: `osquery.delete_pack`
+* `<int:pk>`: The primary key of the pack.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/packs/2/" 
+```
+
+Response (204 No Content)
+
+### /api/osquery/packs/`<slug:slug>`/
 
 * method: `PUT`, `DELETE`
 

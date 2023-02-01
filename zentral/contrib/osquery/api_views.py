@@ -21,8 +21,9 @@ from .models import Configuration, Enrollment, Pack, PackQuery, Query, Automatic
 from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 from .powershell_script.builder import OsqueryZentralEnrollPowershellScriptBuilder
-from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryPackSerializer, QuerySerializer, \
-    AutomaticTableConstructionSerializer, FileCategorySerializer, ConfigurationPackSerializer
+from .serializers import ConfigurationPackSerializer, ConfigurationSerializer, EnrollmentSerializer, \
+    OsqueryPackSerializer, QuerySerializer, AutomaticTableConstructionSerializer, \
+    FileCategorySerializer, PackSerializer
 from .tasks import export_distributed_query_results
 
 
@@ -415,6 +416,22 @@ class ExportDistributedQueryResults(APIView):
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
+
+
+# Packs
+
+class PackList(generics.ListCreateAPIView):
+    queryset = Pack.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = PackSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ('name',)
+
+
+class PackDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Pack.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = PackSerializer
 
 
 # Queries
