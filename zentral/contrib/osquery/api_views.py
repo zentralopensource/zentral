@@ -153,7 +153,7 @@ class FileCategoryFilter(filters.FilterSet):
 
 class FileCategoryList(generics.ListCreateAPIView):
     """
-    List, Create file categories, search by name
+    List, Create file categories, search by name or configuration_id
     """
     queryset = FileCategory.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
