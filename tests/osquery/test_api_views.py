@@ -856,7 +856,7 @@ class APIViewsTestCase(TestCase):
     def test_get_configurations(self):
         configuration = self.force_configuration()
         self.set_permissions("osquery.view_configuration")
-        response = self.get(reverse('osquery_api:configurations'), data={"name": configuration.name})
+        response = self.get(reverse('osquery_api:configurations'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, [{
             "id": configuration.pk,
