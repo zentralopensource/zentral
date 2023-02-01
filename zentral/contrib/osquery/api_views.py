@@ -16,12 +16,12 @@ from rest_framework_yaml.parsers import YAMLParser
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .compliance_checks import sync_query_compliance_check
 from .events import post_osquery_pack_update_events
-from .models import Configuration, Enrollment, Pack, PackQuery, Query, AutomaticTableConstruction
+from .models import Configuration, Enrollment, Pack, PackQuery, Query, AutomaticTableConstruction, FileCategory
 from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 from .powershell_script.builder import OsqueryZentralEnrollPowershellScriptBuilder
 from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryPackSerializer, QuerySerializer, \
-    AutomaticTableConstructionSerializer
+    AutomaticTableConstructionSerializer, FileCategorySerializer
 from .tasks import export_distributed_query_results
 
 
@@ -142,6 +142,33 @@ class EnrollmentScript(EnrollmentArtifact):
 
     def do_get(self):
         return self.builder.build_and_make_response()
+
+
+# File categories
+
+class FileCategoryFilter(filters.FilterSet):
+    configuration_id = filters.ModelChoiceFilter(field_name='configuration', queryset=Configuration.objects.all())
+    name = filters.CharFilter()
+
+
+class FileCategoryList(generics.ListCreateAPIView):
+    """
+    List, Create file categories, search by name or configuration_id
+    """
+    queryset = FileCategory.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = FileCategorySerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = FileCategoryFilter
+
+
+class FileCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, Update, Delete a file category
+    """
+    queryset = FileCategory.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = FileCategorySerializer
 
 
 # Standard Osquery packs

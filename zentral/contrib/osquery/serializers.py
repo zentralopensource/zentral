@@ -1,11 +1,12 @@
 from django.db.models import F
 from django.urls import reverse
+from django.utils.text import slugify
 from rest_framework import serializers
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .compliance_checks import sync_query_compliance_check
-from .models import Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction
+from .models import Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction, FileCategory
 
 
 class AutomaticTableConstructionSerializer(serializers.ModelSerializer):
@@ -69,6 +70,26 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         secret_data = validated_data.pop('secret')
         secret_serializer.update(instance.secret, secret_data)
         return super().update(instance, validated_data)
+
+
+# FileCategory
+
+class FileCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FileCategory
+        fields = '__all__'
+
+    def validate(self, data):
+        name = data.get("name")
+        slug = slugify(name)
+        fc_qs = FileCategory.objects.all()
+        if self.instance:
+            fc_qs = fc_qs.exclude(pk=self.instance.pk)
+        if fc_qs.filter(slug=slug).exists():
+            raise serializers.ValidationError({"name": f"file category with this slug {slug} already exists."})
+        else:
+            data["slug"] = slug
+        return data
 
 
 # Standard Osquery packs
