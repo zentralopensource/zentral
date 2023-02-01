@@ -191,7 +191,9 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:atcs"))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_atcs_by_name(self):
+    def test_get_atcs_filter_by_name(self):
+        for i in range(3):
+            self.force_atc()
         atc = self.force_atc()
         self.set_permissions("osquery.view_automatictableconstruction")
         response = self.get(reverse('osquery_api:atcs'), data={"name": atc.name})
@@ -210,9 +212,10 @@ class APIViewsTestCase(TestCase):
             "name": atc.name
         }])
 
-    def test_get_atcs_by_configuration(self):
+    def test_get_atcs_filter_by_configuration_id(self):
+        for i in range(3):
+            self.force_configuration(force_atc=True)
         configuration, atc = self.force_configuration(force_atc=True)
-        configuration2, atc2 = self.force_configuration(force_atc=True)
         self.set_permissions("osquery.view_automatictableconstruction")
         response = self.get(reverse('osquery_api:atcs'), data={"configuration_id": configuration.id})
         self.assertEqual(response.status_code, 200)
@@ -230,18 +233,18 @@ class APIViewsTestCase(TestCase):
             "name": atc.name
         }])
 
-    def test_get_atcs_by_configuration_not_found(self):
+    def test_get_atcs_filter_by_name_not_found(self):
+        self.set_permissions("osquery.view_automatictableconstruction")
+        response = self.get(reverse('osquery_api:atcs'), data={"name": get_random_string(24)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_atcs_filter_by_configuration_id_not_found(self):
         self.set_permissions("osquery.view_automatictableconstruction")
         response = self.get(reverse('osquery_api:atcs'), data={"configuration_id": 99999})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"configuration_id": ["Select a valid choice. That choice is not one of the "
                                                                 "available choices."]})
-
-    def test_get_atcs_by_name_not_found(self):
-        self.set_permissions("osquery.view_automatictableconstruction")
-        response = self.get(reverse('osquery_api:atcs'), data={"name": get_random_string(24)})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
 
     def test_get_atcs(self):
         atc = self.force_atc()
@@ -272,6 +275,14 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:atc", args=[1]))
         self.assertEqual(response.status_code, 403)
 
+    def test_get_atc_not_found(self):
+        self.set_permissions("osquery.view_automatictableconstruction")
+        response = self.get(reverse("osquery_api:atc", args=[99999]))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
     def test_get_atc(self):
         atc = self.force_atc()
         self.set_permissions("osquery.view_automatictableconstruction")
@@ -300,7 +311,7 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse("osquery_api:atc", args=[1]), {})
         self.assertEqual(response.status_code, 403)
 
-    def test_update_atc_already_exists(self):
+    def test_update_atc_name_conflict(self):
         configuration, atc = self.force_configuration(force_atc=True)
         configuration2, atc2 = self.force_configuration(force_atc=True)
         self.set_permissions("osquery.change_automatictableconstruction")
@@ -317,6 +328,35 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["automatic table construction with this name already exists."]
+        })
+
+    def test_update_atc_fields_empty(self):
+        atc = self.force_atc()
+        self.set_permissions("osquery.change_automatictableconstruction")
+        data = {
+            "name": "",
+            "path": "",
+            "query": "",
+            "table_name": "",
+            "columns": [],
+            "platforms": []
+        }
+        response = self.put_json_data(reverse("osquery_api:atc", args=[atc.id]), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field may not be blank."],
+            "path": ["This field may not be blank."],
+            "query": ["This field may not be blank."],
+            "table_name": ["This field may not be blank."],
+            "columns": ["This list may not be empty."]
+        })
+
+    def test_update_atc_not_found(self):
+        self.set_permissions("osquery.change_automatictableconstruction")
+        response = self.put_json_data(reverse("osquery_api:atc", args=[9999]), {})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
         })
 
     def test_update_atc(self):
@@ -363,7 +403,7 @@ class APIViewsTestCase(TestCase):
         response = self.post(reverse("osquery_api:atcs"))
         self.assertEqual(response.status_code, 403)
 
-    def test_create_atc_already_exists(self):
+    def test_create_atc_name_conflict(self):
         atc = self.force_atc()
         self.set_permissions("osquery.add_automatictableconstruction")
         response = self.post_json_data(reverse("osquery_api:atcs"), {
@@ -378,6 +418,26 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["automatic table construction with this name already exists."]
+        })
+
+    def test_create_atc_fields_empty(self):
+        self.set_permissions("osquery.add_automatictableconstruction")
+        data = {
+            "name": "",
+            "path": "",
+            "query": "",
+            "table_name": "",
+            "columns": [],
+            "platforms": []
+        }
+        response = self.post_json_data(reverse("osquery_api:atcs"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field may not be blank."],
+            "path": ["This field may not be blank."],
+            "query": ["This field may not be blank."],
+            "table_name": ["This field may not be blank."],
+            "columns": ["This list may not be empty."]
         })
 
     def test_create_atc(self):
@@ -422,6 +482,14 @@ class APIViewsTestCase(TestCase):
     def test_delete_atc_permission_denied(self):
         response = self.delete(reverse("osquery_api:atc", args=[1]))
         self.assertEqual(response.status_code, 403)
+
+    def test_delete_atc_not_found(self):
+        self.set_permissions("osquery.delete_automatictableconstruction")
+        response = self.delete(reverse("osquery_api:atc", args=[9999]))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
 
     def test_delete_atc(self):
         atc = self.force_atc()
@@ -481,14 +549,14 @@ class APIViewsTestCase(TestCase):
             "created_at": file_category.created_at.isoformat(),
         }])
 
-    def test_get_file_categories_filter_by_name_unknown(self):
+    def test_get_file_categories_filter_by_name_not_found(self):
         self.set_permissions("osquery.view_filecategory")
         response = self.get(reverse('osquery_api:file_categories'), data={"name": get_random_string(35)})
         self.assertEqual(response.status_code, 200)
         self.assertIsInstance(response.json(), list)
         self.assertEqual(response.json(), [])
 
-    def test_get_file_categories_filter_by_configuration_id_unknown(self):
+    def test_get_file_categories_filter_by_configuration_id_not_found(self):
         self.set_permissions("osquery.view_filecategory")
         response = self.get(reverse('osquery_api:file_categories'), data={"configuration_id": 9999})
         self.assertEqual(response.status_code, 400)
@@ -524,7 +592,7 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:file_category", args=[1]))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_file_category_does_not_exist(self):
+    def test_get_file_category_not_found(self):
         self.set_permissions("osquery.view_filecategory")
         response = self.get(reverse("osquery_api:file_category", args=[9999]))
         self.assertEqual(response.status_code, 404)
@@ -550,78 +618,6 @@ class APIViewsTestCase(TestCase):
             "created_at": file_category.created_at.isoformat(),
         })
 
-    # create file category
-
-    def test_create_file_category_unauthorized(self):
-        response = self.post(reverse("osquery_api:file_categories"), include_token=False)
-        self.assertEqual(response.status_code, 401)
-
-    def test_create_file_category_permission_denied(self):
-        response = self.post(reverse("osquery_api:file_categories"))
-        self.assertEqual(response.status_code, 403)
-
-    def test_create_file_category_slug_conflict(self):
-        file_category = self.force_file_category()
-        self.set_permissions("osquery.add_filecategory")
-        data = {"name": file_category.name.upper()}
-        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {
-            "name": [f"file category with this slug {file_category.slug} already exists."]
-        })
-
-    def test_create_file_category_name_blank(self):
-        self.set_permissions("osquery.add_filecategory")
-        data = {"name": ""}
-        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {
-            "name": ["This field may not be blank."]
-        })
-
-    def test_create_file_category_name_conflict(self):
-        file_category = self.force_file_category()
-        self.set_permissions("osquery.add_filecategory")
-        data = {"name": file_category.name}
-        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {
-            "name": [f"file category with this name already exists."]
-        })
-
-    def test_create_file_category(self):
-        self.set_permissions("osquery.add_filecategory")
-        data = {
-            "name": "file category name",
-            "file_paths": ['/home/yo/bin'],
-            "exclude_paths": ['/home/you/exclude', '/home/me/exclude'],
-            "description": "description of the example file category",
-            "file_paths_queries": ['select * from file_paths where path like "/home/yo/*.bin";'],
-        }
-        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
-        file_category = FileCategory.objects.first()
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json(), {
-            "name": "file category name",
-            "slug": slugify("file category name"),
-            "id": file_category.id,
-            "file_paths": ['/home/yo/bin'],
-            "exclude_paths": ['/home/you/exclude', '/home/me/exclude'],
-            "access_monitoring": False,
-            "description": "description of the example file category",
-            "file_paths_queries": ['select * from file_paths where path like "/home/yo/*.bin";'],
-            "updated_at": file_category.updated_at.isoformat(),
-            "created_at": file_category.created_at.isoformat(),
-        })
-        self.assertEqual(file_category.name, "file category name")
-        self.assertEqual(file_category.slug, slugify("file category name"))
-        self.assertEqual(file_category.file_paths, ['/home/yo/bin'])
-        self.assertEqual(file_category.exclude_paths, ['/home/you/exclude', '/home/me/exclude'])
-        self.assertEqual(file_category.access_monitoring, False)
-        self.assertEqual(file_category.description, "description of the example file category")
-        self.assertEqual(file_category.file_paths_queries,
-                         ['select * from file_paths where path like "/home/yo/*.bin";'])
-
     # update file category
 
     def test_update_file_category_unauthorized(self):
@@ -643,18 +639,6 @@ class APIViewsTestCase(TestCase):
             "name": [f"file category with this slug {file_category.slug} already exists."]
         })
 
-    def test_update_file_category_name_blank(self):
-        file_category = self.force_file_category()
-        self.set_permissions("osquery.change_filecategory")
-        data = {
-            "name": "",
-        }
-        response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category.id]), data=data)
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {
-            "name": ["This field may not be blank."]
-        })
-
     def test_update_file_category_name_conflict(self):
         file_category = self.force_file_category()
         file_category2 = self.force_file_category()
@@ -666,10 +650,27 @@ class APIViewsTestCase(TestCase):
             "name": [f"file category with this name already exists."]
         })
 
-    def test_update_file_category_does_not_exist(self):
+    def test_update_file_category_fields_empty(self):
+        file_category = self.force_file_category()
         self.set_permissions("osquery.change_filecategory")
-        data = {"name": "file category name"}
-        response = self.put_json_data(reverse("osquery_api:file_category", args=[9999]), data=data)
+        data = {
+            "name": "",
+            "description": "",
+            "file_paths": [],
+            "exclude_paths": [],
+            "file_paths_queries": [],
+            "access_monitoring": None,
+        }
+        response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category.id]), data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field may not be blank."],
+            "access_monitoring": ["This field may not be null."],
+        })
+
+    def test_update_file_category_not_found(self):
+        self.set_permissions("osquery.change_filecategory")
+        response = self.put_json_data(reverse("osquery_api:file_category", args=[9999]), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
             "detail": "Not found."
@@ -709,6 +710,86 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(file_category.description, "description of the example file category")
         self.assertEqual(file_category.file_paths_queries, [])
 
+    # create file category
+
+    def test_create_file_category_unauthorized(self):
+        response = self.post(reverse("osquery_api:file_categories"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_file_category_permission_denied(self):
+        response = self.post(reverse("osquery_api:file_categories"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_file_category_slug_conflict(self):
+        file_category = self.force_file_category()
+        self.set_permissions("osquery.add_filecategory")
+        data = {"name": file_category.name.upper()}
+        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": [f"file category with this slug {file_category.slug} already exists."]
+        })
+
+    def test_create_file_category_name_conflict(self):
+        file_category = self.force_file_category()
+        self.set_permissions("osquery.add_filecategory")
+        data = {"name": file_category.name}
+        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": [f"file category with this name already exists."]
+        })
+
+    def test_create_file_category_fields_empty(self):
+        self.set_permissions("osquery.add_filecategory")
+        data = {
+            "name": "",
+            "description": "",
+            "file_paths": [],
+            "exclude_paths": [],
+            "file_paths_queries": [],
+            "access_monitoring": None,
+        }
+        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field may not be blank."],
+            "access_monitoring": ["This field may not be null."],
+        })
+
+    def test_create_file_category(self):
+        self.set_permissions("osquery.add_filecategory")
+        data = {
+            "name": "file category name",
+            "file_paths": ['/home/yo/bin'],
+            "exclude_paths": ['/home/you/exclude', '/home/me/exclude'],
+            "description": "description of the example file category",
+            "file_paths_queries": ['select * from file_paths where path like "/home/yo/*.bin";'],
+        }
+        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        file_category = FileCategory.objects.first()
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json(), {
+            "name": "file category name",
+            "slug": slugify("file category name"),
+            "id": file_category.id,
+            "file_paths": ['/home/yo/bin'],
+            "exclude_paths": ['/home/you/exclude', '/home/me/exclude'],
+            "access_monitoring": False,
+            "description": "description of the example file category",
+            "file_paths_queries": ['select * from file_paths where path like "/home/yo/*.bin";'],
+            "updated_at": file_category.updated_at.isoformat(),
+            "created_at": file_category.created_at.isoformat(),
+        })
+        self.assertEqual(file_category.name, "file category name")
+        self.assertEqual(file_category.slug, slugify("file category name"))
+        self.assertEqual(file_category.file_paths, ['/home/yo/bin'])
+        self.assertEqual(file_category.exclude_paths, ['/home/you/exclude', '/home/me/exclude'])
+        self.assertEqual(file_category.access_monitoring, False)
+        self.assertEqual(file_category.description, "description of the example file category")
+        self.assertEqual(file_category.file_paths_queries,
+                         ['select * from file_paths where path like "/home/yo/*.bin";'])
+
     # delete file category
 
     def test_delete_file_category_unauthorized(self):
@@ -718,6 +799,14 @@ class APIViewsTestCase(TestCase):
     def test_delete_file_category_permission_denied(self):
         response = self.delete(reverse("osquery_api:file_category", args=[1]))
         self.assertEqual(response.status_code, 403)
+
+    def test_delete_file_category_not_found(self):
+        self.set_permissions("osquery.delete_filecategory")
+        response = self.delete(reverse("osquery_api:file_category", args=[9999]))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
 
     def test_delete_file_category(self):
         file_category = self.force_file_category()
