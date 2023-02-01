@@ -907,3 +907,238 @@ $ curl -X DELETE \
 ```
 
 Response (204 No Content)
+
+### /api/osquery/configurations/
+
+#### List all Configurations.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_configuration`
+* Optional filter parameter:
+	* `name`: Name of the configuration.
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/configurations/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/configurations/?name=example" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "name": "example",
+        "description": "",
+        "inventory": true,
+        "inventory_apps": true,
+        "inventory_ec2": false,
+        "inventory_interval": 600,
+        "options": {
+            "config_refresh": 120
+        },
+        "created_at": "2023-01-06T13:05:02.535763",
+        "updated_at": "2023-01-30T09:40:23.912582",
+        "file_categories": [],
+        "automatic_table_constructions": [
+            1
+        ]
+    }
+]
+```
+
+#### Add a new Configuration.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `osquery.add_configuration`
+* Required fields:
+    * `name`: Name of the configuration.
+
+Example:
+
+configuration.json
+
+```json
+{
+	"name": "example2",
+	"description": "description of example2",
+	"inventory": true,
+	"inventory_apps": true,
+	"inventory_ec2": false,
+	"inventory_interval": 600,
+	"options": {
+		"config_refresh": 120
+	},
+	"file_categories": [
+		1
+	],
+	"automatic_table_constructions": [
+		1
+	]
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/configurations/" \
+  -d @configuration.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "example2",
+    "description": "description of example2",
+    "inventory": true,
+    "inventory_apps": true,
+    "inventory_ec2": false,
+    "inventory_interval": 600,
+    "options": {
+        "config_refresh": 120
+    },
+    "created_at": "2023-02-01T11:37:00.622052",
+    "updated_at": "2023-02-01T11:37:00.622077",
+    "file_categories": [
+        1
+    ],
+    "automatic_table_constructions": [
+        1
+    ]
+}
+```
+
+### /api/osquery/configurations/`<int:pk>`/
+
+#### Get an Configuration.
+
+method: GET
+Content-Type: application/json
+Required permission: `osquery.view_configuration`
+`<int:pk>`: The primary key of the configuration.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/configurations/2/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "example2",
+    "description": "description of example2",
+    "inventory": true,
+    "inventory_apps": true,
+    "inventory_ec2": false,
+    "inventory_interval": 600,
+    "options": {
+        "config_refresh": 120
+    },
+    "created_at": "2023-02-01T11:37:00.622052",
+    "updated_at": "2023-02-01T11:37:00.622077",
+    "file_categories": [
+        1
+    ],
+    "automatic_table_constructions": [
+        1
+    ]
+}
+```
+
+#### Update an Configuration.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `osquery.update_configuration`
+* `<int:pk>`: The primary key of the configuration.
+* Required fields:
+    * `name`: Name of the configuration.
+
+Example
+
+configuration_update.json
+
+```json
+{
+	"name": "example2",
+	"description": "description of example2 updated",
+	"inventory": true,
+	"inventory_apps": true,
+	"inventory_ec2": false,
+	"inventory_interval": 800,
+	"options": {
+		"config_refresh": 120
+	},
+	"file_categories": [],
+	"automatic_table_constructions": []
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/configurations/2/" \
+  -d @configuration_update.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "example2",
+    "description": "description of example2 updated",
+    "inventory": true,
+    "inventory_apps": true,
+    "inventory_ec2": false,
+    "inventory_interval": 800,
+    "options": {
+        "config_refresh": 120
+    },
+    "created_at": "2023-02-01T11:37:00.622052",
+    "updated_at": "2023-02-01T11:39:12.664992",
+    "file_categories": [],
+    "automatic_table_constructions": []
+}
+```
+
+#### Delete an Configuration.
+
+* method: DELETE
+* Required permission: `osquery.delete_configuration`
+* `<int:pk>`: The primary key of the configuration.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/configurations/2/" 
+```
+
+Response (204 No Content)
