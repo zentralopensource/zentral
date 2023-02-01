@@ -647,7 +647,7 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category2.id]), data=data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
-            "name": [f"file category with this name already exists."]
+            "name": ["file category with this name already exists."]
         })
 
     def test_update_file_category_fields_empty(self):
@@ -825,22 +825,53 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:configurations"))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_configurations(self):
-        config = self.force_configuration()
+    def test_get_configurations_filter_by_name_not_found(self):
         self.set_permissions("osquery.view_configuration")
-        response = self.get(reverse('osquery_api:configurations'), data={"name": config.name})
+        response = self.get(reverse("osquery_api:configurations"), {"name": get_random_string(32)})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data,
-                         [{"id": config.pk,
-                           "name": config.name,
-                           'description': "",
-                           "inventory": True,
-                           "inventory_apps": False,
-                           "inventory_interval": 86400,
-                           "options": {},
-                           "created_at": config.created_at.isoformat(),
-                           "updated_at": config.updated_at.isoformat()
-                           }])
+        self.assertEqual(response.json(), [])
+
+    def test_get_configurations_filter_by_name(self):
+        for i in range(3):
+            self.force_configuration()
+        configuration = self.force_configuration()
+        self.set_permissions("osquery.view_configuration")
+        response = self.get(reverse("osquery_api:configurations"), {"name": configuration.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            "id": configuration.id,
+            "name": configuration.name,
+            "description": "",
+            "inventory": True,
+            "inventory_apps": False,
+            "inventory_interval": 86400,
+            "inventory_ec2": False,
+            "file_categories": [],
+            "automatic_table_constructions": [],
+            "options": {},
+            "created_at": configuration.created_at.isoformat(),
+            "updated_at": configuration.updated_at.isoformat()
+        }])
+
+    def test_get_configurations(self):
+        configuration = self.force_configuration()
+        self.set_permissions("osquery.view_configuration")
+        response = self.get(reverse('osquery_api:configurations'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [{
+            "id": configuration.pk,
+            "name": configuration.name,
+            'description': "",
+            "inventory": True,
+            "inventory_apps": False,
+            "inventory_interval": 86400,
+            "inventory_ec2": False,
+            "file_categories": [],
+            "automatic_table_constructions": [],
+            "options": {},
+            "created_at": configuration.created_at.isoformat(),
+            "updated_at": configuration.updated_at.isoformat()
+        }])
 
     # get configuration
 
@@ -853,6 +884,14 @@ class APIViewsTestCase(TestCase):
         configuration = self.force_configuration()
         response = self.get(reverse("osquery_api:configuration", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 403)
+
+    def test_get_configuration_not_found(self):
+        self.set_permissions("osquery.view_configuration")
+        response = self.get(reverse("osquery_api:configuration", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
 
     def test_get_configuration(self):
         configuration = self.force_configuration()
@@ -867,6 +906,9 @@ class APIViewsTestCase(TestCase):
              "inventory": True,
              "inventory_apps": False,
              "inventory_interval": 86400,
+             "inventory_ec2": False,
+             "file_categories": [],
+             "automatic_table_constructions": [],
              "options": {},
              "created_at": configuration.created_at.isoformat(),
              "updated_at": configuration.updated_at.isoformat()}
@@ -874,52 +916,297 @@ class APIViewsTestCase(TestCase):
 
     # create configuration
 
-    def test_create_configuration(self):
+    def test_create_configuration_unauthorized(self):
+        response = self.post_json_data(reverse('osquery_api:configurations'), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_configuration_permission_denied(self):
+        response = self.post_json_data(reverse('osquery_api:configurations'), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_configuration_name_conflict(self):
+        configuration = self.force_configuration()
         self.set_permissions("osquery.add_configuration")
-        response = self.post_json_data(reverse('osquery_api:configurations'), {'name': 'Configuration0'})
+        response = self.post_json_data(reverse('osquery_api:configurations'), {'name': configuration.name})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["configuration with this name already exists."]
+        })
+
+    def test_create_configuration_fields_empty(self):
+        self.set_permissions("osquery.add_configuration")
+        response = self.post_json_data(reverse('osquery_api:configurations'), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field is required."]
+        })
+
+    def test_create_configuration_atc_not_found(self):
+        self.set_permissions("osquery.add_configuration")
+        response = self.post_json_data(reverse('osquery_api:configurations'), {
+            'name': 'Configuration0',
+            'automatic_table_constructions': [9999]
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "automatic_table_constructions": ['Invalid pk "9999" - object does not exist.']
+        })
+
+    def test_create_configuration_file_category_not_found(self):
+        self.set_permissions("osquery.add_configuration")
+        response = self.post_json_data(reverse('osquery_api:configurations'), {
+            'name': 'Configuration0',
+            'file_categories': [9999]
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "file_categories": ['Invalid pk "9999" - object does not exist.']
+        })
+
+    def test_create_configuration(self):
+        atc = self.force_atc()
+        file_category = self.force_file_category()
+        self.set_permissions("osquery.add_configuration")
+        data = {
+            'name': 'Configuration0',
+            'description': 'Description0',
+            'inventory': True,
+            'inventory_apps': True,
+            'inventory_interval': 3600,
+            'inventory_ec2': True,
+            'automatic_table_constructions': [atc.pk],
+            'file_categories': [file_category.pk],
+            'options': {
+                'foo': 'bar'
+            }
+        }
+        response = self.post_json_data(reverse('osquery_api:configurations'), data)
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(Configuration.objects.filter(name='Configuration0').count(), 1)
         configuration = Configuration.objects.get(name="Configuration0")
+        self.assertEqual(response.json(), {
+            'id': configuration.pk,
+            'name': 'Configuration0',
+            'description': 'Description0',
+            'inventory': True,
+            'inventory_apps': True,
+            'inventory_interval': 3600,
+            'inventory_ec2': True,
+            'automatic_table_constructions': [atc.pk],
+            'file_categories': [file_category.pk],
+            'options': {
+                'foo': 'bar'
+            },
+            'created_at': configuration.created_at.isoformat(),
+            'updated_at': configuration.updated_at.isoformat()
+        })
         self.assertEqual(configuration.name, 'Configuration0')
+        self.assertEqual(configuration.description, 'Description0')
+        self.assertEqual(configuration.inventory, True)
+        self.assertEqual(configuration.inventory_apps, True)
+        self.assertEqual(configuration.inventory_interval, 3600)
+        self.assertEqual(configuration.inventory_ec2, True)
+        self.assertEqual(configuration.automatic_table_constructions.all()[0], atc)
+        self.assertEqual(configuration.file_categories.all()[0], file_category)
+        self.assertEqual(configuration.options, {'foo': 'bar'})
 
     # update configuration
 
-    def test_update_configuration(self):
-        config = self.force_configuration()
-        new_name = get_random_string(12)
-        data = {'name': new_name}
-        self.set_permissions("osquery.change_configuration")
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(config.pk,)), data)
-        self.assertEqual(response.status_code, 200)
-        config.refresh_from_db()
-        self.assertEqual(config.name, new_name)
+    def test_update_configuration_unauthorized(self):
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(1,)), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
 
-    def test_update_configuration_name_exists(self):
-        config0 = self.force_configuration()
-        config1 = self.force_configuration()
-        data = {'name': config0.name}
+    def test_update_configuration_permission_denied(self):
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(1,)), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_configuration_name_conflict(self):
+        configuration = self.force_configuration()
+        configuration2 = self.force_configuration()
+        data = {'name': configuration.name}
         self.set_permissions("osquery.change_configuration")
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(config1.pk,)), data)
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration2.pk,)), data)
         self.assertEqual(response.status_code, 400)
-        response_j = response.json()
-        self.assertEqual(response_j["name"][0], "configuration with this name already exists.")
+        self.assertEqual(response.json(), {
+            "name": ["configuration with this name already exists."]
+        })
+
+    def test_update_configuration_fields_empty(self):
+        configuration = self.force_configuration()
+        self.set_permissions("osquery.change_configuration")
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.pk,)), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field is required."]
+        })
+
+    def test_update_configuration_not_found(self):
+        self.set_permissions("osquery.change_configuration")
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(9999,)), {})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    def test_update_configuration_atc_not_found(self):
+        configuration = self.force_configuration()
+        self.set_permissions("osquery.change_configuration")
+        data = {
+            'name': configuration.name,
+            'automatic_table_constructions': [9999]
+        }
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "automatic_table_constructions": ['Invalid pk "9999" - object does not exist.']
+        })
+
+    def test_update_configuration_file_category_not_found(self):
+        configuration = self.force_configuration()
+        self.set_permissions("osquery.change_configuration")
+        data = {
+            'name': configuration.name,
+            'file_categories': [9999]
+        }
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "file_categories": ['Invalid pk "9999" - object does not exist.']
+        })
+
+    def test_update_configuration_change_atc(self):
+        configuration, atc = self.force_configuration(force_atc=True)
+        atc2 = self.force_atc()
+        self.set_permissions("osquery.change_configuration")
+        data = {
+            'name': configuration.name,
+            'automatic_table_constructions': [atc2.pk]
+        }
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
+        self.assertEqual(response.status_code, 200)
+        configuration.refresh_from_db()
+        self.assertEqual(response.json(), {
+            'id': configuration.pk,
+            'name': configuration.name,
+            'description': '',
+            'inventory': True,
+            'inventory_apps': False,
+            'inventory_interval': 86400,
+            'inventory_ec2': False,
+            'automatic_table_constructions': [atc2.pk],
+            'file_categories': [],
+            'options': {},
+            'created_at': configuration.created_at.isoformat(),
+            'updated_at': configuration.updated_at.isoformat()
+        })
+        self.assertEqual(configuration.automatic_table_constructions.all()[0], atc2)
+
+    def test_update_configuration_change_file_category(self):
+        configuration, file_category = self.force_configuration(force_file_categories=True)
+        file_category2 = self.force_file_category()
+        self.set_permissions("osquery.change_configuration")
+        data = {
+            'name': configuration.name,
+            'file_categories': [file_category2.pk]
+        }
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
+        self.assertEqual(response.status_code, 200)
+        configuration.refresh_from_db()
+        self.assertEqual(response.json(), {
+            "id": configuration.pk,
+            "name": configuration.name,
+            "description": "",
+            "inventory": True,
+            "inventory_apps": False,
+            "inventory_interval": 86400,
+            "inventory_ec2": False,
+            "automatic_table_constructions": [],
+            "file_categories": [file_category2.pk],
+            "options": {},
+            "created_at": configuration.created_at.isoformat(),
+            "updated_at": configuration.updated_at.isoformat()
+        })
+        self.assertEqual(configuration.file_categories.all()[0], file_category2)
+
+    def test_update_configuration(self):
+        configuration = self.force_configuration()
+        new_name = get_random_string(12)
+        atc = self.force_atc()
+        atc2 = self.force_atc()
+        file_category = self.force_file_category()
+        file_category2 = self.force_file_category()
+        data = {
+            'name': new_name,
+            'description': 'Description1',
+            'inventory': True,
+            'inventory_apps': True,
+            'inventory_interval': 300,
+            'inventory_ec2': True,
+            'automatic_table_constructions': [atc.pk, atc2.pk],
+            'file_categories': [file_category.pk, file_category2.pk],
+            'options': {
+                'foo': 'bar'
+            }
+        }
+        self.set_permissions("osquery.change_configuration")
+        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        configuration.refresh_from_db()
+        self.assertEqual(response.json(), {
+            "id": configuration.pk,
+            "name": new_name,
+            "description": "Description1",
+            "inventory": True,
+            "inventory_apps": True,
+            "inventory_interval": 300,
+            "inventory_ec2": True,
+            "automatic_table_constructions": [atc.pk, atc2.pk],
+            "file_categories": [file_category.pk, file_category2.pk],
+            "options": {"foo": "bar"},
+            "created_at": configuration.created_at.isoformat(),
+            "updated_at": configuration.updated_at.isoformat()
+        })
+        self.assertEqual(configuration.name, new_name)
+        self.assertEqual(configuration.description, "Description1")
+        self.assertEqual(configuration.inventory, True)
+        self.assertEqual(configuration.inventory_apps, True)
+        self.assertEqual(configuration.inventory_interval, 300)
+        self.assertEqual(configuration.inventory_ec2, True)
+        self.assertEqual(configuration.automatic_table_constructions.count(), 2)
+        self.assertEqual(configuration.file_categories.count(), 2)
+        self.assertEqual(configuration.options, {"foo": "bar"})
 
     # delete configuration
 
-    def test_delete_configuration(self):
-        config = self.force_configuration()
-        self.set_permissions("osquery.delete_configuration")
-        response = self.delete(reverse('osquery_api:configuration', args=(config.pk,)))
-        self.assertEqual(response.status_code, 204)
+    def test_delete_configuration_unauthorized(self):
+        response = self.delete(reverse('osquery_api:configuration', args=[1]), include_token=False)
+        self.assertEqual(response.status_code, 401)
 
-    def test_delete_configuration_error(self):
-        config = self.force_configuration()
-        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
-        Enrollment.objects.create(configuration=config, secret=enrollment_secret)
+    def test_delete_configuration_permission_denied(self):
+        response = self.delete(reverse('osquery_api:configuration', args=[1]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_configuration_not_found(self):
         self.set_permissions("osquery.delete_configuration")
-        response = self.delete(reverse('osquery_api:configuration', args=(config.pk,)))
+        response = self.delete(reverse('osquery_api:configuration', args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    def test_delete_configuration_cannot_delete(self):
+        configuration = self.force_configuration()
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
+        Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
+        self.set_permissions("osquery.delete_configuration")
+        response = self.delete(reverse('osquery_api:configuration', args=(configuration.pk,)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ["This configuration cannot be deleted"])
+
+    def test_delete_configuration(self):
+        configuration = self.force_configuration()
+        self.set_permissions("osquery.delete_configuration")
+        response = self.delete(reverse('osquery_api:configuration', args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 204)
 
     # list enrollments
 

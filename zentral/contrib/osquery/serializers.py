@@ -18,10 +18,7 @@ class AutomaticTableConstructionSerializer(serializers.ModelSerializer):
 class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
-        fields = ("id", "name", "description",
-                  "inventory", "inventory_apps", "inventory_interval",
-                  "options",
-                  "created_at", "updated_at")
+        fields = '__all__'
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
