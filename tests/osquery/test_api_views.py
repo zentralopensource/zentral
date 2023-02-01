@@ -191,6 +191,19 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:atcs"))
         self.assertEqual(response.status_code, 403)
 
+    def test_get_atcs_filter_by_name_not_found(self):
+        self.set_permissions("osquery.view_automatictableconstruction")
+        response = self.get(reverse('osquery_api:atcs'), data={"name": get_random_string(24)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_atcs_filter_by_configuration_id_not_found(self):
+        self.set_permissions("osquery.view_automatictableconstruction")
+        response = self.get(reverse('osquery_api:atcs'), data={"configuration_id": 99999})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"configuration_id": ["Select a valid choice. That choice is not one of the "
+                                                                "available choices."]})
+
     def test_get_atcs_filter_by_name(self):
         for i in range(3):
             self.force_atc()
@@ -232,19 +245,6 @@ class APIViewsTestCase(TestCase):
             "path": "/home/yolo",
             "name": atc.name
         }])
-
-    def test_get_atcs_filter_by_name_not_found(self):
-        self.set_permissions("osquery.view_automatictableconstruction")
-        response = self.get(reverse('osquery_api:atcs'), data={"name": get_random_string(24)})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
-
-    def test_get_atcs_filter_by_configuration_id_not_found(self):
-        self.set_permissions("osquery.view_automatictableconstruction")
-        response = self.get(reverse('osquery_api:atcs'), data={"configuration_id": 99999})
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {"configuration_id": ["Select a valid choice. That choice is not one of the "
-                                                                "available choices."]})
 
     def test_get_atcs(self):
         atc = self.force_atc()
@@ -508,6 +508,20 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:file_categories"))
         self.assertEqual(response.status_code, 403)
 
+    def test_get_file_categories_filter_by_name_not_found(self):
+        self.set_permissions("osquery.view_filecategory")
+        response = self.get(reverse('osquery_api:file_categories'), data={"name": get_random_string(35)})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(response.json(), [])
+
+    def test_get_file_categories_filter_by_configuration_id_not_found(self):
+        self.set_permissions("osquery.view_filecategory")
+        response = self.get(reverse('osquery_api:file_categories'), data={"configuration_id": 9999})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"configuration_id": ["Select a valid choice. "
+                                                                "That choice is not one of the available choices."]})
+
     def test_get_file_categories_filter_by_name(self):
         for i in range(3):
             self.force_file_category()
@@ -548,20 +562,6 @@ class APIViewsTestCase(TestCase):
             "updated_at": file_category.updated_at.isoformat(),
             "created_at": file_category.created_at.isoformat(),
         }])
-
-    def test_get_file_categories_filter_by_name_not_found(self):
-        self.set_permissions("osquery.view_filecategory")
-        response = self.get(reverse('osquery_api:file_categories'), data={"name": get_random_string(35)})
-        self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(response.json(), list)
-        self.assertEqual(response.json(), [])
-
-    def test_get_file_categories_filter_by_configuration_id_not_found(self):
-        self.set_permissions("osquery.view_filecategory")
-        response = self.get(reverse('osquery_api:file_categories'), data={"configuration_id": 9999})
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {"configuration_id": ["Select a valid choice. "
-                                                                "That choice is not one of the available choices."]})
 
     def test_get_file_categories(self):
         file_category = self.force_file_category()
