@@ -1569,7 +1569,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {"configuration_id": ["Select a valid choice. That choice is not one of the available choices."]}
+            {"configuration_id": ["no pack found for this configuration"]}
         )
 
     def test_get_packs_filter_by_name(self):

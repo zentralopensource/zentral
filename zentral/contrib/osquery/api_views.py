@@ -433,6 +433,13 @@ class PackList(generics.ListCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = PackFilter
 
+    def get(self, request, *args, **kwargs):
+        configuration_id = request.GET.get("configuration_id")
+        if configuration_id:
+            if not Configuration.objects.filter(configurationpack__configuration=configuration_id).exists():
+                raise ValidationError({"configuration_id": ["no pack found for this configuration"]})
+        return super().get(request, *args, **kwargs)
+
 
 class PackDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Pack.objects.all()
