@@ -1583,7 +1583,6 @@ class APIViewsTestCase(TestCase):
             "id": pack.pk,
             "name": pack.name,
             "slug": slugify(pack.name),
-            "slug": slugify(pack.name),
             "description": "",
             "discovery_queries": [],
             "shard": None,
