@@ -45,6 +45,7 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * Required permission: `osquery.view_pack`
 * Optional filter parameter:
 	* `name`: Name of the pack.
+  * `configuration_id`: primary key of the configuration.
 
 Examples:
 

@@ -420,12 +420,18 @@ class ExportDistributedQueryResults(APIView):
 
 # Packs
 
+class PackFilter(filters.FilterSet):
+    configuration_id = filters.ModelChoiceFilter(field_name="configurationpack__configuration",
+                                                 queryset=Configuration.objects.all())
+    name = filters.CharFilter()
+
+
 class PackList(generics.ListCreateAPIView):
     queryset = Pack.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = PackSerializer
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_fields = ('name',)
+    filterset_class = PackFilter
 
 
 class PackDetail(generics.RetrieveUpdateDestroyAPIView):

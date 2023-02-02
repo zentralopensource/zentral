@@ -15,7 +15,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit,
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query, \
-    AutomaticTableConstruction, FileCategory
+    AutomaticTableConstruction, FileCategory, ConfigurationPack
 from zentral.core.compliance_checks.models import ComplianceCheck
 
 
@@ -35,7 +35,7 @@ class APIViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
-    def force_configuration(self, force_atc=False, force_file_categories=False):
+    def force_configuration(self, force_atc=False, force_file_categories=False, force_pack=False):
         if force_atc:
             atc = self.force_atc()
             conf = Configuration.objects.create(name=get_random_string(12))
@@ -46,6 +46,14 @@ class APIViewsTestCase(TestCase):
             conf = Configuration.objects.create(name=get_random_string(12))
             conf.file_categories.set([file_category])
             return conf, file_category
+        if force_pack:
+            pack = self.force_pack()
+            conf = Configuration.objects.create(name=get_random_string(12))
+            ConfigurationPack.objects.create(
+                pack=pack,
+                configuration=conf
+            )
+            return conf, pack
         return Configuration.objects.create(name=get_random_string(12))
 
     def force_enrollment(self, tag_count=0):
@@ -1555,6 +1563,15 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])
 
+    def test_get_packs_filter_by_configuration_id_not_found(self):
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:packs"), {"configuration_id": 9999})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"configuration_id": ["Select a valid choice. That choice is not one of the available choices."]}
+        )
+
     def test_get_packs_filter_by_name(self):
         for _ in range(3):
             self.force_pack()
@@ -1566,6 +1583,25 @@ class APIViewsTestCase(TestCase):
             "id": pack.pk,
             "name": pack.name,
             "slug": slugify(pack.name),
+            "slug": slugify(pack.name),
+            "description": "",
+            "discovery_queries": [],
+            "shard": None,
+            "event_routing_key": "",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        }])
+
+    def test_get_packs_filter_by_configuration_id(self):
+        for _ in range(3):
+            self.force_configuration(force_pack=True)
+        configuration, pack = self.force_configuration(force_pack=True)
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:packs"), {"configuration_id": configuration.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            "id": pack.pk,
+            "name": pack.name,
             "slug": slugify(pack.name),
             "description": "",
             "discovery_queries": [],
