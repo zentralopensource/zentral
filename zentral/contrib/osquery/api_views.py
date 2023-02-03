@@ -23,7 +23,7 @@ from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 from .powershell_script.builder import OsqueryZentralEnrollPowershellScriptBuilder
 from .serializers import (ConfigurationPackSerializer, ConfigurationSerializer, EnrollmentSerializer,
                           OsqueryPackSerializer, QuerySerializer, AutomaticTableConstructionSerializer,
-                          FileCategorySerializer, PackSerializer)
+                          FileCategorySerializer, PackSerializer, PackQuerySerializer)
 from .tasks import export_distributed_query_results
 
 
@@ -438,6 +438,26 @@ class PackDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Pack.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = PackSerializer
+
+
+# Pack Queries
+
+class PackQueryFilter(filters.FilterSet):
+    pack_id = filters.ModelChoiceFilter(field_name="pack_id", queryset=Pack.objects.all())
+
+
+class PackQueryList(generics.ListCreateAPIView):
+    queryset = PackQuery.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = PackQuerySerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = PackQueryFilter
+
+
+class PackQueryDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = PackQuery.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = PackQuerySerializer
 
 
 # Queries

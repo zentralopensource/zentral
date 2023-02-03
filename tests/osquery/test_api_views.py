@@ -108,25 +108,42 @@ class APIViewsTestCase(TestCase):
         name = get_random_string(12)
         return Pack.objects.create(name=name.lower(), slug=slugify(name))
 
-    def force_query(self, pack_query_mode=None, compliance_check=False):
+    def force_query(self, query_name=None, pack_query_mode=None, compliance_check=False):
+        if query_name:
+            name = query_name
+        else:
+            name = get_random_string(12).lower()
+        slug = slugify(name)
         if compliance_check:
             sql = "select 'OK' as ztl_status;"
         else:
             sql = "SELECT * FROM osquery_schedule;"
-        query = Query.objects.create(name=get_random_string(12), sql=sql)
+        query = Query.objects.create(name=name, sql=sql)
         if pack_query_mode is not None:
             pack = self.force_pack()
             if pack_query_mode == "diff":
                 PackQuery.objects.create(
-                    pack=pack, query=query, interval=60, slug=slugify(query.name), log_removed_actions=False,
+                    pack=pack, query=query, interval=60, slug=slug, log_removed_actions=False,
                     snapshot_mode=False)
             elif pack_query_mode == "snapshot":
                 PackQuery.objects.create(
-                    pack=pack, query=query, interval=60, slug=slugify(query.name), log_removed_actions=False,
+                    pack=pack, query=query, interval=60, slug=slug, log_removed_actions=False,
                     snapshot_mode=True)
         sync_query_compliance_check(query, compliance_check)
         query.refresh_from_db()
         return query
+
+    def force_packquery(self, query_name=None, force_snapshot_mode=False, compliance_check=False):
+        if force_snapshot_mode:
+            pack_query_mode = "snapshot"
+        else:
+            pack_query_mode = "diff"
+
+        return self.force_query(
+            query_name=query_name,
+            pack_query_mode=pack_query_mode,
+            compliance_check=compliance_check
+        ).packquery
 
     def set_permissions(self, *permissions):
         if permissions:
@@ -1825,7 +1842,7 @@ class APIViewsTestCase(TestCase):
             "name": [f"Pack with this slug {pack.slug} already exists"]
         })
 
-    def test_create_slug_not_editable(self):
+    def test_create_pack_slug_not_editable(self):
         self.set_permissions("osquery.add_pack")
         data = {"name": "pack created", "slug": "slug-created"}
         response = self.post_json_data(reverse("osquery_api:packs"), data)
@@ -3040,3 +3057,371 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(ConfigurationPack.objects.count(), 0)
+
+    # get pack query
+
+    def test_get_packquery_unauthorized(self):
+        response = self.get(reverse("osquery_api:pack_query", args=(1,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_packquery_permission_denied(self):
+        response = self.get(reverse("osquery_api:pack_query", args=(1,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_packquery_not_found(self):
+        self.set_permissions("osquery.view_packquery")
+        response = self.get(reverse("osquery_api:pack_query", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    def test_get_packquery(self):
+        self.set_permissions("osquery.view_packquery")
+        pack_query = self.force_packquery()
+        response = self.get(reverse("osquery_api:pack_query", args=(pack_query.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "id": pack_query.pk,
+            "slug": pack_query.slug,
+            "pack": pack_query.pack.pk,
+            "query": pack_query.query.pk,
+            "interval": 60,
+            "log_removed_actions": False,
+            "snapshot_mode": False,
+            "shard": None,
+            "can_be_denylisted": True,
+            "created_at": pack_query.created_at.isoformat(),
+            "updated_at": pack_query.updated_at.isoformat()
+        })
+
+    # update pack query
+
+    def test_update_packquery_unauthorized(self):
+        response = self.put_json_data(reverse("osquery_api:pack_query", args=(1,)), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_packquery_permission_denied(self):
+        response = self.put_json_data(reverse("osquery_api:pack_query", args=(1,)), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_packquery_not_found(self):
+        self.set_permissions("osquery.change_packquery")
+        response = self.put_json_data(reverse("osquery_api:pack_query", args=(9999,)), {})
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_packquery_query_conflict(self):
+        self.set_permissions("osquery.change_packquery")
+        pack_query = self.force_packquery()
+        pack_query2 = self.force_packquery()
+        new_pack = self.force_pack()
+        data = {
+            "pack": new_pack.pk,
+            "query": pack_query2.query.pk,
+            "interval": 120
+        }
+        response = self.put_json_data(reverse("osquery_api:pack_query", args=(pack_query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "query": ["This field must be unique."]
+        })
+
+    def test_update_packquery_slug_exists(self):
+        self.set_permissions("osquery.change_packquery")
+        pack_query = self.force_packquery()
+        pack_query2 = self.force_packquery()
+        query_name = pack_query.query.name.upper()
+        new_query = self.force_query(query_name=query_name)
+        data = {
+            "pack": pack_query.pack.pk,
+            "query": new_query.pk,
+            "interval": 120
+        }
+        response = self.put_json_data(reverse("osquery_api:pack_query", args=(pack_query2.pk,)), data)
+        pack_query2.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "id": pack_query2.pk,
+            "slug": slugify(f"{query_name}-{new_query.pk}"),
+            "pack": pack_query.pack.pk,
+            "query": new_query.pk,
+            "interval": 120,
+            "log_removed_actions": False,
+            "snapshot_mode": False,
+            "shard": None,
+            "can_be_denylisted": True,
+            "created_at": pack_query2.created_at.isoformat(),
+            "updated_at": pack_query2.updated_at.isoformat()
+        })
+        self.assertEqual(pack_query2.slug, slugify(f"{query_name}-{new_query.pk}"))
+        self.assertEqual(pack_query2.query, new_query)
+        self.assertEqual(pack_query2.interval, 120)
+
+    def test_update_packquery_log_removed_actions_snapshot_mode_conflict(self):
+        self.set_permissions("osquery.change_packquery")
+        pack_query = self.force_packquery()
+        data = {
+            "pack": pack_query.pack.pk,
+            "query": pack_query.query.pk,
+            "interval": 120,
+            "log_removed_actions": True,
+            "snapshot_mode": True
+        }
+        response = self.put_json_data(reverse("osquery_api:pack_query", args=(pack_query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "log_removed_actions": ["'log_removed_actions' and 'snapshot_mode' are mutually exclusive"],
+            "snapshot_mode": ["'log_removed_actions' and 'snapshot_mode' are mutually exclusive"]
+        })
+
+    def test_update_packquery_snapshot_mode_compliance_check_conflict(self):
+        self.set_permissions("osquery.change_packquery")
+        pack_query = self.force_packquery(force_snapshot_mode=True, compliance_check=True)
+        data = {
+            "pack": pack_query.pack.pk,
+            "query": pack_query.query.pk,
+            "interval": 120,
+            "snapshot_mode": False
+        }
+        response = self.put_json_data(reverse("osquery_api:pack_query", args=(pack_query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "snapshot_mode": ["A compliance check query can only be scheduled in 'snapshot' mode."]
+        })
+
+    def test_update_packquery_fields_invalid(self):
+        self.set_permissions("osquery.change_packquery")
+        pack_query = self.force_packquery()
+        data = {
+            "pack": 9999,
+            "query": 9999,
+            "interval": 9,
+            "shard": 101
+        }
+        response = self.put_json_data(reverse("osquery_api:pack_query", args=(pack_query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "pack": ['Invalid pk "9999" - object does not exist.'],
+            "query": ['Invalid pk "9999" - object does not exist.'],
+            "interval": ["Ensure this value is greater than or equal to 10."],
+            "shard": ["Ensure this value is less than or equal to 100."]
+        })
+
+    def test_update_packquery(self):
+        self.set_permissions("osquery.change_packquery")
+        pack_query = self.force_packquery()
+        new_pack = self.force_pack()
+        new_query = self.force_query(compliance_check=True)
+        data = {
+            "pack": new_pack.pk,
+            "query": new_query.pk,
+            "interval": 60,
+            "log_removed_actions": False,
+            "snapshot_mode": True,
+            "can_be_denylisted": True,
+            "shard": 10
+        }
+        response = self.put_json_data(reverse("osquery_api:pack_query", args=(pack_query.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        pack_query.refresh_from_db()
+        self.assertEqual(response.json(), {
+            "id": pack_query.pk,
+            "slug": slugify(new_query.name),
+            "pack": new_pack.pk,
+            "query": new_query.pk,
+            "interval": 60,
+            "log_removed_actions": False,
+            "snapshot_mode": True,
+            "shard": 10,
+            "can_be_denylisted": True,
+            "created_at": pack_query.created_at.isoformat(),
+            "updated_at": pack_query.updated_at.isoformat()
+        })
+        self.assertEqual(pack_query.slug, slugify(new_query.name))
+        self.assertEqual(pack_query.pack, new_pack)
+        self.assertEqual(pack_query.query, new_query)
+        self.assertEqual(pack_query.interval, 60)
+        self.assertEqual(pack_query.log_removed_actions, False)
+        self.assertEqual(pack_query.snapshot_mode, True)
+        self.assertEqual(pack_query.shard, 10)
+        self.assertEqual(pack_query.can_be_denylisted, True)
+
+    # create pack query
+
+    def test_create_packquery_unauthorized(self):
+        response = self.post_json_data(reverse("osquery_api:pack_queries"), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_packquery_permission_denied(self):
+        response = self.post_json_data(reverse("osquery_api:pack_queries"), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_packquery_query_conflict(self):
+        self.set_permissions("osquery.add_packquery")
+        pack = self.force_pack()
+        pack_query = self.force_packquery()
+        data = {
+            "pack": pack.pk,
+            "query": pack_query.query.pk,
+            "interval": 60,
+            "log_removed_actions": False,
+            "snapshot_mode": False,
+            "shard": None,
+            "can_be_denylisted": True,
+        }
+        response = self.post_json_data(reverse("osquery_api:pack_queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "query": ['This field must be unique.']
+        })
+
+    def test_create_packquery_slug_exists(self):
+        query_name = "testquery"
+        self.set_permissions("osquery.add_packquery")
+        self.force_packquery(query_name=query_name)
+        query = self.force_query(query_name=query_name.upper())
+        pack = self.force_pack()
+        data = {
+            "pack": pack.pk,
+            "query": query.pk,
+            "interval": 60,
+            "log_removed_actions": False,
+            "snapshot_mode": False,
+            "shard": None,
+            "can_be_denylisted": True,
+        }
+        response = self.post_json_data(reverse("osquery_api:pack_queries"), data)
+        pack_query = PackQuery.objects.get(query=query)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json(), {
+            "id": pack_query.pk,
+            "slug": f"{query_name}-{query.pk}",
+            "pack": pack.pk,
+            "query": query.pk,
+            "interval": 60,
+            "log_removed_actions": False,
+            "snapshot_mode": False,
+            "shard": None,
+            "can_be_denylisted": True,
+            "created_at": pack_query.created_at.isoformat(),
+            "updated_at": pack_query.updated_at.isoformat()
+        })
+        self.assertEqual(pack_query.slug, f"{query_name}-{query.pk}")
+        self.assertEqual(pack_query.pack, pack)
+        self.assertEqual(pack_query.query, query)
+        self.assertEqual(pack_query.interval, 60)
+        self.assertEqual(pack_query.log_removed_actions, False)
+        self.assertEqual(pack_query.snapshot_mode, False)
+        self.assertEqual(pack_query.shard, None)
+        self.assertEqual(pack_query.can_be_denylisted, True)
+
+    def test_create_packquery_log_removed_actions_snapshot_mode_conflict(self):
+        self.set_permissions("osquery.add_packquery")
+        pack = self.force_pack()
+        query = self.force_query()
+        data = {
+            "pack": pack.pk,
+            "query": query.pk,
+            "interval": 60,
+            "log_removed_actions": True,
+            "snapshot_mode": True
+        }
+        response = self.post_json_data(reverse("osquery_api:pack_queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "log_removed_actions": ["'log_removed_actions' and 'snapshot_mode' are mutually exclusive"],
+            "snapshot_mode": ["'log_removed_actions' and 'snapshot_mode' are mutually exclusive"]
+        })
+
+    def test_create_packquery_snapshot_mode_compliance_check_conflict(self):
+        self.set_permissions("osquery.add_packquery")
+        pack = self.force_pack()
+        query = self.force_query(compliance_check=True)
+        data = {
+            "pack": pack.pk,
+            "query": query.pk,
+            "interval": 60,
+            "snapshot_mode": False
+        }
+        response = self.post_json_data(reverse("osquery_api:pack_queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "snapshot_mode": ["A compliance check query can only be scheduled in 'snapshot' mode."]
+        })
+
+    def test_create_packquery_fields_invalid(self):
+        self.set_permissions("osquery.add_packquery")
+        data = {
+            "pack": 9999,
+            "query": 9999,
+            "interval": 9,
+            "shard": 101
+        }
+        response = self.post_json_data(reverse("osquery_api:pack_queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "pack": ['Invalid pk "9999" - object does not exist.'],
+            "query": ['Invalid pk "9999" - object does not exist.'],
+            "interval": ["Ensure this value is greater than or equal to 10."],
+            "shard": ["Ensure this value is less than or equal to 100."]
+        })
+
+    def test_create_packquery(self):
+        self.set_permissions("osquery.add_packquery")
+        pack = self.force_pack()
+        query = self.force_query()
+        data = {
+            "pack": pack.pk,
+            "query": query.pk,
+            "interval": 60,
+            "log_removed_actions": False,
+            "snapshot_mode": False,
+            "shard": 50,
+            "can_be_denylisted": True,
+        }
+        response = self.post_json_data(reverse("osquery_api:pack_queries"), data)
+        self.assertEqual(response.status_code, 201)
+        pack_query = PackQuery.objects.first()
+        self.assertEqual(response.json(), {
+            "id": pack_query.pk,
+            "slug": slugify(query.name),
+            "pack": pack.pk,
+            "query": query.pk,
+            "interval": 60,
+            "log_removed_actions": False,
+            "snapshot_mode": False,
+            "shard": 50,
+            "can_be_denylisted": True,
+            "created_at": pack_query.created_at.isoformat(),
+            "updated_at": pack_query.updated_at.isoformat()
+        })
+        self.assertEqual(pack_query.slug, slugify(query.name))
+        self.assertEqual(pack_query.pack, pack)
+        self.assertEqual(pack_query.query, query)
+        self.assertEqual(pack_query.interval, 60)
+        self.assertEqual(pack_query.log_removed_actions, False)
+        self.assertEqual(pack_query.snapshot_mode, False)
+        self.assertEqual(pack_query.shard, 50)
+        self.assertEqual(pack_query.can_be_denylisted, True)
+
+    # delete pack query
+
+    def test_delete_packquery_unauthorized(self):
+        response = self.delete(reverse("osquery_api:pack_query", args=[1]), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_packquery_permission_denied(self):
+        response = self.delete(reverse("osquery_api:pack_query", args=[1]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_packquery_not_found(self):
+        self.set_permissions("osquery.delete_packquery")
+        response = self.delete(reverse("osquery_api:pack_query", args=[9999]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_packquery(self):
+        self.set_permissions("osquery.delete_packquery")
+        pack_query = self.force_packquery()
+        response = self.delete(reverse("osquery_api:pack_query", args=[pack_query.pk]))
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(PackQuery.objects.count(), 0)

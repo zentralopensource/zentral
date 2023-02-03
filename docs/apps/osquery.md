@@ -1520,3 +1520,208 @@ $ curl -X DELETE \
 ```
 
 Response (204 No Content)
+
+### /api/osquery/packqueries/
+
+#### List all Pack Queries.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_packquery`
+* Optional filter parameter:
+    * `pack_id`: primary key of the pack.
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packqueries/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packqueries/?pack_id=2" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "pack": 2,
+        "query": 1,
+        "slug": "apps2",
+        "interval": 60,
+        "log_removed_actions": true,
+        "snapshot_mode": false,
+        "shard": null,
+        "can_be_denylisted": false,
+        "created_at": "2023-01-18T07:33:49.207023",
+        "updated_at": "2023-01-18T07:33:49.207035"
+    }
+]
+```
+
+#### Add a new Pack Query.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `osquery.add_packquery`
+* Required fields:
+    * `pack`: primary key of an existing pack.
+    * `query`: primary key of an existing query.
+    * `interval`: interval in seconds.
+
+Example:
+
+packquery.json
+
+```json
+{
+	"pack": 3,
+	"query": 3,
+	"interval": 120,
+	"log_removed_actions": true,
+	"snapshot_mode": false,
+	"shard": 50,
+	"can_be_denylisted": false
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packqueries/" \
+  -d @packquery.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "pack": 3,
+    "query": 3,
+    "slug": "test-3673763",
+    "interval": 120,
+    "log_removed_actions": true,
+    "snapshot_mode": false,
+    "shard": 50,
+    "can_be_denylisted": false,
+    "created_at": "2023-02-03T11:54:19.190120",
+    "updated_at": "2023-02-03T11:54:19.190130"
+}
+```
+
+### /api/osquery/packqueries/`<int:pk>`/
+
+#### Get a Pack Query.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_packquery`
+* `<int:pk>`: The primary key of the packquery.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packqueries/2/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "pack": 3,
+    "query": 3,
+    "slug": "test-3673763",
+    "interval": 120,
+    "log_removed_actions": true,
+    "snapshot_mode": false,
+    "shard": 50,
+    "can_be_denylisted": false,
+    "created_at": "2023-02-03T11:54:19.190120",
+    "updated_at": "2023-02-03T11:54:19.190130"
+}
+```
+
+#### Update a Pack Query.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `osquery.update_packquery`
+* `<int:pk>`: The primary key of the packquery.
+* Required fields:
+    * `pack`: primary key of an existing pack.
+    * `query`: primary key of an existing query.
+    * `interval`: interval in seconds.
+
+Example
+
+packquery_update.json
+
+```json
+{
+	"pack": 3,
+	"query": 3,
+	"interval": 60,
+	"log_removed_actions": false,
+	"snapshot_mode": true,
+	"shard": 10,
+	"can_be_denylisted": false
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packqueries/2/" \
+  -d @packquery_update.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "pack": 3,
+    "query": 3,
+    "slug": "test-3673763",
+    "interval": 60,
+    "log_removed_actions": false,
+    "snapshot_mode": true,
+    "shard": 10,
+    "can_be_denylisted": false,
+    "created_at": "2023-02-03T11:54:19.190120",
+    "updated_at": "2023-02-03T11:55:55.902529"
+}
+```
+
+#### Delete a Pack Query.
+
+* method: DELETE
+* Required permission: `osquery.delete_packquery`
+* `<int:pk>`: The primary key of the packquery.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/packqueries/2/" 
+```
+
+Response (204 No Content)
