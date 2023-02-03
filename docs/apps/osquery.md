@@ -97,7 +97,7 @@ pack.json
 {
 	"name": "Example",
 	"description": "description of the example",
-	"discovery_queries": ["select * from example"],
+	"discovery_queries": ["SELECT 1 FROM users WHERE username like 'www%';"],
 	"shard": 50
 }
 ```
@@ -120,7 +120,7 @@ Response:
     "slug": "example",
     "description": "description of the example",
     "discovery_queries": [
-        "select * from example"
+        "SELECT 1 FROM users WHERE username like 'www%';"
     ],
     "shard": 50,
     "event_routing_key": "",
@@ -156,7 +156,7 @@ Response:
     "slug": "example",
     "description": "description of the example",
     "discovery_queries": [
-        "select * from example"
+        "SELECT 1 FROM users WHERE username like 'www%';"
     ],
     "shard": 50,
     "event_routing_key": "",
@@ -182,7 +182,7 @@ pack_update.json
 {
 	"name": "Example Updated",
 	"description": "description of the example updated",
-	"discovery_queries": ["select * from example"],
+	"discovery_queries": ["SELECT 1 FROM users WHERE username like 'www%';"],
 	"shard": 30
 }
 ```
@@ -205,7 +205,7 @@ Response:
     "slug": "example-updated",
     "description": "description of the example updated",
     "discovery_queries": [
-        "select * from example"
+        "SELECT 1 FROM users WHERE username like 'www%';"
     ],
     "shard": 30,
     "event_routing_key": "",
