@@ -14,8 +14,8 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
-from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query, \
-    AutomaticTableConstruction, FileCategory, ConfigurationPack
+from zentral.contrib.osquery.models import (Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query,
+                                            AutomaticTableConstruction, FileCategory, ConfigurationPack)
 from zentral.core.compliance_checks.models import ComplianceCheck
 
 

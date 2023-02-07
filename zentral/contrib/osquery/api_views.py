@@ -16,14 +16,14 @@ from rest_framework_yaml.parsers import YAMLParser
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .compliance_checks import sync_query_compliance_check
 from .events import post_osquery_pack_update_events
-from .models import Configuration, Enrollment, Pack, PackQuery, Query, AutomaticTableConstruction, FileCategory, \
-    ConfigurationPack
+from .models import (Configuration, Enrollment, Pack, PackQuery, Query, AutomaticTableConstruction, FileCategory,
+                     ConfigurationPack)
 from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 from .powershell_script.builder import OsqueryZentralEnrollPowershellScriptBuilder
-from .serializers import ConfigurationPackSerializer, ConfigurationSerializer, EnrollmentSerializer, \
-    OsqueryPackSerializer, QuerySerializer, AutomaticTableConstructionSerializer, \
-    FileCategorySerializer, PackSerializer
+from .serializers import (ConfigurationPackSerializer, ConfigurationSerializer, EnrollmentSerializer,
+                          OsqueryPackSerializer, QuerySerializer, AutomaticTableConstructionSerializer,
+                          FileCategorySerializer, PackSerializer)
 from .tasks import export_distributed_query_results
 
 

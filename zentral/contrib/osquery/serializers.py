@@ -6,8 +6,8 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .compliance_checks import sync_query_compliance_check
-from .models import Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction, FileCategory, \
-    ConfigurationPack
+from .models import (Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction, FileCategory,
+                     ConfigurationPack)
 
 
 class AutomaticTableConstructionSerializer(serializers.ModelSerializer):
