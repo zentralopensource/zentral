@@ -2401,3 +2401,25 @@ class APIViewsTestCase(TestCase):
         query = self.force_query()
         response = self.delete(reverse("osquery_api:query", args=(query.pk,)))
         self.assertEqual(response.status_code, 403)
+
+    # List ConfigurationPacks
+
+    def test_list_configurationpacks_unauthorized(self):
+        response = self.get(reverse("osquery_api:configuration_packs"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_configurationpacks_permission_denied(self):
+        response = self.get(reverse("osquery_api:configuration_packs"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_list_configurationpacks_configuration_id_not_found(self):
+        self.set_permissions("osquery.view_configurationpack")
+        response = self.get(reverse("osquery_api:configuration_packs"), {"configuration_id": 9999})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_list_configurationpacks_pack_id_not_found(self):
+        self.set_permissions("osquery.view_configurationpack")
+        response = self.get(reverse("osquery_api:configuration_packs"), {"pack_id": 9999})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
