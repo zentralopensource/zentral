@@ -1336,3 +1336,187 @@ $ curl -X DELETE \
 ```
 
 Response (204 No Content)
+
+### /api/osquery/configurationpacks/
+
+#### List all Configuration Packs.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_configurationpack`
+* Optional filter parameter:
+    * `pack_id`: primary key of the pack.
+    * `configuration_id`: primary key of the configuration.
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/configurationpacks/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/configurationpacks/?pack_id=2" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "configuration": 2,
+        "pack": 2,
+        "tags": [
+            1
+        ]
+    }
+]
+```
+
+#### Add a new Configuration Pack.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `osquery.add_configurationpack`
+* Required fields:
+    * `pack`: primary key of an existing pack.
+    * `configuration`: primary key of an existing configuration.
+* Optional fields:
+    * `tags`: list of primary keys of existing tags.
+
+Example:
+
+configurationpack.json
+
+```json
+{
+	"configuration": 1,
+	"pack": 2,
+	"tags": [
+		2
+	]
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/configurationpacks/" \
+  -d @configurationpack.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "configuration": 1,
+    "pack": 2,
+    "tags": [
+        2
+    ]
+}
+```
+
+### /api/osquery/configurationpacks/`<int:pk>`/
+
+#### Get a Configuration Pack.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_configurationpack`
+* `<int:pk>`: The primary key of the configuration pack.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/configurationpacks/2/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "configuration": 1,
+    "pack": 2,
+    "tags": [
+        2
+    ]
+}
+```
+
+#### Update a Configuration Pack.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `osquery.update_configurationpack`
+* `<int:pk>`: The primary key of the configurationpack.
+* Required fields:
+    * `pack`: primary key of an existing pack.
+    * `configuration`: primary key of an existing configuration.
+* Optional fields:
+    * `tags`: list of primary keys of existing tags.
+
+Example
+
+configurationpack_update.json
+
+```json
+{
+	"configuration": 1,
+	"pack": 1,
+	"tags": [
+		1
+	]
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/configurationpacks/2/" \
+  -d @configurationpack_update.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "configuration": 1,
+    "pack": 1,
+    "tags": [
+        1
+    ]
+}
+```
+
+#### Delete a Configuration Pack.
+
+* method: DELETE
+* Required permission: `osquery.delete_configurationpack`
+* `<int:pk>`: The primary key of the configuration pack.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/configurationpacks/2/" 
+```
+
+Response (204 No Content)
