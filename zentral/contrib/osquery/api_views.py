@@ -456,6 +456,8 @@ class QueryDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = QuerySerializer
 
 
+# Configuration Packs
+
 class ConfigurationPackFilter(filters.FilterSet):
     pack_id = filters.NumberFilter(field_name="pack_id")
     configuration_id = filters.NumberFilter(field_name="configuration_id")
