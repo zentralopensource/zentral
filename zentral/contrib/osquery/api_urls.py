@@ -5,7 +5,7 @@ from .api_views import (ConfigurationDetail, ConfigurationList,
                         ExportDistributedQueryResults,
                         PackView, QueryList, QueryDetail, AutomaticTableConstructionList,
                         AutomaticTableConstructionDetail, FileCategoryList, FileCategoryDetail, ConfigurationPackList,
-                        ConfigurationPackDetail)
+                        ConfigurationPackDetail, PackList, PackDetail)
 
 
 app_name = "osquery_api"
