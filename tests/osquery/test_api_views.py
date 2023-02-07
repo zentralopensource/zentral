@@ -1569,8 +1569,15 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {"configuration_id": ["no pack found for this configuration"]}
+            {"configuration_id": ["Select a valid choice. That choice is not one of the available choices."]}
         )
+
+    def test_get_packs_filter_by_configuration_id_no_pack(self):
+        self.set_permissions("osquery.view_pack")
+        configuration = self.force_configuration()
+        response = self.get(reverse("osquery_api:packs"), {"configuration_id": configuration.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
 
     def test_get_packs_filter_by_name(self):
         for _ in range(3):
