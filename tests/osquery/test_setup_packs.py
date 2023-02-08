@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from accounts.models import User
+from django.utils.text import slugify
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
 
@@ -41,15 +42,20 @@ class OsquerySetupPacksViewsTestCase(TestCase):
     def _force_pack(self):
         return Pack.objects.create(name=get_random_string(12))
 
-    def _force_query(self, force_pack=False, force_compliance_check=False):
+    def _force_query(self, query_name=None, force_pack=False, force_compliance_check=False):
+        if query_name:
+            name = query_name
+        else:
+            name = get_random_string(12)
         if force_compliance_check:
             sql = "select 'OK' as ztl_status;"
         else:
             sql = "select 1 from processes;"
-        query = Query.objects.create(name=get_random_string(12), sql=sql)
+        query = Query.objects.create(name=name, sql=sql)
+        slug = slugify(query.name)
         if force_pack:
             pack = self._force_pack()
-            PackQuery.objects.create(pack=pack, query=query, interval=12983,
+            PackQuery.objects.create(pack=pack, query=query, interval=12983, slug=slug,
                                      log_removed_actions=False, snapshot_mode=force_compliance_check)
         sync_query_compliance_check(query, force_compliance_check)
         return query
@@ -242,6 +248,22 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         self.assertContains(response, query.name)
         self.assertContains(response, "3456s")
         self.assertNotContains(response, "Compliance check")
+
+    def test_add_pack_query_with_slug_conflict(self):
+        query_name = get_random_string(16)
+        pq = self._force_query(query_name=query_name.lower(), force_pack=True).packquery
+        slug = pq.slug
+        pack = pq.pack
+        query = self._force_query(query_name=query_name.upper())
+        self._login("osquery.add_packquery", "osquery.view_pack", "osquery.view_packquery")
+        response = self.client.post(reverse("osquery:add_pack_query", args=(pack.pk,)),
+                                    {"query": query.pk, "interval": 3456}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/pack_detail.html")
+        self.assertEqual(response.context["object"], pack)
+        self.assertContains(response, query.name)
+        pack_query = PackQuery.objects.get(pack=pack, query=query)
+        self.assertEqual(pack_query.slug, f"{slug}-{query.pk}")
 
     def test_add_pack_query_with_compliance_check_error(self):
         pack = self._force_pack()
