@@ -230,14 +230,6 @@ class ConfigurationPackSerializer(serializers.ModelSerializer):
         model = ConfigurationPack
         fields = "__all__"
 
-    def validate_configuration(self, value):
-        cp_qs = ConfigurationPack.objects.all()
-        if self.instance:
-            cp_qs = cp_qs.exclude(id=self.instance.pk)
-        if cp_qs.filter(configuration=value).exists():
-            raise serializers.ValidationError(["ConfigurationPack with this configuration already exists."])
-        return value
-
 
 class PackSerializer(serializers.ModelSerializer):
     class Meta:

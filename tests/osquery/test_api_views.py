@@ -2885,18 +2885,18 @@ class APIViewsTestCase(TestCase):
             "pack": ["This field is required."]
         })
 
-    def test_update_configurationpack_configuration_id_conflict(self):
+    def test_update_configurationpack_conflict(self):
         self.set_permissions("osquery.change_configurationpack")
         configuration_pack = self.force_configuration_pack()
         configuration_pack2 = self.force_configuration_pack()
         data = {
             "configuration": configuration_pack2.configuration.pk,
-            "pack": configuration_pack.pack.pk
+            "pack": configuration_pack2.pack.pk
         }
         response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
-            "configuration": ["ConfigurationPack with this configuration already exists."]
+            "non_field_errors": ["The fields configuration, pack must make a unique set."]
         })
 
     def test_update_configurationpack(self):
@@ -2942,19 +2942,44 @@ class APIViewsTestCase(TestCase):
             "pack": ["This field is required."]
         })
 
-    def test_create_configurationpack_configuration_id_conflict(self):
+    def test_create_configurationpack_conflict(self):
         self.set_permissions("osquery.add_configurationpack")
         configuration_pack = self.force_configuration_pack(force_tags=True)
-        pack = self.force_pack()
         data = {
             "configuration": configuration_pack.configuration.pk,
-            "pack": pack.pk,
+            "pack": configuration_pack.pack.pk,
         }
         response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
-            "configuration": ["ConfigurationPack with this configuration already exists."]
+            "non_field_errors": ["The fields configuration, pack must make a unique set."]
         })
+
+    def test_create_configurationpack_configuration_with_multiple_packs(self):
+        self.set_permissions("osquery.add_configurationpack")
+        configuration = self.force_configuration()
+        packs = [self.force_pack().pk for i in range(0, 3)]
+        for pack in packs:
+            data = {
+                "configuration": configuration.pk,
+                "pack": pack
+            }
+            response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
+            self.assertEqual(response.status_code, 201)
+            configuration_pack = ConfigurationPack.objects.filter(
+                configuration_id=configuration.pk,
+                pack_id=pack
+            ).first()
+            self.assertEqual(response.json(), {
+                "id": configuration_pack.pk,
+                "configuration": configuration.pk,
+                "tags": [],
+                "pack": pack
+            })
+            self.assertEqual(configuration_pack.pack.pk, pack)
+            self.assertEqual(configuration_pack.configuration.pk, configuration.pk)
+        result = ConfigurationPack.objects.filter(configuration_id=configuration.pk).count()
+        self.assertEqual(result, 3)
 
     def test_create_configurationpack_with_pack_id_used_in_another_configuration_pack(self):
         self.set_permissions("osquery.add_configurationpack")
