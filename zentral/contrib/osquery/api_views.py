@@ -459,8 +459,9 @@ class QueryDetail(generics.RetrieveUpdateDestroyAPIView):
 # Configuration Packs
 
 class ConfigurationPackFilter(filters.FilterSet):
-    pack_id = filters.NumberFilter(field_name="pack_id")
-    configuration_id = filters.NumberFilter(field_name="configuration_id")
+    pack_id = filters.ModelChoiceFilter(field_name="pack_id", queryset=Pack.objects.all())
+    configuration_id = filters.ModelChoiceFilter(field_name="configuration_id",
+                                                 queryset=Configuration.objects.all())
 
 
 class ConfigurationPackList(generics.ListCreateAPIView):
