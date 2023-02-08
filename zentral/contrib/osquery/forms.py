@@ -259,9 +259,13 @@ class PackQueryForm(forms.ModelForm):
         self.instance.pack = self.pack
         query = self.cleaned_data.get("query")
         if query:
-            self.instance.slug = slugify(query.name)
+            slug = slugify(query.name)
+            if PackQuery.objects.filter(slug=slug).exists():
+                slug = f"{slug}-{query.id}"
+            self.instance.slug = slug
             if query.compliance_check and not self.cleaned_data.get("snapshot_mode"):
                 self.add_error("snapshot_mode", "A compliance check query can only be scheduled in 'snapshot' mode.")
+
 
 
 # Query
