@@ -6,7 +6,8 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .compliance_checks import sync_query_compliance_check
-from .models import Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction, FileCategory
+from .models import (Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction, FileCategory,
+                     ConfigurationPack)
 
 
 class AutomaticTableConstructionSerializer(serializers.ModelSerializer):
@@ -220,3 +221,29 @@ class QuerySerializer(serializers.ModelSerializer):
         if compliance_check_deleted:
             query.refresh_from_db()
         return query
+
+
+class ConfigurationPackSerializer(serializers.ModelSerializer):
+    configuration = serializers.PrimaryKeyRelatedField(queryset=Configuration.objects.all())
+
+    class Meta:
+        model = ConfigurationPack
+        fields = "__all__"
+
+
+class PackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Pack
+        fields = "__all__"
+
+    def validate(self, data):
+        name = data.get("name")
+        slug = slugify(name)
+        pack_qs = Pack.objects.all()
+        if self.instance:
+            pack_qs = pack_qs.exclude(id=self.instance.pk)
+        if pack_qs.filter(slug=slug).exists():
+            raise serializers.ValidationError({"name": f"Pack with this slug {slug} already exists"})
+        else:
+            data["slug"] = slug
+        return data

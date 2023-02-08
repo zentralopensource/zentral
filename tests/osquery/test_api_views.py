@@ -14,8 +14,8 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
-from zentral.contrib.osquery.models import Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query, \
-    AutomaticTableConstruction, FileCategory
+from zentral.contrib.osquery.models import (Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query,
+                                            AutomaticTableConstruction, FileCategory, ConfigurationPack)
 from zentral.core.compliance_checks.models import ComplianceCheck
 
 
@@ -35,7 +35,7 @@ class APIViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
-    def force_configuration(self, force_atc=False, force_file_categories=False):
+    def force_configuration(self, force_atc=False, force_file_categories=False, force_pack=False):
         if force_atc:
             atc = self.force_atc()
             conf = Configuration.objects.create(name=get_random_string(12))
@@ -46,7 +46,25 @@ class APIViewsTestCase(TestCase):
             conf = Configuration.objects.create(name=get_random_string(12))
             conf.file_categories.set([file_category])
             return conf, file_category
+        if force_pack:
+            pack = self.force_pack()
+            conf = Configuration.objects.create(name=get_random_string(12))
+            conf_pack = ConfigurationPack.objects.create(
+                pack=pack,
+                configuration=conf
+            )
+            return conf, pack, conf_pack
         return Configuration.objects.create(name=get_random_string(12))
+
+    def force_tags(self, count=1):
+        return [Tag.objects.create(name=get_random_string(12)) for _ in range(count)]
+
+    def force_configuration_pack(self, force_tags=False):
+        _, _, configuration_pack = self.force_configuration(force_pack=True)
+        if force_tags:
+            tag = self.force_tags(1)
+            configuration_pack.tags.set(tag)
+        return configuration_pack
 
     def force_enrollment(self, tag_count=0):
         configuration = self.force_configuration()
@@ -88,7 +106,7 @@ class APIViewsTestCase(TestCase):
 
     def force_pack(self):
         name = get_random_string(12)
-        return Pack.objects.create(name=name, slug=slugify(name))
+        return Pack.objects.create(name=name.lower(), slug=slugify(name))
 
     def force_query(self, pack_query_mode=None, compliance_check=False):
         if compliance_check:
@@ -205,7 +223,7 @@ class APIViewsTestCase(TestCase):
                                                                 "available choices."]})
 
     def test_get_atcs_filter_by_name(self):
-        for i in range(3):
+        for _ in range(3):
             self.force_atc()
         atc = self.force_atc()
         self.set_permissions("osquery.view_automatictableconstruction")
@@ -226,7 +244,7 @@ class APIViewsTestCase(TestCase):
         }])
 
     def test_get_atcs_filter_by_configuration_id(self):
-        for i in range(3):
+        for _ in range(3):
             self.force_configuration(force_atc=True)
         configuration, atc = self.force_configuration(force_atc=True)
         self.set_permissions("osquery.view_automatictableconstruction")
@@ -312,8 +330,8 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_update_atc_name_conflict(self):
-        configuration, atc = self.force_configuration(force_atc=True)
-        configuration2, atc2 = self.force_configuration(force_atc=True)
+        _, atc = self.force_configuration(force_atc=True)
+        _, atc2 = self.force_configuration(force_atc=True)
         self.set_permissions("osquery.change_automatictableconstruction")
         data = {
             "name": atc.name,
@@ -512,7 +530,6 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("osquery.view_filecategory")
         response = self.get(reverse('osquery_api:file_categories'), data={"name": get_random_string(35)})
         self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(response.json(), list)
         self.assertEqual(response.json(), [])
 
     def test_get_file_categories_filter_by_configuration_id_not_found(self):
@@ -523,7 +540,7 @@ class APIViewsTestCase(TestCase):
                                                                 "That choice is not one of the available choices."]})
 
     def test_get_file_categories_filter_by_name(self):
-        for i in range(3):
+        for _ in range(3):
             self.force_file_category()
         file_category = self.force_file_category()
         self.set_permissions("osquery.view_filecategory")
@@ -543,7 +560,7 @@ class APIViewsTestCase(TestCase):
         }])
 
     def test_get_file_categories_filter_by_configuration_id(self):
-        for i in range(3):
+        for _ in range(3):
             self.force_configuration(force_file_categories=True)
         configuration, file_category = self.force_configuration(force_file_categories=True)
         self.set_permissions("osquery.view_filecategory")
@@ -737,7 +754,7 @@ class APIViewsTestCase(TestCase):
         response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
-            "name": [f"file category with this name already exists."]
+            "name": ["file category with this name already exists."]
         })
 
     def test_create_file_category_fields_empty(self):
@@ -832,7 +849,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json(), [])
 
     def test_get_configurations_filter_by_name(self):
-        for i in range(3):
+        for _ in range(3):
             self.force_configuration()
         configuration = self.force_configuration()
         self.set_permissions("osquery.view_configuration")
@@ -1074,12 +1091,12 @@ class APIViewsTestCase(TestCase):
         })
 
     def test_update_configuration_change_atc(self):
-        configuration, atc = self.force_configuration(force_atc=True)
-        atc2 = self.force_atc()
+        configuration, _ = self.force_configuration(force_atc=True)
+        atc = self.force_atc()
         self.set_permissions("osquery.change_configuration")
         data = {
             'name': configuration.name,
-            'automatic_table_constructions': [atc2.pk]
+            'automatic_table_constructions': [atc.pk]
         }
         response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
         self.assertEqual(response.status_code, 200)
@@ -1092,21 +1109,21 @@ class APIViewsTestCase(TestCase):
             'inventory_apps': False,
             'inventory_interval': 86400,
             'inventory_ec2': False,
-            'automatic_table_constructions': [atc2.pk],
+            'automatic_table_constructions': [atc.pk],
             'file_categories': [],
             'options': {},
             'created_at': configuration.created_at.isoformat(),
             'updated_at': configuration.updated_at.isoformat()
         })
-        self.assertEqual(configuration.automatic_table_constructions.all()[0], atc2)
+        self.assertEqual(configuration.automatic_table_constructions.all()[0], atc)
 
     def test_update_configuration_change_file_category(self):
-        configuration, file_category = self.force_configuration(force_file_categories=True)
-        file_category2 = self.force_file_category()
+        configuration, _ = self.force_configuration(force_file_categories=True)
+        file_category = self.force_file_category()
         self.set_permissions("osquery.change_configuration")
         data = {
             'name': configuration.name,
-            'file_categories': [file_category2.pk]
+            'file_categories': [file_category.pk]
         }
         response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
         self.assertEqual(response.status_code, 200)
@@ -1120,12 +1137,12 @@ class APIViewsTestCase(TestCase):
             "inventory_interval": 86400,
             "inventory_ec2": False,
             "automatic_table_constructions": [],
-            "file_categories": [file_category2.pk],
+            "file_categories": [file_category.pk],
             "options": {},
             "created_at": configuration.created_at.isoformat(),
             "updated_at": configuration.updated_at.isoformat()
         })
-        self.assertEqual(configuration.file_categories.all()[0], file_category2)
+        self.assertEqual(configuration.file_categories.all()[0], file_category)
 
     def test_update_configuration(self):
         configuration = self.force_configuration()
@@ -1540,7 +1557,343 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse('osquery_api:enrollment', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 204)
 
-    # put pack
+    # list packs
+
+    def test_get_packs_unauthorized(self):
+        response = self.get(reverse("osquery_api:packs"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_packs_permission_denied(self):
+        response = self.get(reverse("osquery_api:packs"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_packs_filter_by_name_not_found(self):
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:packs"), {"name": get_random_string(12)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_packs_filter_by_configuration_id_not_found(self):
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:packs"), {"configuration_id": 9999})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"configuration_id": ["Select a valid choice. That choice is not one of the available choices."]}
+        )
+
+    def test_get_packs_filter_by_configuration_id_no_pack(self):
+        self.set_permissions("osquery.view_pack")
+        configuration = self.force_configuration()
+        response = self.get(reverse("osquery_api:packs"), {"configuration_id": configuration.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_packs_filter_by_name(self):
+        for _ in range(3):
+            self.force_pack()
+        pack = self.force_pack()
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:packs"), {"name": pack.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            "id": pack.pk,
+            "name": pack.name,
+            "slug": slugify(pack.name),
+            "description": "",
+            "discovery_queries": [],
+            "shard": None,
+            "event_routing_key": "",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        }])
+
+    def test_get_packs_filter_by_configuration_id(self):
+        for _ in range(3):
+            self.force_configuration(force_pack=True)
+        configuration, pack, _ = self.force_configuration(force_pack=True)
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:packs"), {"configuration_id": configuration.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            "id": pack.pk,
+            "name": pack.name,
+            "slug": slugify(pack.name),
+            "description": "",
+            "discovery_queries": [],
+            "shard": None,
+            "event_routing_key": "",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        }])
+
+    def test_get_packs(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:packs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            "id": pack.pk,
+            "name": pack.name,
+            "slug": slugify(pack.name),
+            "description": "",
+            "discovery_queries": [],
+            "shard": None,
+            "event_routing_key": "",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        }])
+
+    # get pack <int:pk>
+
+    def test_get_pack_unauthorized(self):
+        response = self.get(reverse("osquery_api:pack", args=(1,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_pack_permission_denied(self):
+        response = self.get(reverse("osquery_api:pack", args=(1,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_pack_not_found(self):
+        self.set_permissions("osquery.view_pack")
+        response = self.get(reverse("osquery_api:pack", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    def test_get_pack(self):
+        self.set_permissions("osquery.view_pack")
+        pack = self.force_pack()
+        response = self.get(reverse("osquery_api:pack", args=(pack.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "id": pack.pk,
+            "name": pack.name,
+            "slug": slugify(pack.name),
+            "description": "",
+            "discovery_queries": [],
+            "shard": None,
+            "event_routing_key": "",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        })
+
+    # update pack <int:pk>
+
+    def test_update_pack_unauthorized(self):
+        response = self.put_json_data(reverse("osquery_api:pack", args=(1,)), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_pack_permission_denied(self):
+        response = self.put_json_data(reverse("osquery_api:pack", args=(1,)), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_pack_not_found(self):
+        self.set_permissions("osquery.change_pack")
+        response = self.put_json_data(reverse("osquery_api:pack", args=(9999,)), {})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    def test_update_pack_slug_conflict(self):
+        pack = self.force_pack()
+        pack2 = self.force_pack()
+        self.set_permissions("osquery.change_pack")
+        data = {"name": pack.name.upper()}
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack2.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": [f"Pack with this slug {pack.slug} already exists"]
+        })
+
+    def test_update_pack_slug_not_editable(self):
+        pack = self.force_pack()
+        pack_name = "Packed"
+        new_slug = slugify(get_random_string(45))
+        self.set_permissions("osquery.change_pack")
+        data = {
+            "name": pack_name,
+            "slug": new_slug
+        }
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["slug"], 'packed')
+
+    def test_update_pack_name_conflict(self):
+        pack = self.force_pack()
+        pack2 = self.force_pack()
+        self.set_permissions("osquery.change_pack")
+        data = {"name": pack.name}
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack2.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["pack with this name already exists."]
+        })
+
+    def test_update_pack_fields_empty(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.change_pack")
+        data = {"name": ""}
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field may not be blank."]
+        })
+
+    def test_update_pack_shard_invalid(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.change_pack")
+        data = {
+            "name": pack.name,
+            "shard": 101
+        }
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "shard": ["Ensure this value is less than or equal to 100."]
+        })
+
+    def test_update_pack(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.change_pack")
+        data = {
+            "name": "pack updated",
+            "description": "pack description updated",
+            "discovery_queries": ["select * from osquery_info"],
+            "shard": 1,
+            "event_routing_key": "pack_updated"
+        }
+        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        pack.refresh_from_db()
+        self.assertEqual(response.json(), {
+            "id": pack.pk,
+            "name": "pack updated",
+            "slug": "pack-updated",
+            "description": "pack description updated",
+            "discovery_queries": ["select * from osquery_info"],
+            "shard": 1,
+            "event_routing_key": "pack_updated",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        })
+        self.assertEqual(pack.name, "pack updated")
+        self.assertEqual(pack.slug, "pack-updated")
+        self.assertEqual(pack.description, "pack description updated")
+        self.assertEqual(pack.discovery_queries, ["select * from osquery_info"])
+        self.assertEqual(pack.shard, 1)
+        self.assertEqual(pack.event_routing_key, "pack_updated")
+
+    # create pack
+
+    def test_create_pack_unauthorized(self):
+        response = self.post_json_data(reverse("osquery_api:packs"), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_pack_permission_denied(self):
+        response = self.post_json_data(reverse("osquery_api:packs"), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_pack_fields_empty(self):
+        self.set_permissions("osquery.add_pack")
+        data = {"name": ""}
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["This field may not be blank."]
+        })
+
+    def test_create_pack_name_conflict(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.add_pack")
+        data = {"name": pack.name}
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": ["pack with this name already exists."]
+        })
+
+    def test_create_pack_slug_conflict(self):
+        pack = self.force_pack()
+        self.set_permissions("osquery.add_pack")
+        data = {"name": pack.name.upper()}
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "name": [f"Pack with this slug {pack.slug} already exists"]
+        })
+
+    def test_create_slug_not_editable(self):
+        self.set_permissions("osquery.add_pack")
+        data = {"name": "pack created", "slug": "slug-created"}
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["slug"], "pack-created")
+
+    def test_create_pack_shard_invalid(self):
+        self.set_permissions("osquery.add_pack")
+        data = {"name": "pack created", "shard": 101}
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "shard": ["Ensure this value is less than or equal to 100."]
+        })
+
+    def test_create_pack(self):
+        self.set_permissions("osquery.add_pack")
+        data = {
+            "name": "pack created",
+            "description": "pack description created",
+            "discovery_queries": ["select * from osquery_info"],
+            "shard": 1,
+            "event_routing_key": "pack_created"
+        }
+        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        self.assertEqual(response.status_code, 201)
+        pack = Pack.objects.first()
+        self.assertEqual(response.json(), {
+            "id": pack.pk,
+            "name": "pack created",
+            "slug": "pack-created",
+            "description": "pack description created",
+            "discovery_queries": ["select * from osquery_info"],
+            "shard": 1,
+            "event_routing_key": "pack_created",
+            "created_at": pack.created_at.isoformat(),
+            "updated_at": pack.updated_at.isoformat()
+        })
+        self.assertEqual(pack.name, "pack created")
+        self.assertEqual(pack.slug, "pack-created")
+        self.assertEqual(pack.description, "pack description created")
+        self.assertEqual(pack.discovery_queries, ["select * from osquery_info"])
+        self.assertEqual(pack.shard, 1)
+        self.assertEqual(pack.event_routing_key, "pack_created")
+
+    # delete pack <int:pk>
+
+    def test_delete_pack_unauthorized_by_pk(self):
+        response = self.delete(reverse("osquery_api:pack", args=(1,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_pack_permission_denied_by_pk(self):
+        response = self.delete(reverse("osquery_api:pack", args=(1,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_pack_not_found_by_pk(self):
+        self.set_permissions("osquery.delete_pack")
+        response = self.delete(reverse("osquery_api:pack", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_pack_by_pk(self):
+        self.set_permissions("osquery.delete_pack")
+        pack = self.force_pack()
+        response = self.delete(reverse("osquery_api:pack", args=(pack.pk,)))
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Pack.objects.filter(pk=pack.pk).exists())
+
+    # put pack <slug:slug>
 
     def test_put_pack_unauthorized(self):
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
@@ -1551,6 +1904,8 @@ class APIViewsTestCase(TestCase):
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
         response = self.put_json_data(url, {}, include_token=True)
         self.assertEqual(response.status_code, 403)
+
+    # delete pack <slug:slug>
 
     def test_delete_pack_unauthorized(self):
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
@@ -2109,7 +2464,7 @@ class APIViewsTestCase(TestCase):
 
     def test_get_queries_filter_by_name(self):
         query = self.force_query()
-        for i in range(3):
+        for _ in range(3):
             self.force_query()
         self.set_permissions("osquery.view_query")
         response = self.get(reverse("osquery_api:queries"), {"name": query.name})
@@ -2401,3 +2756,287 @@ class APIViewsTestCase(TestCase):
         query = self.force_query()
         response = self.delete(reverse("osquery_api:query", args=(query.pk,)))
         self.assertEqual(response.status_code, 403)
+
+    # List ConfigurationPacks
+
+    def test_list_configurationpacks_unauthorized(self):
+        response = self.get(reverse("osquery_api:configuration_packs"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_configurationpacks_permission_denied(self):
+        response = self.get(reverse("osquery_api:configuration_packs"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_list_configurationpacks_filter_configuration_id_not_found(self):
+        self.set_permissions("osquery.view_configurationpack")
+        response = self.get(reverse("osquery_api:configuration_packs"), {"configuration_id": 9999})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'configuration_id': ['Select a valid choice. That choice is not one of the available choices.']
+        })
+
+    def test_list_configurationpacks_filter_pack_id_not_found(self):
+        self.set_permissions("osquery.view_configurationpack")
+        response = self.get(reverse("osquery_api:configuration_packs"), {"pack_id": 9999})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'pack_id': ['Select a valid choice. That choice is not one of the available choices.']
+        })
+
+    def test_list_configurationpacks_filter_configuration_id(self):
+        self.set_permissions("osquery.view_configurationpack")
+        for _ in range(3):
+            self.force_configuration_pack()
+        configuration, pack, configuration_pack = self.force_configuration(force_pack=True)
+        response = self.get(reverse("osquery_api:configuration_packs"), {"configuration_id": configuration.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            "id": configuration_pack.pk,
+            "configuration": configuration.pk,
+            "tags": [],
+            "pack": pack.pk
+        }])
+
+    def test_list_configurationpacks_filter_pack_id(self):
+        self.set_permissions("osquery.view_configurationpack")
+        for _ in range(3):
+            self.force_configuration_pack()
+        configuration, pack, configuration_pack = self.force_configuration(force_pack=True)
+        response = self.get(reverse("osquery_api:configuration_packs"), {"pack_id": pack.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            "id": configuration_pack.pk,
+            "configuration": configuration.pk,
+            "tags": [],
+            "pack": pack.pk
+        }])
+
+    def test_list_configurationpacks(self):
+        self.set_permissions("osquery.view_configurationpack")
+        configuration_pack = self.force_configuration_pack()
+        response = self.get(reverse("osquery_api:configuration_packs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            "id": configuration_pack.pk,
+            "configuration": configuration_pack.configuration.pk,
+            "tags": [],
+            "pack": configuration_pack.pack.pk
+        }])
+
+    # get configuration pack
+
+    def test_get_configurationpack_unauthorized(self):
+        response = self.get(reverse("osquery_api:configuration_pack", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_configurationpack_permission_denied(self):
+        response = self.get(reverse("osquery_api:configuration_pack", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_configurationpack_not_found(self):
+        self.set_permissions("osquery.view_configurationpack")
+        response = self.get(reverse("osquery_api:configuration_pack", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    def test_get_configurationpack(self):
+        self.set_permissions("osquery.view_configurationpack")
+        configuration_pack = self.force_configuration_pack(force_tags=True)
+        response = self.get(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "id": configuration_pack.pk,
+            "configuration": configuration_pack.configuration.pk,
+            "tags": [t.id for t in configuration_pack.tags.all()],
+            "pack": configuration_pack.pack.pk
+        })
+
+    # update configuration pack
+
+    def test_update_configurationpack_unauthorized(self):
+        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(9999,)), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_configurationpack_permission_denied(self):
+        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(9999,)), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_configurationpack_not_found(self):
+        self.set_permissions("osquery.change_configurationpack")
+        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(9999,)), {})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {
+            "detail": "Not found."
+        })
+
+    def test_update_configurationpack_configuration_fields_empty(self):
+        self.set_permissions("osquery.change_configurationpack")
+        configuration_pack = self.force_configuration_pack()
+        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "configuration": ["This field is required."],
+            "pack": ["This field is required."]
+        })
+
+    def test_update_configurationpack_conflict(self):
+        self.set_permissions("osquery.change_configurationpack")
+        configuration_pack = self.force_configuration_pack()
+        configuration_pack2 = self.force_configuration_pack()
+        data = {
+            "configuration": configuration_pack2.configuration.pk,
+            "pack": configuration_pack2.pack.pk
+        }
+        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "non_field_errors": ["The fields configuration, pack must make a unique set."]
+        })
+
+    def test_update_configurationpack(self):
+        self.set_permissions("osquery.change_configurationpack")
+        configuration_pack = self.force_configuration_pack(force_tags=True)
+        new_configuration = self.force_configuration()
+        new_pack = self.force_pack()
+        new_tag = self.force_tags(1)
+        data = {
+            "configuration": new_configuration.pk,
+            "pack": new_pack.pk,
+            "tags": [t.id for t in new_tag]
+        }
+        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        configuration_pack.refresh_from_db()
+        self.assertEqual(response.json(), {
+            "id": configuration_pack.pk,
+            "configuration": new_configuration.pk,
+            "tags": [t.id for t in new_tag],
+            "pack": new_pack.pk
+        })
+        self.assertEqual(configuration_pack.configuration, new_configuration)
+        self.assertEqual(configuration_pack.tags.count(), 1)
+        self.assertEqual(configuration_pack.pack, new_pack)
+
+    # create configuration pack
+
+    def test_create_configurationpack_unauthorized(self):
+        response = self.post_json_data(reverse("osquery_api:configuration_packs"), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_configurationpack_permission_denied(self):
+        response = self.post_json_data(reverse("osquery_api:configuration_packs"), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_configurationpack_fields_empty(self):
+        self.set_permissions("osquery.add_configurationpack")
+        response = self.post_json_data(reverse("osquery_api:configuration_packs"), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "configuration": ["This field is required."],
+            "pack": ["This field is required."]
+        })
+
+    def test_create_configurationpack_conflict(self):
+        self.set_permissions("osquery.add_configurationpack")
+        configuration_pack = self.force_configuration_pack(force_tags=True)
+        data = {
+            "configuration": configuration_pack.configuration.pk,
+            "pack": configuration_pack.pack.pk,
+        }
+        response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "non_field_errors": ["The fields configuration, pack must make a unique set."]
+        })
+
+    def test_create_configurationpack_configuration_with_multiple_packs(self):
+        self.set_permissions("osquery.add_configurationpack")
+        configuration = self.force_configuration()
+        packs = [self.force_pack().pk for i in range(0, 3)]
+        for pack in packs:
+            data = {
+                "configuration": configuration.pk,
+                "pack": pack
+            }
+            response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
+            self.assertEqual(response.status_code, 201)
+            configuration_pack = ConfigurationPack.objects.filter(
+                configuration_id=configuration.pk,
+                pack_id=pack
+            ).first()
+            self.assertEqual(response.json(), {
+                "id": configuration_pack.pk,
+                "configuration": configuration.pk,
+                "tags": [],
+                "pack": pack
+            })
+            self.assertEqual(configuration_pack.pack.pk, pack)
+            self.assertEqual(configuration_pack.configuration.pk, configuration.pk)
+        result = ConfigurationPack.objects.filter(configuration_id=configuration.pk).count()
+        self.assertEqual(result, 3)
+
+    def test_create_configurationpack_with_pack_id_from_existing(self):
+        self.set_permissions("osquery.add_configurationpack")
+        existing_configuration_pack = self.force_configuration_pack()
+        configuration = self.force_configuration()
+        data = {
+            "configuration": configuration.pk,
+            "pack": existing_configuration_pack.pack.pk,
+        }
+        response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
+        self.assertEqual(response.status_code, 201)
+        configuration_pack = ConfigurationPack.objects.get(pk=response.json()["id"])
+        self.assertEqual(response.json(), {
+            "id": configuration_pack.pk,
+            "configuration": configuration.pk,
+            "tags": [],
+            "pack": configuration_pack.pack.pk
+        })
+        self.assertEqual(configuration_pack.configuration, configuration)
+
+    def test_create_configurationpack(self):
+        self.set_permissions("osquery.add_configurationpack")
+        configuration = self.force_configuration()
+        pack = self.force_pack()
+        tags = self.force_tags(1)
+        data = {
+            "configuration": configuration.pk,
+            "pack": pack.pk,
+            "tags": [t.id for t in tags]
+        }
+        response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
+        self.assertEqual(response.status_code, 201)
+        configuration_pack = ConfigurationPack.objects.first()
+        self.assertEqual(response.json(), {
+            "id": configuration_pack.pk,
+            "configuration": configuration.pk,
+            "tags": [t.id for t in tags],
+            "pack": pack.pk
+        })
+        self.assertEqual(configuration_pack.configuration, configuration)
+        self.assertEqual(configuration_pack.pack, pack)
+        self.assertEqual(configuration_pack.tags.count(), 1)
+
+    # delete configuration pack
+
+    def test_delete_configurationpack_unauthorized(self):
+        response = self.delete(reverse("osquery_api:configuration_pack", args=(1,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_configurationpack_permission_denied(self):
+        response = self.delete(reverse("osquery_api:configuration_pack", args=(1,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_configurationpack_not_found(self):
+        self.set_permissions("osquery.delete_configurationpack")
+        response = self.delete(reverse("osquery_api:configuration_pack", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_configurationpack(self):
+        self.set_permissions("osquery.delete_configurationpack")
+        configuration_pack = self.force_configuration_pack()
+        response = self.delete(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)))
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(ConfigurationPack.objects.count(), 0)

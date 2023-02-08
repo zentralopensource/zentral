@@ -16,12 +16,14 @@ from rest_framework_yaml.parsers import YAMLParser
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
 from .compliance_checks import sync_query_compliance_check
 from .events import post_osquery_pack_update_events
-from .models import Configuration, Enrollment, Pack, PackQuery, Query, AutomaticTableConstruction, FileCategory
+from .models import (Configuration, Enrollment, Pack, PackQuery, Query, AutomaticTableConstruction, FileCategory,
+                     ConfigurationPack)
 from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
 from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 from .powershell_script.builder import OsqueryZentralEnrollPowershellScriptBuilder
-from .serializers import ConfigurationSerializer, EnrollmentSerializer, OsqueryPackSerializer, QuerySerializer, \
-    AutomaticTableConstructionSerializer, FileCategorySerializer
+from .serializers import (ConfigurationPackSerializer, ConfigurationSerializer, EnrollmentSerializer,
+                          OsqueryPackSerializer, QuerySerializer, AutomaticTableConstructionSerializer,
+                          FileCategorySerializer, PackSerializer)
 from .tasks import export_distributed_query_results
 
 
@@ -416,6 +418,28 @@ class ExportDistributedQueryResults(APIView):
                         status=status.HTTP_201_CREATED)
 
 
+# Packs
+
+class PackFilter(filters.FilterSet):
+    configuration_id = filters.ModelChoiceFilter(field_name="configurationpack__configuration",
+                                                 queryset=Configuration.objects.all())
+    name = filters.CharFilter()
+
+
+class PackList(generics.ListCreateAPIView):
+    queryset = Pack.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = PackSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = PackFilter
+
+
+class PackDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Pack.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = PackSerializer
+
+
 # Queries
 
 class QueryList(generics.ListCreateAPIView):
@@ -430,3 +454,25 @@ class QueryDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Query.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = QuerySerializer
+
+
+# Configuration Packs
+
+class ConfigurationPackFilter(filters.FilterSet):
+    pack_id = filters.ModelChoiceFilter(field_name="pack_id", queryset=Pack.objects.all())
+    configuration_id = filters.ModelChoiceFilter(field_name="configuration_id",
+                                                 queryset=Configuration.objects.all())
+
+
+class ConfigurationPackList(generics.ListCreateAPIView):
+    queryset = ConfigurationPack.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = ConfigurationPackSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = ConfigurationPackFilter
+
+
+class ConfigurationPackDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = ConfigurationPack.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = ConfigurationPackSerializer
