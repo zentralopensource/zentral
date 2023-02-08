@@ -46,7 +46,7 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         if query_name:
             name = query_name
         else:
-            name = get_random_string(12).lower()
+            name = get_random_string(12)
         if force_compliance_check:
             sql = "select 'OK' as ztl_status;"
         else:
