@@ -60,13 +60,6 @@ class OsquerySetupPacksViewsTestCase(TestCase):
         sync_query_compliance_check(query, force_compliance_check)
         return query
 
-    def _force_pack_query(self, query_name=None, force_compliance_check=False):
-        return self._force_query(
-            query_name=query_name,
-            force_pack=True,
-            force_compliance_check=force_compliance_check
-        ).packquery
-
     # create pack
 
     def test_create_pack_redirect(self):
@@ -258,7 +251,7 @@ class OsquerySetupPacksViewsTestCase(TestCase):
 
     def test_add_pack_query_with_slug_conflict(self):
         query_name = get_random_string(16)
-        pq = self._force_pack_query(query_name=query_name.lower())
+        pq = self._force_query(query_name=query_name.lower(), force_pack=True).packquery
         slug = pq.slug
         pack = pq.pack
         query = self._force_query(query_name=query_name.upper())
