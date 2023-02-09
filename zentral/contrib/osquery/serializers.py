@@ -7,7 +7,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .compliance_checks import sync_query_compliance_check
 from .models import (Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction, FileCategory,
-                     ConfigurationPack)
+                     ConfigurationPack, PackQuery)
 
 
 class AutomaticTableConstructionSerializer(serializers.ModelSerializer):
@@ -91,7 +91,6 @@ class FileCategorySerializer(serializers.ModelSerializer):
 
 
 # Standard Osquery packs
-
 
 class OsqueryPlatformField(serializers.ListField):
     def to_internal_value(self, data):
@@ -246,4 +245,32 @@ class PackSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"name": f"Pack with this slug {slug} already exists"})
         else:
             data["slug"] = slug
+        return data
+
+
+class PackQuerySerializer(serializers.ModelSerializer):
+    pack = serializers.PrimaryKeyRelatedField(queryset=Pack.objects.all())
+
+    class Meta:
+        model = PackQuery
+        fields = "__all__"
+
+    def validate(self, data):
+        query = data.get("query")
+        slug = slugify(query.name)
+        pq_qs = PackQuery.objects.all()
+        if self.instance:
+            pq_qs = pq_qs.exclude(id=self.instance.id)
+        if pq_qs.filter(slug=slug).exists():
+            slug = f"{slug}-{query.id}"
+        data["slug"] = slug
+        if query.compliance_check and not data.get("snapshot_mode"):
+            raise serializers.ValidationError({
+                "snapshot_mode": ["A compliance check query can only be scheduled in 'snapshot' mode."]
+            })
+        if data.get("snapshot_mode") and data.get("log_removed_actions"):
+            raise serializers.ValidationError({
+                "snapshot_mode": ["'log_removed_actions' and 'snapshot_mode' are mutually exclusive"],
+                "log_removed_actions": ["'log_removed_actions' and 'snapshot_mode' are mutually exclusive"]
+            })
         return data
