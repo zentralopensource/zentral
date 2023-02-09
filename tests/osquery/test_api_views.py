@@ -3058,6 +3058,64 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertEqual(ConfigurationPack.objects.count(), 0)
 
+    # list pack queries
+
+    def test_get_packqueries_unauthorized(self):
+        response = self.get(reverse("osquery_api:pack_queries"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_packqueries_permission_denied(self):
+        response = self.get(reverse("osquery_api:pack_queries"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_packqueries_filter_by_pack_id_not_found(self):
+        self.set_permissions("osquery.view_packquery")
+        response = self.get(reverse("osquery_api:pack_queries"), {"pack_id": 9999})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'pack_id': ['Select a valid choice. That choice is not one of the available choices.']
+        })
+
+    def test_get_packqueries_filter_by_pack_id(self):
+        self.set_permissions("osquery.view_packquery")
+        for _ in range(3):
+            self.force_packquery()
+        pack_query = self.force_packquery()
+        response = self.get(reverse("osquery_api:pack_queries"), {"pack_id": pack_query.pack.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': pack_query.pk,
+            'slug': pack_query.slug,
+            'pack': pack_query.pack.pk,
+            'query': pack_query.query.pk,
+            'interval': 60,
+            'log_removed_actions': False,
+            'snapshot_mode': False,
+            'shard': None,
+            'can_be_denylisted': True,
+            'created_at': pack_query.created_at.isoformat(),
+            'updated_at': pack_query.updated_at.isoformat()
+        }])
+
+    def test_get_packqueries(self):
+        self.set_permissions("osquery.view_packquery")
+        pack_query = self.force_packquery()
+        response = self.get(reverse("osquery_api:pack_queries"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': pack_query.pk,
+            'slug': pack_query.slug,
+            'pack': pack_query.pack.pk,
+            'query': pack_query.query.pk,
+            'interval': 60,
+            'log_removed_actions': False,
+            'snapshot_mode': False,
+            'shard': None,
+            'can_be_denylisted': True,
+            'created_at': pack_query.created_at.isoformat(),
+            'updated_at': pack_query.updated_at.isoformat(),
+        }])
+
     # get pack query
 
     def test_get_packquery_unauthorized(self):
