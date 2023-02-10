@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -19,7 +20,7 @@ from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionReq
 from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
 from .models import Configuration, Rule, RuleSet, Target, Enrollment, translate_rule_policy
 from .serializers import (RuleSerializer, RuleSetUpdateSerializer, ConfigurationSerializer,
-                          EnrollmentSerializer, build_file_tree_from_santa_fileinfo)
+                          EnrollmentSerializer, TargetSerializer, build_file_tree_from_santa_fileinfo)
 from .tasks import export_targets
 
 
@@ -408,3 +409,24 @@ class TargetsExport(APIView):
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
+
+
+class TargetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class TargetFilter(filters.FilterSet):
+    target_identifier = filters.CharFilter(field_name="identifier")
+    target_type = filters.ChoiceFilter(field_name="type", choices=Target.TYPE_CHOICES)
+
+
+class TargetList(generics.ListAPIView):
+    queryset = Target.objects.all().order_by('id')
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = TargetSerializer
+    pagination_class = TargetPagination
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = TargetFilter
+    ordering = ("id",)

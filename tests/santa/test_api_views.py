@@ -1,3 +1,4 @@
+import datetime
 from functools import reduce
 import json
 import operator
@@ -35,6 +36,71 @@ class APIViewsTestCase(TestCase):
         cls.maxDiff = None
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
+        # file tree
+        cls.file_sha256 = get_random_string(64, "abcdef0123456789")
+        cls.file_name = get_random_string(12)
+        cls.file_bundle_name = get_random_string(12)
+        cls.file_cert_sha256 = get_random_string(64, "abcdef0123456789")
+        cls.file_team_id = get_random_string(10, allowed_chars="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        cls.file_cert_cn = f"Developer ID Application: YOLO ({cls.file_team_id})"
+        cls.file, _ = File.objects.commit({
+            'source': {'module': 'zentral.contrib.santa', 'name': 'Santa events'},
+            'bundle': {'bundle_id': 'servicecontroller:com.apple.stomp.transcoderx',
+                       'bundle_name': cls.file_bundle_name,
+                       'bundle_version': '3.5.3',
+                       'bundle_version_str': '3.5.3'},
+            'bundle_path': ('/Library/Frameworks/Compressor.framework/'
+                            'Versions/A/Resources/CompressorTranscoderX.bundle'),
+            'name': cls.file_name,
+            'path': ('/Library/Frameworks/Compressor.framework/'
+                     'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
+            'sha_256': cls.file_sha256,
+            'signed_by': {
+                'common_name': cls.file_cert_cn,
+                'organization': 'Apple Inc.',
+                'organizational_unit': cls.file_team_id,
+                'sha_256': cls.file_cert_sha256,
+                'valid_from': datetime.datetime(2007, 2, 23, 22, 2, 56),
+                'valid_until': datetime.datetime(2015, 1, 14, 22, 2, 56),
+                'signed_by': {
+                    'common_name': 'Apple Code Signing Certification Authority',
+                    'organization': 'Apple Inc.',
+                    'organizational_unit': 'Apple Certification Authority',
+                    'sha_256': '3afa0bf5027fd0532f436b39363a680aefd6baf7bf6a4f97f17be2937b84b150',
+                    'valid_from': datetime.datetime(2007, 2, 14, 21, 19, 19),
+                    'valid_until': datetime.datetime(2015, 2, 14, 21, 19, 19),
+                    'signed_by': {
+                        'common_name': 'Apple Root CA',
+                        'organization': 'Apple Inc.',
+                        'organizational_unit': 'Apple Certification Authority',
+                        'sha_256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
+                        'valid_from': datetime.datetime(2006, 4, 25, 21, 40, 36),
+                        'valid_until': datetime.datetime(2035, 2, 9, 21, 40, 36),
+                    },
+                },
+            }
+        })
+        cls.file_cert = Certificate.objects.commit({
+            "organization": "Awesome Inc",
+            "common_name": f"Developer ID Application: Awesome Inc ({cls.file_team_id})",
+            "organizational_unit": f"{cls.file_team_id}",
+            "sha_256": cls.file_cert_sha256,
+            'valid_from': datetime.datetime(2006, 4, 25, 21, 40, 36),
+            'valid_until': datetime.datetime(2035, 2, 9, 21, 40, 36),
+            'signed_by': {
+                'common_name': 'Apple Root CA',
+                'organization': 'Apple Inc.',
+                'organizational_unit': 'Apple Certification Authority',
+                'sha_256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
+                'valid_from': datetime.datetime(2006, 4, 25, 21, 40, 36),
+                'valid_until': datetime.datetime(2035, 2, 9, 21, 40, 36),
+            },
+        })
+
+        cls.file_target = Target.objects.create(type=Target.BINARY, identifier=cls.file_sha256)
+        cls.file_cert_target = Target.objects.create(type=Target.CERTIFICATE, identifier=cls.file_cert_sha256)
+        cls.file_bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=cls.file.bundle.bundle_id)
+        cls.file_team_id_target = Target.objects.create(type=Target.TEAM_ID, identifier=cls.file_team_id)
 
     # utils
 
@@ -42,13 +108,18 @@ class APIViewsTestCase(TestCase):
         if target_identifier is None:
             target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
         target = Target.objects.create(type=Target.BUNDLE, identifier=target_identifier)
+        data = {
+            "target": target,
+            "executable_rel_path": get_random_string(12),
+            "bundle_id": self.file.bundle.bundle_id,
+            "name": self.file_bundle_name,
+            "version": self.file.bundle.bundle_version,
+            "version_str": self.file.bundle.bundle_version_str,
+            "binary_count": 1,
+        }
         if fake_upload:
-            return Bundle.objects.create(
-                target=target,
-                binary_count=1,
-                uploaded_at=timezone.now().isoformat()
-            )
-        return Bundle.objects.create(target=target, binary_count=1)
+            data["uploaded_at"] = timezone.now().isoformat()
+        return Bundle.objects.create(**data)
 
     def force_tags(self, count=6):
         return [Tag.objects.create(name=get_random_string(12)) for _ in range(count)]
@@ -2158,3 +2229,216 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("santa.delete_enrollment")
         response = self.delete(reverse('santa_api:enrollment', args=(1213028133,)))
         self.assertEqual(response.status_code, 404)
+
+    # targets
+
+    def test_targets_read_only(self):
+        self.set_permissions("santa.add_target", "santa.change_target", "santa.delete_target")
+        response = self.post_json_data(reverse('santa_api:targets'), {})
+        self.assertEqual(response.status_code, 405)
+        response = self.put_json_data(reverse('santa_api:targets'), {})
+        self.assertEqual(response.status_code, 405)
+        response = self.delete(reverse('santa_api:targets'))
+        self.assertEqual(response.status_code, 405)
+
+    # list targets
+
+    def test_list_targets_unauthorized(self):
+        response = self.get(reverse('santa_api:targets'), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_targets_permission_denied(self):
+        response = self.get(reverse('santa_api:targets'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_list_targets_filter_by_target_type_invalid(self):
+        self.set_permissions("santa.view_target")
+        response = self.get(reverse('santa_api:targets'), {"target_type": "INVALID"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "target_type": ['Select a valid choice. INVALID is not one of the available choices.']
+        })
+
+    def test_list_targets_filter_by_target_type_and_target_identifier_not_found(self):
+        self.set_permissions("santa.view_target")
+        response = self.get(reverse('santa_api:targets'),
+                            {"target_type": "BINARY", "target_identifier": self.file_cert_sha256})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
+
+    def test_list_targets_filter_by_target_type_and_target_identifier(self):
+        self.set_permissions("santa.view_target")
+        response = self.get(reverse('santa_api:targets'),
+                            {"target_type": "BUNDLE", "target_identifier": self.file.bundle.bundle_id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'count': 1, 'next': None, 'previous': None, 'results': [
+            {
+                'id': self.file_bundle_target.pk,
+                'files': [],
+                'certificates': [],
+                'team_ids': [],
+                'type': 'BUNDLE',
+                'identifier': 'servicecontroller:com.apple.stomp.transcoderx'
+            }
+        ]})
+
+    def test_list_targets_filter_by_target_identifier_not_found(self):
+        self.set_permissions("santa.view_target")
+        response = self.get(reverse('santa_api:targets'),
+                            {"target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789')})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
+
+    def test_list_targets_filter_by_target_type(self):
+        self.set_permissions("santa.view_target")
+        response = self.get(reverse('santa_api:targets'), {"target_type": "BINARY"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'count': 1,
+            'next': None,
+            'previous': None,
+            'results': [
+                {
+                    'id': self.file_target.pk,
+                    'files': [
+                        {
+                            'id': self.file_target.files[0].id,
+                            'name': self.file_target.files[0].name,
+                            'path': '/Library/Frameworks/Compressor.framework/Versions/A/'
+                                    'Resources/CompressorTranscoderX.bundle/Contents/MacOS',
+                            'sha_256': self.file_sha256,
+                            'bundle_path': '/Library/Frameworks/Compressor.framework/Versions/A/'
+                                           'Resources/CompressorTranscoderX.bundle',
+                            'source': self.file_target.files[0].source.pk,
+                            'bundle': self.file_target.files[0].bundle.pk,
+                            'signed_by': self.file_target.files[0].signed_by.pk,
+                        }
+                    ],
+                    'certificates': [],
+                    'team_ids': [],
+                    'type': 'BINARY',
+                    'identifier': self.file_sha256
+                }
+            ]})
+
+    def test_list_targets_filter_by_identifier(self):
+        self.set_permissions("santa.view_target")
+        response = self.get(reverse('santa_api:targets'), {"target_identifier": self.file_team_id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'count': 1,
+            'next': None,
+            'previous': None,
+            'results': [
+                {
+                    'id': self.file_team_id_target.pk,
+                    'files': [],
+                    'certificates': [],
+                    'team_ids': [
+                        {
+                            'organizational_unit': self.file_team_id,
+                            'organization': 'Apple Inc.'
+                        }
+                    ],
+                    'type': 'TEAMID',
+                    'identifier': self.file_team_id
+                }
+            ]})
+
+    def test_list_targets_pagination(self):
+        for _ in range(0, 10):
+            self.force_rule()
+        self.set_permissions("santa.view_target")
+        response = self.get(reverse('santa_api:targets'), {"page_size": 5})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['count'], 14)
+        self.assertEqual(len(response.json()['results']), 5)
+        self.assertIsNotNone(response.json()['next'])
+        self.assertIsNone(response.json()['previous'])
+
+    def test_list_targets(self):
+        self.set_permissions("santa.view_target")
+        response = self.get(reverse('santa_api:targets'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'count': 4,
+            'next': None,
+            'previous': None,
+            'results': [
+                {
+                    'id': self.file_target.pk,
+                    'files': [
+                        {
+                            'id': self.file_target.files[0].id,
+                            'name': self.file_target.files[0].name,
+                            'path': '/Library/Frameworks/Compressor.framework/Versions/A/'
+                                    'Resources/CompressorTranscoderX.bundle/Contents/MacOS',
+                            'sha_256': self.file_sha256,
+                            'bundle_path': '/Library/Frameworks/Compressor.framework/Versions/A/'
+                                           'Resources/CompressorTranscoderX.bundle',
+                            'source': self.file_target.files[0].source.pk,
+                            'bundle': self.file_target.files[0].bundle.pk,
+                            'signed_by': self.file_target.files[0].signed_by.pk,
+                        }
+                    ],
+                    'certificates': [],
+                    'team_ids': [],
+                    'type': 'BINARY',
+                    'identifier': self.file_sha256
+                },
+                {
+                    'id': self.file_cert_target.pk,
+                    'files': [],
+                    'certificates': [
+                        {
+                            'id': self.file_cert_target.certificates[0].id,
+                            'common_name': f'Developer ID Application: YOLO ({self.file_team_id})',
+                            'organization': 'Apple Inc.',
+                            'organizational_unit': self.file_team_id,
+                            'domain': None,
+                            'sha_1': None,
+                            'sha_256': self.file_cert_sha256,
+                            'valid_from': self.file_cert_target.certificates[0].valid_from.isoformat(),
+                            'valid_until': self.file_cert_target.certificates[0].valid_until.isoformat(),
+                            'signed_by': self.file_cert_target.certificates[0].signed_by.id
+                        },
+                        {
+                            'id': self.file_cert_target.certificates[1].id,
+                            'common_name': f'Developer ID Application: Awesome Inc ({self.file_team_id})',
+                            'organization': 'Awesome Inc',
+                            'organizational_unit': self.file_team_id,
+                            'domain': None,
+                            'sha_1': None,
+                            'sha_256': self.file_cert_sha256,
+                            'valid_from': self.file_cert_target.certificates[1].valid_from.isoformat(),
+                            'valid_until': self.file_cert_target.certificates[1].valid_until.isoformat(),
+                            'signed_by': self.file_cert_target.certificates[1].signed_by.id
+                        }
+                    ],
+                    'team_ids': [],
+                    'type': 'CERTIFICATE',
+                    'identifier': self.file_cert_sha256
+                },
+                {
+                    'id': self.file_bundle_target.pk,
+                    'files': [],
+                    'certificates': [],
+                    'team_ids': [],
+                    'type': 'BUNDLE',
+                    'identifier': 'servicecontroller:com.apple.stomp.transcoderx'
+                },
+                {
+                    'id': self.file_team_id_target.pk,
+                    'files': [],
+                    'certificates': [],
+                    'team_ids': [
+                        {
+                            'organizational_unit': self.file_team_id,
+                            'organization': 'Apple Inc.'
+                        }
+                    ],
+                    'type': 'TEAMID',
+                    'identifier': self.file_team_id
+                }
+            ]
+        })

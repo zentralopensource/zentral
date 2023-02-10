@@ -2,13 +2,12 @@ from datetime import datetime
 from itertools import chain
 import logging
 import os.path
-
 from django.db import transaction
 from django.db.models import F
 from django.urls import reverse
 from rest_framework import serializers
 from zentral.conf import settings
-from zentral.contrib.inventory.models import EnrollmentSecret
+from zentral.contrib.inventory.models import EnrollmentSecret, File, Certificate
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .events import post_santa_rule_update_event
 from .models import Bundle, Configuration, Rule, Target, Enrollment, translate_rule_policy
@@ -61,6 +60,35 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         secret_data = validated_data.pop('secret')
         secret_serializer.update(instance.secret, secret_data)
         return super().update(instance, validated_data)
+
+
+# Targets
+
+class TargetFilesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = File
+        exclude = ('mt_hash', 'mt_created_at')
+
+
+class TargetCertificatesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Certificate
+        exclude = ('mt_hash', 'mt_created_at')
+
+
+class TargetTeamIDsSerializer(serializers.Serializer):
+    organizational_unit = serializers.CharField()
+    organization = serializers.CharField()
+
+
+class TargetSerializer(serializers.ModelSerializer):
+    files = TargetFilesSerializer(many=True, read_only=True)
+    certificates = TargetCertificatesSerializer(many=True, read_only=True)
+    team_ids = TargetTeamIDsSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Target
+        fields = '__all__'
 
 
 class RuleSerializer(serializers.ModelSerializer):

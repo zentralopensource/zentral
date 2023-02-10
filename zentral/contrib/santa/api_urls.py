@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework.urlpatterns import format_suffix_patterns
 from .api_views import (IngestFileInfo, RuleList, RuleSetUpdate, TargetsExport, ConfigurationList,
                         ConfigurationDetail, EnrollmentList, EnrollmentDetail,
-                        EnrollmentPlist, EnrollmentConfigurationProfile, RuleDetail)
+                        EnrollmentPlist, EnrollmentConfigurationProfile, RuleDetail, TargetList)
 
 
 app_name = "santa_api"
@@ -18,6 +18,7 @@ urlpatterns = [
     path('rules/', RuleList.as_view(), name="rules"),
     path('rules/<int:pk>/', RuleDetail.as_view(), name="rule"),
     path('rulesets/update/', RuleSetUpdate.as_view(), name="ruleset_update"),
+    path('targets/', TargetList.as_view(), name="targets"),
     path('targets/export/', TargetsExport.as_view(), name="targets_export"),
 ]
 
