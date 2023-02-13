@@ -89,8 +89,10 @@ Example payload:
 
 ```json
 {
-  "principal_names": ["janeDoe", "johnSmith"],
-  "unique_ids": ["max.mustermann@example.com"],
+  "principal_users": {
+    "principal_names": ["janeDoe", "johnSmith"],
+    "unique_ids": ["max.mustermann@example.com"]
+  },
   "tags": {
     "taxonomy 1": "tag1",
     "taxonomy 2": null
