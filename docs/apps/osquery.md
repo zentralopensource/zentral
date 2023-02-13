@@ -512,7 +512,7 @@ $ curl -X DELETE \
 
 Response (204 No Content)
 
-### /api/osquery/configurationpacks/
+### /api/osquery/configuration_packs/
 
 #### List all Configuration Packs.
 
@@ -528,14 +528,14 @@ Examples:
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configurationpacks/" \
+  "https://zentral.example.com/api/osquery/configuration_packs/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configurationpacks/?pack_id=2" \
+  "https://zentral.example.com/api/osquery/configuration_packs/?pack_id=2" \
   |python3 -m json.tool
 ```
 
@@ -583,7 +583,7 @@ configurationpack.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configurationpacks/" \
+  "https://zentral.example.com/api/osquery/configuration_packs/" \
   -d @configurationpack.json \
   |python3 -m json.tool
 ```
@@ -601,7 +601,7 @@ Response:
 }
 ```
 
-### /api/osquery/configurationpacks/`<int:pk>`/
+### /api/osquery/configuration_packs/`<int:pk>`/
 
 #### Get a Configuration Pack.
 
@@ -615,7 +615,7 @@ Example
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configurationpacks/2/" \
+  "https://zentral.example.com/api/osquery/configuration_packs/2/" \
   |python3 -m json.tool
 ```
 
@@ -662,7 +662,7 @@ configurationpack_update.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configurationpacks/2/" \
+  "https://zentral.example.com/api/osquery/configuration_packs/2/" \
   -d @configurationpack_update.json \
   |python3 -m json.tool
 ```
@@ -691,7 +691,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/configurationpacks/2/" 
+  "https://zentral.example.com/api/osquery/configuration_packs/2/" 
 ```
 
 Response (204 No Content)
@@ -1308,7 +1308,7 @@ You should get a response close to this one:
 }
 ```
 
-### /api/osquery/packqueries/
+### /api/osquery/pack_queries/
 
 #### List all Pack Queries.
 
@@ -1323,14 +1323,14 @@ Examples:
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packqueries/" \
+  "https://zentral.example.com/api/osquery/pack_queries/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packqueries/?pack_id=2" \
+  "https://zentral.example.com/api/osquery/pack_queries/?pack_id=2" \
   |python3 -m json.tool
 ```
 
@@ -1384,7 +1384,7 @@ packquery.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packqueries/" \
+  "https://zentral.example.com/api/osquery/pack_queries/" \
   -d @packquery.json \
   |python3 -m json.tool
 ```
@@ -1407,7 +1407,7 @@ Response:
 }
 ```
 
-### /api/osquery/packqueries/`<int:pk>`/
+### /api/osquery/pack_queries/`<int:pk>`/
 
 #### Get a Pack Query.
 
@@ -1421,7 +1421,7 @@ Example
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packqueries/2/" \
+  "https://zentral.example.com/api/osquery/pack_queries/2/" \
   |python3 -m json.tool
 ```
 
@@ -1474,7 +1474,7 @@ packquery_update.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packqueries/2/" \
+  "https://zentral.example.com/api/osquery/pack_queries/2/" \
   -d @packquery_update.json \
   |python3 -m json.tool
 ```
@@ -1508,7 +1508,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/packqueries/2/" 
+  "https://zentral.example.com/api/osquery/pack_queries/2/" 
 ```
 
 Response (204 No Content)
