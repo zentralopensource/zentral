@@ -233,608 +233,6 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * `Content-Type: application/json`
 * `Content-Type: application/yaml`
 
-### /api/santa/rules/
-
-#### List all Santa rules
-
-* method: GET
-* Content-Type: application/json
-* Required permission: `santa.view_rule`
-* Optional search parameters:
-  * `target_type`: the type (`BINARY`, `CERTIFICATE`, …) of the rule target.
-  * `target_identifier`: the identifier of the rule target.
-  * `configuration_id`: the ID of the Zentral Santa configuration the rule is attached to.
-
-Use this endpoint to get a list of the Santa rules.
-
-Example:
-
-```bash
-curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/santa/rules/" \
-  |python3 -m json.tool
-```
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/santa/rules/?target_type=TEAMID" \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-[
-    {
-        "id": 1,
-        "target_type": "TEAMID",
-        "target_identifier": "9BNSXJN65R",
-        "ruleset": null,
-        "version": 1,
-        "policy": 1,
-        "custom_msg": "",
-        "description": "",
-        "serial_numbers": [],
-        "excluded_serial_numbers": [],
-        "primary_users": [],
-        "excluded_primary_users": [],
-        "created_at": "2023-01-17T13:08:19.503831",
-        "updated_at": "2023-01-17T13:08:19.503837",
-        "configuration": 1,
-        "tags": [
-            2
-        ],
-        "excluded_tags": [
-            1
-        ]
-    },
-    {
-        "id": 2,
-        "target_type": "TEAMID",
-        "target_identifier": "1234567890",
-        "ruleset": null,
-        "version": 1,
-        "policy": 1,
-        "custom_msg": "",
-        "description": "",
-        "serial_numbers": [],
-        "excluded_serial_numbers": [],
-        "primary_users": [],
-        "excluded_primary_users": [],
-        "created_at": "2023-01-20T06:10:15.059545",
-        "updated_at": "2023-01-20T06:10:15.059556",
-        "configuration": 1,
-        "tags": [],
-        "excluded_tags": []
-    }
-]
-```
-
-#### Add new Santa rule
-
-* method: POST
-* Content-Type: application/json
-* Required permission: `santa.add_rule`
-
-Use this endpoint to add a new Santa rule.
-
-> **_NOTEs:_** The `ruleset` attribute is read-only
-
-Example:
-
-rule.json:
-
-```json
-{
-    "target_type": "BINARY",
-    "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
-    "policy": 1,
-    "description": "Allow the yes binary on macOS 12.5",
-    "configuration": 1,
-    "tags": [1],
-    "excluded_tags": [2],
-    "serial_numbers": ["1234567890", "1234567891"],
-    "excluded_serial_numbers": ["1234567892", "1234567893"],
-    "primary_users": ["john", "jane"],
-    "excluded_primary_users": ["joe"]
-}
-```
-
-```bash
-$ curl -X POST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d @rule.json \
-  "https://zentral.example.com/api/santa/rules/"\
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-    "id": 8,
-    "target_type": "BINARY",
-    "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
-    "ruleset": null,
-    "version": 1,
-    "policy": 1,
-    "custom_msg": "",
-    "description": "Allow the yes binary on macOS 12.5",
-    "serial_numbers": [
-        "1234567890",
-        "1234567891"
-    ],
-    "excluded_serial_numbers": [
-        "1234567892",
-        "1234567893"
-    ],
-    "primary_users": [
-        "john",
-        "jane"
-    ],
-    "excluded_primary_users": [
-        "joe"
-    ],
-    "created_at": "2023-01-30T08:51:13.826830",
-    "updated_at": "2023-01-30T08:51:13.826841",
-    "configuration": 1,
-    "tags": [
-        1
-    ],
-    "excluded_tags": [
-        2
-    ]
-}
-```
-
-### /api/santa/rules/`<int: pk>`/
-
-#### Get a rule
-
-* method: GET
-* Content-Type: application/json
-* Required permission: `santa.view_rule`
-* `<int:pk>`: the primary key of the rule.
-
-Example
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/santa/rules/1/" \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-    "id": 1,
-    "target_type": "TEAMID",
-    "target_identifier": "9BNSXJN65R",
-    "ruleset": null,
-    "version": 1,
-    "policy": 1,
-    "custom_msg": "",
-    "description": "",
-    "serial_numbers": [],
-    "excluded_serial_numbers": [],
-    "primary_users": [],
-    "excluded_primary_users": [],
-    "created_at": "2023-01-17T13:08:19.503831",
-    "updated_at": "2023-01-17T13:08:19.503837",
-    "configuration": 1,
-    "tags": [
-        2
-    ],
-    "excluded_tags": [
-        1
-    ]
-}
-```
-
-#### Update a rule
-
-* method: PUT
-* Content-Type: application/json
-* Required permission: `santa.edit_rule`
-
-Use this endpoint to update a Santa rule.
-
-> **_NOTEs:_** The `ruleset` attribute is read-only
-
-Example:
-
-rule_update.json:
-
-```json
-{
-    "target_type": "BINARY",
-    "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
-    "policy": 2,
-    "description": "Block the yes binary on macOS 12.5",
-    "configuration": 1,
-    "custom_msg": "This binary is not allowed on this machine",
-    "tags": [1],
-    "excluded_tags": [2],
-    "serial_numbers": ["1234567890", "1234567891"],
-    "excluded_serial_numbers": ["1234567892"],
-    "primary_users": ["joe", "mary"],
-    "excluded_primary_users": ["jack"]
-}
-```
-
-
-```bash
-$ curl -X PUT \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d @rule_update.json \
-  "https://zentral.example.com/api/santa/rules/8/"\
-  |python3 -m json.tool
-```
-
-
-Response:
-
-```json
-{
-    "id": 8,
-    "target_type": "BINARY",
-    "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
-    "ruleset": null,
-    "version": 2,
-    "policy": 2,
-    "custom_msg": "This binary is not allowed on this machine",
-    "description": "Block the yes binary on macOS 12.5",
-    "serial_numbers": [
-        "1234567890",
-        "1234567891"
-    ],
-    "excluded_serial_numbers": [
-        "1234567892"
-    ],
-    "primary_users": [
-        "joe",
-        "mary"
-    ],
-    "excluded_primary_users": [
-        "jack"
-    ],
-    "created_at": "2023-01-30T08:51:13.826830",
-    "updated_at": "2023-01-30T08:54:21.860380",
-    "configuration": 1,
-    "tags": [
-        1
-    ],
-    "excluded_tags": [
-        2
-    ]
-}
-```
-
-#### Delete a rule
-
-* method: DELETE
-* Required permission: `santa.delete_rule`
-* `<int:pk>`: the primary key of the rule.
-
-Use this endpoint to delete a Santa rule.
-
-Example
-
-```bash
-$ curl -X DELETE \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/santa/rules/8/"
-```
-
-### /api/santa/ingest/fileinfo/
-
-* method: POST
-* Content-Type: application/json
-
-This endpoint is designed to ingest the JSON output of the [`santactl fileinfo` command](https://santa.dev/details/santactl.html#fileinfo). This can be used to quickly and automatically upload information about binaries and certificates to Zentral. This information will be used to add context to rules identifiers, and in the rule forms.
-
-Example:
-
-```
-$ santactl fileinfo --json \
-  --filter "Type=Executable" \
-  -r /Applications/TeamViewer.app/ \
-  | curl -XPOST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d @- \
-  https://zentral.example.com/api/santa/ingest/fileinfo/
-```
-
-This response is a JSON object with some counters:
-
-```json
-{
-    "deserialization_errors": 0,
-    "db_errors": 0,
-    "present": 0,
-    "added": 9,
-    "ignored": 0
-}
-```
-
-This operation is idempotent. The second time you run the command, and if the application has not changed, you will get the following response:
-
-```json
-{
-    "deserialization_errors": 0,
-    "db_errors": 0,
-    "present": 9,
-    "added": 0,
-    "ignored": 0
-}
-```
-
-### /api/santa/rulesets/update/
-
-* method: POST
-* Content-Type: application/json or application/yaml
-
-This endpoint is designed to help automatically maintain Zentral Santa configuration rulesets. It can be used in a CI/CD workflow.
-
-To make a dry-run request, use `?dryRun` or `?dryRun=All` as query string.
-
-#### Definition of a ruleset
-
-A ruleset is a set of rules, with a unique name, that can be applied to some Zentral configurations.
-
-Ruleset updates are applied idempotently. Rules will be added, updated or deleted in the scoped configurations to match the definition of the posted ruleset.
-
-The key for each rule is the target (type, identifier). Only **one rule** can exist **for a given target** in a configuration.
-
-Ruleset allows to automatically manage a set of rules in a configuration, without modifying rules from a different ruleset, or manually created in Zentral.
-
-But if a manual rule or a rule from a different ruleset on a given target already exists, adding a rule on the same target in a ruleset will create a conflict, and the update will be rejected.
-
-Finally, rules belonging to a ruleset cannot be manually edited in Zentral.
-
-#### Payloads
-
-The rulesets can be posted in JSON or YAML format. See *Examples* below, and the different `Content-Type` header values.
-
-##### Ruleset attributes
-
-|Attribute|Mandatory|Value|
-|---|---|---|
-|`name`|✓|Unique name of the ruleset.<br>Used as key to determine if it is a create or update operation|
-|`rules`|✓|A list of rule objects (see below)|
-
-##### Rule attributes
-
-|Attribute|Mandatory|Value|
-|---|---|---|
-|`rule_type`|✓|Either `BINARY`, `CERTIFICATE`, `BUNDLE`, or `TEAMID`|
-|`identifier`|✓|The `BINARY`, `CERTIFICATE`, `BUNDLE` sha256 hex digest,<br>or the `TEAMID` of the signing certificate|
-|`policy`|✓|Either `ALLOWLIST`, `ALLOWLIST_COMPILER`, `BLOCKLIST`,<br>or `SILENT_BLOCKLIST`|
-|`custom_msg`||Optional message to show when the application is blocked.<br>Only valid for a `BLOCKLIST` policy|
-|`description`||Optional description to add context to a rule.<br>Only displayed in the Zentral GUI.|
-|`serial_numbers`||A list of machine serial numbers.<br>If set, **only** those machines will receive the rule|
-|`excluded_serial_numbers`||A list of machine serial numbers.<br>If set, those machines will **not** receive the rule|
-|`primary_users`||A list of machine owners.<br>If set, **only** the machines associated with those owners<br>(see Santa `MachineOwner`) will receive the rule|
-|`excluded_primary_users`||A list  of machine owners.<br>If set, the machines associated with those owners<br>(see Santa `MachineOwner`) will **not** receive the rule|
-|`tags`||A list of machine tags.<br>If set, **only** the machines with any one of those tags<br>will receive the rule|
-|`excluded_tags`||A list of machine tags.<br>If set, the machines with any one of those tags<br>will **not** receive the rule|
-
-#### Examples
-
-ruleset.json
-
-```json
-{
-  "name": "First ruleset test",
-  "rules": [
-    {
-      "rule_type": "BINARY",
-      "identifier": "1111111111111111111111111111111111111111111111111111111111111111",
-      "policy": "ALLOWLIST",
-      "description": "First rule of the first ruleset…"
-    },
-    {
-      "rule_type": "BINARY",
-      "identifier": "2222222222222222222222222222222222222222222222222222222222222222",
-      "policy": "ALLOWLIST",
-      "serial_numbers": ["SN1", "SN2"],
-      "excluded_serial_numbers": ["SN3"],
-      "primary_users": ["user1@example.com", "user2@example.com"],
-      "excluded_primary_users": ["user3@example.com"],
-      "tags": ["tag1", "tag2"],
-      "excluded_tags": ["tag3"]
-    }
-  ]
-}
-```
-
-Post the ruleset.json update to Zentral:
-
-```
-$ curl -XPOST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d @ruleset.json \
-  https://zentral.example.com/api/santa/rulesets/update/\
-  |python3 -m json.tool
-```
-
-You should get a response close to this one:
-
-```json
-{
-    "ruleset": {
-        "pk": 1,
-        "name": "First ruleset test"
-    },
-    "dry_run": false,
-    "result": "created",
-    "configurations": [
-        {
-            "name": "Name of your configuration",
-            "pk": 1,
-            "rule_results": {
-                "created": 2,
-                "deleted": 0,
-                "present": 0,
-                "updated": 0
-            }
-        }
-    ]
-}
-```
-
-If you post the same file again, you will get this answer:
-
-```json
-{
-    "ruleset": {
-        "pk": 1,
-        "name": "First ruleset test"
-    },
-    "dry_run": false,
-    "result": "present",
-    "configurations": [
-        {
-            "name": "Name of your configuration",
-            "pk": 1,
-            "rule_results": {
-                "created": 0,
-                "deleted": 0,
-                "present": 2,
-                "updated": 0
-            }
-        }
-    ]
-}
-```
-
-ruleset2.json, scoped to only one configuration, but with a conflict with ruleset.json:
-
-```json
-{
-  "name": "Second ruleset test",
-  "configurations": ["Name of your configuration"],
-  "rules": [
-    {
-      "rule_type": "BINARY",
-      "identifier": "1111111111111111111111111111111111111111111111111111111111111111",
-      "policy": "ALLOWLIST"
-    }
-  ]
-}
-```
-
-If you POST it, you will get the following error:
-
-```json
-{
-    "rules": {
-        "0": {
-            "non_field_errors": [
-                "BINARY/1111111111111111111111111111111111111111111111111111111111111111: conflict"
-            ]
-        }
-    }
-}
-```
-
-This indicates that there is an existing rule in the configuration, on the same target as the first rule in ruleset2.json, but not belonging to this ruleset. If we change the identifier, a new rule will be created without conflict, and without modifying the manual rules, or the rules from ruleset.json.
-
-```json
-{
-  "name": "Second ruleset test",
-  "configurations": ["Name of your configuration"],
-  "rules": [
-    {
-      "rule_type": "BINARY",
-      "identifier": "9876987698769876987698769876987698769876987698769876987698769876",
-      "policy": "ALLOWLIST"
-    }
-  ]
-}
-```
-
-```json
-{
-    "ruleset": {
-        "pk": 2,
-        "name": "Second ruleset test"
-    },
-    "dry_run": false,
-    "result": "created",
-    "configurations": [
-        {
-            "name": "Name of your configuration",
-            "pk": 1,
-            "rule_results": {
-                "created": 1,
-                "deleted": 0,
-                "present": 0,
-                "updated": 0
-            }
-        }
-    ]
-}
-```
-
-You can also use a YAML payload. This can be useful if you would like to use comments in the source.
-
-ruleset2.yml
-
-```yaml
----
-name: Second ruleset test
-configurations:
-  - Name of your configuration
-rules:
-  - rule_type: BINARY
-    identifier: 9876987698769876987698769876987698769876987698769876987698769876
-    policy: ALLOWLIST
-```
-
-Post the yml source to Zentral:
-
-```
-$ curl -XPOST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/yaml' \
-  --data-binary @ruleset2.yml \
-  https://zentral.example.com/api/santa/rulesets/update/\
-  |python3 -m json.tool
-```
-
-Nothing was changed:
-
-```json
-{
-    "ruleset": {
-        "pk": 2,
-        "name": "Second ruleset test"
-    },
-    "dry_run": false,
-    "result": "present",
-    "configurations": [
-        {
-            "name": "Name of your configuration",
-            "pk": 1,
-            "rule_results": {
-                "created": 0,
-                "deleted": 0,
-                "present": 1,
-                "updated": 0
-            }
-        }
-    ]
-}
-```
-
 ### /api/santa/configurations/
 
 #### List all Santa configurations.
@@ -1318,4 +716,666 @@ Example
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/santa/enrollments/1/configuration_profile/ \
   --output com.example.zentral.santa_configuration.mobileconfig
+```
+
+### /api/santa/ingest/fileinfo/
+
+* method: POST
+* Content-Type: application/json
+
+This endpoint is designed to ingest the JSON output of the [`santactl fileinfo` command](https://santa.dev/details/santactl.html#fileinfo). This can be used to quickly and automatically upload information about binaries and certificates to Zentral. This information will be used to add context to rules identifiers, and in the rule forms.
+
+Example:
+
+```
+$ santactl fileinfo --json \
+  --filter "Type=Executable" \
+  -r /Applications/TeamViewer.app/ \
+  | curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @- \
+  https://zentral.example.com/api/santa/ingest/fileinfo/
+```
+
+This response is a JSON object with some counters:
+
+```json
+{
+    "deserialization_errors": 0,
+    "db_errors": 0,
+    "present": 0,
+    "added": 9,
+    "ignored": 0
+}
+```
+
+This operation is idempotent. The second time you run the command, and if the application has not changed, you will get the following response:
+
+```json
+{
+    "deserialization_errors": 0,
+    "db_errors": 0,
+    "present": 9,
+    "added": 0,
+    "ignored": 0
+}
+```
+
+### /api/santa/rules/
+
+#### List all Santa rules
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `santa.view_rule`
+* Optional search parameters:
+  * `target_type`: the type (`BINARY`, `CERTIFICATE`, …) of the rule target.
+  * `target_identifier`: the identifier of the rule target.
+  * `configuration_id`: the ID of the Zentral Santa configuration the rule is attached to.
+
+Use this endpoint to get a list of the Santa rules.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/santa/rules/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/santa/rules/?target_type=TEAMID" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "target_type": "TEAMID",
+        "target_identifier": "9BNSXJN65R",
+        "ruleset": null,
+        "version": 1,
+        "policy": 1,
+        "custom_msg": "",
+        "description": "",
+        "serial_numbers": [],
+        "excluded_serial_numbers": [],
+        "primary_users": [],
+        "excluded_primary_users": [],
+        "created_at": "2023-01-17T13:08:19.503831",
+        "updated_at": "2023-01-17T13:08:19.503837",
+        "configuration": 1,
+        "tags": [
+            2
+        ],
+        "excluded_tags": [
+            1
+        ]
+    },
+    {
+        "id": 2,
+        "target_type": "TEAMID",
+        "target_identifier": "1234567890",
+        "ruleset": null,
+        "version": 1,
+        "policy": 1,
+        "custom_msg": "",
+        "description": "",
+        "serial_numbers": [],
+        "excluded_serial_numbers": [],
+        "primary_users": [],
+        "excluded_primary_users": [],
+        "created_at": "2023-01-20T06:10:15.059545",
+        "updated_at": "2023-01-20T06:10:15.059556",
+        "configuration": 1,
+        "tags": [],
+        "excluded_tags": []
+    }
+]
+```
+
+#### Add new Santa rule
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `santa.add_rule`
+
+Use this endpoint to add a new Santa rule.
+
+> **_NOTEs:_** The `ruleset` attribute is read-only
+
+Example:
+
+rule.json:
+
+```json
+{
+    "target_type": "BINARY",
+    "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
+    "policy": 1,
+    "description": "Allow the yes binary on macOS 12.5",
+    "configuration": 1,
+    "tags": [1],
+    "excluded_tags": [2],
+    "serial_numbers": ["1234567890", "1234567891"],
+    "excluded_serial_numbers": ["1234567892", "1234567893"],
+    "primary_users": ["john", "jane"],
+    "excluded_primary_users": ["joe"]
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @rule.json \
+  "https://zentral.example.com/api/santa/rules/"\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 8,
+    "target_type": "BINARY",
+    "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
+    "ruleset": null,
+    "version": 1,
+    "policy": 1,
+    "custom_msg": "",
+    "description": "Allow the yes binary on macOS 12.5",
+    "serial_numbers": [
+        "1234567890",
+        "1234567891"
+    ],
+    "excluded_serial_numbers": [
+        "1234567892",
+        "1234567893"
+    ],
+    "primary_users": [
+        "john",
+        "jane"
+    ],
+    "excluded_primary_users": [
+        "joe"
+    ],
+    "created_at": "2023-01-30T08:51:13.826830",
+    "updated_at": "2023-01-30T08:51:13.826841",
+    "configuration": 1,
+    "tags": [
+        1
+    ],
+    "excluded_tags": [
+        2
+    ]
+}
+```
+
+### /api/santa/rules/`<int: pk>`/
+
+#### Get a rule
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `santa.view_rule`
+* `<int:pk>`: the primary key of the rule.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/santa/rules/1/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 1,
+    "target_type": "TEAMID",
+    "target_identifier": "9BNSXJN65R",
+    "ruleset": null,
+    "version": 1,
+    "policy": 1,
+    "custom_msg": "",
+    "description": "",
+    "serial_numbers": [],
+    "excluded_serial_numbers": [],
+    "primary_users": [],
+    "excluded_primary_users": [],
+    "created_at": "2023-01-17T13:08:19.503831",
+    "updated_at": "2023-01-17T13:08:19.503837",
+    "configuration": 1,
+    "tags": [
+        2
+    ],
+    "excluded_tags": [
+        1
+    ]
+}
+```
+
+#### Update a rule
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `santa.edit_rule`
+
+Use this endpoint to update a Santa rule.
+
+> **_NOTEs:_** The `ruleset` attribute is read-only
+
+Example:
+
+rule_update.json:
+
+```json
+{
+    "target_type": "BINARY",
+    "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
+    "policy": 2,
+    "description": "Block the yes binary on macOS 12.5",
+    "configuration": 1,
+    "custom_msg": "This binary is not allowed on this machine",
+    "tags": [1],
+    "excluded_tags": [2],
+    "serial_numbers": ["1234567890", "1234567891"],
+    "excluded_serial_numbers": ["1234567892"],
+    "primary_users": ["joe", "mary"],
+    "excluded_primary_users": ["jack"]
+}
+```
+
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @rule_update.json \
+  "https://zentral.example.com/api/santa/rules/8/"\
+  |python3 -m json.tool
+```
+
+
+Response:
+
+```json
+{
+    "id": 8,
+    "target_type": "BINARY",
+    "target_identifier": "2e4c209792b8c847063b94422adeee4ebeb523a1c28a8becfd99a77588c1c247",
+    "ruleset": null,
+    "version": 2,
+    "policy": 2,
+    "custom_msg": "This binary is not allowed on this machine",
+    "description": "Block the yes binary on macOS 12.5",
+    "serial_numbers": [
+        "1234567890",
+        "1234567891"
+    ],
+    "excluded_serial_numbers": [
+        "1234567892"
+    ],
+    "primary_users": [
+        "joe",
+        "mary"
+    ],
+    "excluded_primary_users": [
+        "jack"
+    ],
+    "created_at": "2023-01-30T08:51:13.826830",
+    "updated_at": "2023-01-30T08:54:21.860380",
+    "configuration": 1,
+    "tags": [
+        1
+    ],
+    "excluded_tags": [
+        2
+    ]
+}
+```
+
+#### Delete a rule
+
+* method: DELETE
+* Required permission: `santa.delete_rule`
+* `<int:pk>`: the primary key of the rule.
+
+Use this endpoint to delete a Santa rule.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/santa/rules/8/"
+```
+
+### /api/santa/rulesets/update/
+
+* method: POST
+* Content-Type: application/json or application/yaml
+
+This endpoint is designed to help automatically maintain Zentral Santa configuration rulesets. It can be used in a CI/CD workflow.
+
+To make a dry-run request, use `?dryRun` or `?dryRun=All` as query string.
+
+#### Definition of a ruleset
+
+A ruleset is a set of rules, with a unique name, that can be applied to some Zentral configurations.
+
+Ruleset updates are applied idempotently. Rules will be added, updated or deleted in the scoped configurations to match the definition of the posted ruleset.
+
+The key for each rule is the target (type, identifier). Only **one rule** can exist **for a given target** in a configuration.
+
+Ruleset allows to automatically manage a set of rules in a configuration, without modifying rules from a different ruleset, or manually created in Zentral.
+
+But if a manual rule or a rule from a different ruleset on a given target already exists, adding a rule on the same target in a ruleset will create a conflict, and the update will be rejected.
+
+Finally, rules belonging to a ruleset cannot be manually edited in Zentral.
+
+#### Payloads
+
+The rulesets can be posted in JSON or YAML format. See *Examples* below, and the different `Content-Type` header values.
+
+##### Ruleset attributes
+
+|Attribute|Mandatory|Value|
+|---|---|---|
+|`name`|✓|Unique name of the ruleset.<br>Used as key to determine if it is a create or update operation|
+|`rules`|✓|A list of rule objects (see below)|
+
+##### Rule attributes
+
+|Attribute|Mandatory|Value|
+|---|---|---|
+|`rule_type`|✓|Either `BINARY`, `CERTIFICATE`, `BUNDLE`, or `TEAMID`|
+|`identifier`|✓|The `BINARY`, `CERTIFICATE`, `BUNDLE` sha256 hex digest,<br>or the `TEAMID` of the signing certificate|
+|`policy`|✓|Either `ALLOWLIST`, `ALLOWLIST_COMPILER`, `BLOCKLIST`,<br>or `SILENT_BLOCKLIST`|
+|`custom_msg`||Optional message to show when the application is blocked.<br>Only valid for a `BLOCKLIST` policy|
+|`description`||Optional description to add context to a rule.<br>Only displayed in the Zentral GUI.|
+|`serial_numbers`||A list of machine serial numbers.<br>If set, **only** those machines will receive the rule|
+|`excluded_serial_numbers`||A list of machine serial numbers.<br>If set, those machines will **not** receive the rule|
+|`primary_users`||A list of machine owners.<br>If set, **only** the machines associated with those owners<br>(see Santa `MachineOwner`) will receive the rule|
+|`excluded_primary_users`||A list  of machine owners.<br>If set, the machines associated with those owners<br>(see Santa `MachineOwner`) will **not** receive the rule|
+|`tags`||A list of machine tags.<br>If set, **only** the machines with any one of those tags<br>will receive the rule|
+|`excluded_tags`||A list of machine tags.<br>If set, the machines with any one of those tags<br>will **not** receive the rule|
+
+#### Examples
+
+ruleset.json
+
+```json
+{
+  "name": "First ruleset test",
+  "rules": [
+    {
+      "rule_type": "BINARY",
+      "identifier": "1111111111111111111111111111111111111111111111111111111111111111",
+      "policy": "ALLOWLIST",
+      "description": "First rule of the first ruleset…"
+    },
+    {
+      "rule_type": "BINARY",
+      "identifier": "2222222222222222222222222222222222222222222222222222222222222222",
+      "policy": "ALLOWLIST",
+      "serial_numbers": ["SN1", "SN2"],
+      "excluded_serial_numbers": ["SN3"],
+      "primary_users": ["user1@example.com", "user2@example.com"],
+      "excluded_primary_users": ["user3@example.com"],
+      "tags": ["tag1", "tag2"],
+      "excluded_tags": ["tag3"]
+    }
+  ]
+}
+```
+
+Post the ruleset.json update to Zentral:
+
+```
+$ curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @ruleset.json \
+  https://zentral.example.com/api/santa/rulesets/update/\
+  |python3 -m json.tool
+```
+
+You should get a response close to this one:
+
+```json
+{
+    "ruleset": {
+        "pk": 1,
+        "name": "First ruleset test"
+    },
+    "dry_run": false,
+    "result": "created",
+    "configurations": [
+        {
+            "name": "Name of your configuration",
+            "pk": 1,
+            "rule_results": {
+                "created": 2,
+                "deleted": 0,
+                "present": 0,
+                "updated": 0
+            }
+        }
+    ]
+}
+```
+
+If you post the same file again, you will get this answer:
+
+```json
+{
+    "ruleset": {
+        "pk": 1,
+        "name": "First ruleset test"
+    },
+    "dry_run": false,
+    "result": "present",
+    "configurations": [
+        {
+            "name": "Name of your configuration",
+            "pk": 1,
+            "rule_results": {
+                "created": 0,
+                "deleted": 0,
+                "present": 2,
+                "updated": 0
+            }
+        }
+    ]
+}
+```
+
+ruleset2.json, scoped to only one configuration, but with a conflict with ruleset.json:
+
+```json
+{
+  "name": "Second ruleset test",
+  "configurations": ["Name of your configuration"],
+  "rules": [
+    {
+      "rule_type": "BINARY",
+      "identifier": "1111111111111111111111111111111111111111111111111111111111111111",
+      "policy": "ALLOWLIST"
+    }
+  ]
+}
+```
+
+If you POST it, you will get the following error:
+
+```json
+{
+    "rules": {
+        "0": {
+            "non_field_errors": [
+                "BINARY/1111111111111111111111111111111111111111111111111111111111111111: conflict"
+            ]
+        }
+    }
+}
+```
+
+This indicates that there is an existing rule in the configuration, on the same target as the first rule in ruleset2.json, but not belonging to this ruleset. If we change the identifier, a new rule will be created without conflict, and without modifying the manual rules, or the rules from ruleset.json.
+
+```json
+{
+  "name": "Second ruleset test",
+  "configurations": ["Name of your configuration"],
+  "rules": [
+    {
+      "rule_type": "BINARY",
+      "identifier": "9876987698769876987698769876987698769876987698769876987698769876",
+      "policy": "ALLOWLIST"
+    }
+  ]
+}
+```
+
+```json
+{
+    "ruleset": {
+        "pk": 2,
+        "name": "Second ruleset test"
+    },
+    "dry_run": false,
+    "result": "created",
+    "configurations": [
+        {
+            "name": "Name of your configuration",
+            "pk": 1,
+            "rule_results": {
+                "created": 1,
+                "deleted": 0,
+                "present": 0,
+                "updated": 0
+            }
+        }
+    ]
+}
+```
+
+You can also use a YAML payload. This can be useful if you would like to use comments in the source.
+
+ruleset2.yml
+
+```yaml
+---
+name: Second ruleset test
+configurations:
+  - Name of your configuration
+rules:
+  - rule_type: BINARY
+    identifier: 9876987698769876987698769876987698769876987698769876987698769876
+    policy: ALLOWLIST
+```
+
+Post the yml source to Zentral:
+
+```
+$ curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/yaml' \
+  --data-binary @ruleset2.yml \
+  https://zentral.example.com/api/santa/rulesets/update/\
+  |python3 -m json.tool
+```
+
+Nothing was changed:
+
+```json
+{
+    "ruleset": {
+        "pk": 2,
+        "name": "Second ruleset test"
+    },
+    "dry_run": false,
+    "result": "present",
+    "configurations": [
+        {
+            "name": "Name of your configuration",
+            "pk": 1,
+            "rule_results": {
+                "created": 0,
+                "deleted": 0,
+                "present": 1,
+                "updated": 0
+            }
+        }
+    ]
+}
+```
+
+### /api/santa/targets/
+
+#### List all Targets.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `santa.view_target`
+* Optional filter parameter:
+    * `target_type`: the type (`BINARY`, `CERTIFICATE`, …) of the rule target.
+    * `target_identifier`: the identifier of the rule target.
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/santa/targets/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/santa/targets/?target_type=BINARY \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 6,
+            "files": [
+                {
+                    "id": 6,
+                    "name": "HR22V4547K.com.tyme-app.Tyme3LoginItem",
+                    "path": "/Applications/Tyme.app/Contents/Library/LoginItems/
+                            HR22V4547K.com.tyme-app.Tyme3LoginItem.app/Contents/MacOS",
+                    "sha_256": "ad5b8d14b243cda4627789b8873cf7a81ebd45cb99ce1beb61dc035c0a03a86a",
+                    "bundle_path": "/Applications/Tyme.app/Contents/Library/LoginItems/
+                                   HR22V4547K.com.tyme-app.Tyme3LoginItem.app",
+                    "source": 4,
+                    "bundle": 63,
+                    "signed_by": 7
+                }
+            ],
+            "certificates": [],
+            "team_ids": [],
+            "type": "BINARY",
+            "identifier": "ad5b8d14b243cda4627789b8873cf7a81ebd45cb99ce1beb61dc035c0a03a86a"
+        }
+    ]
+}
 ```
