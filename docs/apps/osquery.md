@@ -42,7 +42,7 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * Content-Type: application/json
 * Required permission: `osquery.view_automatictableconstruction`
 * Optional filter parameter:
-	* `name`: name of the ATC.
+    * `name`: name of the ATC.
     * `configuration_id`: primary key of the configuration.
 
 Examples:
@@ -285,7 +285,7 @@ Response (204 No Content)
 * Content-Type: application/json
 * Required permission: `osquery.view_configuration`
 * Optional filter parameter:
-	* `name`: Name of the configuration.
+    * `name`: Name of the configuration.
 
 Examples:
 
@@ -1706,9 +1706,9 @@ Response (204 No Content)
 
 * method: POST
 * required permissions:
-	* `osquery.view_distributedqueryresult`
+    * `osquery.view_distributedqueryresult`
 * optional parameter:
-	* `export_format`: One of `csv`, `ndjson` or `json`. Defaults to `csv`.
+    * `export_format`: One of `csv`, `ndjson` or `json`. Defaults to `csv`.
 
 Use this endpoint to trigger a Osquery run export task. The result of this task will be a file containing all the data collected during the run.
 
