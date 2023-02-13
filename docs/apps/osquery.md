@@ -6,9 +6,6 @@
 
 To activate the osquery module, you need to add a `zentral.contrib.osquery` section to the `apps` section in `base.json`.
 
-## HTTP API
-
-There are three HTTP API endpoints available.
 
 ### Requests
 
@@ -35,6 +32,8 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * `Content-Type: application/json`
 * `Content-Type: application/x-osquery-conf`
 * `Content-Type: application/yaml`
+
+## HTTP API
 
 ### /api/osquery/atcs/
 
