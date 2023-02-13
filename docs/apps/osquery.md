@@ -154,7 +154,7 @@ Response:
 
 ### /api/osquery/atcs/`<int:pk>`/
 
-#### Get an ATC.
+#### Get a ATC.
 
 method: GET
 Content-Type: application/json
@@ -194,7 +194,7 @@ Response:
 }
 ```
 
-#### Update an ATC.
+#### Update a ATC.
 
 * method: PUT
 * Content-Type: application/json
@@ -263,7 +263,7 @@ Response:
 }
 ```
 
-#### Delete an ATC.
+#### Delete a ATC.
 
 * method: DELETE
 * Required permission: `osquery.delete_automatictableconstruction`
@@ -398,7 +398,7 @@ Response:
 
 ### /api/osquery/configurations/`<int:pk>`/
 
-#### Get an Configuration.
+#### Get a Configuration.
 
 method: GET
 Content-Type: application/json
@@ -439,7 +439,7 @@ Response:
 }
 ```
 
-#### Update an Configuration.
+#### Update a Configuration.
 
 * method: PUT
 * Content-Type: application/json
@@ -498,7 +498,7 @@ Response:
 }
 ```
 
-#### Delete an Configuration.
+#### Delete a Configuration.
 
 * method: DELETE
 * Required permission: `osquery.delete_configuration`
@@ -799,7 +799,7 @@ Response:
 
 ### /api/osquery/file_categories/`<int:pk>`/
 
-#### Get an FileCategory.
+#### Get a FileCategory.
 
 * method: GET
 * Content-Type: application/json
@@ -837,7 +837,7 @@ Response:
 }
 ```
 
-#### Update an FileCategory.
+#### Update a FileCategory.
 
 * method: PUT
 * Content-Type: application/json
@@ -893,7 +893,7 @@ Response:
 }
 ```
 
-#### Delete an FileCategory.
+#### Delete a FileCategory.
 
 * method: DELETE
 * Required permission: `osquery.delete_filecategory`
@@ -1105,11 +1105,13 @@ Response (204 No Content)
 
 ### /api/osquery/packs/`<slug:slug>`/
 
+#### Create or update a standard Osquery pack.
+
 * method: `PUT`, `DELETE`
 
 This endpoint is designed to create or update a standard Osquery pack.
 
-#### Examples
+Examples
 
 pack.json
 
@@ -1138,12 +1140,12 @@ pack.json
 
 `PUT` the pack.json file to Zentral:
 
-```
+```bash
 $ curl -XPUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @pack.json \
-  https://zentral.example.com/api/osquery/packs/first-pack-slug/ \
+  "https://zentral.example.com/api/osquery/packs/first-pack-slug/" \
   |python3 -m json.tool
 ```
 
@@ -1186,11 +1188,11 @@ If you `PUT` the same file again, you will get this answer:
 If you make a `DELETE` request on the same URL, the pack and all its rules will be deleted:
 
 
-```
+```bash
 $ curl -XDELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
-  https://zentral.example.com/api/osquery/packs/first-pack-slug/ \
+  "https://zentral.example.com/api/osquery/packs/first-pack-slug/" \
   |python3 -m json.tool
 ```
 
@@ -1216,7 +1218,7 @@ If the pack is in the osquery format (broken JSON), with line-wrapping character
 
 pack.conf  ([Real examples](https://github.com/osquery/osquery/blob/master/packs/) are available in the osquery repository.)
 
-```
+```json
 {
   // Do not use this query in production!!!
   "platform": "darwin",
@@ -1234,12 +1236,12 @@ pack.conf  ([Real examples](https://github.com/osquery/osquery/blob/master/packs
 }
 ```
 
-```
+```bash
 $ curl -XPUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/x-osquery-conf' \
   --data-binary @pack.conf \
-  https://zentral.example.com/api/osquery/packs/second-pack-slug/ \
+  "https://zentral.example.com/api/osquery/packs/second-pack-slug/" \
   |python3 -m json.tool
 ```
 
@@ -1281,12 +1283,12 @@ queries:
     value: Artifact used by this malware - 🔥
 ```
 
-```
+```bash
 $ curl -XPUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/yaml' \
   --data-binary @pack.yml \
-  https://zentral.example.com/api/osquery/packs/second-pack-slug/ \
+  "https://zentral.example.com/api/osquery/packs/second-pack-slug/" \
   |python3 -m json.tool
 ```
 
@@ -1527,13 +1529,13 @@ Examples
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/osquery/queries/ \
+  "https://zentral.example.com/api/osquery/queries/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/osquery/queries/?name=GetApps \
+  "https://zentral.example.com/api/osquery/queries/?name=GetApps" \
   |python3 -m json.tool
 ```
 
@@ -1582,7 +1584,7 @@ $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @query.json \
-  https://zentral.example.com/api/osquery/queries/\
+  "https://zentral.example.com/api/osquery/queries/" \
   |python3 -m json.tool
 ```
 
@@ -1617,7 +1619,7 @@ Example
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/osquery/queries/1/ \
+  "https://zentral.example.com/api/osquery/queries/1/" \
   |python3 -m json.tool
 ```
 
@@ -1662,7 +1664,7 @@ $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @query_update.json \
-  https://zentral.example.com/api/osquery/queries/1/\
+  "https://zentral.example.com/api/osquery/queries/1/" \
   |python3 -m json.tool
 ```
 
@@ -1695,12 +1697,14 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/osquery/queries/1/
+  "https://zentral.example.com/api/osquery/queries/1/"
 ```
 
 Response (204 No Content)
 
 ### `/api/osquery/runs/<int:pk>/results/export/`
+
+#### Trigger a Osquery run export task.
 
 * method: POST
 * required permissions:
@@ -1710,16 +1714,16 @@ Response (204 No Content)
 
 Use this endpoint to trigger a Osquery run export task. The result of this task will be a file containing all the data collected during the run.
 
-#### Example
+Example
 
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/osquery/runs/1/results/export/\
+  "https://zentral.example.com/api/osquery/runs/1/results/export/" \
   |python3 -m json.tool
 ```
 
-#### Response
+Response
 
 ```json
 {
