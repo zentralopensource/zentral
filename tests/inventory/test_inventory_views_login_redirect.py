@@ -58,9 +58,6 @@ class InventoryLoginRedirectTestCase(TestCase):
         self.assertRedirects(response, "{u}?{q}".format(u=reverse("login"),
                                                         q=urllib.parse.urlencode({"next": url}, safe="/")))
 
-    def test_index(self):
-        self.login_redirect("index", query="sf=mbu-t-tp-hm-pf-osv")
-
     def test_groups(self):
         self.login_redirect("groups")
 

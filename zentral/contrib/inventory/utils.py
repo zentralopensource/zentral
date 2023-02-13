@@ -1136,6 +1136,31 @@ class LastSeenFilter(BaseMSFilter):
                 pass
 
 
+class MACAddressFilter(BaseMSFilter):
+    query_kwarg = "ma"
+    free_input = True
+    redirect_if_single_result = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.value:
+            self.value = self.value.strip()
+
+    def joins(self):
+        if not self.value:
+            return
+        yield "left join inventory_machinesnapshot_network_interfaces as msni on (ms.id = msni.machinesnapshot_id)"
+        yield "left join inventory_networkinterface as ni on (msni.networkinterface_id = ni.id)"
+
+    def wheres(self):
+        if self.value:
+            yield "UPPER(ni.mac) LIKE UPPER(%s)"
+
+    def where_args(self):
+        if self.value:
+            yield "{}%".format(connection.ops.prep_for_like_query(self.value))
+
+
 class HardwareModelFilter(BaseMSFilter):
     title = "Hardware models"
     optional = True
@@ -1428,6 +1453,7 @@ class MSQuery:
         SerialNumberFilter,
         ComputerNameFilter,
         PrincipalUserNameFilter,
+        MACAddressFilter,
         LastSeenFilter,
     ]
     extra_filters = [

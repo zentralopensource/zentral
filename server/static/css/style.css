@@ -12,3 +12,6 @@ table.action-probe-config tr:first-child td {border: none}
 table.action-probe-config tr td:first-child {font-weight:700; width:1%; white-space:nowrap; padding-right: 2em}
 
 select#id_permissions {height:50vh}
+
+#inventory-form {display:flex;flex-wrap:wrap;align-items:center;gap:5px;row-gap:10px}
+#inventory-form .form-group {margin:0}
