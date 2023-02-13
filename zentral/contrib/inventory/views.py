@@ -93,7 +93,7 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
             request_dict["ls"] = request.session.setdefault(self.last_seen_session_key, self.last_seen_default)
         return MSQuery(request_dict)
 
-    def dispatch(self, request, *args, **kwargs):
+    def get(self, request, *args, **kwargs):
         try:
             self.object = self.get_object(**kwargs)
         except ObjectDoesNotExist:
@@ -108,7 +108,7 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
             request.session[self.last_seen_session_key] = ls
         elif self.last_seen_session_key in request.session:
             del request.session[self.last_seen_session_key]
-        return super().dispatch(request, *args, **kwargs)
+        return super().get(request, *args, **kwargs)
 
     def get_list_title(self):
         return ""
