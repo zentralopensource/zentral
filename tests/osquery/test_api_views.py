@@ -133,7 +133,7 @@ class APIViewsTestCase(TestCase):
         query.refresh_from_db()
         return query
 
-    def force_packquery(self, query_name=None, force_snapshot_mode=False, compliance_check=False):
+    def force_pack_query(self, query_name=None, force_snapshot_mode=False, compliance_check=False):
         if force_snapshot_mode:
             pack_query_mode = "snapshot"
         else:
@@ -2776,15 +2776,15 @@ class APIViewsTestCase(TestCase):
 
     # List ConfigurationPacks
 
-    def test_list_configurationpacks_unauthorized(self):
+    def test_list_configuration_packs_unauthorized(self):
         response = self.get(reverse("osquery_api:configuration_packs"), include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_list_configurationpacks_permission_denied(self):
+    def test_list_configuration_packs_permission_denied(self):
         response = self.get(reverse("osquery_api:configuration_packs"))
         self.assertEqual(response.status_code, 403)
 
-    def test_list_configurationpacks_filter_configuration_id_not_found(self):
+    def test_list_configuration_packs_filter_configuration_id_not_found(self):
         self.set_permissions("osquery.view_configurationpack")
         response = self.get(reverse("osquery_api:configuration_packs"), {"configuration_id": 9999})
         self.assertEqual(response.status_code, 400)
@@ -2792,7 +2792,7 @@ class APIViewsTestCase(TestCase):
             'configuration_id': ['Select a valid choice. That choice is not one of the available choices.']
         })
 
-    def test_list_configurationpacks_filter_pack_id_not_found(self):
+    def test_list_configuration_packs_filter_pack_id_not_found(self):
         self.set_permissions("osquery.view_configurationpack")
         response = self.get(reverse("osquery_api:configuration_packs"), {"pack_id": 9999})
         self.assertEqual(response.status_code, 400)
@@ -2800,7 +2800,7 @@ class APIViewsTestCase(TestCase):
             'pack_id': ['Select a valid choice. That choice is not one of the available choices.']
         })
 
-    def test_list_configurationpacks_filter_configuration_id(self):
+    def test_list_configuration_packs_filter_configuration_id(self):
         self.set_permissions("osquery.view_configurationpack")
         for _ in range(3):
             self.force_configuration_pack()
@@ -2814,7 +2814,7 @@ class APIViewsTestCase(TestCase):
             "pack": pack.pk
         }])
 
-    def test_list_configurationpacks_filter_pack_id(self):
+    def test_list_configuration_packs_filter_pack_id(self):
         self.set_permissions("osquery.view_configurationpack")
         for _ in range(3):
             self.force_configuration_pack()
@@ -2828,7 +2828,7 @@ class APIViewsTestCase(TestCase):
             "pack": pack.pk
         }])
 
-    def test_list_configurationpacks(self):
+    def test_list_configuration_packs(self):
         self.set_permissions("osquery.view_configurationpack")
         configuration_pack = self.force_configuration_pack()
         response = self.get(reverse("osquery_api:configuration_packs"))
@@ -2842,15 +2842,15 @@ class APIViewsTestCase(TestCase):
 
     # get configuration pack
 
-    def test_get_configurationpack_unauthorized(self):
+    def test_get_configuration_pack_unauthorized(self):
         response = self.get(reverse("osquery_api:configuration_pack", args=(9999,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_get_configurationpack_permission_denied(self):
+    def test_get_configuration_pack_permission_denied(self):
         response = self.get(reverse("osquery_api:configuration_pack", args=(9999,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_configurationpack_not_found(self):
+    def test_get_configuration_pack_not_found(self):
         self.set_permissions("osquery.view_configurationpack")
         response = self.get(reverse("osquery_api:configuration_pack", args=(9999,)))
         self.assertEqual(response.status_code, 404)
@@ -2858,7 +2858,7 @@ class APIViewsTestCase(TestCase):
             "detail": "Not found."
         })
 
-    def test_get_configurationpack(self):
+    def test_get_configuration_pack(self):
         self.set_permissions("osquery.view_configurationpack")
         configuration_pack = self.force_configuration_pack(force_tags=True)
         response = self.get(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)))
@@ -2872,15 +2872,15 @@ class APIViewsTestCase(TestCase):
 
     # update configuration pack
 
-    def test_update_configurationpack_unauthorized(self):
+    def test_update_configuration_pack_unauthorized(self):
         response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(9999,)), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_update_configurationpack_permission_denied(self):
+    def test_update_configuration_pack_permission_denied(self):
         response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(9999,)), {})
         self.assertEqual(response.status_code, 403)
 
-    def test_update_configurationpack_not_found(self):
+    def test_update_configuration_pack_not_found(self):
         self.set_permissions("osquery.change_configurationpack")
         response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(9999,)), {})
         self.assertEqual(response.status_code, 404)
@@ -2888,7 +2888,7 @@ class APIViewsTestCase(TestCase):
             "detail": "Not found."
         })
 
-    def test_update_configurationpack_configuration_fields_empty(self):
+    def test_update_configuration_pack_configuration_fields_empty(self):
         self.set_permissions("osquery.change_configurationpack")
         configuration_pack = self.force_configuration_pack()
         response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), {})
@@ -2898,7 +2898,7 @@ class APIViewsTestCase(TestCase):
             "pack": ["This field is required."]
         })
 
-    def test_update_configurationpack_conflict(self):
+    def test_update_configuration_pack_conflict(self):
         self.set_permissions("osquery.change_configurationpack")
         configuration_pack = self.force_configuration_pack()
         configuration_pack2 = self.force_configuration_pack()
@@ -2912,7 +2912,7 @@ class APIViewsTestCase(TestCase):
             "non_field_errors": ["The fields configuration, pack must make a unique set."]
         })
 
-    def test_update_configurationpack(self):
+    def test_update_configuration_pack(self):
         self.set_permissions("osquery.change_configurationpack")
         configuration_pack = self.force_configuration_pack(force_tags=True)
         new_configuration = self.force_configuration()
@@ -2938,15 +2938,15 @@ class APIViewsTestCase(TestCase):
 
     # create configuration pack
 
-    def test_create_configurationpack_unauthorized(self):
+    def test_create_configuration_pack_unauthorized(self):
         response = self.post_json_data(reverse("osquery_api:configuration_packs"), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_create_configurationpack_permission_denied(self):
+    def test_create_configuration_pack_permission_denied(self):
         response = self.post_json_data(reverse("osquery_api:configuration_packs"), {})
         self.assertEqual(response.status_code, 403)
 
-    def test_create_configurationpack_fields_empty(self):
+    def test_create_configuration_pack_fields_empty(self):
         self.set_permissions("osquery.add_configurationpack")
         response = self.post_json_data(reverse("osquery_api:configuration_packs"), {})
         self.assertEqual(response.status_code, 400)
@@ -2955,7 +2955,7 @@ class APIViewsTestCase(TestCase):
             "pack": ["This field is required."]
         })
 
-    def test_create_configurationpack_conflict(self):
+    def test_create_configuration_pack_conflict(self):
         self.set_permissions("osquery.add_configurationpack")
         configuration_pack = self.force_configuration_pack(force_tags=True)
         data = {
@@ -2968,7 +2968,7 @@ class APIViewsTestCase(TestCase):
             "non_field_errors": ["The fields configuration, pack must make a unique set."]
         })
 
-    def test_create_configurationpack_configuration_with_multiple_packs(self):
+    def test_create_configuration_pack_configuration_with_multiple_packs(self):
         self.set_permissions("osquery.add_configurationpack")
         configuration = self.force_configuration()
         packs = [self.force_pack().pk for i in range(0, 3)]
@@ -2994,7 +2994,7 @@ class APIViewsTestCase(TestCase):
         result = ConfigurationPack.objects.filter(configuration_id=configuration.pk).count()
         self.assertEqual(result, 3)
 
-    def test_create_configurationpack_with_pack_id_from_existing(self):
+    def test_create_configuration_pack_with_pack_id_from_existing(self):
         self.set_permissions("osquery.add_configurationpack")
         existing_configuration_pack = self.force_configuration_pack()
         configuration = self.force_configuration()
@@ -3013,7 +3013,7 @@ class APIViewsTestCase(TestCase):
         })
         self.assertEqual(configuration_pack.configuration, configuration)
 
-    def test_create_configurationpack(self):
+    def test_create_configuration_pack(self):
         self.set_permissions("osquery.add_configurationpack")
         configuration = self.force_configuration()
         pack = self.force_pack()
@@ -3038,20 +3038,20 @@ class APIViewsTestCase(TestCase):
 
     # delete configuration pack
 
-    def test_delete_configurationpack_unauthorized(self):
+    def test_delete_configuration_pack_unauthorized(self):
         response = self.delete(reverse("osquery_api:configuration_pack", args=(1,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_delete_configurationpack_permission_denied(self):
+    def test_delete_configuration_pack_permission_denied(self):
         response = self.delete(reverse("osquery_api:configuration_pack", args=(1,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_configurationpack_not_found(self):
+    def test_delete_configuration_pack_not_found(self):
         self.set_permissions("osquery.delete_configurationpack")
         response = self.delete(reverse("osquery_api:configuration_pack", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_configurationpack(self):
+    def test_delete_configuration_pack(self):
         self.set_permissions("osquery.delete_configurationpack")
         configuration_pack = self.force_configuration_pack()
         response = self.delete(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)))
@@ -3060,15 +3060,15 @@ class APIViewsTestCase(TestCase):
 
     # list pack queries
 
-    def test_get_packqueries_unauthorized(self):
+    def test_get_pack_queryies_unauthorized(self):
         response = self.get(reverse("osquery_api:pack_queries"), include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_get_packqueries_permission_denied(self):
+    def test_get_pack_queryies_permission_denied(self):
         response = self.get(reverse("osquery_api:pack_queries"))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_packqueries_filter_by_pack_id_not_found(self):
+    def test_get_pack_queryies_filter_by_pack_id_not_found(self):
         self.set_permissions("osquery.view_packquery")
         response = self.get(reverse("osquery_api:pack_queries"), {"pack_id": 9999})
         self.assertEqual(response.status_code, 400)
@@ -3076,11 +3076,11 @@ class APIViewsTestCase(TestCase):
             'pack_id': ['Select a valid choice. That choice is not one of the available choices.']
         })
 
-    def test_get_packqueries_filter_by_pack_id(self):
+    def test_get_pack_queryies_filter_by_pack_id(self):
         self.set_permissions("osquery.view_packquery")
         for _ in range(3):
-            self.force_packquery()
-        pack_query = self.force_packquery()
+            self.force_pack_query()
+        pack_query = self.force_pack_query()
         response = self.get(reverse("osquery_api:pack_queries"), {"pack_id": pack_query.pack.pk})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -3097,9 +3097,9 @@ class APIViewsTestCase(TestCase):
             'updated_at': pack_query.updated_at.isoformat()
         }])
 
-    def test_get_packqueries(self):
+    def test_get_pack_queryies(self):
         self.set_permissions("osquery.view_packquery")
-        pack_query = self.force_packquery()
+        pack_query = self.force_pack_query()
         response = self.get(reverse("osquery_api:pack_queries"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -3118,15 +3118,15 @@ class APIViewsTestCase(TestCase):
 
     # get pack query
 
-    def test_get_packquery_unauthorized(self):
+    def test_get_pack_query_unauthorized(self):
         response = self.get(reverse("osquery_api:pack_query", args=(1,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_get_packquery_permission_denied(self):
+    def test_get_pack_query_permission_denied(self):
         response = self.get(reverse("osquery_api:pack_query", args=(1,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_packquery_not_found(self):
+    def test_get_pack_query_not_found(self):
         self.set_permissions("osquery.view_packquery")
         response = self.get(reverse("osquery_api:pack_query", args=(9999,)))
         self.assertEqual(response.status_code, 404)
@@ -3134,9 +3134,9 @@ class APIViewsTestCase(TestCase):
             "detail": "Not found."
         })
 
-    def test_get_packquery(self):
+    def test_get_pack_query(self):
         self.set_permissions("osquery.view_packquery")
-        pack_query = self.force_packquery()
+        pack_query = self.force_pack_query()
         response = self.get(reverse("osquery_api:pack_query", args=(pack_query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
@@ -3155,23 +3155,23 @@ class APIViewsTestCase(TestCase):
 
     # update pack query
 
-    def test_update_packquery_unauthorized(self):
+    def test_update_pack_query_unauthorized(self):
         response = self.put_json_data(reverse("osquery_api:pack_query", args=(1,)), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_update_packquery_permission_denied(self):
+    def test_update_pack_query_permission_denied(self):
         response = self.put_json_data(reverse("osquery_api:pack_query", args=(1,)), {})
         self.assertEqual(response.status_code, 403)
 
-    def test_update_packquery_not_found(self):
+    def test_update_pack_query_not_found(self):
         self.set_permissions("osquery.change_packquery")
         response = self.put_json_data(reverse("osquery_api:pack_query", args=(9999,)), {})
         self.assertEqual(response.status_code, 404)
 
-    def test_update_packquery_query_conflict(self):
+    def test_update_pack_query_query_conflict(self):
         self.set_permissions("osquery.change_packquery")
-        pack_query = self.force_packquery()
-        pack_query2 = self.force_packquery()
+        pack_query = self.force_pack_query()
+        pack_query2 = self.force_pack_query()
         new_pack = self.force_pack()
         data = {
             "pack": new_pack.pk,
@@ -3184,10 +3184,10 @@ class APIViewsTestCase(TestCase):
             "query": ["This field must be unique."]
         })
 
-    def test_update_packquery_slug_exists(self):
+    def test_update_pack_query_slug_exists(self):
         self.set_permissions("osquery.change_packquery")
-        pack_query = self.force_packquery()
-        pack_query2 = self.force_packquery()
+        pack_query = self.force_pack_query()
+        pack_query2 = self.force_pack_query()
         query_name = pack_query.query.name.upper()
         new_query = self.force_query(query_name=query_name)
         data = {
@@ -3215,9 +3215,9 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(pack_query2.query, new_query)
         self.assertEqual(pack_query2.interval, 120)
 
-    def test_update_packquery_log_removed_actions_snapshot_mode_conflict(self):
+    def test_update_pack_query_log_removed_actions_snapshot_mode_conflict(self):
         self.set_permissions("osquery.change_packquery")
-        pack_query = self.force_packquery()
+        pack_query = self.force_pack_query()
         data = {
             "pack": pack_query.pack.pk,
             "query": pack_query.query.pk,
@@ -3232,9 +3232,9 @@ class APIViewsTestCase(TestCase):
             "snapshot_mode": ["'log_removed_actions' and 'snapshot_mode' are mutually exclusive"]
         })
 
-    def test_update_packquery_snapshot_mode_compliance_check_conflict(self):
+    def test_update_pack_query_snapshot_mode_compliance_check_conflict(self):
         self.set_permissions("osquery.change_packquery")
-        pack_query = self.force_packquery(force_snapshot_mode=True, compliance_check=True)
+        pack_query = self.force_pack_query(force_snapshot_mode=True, compliance_check=True)
         data = {
             "pack": pack_query.pack.pk,
             "query": pack_query.query.pk,
@@ -3247,9 +3247,9 @@ class APIViewsTestCase(TestCase):
             "snapshot_mode": ["A compliance check query can only be scheduled in 'snapshot' mode."]
         })
 
-    def test_update_packquery_fields_invalid(self):
+    def test_update_pack_query_fields_invalid(self):
         self.set_permissions("osquery.change_packquery")
-        pack_query = self.force_packquery()
+        pack_query = self.force_pack_query()
         data = {
             "pack": 9999,
             "query": 9999,
@@ -3265,9 +3265,9 @@ class APIViewsTestCase(TestCase):
             "shard": ["Ensure this value is less than or equal to 100."]
         })
 
-    def test_update_packquery(self):
+    def test_update_pack_query(self):
         self.set_permissions("osquery.change_packquery")
-        pack_query = self.force_packquery()
+        pack_query = self.force_pack_query()
         new_pack = self.force_pack()
         new_query = self.force_query(compliance_check=True)
         data = {
@@ -3306,18 +3306,18 @@ class APIViewsTestCase(TestCase):
 
     # create pack query
 
-    def test_create_packquery_unauthorized(self):
+    def test_create_pack_query_unauthorized(self):
         response = self.post_json_data(reverse("osquery_api:pack_queries"), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_create_packquery_permission_denied(self):
+    def test_create_pack_query_permission_denied(self):
         response = self.post_json_data(reverse("osquery_api:pack_queries"), {})
         self.assertEqual(response.status_code, 403)
 
-    def test_create_packquery_query_conflict(self):
+    def test_create_pack_query_query_conflict(self):
         self.set_permissions("osquery.add_packquery")
         pack = self.force_pack()
-        pack_query = self.force_packquery()
+        pack_query = self.force_pack_query()
         data = {
             "pack": pack.pk,
             "query": pack_query.query.pk,
@@ -3333,10 +3333,10 @@ class APIViewsTestCase(TestCase):
             "query": ['This field must be unique.']
         })
 
-    def test_create_packquery_slug_exists(self):
+    def test_create_pack_query_slug_exists(self):
         query_name = "testquery"
         self.set_permissions("osquery.add_packquery")
-        self.force_packquery(query_name=query_name)
+        self.force_pack_query(query_name=query_name)
         query = self.force_query(query_name=query_name.upper())
         pack = self.force_pack()
         data = {
@@ -3373,7 +3373,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(pack_query.shard, None)
         self.assertEqual(pack_query.can_be_denylisted, True)
 
-    def test_create_packquery_log_removed_actions_snapshot_mode_conflict(self):
+    def test_create_pack_query_log_removed_actions_snapshot_mode_conflict(self):
         self.set_permissions("osquery.add_packquery")
         pack = self.force_pack()
         query = self.force_query()
@@ -3391,7 +3391,7 @@ class APIViewsTestCase(TestCase):
             "snapshot_mode": ["'log_removed_actions' and 'snapshot_mode' are mutually exclusive"]
         })
 
-    def test_create_packquery_snapshot_mode_compliance_check_conflict(self):
+    def test_create_pack_query_snapshot_mode_compliance_check_conflict(self):
         self.set_permissions("osquery.add_packquery")
         pack = self.force_pack()
         query = self.force_query(compliance_check=True)
@@ -3407,7 +3407,7 @@ class APIViewsTestCase(TestCase):
             "snapshot_mode": ["A compliance check query can only be scheduled in 'snapshot' mode."]
         })
 
-    def test_create_packquery_fields_invalid(self):
+    def test_create_pack_query_fields_invalid(self):
         self.set_permissions("osquery.add_packquery")
         data = {
             "pack": 9999,
@@ -3424,7 +3424,7 @@ class APIViewsTestCase(TestCase):
             "shard": ["Ensure this value is less than or equal to 100."]
         })
 
-    def test_create_packquery(self):
+    def test_create_pack_query(self):
         self.set_permissions("osquery.add_packquery")
         pack = self.force_pack()
         query = self.force_query()
@@ -3464,22 +3464,22 @@ class APIViewsTestCase(TestCase):
 
     # delete pack query
 
-    def test_delete_packquery_unauthorized(self):
+    def test_delete_pack_query_unauthorized(self):
         response = self.delete(reverse("osquery_api:pack_query", args=[1]), include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_delete_packquery_permission_denied(self):
+    def test_delete_pack_query_permission_denied(self):
         response = self.delete(reverse("osquery_api:pack_query", args=[1]))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_packquery_not_found(self):
+    def test_delete_pack_query_not_found(self):
         self.set_permissions("osquery.delete_packquery")
         response = self.delete(reverse("osquery_api:pack_query", args=[9999]))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_packquery(self):
+    def test_delete_pack_query(self):
         self.set_permissions("osquery.delete_packquery")
-        pack_query = self.force_packquery()
+        pack_query = self.force_pack_query()
         response = self.delete(reverse("osquery_api:pack_query", args=[pack_query.pk]))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(PackQuery.objects.count(), 0)
