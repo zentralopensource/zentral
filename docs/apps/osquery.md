@@ -8,8 +8,6 @@ To activate the osquery module, you need to add a `zentral.contrib.osquery` sect
 
 ## HTTP API
 
-There are three HTTP API endpoints available.
-
 ### Requests
 
 #### Authentication
@@ -36,618 +34,6 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * `Content-Type: application/x-osquery-conf`
 * `Content-Type: application/yaml`
 
-### /api/osquery/packs/
-
-#### List all Packs.
-
-* method: GET
-* Content-Type: application/json
-* Required permission: `osquery.view_pack`
-* Optional filter parameter:
-    * `name`: Name of the pack.
-    * `configuration_id`: primary key of the configuration.
-
-Examples:
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packs/" \
-  |python3 -m json.tool
-```
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packs/?name=Default" \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-[
-    {
-        "id": 1,
-        "name": "Default",
-        "slug": "default",
-        "description": "",
-        "discovery_queries": [],
-        "shard": null,
-        "event_routing_key": "",
-        "created_at": "2023-01-13T07:06:51.000733",
-        "updated_at": "2023-01-13T07:06:51.000743"
-    }
-]
-```
-
-#### Add a new Pack.
-
-* method: POST
-* Content-Type: application/json
-* Required permission: `osquery.add_pack`
-* Required fields:
-    * `name`: Name of the pack.
-
-Example:
-
-pack.json
-
-```json
-{
-	"name": "Example",
-	"description": "description of the example",
-	"discovery_queries": ["SELECT 1 FROM users WHERE username like 'www%';"],
-	"shard": 50
-}
-```
-
-```bash
-$ curl -X POST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packs/" \
-  -d @pack.json \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-    "id": 2,
-    "name": "Example",
-    "slug": "example",
-    "description": "description of the example",
-    "discovery_queries": [
-        "SELECT 1 FROM users WHERE username like 'www%';"
-    ],
-    "shard": 50,
-    "event_routing_key": "",
-    "created_at": "2023-02-02T07:30:42.133421",
-    "updated_at": "2023-02-02T07:30:42.133434"
-}
-```
-
-### /api/osquery/packs/`<int:pk>`/
-
-#### Get a Pack.
-
-* method: GET
-* Content-Type: application/json
-* Required permission: `osquery.view_pack`
-* `<int:pk>`: The primary key of the pack.
-
-Example
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packs/2/" \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-    "id": 2,
-    "name": "Example",
-    "slug": "example",
-    "description": "description of the example",
-    "discovery_queries": [
-        "SELECT 1 FROM users WHERE username like 'www%';"
-    ],
-    "shard": 50,
-    "event_routing_key": "",
-    "created_at": "2023-02-02T07:30:42.133421",
-    "updated_at": "2023-02-02T07:30:42.133434"
-}
-```
-
-#### Update a Pack.
-
-* method: PUT
-* Content-Type: application/json
-* Required permission: `osquery.update_pack`
-* `<int:pk>`: The primary key of the pack.
-* Required fields:
-    * `name`: Name of the pack.
-
-Example
-
-pack_update.json
-
-```json
-{
-	"name": "Example Updated",
-	"description": "description of the example updated",
-	"discovery_queries": ["SELECT 1 FROM users WHERE username like 'www%';"],
-	"shard": 30
-}
-```
-
-```bash
-$ curl -X PUT \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packs/2/" \
-  -d @pack_update.json \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-    "id": 2,
-    "name": "Example Updated",
-    "slug": "example-updated",
-    "description": "description of the example updated",
-    "discovery_queries": [
-        "SELECT 1 FROM users WHERE username like 'www%';"
-    ],
-    "shard": 30,
-    "event_routing_key": "",
-    "created_at": "2023-02-02T07:30:42.133421",
-    "updated_at": "2023-02-02T07:32:55.258776"
-}
-```
-
-#### Delete a Pack.
-
-* method: DELETE
-* Required permission: `osquery.delete_pack`
-* `<int:pk>`: The primary key of the pack.
-
-Example
-
-```bash
-$ curl -X DELETE \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/packs/2/" 
-```
-
-Response (204 No Content)
-
-### /api/osquery/packs/`<slug:slug>`/
-
-* method: `PUT`, `DELETE`
-
-This endpoint is designed to create or update a standard Osquery pack.
-
-#### Examples
-
-pack.json
-
-```json
-{
-  "name": "First pack",
-  "platform": "darwin",
-  "queries": {
-    "Leverage-A_1": {
-      "query" : "select * from launchd where path like '%UserEvent.System.plist';",
-      "interval" : "3600",
-      "version": "1.4.5",
-      "description" : "(http://www.intego.com/mac-security-blog/new-mac-trojan-discovered-related-to-syria/)",
-      "value" : "Artifact used by this malware"
-    },
-    "Leverage-A_2": {
-      "query" : "select * from file where path = '/Users/Shared/UserEvent.app';",
-      "interval" : "3600",
-      "version": "1.4.5",
-      "description" : "(http://www.intego.com/mac-security-blog/new-mac-trojan-discovered-related-to-syria/)",
-      "value" : "Artifact used by this malware"
-    }
-  }
-}
-```
-
-`PUT` the pack.json file to Zentral:
-
-```
-$ curl -XPUT \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d @pack.json \
-  https://zentral.example.com/api/osquery/packs/first-pack-slug/ \
-  |python3 -m json.tool
-```
-
-You should get a response close to this one:
-
-```json
-{
-  "pack": {
-    "pk": 1,
-    "slug": "first-pack-slug"
-  },
-  "result": "created",
-  "query_results": {
-    "created": 2,
-    "deleted": 0,
-    "present": 0,
-    "updated": 0
-  }
-}
-```
-
-If you `PUT` the same file again, you will get this answer:
-
-```json
-{
-  "pack": {
-    "pk": 1,
-    "slug": "first-pack-slug"
-  },
-  "result": "present",
-  "query_results": {
-    "created": 0,
-    "deleted": 0,
-    "present": 2,
-    "updated": 0
-  }
-}
-```
-
-If you make a `DELETE` request on the same URL, the pack and all its rules will be deleted:
-
-
-```
-$ curl -XDELETE \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  https://zentral.example.com/api/osquery/packs/first-pack-slug/ \
-  |python3 -m json.tool
-```
-
-You should get a response close to this one:
-
-```json
-{
-  "pack": {
-    "pk": 1,
-    "slug": "first-pack-slug"
-  },
-  "result": "deleted",
-  "query_results": {
-    "created": 0,
-    "deleted": 2,
-    "present": 0,
-    "updated": 0
-  }
-}
-```
-
-If the pack is in the osquery format (broken JSON), with line-wrapping characters, or comments, use the `application/x-osquery-conf` content type.
-
-pack.conf  ([Real examples](https://github.com/osquery/osquery/blob/master/packs/) are available in the osquery repository.)
-
-```
-{
-  // Do not use this query in production!!!
-  "platform": "darwin",
-  "queries": {
-    "WireLurker": {
-      "query" : "select * from launchd where \
-        name = 'com.apple.periodic-dd-mm-yy.plist';",
-      "interval" : "3600",
-      "version": "1.4.5",
-      "description" : "(https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)",
-      "value" : "Artifact used by this malware - 🔥"
-      # 🧨
-    }
-  }
-}
-```
-
-```
-$ curl -XPUT \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/x-osquery-conf' \
-  --data-binary @pack.conf \
-  https://zentral.example.com/api/osquery/packs/second-pack-slug/ \
-  |python3 -m json.tool
-```
-
-You should get a response close to this one:
-
-```json
-{
-  "pack": {
-    "pk": 2,
-    "slug": "second-pack-slug"
-  },
-  "result": "created",
-  "query_results": {
-    "created": 1,
-    "deleted": 0,
-    "present": 0,
-    "updated": 0
-  }
-}
-```
-
-You can also use a YAML payload, with the `application/yaml` content type.
-
-pack.yml
-
-```yaml
----
-# Do not use this query in production!!!
-
-platform: "darwin"
-queries:
-  WireLurker:
-    query: >-
-      select * from launchd where
-      name = 'com.apple.periodic-dd-mm-yy.plist';
-    interval: 3600
-    version: 1.4.5
-    description: (https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)
-    value: Artifact used by this malware - 🔥
-```
-
-```
-$ curl -XPUT \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/yaml' \
-  --data-binary @pack.yml \
-  https://zentral.example.com/api/osquery/packs/second-pack-slug/ \
-  |python3 -m json.tool
-```
-
-You should get a response close to this one:
-
-```json
-{
-  "pack": {
-    "pk": 2,
-    "slug": "third-pack-slug"
-  },
-  "result": "present",
-  "query_results": {
-    "created": 0,
-    "deleted": 0,
-    "present": 0,
-    "updated": 1
-  }
-}
-```
-
-### `/api/osquery/runs/<int:pk>/results/export/`
-
-* method: POST
-* required permissions:
-	* `osquery.view_distributedqueryresult`
-* optional parameter:
-	* `export_format`: One of `csv`, `ndjson` or `json`. Defaults to `csv`.
-
-Use this endpoint to trigger a Osquery run export task. The result of this task will be a file containing all the data collected during the run.
-
-#### Example
-
-```bash
-curl -XPOST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/osquery/runs/1/results/export/\
-  |python3 -m json.tool
-```
-
-#### Response
-
-```json
-{
-  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd3",
-  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd3/"
-}
-```
-
-### /api/osquery/queries/
-
-#### List all queries.
-
-* method: GET
-* Content-Type: application/json
-* Required permission: `osquery.view_query`
-* Optional filter parameter:
-    * `name`: name of the query.
-
-Examples
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/osquery/queries/ \
-  |python3 -m json.tool
-```
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/osquery/queries/?name=GetApps \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-[
-    {
-        "id": 1,
-        "compliance_check_enabled": false,
-        "name": "GetApps",
-        "sql": "SELECT * FROM apps;",
-        "platforms": [],
-        "minimum_osquery_version": null,
-        "description": "Get list of Apps",
-        "value": "",
-        "version": 2,
-        "created_at": "2023-01-13T07:10:12.571288",
-        "updated_at": "2023-01-13T09:24:39.779067"
-    }
-]
-```
-
-#### Add a new query.
-
-* method: POST
-* Content-Type: application/json
-* Required permission: `osquery.add_query`
-
-> **_NOTE:_** `compliance_check_enabled: true` only possible if sql query contains `ztl_status`.
-
-Example
-
-query.json
-
-```json
-{
-	"compliance_check_enabled": false,
-	"name": "GetApps",
-	"sql": "SELECT * FROM apps;"
-}
-```
-
-```bash
-$ curl -X POST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d @query.json \
-  https://zentral.example.com/api/osquery/queries/\
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-	"id": 1,
-	"compliance_check_enabled": false,
-	"name": "GetApps",
-	"sql": "SELECT * FROM apps;",
-	"platforms": [],
-	"minimum_osquery_version": null,
-	"description": "Get list of Apps",
-	"value": "",
-	"version": 1,
-	"created_at": "2023-01-13T07:10:12.571288",
-	"updated_at": "2023-01-13T09:24:39.779067"
-}
-```
-
-### /api/osquery/queries/`<int:pk>`/
-
-#### Get a query.
-
-* method: GET
-* Content-Type: application/json
-* Required permission: `osquery.view_query`
-* `<int:pk>`: the primary key of the query.
-
-Example
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/osquery/queries/1/ \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-	"id": 1,
-	"compliance_check_enabled": false,
-	"name": "GetApps",
-	"sql": "SELECT * FROM apps;",
-	"platforms": [],
-	"minimum_osquery_version": null,
-	"description": "Get list of Apps",
-	"value": "",
-	"version": 1,
-	"created_at": "2023-01-13T07:10:12.571288",
-	"updated_at": "2023-01-13T09:24:39.779067"
-}
-```
-
-#### Update a query.
-
-* method: PUT
-* Content-Type: application/json
-* Required permission: `osquery.update_query`
-* `<int:pk>`: the primary key of the query.
-
-Example
-
-query_update.json
-
-```json
-{
-	"name": "GetUsers",
-	"sql": "SELECT * FROM users;"
-}
-```
-
-```bash
-$ curl -X PUT \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d @query_update.json \
-  https://zentral.example.com/api/osquery/queries/1/\
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-	"id": 1,
-	"compliance_check_enabled": false,
-	"name": "GetUsers",
-	"sql": "SELECT * FROM users;",
-	"platforms": [],
-	"minimum_osquery_version": null,
-	"description": "Get list of Apps",
-	"value": "",
-	"version": 2,
-	"created_at": "2023-01-14T07:10:12.571288",
-	"updated_at": "2023-01-14T09:24:39.779067"
-}
-```
-
-#### Delete a query.
-
-* method: DELETE
-* Required permission: `osquery.delete_query`
-* `<int:pk>`: the primary key of the query.
-
-Example
-
-```bash
-$ curl -X DELETE \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/osquery/queries/1/
-```
-
 ### /api/osquery/atcs/
 
 #### List all ATCs.
@@ -656,7 +42,7 @@ $ curl -X DELETE \
 * Content-Type: application/json
 * Required permission: `osquery.view_automatictableconstruction`
 * Optional filter parameter:
-	* `name`: name of the ATC.
+    * `name`: name of the ATC.
     * `configuration_id`: primary key of the configuration.
 
 Examples:
@@ -766,7 +152,7 @@ Response:
 
 ### /api/osquery/atcs/`<int:pk>`/
 
-#### Get an ATC.
+#### Get a ATC.
 
 method: GET
 Content-Type: application/json
@@ -806,7 +192,7 @@ Response:
 }
 ```
 
-#### Update an ATC.
+#### Update a ATC.
 
 * method: PUT
 * Content-Type: application/json
@@ -875,7 +261,7 @@ Response:
 }
 ```
 
-#### Delete an ATC.
+#### Delete a ATC.
 
 * method: DELETE
 * Required permission: `osquery.delete_automatictableconstruction`
@@ -891,217 +277,6 @@ $ curl -X DELETE \
 
 Response (204 No Content)
 
-### /api/osquery/file_categories/
-
-#### List all FileCategories.
-
-* method: GET
-* Content-Type: application/json
-* Required permission: `osquery.view_filecategory`
-* Optional filter parameter:
-	* `name`: name of the FileCategory.
-    * `configuration_id`: primary key of the configuration.
-
-Examples:
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/file_categories/" \
-  |python3 -m json.tool
-```
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/file_categories/?name=example" \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-[
-    {
-        "id": 1,
-        "name": "example",
-        "slug": "example",
-        "description": "example description",
-        "file_paths": [],
-        "exclude_paths": [],
-        "file_paths_queries": [],
-        "access_monitoring": false,
-        "created_at": "2023-01-31T11:48:53.014319",
-        "updated_at": "2023-01-31T11:48:53.014332"
-    }
-]
-```
-
-#### Add a new FileCategory.
-
-* method: POST
-* Content-Type: application/json
-* Required permission: `osquery.add_filecategory`
-
-Example:
-
-file_category.json
-
-```json
-{
-	"name": "example2",
-	"slug": "example2",
-	"description": "example2 description",
-	"file_paths": ["/usr/example2"],
-	"exclude_paths": ["/home/you/exclude1", "/home/me/exclude2"],
-	"file_paths_queries": [],
-	"access_monitoring": true
-}
-```
-
-```bash
-$ curl -X POST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/file_categories/" \
-  -d @file_category.json \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-    "id": 2,
-    "name": "example2",
-    "slug": "example2",
-    "description": "example2 description",
-    "file_paths": [
-        "/usr/example2"
-    ],
-    "exclude_paths": [
-        "/home/you/exclude1",
-        "/home/me/exclude2"
-    ],
-    "file_paths_queries": [],
-    "access_monitoring": true,
-    "created_at": "2023-01-31T14:09:46.079654",
-    "updated_at": "2023-01-31T14:09:46.079664"
-}
-```
-
-### /api/osquery/file_categories/`<int:pk>`/
-
-#### Get an FileCategory.
-
-* method: GET
-* Content-Type: application/json
-* Required permission: `osquery.view_filecategory`
-* `<int:pk>`: the primary key of the FileCategory.
-
-Example
-
-```bash
-$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/file_categories/2/" \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-    "id": 2,
-    "name": "example2",
-    "slug": "example2",
-    "description": "example2 description",
-    "file_paths": [
-        "/usr/example2"
-    ],
-    "exclude_paths": [
-        "/home/you/exclude1",
-        "/home/me/exclude2"
-    ],
-    "file_paths_queries": [],
-    "access_monitoring": true,
-    "created_at": "2023-01-31T14:09:46.079654",
-    "updated_at": "2023-01-31T14:09:46.079664"
-}
-```
-
-#### Update an FileCategory.
-
-* method: PUT
-* Content-Type: application/json
-* Required permission: `osquery.update_filecategory`
-* `<int:pk>`: the primary key of the FileCategory.
-
-Example
-
-file_category_update.json
-
-```json
-{
-    "name": "example2 updated",
-    "description": "example2 description updated",
-    "file_paths": [
-        "/usr/bin/example2"
-    ],
-    "exclude_paths": [
-        "/home/you/exclude1"
-    ],
-    "file_paths_queries": [],
-    "access_monitoring": false
-}
-```
-
-```bash
-$ curl -X PUT \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/file_categories/2/" \
-  -d @file_categories_update.json \
-  |python3 -m json.tool
-```
-
-Response:
-
-```json
-{
-    "id": 2,
-    "name": "example2 updated",
-    "slug": "example2-updated",
-    "description": "example2 description updated",
-    "file_paths": [
-        "/usr/bin/example2"
-    ],
-    "exclude_paths": [
-        "/home/you/exclude1"
-    ],
-    "file_paths_queries": [],
-    "access_monitoring": false,
-    "created_at": "2023-01-31T11:48:53.014319",
-    "updated_at": "2023-01-31T14:13:39.306239"
-}
-```
-
-#### Delete an FileCategory.
-
-* method: DELETE
-* Required permission: `osquery.delete_filecategory`
-* `<int:pk>`: the primary key of the FileCategory.
-
-Example
-
-```bash
-$ curl -X DELETE \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/file_categories/2/" 
-```
-
-Response (204 No Content)
-
 ### /api/osquery/configurations/
 
 #### List all Configurations.
@@ -1110,7 +285,7 @@ Response (204 No Content)
 * Content-Type: application/json
 * Required permission: `osquery.view_configuration`
 * Optional filter parameter:
-	* `name`: Name of the configuration.
+    * `name`: Name of the configuration.
 
 Examples:
 
@@ -1221,7 +396,7 @@ Response:
 
 ### /api/osquery/configurations/`<int:pk>`/
 
-#### Get an Configuration.
+#### Get a Configuration.
 
 method: GET
 Content-Type: application/json
@@ -1262,7 +437,7 @@ Response:
 }
 ```
 
-#### Update an Configuration.
+#### Update a Configuration.
 
 * method: PUT
 * Content-Type: application/json
@@ -1321,7 +496,7 @@ Response:
 }
 ```
 
-#### Delete an Configuration.
+#### Delete a Configuration.
 
 * method: DELETE
 * Required permission: `osquery.delete_configuration`
@@ -1520,6 +695,618 @@ $ curl -X DELETE \
 ```
 
 Response (204 No Content)
+
+### /api/osquery/file_categories/
+
+#### List all FileCategories.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_filecategory`
+* Optional filter parameter:
+	* `name`: name of the FileCategory.
+    * `configuration_id`: primary key of the configuration.
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/file_categories/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/file_categories/?name=example" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "name": "example",
+        "slug": "example",
+        "description": "example description",
+        "file_paths": [],
+        "exclude_paths": [],
+        "file_paths_queries": [],
+        "access_monitoring": false,
+        "created_at": "2023-01-31T11:48:53.014319",
+        "updated_at": "2023-01-31T11:48:53.014332"
+    }
+]
+```
+
+#### Add a new FileCategory.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `osquery.add_filecategory`
+
+Example:
+
+file_category.json
+
+```json
+{
+	"name": "example2",
+	"slug": "example2",
+	"description": "example2 description",
+	"file_paths": ["/usr/example2"],
+	"exclude_paths": ["/home/you/exclude1", "/home/me/exclude2"],
+	"file_paths_queries": [],
+	"access_monitoring": true
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/file_categories/" \
+  -d @file_category.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "example2",
+    "slug": "example2",
+    "description": "example2 description",
+    "file_paths": [
+        "/usr/example2"
+    ],
+    "exclude_paths": [
+        "/home/you/exclude1",
+        "/home/me/exclude2"
+    ],
+    "file_paths_queries": [],
+    "access_monitoring": true,
+    "created_at": "2023-01-31T14:09:46.079654",
+    "updated_at": "2023-01-31T14:09:46.079664"
+}
+```
+
+### /api/osquery/file_categories/`<int:pk>`/
+
+#### Get a FileCategory.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_filecategory`
+* `<int:pk>`: the primary key of the FileCategory.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/file_categories/2/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "example2",
+    "slug": "example2",
+    "description": "example2 description",
+    "file_paths": [
+        "/usr/example2"
+    ],
+    "exclude_paths": [
+        "/home/you/exclude1",
+        "/home/me/exclude2"
+    ],
+    "file_paths_queries": [],
+    "access_monitoring": true,
+    "created_at": "2023-01-31T14:09:46.079654",
+    "updated_at": "2023-01-31T14:09:46.079664"
+}
+```
+
+#### Update a FileCategory.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `osquery.update_filecategory`
+* `<int:pk>`: the primary key of the FileCategory.
+
+Example
+
+file_category_update.json
+
+```json
+{
+    "name": "example2 updated",
+    "description": "example2 description updated",
+    "file_paths": [
+        "/usr/bin/example2"
+    ],
+    "exclude_paths": [
+        "/home/you/exclude1"
+    ],
+    "file_paths_queries": [],
+    "access_monitoring": false
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/file_categories/2/" \
+  -d @file_categories_update.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "example2 updated",
+    "slug": "example2-updated",
+    "description": "example2 description updated",
+    "file_paths": [
+        "/usr/bin/example2"
+    ],
+    "exclude_paths": [
+        "/home/you/exclude1"
+    ],
+    "file_paths_queries": [],
+    "access_monitoring": false,
+    "created_at": "2023-01-31T11:48:53.014319",
+    "updated_at": "2023-01-31T14:13:39.306239"
+}
+```
+
+#### Delete a FileCategory.
+
+* method: DELETE
+* Required permission: `osquery.delete_filecategory`
+* `<int:pk>`: the primary key of the FileCategory.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/file_categories/2/" 
+```
+
+Response (204 No Content)
+
+### /api/osquery/packs/
+
+#### List all Packs.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_pack`
+* Optional filter parameter:
+    * `name`: Name of the pack.
+    * `configuration_id`: primary key of the configuration.
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packs/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packs/?name=Default" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "name": "Default",
+        "slug": "default",
+        "description": "",
+        "discovery_queries": [],
+        "shard": null,
+        "event_routing_key": "",
+        "created_at": "2023-01-13T07:06:51.000733",
+        "updated_at": "2023-01-13T07:06:51.000743"
+    }
+]
+```
+
+#### Add a new Pack.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `osquery.add_pack`
+* Required fields:
+    * `name`: Name of the pack.
+
+Example:
+
+pack.json
+
+```json
+{
+	"name": "Example",
+	"description": "description of the example",
+	"discovery_queries": ["SELECT 1 FROM users WHERE username like 'www%';"],
+	"shard": 50
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packs/" \
+  -d @pack.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "Example",
+    "slug": "example",
+    "description": "description of the example",
+    "discovery_queries": [
+        "SELECT 1 FROM users WHERE username like 'www%';"
+    ],
+    "shard": 50,
+    "event_routing_key": "",
+    "created_at": "2023-02-02T07:30:42.133421",
+    "updated_at": "2023-02-02T07:30:42.133434"
+}
+```
+
+### /api/osquery/packs/`<int:pk>`/
+
+#### Get a Pack.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_pack`
+* `<int:pk>`: The primary key of the pack.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packs/2/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "Example",
+    "slug": "example",
+    "description": "description of the example",
+    "discovery_queries": [
+        "SELECT 1 FROM users WHERE username like 'www%';"
+    ],
+    "shard": 50,
+    "event_routing_key": "",
+    "created_at": "2023-02-02T07:30:42.133421",
+    "updated_at": "2023-02-02T07:30:42.133434"
+}
+```
+
+#### Update a Pack.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `osquery.update_pack`
+* `<int:pk>`: The primary key of the pack.
+* Required fields:
+    * `name`: Name of the pack.
+
+Example
+
+pack_update.json
+
+```json
+{
+	"name": "Example Updated",
+	"description": "description of the example updated",
+	"discovery_queries": ["SELECT 1 FROM users WHERE username like 'www%';"],
+	"shard": 30
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/osquery/packs/2/" \
+  -d @pack_update.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "name": "Example Updated",
+    "slug": "example-updated",
+    "description": "description of the example updated",
+    "discovery_queries": [
+        "SELECT 1 FROM users WHERE username like 'www%';"
+    ],
+    "shard": 30,
+    "event_routing_key": "",
+    "created_at": "2023-02-02T07:30:42.133421",
+    "updated_at": "2023-02-02T07:32:55.258776"
+}
+```
+
+#### Delete a Pack.
+
+* method: DELETE
+* Required permission: `osquery.delete_pack`
+* `<int:pk>`: The primary key of the pack.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/packs/2/" 
+```
+
+Response (204 No Content)
+
+### /api/osquery/packs/`<slug:slug>`/
+
+#### Create or update a standard Osquery pack.
+
+* method: `PUT`, `DELETE`
+
+This endpoint is designed to create or update a standard Osquery pack.
+
+Examples
+
+pack.json
+
+```json
+{
+  "name": "First pack",
+  "platform": "darwin",
+  "queries": {
+    "Leverage-A_1": {
+      "query" : "select * from launchd where path like '%UserEvent.System.plist';",
+      "interval" : "3600",
+      "version": "1.4.5",
+      "description" : "(http://www.intego.com/mac-security-blog/new-mac-trojan-discovered-related-to-syria/)",
+      "value" : "Artifact used by this malware"
+    },
+    "Leverage-A_2": {
+      "query" : "select * from file where path = '/Users/Shared/UserEvent.app';",
+      "interval" : "3600",
+      "version": "1.4.5",
+      "description" : "(http://www.intego.com/mac-security-blog/new-mac-trojan-discovered-related-to-syria/)",
+      "value" : "Artifact used by this malware"
+    }
+  }
+}
+```
+
+`PUT` the pack.json file to Zentral:
+
+```bash
+$ curl -XPUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @pack.json \
+  "https://zentral.example.com/api/osquery/packs/first-pack-slug/" \
+  |python3 -m json.tool
+```
+
+You should get a response close to this one:
+
+```json
+{
+  "pack": {
+    "pk": 1,
+    "slug": "first-pack-slug"
+  },
+  "result": "created",
+  "query_results": {
+    "created": 2,
+    "deleted": 0,
+    "present": 0,
+    "updated": 0
+  }
+}
+```
+
+If you `PUT` the same file again, you will get this answer:
+
+```json
+{
+  "pack": {
+    "pk": 1,
+    "slug": "first-pack-slug"
+  },
+  "result": "present",
+  "query_results": {
+    "created": 0,
+    "deleted": 0,
+    "present": 2,
+    "updated": 0
+  }
+}
+```
+
+If you make a `DELETE` request on the same URL, the pack and all its rules will be deleted:
+
+
+```bash
+$ curl -XDELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  "https://zentral.example.com/api/osquery/packs/first-pack-slug/" \
+  |python3 -m json.tool
+```
+
+You should get a response close to this one:
+
+```json
+{
+  "pack": {
+    "pk": 1,
+    "slug": "first-pack-slug"
+  },
+  "result": "deleted",
+  "query_results": {
+    "created": 0,
+    "deleted": 2,
+    "present": 0,
+    "updated": 0
+  }
+}
+```
+
+If the pack is in the osquery format (broken JSON), with line-wrapping characters, or comments, use the `application/x-osquery-conf` content type.
+
+pack.conf  ([Real examples](https://github.com/osquery/osquery/blob/master/packs/) are available in the osquery repository.)
+
+```json
+{
+  // Do not use this query in production!!!
+  "platform": "darwin",
+  "queries": {
+    "WireLurker": {
+      "query" : "select * from launchd where \
+        name = 'com.apple.periodic-dd-mm-yy.plist';",
+      "interval" : "3600",
+      "version": "1.4.5",
+      "description" : "(https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)",
+      "value" : "Artifact used by this malware - 🔥"
+      # 🧨
+    }
+  }
+}
+```
+
+```bash
+$ curl -XPUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/x-osquery-conf' \
+  --data-binary @pack.conf \
+  "https://zentral.example.com/api/osquery/packs/second-pack-slug/" \
+  |python3 -m json.tool
+```
+
+You should get a response close to this one:
+
+```json
+{
+  "pack": {
+    "pk": 2,
+    "slug": "second-pack-slug"
+  },
+  "result": "created",
+  "query_results": {
+    "created": 1,
+    "deleted": 0,
+    "present": 0,
+    "updated": 0
+  }
+}
+```
+
+You can also use a YAML payload, with the `application/yaml` content type.
+
+pack.yml
+
+```yaml
+---
+# Do not use this query in production!!!
+
+platform: "darwin"
+queries:
+  WireLurker:
+    query: >-
+      select * from launchd where
+      name = 'com.apple.periodic-dd-mm-yy.plist';
+    interval: 3600
+    version: 1.4.5
+    description: (https://github.com/PaloAltoNetworks-BD/WireLurkerDetector)
+    value: Artifact used by this malware - 🔥
+```
+
+```bash
+$ curl -XPUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/yaml' \
+  --data-binary @pack.yml \
+  "https://zentral.example.com/api/osquery/packs/second-pack-slug/" \
+  |python3 -m json.tool
+```
+
+You should get a response close to this one:
+
+```json
+{
+  "pack": {
+    "pk": 2,
+    "slug": "third-pack-slug"
+  },
+  "result": "present",
+  "query_results": {
+    "created": 0,
+    "deleted": 0,
+    "present": 0,
+    "updated": 1
+  }
+}
+```
 
 ### /api/osquery/packqueries/
 
@@ -1725,3 +1512,220 @@ $ curl -X DELETE \
 ```
 
 Response (204 No Content)
+
+### /api/osquery/queries/
+
+#### List all queries.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_query`
+* Optional filter parameter:
+    * `name`: name of the query.
+
+Examples
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/queries/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/queries/?name=GetApps" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "compliance_check_enabled": false,
+        "name": "GetApps",
+        "sql": "SELECT * FROM apps;",
+        "platforms": [],
+        "minimum_osquery_version": null,
+        "description": "Get list of Apps",
+        "value": "",
+        "version": 2,
+        "created_at": "2023-01-13T07:10:12.571288",
+        "updated_at": "2023-01-13T09:24:39.779067"
+    }
+]
+```
+
+#### Add a new query.
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `osquery.add_query`
+
+> **_NOTE:_** `compliance_check_enabled: true` only possible if sql query contains `ztl_status`.
+
+Example
+
+query.json
+
+```json
+{
+	"compliance_check_enabled": false,
+	"name": "GetApps",
+	"sql": "SELECT * FROM apps;"
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @query.json \
+  "https://zentral.example.com/api/osquery/queries/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+	"id": 1,
+	"compliance_check_enabled": false,
+	"name": "GetApps",
+	"sql": "SELECT * FROM apps;",
+	"platforms": [],
+	"minimum_osquery_version": null,
+	"description": "Get list of Apps",
+	"value": "",
+	"version": 1,
+	"created_at": "2023-01-13T07:10:12.571288",
+	"updated_at": "2023-01-13T09:24:39.779067"
+}
+```
+
+### /api/osquery/queries/`<int:pk>`/
+
+#### Get a query.
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `osquery.view_query`
+* `<int:pk>`: the primary key of the query.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/queries/1/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+	"id": 1,
+	"compliance_check_enabled": false,
+	"name": "GetApps",
+	"sql": "SELECT * FROM apps;",
+	"platforms": [],
+	"minimum_osquery_version": null,
+	"description": "Get list of Apps",
+	"value": "",
+	"version": 1,
+	"created_at": "2023-01-13T07:10:12.571288",
+	"updated_at": "2023-01-13T09:24:39.779067"
+}
+```
+
+#### Update a query.
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `osquery.update_query`
+* `<int:pk>`: the primary key of the query.
+
+Example
+
+query_update.json
+
+```json
+{
+	"name": "GetUsers",
+	"sql": "SELECT * FROM users;"
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d @query_update.json \
+  "https://zentral.example.com/api/osquery/queries/1/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+	"id": 1,
+	"compliance_check_enabled": false,
+	"name": "GetUsers",
+	"sql": "SELECT * FROM users;",
+	"platforms": [],
+	"minimum_osquery_version": null,
+	"description": "Get list of Apps",
+	"value": "",
+	"version": 2,
+	"created_at": "2023-01-14T07:10:12.571288",
+	"updated_at": "2023-01-14T09:24:39.779067"
+}
+```
+
+#### Delete a query.
+
+* method: DELETE
+* Required permission: `osquery.delete_query`
+* `<int:pk>`: the primary key of the query.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/queries/1/"
+```
+
+Response (204 No Content)
+
+### `/api/osquery/runs/<int:pk>/results/export/`
+
+#### Trigger a Osquery run export task.
+
+* method: POST
+* required permissions:
+    * `osquery.view_distributedqueryresult`
+* optional parameter:
+    * `export_format`: One of `csv`, `ndjson` or `json`. Defaults to `csv`.
+
+Use this endpoint to trigger a Osquery run export task. The result of this task will be a file containing all the data collected during the run.
+
+Example
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/osquery/runs/1/results/export/" \
+  |python3 -m json.tool
+```
+
+Response
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd3",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd3/"
+}
+```
