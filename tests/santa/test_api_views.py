@@ -40,6 +40,7 @@ class APIViewsTestCase(TestCase):
         cls.file_sha256 = get_random_string(64, "abcdef0123456789")
         cls.file_name = get_random_string(12)
         cls.file_bundle_name = get_random_string(12)
+        cls.file_bundle_sha256 = get_random_string(64, "abcdef0123456789")
         cls.file_cert_sha256 = get_random_string(64, "abcdef0123456789")
         cls.file_team_id = get_random_string(10, allowed_chars="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
         cls.file_cert_cn = f"Developer ID Application: YOLO ({cls.file_team_id})"
@@ -99,7 +100,7 @@ class APIViewsTestCase(TestCase):
 
         cls.file_target = Target.objects.create(type=Target.BINARY, identifier=cls.file_sha256)
         cls.file_cert_target = Target.objects.create(type=Target.CERTIFICATE, identifier=cls.file_cert_sha256)
-        cls.file_bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=cls.file_sha256)
+        cls.file_bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=cls.file_bundle_sha256)
         cls.file_team_id_target = Target.objects.create(type=Target.TEAM_ID, identifier=cls.file_team_id)
 
     # utils
@@ -2264,7 +2265,7 @@ class APIViewsTestCase(TestCase):
     def test_list_targets_filter_by_target_type_and_target_identifier(self):
         self.set_permissions("santa.view_target")
         response = self.get(reverse('santa_api:targets'),
-                            {"target_type": "BUNDLE", "target_identifier": self.file_sha256})
+                            {"target_type": "BUNDLE", "target_identifier": self.file_bundle_sha256})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'count': 1, 'next': None, 'previous': None, 'results': [
             {
@@ -2273,7 +2274,7 @@ class APIViewsTestCase(TestCase):
                 'certificates': [],
                 'team_ids': [],
                 'type': 'BUNDLE',
-                'identifier': self.file_sha256
+                'identifier': self.file_bundle_sha256
             }
         ]})
 
@@ -2406,7 +2407,7 @@ class APIViewsTestCase(TestCase):
                     'certificates': [],
                     'team_ids': [],
                     'type': 'BUNDLE',
-                    'identifier': self.file_sha256
+                    'identifier': self.file_bundle_sha256
                 },
                 {
                     'id': self.file_team_id_target.pk,
