@@ -99,7 +99,7 @@ class APIViewsTestCase(TestCase):
 
         cls.file_target = Target.objects.create(type=Target.BINARY, identifier=cls.file_sha256)
         cls.file_cert_target = Target.objects.create(type=Target.CERTIFICATE, identifier=cls.file_cert_sha256)
-        cls.file_bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=cls.file.bundle.bundle_id)
+        cls.file_bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=cls.file_sha256)
         cls.file_team_id_target = Target.objects.create(type=Target.TEAM_ID, identifier=cls.file_team_id)
 
     # utils
@@ -108,18 +108,13 @@ class APIViewsTestCase(TestCase):
         if target_identifier is None:
             target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
         target = Target.objects.create(type=Target.BUNDLE, identifier=target_identifier)
-        data = {
-            "target": target,
-            "executable_rel_path": get_random_string(12),
-            "bundle_id": self.file.bundle.bundle_id,
-            "name": self.file_bundle_name,
-            "version": self.file.bundle.bundle_version,
-            "version_str": self.file.bundle.bundle_version_str,
-            "binary_count": 1,
-        }
         if fake_upload:
-            data["uploaded_at"] = timezone.now().isoformat()
-        return Bundle.objects.create(**data)
+            return Bundle.objects.create(
+                target=target,
+                binary_count=1,
+                uploaded_at=timezone.now().isoformat()
+            )
+        return Bundle.objects.create(target=target, binary_count=1)
 
     def force_tags(self, count=6):
         return [Tag.objects.create(name=get_random_string(12)) for _ in range(count)]
@@ -2262,14 +2257,14 @@ class APIViewsTestCase(TestCase):
     def test_list_targets_filter_by_target_type_and_target_identifier_not_found(self):
         self.set_permissions("santa.view_target")
         response = self.get(reverse('santa_api:targets'),
-                            {"target_type": "BINARY", "target_identifier": self.file_cert_sha256})
+                            {"target_type": "BINARY", "target_identifier": get_random_string(64, "abcdef0123456789")})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_list_targets_filter_by_target_type_and_target_identifier(self):
         self.set_permissions("santa.view_target")
         response = self.get(reverse('santa_api:targets'),
-                            {"target_type": "BUNDLE", "target_identifier": self.file.bundle.bundle_id})
+                            {"target_type": "BUNDLE", "target_identifier": self.file_sha256})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'count': 1, 'next': None, 'previous': None, 'results': [
             {
@@ -2278,7 +2273,7 @@ class APIViewsTestCase(TestCase):
                 'certificates': [],
                 'team_ids': [],
                 'type': 'BUNDLE',
-                'identifier': 'servicecontroller:com.apple.stomp.transcoderx'
+                'identifier': self.file_sha256
             }
         ]})
 
@@ -2302,16 +2297,13 @@ class APIViewsTestCase(TestCase):
                     'id': self.file_target.pk,
                     'files': [
                         {
-                            'id': self.file_target.files[0].id,
                             'name': self.file_target.files[0].name,
                             'path': '/Library/Frameworks/Compressor.framework/Versions/A/'
                                     'Resources/CompressorTranscoderX.bundle/Contents/MacOS',
                             'sha_256': self.file_sha256,
                             'bundle_path': '/Library/Frameworks/Compressor.framework/Versions/A/'
                                            'Resources/CompressorTranscoderX.bundle',
-                            'source': self.file_target.files[0].source.pk,
-                            'bundle': self.file_target.files[0].bundle.pk,
-                            'signed_by': self.file_target.files[0].signed_by.pk,
+                            'bundle': self.file_target.files[0].bundle.pk
                         }
                     ],
                     'certificates': [],
@@ -2346,15 +2338,13 @@ class APIViewsTestCase(TestCase):
             ]})
 
     def test_list_targets_pagination(self):
-        for _ in range(0, 10):
-            self.force_rule()
         self.set_permissions("santa.view_target")
-        response = self.get(reverse('santa_api:targets'), {"page_size": 5})
+        response = self.get(reverse('santa_api:targets'), {"page_size": 2})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['count'], 14)
-        self.assertEqual(len(response.json()['results']), 5)
-        self.assertIsNotNone(response.json()['next'])
-        self.assertIsNone(response.json()['previous'])
+        self.assertEqual(response.json()['count'], 4)
+        self.assertEqual(len(response.json()['results']), 2)
+        self.assertEqual(response.json()['next'], 'http://testserver/api/santa/targets/?page=2&page_size=2')
+        self.assertEqual(response.json()['previous'], None)
 
     def test_list_targets(self):
         self.set_permissions("santa.view_target")
@@ -2369,16 +2359,13 @@ class APIViewsTestCase(TestCase):
                     'id': self.file_target.pk,
                     'files': [
                         {
-                            'id': self.file_target.files[0].id,
                             'name': self.file_target.files[0].name,
                             'path': '/Library/Frameworks/Compressor.framework/Versions/A/'
                                     'Resources/CompressorTranscoderX.bundle/Contents/MacOS',
                             'sha_256': self.file_sha256,
                             'bundle_path': '/Library/Frameworks/Compressor.framework/Versions/A/'
                                            'Resources/CompressorTranscoderX.bundle',
-                            'source': self.file_target.files[0].source.pk,
                             'bundle': self.file_target.files[0].bundle.pk,
-                            'signed_by': self.file_target.files[0].signed_by.pk,
                         }
                     ],
                     'certificates': [],
@@ -2391,28 +2378,22 @@ class APIViewsTestCase(TestCase):
                     'files': [],
                     'certificates': [
                         {
-                            'id': self.file_cert_target.certificates[0].id,
                             'common_name': f'Developer ID Application: YOLO ({self.file_team_id})',
                             'organization': 'Apple Inc.',
                             'organizational_unit': self.file_team_id,
                             'domain': None,
-                            'sha_1': None,
                             'sha_256': self.file_cert_sha256,
                             'valid_from': self.file_cert_target.certificates[0].valid_from.isoformat(),
                             'valid_until': self.file_cert_target.certificates[0].valid_until.isoformat(),
-                            'signed_by': self.file_cert_target.certificates[0].signed_by.id
                         },
                         {
-                            'id': self.file_cert_target.certificates[1].id,
                             'common_name': f'Developer ID Application: Awesome Inc ({self.file_team_id})',
                             'organization': 'Awesome Inc',
                             'organizational_unit': self.file_team_id,
                             'domain': None,
-                            'sha_1': None,
                             'sha_256': self.file_cert_sha256,
                             'valid_from': self.file_cert_target.certificates[1].valid_from.isoformat(),
                             'valid_until': self.file_cert_target.certificates[1].valid_until.isoformat(),
-                            'signed_by': self.file_cert_target.certificates[1].signed_by.id
                         }
                     ],
                     'team_ids': [],
@@ -2425,7 +2406,7 @@ class APIViewsTestCase(TestCase):
                     'certificates': [],
                     'team_ids': [],
                     'type': 'BUNDLE',
-                    'identifier': 'servicecontroller:com.apple.stomp.transcoderx'
+                    'identifier': self.file_sha256
                 },
                 {
                     'id': self.file_team_id_target.pk,

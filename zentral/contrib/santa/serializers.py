@@ -67,13 +67,13 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 class TargetFilesSerializer(serializers.ModelSerializer):
     class Meta:
         model = File
-        exclude = ('mt_hash', 'mt_created_at')
+        exclude = ('id', 'signed_by', 'source', 'mt_hash', 'mt_created_at')
 
 
 class TargetCertificatesSerializer(serializers.ModelSerializer):
     class Meta:
         model = Certificate
-        exclude = ('mt_hash', 'mt_created_at')
+        exclude = ('id', 'signed_by', 'sha_1', 'mt_hash', 'mt_created_at')
 
 
 class TargetTeamIDsSerializer(serializers.Serializer):
