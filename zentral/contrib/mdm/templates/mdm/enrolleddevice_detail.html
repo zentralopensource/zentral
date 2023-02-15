@@ -241,9 +241,9 @@
   </tbody>
 </table>
 
-<h3>{{ installed_artifacts_count }} Artifact{{ installed_artifacts_count|pluralize }}</h3>
+<h3>{{ target_artifacts_count }} Artifact{{ target_artifacts_count|pluralize }}</h3>
 
-{% if installed_artifacts_count %}
+{% if target_artifacts_count %}
 <table class="table table-condensed">
   <thead>
     <tr>
@@ -255,8 +255,8 @@
     </tr>
   </thead>
   <tbody>
-    {% for installed_artifact in installed_artifacts %}
-    {% with installed_artifact.artifact_version as artifact_version %}
+    {% for target_artifact in target_artifacts %}
+    {% with target_artifact.artifact_version as artifact_version %}
     {% with artifact_version.artifact as artifact %}
     <tr>
       <td>{{ artifact.get_type_display }}</td>
@@ -274,9 +274,9 @@
         {{ artifact_version.version }}
         {% endif %}
       </td>
-      <td>{{ installed_artifact.get_status_display }}</td>
+      <td>{{ target_artifact.get_status_display }}</td>
       <td>
-        {{ installed_artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}
+        {{ target_artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}
       </td>
     </tr>
     {% endwith %}

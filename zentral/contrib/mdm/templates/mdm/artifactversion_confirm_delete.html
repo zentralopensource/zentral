@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
+  <li><a href="{% url 'mdm:artifact' object.artifact.pk %}">{{ object.artifact }}</a></li>
+  <li><a href="{{ object.get_absolute_url }}">v{{ object.version }}</a></li>
+  <li class="active">Delete</li>
+</ol>
+
+<h3>Delete artifact version v{{ object.version}}</h3>
+
+<form class="form" method="post">{% csrf_token %}
+  <p>Do you really want to delete this artifact version?</p>
+  <p>
+    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    <button type="submit" class="btn btn-danger">Delete</button>
+  </p>
+</form>
+{% endblock %}

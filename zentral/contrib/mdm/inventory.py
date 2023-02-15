@@ -1,6 +1,6 @@
 import logging
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.contrib.mdm.models import Blueprint, CommandStatus, DeviceCommand, Platform
+from zentral.contrib.mdm.models import Blueprint, Command, DeviceCommand, Platform
 from zentral.contrib.mdm.commands.base import load_command
 
 
@@ -55,17 +55,17 @@ def ms_tree_from_payload(payload):
         if hardware_model:
             hardware_model = hardware_model.upper()
             if "IPOD" in hardware_model or "IPHONE" in hardware_model:
-                d["name"] = Platform.iOS.value
+                d["name"] = Platform.IOS
             elif "IPAD" in hardware_model:
                 if d["major"] >= 13:
-                    d["name"] = Platform.iPadOS.value
+                    d["name"] = Platform.IPADOS
                 else:
-                    d["name"] = Platform.iOS.value
+                    d["name"] = Platform.IOS
             elif "TV" in hardware_model:
-                d["name"] = Platform.tvOS.value
+                d["name"] = Platform.TVOS
             else:
                 # No watchOS
-                d["name"] = Platform.macOS.value
+                d["name"] = Platform.MACOS
         ms_tree["os_version"] = d
 
     return ms_tree
@@ -112,7 +112,7 @@ def update_inventory_tree(command, commit_enrolled_device=True):
                 enrolled_device=enrolled_device,
                 name=cmd_db_name,
                 result__isnull=False,
-                status=CommandStatus.Acknowledged.value
+                status=Command.Status.ACKNOWLEDGED
             ).order_by("-created_at").first()
             if latest_db_command:
                 latest_command = load_command(latest_db_command)

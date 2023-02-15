@@ -4,6 +4,7 @@ import plistlib
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
+from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import InstalledApplicationList
 from zentral.contrib.mdm.commands.scheduling import _update_inventory
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
@@ -40,24 +41,24 @@ class InstalledApplicationListCommandTestCase(TestCase):
 
     def test_scope(self):
         for channel, platform, user_enrollment, result in (
-            (Channel.Device, Platform.iOS, False, True),
-            (Channel.Device, Platform.iPadOS, False, True),
-            (Channel.Device, Platform.macOS, False, True),
-            (Channel.Device, Platform.tvOS, False, True),
-            (Channel.User, Platform.iOS, False, False),
-            (Channel.User, Platform.iPadOS, False, False),
-            (Channel.User, Platform.macOS, False, True),
-            (Channel.User, Platform.tvOS, False, False),
-            (Channel.Device, Platform.iOS, True, True),
-            (Channel.Device, Platform.iPadOS, True, False),
-            (Channel.Device, Platform.macOS, True, False),
-            (Channel.Device, Platform.tvOS, True, False),
-            (Channel.User, Platform.iOS, True, False),
-            (Channel.User, Platform.iPadOS, True, False),
-            (Channel.User, Platform.macOS, True, False),
-            (Channel.User, Platform.tvOS, True, False),
+            (Channel.DEVICE, Platform.IOS, False, True),
+            (Channel.DEVICE, Platform.IPADOS, False, True),
+            (Channel.DEVICE, Platform.MACOS, False, True),
+            (Channel.DEVICE, Platform.TVOS, False, True),
+            (Channel.USER, Platform.IOS, False, False),
+            (Channel.USER, Platform.IPADOS, False, False),
+            (Channel.USER, Platform.MACOS, False, True),
+            (Channel.USER, Platform.TVOS, False, False),
+            (Channel.DEVICE, Platform.IOS, True, True),
+            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.MACOS, True, False),
+            (Channel.DEVICE, Platform.TVOS, True, False),
+            (Channel.USER, Platform.IOS, True, False),
+            (Channel.USER, Platform.IPADOS, True, False),
+            (Channel.USER, Platform.MACOS, True, False),
+            (Channel.USER, Platform.TVOS, True, False),
         ):
-            self.enrolled_device.platform = platform.name
+            self.enrolled_device.platform = platform
             self.enrolled_device.user_enrollment = user_enrollment
             self.assertEqual(
                 result,
@@ -67,16 +68,16 @@ class InstalledApplicationListCommandTestCase(TestCase):
     # load_kwargs
 
     def test_load_kwargs_defaults(self):
-        cmd = InstalledApplicationList.create_for_device(
-            self.enrolled_device,
+        cmd = InstalledApplicationList.create_for_target(
+            Target(self.enrolled_device),
         )
         self.assertFalse(cmd.managed_only)
         self.assertFalse(cmd.update_inventory)
         self.assertTrue(cmd.store_result)
 
     def test_load_kwargs(self):
-        cmd = InstalledApplicationList.create_for_device(
-            self.enrolled_device,
+        cmd = InstalledApplicationList.create_for_target(
+            Target(self.enrolled_device),
             kwargs={"managed_only": True,
                     "update_inventory": True}
         )
@@ -87,8 +88,8 @@ class InstalledApplicationListCommandTestCase(TestCase):
     # build_command
 
     def test_build_command(self):
-        cmd = InstalledApplicationList.create_for_device(
-            self.enrolled_device
+        cmd = InstalledApplicationList.create_for_target(
+            Target(self.enrolled_device)
         )
         response = cmd.build_http_response(self.dep_enrollment_session)
         payload = plistlib.loads(response.content)["Command"]
@@ -100,8 +101,8 @@ class InstalledApplicationListCommandTestCase(TestCase):
     def test_process_acknowledged_response(self):
         self.assertEqual(self.enrolled_device.blueprint.collect_apps, Blueprint.InventoryItemCollectionOption.ALL)
         start = datetime.utcnow()
-        cmd = InstalledApplicationList.create_for_device(
-            self.dep_enrollment_session.enrolled_device,
+        cmd = InstalledApplicationList.create_for_target(
+            Target(self.dep_enrollment_session.enrolled_device),
             kwargs={"update_inventory": True}
         )
         cmd.process_response(self.installed_application_list, self.dep_enrollment_session, self.mbu)
@@ -116,8 +117,8 @@ class InstalledApplicationListCommandTestCase(TestCase):
 
     def test_process_acknowledged_response_do_not_collect_apps(self):
         self.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.NO
-        cmd = InstalledApplicationList.create_for_device(
-            self.dep_enrollment_session.enrolled_device,
+        cmd = InstalledApplicationList.create_for_target(
+            Target(self.dep_enrollment_session.enrolled_device),
             kwargs={"update_inventory": True}
         )
         cmd.process_response(self.installed_application_list, self.dep_enrollment_session, self.mbu)
@@ -142,10 +143,9 @@ class InstalledApplicationListCommandTestCase(TestCase):
                          Blueprint.InventoryItemCollectionOption.NO)
         self.assertIsNone(self.enrolled_device.apps_updated_at)
         self.assertIsNone(_update_inventory(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         ))
 
     def test_update_inventory_managed_apps_updated_at_none(self):
@@ -158,10 +158,9 @@ class InstalledApplicationListCommandTestCase(TestCase):
                          Blueprint.InventoryItemCollectionOption.NO)
         self.assertIsNone(self.enrolled_device.apps_updated_at)
         cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, InstalledApplicationList)
         self.assertTrue(cmd.managed_only)
@@ -177,10 +176,9 @@ class InstalledApplicationListCommandTestCase(TestCase):
                          Blueprint.InventoryItemCollectionOption.NO)
         self.enrolled_device.apps_updated_at = datetime(2000, 1, 1)
         cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, InstalledApplicationList)
         self.assertFalse(cmd.managed_only)
@@ -196,8 +194,7 @@ class InstalledApplicationListCommandTestCase(TestCase):
                          Blueprint.InventoryItemCollectionOption.NO)
         self.enrolled_device.apps_updated_at = datetime.utcnow()
         self.assertIsNone(_update_inventory(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         ))

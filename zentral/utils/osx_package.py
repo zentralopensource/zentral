@@ -315,9 +315,6 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
     def extra_build_steps(self):
         pass
 
-    def extra_product_archive_build_steps(self, product_archive_builder):
-        pass
-
     def get_product_archive(self):
         return None
 
@@ -341,17 +338,16 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         self._build_scripts()
         self._build_bom()
 
+        product_archive_title = self.get_product_archive_title()
         product_archive = self.get_product_archive()
         extra_packages = self.get_extra_packages()
 
-        if product_archive or extra_packages:
+        if product_archive_title or product_archive or extra_packages:
             # build a product archive
-            builder = ProductArchiveBuilder(self.get_product_archive_title(),
-                                            product_archive)
+            builder = ProductArchiveBuilder(product_archive_title, product_archive)
             for extra_package in extra_packages:
                 builder.add_package(extra_package)
             builder.add_package(self.package_dir)
-            self.extra_product_archive_build_steps(builder)
             self._clean()
         else:
             # build a component package
@@ -445,9 +441,6 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             with open(self.get_root_path(tls_server_certs_rel_path), "w") as f:
                 f.write(tls_fullchain)
             return TLS_SERVER_CERTS_CLIENT_PATH
-
-    def is_product_archive(self):
-        return self.get_product_archive() is not None or len(self.get_extra_packages()) > 0
 
     def create_file_with_content_string(self, rel_path, content, executable=False):
         filepath = self.get_root_path(rel_path)

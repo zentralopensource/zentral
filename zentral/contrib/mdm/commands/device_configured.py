@@ -12,7 +12,7 @@ class DeviceConfigured(Command):
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
         return (
-            channel == Channel.Device
+            channel == Channel.DEVICE
             and enrolled_device.awaiting_configuration
         )
 

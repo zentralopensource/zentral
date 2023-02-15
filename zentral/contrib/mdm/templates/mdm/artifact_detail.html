@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load bootstrap inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -12,14 +12,14 @@
 <h3>{{ object }}</h3>
 
 <p>
-  {% if perms.mdm.change_artifact and object.type == 'Profile' %}
+  {% if perms.mdm.change_artifact %}
   <a class="btn btn-default" href="{% url 'mdm:update_artifact' object.pk %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
   {% endif %}
-  {% if perms.mdm.delete_artifact %}
-  <a class="btn btn-danger" href="{% url 'mdm:trash_artifact' object.pk %}">
+  {% if perms.mdm.delete_artifact and object.can_be_deleted %}
+  <a class="btn btn-danger" href="{% url 'mdm:delete_artifact' object.pk %}">
     <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
     Delete
   </a>
@@ -29,7 +29,7 @@
 <table class="table">
   <tbody>
     <tr>
-      <th>Type</th>
+      <th style="width:33vw">Type</th>
       <td>{{ object.get_type_display }}</td>
     </tr>
     <tr>
@@ -40,118 +40,54 @@
       <th>Platform{{ object.platforms|length|pluralize }}</th>
       <td>{{ object.platforms|join:", "|default:"-" }}</td>
     </tr>
+    <tr>
+      <th>Depends on</th>
+      <td>
+        {% for required_artifact in object.requires.all %}
+        <a href="{{ required_artifact.get_absolute_url }}">{{ required_artifact }}</a>{% if not forloop.last %}, {% endif %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+    </tr>
+    <tr>
+      <th>Install during setup assistant</th>
+      <td>{{ object.install_during_setup_assistant|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Auto update</th>
+      <td>{{ object.auto_update|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Reinstall interval</th>
+      <td>
+        {% if not object.reinstall_interval %}
+        Never
+        {% else %}
+        {{ object.reinstall_interval }} day{{ object.reinstall_interval|pluralize }}
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Reinstall on OS update</th>
+      <td>{{ object.get_reinstall_on_os_update_display }}</td>
+    </tr>
+
     {% if enterpriseapp_list %}
     {% with enterpriseapp_list|first as enterprise_app %}
-    <tr>
-      <th colspan="2"><h4>Enterprise App</h4></th>
-    </tr>
-    <tr>
-      <th>Product ID</th>
-      <td>{{ enterprise_app.product_id }}</td>
-    </tr>
-    <tr>
-      <th>Product version</th>
-      <th>{{ enterprise_app.product_version }}</td>
-    </tr>
-    <tr>
-      <th>Bundle{{ enterprise_app.bundles|length|pluralize }}</th>
-      <td>
-        {% if enterprise_app.bundles %}
-        <table class="table table-condensed">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Version</th>
-              <th>Path</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for bundle in enterprise_app.bundles %}
-            <tr>
-              <td>{{ bundle.id }}</td>
-              <td>{{ bundle.version_str }}{% if bundle.version != bundle.version_str %} / {{ bundle.version }}{% endif %}</td>
-              <td>{{ bundle.path }}
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        -
-        {% endif %}
-      </td>
-    </tr>
+    {% include "mdm/_enterprise_app_detail.html" %}
     {% endwith %}
     {% endif %}
+
     {% if profile_list %}
     {% with profile_list|first as profile %}
-    <tr>
-      <th colspan="2"><h4>Profile</h4></td>
-    </tr>
-    <tr>
-      <th>Payload description</th>
-      <td>{{ profile.get_payload_description|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Payload identifier</th>
-      <td><code>{{ profile.payload_identifier }}</code></th>
-    </tr>
-    <tr>
-      <th>Installed payload identifier</th>
-      <td><code>{{ profile.installed_payload_identifier }}</code></th>
-    </tr>
+    {% include "mdm/_profile_detail.html" %}
     {% endwith %}
     {% endif %}
+
     {% if storeapp_list %}
     {% with storeapp_list|first as store_app %}
-    {% with store_app.location_asset as location_asset %}
-    {% with location_asset.asset as asset %}
-    {% with location_asset.location as location %}
-    <tr>
-      <th>Asset</th>
-      <td>
-        {% if perms.mdm.view_asset %}
-        <a href="{{ store_app.location_asset.get_absolute_url }}">{{ asset.name }}</a>
-        {% else %}
-        {{ asset.name }}
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Location</th>
-      <td>
-        {% if perms.mdm.view_location %}
-        <a href="{{ location.get_absolute_url }}">{{ location }}</a>
-        {% else %}
-        {{ location }}
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Availability</th>
-      <td>
-        <table>
-          <tr>
-            <th style="padding:0 5px 5px 0">assigned</th>
-            <td style="padding:0 5px 5px 0">{{ location_asset.assigned_count }}</td>
-          </tr>
-          <tr>
-            <th style="padding:0 5px 5px 0">available</th>
-            <td style="padding:0 5px 5px 0">{{ location_asset.available_count }}</td>
-          </tr>
-          <tr>
-            <th style="padding:0 5px 5px 0">retired</th>
-            <td style="padding:0 5px 5px 0">{{ location_asset.retired_count }}</td>
-          </tr>
-          <tr>
-            <th style="padding:0 5px 5px 0">total</th>
-            <td style="padding:0 5px 5px 0">{{ location_asset.total_count }}</td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-    {% endwith %}
-    {% endwith %}
-    {% endwith %}
+    {% include "mdm/_store_app_detail.html" %}
     {% endwith %}
     {% endif %}
   </tbody>
@@ -161,85 +97,85 @@
   <dd class="small text-muted">{{ object.created_at|date:'r' }}</dd>
   <dt class="small text-muted">Updated at</dt>
   <dd class="small text-muted">{{ object.updated_at|date:'r' }}</dd>
-  {% if object.trashed_at %}
-  <dt class="small text-danger">Trashed at</dt>
-  <dd class="small text-danger">{{ object.trashed_at|date:'r' }}</dd>
-  {% endif %}
 </dl>
 
-<h4>{{ versions_count }} Version{{ versions_count|pluralize }}</h4>
+<h4>{{ versions_count }} Version{{ versions_count|pluralize }}</h4>
 
-{% if enterpriseapp_list %}
-<table class="table">
-  <thead>
-    <tr>
-      <th>Version</th>
-      <th>Filename</th>
-      <th>Created at</td>
-    </tr>
-  </thead>
-  <tbody>
-    {% for enterprise_app in enterpriseapp_list %}
-    <tr id="{{ enterprise_app.artifact_version.pk }}">
-      <td>{{ enterprise_app.artifact_version.version }}</td>
-      <td>{{ enterprise_app.filename|default:"-" }}</td>
-      <td>{{ enterprise_app.artifact_version.created_at }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% if upgrade_link %}
+<p>
+  <a class="btn btn-default" href="{{ upgrade_link }}">
+    <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
+    Create
+  </a>
+</p>
 {% endif %}
 
-{% if profile_list %}
+{% if versions_count %}
 <table class="table">
   <thead>
     <tr>
       <th>Version</th>
-      <th>Filename</th>
-      <th>Payload UUID</th>
-      <th>Payload Content</th>
-      <th>Created at</th>
+      <th>Platforms</th>
+      <th>Excl. tags</th>
+      <th>Def. shard</th>
+      <th>Tag shards</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
-    {% for profile in profile_list %}
-    <tr id="{{ profile.artifact_version.pk }}">
-      <td>{{ profile.artifact_version.version }}</td>
-      <td>{{ profile.filename|default:"-" }}</td>
-      <td><code>{{ profile.payload_uuid }}</code></td>
+    {% for av in versions %}
+    <tr id="ba-{{ av.pk }}">
       <td>
+        {% if perms.mdm.view_artifactversion %}
+        <a href="{{ av.get_absolute_url }}">{{ av.version }}</a>
+        {% else %}
+        {{ av.version }}
+        {% endif %}
+      </td>
+      <td>
+        {% if av.platforms %}
         <ul class="list-unstyled">
-          {% for payload_type, payload_display_name in profile.payloads %}
-          <li>{{ payload_type }}{% if payload_display_name %} - {{ payload_display_name }}{% endif %}</li>
-          {% endfor %}
+        {% for platform, versions in av.platforms.items %}
+          <li>{% if versions.min %}{{ versions.min }} ≤ {% endif %}{{ platform }}{% if versions.max %} < {{ versions.max }}{% endif %}</li>
+        {% endfor %}
         </ul>
+        {% else %}
+        -
+        {% endif %}
       </td>
-      <td>{{ profile.artifact_version.created_at }}</td>
       <td>
-        <a class="btn btn-default btn-xs" href="{% url "mdm:download_profile" profile.artifact_version.pk %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-        </a>
+        {% for tag in av.excluded_tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
       </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-
-{% if storeapp_list %}
-<table class="table">
-  <thead>
-    <tr>
-      <th>Version</th>
-      <th>Created at</td>
-    </tr>
-  </thead>
-  <tbody>
-    {% for store_app in storeapp_list %}
-    <tr id="{{ store_app.artifact_version.pk }}">
-      <td>{{ store_app.artifact_version.version }}</td>
-      <td>{{ store_app.artifact_version.created_at }}</td>
+      <td>
+        {{ av.default_shard }}/{{ av.shard_modulo }}
+      </td>
+      <td>
+        {% if av.tag_shards %}
+        <table>
+        {% for tag, shard in av.tag_shards.items %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag %}</td><td>{{ shard }}</td></tr>
+        {% endfor %}
+        </table>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      <td>
+        {% if perms.mdm.change_artifactversion %}
+        <a href="{% url 'mdm:update_artifact_version' object.pk av.pk %}" class="btn btn-default">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+        {% if perms.mdm.delete_artifactversion and av.can_be_deleted %}
+        <a href="{% url 'mdm:delete_artifact_version' object.pk av.pk %}" class="btn btn-danger">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>
@@ -248,7 +184,7 @@
 
 <h4>{{ blueprint_artifacts_count }} Blueprint{{ blueprint_artifacts_count|pluralize }}</h4>
 
-{% if perms.mdm.change_blueprint %}
+{% if perms.mdm.add_blueprint %}
 <p>
   <a href="{% url 'mdm:create_blueprint_artifact' object.pk %}" class="btn btn-default">
     Add
@@ -261,9 +197,10 @@
   <thead>
     <tr>
       <th>Name</th>
-      <th>Priority</th>
-      <th>Before S.A.?</th>
-      <th>Auto update?</th>
+      <th>Platforms</th>
+      <th>Excl. tags</th>
+      <th>Def. shard</th>
+      <th>Tag shards</th>
       <th></th>
     </tr>
   </thead>
@@ -277,9 +214,38 @@
         {{ ba.blueprint }}
         {% endif %}
       </td>
-      <td>{{ ba.priority }}</td>
-      <td>{{ ba.install_before_setup_assistant|yesno }}</td>
-      <td>{{ ba.auto_update|yesno }}</td>
+      <td>
+        {% if ba.platforms %}
+        <ul class="list-unstyled">
+        {% for platform, versions in ba.platforms.items %}
+          <li>{% if versions.min %}{{ versions.min }} ≤ {% endif %}{{ platform }}{% if versions.max %} < {{ versions.max }}{% endif %}</li>
+        {% endfor %}
+        </ul>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      <td>
+        {% for tag in ba.excluded_tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+      <td>
+        {{ ba.default_shard }}/{{ ba.shard_modulo }}
+      </td>
+      <td>
+        {% if ba.tag_shards %}
+        <table>
+        {% for tag, shard in ba.tag_shards.items %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag %}</td><td>{{ shard }}</td></tr>
+        {% endfor %}
+        </table>
+        {% else %}
+        -
+        {% endif %}
+      </td>
       <td>
         {% if perms.mdm.change_blueprintartifact %}
         <a href="{% url 'mdm:update_blueprint_artifact' object.pk ba.pk %}" class="btn btn-default">

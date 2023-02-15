@@ -11,7 +11,6 @@ from zentral.contrib.mdm.commands import ManagedApplicationList
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.models import (
     Artifact,
-    ArtifactType,
     ArtifactVersion,
     Asset,
     Blueprint,
@@ -23,7 +22,7 @@ from zentral.contrib.mdm.models import (
     LocationAsset,
     Platform,
     StoreApp,
-    TargetArtifactStatus,
+    TargetArtifact,
 )
 from .utils import force_dep_enrollment_session
 
@@ -76,9 +75,10 @@ class ManagedApplicationListCommandTestCase(TestCase):
         if artifact is None:
             artifact = Artifact.objects.create(
                 name=get_random_string(32),
-                type=ArtifactType.StoreApp.name,
-                channel=Channel.Device.name,
-                platforms=[Platform.macOS.name],
+                type=Artifact.Type.STORE_APP,
+                channel=Channel.DEVICE,
+                platforms=[Platform.MACOS],
+                auto_update=True,
             )
             asset = Asset.objects.create(
                 adam_id="1234567890",
@@ -87,7 +87,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
                 product_type=Asset.ProductType.APP,
                 device_assignable=True,
                 revocable=True,
-                supported_platforms=[Platform.macOS.name],
+                supported_platforms=[Platform.MACOS],
             )
             location = Location(
                 server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
@@ -110,7 +110,9 @@ class ManagedApplicationListCommandTestCase(TestCase):
         else:
             location_asset = artifact.artifactversion_set.first().store_app.location_asset
         artifact_version = ArtifactVersion.objects.create(
-            artifact=artifact, version=version or 0
+            artifact=artifact,
+            version=version or 0,
+            macos=True
         )
         store_app = StoreApp.objects.create(
             artifact_version=artifact_version, location_asset=location_asset
@@ -119,14 +121,12 @@ class ManagedApplicationListCommandTestCase(TestCase):
             DeviceArtifact.objects.create(
                 enrolled_device=self.enrolled_device,
                 artifact_version=artifact_version,
-                status=status.name,
+                status=status,
             )
-        BlueprintArtifact.objects.create(
+        BlueprintArtifact.objects.get_or_create(
             blueprint=self.blueprint,
             artifact=artifact,
-            install_before_setup_assistant=False,
-            auto_update=True,
-            priority=100,
+            defaults={"macos": True},
         )
         return artifact_version, store_app
 
@@ -134,24 +134,24 @@ class ManagedApplicationListCommandTestCase(TestCase):
 
     def test_scope(self):
         for channel, platform, user_enrollment, result in (
-            (Channel.Device, Platform.iOS, False, True),
-            (Channel.Device, Platform.iPadOS, False, True),
-            (Channel.Device, Platform.macOS, False, True),
-            (Channel.Device, Platform.tvOS, False, True),
-            (Channel.User, Platform.iOS, False, False),
-            (Channel.User, Platform.iPadOS, False, False),
-            (Channel.User, Platform.macOS, False, True),
-            (Channel.User, Platform.tvOS, False, False),
-            (Channel.Device, Platform.iOS, True, True),
-            (Channel.Device, Platform.iPadOS, True, False),
-            (Channel.Device, Platform.macOS, True, True),
-            (Channel.Device, Platform.tvOS, True, False),
-            (Channel.User, Platform.iOS, True, False),
-            (Channel.User, Platform.iPadOS, True, False),
-            (Channel.User, Platform.macOS, True, True),
-            (Channel.User, Platform.tvOS, True, False),
+            (Channel.DEVICE, Platform.IOS, False, True),
+            (Channel.DEVICE, Platform.IPADOS, False, True),
+            (Channel.DEVICE, Platform.MACOS, False, True),
+            (Channel.DEVICE, Platform.TVOS, False, True),
+            (Channel.USER, Platform.IOS, False, False),
+            (Channel.USER, Platform.IPADOS, False, False),
+            (Channel.USER, Platform.MACOS, False, True),
+            (Channel.USER, Platform.TVOS, False, False),
+            (Channel.DEVICE, Platform.IOS, True, True),
+            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.MACOS, True, True),
+            (Channel.DEVICE, Platform.TVOS, True, False),
+            (Channel.USER, Platform.IOS, True, False),
+            (Channel.USER, Platform.IPADOS, True, False),
+            (Channel.USER, Platform.MACOS, True, True),
+            (Channel.USER, Platform.TVOS, True, False),
         ):
-            self.enrolled_device.platform = platform.name
+            self.enrolled_device.platform = platform
             self.enrolled_device.user_enrollment = user_enrollment
             self.assertEqual(
                 result,
@@ -234,11 +234,11 @@ class ManagedApplicationListCommandTestCase(TestCase):
         )
 
     def test_update_device_artifact_found_and_installed(self):
-        artifact_version0, _ = self._force_store_app(status=TargetArtifactStatus.Installed)
+        artifact_version0, _ = self._force_store_app(status=TargetArtifact.Status.INSTALLED)
         artifact_version, store_app = self._force_store_app(
             artifact=artifact_version0.artifact,
             version=1,
-            status=TargetArtifactStatus.AwaitingConfirmation
+            status=TargetArtifact.Status.AWAITING_CONFIRMATION
         )
         da_qs = DeviceArtifact.objects.filter(
             enrolled_device=self.enrolled_device,
@@ -255,7 +255,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         self.assertEqual(da_qs.count(), 1)
         da = da_qs.first()
         self.assertEqual(da.artifact_version, artifact_version)
-        self.assertEqual(da.status, TargetArtifactStatus.Installed.name)
+        self.assertEqual(da.status, TargetArtifact.Status.INSTALLED)
         dcmd_qs = DeviceCommand.objects.filter(
             enrolled_device=self.enrolled_device,
             time__isnull=True
@@ -263,16 +263,16 @@ class ManagedApplicationListCommandTestCase(TestCase):
         self.assertEqual(dcmd_qs.count(), 0)
 
     def test_update_device_artifact_error(self):
-        artifact_version0, _ = self._force_store_app(status=TargetArtifactStatus.Installed)
+        artifact_version0, _ = self._force_store_app(status=TargetArtifact.Status.INSTALLED)
         artifact_version, store_app = self._force_store_app(
             artifact=artifact_version0.artifact,
             version=1,
-            status=TargetArtifactStatus.AwaitingConfirmation
+            status=TargetArtifact.Status.AWAITING_CONFIRMATION
         )
         da_qs = DeviceArtifact.objects.filter(
             enrolled_device=self.enrolled_device,
             artifact_version__artifact=artifact_version0.artifact
-        )
+        ).order_by("created_at")
         self.assertEqual(da_qs.count(), 2)
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
@@ -281,10 +281,13 @@ class ManagedApplicationListCommandTestCase(TestCase):
         )
         response = self._get_response(cmd, status="Failed")
         cmd.process_response(response, self.dep_enrollment_session, self.mbu)
-        self.assertEqual(da_qs.count(), 1)
-        da = da_qs.first()
+        self.assertEqual(da_qs.count(), 2)
+        da = da_qs[0]
         self.assertEqual(da.artifact_version, artifact_version0)
-        self.assertEqual(da.status, TargetArtifactStatus.Installed.name)
+        self.assertEqual(da.status, TargetArtifact.Status.INSTALLED)
+        da2 = da_qs[1]
+        self.assertEqual(da2.artifact_version, artifact_version)
+        self.assertEqual(da2.status, TargetArtifact.Status.FAILED)
         dcmd_qs = DeviceCommand.objects.filter(
             enrolled_device=self.enrolled_device,
             time__isnull=True
@@ -295,7 +298,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
     def test_update_device_artifact_not_found(self, logger_warning):
         artifact_version, store_app = self._force_store_app(
             bundle_id="com.example.yolo",
-            status=TargetArtifactStatus.AwaitingConfirmation
+            status=TargetArtifact.Status.AWAITING_CONFIRMATION
         )
         da_qs = DeviceArtifact.objects.filter(
             enrolled_device=self.enrolled_device,
@@ -304,7 +307,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         self.assertEqual(da_qs.count(), 1)
         da = da_qs.first()
         self.assertEqual(da.artifact_version, artifact_version)
-        self.assertEqual(da.status, TargetArtifactStatus.AwaitingConfirmation.name)
+        self.assertEqual(da.status, TargetArtifact.Status.AWAITING_CONFIRMATION)
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
             artifact_version,
@@ -316,7 +319,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         self.assertEqual(da_qs.count(), 1)
         da = da_qs.first()
         self.assertEqual(da.artifact_version, artifact_version)
-        self.assertEqual(da.status, TargetArtifactStatus.AwaitingConfirmation.name)
+        self.assertEqual(da.status, TargetArtifact.Status.AWAITING_CONFIRMATION)
         logger_warning.assert_called_once_with(
             "Artifact version %s was not found on device %s.",
             artifact_version.pk, self.enrolled_device.serial_number
@@ -335,7 +338,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
     @patch("zentral.contrib.mdm.commands.managed_application_list.logger.warning")
     def test_update_device_artifact_found_not_installed_no_error(self, logger_warning):
         artifact_version, store_app = self._force_store_app(
-            status=TargetArtifactStatus.AwaitingConfirmation
+            status=TargetArtifact.Status.AWAITING_CONFIRMATION
         )
         da_qs = DeviceArtifact.objects.filter(
             enrolled_device=self.enrolled_device,
@@ -344,7 +347,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         self.assertEqual(da_qs.count(), 1)
         da = da_qs.first()
         self.assertEqual(da.artifact_version, artifact_version)
-        self.assertEqual(da.status, TargetArtifactStatus.AwaitingConfirmation.name)
+        self.assertEqual(da.status, TargetArtifact.Status.AWAITING_CONFIRMATION)
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
             artifact_version,
@@ -356,7 +359,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         self.assertEqual(da_qs.count(), 1)
         da = da_qs.first()
         self.assertEqual(da.artifact_version, artifact_version)
-        self.assertEqual(da.status, TargetArtifactStatus.AwaitingConfirmation.name)
+        self.assertEqual(da.status, TargetArtifact.Status.AWAITING_CONFIRMATION)
         logger_warning.assert_not_called()
         dcmd_qs = DeviceCommand.objects.filter(
             enrolled_device=self.enrolled_device,
@@ -372,8 +375,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
     @patch("zentral.contrib.mdm.commands.managed_application_list.logger.warning")
     def test_update_device_artifact_found_not_installed_no_error_too_many_retries(self, logger_warning):
         artifact_version, store_app = self._force_store_app(
-            bundle_id="com.example.yolo",
-            status=TargetArtifactStatus.AwaitingConfirmation
+            status=TargetArtifact.Status.AWAITING_CONFIRMATION
         )
         da_qs = DeviceArtifact.objects.filter(
             enrolled_device=self.enrolled_device,
@@ -382,7 +384,7 @@ class ManagedApplicationListCommandTestCase(TestCase):
         self.assertEqual(da_qs.count(), 1)
         da = da_qs.first()
         self.assertEqual(da.artifact_version, artifact_version)
-        self.assertEqual(da.status, TargetArtifactStatus.AwaitingConfirmation.name)
+        self.assertEqual(da.status, TargetArtifact.Status.AWAITING_CONFIRMATION)
         cmd = ManagedApplicationList.create_for_device(
             self.enrolled_device,
             artifact_version,
@@ -390,12 +392,12 @@ class ManagedApplicationListCommandTestCase(TestCase):
                     "retries": 10}
         )
         self.assertEqual(cmd.retries, 10)
-        response = self._get_response(cmd, status="Managed")
+        response = self._get_response(cmd, status="Installing")
         cmd.process_response(response, self.dep_enrollment_session, self.mbu)
         self.assertEqual(da_qs.count(), 1)
         da = da_qs.first()
         self.assertEqual(da.artifact_version, artifact_version)
-        self.assertEqual(da.status, TargetArtifactStatus.AwaitingConfirmation.name)
+        self.assertEqual(da.status, TargetArtifact.Status.AWAITING_CONFIRMATION)
         logger_warning.assert_called_once_with(
             "Stop rescheduling %s command on device %s for artifact version %s.",
             "ManagedApplicationList", self.enrolled_device.serial_number, artifact_version.pk

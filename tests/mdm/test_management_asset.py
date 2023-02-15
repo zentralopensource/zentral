@@ -9,7 +9,9 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from zentral.contrib.mdm.models import Artifact, Asset, Location, LocationAsset, StoreApp
+from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
+                                        Channel, Location, LocationAsset, Platform, StoreApp)
+from .utils import force_artifact, force_blueprint_artifact
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -52,7 +54,7 @@ class AssetManagementViewsTestCase(TestCase):
             bundle_id="pro.zentral.tests"
         )
 
-    def _force_location_asset(self):
+    def _force_location_asset(self, artifacts=False):
         asset = self._force_asset()
         location = Location(
             server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
@@ -68,10 +70,71 @@ class AssetManagementViewsTestCase(TestCase):
         )
         location.set_notification_auth_token()
         location.save()
-        return LocationAsset.objects.create(
+        location_asset = LocationAsset.objects.create(
             asset=asset,
             location=location
         )
+        if artifacts:
+            for i in range(2):
+                artifact = Artifact.objects.create(
+                    name=get_random_string(12),
+                    type=Artifact.Type.STORE_APP,
+                    channel=Channel.DEVICE,
+                    platforms=[Platform.MACOS]
+                )
+                artifact_version = ArtifactVersion.objects.create(
+                    artifact=artifact,
+                    version=0,
+                    macos=True
+                )
+                StoreApp.objects.create(
+                    artifact_version=artifact_version,
+                    location_asset=location_asset
+                )
+        return location_asset
+
+    # asset model
+
+    def test_asset_with_name_str(self):
+        asset = self._force_asset()
+        self.assertEqual(str(asset), f"App {asset.name}")
+
+    def test_asset_without_name_str(self):
+        asset = self._force_asset()
+        asset.name = None
+        asset.save()
+        self.assertEqual(str(asset), f"App {asset.adam_id} {asset.pricing_param}")
+
+    def test_location_asset_str(self):
+        location_asset = self._force_location_asset()
+        self.assertEqual(str(location_asset), f"{location_asset.location.name} - App {location_asset.asset.name}")
+
+    def test_asset_icon_no_metadata(self):
+        asset = self._force_asset()
+        self.assertIsNone(asset.icon_url)
+
+    def test_asset_icon_missing_metadata(self):
+        asset = self._force_asset()
+        asset.metadata = {"un": 2}
+        self.assertIsNone(asset.icon_url)
+
+    def test_asset_icon(self):
+        asset = self._force_asset()
+        asset.metadata = {"artwork": {"width": 512, "height": 1024, "url": "https://example.com/{w}x{h}bb.{f}"}}
+        self.assertEqual(asset.icon_url, "https://example.com/128x128bb.png")
+
+    def test_asset_lastest_version(self):
+        asset = self._force_asset()
+        asset.metadata = {
+            "offers": [
+                {"un": 2},
+                {"version": {"display": "INVALID"}},
+                {"version": {"display": "13.1"}},
+                {"version": {"display": "13.1.1"}},
+                {"version": {"display": "13.0"}},
+            ]
+        }
+        self.assertEqual(asset.lastest_version, "13.1.1")
 
     # assets
 
@@ -124,6 +187,16 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/asset_detail.html")
         self.assertContains(response, reverse("mdm:create_asset_artifact", args=(asset.pk,)))
+
+    def test_asset_with_artifact(self):
+        location_asset = self._force_location_asset(artifacts=True)
+        artifact = location_asset.storeapp_set.first().artifact_version.artifact
+        self._login("mdm.view_asset")
+        response = self.client.get(reverse("mdm:asset", args=(location_asset.asset.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/asset_detail.html")
+        self.assertNotContains(response, "No artifacts found for this asset.")
+        self.assertContains(response, artifact.name)
 
     # create_asset_artifact
 
@@ -233,11 +306,12 @@ class AssetManagementViewsTestCase(TestCase):
                                      "remove_on_unenroll": "on",
                                      "prevent_backup": "on"},
                                     follow=True)
-        self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_detail.html")
         artifact = response.context["object"]
         self.assertEqual(artifact.name, name)
-        store_app = StoreApp.objects.get(artifact_version__artifact=artifact, location_asset=location_asset)
+        self.assertEqual(artifact.artifactversion_set.count(), 1)
+        artifact_version = artifact.artifactversion_set.first()
+        store_app = StoreApp.objects.get(artifact_version=artifact_version, location_asset=location_asset)
         self.assertEqual(store_app.get_management_flags(), 5)
         self.assertTrue(store_app.has_configuration())
         self.assertEqual(store_app.get_configuration(), {"un": 1})
@@ -284,3 +358,82 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/assetartifact_form.html")
         form = response.context["form"]
         self.assertEqual(form.fields["name"].initial, asset.name)
+
+    # upgrade store app get
+
+    def test_upgrade_store_app_get_redirect(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.STORE_APP)
+        self._login_redirect(reverse("mdm:upgrade_store_app", args=(artifact.pk,)))
+
+    def test_upgrade_store_app_get_permission_denied(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.STORE_APP)
+        self._login("mdm.change_artifactversion")
+        response = self.client.get(reverse("mdm:upgrade_store_app", args=(artifact.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_upgrade_store_app_get_ok(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.STORE_APP)
+        self._login("mdm.add_artifactversion")
+        response = self.client.get(reverse("mdm:upgrade_store_app", args=(artifact.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
+
+    # upgrade store app post
+
+    def test_upgrade_store_app_post_ok(self):
+        blueprint_artifact, artifact, (store_app_av1,) = force_blueprint_artifact(
+                artifact_type=Artifact.Type.STORE_APP
+        )
+        blueprint = blueprint_artifact.blueprint
+        artifact_pk = str(artifact.pk)
+        self.assertEqual(list(blueprint.serialized_artifacts.keys()), [artifact_pk])
+        self.assertEqual(
+            list(str(av["pk"]) for av in blueprint.serialized_artifacts[artifact_pk]["versions"]),
+            [str(store_app_av1.pk)]
+        )
+        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        response = self.client.post(reverse("mdm:upgrade_store_app", args=(artifact.pk,)),
+                                    {"default_shard": 1,
+                                     "shard_modulo": 10,
+                                     "macos": "on",
+                                     "macos_min_version": "13.3.1",
+                                     "remove_on_unenroll": False},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifactversion_detail.html")
+        store_app_av2 = response.context["object"]
+        self.assertEqual(artifact, store_app_av2.artifact)
+        self.assertEqual(artifact.artifactversion_set.count(), 2)
+        self.assertEqual(store_app_av2.version, 2)
+        self.assertEqual(store_app_av2.default_shard, 1)
+        self.assertEqual(store_app_av2.shard_modulo, 10)
+        self.assertTrue(store_app_av2.macos)
+        self.assertEqual(store_app_av2.macos_min_version, "13.3.1")
+        store_app_2 = store_app_av2.store_app
+        self.assertFalse(store_app_2.remove_on_unenroll)
+        blueprint.refresh_from_db()
+        # blueprint serialized artifacts updated
+        self.assertEqual(list(blueprint.serialized_artifacts.keys()), [artifact_pk])
+        self.assertEqual(
+            set(str(av["pk"]) for av in blueprint.serialized_artifacts[artifact_pk]["versions"]),
+            {str(store_app_av1.pk), str(store_app_av2.pk)}
+        )
+
+    def test_upgrade_store_app_post_no_change(self):
+        _, artifact, (store_app_av1,) = force_blueprint_artifact(artifact_type=Artifact.Type.STORE_APP)
+        store_app_1 = store_app_av1.store_app
+        store_app_1.configuration = plistlib.dumps({"un": 1})
+        store_app_1.save()
+        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        response = self.client.post(reverse("mdm:upgrade_store_app", args=(artifact.pk,)),
+                                    {"default_shard": 1,
+                                     "shard_modulo": 10,
+                                     "macos": "on",
+                                     "configuration": store_app_1.configuration.decode("utf-8"),
+                                     "macos_min_version": "13.3.1",
+                                     "remove_on_unenroll": True},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
+        self.assertFormError(response, "object_form", None,
+                             "This version of the store app is identical to the latest version")

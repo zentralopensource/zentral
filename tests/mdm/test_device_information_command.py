@@ -4,7 +4,9 @@ import os.path
 import plistlib
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
+from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import DeviceInformation, SecurityInfo
 from zentral.contrib.mdm.commands.scheduling import _update_inventory
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
@@ -38,20 +40,20 @@ class DeviceInformationCommandTestCase(TestCase):
 
     def test_scope(self):
         for channel, platform, user_enrollment, result in (
-            (Channel.Device, Platform.iOS, False, True),
-            (Channel.Device, Platform.iPadOS, False, True),
-            (Channel.Device, Platform.macOS, False, True),
-            (Channel.Device, Platform.tvOS, False, True),
-            (Channel.User, Platform.iOS, False, False),
-            (Channel.User, Platform.iPadOS, False, True),
-            (Channel.User, Platform.macOS, False, True),
-            (Channel.User, Platform.tvOS, False, False),
-            (Channel.Device, Platform.iOS, True, True),
-            (Channel.Device, Platform.iPadOS, True, False),
-            (Channel.Device, Platform.macOS, True, True),
-            (Channel.Device, Platform.tvOS, True, False),
+            (Channel.DEVICE, Platform.IOS, False, True),
+            (Channel.DEVICE, Platform.IPADOS, False, True),
+            (Channel.DEVICE, Platform.MACOS, False, True),
+            (Channel.DEVICE, Platform.TVOS, False, True),
+            (Channel.USER, Platform.IOS, False, False),
+            (Channel.USER, Platform.IPADOS, False, True),
+            (Channel.USER, Platform.MACOS, False, True),
+            (Channel.USER, Platform.TVOS, False, False),
+            (Channel.DEVICE, Platform.IOS, True, True),
+            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.MACOS, True, True),
+            (Channel.DEVICE, Platform.TVOS, True, False),
         ):
-            self.enrolled_device.platform = platform.name
+            self.enrolled_device.platform = platform
             self.enrolled_device.user_enrollment = user_enrollment
             self.assertEqual(
                 result,
@@ -69,7 +71,7 @@ class DeviceInformationCommandTestCase(TestCase):
             if platforms is not None:
                 self.assertIsInstance(platforms, dict)
                 for platform, min_os_version in platforms.items():
-                    self.assertIn(platform, Platform.all_values())
+                    self.assertIn(platform, Platform.values)
                     self.assertIsInstance(min_os_version, tuple)
                     self.assertTrue(all(isinstance(i, int) for i in min_os_version))
 
@@ -136,20 +138,18 @@ class DeviceInformationCommandTestCase(TestCase):
     def test_update_inventory_device_information_updated_at_none(self):
         self.assertIsNone(self.enrolled_device.device_information_updated_at)
         cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, DeviceInformation)
 
     def test_update_inventory_device_information_updated_at_old(self):
         self.enrolled_device.device_information_updated_at = datetime(2000, 1, 1)
         cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, DeviceInformation)
 
@@ -157,9 +157,8 @@ class DeviceInformationCommandTestCase(TestCase):
         self.enrolled_device.device_information_updated_at = datetime.utcnow()
         self.assertIsNone(self.enrolled_device.security_info_updated_at)
         cmd = _update_inventory(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, SecurityInfo)

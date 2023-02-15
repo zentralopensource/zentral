@@ -7,9 +7,10 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.apps_books import (ensure_enrolled_device_location_asset_association,
                                             queue_install_application_command_if_necessary,
                                             clear_on_the_fly_assignment)
+from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.commands.install_application import InstallApplication
-from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
+from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Asset, Blueprint, BlueprintArtifact, DeviceAssignment, DeviceCommand,
                                         EnrolledDeviceLocationAssetAssociation,
                                         Location, LocationAsset,
@@ -202,23 +203,26 @@ class MDMOnTheFlyAssignmentTestCase(TestCase):
         edlaa.save()
         artifact = Artifact.objects.create(
             name=get_random_string(32),
-            type=ArtifactType.StoreApp.name,
+            type=Artifact.Type.STORE_APP,
             channel="Device",
             platforms=["macOS"],
+            auto_update=True,
         )
         artifact_version = ArtifactVersion.objects.create(
             artifact=artifact,
-            version=1
+            version=1,
+            macos=True,
         )
         StoreApp.objects.create(
             artifact_version=artifact_version,
             location_asset=location_asset,
         )
-        BlueprintArtifact.objects.create(
+        BlueprintArtifact.objects.get_or_create(
             blueprint=self.enrolled_device.blueprint,
-            install_before_setup_assistant=True,
-            artifact=artifact
+            artifact=artifact,
+            defaults={"macos": True},
         )
+        update_blueprint_serialized_artifacts(self.enrolled_device.blueprint)
         queue_install_application_command_if_necessary(
             location_asset.location,
             self.enrolled_device.serial_number,

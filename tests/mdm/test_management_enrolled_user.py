@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import CustomCommand
 from .utils import force_dep_enrollment_session, force_enrolled_user
 
@@ -75,8 +76,8 @@ class EnrolledUserManagementViewsTestCase(TestCase):
 
     def test_enrolled_user_one_command(self):
         enrolled_user, enrolled_device = self._force_enrolled_user()
-        CustomCommand.create_for_user(
-            enrolled_user,
+        CustomCommand.create_for_target(
+            Target(enrolled_device, enrolled_user),
             kwargs={"command": plistlib.dumps({"RequestType": "ProfileList"}).decode("utf-8")},
             queue=True
         )
@@ -93,8 +94,8 @@ class EnrolledUserManagementViewsTestCase(TestCase):
         enrolled_user, enrolled_device = self._force_enrolled_user()
         first_command = second_command = None
         for i in range(11):
-            cmd = CustomCommand.create_for_user(
-                enrolled_user,
+            cmd = CustomCommand.create_for_target(
+                Target(enrolled_device, enrolled_user),
                 kwargs={"command": plistlib.dumps({"RequestType": "ProfileList"}).decode("utf-8")},
                 queue=True
             )
@@ -145,8 +146,8 @@ class EnrolledUserManagementViewsTestCase(TestCase):
         enrolled_user, enrolled_device = self._force_enrolled_user()
         first_command = second_command = None
         for i in range(5):
-            cmd = CustomCommand.create_for_user(
-                enrolled_user,
+            cmd = CustomCommand.create_for_target(
+                Target(enrolled_device, enrolled_user),
                 kwargs={"command": plistlib.dumps({"RequestType": "ProfileList"}).decode("utf-8")},
                 queue=True
             )
@@ -184,8 +185,8 @@ class EnrolledUserManagementViewsTestCase(TestCase):
 
     def test_download_enrolled_user_command_result_redirect(self):
         enrolled_user, enrolled_device = self._force_enrolled_user()
-        cmd = CustomCommand.create_for_user(
-            enrolled_user,
+        cmd = CustomCommand.create_for_target(
+            Target(enrolled_device, enrolled_user),
             kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
             queue=True
         )
@@ -193,8 +194,8 @@ class EnrolledUserManagementViewsTestCase(TestCase):
 
     def test_download_enrolled_user_command_result_permission_denied(self):
         enrolled_user, enrolled_device = self._force_enrolled_user()
-        cmd = CustomCommand.create_for_user(
-            enrolled_user,
+        cmd = CustomCommand.create_for_target(
+            Target(enrolled_device, enrolled_user),
             kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
             queue=True
         )
@@ -204,8 +205,8 @@ class EnrolledUserManagementViewsTestCase(TestCase):
 
     def test_download_enrolled_user_command_result_no_result_404(self):
         enrolled_user, enrolled_device = self._force_enrolled_user()
-        cmd = CustomCommand.create_for_user(
-            enrolled_user,
+        cmd = CustomCommand.create_for_target(
+            Target(enrolled_device, enrolled_user),
             kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
             queue=True
         )
@@ -215,8 +216,8 @@ class EnrolledUserManagementViewsTestCase(TestCase):
 
     def test_download_enrolled_user_command_result(self):
         enrolled_user, enrolled_device = self._force_enrolled_user()
-        cmd = CustomCommand.create_for_user(
-            enrolled_user,
+        cmd = CustomCommand.create_for_target(
+            Target(enrolled_device, enrolled_user),
             kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
             queue=True
         )

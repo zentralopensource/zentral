@@ -1,6 +1,6 @@
 import logging
 from zentral.contrib.mdm.inventory import update_inventory_tree
-from zentral.contrib.mdm.models import Channel, DeviceArtifact, Platform, TargetArtifactStatus
+from zentral.contrib.mdm.models import Channel, Platform, TargetArtifact
 from .base import register_command, Command
 
 
@@ -15,11 +15,11 @@ class InstalledApplicationList(Command):
     def verify_channel_and_device(channel, enrolled_device):
         return (
             (
-                channel == Channel.Device
-                or enrolled_device.platform == Platform.macOS.name
+                channel == Channel.DEVICE
+                or enrolled_device.platform == Platform.MACOS
             ) and (
                 not enrolled_device.user_enrollment
-                or enrolled_device.platform == Platform.iOS.name
+                or enrolled_device.platform == Platform.IOS
             )
         )
 
@@ -55,6 +55,7 @@ class InstalledApplicationList(Command):
         # this command was sent to check on an install
         found = False
         error = False
+        extra_info = {}
         installed = True
         app_key_attrs = list(self.apps_to_check[0].keys())
         for app in self.response.get("InstalledApplicationList", []):
@@ -62,29 +63,28 @@ class InstalledApplicationList(Command):
             if app_key not in self.apps_to_check:
                 continue
             found = True
+            for attr in ("DownloadCancelled", "DownloadFailed",
+                         "DownloadPaused", "DownloadWaiting",
+                         "Installing"):
+                extra_info[attr] = app.get(attr)
             if any(app.get(attr) for attr in ("DownloadWaiting", "DownloadPaused", "Installing")):
                 installed = False
             elif any(app.get(attr) for attr in ("DownloadCancelled", "DownloadFailed")):
                 error = True
                 break
         if found and installed:
-            # cleanup
-            (DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device,
-                                           artifact_version__artifact=self.artifact)
-                                   .exclude(artifact_version=self.artifact_version)
-                                   .delete())
-            # update
-            DeviceArtifact.objects.update_or_create(
-                enrolled_device=self.enrolled_device,
-                artifact_version=self.artifact_version,
-                defaults={"status": TargetArtifactStatus.Installed.name}
+            self.target.update_target_artifact(
+                self.artifact_version,
+                TargetArtifact.Status.INSTALLED,
+                allow_reinstall=True,
             )
         elif error:
-            # we remove the device artifact, a new install will be triggered
-            # TODO evaluate if it is the best option
-            # cleanup
-            DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device,
-                                          artifact_version=self.artifact_version).delete()
+            self.target.update_target_artifact(
+                self.enrolled_device,
+                self.artifact_version,
+                TargetArtifact.Status.FAILED,
+                extra_info=extra_info
+            )
         else:
             if not found:
                 logger.warning("Artifact version %s was not found.", self.artifact_version.pk)
@@ -95,8 +95,7 @@ class InstalledApplicationList(Command):
                 return
             # queue a new installed application list command
             first_delay_seconds = 15  # TODO hardcoded
-            self.create_for_device(
-                self.enrolled_device,
+            self.create_for_target(
                 self.artifact_version,
                 kwargs={"apps_to_check": self.apps_to_check,
                         "retries": self.retries + 1},

@@ -2,13 +2,14 @@ import plistlib
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.commands import InstalledApplicationList, InstallEnterpriseApplication
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.commands.scheduling import _install_artifacts
-from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
+from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Blueprint, BlueprintArtifact, Channel,
                                         DeviceArtifact, DeviceCommand, EnterpriseApp,
-                                        Platform, RequestStatus, TargetArtifactStatus)
+                                        Platform, RequestStatus, TargetArtifact)
 from .utils import force_dep_enrollment_session
 
 
@@ -31,13 +32,15 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
         cls.enrolled_device.save()
         cls.artifact = Artifact.objects.create(
             name=get_random_string(32),
-            type=ArtifactType.EnterpriseApp.name,
-            channel=Channel.Device.name,
-            platforms=[Platform.macOS.name],
+            type=Artifact.Type.ENTERPRISE_APP,
+            channel=Channel.DEVICE,
+            platforms=[Platform.MACOS],
+            auto_update=True,
         )
         cls.artifact_version0 = ArtifactVersion.objects.create(
             artifact=cls.artifact,
-            version=0
+            version=0,
+            macos=True,
         )
         cls.enterprise_app = EnterpriseApp.objects.create(
             artifact_version=cls.artifact_version0,
@@ -49,18 +52,17 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
         DeviceArtifact.objects.create(
             enrolled_device=cls.enrolled_device,
             artifact_version=cls.artifact_version0,
-            status=TargetArtifactStatus.Installed.name
+            status=TargetArtifact.Status.INSTALLED
         )
-        BlueprintArtifact.objects.create(
+        BlueprintArtifact.objects.get_or_create(
             blueprint=cls.blueprint,
             artifact=cls.artifact,
-            install_before_setup_assistant=True,
-            auto_update=True,
-            priority=100
+            defaults={"macos": True},
         )
         cls.artifact_version = ArtifactVersion.objects.create(
             artifact=cls.artifact,
-            version=1
+            version=1,
+            macos=True
         )
         cls.enterprise_app = EnterpriseApp.objects.create(
             artifact_version=cls.artifact_version,
@@ -69,25 +71,26 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
             product_version="1.0.0",
             manifest={"items": [{"assets": [{}]}]}
         )
+        update_blueprint_serialized_artifacts(cls.blueprint)
 
     # verify_channel_and_device
 
     def test_scope(self):
         for channel, platform, user_enrollment, result in (
-            (Channel.Device, Platform.iOS, False, False),
-            (Channel.Device, Platform.iPadOS, False, False),
-            (Channel.Device, Platform.macOS, False, True),
-            (Channel.Device, Platform.tvOS, False, False),
-            (Channel.User, Platform.iOS, False, False),
-            (Channel.User, Platform.iPadOS, False, False),
-            (Channel.User, Platform.macOS, False, False),
-            (Channel.User, Platform.tvOS, False, False),
-            (Channel.Device, Platform.iOS, True, False),
-            (Channel.Device, Platform.iPadOS, True, False),
-            (Channel.Device, Platform.macOS, True, True),
-            (Channel.Device, Platform.tvOS, True, False),
+            (Channel.DEVICE, Platform.IOS, False, False),
+            (Channel.DEVICE, Platform.IPADOS, False, False),
+            (Channel.DEVICE, Platform.MACOS, False, True),
+            (Channel.DEVICE, Platform.TVOS, False, False),
+            (Channel.USER, Platform.IOS, False, False),
+            (Channel.USER, Platform.IPADOS, False, False),
+            (Channel.USER, Platform.MACOS, False, False),
+            (Channel.USER, Platform.TVOS, False, False),
+            (Channel.DEVICE, Platform.IOS, True, False),
+            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.MACOS, True, True),
+            (Channel.DEVICE, Platform.TVOS, True, False),
         ):
-            self.enrolled_device.platform = platform.name
+            self.enrolled_device.platform = platform
             self.enrolled_device.user_enrollment = user_enrollment
             self.assertEqual(
                 result,
@@ -133,6 +136,70 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
              "InstallAsManaged": False}
         )
 
+    def test_build_managed_command_remove_on_unenroll_macos_11(self):
+        self.enrolled_device.os_version = "11.6.1"
+        self.enterprise_app.install_as_managed = True
+        self.enterprise_app.remove_on_unenroll = True
+        cmd = InstallEnterpriseApplication.create_for_device(self.enrolled_device, self.artifact_version)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "InstallEnterpriseApplication",
+             "Manifest": {
+                 "items": [
+                     {"assets": [
+                         {"url": f"https://zentral/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
+                      ]}
+                 ]
+             },
+             "InstallAsManaged": True,
+             "ChangeManagementState": "Managed",
+             "ManagementFlags": 1}
+        )
+
+    def test_build_managed_do_not_remove_on_unenroll_macos_11(self):
+        self.enrolled_device.os_version = "11.6.1"
+        self.enterprise_app.install_as_managed = True
+        self.enterprise_app.remove_on_unenroll = False
+        cmd = InstallEnterpriseApplication.create_for_device(self.enrolled_device, self.artifact_version)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "InstallEnterpriseApplication",
+             "Manifest": {
+                 "items": [
+                     {"assets": [
+                         {"url": f"https://zentral/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
+                      ]}
+                 ]
+             },
+             "InstallAsManaged": True,
+             "ChangeManagementState": "Managed",
+             "ManagementFlags": 0}
+        )
+
+    def test_build_managed_configuration(self):
+        self.enterprise_app.configuration = plistlib.dumps({"Yolo": "Fomo $ENROLLED_DEVICE.SERIAL_NUMBER"})
+        cmd = InstallEnterpriseApplication.create_for_device(self.enrolled_device, self.artifact_version)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "InstallEnterpriseApplication",
+             "Manifest": {
+                 "items": [
+                     {"assets": [
+                         {"url": f"https://zentral/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
+                      ]}
+                 ]
+             },
+             "Configuration": {
+                "Yolo": f"Fomo {self.enrolled_device.serial_number}"
+             }}
+        )
+
     # process_response
 
     def test_process_acknowledged_response_with_bundles(self):
@@ -155,7 +222,7 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
         da0, da1 = list(qs)
         self.assertEqual(da0.artifact_version, self.artifact_version0)
         self.assertEqual(da1.artifact_version, self.artifact_version)
-        self.assertEqual(da1.status, TargetArtifactStatus.AwaitingConfirmation.name)
+        self.assertEqual(da1.status, TargetArtifact.Status.AWAITING_CONFIRMATION)
         qs = DeviceCommand.objects.filter(
             enrolled_device=self.enrolled_device,
             time__isnull=True
@@ -186,7 +253,7 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
         self.assertEqual(qs.count(), 1)
         da = qs.first()
         self.assertEqual(da.artifact_version, self.artifact_version)
-        self.assertEqual(da.status, TargetArtifactStatus.Acknowledged.name)
+        self.assertEqual(da.status, TargetArtifact.Status.ACKNOWLEDGED)
         self.assertEqual(
             DeviceCommand.objects.filter(
                 enrolled_device=self.enrolled_device,
@@ -200,21 +267,20 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
     def test_install_artifacts_noop(self):
         DeviceArtifact.objects.filter(
             enrolled_device=self.enrolled_device,
-            artifact_version__artifact=self.artifact
+            artifact_version__artifact=self.artifact,
+            status=TargetArtifact.Status.INSTALLED,
         ).update(artifact_version=self.artifact_version)
         self.assertIsNone(_install_artifacts(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None
+            RequestStatus.IDLE,
         ))
 
     def test_install_artifacts(self):
         cmd = _install_artifacts(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, InstallEnterpriseApplication)
         self.assertEqual(cmd.artifact_version, self.artifact_version)

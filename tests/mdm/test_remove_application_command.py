@@ -5,11 +5,11 @@ from unittest.mock import patch, Mock
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.commands import RemoveApplication
 from zentral.contrib.mdm.commands.scheduling import _remove_artifacts
 from zentral.contrib.mdm.models import (
     Artifact,
-    ArtifactType,
     ArtifactVersion,
     Asset,
     Blueprint,
@@ -21,7 +21,7 @@ from zentral.contrib.mdm.models import (
     Platform,
     RequestStatus,
     StoreApp,
-    TargetArtifactStatus,
+    TargetArtifact,
 )
 from .utils import force_dep_enrollment_session
 
@@ -52,9 +52,10 @@ class RemoveApplicationCommandTestCase(TestCase):
         if artifact is None:
             artifact = Artifact.objects.create(
                 name=get_random_string(32),
-                type=ArtifactType.StoreApp.name,
-                channel=Channel.Device.name,
-                platforms=[Platform.macOS.name],
+                type=Artifact.Type.STORE_APP,
+                channel=Channel.DEVICE,
+                platforms=[Platform.MACOS],
+                auto_update=True,
             )
             asset = Asset.objects.create(
                 adam_id="1234567890",
@@ -63,7 +64,7 @@ class RemoveApplicationCommandTestCase(TestCase):
                 product_type=Asset.ProductType.APP,
                 device_assignable=True,
                 revocable=True,
-                supported_platforms=[Platform.macOS.name],
+                supported_platforms=[Platform.MACOS],
             )
             location = Location(
                 server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
@@ -86,7 +87,9 @@ class RemoveApplicationCommandTestCase(TestCase):
         else:
             location_asset = artifact.artifactversion_set.first().store_app.location_asset
         artifact_version = ArtifactVersion.objects.create(
-            artifact=artifact, version=version or 0
+            artifact=artifact,
+            version=version or 0,
+            macos=True,
         )
         store_app = StoreApp.objects.create(
             artifact_version=artifact_version, location_asset=location_asset
@@ -95,40 +98,39 @@ class RemoveApplicationCommandTestCase(TestCase):
             DeviceArtifact.objects.create(
                 enrolled_device=self.enrolled_device,
                 artifact_version=artifact_version,
-                status=status.name,
+                status=status,
             )
         if in_blueprint:
-            BlueprintArtifact.objects.create(
+            BlueprintArtifact.objects.get_or_create(
                 blueprint=self.blueprint,
                 artifact=artifact,
-                install_before_setup_assistant=False,
-                auto_update=True,
-                priority=100,
+                defaults={"macos": True},
             )
+            update_blueprint_serialized_artifacts(self.blueprint)
         return artifact_version, store_app
 
     # verify_channel_and_device
 
     def test_scope(self):
         for channel, platform, user_enrollment, result in (
-            (Channel.Device, Platform.iOS, False, True),
-            (Channel.Device, Platform.iPadOS, False, True),
-            (Channel.Device, Platform.macOS, False, True),
-            (Channel.Device, Platform.tvOS, False, True),
-            (Channel.User, Platform.iOS, False, False),
-            (Channel.User, Platform.iPadOS, False, False),
-            (Channel.User, Platform.macOS, False, False),
-            (Channel.User, Platform.tvOS, False, False),
-            (Channel.Device, Platform.iOS, True, True),
-            (Channel.Device, Platform.iPadOS, True, False),
-            (Channel.Device, Platform.macOS, True, False),
-            (Channel.Device, Platform.tvOS, True, False),
-            (Channel.User, Platform.iOS, True, False),
-            (Channel.User, Platform.iPadOS, True, False),
-            (Channel.User, Platform.macOS, True, False),
-            (Channel.User, Platform.tvOS, True, False),
+            (Channel.DEVICE, Platform.IOS, False, True),
+            (Channel.DEVICE, Platform.IPADOS, False, True),
+            (Channel.DEVICE, Platform.MACOS, False, True),
+            (Channel.DEVICE, Platform.TVOS, False, True),
+            (Channel.USER, Platform.IOS, False, False),
+            (Channel.USER, Platform.IPADOS, False, False),
+            (Channel.USER, Platform.MACOS, False, False),
+            (Channel.USER, Platform.TVOS, False, False),
+            (Channel.DEVICE, Platform.IOS, True, True),
+            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.MACOS, True, False),
+            (Channel.DEVICE, Platform.TVOS, True, False),
+            (Channel.USER, Platform.IOS, True, False),
+            (Channel.USER, Platform.IPADOS, True, False),
+            (Channel.USER, Platform.MACOS, True, False),
+            (Channel.USER, Platform.TVOS, True, False),
         ):
-            self.enrolled_device.platform = platform.name
+            self.enrolled_device.platform = platform
             self.enrolled_device.user_enrollment = user_enrollment
             self.assertEqual(
                 result,
@@ -175,7 +177,7 @@ class RemoveApplicationCommandTestCase(TestCase):
         client.post_device_disassociation.return_value = {"eventId": str(uuid.uuid4())}
         location_cache_get.return_value = (None, client)
         artifact_version, store_app = self._force_store_app(
-            status=TargetArtifactStatus.Installed
+            status=TargetArtifact.Status.INSTALLED
         )
         qs = DeviceArtifact.objects.filter(
             enrolled_device=self.enrolled_device,
@@ -189,7 +191,9 @@ class RemoveApplicationCommandTestCase(TestCase):
         cmd.process_response(
             {"Status": "Acknowledged"}, self.dep_enrollment_session, self.mbu
         )
-        self.assertEqual(qs.count(), 0)
+        self.assertEqual(qs.count(), 1)
+        ta = qs.first()
+        self.assertEqual(ta.status, TargetArtifact.Status.UNINSTALLED)
         location_cache_get.assert_called_once_with(store_app.location_asset.location.mdm_info_id)
         client.post_device_disassociation.assert_called_once_with(self.enrolled_device.serial_number,
                                                                   store_app.location_asset.asset)
@@ -201,7 +205,7 @@ class RemoveApplicationCommandTestCase(TestCase):
         client.post_device_disassociation.side_effect = KeyError
         location_cache_get.return_value = (None, client)
         artifact_version, store_app = self._force_store_app(
-            status=TargetArtifactStatus.Installed
+            status=TargetArtifact.Status.INSTALLED
         )
         qs = DeviceArtifact.objects.filter(
             enrolled_device=self.enrolled_device,
@@ -215,7 +219,9 @@ class RemoveApplicationCommandTestCase(TestCase):
         cmd.process_response(
             {"Status": "Acknowledged"}, self.dep_enrollment_session, self.mbu
         )
-        self.assertEqual(qs.count(), 0)
+        self.assertEqual(qs.count(), 1)
+        ta = qs.first()
+        self.assertEqual(ta.status, TargetArtifact.Status.UNINSTALLED)
         location_asset = store_app.location_asset
         location = location_asset.location
         asset = location_asset.asset
@@ -233,7 +239,7 @@ class RemoveApplicationCommandTestCase(TestCase):
         client.post_device_disassociation.return_value = {}
         location_cache_get.return_value = (None, client)
         artifact_version, store_app = self._force_store_app(
-            status=TargetArtifactStatus.Installed
+            status=TargetArtifact.Status.INSTALLED
         )
         qs = DeviceArtifact.objects.filter(
             enrolled_device=self.enrolled_device,
@@ -247,7 +253,9 @@ class RemoveApplicationCommandTestCase(TestCase):
         cmd.process_response(
             {"Status": "Acknowledged"}, self.dep_enrollment_session, self.mbu
         )
-        self.assertEqual(qs.count(), 0)
+        self.assertEqual(qs.count(), 1)
+        ta = qs.first()
+        self.assertEqual(ta.status, TargetArtifact.Status.UNINSTALLED)
         location_asset = store_app.location_asset
         location = location_asset.location
         asset = location_asset.asset
@@ -262,55 +270,47 @@ class RemoveApplicationCommandTestCase(TestCase):
 
     def test_remove_application_noop(self):
         artifact_version, _ = self._force_store_app(
-            status=TargetArtifactStatus.Installed, in_blueprint=True
+            status=TargetArtifact.Status.INSTALLED, in_blueprint=True
         )
         self.assertIsNone(
             _remove_artifacts(
-                Channel.Device,
-                RequestStatus.Idle,
+                Target(self.enrolled_device),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                None,
+                RequestStatus.IDLE,
             )
         )
 
     def test_remove_application_notnow_noop(self):
         artifact_version, _ = self._force_store_app(
-            status=TargetArtifactStatus.Installed
+            status=TargetArtifact.Status.INSTALLED
         )
         self.assertIsNone(
             _remove_artifacts(
-                Channel.Device,
-                RequestStatus.NotNow,
+                Target(self.enrolled_device),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                None,
+                RequestStatus.NOT_NOW,
             )
         )
 
     def test_remove_application(self):
         artifact_version, _ = self._force_store_app(
-            status=TargetArtifactStatus.Installed
+            status=TargetArtifact.Status.INSTALLED
         )
         command = _remove_artifacts(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(command, RemoveApplication)
-        self.assertEqual(command.channel, Channel.Device)
+        self.assertEqual(command.channel, Channel.DEVICE)
         self.assertEqual(command.artifact_version, artifact_version)
 
     def test_remove_application_previous_error_noop(self):
-        self._force_store_app(status=TargetArtifactStatus.Installed)
+        self._force_store_app(status=TargetArtifact.Status.INSTALLED)
         command = _remove_artifacts(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         )
         command.process_response(
             {"Status": "Error", "ErrorChain": [{"un": 1}]},
@@ -319,10 +319,8 @@ class RemoveApplicationCommandTestCase(TestCase):
         )
         self.assertIsNone(
             _remove_artifacts(
-                Channel.Device,
-                RequestStatus.Idle,
+                Target(self.enrolled_device),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                None,
+                RequestStatus.IDLE,
             )
         )

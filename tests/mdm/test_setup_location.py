@@ -46,9 +46,8 @@ class SetupLocationViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _force_location(self, server_token_hash=None, name=None):
-        location = Location(
+        location = Location.objects.create(
             server_token_hash=server_token_hash or get_random_string(40, allowed_chars='abcdef0123456789'),
-            server_token=get_random_string(12),
             server_token_expiration_date=datetime.date(2050, 1, 1),
             organization_name=get_random_string(12),
             country_code="DE",
@@ -58,6 +57,8 @@ class SetupLocationViewsTestCase(TestCase):
             website_url="https://business.apple.com",
             mdm_info_id=uuid.uuid4(),
         )
+        location.set_server_token(get_random_string(12))
+        location.save()
         server_token = location.set_notification_auth_token()
         location.save()
         return location, server_token
@@ -76,6 +77,15 @@ class SetupLocationViewsTestCase(TestCase):
         vppserver_token = BytesIO(content)
         vppserver_token.name = "test.vppserver_token"
         return vppserver_token, digest
+
+    # rewrap secrets
+
+    def test_rewrap_secrets(self):
+        location, _ = self._force_location()
+        server_token = location.get_server_token()
+        self.assertIsNotNone(server_token)
+        location.rewrap_secrets()
+        self.assertEqual(location.get_server_token(), server_token)
 
     # list server server_tokens
 

@@ -1,5 +1,4 @@
 import base64
-from datetime import datetime
 import json
 import logging
 import plistlib
@@ -13,17 +12,16 @@ from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
 from django.views.generic import View
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.base import get_command
 from zentral.contrib.mdm.commands.scheduling import get_next_command_response
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.declarations import (build_legacy_profile,
-                                              build_management_status_subscriptions,
-                                              get_blueprint_tokens_response,
-                                              update_enrolled_device_artifacts)
+                                              build_target_management_status_subscriptions)
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.inventory import ms_tree_from_payload
-from zentral.contrib.mdm.models import (ArtifactType, ArtifactVersion,
+from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Channel, RequestStatus, DeviceCommand, EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
                                         Platform,
@@ -165,9 +163,9 @@ class MDMView(PostEventMixin, View):
         self.enrolled_device_udid = self.udid or self.enrollment_id
         self.enrolled_user_id = self.user_id or self.enrollment_user_id
         if self.enrolled_user_id:
-            self.channel = Channel.User
+            self.channel = Channel.USER
         else:
-            self.channel = Channel.Device
+            self.channel = Channel.DEVICE
         return self.do_put()
 
     def get_certificate(self):
@@ -198,7 +196,7 @@ class MDMView(PostEventMixin, View):
 
     @cached_property
     def enrolled_user(self):
-        if self.channel == Channel.Device:
+        if self.channel == Channel.DEVICE:
             return
         enrolled_device = self.enrolled_device
         try:
@@ -206,6 +204,10 @@ class MDMView(PostEventMixin, View):
                                                     .get(user_id=self.enrolled_user_id))
         except EnrolledUser.DoesNotExist:
             self.abort(f"enrolled device {enrolled_device.udid} has no user {self.enrolled_user_id}")
+
+    @cached_property
+    def target(self):
+        return Target(self.enrolled_device, self.enrolled_user)
 
 
 class CheckinView(MDMView):
@@ -245,7 +247,7 @@ class CheckinView(MDMView):
             enrolled_device_defaults["dep_enrollment"] = True
             enrolled_device_defaults["user_enrollment"] = False
             enrolled_device_defaults["supervised"] = True
-            if platform == Platform.macOS.value:
+            if platform == Platform.MACOS:
                 enrolled_device_defaults["user_approved_enrollment"] = True
         elif isinstance(self.enrollment_session, OTAEnrollmentSession):
             enrolled_device_defaults["dep_enrollment"] = False
@@ -286,7 +288,7 @@ class CheckinView(MDMView):
 
         payload_token = self.payload.get("Token")
 
-        if self.channel == Channel.Device:
+        if self.channel == Channel.DEVICE:
             # payload token is the enrolled device token
             enrolled_device_defaults["token"] = payload_token
 
@@ -307,7 +309,7 @@ class CheckinView(MDMView):
 
         # enrolled user
         user_created = False
-        if self.channel == Channel.User and self.enrolled_user_id.upper() != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF":
+        if self.channel == Channel.USER and self.enrolled_user_id.upper() != "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF":
             # user channel and no shared ipad
             # see https://developer.apple.com/documentation/devicemanagement/tokenupdaterequest
             enrolled_user_defaults = {"enrolled_device": enrolled_device,
@@ -320,7 +322,7 @@ class CheckinView(MDMView):
                 defaults=enrolled_user_defaults
             )
         self.post_event("success",
-                        token_type="user" if self.channel == Channel.User else "device",
+                        token_type="user" if self.channel == Channel.USER else "device",
                         user_id=self.enrolled_user_id,
                         device_created=device_created,
                         user_created=user_created)
@@ -355,14 +357,12 @@ class CheckinView(MDMView):
             # TODO default empty configuration?
             self.abort("Missing blueprint. No declarative management possible.", **event_payload)
         if endpoint == "tokens":
-            response, declarations_token = get_blueprint_tokens_response(blueprint)
-            if self.enrolled_device.declarations_token != declarations_token:
-                self.enrolled_device.declarations_token = declarations_token
-                self.enrolled_device.save()
+            response, declarations_token = self.target.sync_tokens
+            self.target.update_declarations_token(declarations_token)
         elif endpoint == "declaration-items":
-            response = blueprint.declaration_items
+            response = self.target.declaration_items
         elif endpoint == "status":
-            update_enrolled_device_artifacts(self.enrolled_device, json_data)
+            self.target.update_target_artifacts_with_status_report(json_data)
             self.post_event("success", **event_payload)
             return HttpResponse(status=204)
         elif endpoint.startswith("declaration"):
@@ -370,11 +370,11 @@ class CheckinView(MDMView):
             event_payload["declaration_type"] = declaration_type
             event_payload["declaration_identifier"] = declaration_identifier
             if declaration_identifier.endswith("management-status-subscriptions"):
-                response = build_management_status_subscriptions(blueprint)
+                response = build_target_management_status_subscriptions(self.target)
             elif declaration_identifier.endswith("activation"):
-                response = blueprint.activation
+                response = self.target.activation
             elif "legacy-profile" in declaration_identifier:
-                response = build_legacy_profile(blueprint, declaration_identifier)
+                response = build_legacy_profile(self.target, declaration_identifier)
             else:
                 self.abort("Unknown declaration", **event_payload)
         self.post_event("success", **event_payload)
@@ -420,7 +420,7 @@ class ConnectView(MDMView):
             self.abort("unknown request status")
         command_uuid = self.payload.get("CommandUUID", None)
 
-        self.post_event("failure" if request_status.is_error() else "success",
+        self.post_event("failure" if request_status.is_error else "success",
                         command_uuid=command_uuid,
                         request_status=request_status.value,
                         user_id=self.enrolled_user_id)
@@ -432,19 +432,10 @@ class ConnectView(MDMView):
                 command.process_response(self.payload, self.enrollment_session, self.meta_business_unit)
 
         # update last seen at
-        if self.channel == Channel.Device and self.enrolled_device:
-            self.enrolled_device.last_seen_at = datetime.utcnow()
-            self.enrolled_device.save()
-        elif self.channel == Channel.User and self.enrolled_user:
-            self.enrolled_user.last_seen_at = datetime.utcnow()
-            self.enrolled_user.save()
+        self.target.update_last_seen()
 
         # return next command if possible
-        return get_next_command_response(
-            self.channel, request_status,
-            self.enrollment_session,
-            self.enrolled_device, self.enrolled_user
-        )
+        return get_next_command_response(self.target, self.enrollment_session, request_status)
 
 
 class EnterpriseAppDownloadView(View):
@@ -471,7 +462,7 @@ class ProfileDownloadView(MDMView):
         artifact_version = get_object_or_404(
             ArtifactVersion.objects.select_related("profile"),
             pk=kwargs["pk"],
-            artifact__type=ArtifactType.Profile.name
+            artifact__type=Artifact.Type.PROFILE
         )
         return HttpResponse(build_payload(artifact_version.profile, self.enrollment_session),
                             content_type="application/x-apple-aspen-config")

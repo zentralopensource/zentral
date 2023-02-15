@@ -1,0 +1,97 @@
+{% load base_extras %}
+<tr>
+  <th colspan="2"><h4>Store app</h4></th>
+</tr>
+{% with store_app.location_asset as location_asset %}
+{% with location_asset.asset as asset %}
+{% with location_asset.location as location %}
+<tr>
+  <th>Asset</th>
+  <td>
+    {% if perms.mdm.view_asset %}
+    <a href="{{ store_app.location_asset.get_absolute_url }}">{{ asset.name }}</a>
+    {% else %}
+    {{ asset.name }}
+    {% endif %}
+  </td>
+</tr>
+<tr>
+  <th>Location</th>
+  <td>
+    {% if perms.mdm.view_location %}
+    <a href="{{ location.get_absolute_url }}">{{ location }}</a>
+    {% else %}
+    {{ location }}
+    {% endif %}
+  </td>
+</tr>
+<tr>
+  <th>Availability</th>
+  <td>
+    <table>
+      <tr>
+        <th style="padding:0 5px 5px 0">assigned</th>
+        <td style="padding:0 5px 5px 0">{{ location_asset.assigned_count }}</td>
+      </tr>
+      <tr>
+        <th style="padding:0 5px 5px 0">available</th>
+        <td style="padding:0 5px 5px 0">{{ location_asset.available_count }}</td>
+      </tr>
+      <tr>
+        <th style="padding:0 5px 5px 0">retired</th>
+        <td style="padding:0 5px 5px 0">{{ location_asset.retired_count }}</td>
+      </tr>
+      <tr>
+        <th style="padding:0 5px 5px 0">total</th>
+        <td style="padding:0 5px 5px 0">{{ location_asset.total_count }}</td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+  <th>Associated domains</th>
+  <td>
+    {% if store_app.associated_domains %}
+    {{ store_app.associated_domains|join:", " }}
+    {% else %}
+    -
+    {% endif %}
+  </td>
+</tr>
+<tr>
+  <th>Associated domains enable direct downloads</th>
+  <td>{{ store_app|yesno }}</td>
+</tr>
+<tr>
+  <th>Configuration</th>
+  {% with store_app.get_configuration as configuration %}
+  <td>{% if configuration %}{{ configuration|pythonprettyprint }}{% else %}-{% endif %}</td>
+  {% endwith %}
+</tr>
+<tr>
+  <th>Prevent backup</th>
+  <td>{{ store_app.prevent_backup|yesno }}</td>
+</tr>
+<tr>
+  <th>Removable</th>
+  <td>{{ store_app.removable|yesno }}</td>
+</tr>
+<tr>
+  <th>Remove on unenroll</th>
+  <td>{{ store_app.remove_on_unenroll|yesno }}</td>
+</tr>
+<tr>
+  <th>VPN UUID</th>
+  <td>{{ store_app.vpn_uuid|default:"-" }}</td>
+</tr>
+<tr>
+  <th>Content filter UUID</th>
+  <td>{{ store_app.content_filter_uuid|default:"-" }}</td>
+</tr>
+<tr>
+  <th>DNS proxy UUID</th>
+  <td>{{ store_app.dns_proxy_uuid|default:"-" }}</td>
+</tr>
+{% endwith %}
+{% endwith %}
+{% endwith %}

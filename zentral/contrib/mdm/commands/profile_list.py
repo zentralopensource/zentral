@@ -18,11 +18,11 @@ class ProfileList(Command):
     def verify_channel_and_device(channel, enrolled_device):
         return (
             (
-                channel == Channel.Device
-                or enrolled_device.platform in (Platform.iPadOS.name, Platform.macOS.name)
+                channel == Channel.DEVICE
+                or enrolled_device.platform in (Platform.IPADOS, Platform.MACOS)
             ) and (
                 not enrolled_device.user_enrollment
-                or enrolled_device.platform in (Platform.iOS.name, Platform.macOS.name)
+                or enrolled_device.platform in (Platform.IOS, Platform.MACOS)
             )
         )
 

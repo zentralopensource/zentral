@@ -13,8 +13,8 @@ class AccountConfiguration(Command):
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
         return (
-            channel == Channel.Device
-            and enrolled_device.platform == Platform.macOS.name
+            channel == Channel.DEVICE
+            and enrolled_device.platform == Platform.MACOS
             and not enrolled_device.user_enrollment
         )
 

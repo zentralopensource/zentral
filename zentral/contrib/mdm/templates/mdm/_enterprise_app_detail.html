@@ -1,0 +1,57 @@
+{% load base_extras %}
+<tr>
+  <th colspan="2"><h4>Enterprise app</h4></th>
+</tr>
+<tr>
+  <th>Product ID</th>
+  <td>{{ enterprise_app.product_id }}</td>
+</tr>
+<tr>
+  <th>Product version</th>
+  <td>{{ enterprise_app.product_version }}</td>
+</tr>
+<tr>
+  <th>Bundle{{ enterprise_app.bundles|length|pluralize }}</th>
+  <td>
+    {% if enterprise_app.bundles %}
+    <table class="table table-condensed">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Version</th>
+          <th>Path</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for bundle in enterprise_app.bundles %}
+        <tr>
+          <td>{{ bundle.id }}</td>
+          <td>{{ bundle.version_str }}{% if bundle.version != bundle.version_str %} / {{ bundle.version }}{% endif %}</td>
+          <td>{{ bundle.path|default:"-" }}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    -
+    {% endif %}
+  </td>
+</tr>
+<tr>
+  <th>iOS app</th>
+  <td>{{ enterprise_app.ios_app|yesno }}</td>
+</tr>
+<tr>
+  <th>Install as managed</th>
+  <td>{{ enterprise_app.install_as_managed|yesno }}</td>
+</tr>
+<tr>
+  <th>Remove on unenroll</th>
+  <td>{{ enterprise_app.remove_on_unenroll|yesno }}</td>
+</tr>
+<tr>
+  <th>Configuration</th>
+  {% with enterprise_app.get_configuration as configuration %}
+  <td>{% if configuration %}{{ configuration|pythonprettyprint }}{% else %}-{% endif %}</td>
+  {% endwith %}
+</tr>

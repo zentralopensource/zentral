@@ -1,7 +1,7 @@
 import logging
 import plistlib
 from zentral.utils.payloads import sign_payload
-from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform, SCEPConfig, UserArtifact
+from zentral.contrib.mdm.models import Artifact, Channel, Platform, SCEPConfig, TargetArtifact
 from zentral.contrib.mdm.payloads import substitute_variables
 from zentral.contrib.mdm.scep import update_scep_payload
 from .base import register_command, Command
@@ -43,17 +43,17 @@ def build_payload(profile, enrollment_session, enrolled_user=None):
 
 class InstallProfile(Command):
     request_type = "InstallProfile"
-    artifact_operation = ArtifactOperation.Installation
+    artifact_operation = Artifact.Operation.INSTALLATION
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
         return (
             (
-                channel == Channel.Device
-                or enrolled_device.platform in (Platform.iPadOS.name, Platform.macOS.name)
+                channel == Channel.DEVICE
+                or enrolled_device.platform in (Platform.IPADOS, Platform.MACOS)
             ) and (
                 not enrolled_device.user_enrollment
-                or enrolled_device.platform in (Platform.iOS.name, Platform.macOS.name)
+                or enrolled_device.platform in (Platform.IOS, Platform.MACOS)
             )
         )
 
@@ -61,18 +61,14 @@ class InstallProfile(Command):
         return {"Payload": build_payload(self.artifact_version.profile, self.enrollment_session, self.enrolled_user)}
 
     def command_acknowledged(self):
-        if self.channel == Channel.Device:
-            DeviceArtifact.objects.update_or_create(
-                enrolled_device=self.enrolled_device,
-                artifact_version__artifact=self.artifact_version.artifact,
-                defaults={"artifact_version": self.artifact_version}
-            )
-        else:
-            UserArtifact.objects.update_or_create(
-                enrolled_user=self.enrolled_user,
-                artifact_version__artifact=self.artifact_version.artifact,
-                defaults={"artifact_version": self.artifact_version}
-            )
+        self.target.update_target_artifact(
+            self.artifact_version,
+            TargetArtifact.Status.ACKNOWLEDGED,
+            allow_reinstall=True
+        )
+
+    def command_error(self):
+        self.target.update_target_artifact(self.artifact_version, TargetArtifact.Status.FAILED)
 
 
 register_command(InstallProfile)
