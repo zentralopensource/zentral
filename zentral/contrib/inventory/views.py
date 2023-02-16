@@ -99,10 +99,9 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
         except ObjectDoesNotExist:
             raise Http404
         self.msquery = self.get_msquery(request)
-        if request.method == "GET":
-            redirect_url = self.msquery.redirect_url()
-            if redirect_url:
-                return HttpResponseRedirect(redirect_url)
+        redirect_url = self.msquery.redirect_url()
+        if redirect_url:
+            return HttpResponseRedirect(redirect_url)
         ls = self.msquery.query_dict.get("ls")
         if ls:
             request.session[self.last_seen_session_key] = ls
@@ -214,6 +213,11 @@ class MachineListView(PermissionRequiredMixin, TemplateView):
         self.msquery.add_filter(ComplianceCheckStatusFilter, compliance_check_pk=compliance_check.pk)
 
     def post(self, request, *args, **kwargs):
+        try:
+            self.object = self.get_object(**kwargs)
+        except ObjectDoesNotExist:
+            raise Http404
+        self.msquery = self.get_msquery(request)
         forms = self.get_forms()
         filter_key = request.POST.get("filter_key")
         form = forms[filter_key]

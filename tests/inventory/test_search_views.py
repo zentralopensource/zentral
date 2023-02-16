@@ -116,3 +116,26 @@ class InventorySearchViewsTestCase(TestCase):
         )
         self.assertRedirects(response, reverse("inventory:machine", args=("0123456789",)))
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
+
+    def test_index_add_bundle_filter(self):
+        self._login("inventory.view_machinesnapshot")
+        response = self.client.post(
+            "/inventory/?ls=7d&sf=mbu-t-mis-tp-pf-hm-osv",
+            {"filter_key": "bundle_filter_form",
+             "bf-bundle_id": "org.mozilla.firefoxdeveloperedition"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/machine_list.html")
+        self.assertContains(response, "org.mozilla.firefoxdeveloperedition")
+
+    def test_index_add_bundle_filter_error(self):
+        self._login("inventory.view_machinesnapshot")
+        response = self.client.post(
+            "/inventory/?ls=7d&sf=mbu-t-mis-tp-pf-hm-osv",
+            {"filter_key": "bundle_filter_form"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/machine_list.html")
+        self.assertFormError(response, "bundle_filter_form", None, "Choose a bundle id or a bundle name.")
