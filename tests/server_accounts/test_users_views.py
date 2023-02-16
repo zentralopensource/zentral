@@ -36,10 +36,15 @@ class AccountUsersViewsTestCase(TestCase):
                                             "{}@zentral.io".format(get_random_string(12)),
                                             get_random_string(12))
         # remote user
-        cls.remoteuser = User.objects.create_user(get_random_string(19),
-                                                  "{}@zentral.io".format(get_random_string(12)),
-                                                  get_random_string(45),
-                                                  is_remote=True)
+        cls.remote_user = User.objects.create_user(get_random_string(19),
+                                                   "{}@zentral.io".format(get_random_string(12)),
+                                                   get_random_string(45),
+                                                   is_remote=True)
+        # service account
+        cls.service_account = User.objects.create_user(get_random_string(19),
+                                                       "{}@zentral.io".format(get_random_string(12)),
+                                                       get_random_string(12),
+                                                       is_service_account=True)
 
     # auth utils
 
@@ -163,14 +168,14 @@ class AccountUsersViewsTestCase(TestCase):
         self.login("accounts.view_user")
         response = self.client.get(reverse("accounts:users"))
         for text in (self.user.username, self.user.email,
-                     self.remoteuser.username, self.remoteuser.email,
+                     self.remote_user.username, self.remote_user.email,
                      self.superuser.username, self.superuser.email,
                      "4 Users"):
             self.assertContains(response, text)
         for text in (reverse("accounts:delete_user", args=(self.user.pk,)),
                      reverse("accounts:update_user", args=(self.user.pk,)),
-                     reverse("accounts:delete_user", args=(self.remoteuser.pk,)),
-                     reverse("accounts:update_user", args=(self.remoteuser.pk,)),
+                     reverse("accounts:delete_user", args=(self.remote_user.pk,)),
+                     reverse("accounts:update_user", args=(self.remote_user.pk,)),
                      reverse("accounts:update_user", args=(self.superuser.pk,))):
             self.assertNotContains(response, text)
         self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
@@ -178,8 +183,8 @@ class AccountUsersViewsTestCase(TestCase):
         response = self.client.get(reverse("accounts:users"))
         for text in (reverse("accounts:delete_user", args=(self.user.pk,)),
                      reverse("accounts:update_user", args=(self.user.pk,)),
-                     reverse("accounts:delete_user", args=(self.remoteuser.pk,)),
-                     reverse("accounts:update_user", args=(self.remoteuser.pk,)),
+                     reverse("accounts:delete_user", args=(self.remote_user.pk,)),
+                     reverse("accounts:update_user", args=(self.remote_user.pk,)),
                      reverse("accounts:update_user", args=(self.superuser.pk,))):
             self.assertContains(response, text)
         self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
@@ -255,6 +260,8 @@ class AccountUsersViewsTestCase(TestCase):
         del settings._collection["users"]
         for text in ("5 Users", "test", "test@example.com"):
             self.assertContains(response, text)
+        user = User.objects.get(email="test@example.com")
+        self.assertEqual(user.description, "")
 
     # create service account
 
@@ -269,11 +276,13 @@ class AccountUsersViewsTestCase(TestCase):
         self.login("accounts.add_user", "accounts.view_user", "accounts.add_apitoken")
         username = get_random_string(12)
         response = self.client.post(reverse("accounts:create_service_account"),
-                                    {"username": username},
+                                    {"username": username,
+                                     "description": "yolo fomo"},
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/user_api_token.html")
         service_account = response.context["object"]
         self.assertEqual(service_account.username, username)
+        self.assertEqual(service_account.description, "yolo fomo")
         self.assertTrue(service_account.is_service_account)
         api_key = response.context["api_key"]
         self.assertContains(response, api_key)
@@ -295,18 +304,58 @@ class AccountUsersViewsTestCase(TestCase):
 
     def test_user_update_get(self):
         self.login("accounts.change_user")
-        for user, ue_disabled, su_disabled in ((self.user, False, False),
-                                               (self.remoteuser, True, False),
-                                               (self.superuser, False, True)):
-            response = self.client.get(reverse("accounts:update_user", args=(user.id,)))
-            self.assertContains(response, "Update user {}".format(user))
-            form = response.context["form"]
-            if ue_disabled:
-                self.assertNotIn("username", form.fields)
-                self.assertNotIn("email", form.fields)
-            else:
-                self.assertIn("username", form.fields)
-                self.assertIn("email", form.fields)
+        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
+        self.assertContains(response, "Update user {}".format(self.user))
+        form = response.context["form"]
+        self.assertIn("username", form.fields)
+        self.assertIn("email", form.fields)
+        self.assertNotIn("description", form.fields)
+        self.assertIn("is_superuser", form.fields)  # not a superuser → editable
+
+    def test_remote_user_update_get(self):
+        self.login("accounts.change_user")
+        response = self.client.get(reverse("accounts:update_user", args=(self.remote_user.id,)))
+        self.assertContains(response, "Update user {}".format(self.remote_user))
+        form = response.context["form"]
+        self.assertNotIn("username", form.fields)
+        self.assertNotIn("email", form.fields)
+        self.assertNotIn("description", form.fields)
+        self.assertIn("is_superuser", form.fields)  # not a superuser → editable
+
+    def test_unique_superuser_update_get(self):
+        self.login("accounts.change_user")
+        response = self.client.get(reverse("accounts:update_user", args=(self.superuser.id,)))
+        self.assertContains(response, "Update user {}".format(self.superuser))
+        form = response.context["form"]
+        self.assertIn("username", form.fields)
+        self.assertIn("email", form.fields)
+        self.assertNotIn("description", form.fields)
+        self.assertNotIn("is_superuser", form.fields)  # unique superuser → not editable
+
+    def test_not_unique_superuser_update_get(self):
+        # add a superuser
+        User.objects.create_user(get_random_string(19),
+                                 "{}@zentral.io".format(get_random_string(12)),
+                                 get_random_string(12),
+                                 is_superuser=True)
+        self.login("accounts.change_user")
+        response = self.client.get(reverse("accounts:update_user", args=(self.superuser.id,)))
+        self.assertContains(response, "Update user {}".format(self.superuser))
+        form = response.context["form"]
+        self.assertIn("username", form.fields)
+        self.assertIn("email", form.fields)
+        self.assertNotIn("description", form.fields)
+        self.assertIn("is_superuser", form.fields)  # not unique superuser → not editable
+
+    def test_service_account_update_get(self):
+        self.login("accounts.change_user")
+        response = self.client.get(reverse("accounts:update_user", args=(self.service_account.id,)))
+        self.assertContains(response, "Update service account {}".format(self.service_account))
+        form = response.context["form"]
+        self.assertIn("username", form.fields)
+        self.assertNotIn("email", form.fields)
+        self.assertIn("description", form.fields)
+        self.assertNotIn("is_superuser", form.fields)
 
     def test_user_update_username_error(self):
         self.login("accounts.change_user")
@@ -334,6 +383,20 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "accounts/user_detail.html")
         for text in ("User tata@example.com", "toto"):
             self.assertContains(response, text)
+        user = User.objects.get(email="tata@example.com")
+        self.assertEqual(user.description, "")
+
+    def test_service_account_update_ok(self):
+        self.login("accounts.change_user", "accounts.view_user")
+        response = self.client.post(reverse("accounts:update_user", args=(self.service_account.id,)),
+                                    {"username": "toto",
+                                     "description": "yolo2 fomo2"},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/user_detail.html")
+        self.assertContains(response, "Service Account toto")
+        self.assertContains(response, "yolo2 fomo2")
+        user = User.objects.get(username="toto")
+        self.assertEqual(user.description, "yolo2 fomo2")
 
     # delete
 
