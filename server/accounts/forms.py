@@ -126,7 +126,7 @@ class ServiceAccountForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ("username", "groups")
+        fields = ("username", "description", "groups")
 
     def clean(self):
         username = self.cleaned_data.get("username")

@@ -22,6 +22,7 @@ class User(AbstractUser):
     is_remote = models.BooleanField(default=False)
     is_service_account = models.BooleanField(default=False)
     password_updated_at = models.DateTimeField(blank=True, null=True, editable=False)
+    description = models.TextField(blank=True)
 
     objects = UserManager()
 
