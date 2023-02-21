@@ -1,14 +1,18 @@
 from django.shortcuts import get_object_or_404
+from django_filters import rest_framework as filters
+from rest_framework import generics
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer
 from rest_framework.views import APIView
-from zentral.utils.drf import DjangoPermissionRequired
+from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.utils.drf import DjangoPermissionRequired, DefaultDjangoModelPermissions
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
 from .models import CacheServer, Manifest
+from .serializers import ManifestSerializer
 
 
 class SyncRepository(APIView):
@@ -56,3 +60,22 @@ class UpdateCacheServer(APIView):
         )
         post_monolith_cache_server_update_request(request, cache_server=cache_server)
         return Response({"status": 0})
+
+
+class ManifestFilter(filters.FilterSet):
+    meta_business_unit_id = filters.ModelChoiceFilter(queryset=MetaBusinessUnit.objects.all())
+    name = filters.CharFilter()
+
+
+class ManifestList(generics.ListCreateAPIView):
+    queryset = Manifest.objects.all()
+    serializer_class = ManifestSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = ManifestFilter
+
+
+class ManifestDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Manifest.objects.all()
+    serializer_class = ManifestSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
