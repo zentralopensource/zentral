@@ -86,15 +86,6 @@ urlpatterns = [
     path('configurations/<int:configuration_pk>/enrollments/<int:pk>/bump_version/',
          views.EnrollmentBumpVersionView.as_view(),
          name='bump_enrollment_version'),
-
-    # osquery API
-    path('enroll', csrf_exempt(views.EnrollView.as_view()), name='enroll'),
-    path('config', csrf_exempt(views.ConfigView.as_view()), name='config'),
-    path('carver/start', csrf_exempt(views.StartFileCarvingView.as_view()), name='carver_start'),
-    path('carver/continue', csrf_exempt(views.ContinueFileCarvingView.as_view()), name='carver_continue'),
-    path('distributed/read', csrf_exempt(views.DistributedReadView.as_view()), name='distributed_read'),
-    path('distributed/write', csrf_exempt(views.DistributedWriteView.as_view()), name='distributed_write'),
-    path('log', csrf_exempt(views.LogView.as_view()), name='log'),
 ]
 
 

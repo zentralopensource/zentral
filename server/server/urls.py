@@ -41,11 +41,22 @@ for app_name, app_config in zentral_settings.get('apps', {}).items():
     app_shortname = app_name.rsplit('.', 1)[-1]
     for url_prefix, url_module_name in (("", "urls"),
                                         ("api/", "api_urls"),
-                                        ("metrics/", "metrics_urls")):
+                                        ("metrics/", "metrics_urls"),
+                                        ("public/", "public_urls")):
         if url_module_name == "metrics_urls" and not app_config.get("metrics", False):
             continue
         try:
             urlpatterns.append(path(f"{url_prefix}{app_shortname}/", include(f"{app_name}.{url_module_name}")))
+            if url_module_name == "public_urls" and app_config.get('mount_legacy_public_endpoints', False):
+                urlpatterns.append(
+                    path(
+                         f"{app_shortname}/",
+                         include(
+                              f"{app_name}.{url_module_name}",
+                              namespace=f"{app_shortname}_public_legacy"
+                         )
+                    )
+                )
         except ModuleNotFoundError:
             pass
 

@@ -385,23 +385,23 @@ class Configuration(models.Model):
 
             # tls config every 1200s
             "config_plugin": "tls",
-            "config_tls_endpoint": reverse("osquery:config"),
+            "config_tls_endpoint": reverse("osquery_public:config"),
             "config_refresh": 1200,
 
             # distributed queries enabled with a 60s interval
             "disable_distributed": False,
             "distributed_plugin": "tls",
             "distributed_interval": 60,
-            "distributed_tls_read_endpoint": reverse("osquery:distributed_read"),
-            "distributed_tls_write_endpoint": reverse("osquery:distributed_write"),
+            "distributed_tls_read_endpoint": reverse("osquery_public:distributed_read"),
+            "distributed_tls_write_endpoint": reverse("osquery_public:distributed_write"),
 
             # force tls enrollment
             "disable_enrollment": False,
-            "enroll_tls_endpoint": reverse("osquery:enroll"),
+            "enroll_tls_endpoint": reverse("osquery_public:enroll"),
 
             # tls logger with a 60s period, and compression
             "logger_plugin": "tls",
-            "logger_tls_endpoint": reverse("osquery:log"),
+            "logger_tls_endpoint": reverse("osquery_public:log"),
             "logger_tls_period": 60,
             "logger_tls_compress": True,
         }
@@ -410,8 +410,8 @@ class Configuration(models.Model):
             flags.update({
                 "carver_disable_function": False,
                 "disable_carver": False,
-                "carver_continue_endpoint": reverse("osquery:carver_continue"),
-                "carver_start_endpoint": reverse("osquery:carver_start"),
+                "carver_continue_endpoint": reverse("osquery_public:carver_continue"),
+                "carver_start_endpoint": reverse("osquery_public:carver_start"),
                 "carver_compression": False,  # TODO: implement!
             })
         # Forced because we need the Osquery API views to work
