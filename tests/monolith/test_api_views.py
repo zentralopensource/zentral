@@ -265,8 +265,9 @@ class MonolithAPIViewsTestCase(TestCase):
             'version': 1,
             'created_at': manifest.created_at.isoformat(),
             'updated_at': manifest.updated_at.isoformat(),
-            'meta_business_unit': self.manifest.meta_business_unit.pk
+            'meta_business_unit': self.mbu.pk
         })
+        self.assertEqual(manifest.name, 'foo')
 
     # update manifest
 
@@ -313,7 +314,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self._set_permissions("monolith.change_manifest")
         response = self._put_json_data(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
             'name': 'spam',
-            'meta_business_unit': self.manifest.meta_business_unit.pk
+            'meta_business_unit': self.mbu.pk
         })
         self.assertEqual(response.status_code, 200)
         manifest.refresh_from_db()
@@ -323,8 +324,9 @@ class MonolithAPIViewsTestCase(TestCase):
             'version': 1,
             'created_at': manifest.created_at.isoformat(),
             'updated_at': manifest.updated_at.isoformat(),
-            'meta_business_unit': self.manifest.meta_business_unit.pk
+            'meta_business_unit': self.mbu.pk
         })
+        self.assertEqual(manifest.name, 'spam')
 
     # delete manifest
 
