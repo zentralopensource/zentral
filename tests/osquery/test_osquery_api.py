@@ -4,8 +4,10 @@ from unittest.mock import patch
 import uuid
 from django.urls import reverse
 from django.test import TestCase, override_settings
+from django.urls import NoReverseMatch
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
+from server.urls import build_urlpatterns_for_zentral_apps
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
@@ -17,7 +19,7 @@ from zentral.contrib.osquery.models import (Configuration, ConfigurationPack,
                                             Query, Pack, PackQuery)
 from zentral.contrib.osquery.views.utils import update_tree_with_inventory_query_snapshot
 from zentral.core.compliance_checks.models import MachineStatus, Status
-from django.apps import apps
+
 
 INVENTORY_QUERY_SNAPSHOT = [
     {'build': '19H1824',
@@ -1405,3 +1407,18 @@ class OsqueryAPIViewsTestCase(TestCase):
                 reverse(f"osquery_public:{route}"),
                 url_prefix + reverse(f"osquery_public_legacy:{route}")
             )
+
+    def test_mount_legacy_public_endpoints_flag(self):
+        url_prefix = "/public"
+        routes = ['enroll', 'config', 'carver_start', 'carver_continue', 'distributed_read', 'distributed_write']
+
+        urlpatterns_w_legacy = tuple(build_urlpatterns_for_zentral_apps(mount_legacy_public_endpoints=True))
+        urlpatterns_wo_legacy = tuple(build_urlpatterns_for_zentral_apps(mount_legacy_public_endpoints=False))
+
+        for route in routes:
+            self.assertEqual(
+                reverse(f"osquery_public:{route}", urlconf=urlpatterns_w_legacy),
+                url_prefix + reverse(f"osquery_public_legacy:{route}", urlconf=urlpatterns_w_legacy)
+            )
+            with self.assertRaises(NoReverseMatch):
+                reverse("osquery_public:{route}", args=urlpatterns_wo_legacy)

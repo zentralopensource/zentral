@@ -36,29 +36,50 @@ urlpatterns = [
          name='password_reset_complete'),
 ]
 
+
 # zentral apps
-for app_name, app_config in zentral_settings.get('apps', {}).items():
-    app_shortname = app_name.rsplit('.', 1)[-1]
-    for url_prefix, url_module_name in (("", "urls"),
-                                        ("api/", "api_urls"),
-                                        ("metrics/", "metrics_urls"),
-                                        ("public/", "public_urls")):
-        if url_module_name == "metrics_urls" and not app_config.get("metrics", False):
-            continue
-        try:
-            urlpatterns.append(path(f"{url_prefix}{app_shortname}/", include(f"{app_name}.{url_module_name}")))
-            if url_module_name == "public_urls" and app_config.get('mount_legacy_public_endpoints', False):
-                urlpatterns.append(
-                    path(
-                         f"{app_shortname}/",
-                         include(
-                              f"{app_name}.{url_module_name}",
-                              namespace=f"{app_shortname}_public_legacy"
-                         )
+def build_urlpatterns_for_zentral_apps(mount_legacy_public_endpoints=None):
+    """ Builds urlpatterns objects from zentral app configurations.
+
+    Args:
+        mount_legacy_public_endpoints (boolean, optional):
+            Set to True if we want do include {url_prefix} endpoints
+            False if not.
+            Defaults to None (injection for testing)
+
+    Returns:
+        urlpatterns: a list of path or re_path elements
+    """
+    urlpatterns = []
+    for app_name, app_config in zentral_settings.get('apps', {}).items():
+        app_shortname = app_name.rsplit('.', 1)[-1]
+        for url_prefix, url_module_name in (("", "urls"),
+                                            ("api/", "api_urls"),
+                                            ("metrics/", "metrics_urls"),
+                                            ("public/", "public_urls")):
+            if url_module_name == "metrics_urls" and not app_config.get("metrics", False):
+                continue
+            try:
+                urlpatterns.append(path(f"{url_prefix}{app_shortname}/", include(f"{app_name}.{url_module_name}")))
+                if (
+                    url_module_name == "public_urls" and
+                    (mount_legacy_public_endpoints or app_config.get('mount_legacy_public_endpoints', False))
+                ):
+                    urlpatterns.append(
+                        path(
+                            f"{app_shortname}/",
+                            include(
+                                f"{app_name}.{url_module_name}",
+                                namespace=f"{app_shortname}_public_legacy"
+                            )
+                        )
                     )
-                )
-        except ModuleNotFoundError:
-            pass
+            except ModuleNotFoundError:
+                pass
+    return urlpatterns
+
+
+urlpatterns.extend(build_urlpatterns_for_zentral_apps())
 
 # static files
 urlpatterns += staticfiles_urlpatterns()
