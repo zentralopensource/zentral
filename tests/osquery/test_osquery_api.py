@@ -4,8 +4,11 @@ from unittest.mock import patch
 import uuid
 from django.urls import reverse
 from django.test import TestCase, override_settings
+from django.urls import NoReverseMatch
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
+from server.urls import build_urlpatterns_for_zentral_apps
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
@@ -170,7 +173,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     # utiliy methods
 
     def post_as_json(self, url_name, data):
-        return self.client.post(reverse("osquery:{}".format(url_name)),
+        return self.client.post(reverse("osquery_public:{}".format(url_name)),
                                 json.dumps(data),
                                 content_type="application/json")
 
@@ -283,14 +286,14 @@ class OsqueryAPIViewsTestCase(TestCase):
     # enrollment
 
     def test_enroll_405(self):
-        response = self.client.get(reverse("osquery:enroll"))
+        response = self.client.get(reverse("osquery_public:enroll"))
         self.assertEqual(response.status_code, 405)
         self.assertCountEqual(["POST", "OPTIONS"], (m.strip() for m in response["Allow"].split(",")))
 
     def test_enroll_bad_json(self):
-        response = self.client.post(reverse("osquery:enroll"))
+        response = self.client.post(reverse("osquery_public:enroll"))
         self.assertEqual(response.status_code, 400)
-        response = self.client.post(reverse("osquery:enroll"),
+        response = self.client.post(reverse("osquery_public:enroll"),
                                     data="lkjadslkjdsalkdjas",
                                     content_type="application/json")
         self.assertEqual(response.status_code, 400)
@@ -389,7 +392,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     # config
 
     def test_config_405(self):
-        response = self.client.get(reverse("osquery:enroll"))
+        response = self.client.get(reverse("osquery_public:enroll"))
         self.assertEqual(response.status_code, 405)
         self.assertCountEqual(["POST", "OPTIONS"], (m.strip() for m in response["Allow"].split(",")))
 
@@ -556,7 +559,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     # distributed queries
 
     def test_distributed_read_405(self):
-        response = self.client.get(reverse("osquery:distributed_read"))
+        response = self.client.get(reverse("osquery_public:distributed_read"))
         self.assertEqual(response.status_code, 405)
         self.assertCountEqual(["POST", "OPTIONS"], (m.strip() for m in response["Allow"].split(",")))
 
@@ -617,7 +620,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(dqm_qs.count(), 2)
 
     def test_distributed_write_405(self):
-        response = self.client.get(reverse("osquery:distributed_write"))
+        response = self.client.get(reverse("osquery_public:distributed_write"))
         self.assertEqual(response.status_code, 405)
         self.assertCountEqual(["POST", "OPTIONS"], (m.strip() for m in response["Allow"].split(",")))
 
@@ -759,7 +762,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     # log
 
     def test_log_405(self):
-        response = self.client.get(reverse("osquery:log"))
+        response = self.client.get(reverse("osquery_public:log"))
         self.assertEqual(response.status_code, 405)
         self.assertCountEqual(["POST", "OPTIONS"], (m.strip() for m in response["Allow"].split(",")))
 
@@ -1395,3 +1398,29 @@ class OsqueryAPIViewsTestCase(TestCase):
         }
         response = self.post_as_json("carver_continue", post_data)
         self.assertEqual(response.status_code, 400)
+
+    def test_legacy_public_urls_are_disabled_on_tests(self):
+        routes = ['enroll', 'config', 'carver_start', 'carver_continue', 'distributed_read', 'distributed_write']
+
+        for route in routes:
+            with self.assertRaises(NoReverseMatch):
+                reverse(f"osquery_public_legacy:{route}")
+            self.assertIsNotNone(reverse(f"osquery_public:{route}"))
+
+    def test_mount_legacy_public_endpoints_flag_is_working(self):
+        url_prefix = "/public"
+        routes = ['enroll', 'config', 'carver_start', 'carver_continue', 'distributed_read', 'distributed_write']
+
+        osquery_conf = settings._collection["apps"]._collection["zentral.contrib.osquery"]
+        osquery_conf._collection["mount_legacy_public_endpoints"] = True
+        urlpatterns_w_legacy = tuple(build_urlpatterns_for_zentral_apps())
+        osquery_conf._collection["mount_legacy_public_endpoints"] = False
+        urlpatterns_wo_legacy = tuple(build_urlpatterns_for_zentral_apps())
+
+        for route in routes:
+            self.assertEqual(
+                reverse(f"osquery_public:{route}", urlconf=urlpatterns_w_legacy),
+                url_prefix + reverse(f"osquery_public_legacy:{route}", urlconf=urlpatterns_w_legacy)
+            )
+            with self.assertRaises(NoReverseMatch):
+                reverse("osquery_public:{route}", args=urlpatterns_wo_legacy)

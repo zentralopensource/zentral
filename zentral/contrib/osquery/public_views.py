@@ -28,7 +28,7 @@ from zentral.contrib.osquery.tasks import build_file_carving_session_archive
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
-from .utils import (prepare_file_carving_session_if_necessary,
+from .views.utils import (prepare_file_carving_session_if_necessary,
                     update_tree_with_enrollment_host_details, update_tree_with_inventory_query_snapshot)
 
 
