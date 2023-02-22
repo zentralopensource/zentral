@@ -6,6 +6,10 @@ New `zentral.core.stores.backends.snowflake` store backend.
 
 ### Backward incompatibilities
 
+#### 🧨 new URLs for Osquery
+
+The Osquery URLs used by the Osquery agent are now prefixed with `public/` by default. Enrollment packages (use the enrollment bump version button to force new ones) are including those new URLs, but agents currently deployed will keep using the legacy URLs until they are reconfigured. To mount the legacy endpoints required by those agents, set the optional configuration key `mount_legacy_public_endpoints` to `true` in the `zentral.contrib.osquery` app section of the `base.json` configuration in your deployments.
+
 #### 🧨 Filebeat module removed
 
 Extra logs can still be shipped to Zentral, but Zentral doesn't need to manage the Filebeat enrollments.
