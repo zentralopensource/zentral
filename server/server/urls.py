@@ -38,14 +38,8 @@ urlpatterns = [
 
 
 # zentral apps
-def build_urlpatterns_for_zentral_apps(mount_legacy_public_endpoints=None):
+def build_urlpatterns_for_zentral_apps():
     """ Builds urlpatterns objects from zentral app configurations.
-
-    Args:
-        mount_legacy_public_endpoints (boolean, optional):
-            Set to True if we want do include {url_prefix} endpoints
-            False if not.
-            Defaults to None (injection for testing)
 
     Returns:
         urlpatterns: a list of path or re_path elements
@@ -61,10 +55,7 @@ def build_urlpatterns_for_zentral_apps(mount_legacy_public_endpoints=None):
                 continue
             try:
                 urlpatterns.append(path(f"{url_prefix}{app_shortname}/", include(f"{app_name}.{url_module_name}")))
-                if (
-                    url_module_name == "public_urls" and
-                    (mount_legacy_public_endpoints or app_config.get('mount_legacy_public_endpoints', False))
-                ):
+                if (url_module_name == "public_urls" and app_config.get('mount_legacy_public_endpoints', False)):
                     urlpatterns.append(
                         path(
                             f"{app_shortname}/",

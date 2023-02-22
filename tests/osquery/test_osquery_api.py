@@ -8,6 +8,7 @@ from django.urls import NoReverseMatch
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from server.urls import build_urlpatterns_for_zentral_apps
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
@@ -1398,22 +1399,22 @@ class OsqueryAPIViewsTestCase(TestCase):
         response = self.post_as_json("carver_continue", post_data)
         self.assertEqual(response.status_code, 400)
 
-    def test_public_urls(self):
-        url_prefix = "/public"
+    def test_public_urls_are_disabled_on_tests(self):
         routes = ['enroll', 'config', 'carver_start', 'carver_continue', 'distributed_read', 'distributed_write']
 
         for route in routes:
-            self.assertEqual(
-                reverse(f"osquery_public:{route}"),
-                url_prefix + reverse(f"osquery_public_legacy:{route}")
-            )
+            with self.assertRaises(NoReverseMatch):
+                reverse(f"osquery_public_legacy:{route}")
+            self.assertIsNotNone(reverse(f"osquery_public:{route}"))
 
-    def test_mount_legacy_public_endpoints_flag(self):
+    def test_mount_legacy_public_endpoints_flag_is_working(self):
         url_prefix = "/public"
         routes = ['enroll', 'config', 'carver_start', 'carver_continue', 'distributed_read', 'distributed_write']
 
-        urlpatterns_w_legacy = tuple(build_urlpatterns_for_zentral_apps(mount_legacy_public_endpoints=True))
-        urlpatterns_wo_legacy = tuple(build_urlpatterns_for_zentral_apps(mount_legacy_public_endpoints=False))
+        settings._collection["apps"]._collection["zentral.contrib.osquery"]._collection["mount_legacy_public_endpoints"] = True  # NOQA
+        urlpatterns_w_legacy = tuple(build_urlpatterns_for_zentral_apps())
+        settings._collection["apps"]._collection["zentral.contrib.osquery"]._collection["mount_legacy_public_endpoints"] = False  # NOQA
+        urlpatterns_wo_legacy = tuple(build_urlpatterns_for_zentral_apps())
 
         for route in routes:
             self.assertEqual(

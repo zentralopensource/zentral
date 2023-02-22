@@ -188,9 +188,7 @@
     },
     "zentral.contrib.nagios": {},
     "zentral.contrib.okta": {},
-    "zentral.contrib.osquery": {
-      "mount_legacy_public_endpoints": true
-    },
+    "zentral.contrib.osquery": {},
     "zentral.contrib.puppet": {
       "instances": [
         {
