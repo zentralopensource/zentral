@@ -1399,7 +1399,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         response = self.post_as_json("carver_continue", post_data)
         self.assertEqual(response.status_code, 400)
 
-    def test_public_urls_are_disabled_on_tests(self):
+    def test_legacy_public_urls_are_disabled_on_tests(self):
         routes = ['enroll', 'config', 'carver_start', 'carver_continue', 'distributed_read', 'distributed_write']
 
         for route in routes:
@@ -1411,9 +1411,10 @@ class OsqueryAPIViewsTestCase(TestCase):
         url_prefix = "/public"
         routes = ['enroll', 'config', 'carver_start', 'carver_continue', 'distributed_read', 'distributed_write']
 
-        settings._collection["apps"]._collection["zentral.contrib.osquery"]._collection["mount_legacy_public_endpoints"] = True  # NOQA
+        obsquery_conf = settings._collection["apps"]._collection["zentral.contrib.osquery"]
+        obsquery_conf._collection["mount_legacy_public_endpoints"] = True
         urlpatterns_w_legacy = tuple(build_urlpatterns_for_zentral_apps())
-        settings._collection["apps"]._collection["zentral.contrib.osquery"]._collection["mount_legacy_public_endpoints"] = False  # NOQA
+        obsquery_conf._collection["mount_legacy_public_endpoints"] = False
         urlpatterns_wo_legacy = tuple(build_urlpatterns_for_zentral_apps())
 
         for route in routes:
