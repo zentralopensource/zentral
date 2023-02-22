@@ -4,7 +4,10 @@ import uuid
 from django.db.models import F
 from django.urls import reverse
 from django.test import TestCase, override_settings
+from django.urls import NoReverseMatch
 from django.utils.crypto import get_random_string
+from server.urls import build_urlpatterns_for_zentral_apps
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, File, MachineSnapshot, MetaBusinessUnit
 from zentral.contrib.santa.events import SantaEnrollmentEvent, SantaEventEvent, SantaPreflightEvent
 from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
@@ -734,3 +737,41 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {})
+
+    def test_legacy_public_urls_are_disabled_on_tests(self):
+        hardware_uuid = self._get_preflight_data()
+        routes = [
+            ('preflight', (get_random_string(12), hardware_uuid)),
+            ('ruledownload', (self.enrollment_secret.secret, uuid.uuid4())),
+            ('eventupload', (self.enrollment_secret.secret, uuid.uuid4())),
+            ('postflight', (self.enrollment_secret.secret, uuid.uuid4())),
+        ]
+
+        for route, args in routes:
+            with self.assertRaises(NoReverseMatch):
+                reverse(f"santa_public_legacy:{route}", args=args)
+            self.assertIsNotNone(reverse(f"santa_public:{route}", args=args))
+
+    def test_mount_legacy_public_endpoints_flag_is_working(self):
+        hardware_uuid = self._get_preflight_data()
+        routes = [
+            ('preflight', (get_random_string(12), hardware_uuid)),
+            ('ruledownload', (self.enrollment_secret.secret, uuid.uuid4())),
+            ('eventupload', (self.enrollment_secret.secret, uuid.uuid4())),
+            ('postflight', (self.enrollment_secret.secret, uuid.uuid4())),
+        ]
+        url_prefix = "/public"
+
+        santa_conf = settings._collection["apps"]._collection["zentral.contrib.santa"]
+        santa_conf._collection["mount_legacy_public_endpoints"] = True
+        urlpatterns_w_legacy = tuple(build_urlpatterns_for_zentral_apps())
+        santa_conf._collection["mount_legacy_public_endpoints"] = False
+        urlpatterns_wo_legacy = tuple(build_urlpatterns_for_zentral_apps())
+
+        for route, args in routes:
+            self.assertEqual(
+                reverse(f"santa_public:{route}", urlconf=urlpatterns_w_legacy, args=args),
+                url_prefix + reverse(f"santa_public_legacy:{route}", urlconf=urlpatterns_w_legacy, args=args)
+            )
+            with self.assertRaises(NoReverseMatch):
+                reverse("santa_public:{route}", urlconf=urlpatterns_wo_legacy, args=args)
