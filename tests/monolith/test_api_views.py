@@ -53,10 +53,42 @@ class MonolithAPIViewsTestCase(TestCase):
             kwargs["HTTP_X_REAL_IP"] = ip
         return self.client.post(url, data, **kwargs)
 
+    def _put_data(self, url, data, content_type, include_token=True):
+        kwargs = {"content_type": content_type}
+        if include_token:
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
+        return self.client.put(url, data, **kwargs)
+
     def _post_json_data(self, url, data, include_token=True, ip=None):
         content_type = "application/json"
         data = json.dumps(data)
         return self._post_data(url, data, content_type, include_token, ip)
+
+    def _put_json_data(self, url, data, include_token=True):
+        content_type = "application/json"
+        data = json.dumps(data)
+        return self._put_data(url, data, content_type, include_token)
+
+    def get(self, url, data=None, include_token=True):
+        kwargs = {}
+        if data is not None:
+            kwargs["data"] = data
+        if include_token:
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
+        return self.client.get(url, **kwargs)
+
+    def delete(self, url, include_token=True):
+        kwargs = {}
+        if include_token:
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
+        return self.client.delete(url, **kwargs)
+    
+    def force_manifest(self, mbu=None, name=None):
+        if mbu is None:
+            mbu = self.mbu
+        if name is None:
+            name = get_random_string(12)
+        return Manifest.objects.create(meta_business_unit=mbu, name=name)
 
     # sync repository
 
@@ -105,3 +137,219 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {"status": 0})
         cache_server = CacheServer.objects.get(manifest=self.manifest, name=name)
         self.assertEqual(cache_server.public_ip_address, ip_address)
+
+    # list manifests
+
+    def test_get_manifests_unauthorized(self):
+        response = self.get(reverse("monolith_api:manifests"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_manifests_permission_denied(self):
+        response = self.get(reverse("monolith_api:manifests"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_manifests_filter_by_name_not_found(self):
+        self._set_permissions("monolith.view_manifest")
+        response = self.get(reverse("monolith_api:manifests"), {"name": "foo"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_manifests_filter_by_meta_business_unit_id_not_found(self):
+        self._set_permissions("monolith.view_manifest")
+        response = self.get(reverse("monolith_api:manifests"), {"meta_business_unit_id": 9999})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'meta_business_unit_id': ['Select a valid choice. That choice is not one of the available choices.']
+        })
+
+    def test_get_manifests_filter_by_name(self):
+        for _ in range(3):
+            self.force_manifest()
+        self._set_permissions("monolith.view_manifest")
+        response = self.get(reverse("monolith_api:manifests"), {"name": self.manifest.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': self.manifest.pk,
+            'name': self.manifest.name,
+            'version': 1,
+            'created_at': self.manifest.created_at.isoformat(),
+            'updated_at': self.manifest.updated_at.isoformat(),
+            'meta_business_unit': self.manifest.meta_business_unit.pk
+        }])
+
+    def test_get_manifests_filter_by_meta_business_unit_id(self):
+        self._set_permissions("monolith.view_manifest")
+        response = self.get(reverse("monolith_api:manifests"),
+                            {"meta_business_unit_id": self.manifest.meta_business_unit.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': self.manifest.pk,
+            'name': self.manifest.name,
+            'version': 1,
+            'created_at': self.manifest.created_at.isoformat(),
+            'updated_at': self.manifest.updated_at.isoformat(),
+            'meta_business_unit': self.manifest.meta_business_unit.pk
+        }])
+
+    def test_get_manifests(self):
+        self._set_permissions("monolith.view_manifest")
+        response = self.get(reverse("monolith_api:manifests"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': self.manifest.pk,
+            'name': self.manifest.name,
+            'version': 1,
+            'created_at': self.manifest.created_at.isoformat(),
+            'updated_at': self.manifest.updated_at.isoformat(),
+            'meta_business_unit': self.manifest.meta_business_unit.pk
+        }])
+
+    # get manifest
+
+    def test_get_manifest_unauthorized(self):
+        response = self.get(reverse("monolith_api:manifest", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_manifest_permission_denied(self):
+        response = self.get(reverse("monolith_api:manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_manifest_not_found(self):
+        self._set_permissions("monolith.view_manifest")
+        response = self.get(reverse("monolith_api:manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_manifest(self):
+        self._set_permissions("monolith.view_manifest")
+        response = self.get(reverse("monolith_api:manifest", args=(self.manifest.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'id': self.manifest.pk,
+            'name': self.manifest.name,
+            'version': 1,
+            'created_at': self.manifest.created_at.isoformat(),
+            'updated_at': self.manifest.updated_at.isoformat(),
+            'meta_business_unit': self.manifest.meta_business_unit.pk
+        })
+
+    # create manifest
+
+    def test_create_manifest_unauthorized(self):
+        response = self._post_json_data(reverse("monolith_api:manifests"), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_manifest_permission_denied(self):
+        response = self._post_json_data(reverse("monolith_api:manifests"), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_manifest_fields_empty(self):
+        self._set_permissions("monolith.add_manifest")
+        response = self._post_json_data(reverse("monolith_api:manifests"), data={})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'name': ['This field is required.'],
+            'meta_business_unit': ['This field is required.']
+        })
+
+    def test_create_manifest(self):
+        self._set_permissions("monolith.add_manifest")
+        response = self._post_json_data(reverse("monolith_api:manifests"), data={
+            'name': 'foo',
+            'meta_business_unit': self.manifest.meta_business_unit.pk
+        })
+        self.assertEqual(response.status_code, 201)
+        manifest = Manifest.objects.get(name='foo')
+        self.assertEqual(response.json(), {
+            'id': manifest.pk,
+            'name': 'foo',
+            'version': 1,
+            'created_at': manifest.created_at.isoformat(),
+            'updated_at': manifest.updated_at.isoformat(),
+            'meta_business_unit': self.mbu.pk
+        })
+        self.assertEqual(manifest.name, 'foo')
+
+    # update manifest
+
+    def test_update_manifest_unauthorized(self):
+        response = self._put_json_data(reverse("monolith_api:manifest", args=(9999,)), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_manifest_permission_denied(self):
+        response = self._put_json_data(reverse("monolith_api:manifest", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_manifest_not_found(self):
+        self._set_permissions("monolith.change_manifest")
+        response = self._put_json_data(reverse("monolith_api:manifest", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_manifest_fields_invalid(self):
+        self._set_permissions("monolith.change_manifest")
+        response = self._put_json_data(reverse("monolith_api:manifest", args=(self.manifest.pk,)), data={
+            'name': '',
+            'meta_business_unit': ''
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'name': ['This field may not be blank.'],
+            'meta_business_unit': ['This field may not be null.']
+        })
+
+    def test_update_manifest_invalid_meta_business_unit(self):
+        manifest = self.force_manifest()
+        self._set_permissions("monolith.change_manifest")
+        response = self._put_json_data(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
+            'name': 'foo',
+            'meta_business_unit': 9999
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'meta_business_unit': ['Invalid pk "9999" - object does not exist.']
+        })
+
+    def test_update_manifest(self):
+        manifest = self.force_manifest()
+        self._set_permissions("monolith.change_manifest")
+        response = self._put_json_data(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
+            'name': 'spam',
+            'meta_business_unit': self.mbu.pk
+        })
+        self.assertEqual(response.status_code, 200)
+        manifest.refresh_from_db()
+        self.assertEqual(response.json(), {
+            'id': manifest.pk,
+            'name': 'spam',
+            'version': 1,
+            'created_at': manifest.created_at.isoformat(),
+            'updated_at': manifest.updated_at.isoformat(),
+            'meta_business_unit': self.mbu.pk
+        })
+        self.assertEqual(manifest.name, 'spam')
+
+    # delete manifest
+
+    def test_delete_manifest_unauthorized(self):
+        response = self.delete(reverse("monolith_api:manifest", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_manifest_permission_denied(self):
+        response = self.delete(reverse("monolith_api:manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_manifest_not_found(self):
+        self._set_permissions("monolith.delete_manifest")
+        response = self.delete(reverse("monolith_api:manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_manifest(self):
+        manifest = self.force_manifest()
+        self._set_permissions("monolith.delete_manifest")
+        response = self.delete(reverse("monolith_api:manifest", args=(manifest.pk,)))
+        self.assertEqual(response.status_code, 204)
+
+
+
+
+
+
