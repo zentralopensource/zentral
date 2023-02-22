@@ -1411,10 +1411,10 @@ class OsqueryAPIViewsTestCase(TestCase):
         url_prefix = "/public"
         routes = ['enroll', 'config', 'carver_start', 'carver_continue', 'distributed_read', 'distributed_write']
 
-        obsquery_conf = settings._collection["apps"]._collection["zentral.contrib.osquery"]
-        obsquery_conf._collection["mount_legacy_public_endpoints"] = True
+        osquery_conf = settings._collection["apps"]._collection["zentral.contrib.osquery"]
+        osquery_conf._collection["mount_legacy_public_endpoints"] = True
         urlpatterns_w_legacy = tuple(build_urlpatterns_for_zentral_apps())
-        obsquery_conf._collection["mount_legacy_public_endpoints"] = False
+        osquery_conf._collection["mount_legacy_public_endpoints"] = False
         urlpatterns_wo_legacy = tuple(build_urlpatterns_for_zentral_apps())
 
         for route in routes:
