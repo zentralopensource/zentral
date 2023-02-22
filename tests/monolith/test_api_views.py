@@ -309,7 +309,6 @@ class MonolithAPIViewsTestCase(TestCase):
         })
 
     def test_update_manifest(self):
-        # TODO: versioning not implemented yet
         manifest = self.force_manifest()
         self._set_permissions("monolith.change_manifest")
         response = self._put_json_data(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
