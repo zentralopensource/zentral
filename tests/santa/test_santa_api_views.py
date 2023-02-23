@@ -4,7 +4,10 @@ import uuid
 from django.db.models import F
 from django.urls import reverse
 from django.test import TestCase, override_settings
+from django.urls import NoReverseMatch
 from django.utils.crypto import get_random_string
+from server.urls import build_urlpatterns_for_zentral_apps
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, File, MachineSnapshot, MetaBusinessUnit
 from zentral.contrib.santa.events import SantaEnrollmentEvent, SantaEventEvent, SantaPreflightEvent
 from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
@@ -65,14 +68,14 @@ class SantaAPIViewsTestCase(TestCase):
 
     def test_preflight_bad_secret(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
-        url = reverse("santa:preflight", args=(get_random_string(12), hardware_uuid))
+        url = reverse("santa_public:preflight", args=(get_random_string(12), hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 403)
 
     def test_preflight_missing_serial_num(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         data.pop("serial_num")
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 400)
 
@@ -80,7 +83,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.configuration.client_certificate_auth = True
         self.configuration.save()
         data, serial_number, hardware_uuid = self._get_preflight_data()
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 403)
 
@@ -88,7 +91,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_preflight(self, post_event):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         data["binary_rule_count"] = 17
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
 
         # MONITOR mode
         response = self.post_as_json(url, data)
@@ -131,7 +134,7 @@ class SantaAPIViewsTestCase(TestCase):
 
     def test_preflight_default_usb_options(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -141,7 +144,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_preflight_remount_usb_options(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         Configuration.objects.update(block_usb_mount=True, remount_usb_mode=["noexec", "rdonly"])
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -151,7 +154,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_preflight_model_identifier(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         data["model_identifier"] = "Macmini9,1"
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         self.post_as_json(url, data)
 
         # Machine snapshot
@@ -162,7 +165,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_preflight_missing_client_mode(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         del data["client_mode"]
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
 
         # MONITOR mode
         response = self.post_as_json(url, data)
@@ -177,7 +180,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_preflight_compiler_rule_count_overflow(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         data["compiler_rule_count"] = 27551562368811008
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
 
@@ -188,7 +191,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_preflight_binary_rule_count_negative(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         data["binary_rule_count"] = -27551562368811008
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
 
@@ -199,7 +202,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_preflight_enrollment_clean_sync(self):
         # enrollment, clean sync not requested → clean sync
         data, serial_number, hardware_uuid = self._get_preflight_data()
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -208,7 +211,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_preflight_no_enrollment_no_clean_sync(self):
         # no enrollment, clean sync not requested → no clean sync
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -218,7 +221,7 @@ class SantaAPIViewsTestCase(TestCase):
         # no enrollment, clean sync requested → clean sync
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         data["request_clean_sync"] = True
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -238,7 +241,7 @@ class SantaAPIViewsTestCase(TestCase):
         )
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         data["binary_rule_count"] = 0  # sync not OK
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         self.enrolled_machine.refresh_from_db()
@@ -268,7 +271,7 @@ class SantaAPIViewsTestCase(TestCase):
         )
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         data["binary_rule_count"] = 1
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         self.enrolled_machine.refresh_from_db()
@@ -301,7 +304,7 @@ class SantaAPIViewsTestCase(TestCase):
         )
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         data["binary_rule_count"] = 1
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         self.enrolled_machine.refresh_from_db()
@@ -333,7 +336,7 @@ class SantaAPIViewsTestCase(TestCase):
             cursor=None
         )
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         self.enrolled_machine.refresh_from_db()
@@ -367,7 +370,7 @@ class SantaAPIViewsTestCase(TestCase):
             cursor=None
         )
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
-        url = reverse("santa:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         self.enrolled_machine.refresh_from_db()
@@ -385,7 +388,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.enrolled_machine.last_sync_ok = False
         self.enrolled_machine.save()
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
-        url = reverse("santa:preflight", args=(self.enrollment_secret2.secret, hardware_uuid))
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret2.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         enrolled_machine = EnrolledMachine.objects.get(serial_number=self.machine_serial_number)
@@ -409,13 +412,13 @@ class SantaAPIViewsTestCase(TestCase):
     # rule download
 
     def test_rule_download_not_enrolled(self):
-        url = reverse("santa:ruledownload", args=(self.enrollment_secret.secret, uuid.uuid4()))
+        url = reverse("santa_public:ruledownload", args=(self.enrollment_secret.secret, uuid.uuid4()))
         # no rules
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 403)
 
     def test_rule_download(self):
-        url = reverse("santa:ruledownload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
+        url = reverse("santa_public:ruledownload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         # no rules
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 200)
@@ -540,7 +543,7 @@ class SantaAPIViewsTestCase(TestCase):
     # event upload
 
     def test_eventupload_not_enrolled(self):
-        url = reverse("santa:eventupload", args=(self.enrollment_secret.secret, uuid.uuid4()))
+        url = reverse("santa_public:eventupload", args=(self.enrollment_secret.secret, uuid.uuid4()))
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 403)
 
@@ -585,7 +588,7 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_from': 1146001236,
                                'valid_until': 2054670036}]
         }
-        url = reverse("santa:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
+        url = reverse("santa_public:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -645,7 +648,7 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_from': 1146001236,
                                'valid_until': 2054670036}]
         }
-        url = reverse("santa:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
+        url = reverse("santa_public:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -707,7 +710,7 @@ class SantaAPIViewsTestCase(TestCase):
             target=t,
             defaults={"binary_count": event_d["file_bundle_binary_count"]}
         )
-        url = reverse("santa:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
+        url = reverse("santa_public:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -724,13 +727,49 @@ class SantaAPIViewsTestCase(TestCase):
     # postflight
 
     def test_rule_postflight_not_enrolled(self):
-        url = reverse("santa:postflight", args=(self.enrollment_secret.secret, uuid.uuid4()))
+        url = reverse("santa_public:postflight", args=(self.enrollment_secret.secret, uuid.uuid4()))
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 403)
 
     def test_postflight(self):
-        url = reverse("santa:postflight", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
+        url = reverse("santa_public:postflight", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {})
+
+    def test_legacy_public_urls_are_disabled_on_tests(self):
+        hardware_uuid = uuid.uuid4()
+        routes = ['preflight', 'ruledownload', 'eventupload', 'postflight']
+
+        for route in routes:
+            with self.assertRaises(NoReverseMatch):
+                reverse(f"santa_public_legacy:{route}", args=(self.enrollment_secret.secret, hardware_uuid))
+            self.assertIsNotNone(reverse(f"santa_public:{route}", args=(self.enrollment_secret.secret, hardware_uuid)))
+
+    def test_mount_legacy_public_endpoints_flag_is_working(self):
+        hardware_uuid = uuid.uuid4()
+        routes = ['preflight', 'ruledownload', 'eventupload', 'postflight']
+
+        santa_conf = settings._collection["apps"]._collection["zentral.contrib.santa"]
+        santa_conf._collection["mount_legacy_public_endpoints"] = True
+        urlpatterns_w_legacy = tuple(build_urlpatterns_for_zentral_apps())
+        santa_conf._collection["mount_legacy_public_endpoints"] = False
+        urlpatterns_wo_legacy = tuple(build_urlpatterns_for_zentral_apps())
+
+        for route in routes:
+            self.assertEqual(
+                reverse(f"santa_public:{route}",
+                        urlconf=urlpatterns_w_legacy,
+                        args=(self.enrollment_secret.secret, hardware_uuid)
+                        ),
+                "/public" + reverse(f"santa_public_legacy:{route}",
+                                    urlconf=urlpatterns_w_legacy,
+                                    args=(self.enrollment_secret.secret, hardware_uuid)
+                                    )
+            )
+            with self.assertRaises(NoReverseMatch):
+                reverse(f"santa_public_legacy:{route}",
+                        urlconf=urlpatterns_wo_legacy,
+                        args=(self.enrollment_secret.secret, hardware_uuid)
+                        )
