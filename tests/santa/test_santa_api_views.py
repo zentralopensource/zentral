@@ -739,7 +739,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(json_response, {})
 
     def test_legacy_public_urls_are_disabled_on_tests(self):
-        data, serial_number, hardware_uuid = self._get_preflight_data()
+        hardware_uuid = uuid.uuid4()
         routes = ['preflight', 'ruledownload', 'eventupload', 'postflight']
 
         for route in routes:
@@ -748,7 +748,7 @@ class SantaAPIViewsTestCase(TestCase):
             self.assertIsNotNone(reverse(f"santa_public:{route}", args=(self.enrollment_secret.secret, hardware_uuid)))
 
     def test_mount_legacy_public_endpoints_flag_is_working(self):
-        data, serial_number, hardware_uuid = self._get_preflight_data()
+        hardware_uuid = uuid.uuid4()
         routes = ['preflight', 'ruledownload', 'eventupload', 'postflight']
 
         santa_conf = settings._collection["apps"]._collection["zentral.contrib.santa"]
