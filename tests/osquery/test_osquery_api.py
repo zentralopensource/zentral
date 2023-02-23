@@ -1423,4 +1423,4 @@ class OsqueryAPIViewsTestCase(TestCase):
                 url_prefix + reverse(f"osquery_public_legacy:{route}", urlconf=urlpatterns_w_legacy)
             )
             with self.assertRaises(NoReverseMatch):
-                reverse("osquery_public:{route}", args=urlpatterns_wo_legacy)
+                reverse(f"osquery_public_legacy:{route}", urlconf=urlpatterns_wo_legacy)
