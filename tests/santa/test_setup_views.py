@@ -2,14 +2,15 @@ import datetime
 from functools import reduce
 import operator
 import plistlib
+from accounts.models import User
 from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, File, Tag
-from accounts.models import User
 from zentral.contrib.santa.models import Bundle, Configuration, Enrollment, Rule, Target
 
 
@@ -377,7 +378,10 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/x-plist")
         plist_config = plistlib.loads(response.content)
-        self.assertTrue(plist_config["SyncBaseURL"].endswith(f"/santa/sync/{enrollment.secret.secret}/"))
+        self.assertEqual(
+            plist_config["SyncBaseURL"],
+            f'https://{settings["api"]["fqdn"]}' + f"/public/santa/sync/{enrollment.secret.secret}/"
+        )
         self.assertEqual(plist_config["ClientMode"], configuration.client_mode)
 
     def test_enrollment_configuration_profile_permission_denied(self):
