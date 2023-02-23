@@ -4,7 +4,6 @@ from . import public_views
 
 app_name = "santa_public"
 urlpatterns = [
-        # API
     path('sync/<str:enrollment_secret>/preflight/<str:machine_id>',
          csrf_exempt(public_views.PreflightView.as_view()), name='preflight'),
     path('sync/<str:enrollment_secret>/ruledownload/<str:machine_id>',
