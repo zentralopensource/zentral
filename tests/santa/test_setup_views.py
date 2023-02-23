@@ -380,7 +380,7 @@ class SantaSetupViewsTestCase(TestCase):
         plist_config = plistlib.loads(response.content)
         self.assertEqual(
             plist_config["SyncBaseURL"],
-            f'https://{settings["api"]["fqdn"]}' + f"/public/santa/sync/{enrollment.secret.secret}/"
+            f'https://{settings["api"]["fqdn"]}/public/santa/sync/{enrollment.secret.secret}/'
         )
         self.assertEqual(plist_config["ClientMode"], configuration.client_mode)
 
