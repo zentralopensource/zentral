@@ -15,8 +15,7 @@ Once you are logged into your instance, use the following command:
 sudo /home/zentral/app/utils/setup.py \
      zentral.example.com \
      username \
-     email@example.com \
-     zentral-clicertauth.example.com
+     email@example.com
 ```
 
 List of the arguments:
