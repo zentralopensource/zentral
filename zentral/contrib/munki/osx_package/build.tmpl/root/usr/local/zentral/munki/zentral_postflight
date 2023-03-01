@@ -600,6 +600,27 @@ def get_logged_in_user_principal_user(domains):
         pass
 
 
+# munkilib version
+
+
+def get_munkilib_version_info():
+    info = {}
+    try:
+        with open("/usr/local/munki/munkilib/version.plist", "rb") as f:
+            raw_info = plistlib.load(f)
+    except Exception:
+        return info
+    if not isinstance(raw_info, dict):
+        return info
+    for plist_attr, attr in (("BuildNumber", "build"),
+                             ("CFBundleShortVersionString", "version"),
+                             ("GitRevision", "revision")):
+        val = raw_info.get(plist_attr)
+        if isinstance(val, str):
+            info[f"munkilib_{attr}"] = val
+    return info
+
+
 # Zentral Munki API calls
 
 
@@ -724,6 +745,9 @@ if __name__ == '__main__':
             pass
         else:
             machine_snapshot['extra_facts'] = latest_mir.get_extra_facts(collected_condition_keys)
+    munkilib_version_info = get_munkilib_version_info()
+    if munkilib_version_info:
+        machine_snapshot.setdefault('extra_facts', {}).update(munkilib_version_info)
 
     data = {'machine_snapshot': machine_snapshot}
 
