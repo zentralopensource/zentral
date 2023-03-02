@@ -8,6 +8,7 @@ class ZentralOsqueryAppConfig(ZentralAppConfig):
     permission_models = (
         "automatictableconstruction",
         "configuration",
+        "configurationpack",
         "distributedquery",
         "distributedqueryresult",
         "enrollment",
