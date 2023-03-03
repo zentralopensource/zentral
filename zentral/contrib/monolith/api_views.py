@@ -11,8 +11,8 @@ from zentral.utils.drf import DjangoPermissionRequired, DefaultDjangoModelPermis
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
-from .models import CacheServer, Catalog, Manifest, ManifestCatalog
-from .serializers import CatalogSerializer, ManifestSerializer, ManifestCatalogSerializer
+from .models import CacheServer, Catalog, Manifest, ManifestCatalog, SubManifest
+from .serializers import CatalogSerializer, ManifestSerializer, ManifestCatalogSerializer, SubManifestSerializer
 
 
 class SyncRepository(APIView):
@@ -116,4 +116,18 @@ class ManifestCatalogList(generics.ListCreateAPIView):
 class ManifestCatalogDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = ManifestCatalog.objects.all()
     serializer_class = ManifestCatalogSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+
+
+class SubManifestList(generics.ListCreateAPIView):
+    queryset = SubManifest.objects.all()
+    serializer_class = SubManifestSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ('name',)
+
+
+class SubManifestDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = SubManifest.objects.all()
+    serializer_class = SubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
