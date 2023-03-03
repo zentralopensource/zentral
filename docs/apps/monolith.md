@@ -663,6 +663,173 @@ $ curl -X DELETE \
 
 Response (204 No Content)
 
+### /api/monolith/manifest_sub_manifests/
+
+#### List all manifest sub manifests
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_manifestsubmanifest`
+* Optional filter parameters:
+  * `manifest_id` ID of the manifest
+  * `sub_manifest_id` ID of the sub manifest
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/?manifest_id=1" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/?sub_manifest_id=2" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[{
+  "id": 1,
+  "manifest": 1,
+  "sub_manifest": 2,
+  "tags": []
+}]
+```
+
+#### Add a manifest sub manifest
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `monolith.add_manifestsubmanifest`
+
+Examples:
+
+manifest\_sub_manifest.json
+
+```json
+{
+  "manifest": 1,
+  "sub_manifest": 2,
+  "tags": [17]
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/" \
+  -d @manifest_sub_manifest.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "manifest": 1,
+  "sub_manifest": 2,
+  "tags": [17]
+}
+```
+
+### /api/monolith/manifest_sub_manifests/`<int:pk>`/
+
+#### Get a manifest sub manifest
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_manifestsubmanifest`
+* `<int:pk>`: the primary key of the manifest sub manifest
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/1/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "manifest": 1,
+  "sub_manifest": 2,
+  "tags": [17]
+}
+```
+
+#### Update a manifest sub manifest
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `monolith.change_manifestsubmanifest`
+* `<int:pk>`: the primary key of the manifest sub manifest
+
+Example:
+
+manifest\_sub_manifest.json
+
+```json
+{
+  "manifest": 2,
+  "sub_manifest": 3,
+  "tags": []
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/1/" \
+  -d @manifest_sub_manifest.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```
+{
+  "id": 1,
+  "manifest": 2,
+  "sub_manifest": 3,
+  "tags": []
+}
+```
+
+#### Delete a manifest sub manifest
+
+* method: DELETE
+* Required permission: `monolith.delete_manifestsubmanifest`
+* `<int:pk>`: the primary key of the manifest sub manifest.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/1/"
+```
+
+Response (204 No Content)
+
 ### /api/monolith/sub_manifests/
 
 #### List all sub manifests
