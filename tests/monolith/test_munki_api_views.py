@@ -109,7 +109,7 @@ class MonolithAPIViewsTestCase(TestCase):
     ):
         if catalog is None:
             catalog = Catalog.objects.create(name=get_random_string(12))
-        ManifestCatalog.objects.create(manifest=self.manifest, catalog=catalog)
+        ManifestCatalog.objects.get_or_create(manifest=self.manifest, catalog=catalog)
         if sub_manifest is None:
             sub_manifest, _ = SubManifest.objects.get_or_create(name=get_random_string(12))
         ManifestSubManifest.objects.get_or_create(

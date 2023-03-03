@@ -818,6 +818,7 @@ class ManifestCatalog(models.Model):
     tags = models.ManyToManyField(Tag)
 
     class Meta:
+        unique_together = (("manifest", "catalog"),)
         ordering = ('-catalog__priority', '-catalog__name')
 
 
