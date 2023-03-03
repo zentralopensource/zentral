@@ -205,7 +205,7 @@ Response:
 }]
 ```
 
-#### Add a manifests
+#### Add a manifest
 
 * method: POST
 * Content-Type: application/json
@@ -370,7 +370,7 @@ Response:
 }]
 ```
 
-#### Add a catalogs
+#### Add a catalog
 
 * method: POST
 * Content-Type: application/json
@@ -491,7 +491,172 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/catalog/1/"
+  "https://zentral.example.com/api/monolith/catalogs/1/"
+```
+
+Response (204 No Content)
+
+### /api/monolith/manifest_catalogs/
+
+#### List all manifest catalogs
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_manifestcatalog`
+* Optional filter parameter:
+  * `manifest_id` ID of the manifest
+  * `catalog_id` ID of the catalog
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_catalogs/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_catalogs/?manifest_id=1" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_catalogs/?catalog_id=2" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[{
+  "id": 1,
+  "manifest": 1,
+  "catalog": 2,
+  "tags": []
+}]
+```
+
+#### Add a manifest catalog
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `monolith.add_manifestcatalog`
+
+Examples:
+
+manifest\_catalog.json
+
+```json
+{
+  "manifest": 1,
+  "catalog": 2,
+  "tags": [17]
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_catalogs/" \
+  -d @manifest_catalog.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "manifest": 1,
+  "catalog": 2,
+  "tags": [17]
+}
+```
+
+### /api/monolith/manifest_catalogs/`<int:pk>`/
+
+#### Get a manifest catalog
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_manifestcatalog`
+* `<int:pk>`: the primary key of the manifest catalog
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_catalogs/1/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "manifest": 1,
+  "catalog": 2,
+  "tags": [17]
+}
+```
+
+#### Update a manifest catalog
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `monolith.change_manifestcatalog`
+* `<int:pk>`: the primary key of the manifest catalog
+
+Example:
+
+manifest\_catalog.json
+
+```json
+{
+  "manifest": 2,
+  "catalog": 3,
+  "tags": []
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_catalogs/1/" \
+  -d @manifest_catalog.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```
+  "id": 1,
+  "manifest": 2,
+  "catalog": 3,
+  "tags": []
+```
+
+#### Delete a manifest catalog
+
+* method: DELETE
+* Required permission: `monolith.delete_manifestcatalog`
+* `<int:pk>`: the primary key of the manifest catalog.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/monolith/manifest_catalogs/1/"
 ```
 
 Response (204 No Content)

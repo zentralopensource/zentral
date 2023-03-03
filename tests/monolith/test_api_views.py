@@ -9,8 +9,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
-from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.monolith.models import CacheServer, Catalog, Manifest
+from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
+from zentral.contrib.monolith.models import CacheServer, Catalog, Manifest, ManifestCatalog
 
 
 class MonolithAPIViewsTestCase(TestCase):
@@ -98,6 +98,14 @@ class MonolithAPIViewsTestCase(TestCase):
         if archived:
             archived_at = datetime.utcnow()
         return Catalog.objects.create(name=name, priority=1, archived_at=archived_at)
+
+    def force_manifest_catalog(self, tag=None):
+        manifest = self.force_manifest()
+        catalog = self.force_catalog()
+        mc = ManifestCatalog.objects.create(manifest=manifest, catalog=catalog)
+        if tag:
+            mc.tags.add(tag)
+        return mc
 
     # sync repository
 
@@ -544,4 +552,187 @@ class MonolithAPIViewsTestCase(TestCase):
         catalog = self.force_catalog()
         self._set_permissions("monolith.delete_catalog")
         response = self.delete(reverse("monolith_api:catalog", args=(catalog.pk,)))
+        self.assertEqual(response.status_code, 204)
+
+    # list manifest catalogs
+
+    def test_get_manifest_catalogs_unauthorized(self):
+        response = self.get(reverse("monolith_api:manifest_catalogs"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_manifest_catalogs_permission_denied(self):
+        response = self.get(reverse("monolith_api:manifest_catalogs"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_manifest_catalogs_filter_by_name_not_found(self):
+        self._set_permissions("monolith.view_manifestcatalog")
+        response = self.get(reverse("monolith_api:manifest_catalogs"), {"manifest_id": self.manifest.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_manifest_catalogs_filter_by_manifest_id(self):
+        self.force_manifest_catalog()
+        manifest_catalog = self.force_manifest_catalog()
+        self._set_permissions("monolith.view_manifestcatalog")
+        response = self.get(reverse("monolith_api:manifest_catalogs"),
+                            {"manifest_id": manifest_catalog.manifest.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': manifest_catalog.pk,
+            'manifest': manifest_catalog.manifest.id,
+            'catalog': manifest_catalog.catalog.id,
+            'tags': []
+        }])
+
+    def test_get_manifest_catalogs_filter_by_catalog_id(self):
+        self.force_manifest_catalog()
+        manifest_catalog = self.force_manifest_catalog()
+        self._set_permissions("monolith.view_manifestcatalog")
+        response = self.get(reverse("monolith_api:manifest_catalogs"),
+                            {"catalog_id": manifest_catalog.catalog.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': manifest_catalog.pk,
+            'manifest': manifest_catalog.manifest.id,
+            'catalog': manifest_catalog.catalog.id,
+            'tags': []
+        }])
+
+    def test_get_manifest_catalogs(self):
+        manifest_catalog = self.force_manifest_catalog()
+        self._set_permissions("monolith.view_manifestcatalog")
+        response = self.get(reverse("monolith_api:manifest_catalogs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': manifest_catalog.pk,
+            'manifest': manifest_catalog.manifest.id,
+            'catalog': manifest_catalog.catalog.id,
+            'tags': []
+        }])
+
+    # get manifest_catalog
+
+    def test_get_manifest_catalog_unauthorized(self):
+        response = self.get(reverse("monolith_api:manifest_catalog", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_manifest_catalog_permission_denied(self):
+        response = self.get(reverse("monolith_api:manifest_catalog", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_manifest_catalog_not_found(self):
+        self._set_permissions("monolith.view_manifestcatalog")
+        response = self.get(reverse("monolith_api:manifest_catalog", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_manifest_catalog(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        manifest_catalog = self.force_manifest_catalog(tag=tag)
+        self._set_permissions("monolith.view_manifestcatalog")
+        response = self.get(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'id': manifest_catalog.pk,
+            'manifest': manifest_catalog.manifest.id,
+            'catalog': manifest_catalog.catalog.id,
+            'tags': [tag.pk]
+        })
+
+    # create manifest_catalog
+
+    def test_create_manifest_catalog_unauthorized(self):
+        response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_manifest_catalog_permission_denied(self):
+        response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_manifest_catalog_fields_empty(self):
+        self._set_permissions("monolith.add_manifestcatalog")
+        response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), data={})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'manifest': ['This field is required.'],
+            'catalog': ['This field is required.'],
+            'tags': ['This field is required.'],
+        })
+
+    def test_create_manifest_catalog(self):
+        self._set_permissions("monolith.add_manifestcatalog")
+        manifest = self.force_manifest()
+        catalog = self.force_catalog()
+        tag = Tag.objects.create(name=get_random_string(12))
+        response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), data={
+            'manifest': manifest.pk,
+            'catalog': catalog.pk,
+            'tags': [tag.pk],
+        })
+        self.assertEqual(response.status_code, 201)
+        manifest_catalog = ManifestCatalog.objects.get(manifest=manifest, catalog=catalog)
+        self.assertEqual(response.json(), {
+            'id': manifest_catalog.pk,
+            'manifest': manifest.pk,
+            'catalog': catalog.pk,
+            'tags': [tag.pk]
+        })
+        self.assertEqual(list(t.pk for t in manifest_catalog.tags.all()), [tag.pk])
+
+    # update manifest_catalog
+
+    def test_update_manifest_catalog_unauthorized(self):
+        response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(9999,)),
+                                       include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_manifest_catalog_permission_denied(self):
+        response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_manifest_catalog_not_found(self):
+        self._set_permissions("monolith.change_manifestcatalog")
+        response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_manifest_catalog(self):
+        manifest_catalog = self.force_manifest_catalog()
+        manifest = self.force_manifest()
+        catalog = self.force_catalog()
+        tag = Tag.objects.create(name=get_random_string(12))
+        self._set_permissions("monolith.change_manifestcatalog")
+        response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)), data={
+            'manifest': manifest.pk,
+            'catalog': catalog.pk,
+            'tags': [tag.pk],
+        })
+        self.assertEqual(response.status_code, 200)
+        test_manifest_catalog = ManifestCatalog.objects.get(manifest=manifest, catalog=catalog)
+        self.assertEqual(manifest_catalog, test_manifest_catalog)
+        self.assertEqual(response.json(), {
+            'id': test_manifest_catalog.pk,
+            'manifest': manifest.pk,
+            'catalog': catalog.pk,
+            'tags': [tag.pk]
+        })
+        self.assertEqual(list(t.pk for t in test_manifest_catalog.tags.all()), [tag.pk])
+
+    # delete manifest_catalog
+
+    def test_delete_manifestcatalog_unauthorized(self):
+        response = self.delete(reverse("monolith_api:manifest_catalog", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_manifestcatalog_permission_denied(self):
+        response = self.delete(reverse("monolith_api:manifest_catalog", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_manifestcatalog_not_found(self):
+        self._set_permissions("monolith.delete_manifestcatalog")
+        response = self.delete(reverse("monolith_api:manifest_catalog", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_manifestcatalog(self):
+        manifest_catalog = self.force_manifest_catalog()
+        self._set_permissions("monolith.delete_manifestcatalog")
+        response = self.delete(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)))
         self.assertEqual(response.status_code, 204)
