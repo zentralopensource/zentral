@@ -1,3 +1,4 @@
+from datetime import datetime
 from functools import reduce
 import json
 import operator
@@ -9,7 +10,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.monolith.models import CacheServer, Manifest
+from zentral.contrib.monolith.models import CacheServer, Catalog, Manifest
 
 
 class MonolithAPIViewsTestCase(TestCase):
@@ -82,13 +83,21 @@ class MonolithAPIViewsTestCase(TestCase):
         if include_token:
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.delete(url, **kwargs)
-    
+
     def force_manifest(self, mbu=None, name=None):
         if mbu is None:
             mbu = self.mbu
         if name is None:
             name = get_random_string(12)
         return Manifest.objects.create(meta_business_unit=mbu, name=name)
+
+    def force_catalog(self, name=None, archived=False):
+        if name is None:
+            name = get_random_string(12)
+        archived_at = None
+        if archived:
+            archived_at = datetime.utcnow()
+        return Catalog.objects.create(name=name, priority=1, archived_at=archived_at)
 
     # sync repository
 
@@ -348,8 +357,191 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self.delete(reverse("monolith_api:manifest", args=(manifest.pk,)))
         self.assertEqual(response.status_code, 204)
 
+    # list catalogs
 
+    def test_get_catalogs_unauthorized(self):
+        response = self.get(reverse("monolith_api:catalogs"), include_token=False)
+        self.assertEqual(response.status_code, 401)
 
+    def test_get_catalogs_permission_denied(self):
+        response = self.get(reverse("monolith_api:catalogs"))
+        self.assertEqual(response.status_code, 403)
 
+    def test_get_catalogs_filter_by_name_not_found(self):
+        self._set_permissions("monolith.view_catalog")
+        response = self.get(reverse("monolith_api:catalogs"), {"name": "foo"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
 
+    def test_get_catalogs_filter_by_name(self):
+        self.force_catalog()
+        catalog = self.force_catalog()
+        self._set_permissions("monolith.view_catalog")
+        response = self.get(reverse("monolith_api:catalogs"), {"name": catalog.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': catalog.pk,
+            'name': catalog.name,
+            'priority': 1,
+            'created_at': catalog.created_at.isoformat(),
+            'updated_at': catalog.updated_at.isoformat(),
+            'archived_at': None,
+        }])
 
+    def test_get_catalogs(self):
+        catalog = self.force_catalog()
+        self._set_permissions("monolith.view_catalog")
+        response = self.get(reverse("monolith_api:catalogs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': catalog.pk,
+            'name': catalog.name,
+            'priority': 1,
+            'created_at': catalog.created_at.isoformat(),
+            'updated_at': catalog.updated_at.isoformat(),
+            'archived_at': None,
+        }])
+
+    # get catalog
+
+    def test_get_catalog_unauthorized(self):
+        response = self.get(reverse("monolith_api:catalog", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_catalog_permission_denied(self):
+        response = self.get(reverse("monolith_api:catalog", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_catalog_not_found(self):
+        self._set_permissions("monolith.view_catalog")
+        response = self.get(reverse("monolith_api:catalog", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_catalog(self):
+        catalog = self.force_catalog(archived=True)
+        self._set_permissions("monolith.view_catalog")
+        response = self.get(reverse("monolith_api:catalog", args=(catalog.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'id': catalog.pk,
+            'name': catalog.name,
+            'priority': 1,
+            'created_at': catalog.created_at.isoformat(),
+            'updated_at': catalog.updated_at.isoformat(),
+            'archived_at': catalog.archived_at.isoformat(),
+        })
+
+    # create catalog
+
+    def test_create_catalog_unauthorized(self):
+        response = self._post_json_data(reverse("monolith_api:catalogs"), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_catalog_permission_denied(self):
+        response = self._post_json_data(reverse("monolith_api:catalogs"), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_catalog_fields_empty(self):
+        self._set_permissions("monolith.add_catalog")
+        response = self._post_json_data(reverse("monolith_api:catalogs"), data={})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'name': ['This field is required.'],
+        })
+
+    def test_create_catalog(self):
+        self._set_permissions("monolith.add_catalog")
+        name = get_random_string(12)
+        response = self._post_json_data(reverse("monolith_api:catalogs"), data={
+            'name': name,
+            'priority': 17,
+            'archived_at': datetime.utcnow().isoformat(),
+        })
+        self.assertEqual(response.status_code, 201)
+        catalog = Catalog.objects.get(name=name)
+        self.assertEqual(response.json(), {
+            'id': catalog.pk,
+            'name': name,
+            'priority': 17,
+            'created_at': catalog.created_at.isoformat(),
+            'updated_at': catalog.updated_at.isoformat(),
+            'archived_at': None  # read only
+        })
+        self.assertEqual(catalog.priority, 17)
+
+    # update catalog
+
+    def test_update_catalog_unauthorized(self):
+        response = self._put_json_data(reverse("monolith_api:catalog", args=(9999,)), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_catalog_permission_denied(self):
+        response = self._put_json_data(reverse("monolith_api:catalog", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_catalog_not_found(self):
+        self._set_permissions("monolith.change_catalog")
+        response = self._put_json_data(reverse("monolith_api:catalog", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_catalog_fields_invalid(self):
+        catalog = self.force_catalog()
+        self._set_permissions("monolith.change_catalog")
+        response = self._put_json_data(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
+            'name': '',
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'name': ['This field may not be blank.'],
+        })
+
+    def test_update_catalog(self):
+        catalog = self.force_catalog()
+        self._set_permissions("monolith.change_catalog")
+        new_name = get_random_string(12)
+        response = self._put_json_data(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
+            'name': new_name,
+            'priority': 42,
+        })
+        self.assertEqual(response.status_code, 200)
+        catalog.refresh_from_db()
+        self.assertEqual(response.json(), {
+            'id': catalog.pk,
+            'name': new_name,
+            'priority': 42,
+            'created_at': catalog.created_at.isoformat(),
+            'updated_at': catalog.updated_at.isoformat(),
+            'archived_at': None
+        })
+        self.assertEqual(catalog.name, new_name)
+        self.assertEqual(catalog.priority, 42)
+
+    # delete catalog
+
+    def test_delete_catalog_unauthorized(self):
+        response = self.delete(reverse("monolith_api:catalog", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_catalog_permission_denied(self):
+        response = self.delete(reverse("monolith_api:catalog", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_catalog_not_found(self):
+        self._set_permissions("monolith.delete_catalog")
+        response = self.delete(reverse("monolith_api:catalog", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_catalog_not_ok(self):
+        catalog = self.force_catalog()
+        self._set_permissions("monolith.delete_catalog")
+        response = self.delete(reverse("monolith_api:catalog", args=(catalog.pk,)))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), ['This catalog cannot be deleted'])
+
+    @patch("zentral.contrib.monolith.models.monolith_conf.repository")
+    def test_delete_catalog(self, repository):
+        repository.manual_catalog_management = True
+        catalog = self.force_catalog()
+        self._set_permissions("monolith.delete_catalog")
+        response = self.delete(reverse("monolith_api:catalog", args=(catalog.pk,)))
+        self.assertEqual(response.status_code, 204)

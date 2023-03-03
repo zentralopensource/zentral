@@ -11,8 +11,8 @@ from zentral.utils.drf import DjangoPermissionRequired, DefaultDjangoModelPermis
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
-from .models import CacheServer, Manifest
-from .serializers import ManifestSerializer
+from .models import CacheServer, Catalog, Manifest
+from .serializers import CatalogSerializer, ManifestSerializer
 
 
 class SyncRepository(APIView):
@@ -60,6 +60,25 @@ class UpdateCacheServer(APIView):
         )
         post_monolith_cache_server_update_request(request, cache_server=cache_server)
         return Response({"status": 0})
+
+
+class CatalogList(generics.ListCreateAPIView):
+    queryset = Catalog.objects.all()
+    serializer_class = CatalogSerializer
+    permission_classes = (DefaultDjangoModelPermissions,)
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ('name',)
+
+
+class CatalogDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Catalog.objects.all()
+    serializer_class = CatalogSerializer
+    permission_classes = (DefaultDjangoModelPermissions,)
+
+    def perform_destroy(self, instance):
+        if not instance.can_be_deleted():
+            raise ValidationError('This catalog cannot be deleted')
+        return super().perform_destroy(instance)
 
 
 class ManifestFilter(filters.FilterSet):
