@@ -1,6 +1,7 @@
 from django.urls import path
 from .api_views import (SyncRepository, UpdateCacheServer,
                         CatalogList, CatalogDetail,
+                        ConditionList, ConditionDetail,
                         ManifestList, ManifestDetail,
                         ManifestCatalogList, ManifestCatalogDetail,
                         ManifestSubManifestList, ManifestSubManifestDetail,
@@ -11,6 +12,8 @@ urlpatterns = [
     path('repository/sync/', SyncRepository.as_view(), name="sync_repository"),
     path('catalogs/', CatalogList.as_view(), name="catalogs"),
     path('catalogs/<int:pk>/', CatalogDetail.as_view(), name="catalog"),
+    path('conditions/', ConditionList.as_view(), name="conditions"),
+    path('conditions/<int:pk>/', ConditionDetail.as_view(), name="condition"),
     path('manifests/', ManifestList.as_view(), name="manifests"),
     path('manifests/<int:pk>/', ManifestDetail.as_view(), name="manifest"),
     path('manifests/<int:pk>/cache_servers/', UpdateCacheServer.as_view(), name="update_cache_server"),

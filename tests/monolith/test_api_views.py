@@ -10,8 +10,9 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
-from zentral.contrib.monolith.models import (CacheServer, Catalog, Manifest, ManifestCatalog, ManifestSubManifest,
-                                             SubManifest)
+from zentral.contrib.monolith.models import (CacheServer, Catalog, Condition,
+                                             Manifest, ManifestCatalog, ManifestSubManifest,
+                                             SubManifest, SubManifestAttachment)
 
 
 class MonolithAPIViewsTestCase(TestCase):
@@ -85,13 +86,6 @@ class MonolithAPIViewsTestCase(TestCase):
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.delete(url, **kwargs)
 
-    def force_manifest(self, mbu=None, name=None):
-        if mbu is None:
-            mbu = self.mbu
-        if name is None:
-            name = get_random_string(12)
-        return Manifest.objects.create(meta_business_unit=mbu, name=name)
-
     def force_catalog(self, name=None, archived=False):
         if name is None:
             name = get_random_string(12)
@@ -99,6 +93,19 @@ class MonolithAPIViewsTestCase(TestCase):
         if archived:
             archived_at = datetime.utcnow()
         return Catalog.objects.create(name=name, priority=1, archived_at=archived_at)
+
+    def force_condition(self):
+        return Condition.objects.create(
+            name=get_random_string(),
+            predicate=get_random_string()
+        )
+
+    def force_manifest(self, mbu=None, name=None):
+        if mbu is None:
+            mbu = self.mbu
+        if name is None:
+            name = get_random_string(12)
+        return Manifest.objects.create(meta_business_unit=mbu, name=name)
 
     def force_manifest_catalog(self, tag=None):
         manifest = self.force_manifest()
@@ -121,6 +128,18 @@ class MonolithAPIViewsTestCase(TestCase):
             name=get_random_string(12),
             description=get_random_string(12),
             meta_business_unit=meta_business_unit
+        )
+
+    def force_sub_manifest_attachment(self, sub_manifest=None, condition=None):
+        if sub_manifest is None:
+            sub_manifest = self.force_sub_manifest()
+        return SubManifestAttachment.objects.create(
+            sub_manifest=sub_manifest,
+            key="managed_installs",
+            type="script",
+            name=get_random_string(12),
+            condition=condition,
+            pkg_info={}
         )
 
     # sync repository
@@ -570,6 +589,193 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self.delete(reverse("monolith_api:catalog", args=(catalog.pk,)))
         self.assertEqual(response.status_code, 204)
 
+    # list conditions
+
+    def test_get_conditions_unauthorized(self):
+        response = self.get(reverse("monolith_api:conditions"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_conditions_permission_denied(self):
+        response = self.get(reverse("monolith_api:conditions"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_conditions_filter_by_name_not_found(self):
+        self._set_permissions("monolith.view_condition")
+        response = self.get(reverse("monolith_api:conditions"), {"name": "foo"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_conditions_filter_by_name(self):
+        self.force_condition()
+        condition = self.force_condition()
+        self._set_permissions("monolith.view_condition")
+        response = self.get(reverse("monolith_api:conditions"), {"name": condition.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': condition.pk,
+            'name': condition.name,
+            'predicate': condition.predicate,
+            'created_at': condition.created_at.isoformat(),
+            'updated_at': condition.updated_at.isoformat(),
+        }])
+
+    def test_get_conditions(self):
+        condition = self.force_condition()
+        self._set_permissions("monolith.view_condition")
+        response = self.get(reverse("monolith_api:conditions"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': condition.pk,
+            'name': condition.name,
+            'predicate': condition.predicate,
+            'created_at': condition.created_at.isoformat(),
+            'updated_at': condition.updated_at.isoformat(),
+        }])
+
+    # get condition
+
+    def test_get_condition_unauthorized(self):
+        response = self.get(reverse("monolith_api:condition", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_condition_permission_denied(self):
+        response = self.get(reverse("monolith_api:condition", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_condition_not_found(self):
+        self._set_permissions("monolith.view_condition")
+        response = self.get(reverse("monolith_api:condition", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_condition(self):
+        condition = self.force_condition()
+        self._set_permissions("monolith.view_condition")
+        response = self.get(reverse("monolith_api:condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'id': condition.pk,
+            'name': condition.name,
+            'predicate': condition.predicate,
+            'created_at': condition.created_at.isoformat(),
+            'updated_at': condition.updated_at.isoformat(),
+        })
+
+    # create condition
+
+    def test_create_condition_unauthorized(self):
+        response = self._post_json_data(reverse("monolith_api:conditions"), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_condition_permission_denied(self):
+        response = self._post_json_data(reverse("monolith_api:conditions"), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_condition_fields_empty(self):
+        self._set_permissions("monolith.add_condition")
+        response = self._post_json_data(reverse("monolith_api:conditions"), data={})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'name': ['This field is required.'],
+            'predicate': ['This field is required.'],
+        })
+
+    def test_create_condition(self):
+        self._set_permissions("monolith.add_condition")
+        name = get_random_string(12)
+        predicate = get_random_string(12)
+        response = self._post_json_data(reverse("monolith_api:conditions"), data={
+            'name': name,
+            'predicate': predicate,
+        })
+        self.assertEqual(response.status_code, 201)
+        condition = Condition.objects.get(name=name)
+        self.assertEqual(response.json(), {
+            'id': condition.pk,
+            'name': name,
+            'predicate': predicate,
+            'created_at': condition.created_at.isoformat(),
+            'updated_at': condition.updated_at.isoformat(),
+        })
+        self.assertEqual(condition.predicate, predicate)
+
+    # update condition
+
+    def test_update_condition_unauthorized(self):
+        response = self._put_json_data(reverse("monolith_api:condition", args=(9999,)), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_condition_permission_denied(self):
+        response = self._put_json_data(reverse("monolith_api:condition", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_condition_not_found(self):
+        self._set_permissions("monolith.change_condition")
+        response = self._put_json_data(reverse("monolith_api:condition", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_condition_fields_invalid(self):
+        condition = self.force_condition()
+        self._set_permissions("monolith.change_condition")
+        response = self._put_json_data(reverse("monolith_api:condition", args=(condition.pk,)), data={
+            'name': '',
+            'predicate': '',
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'name': ['This field may not be blank.'],
+            'predicate': ['This field may not be blank.'],
+        })
+
+    def test_update_condition(self):
+        condition = self.force_condition()
+        self._set_permissions("monolith.change_condition")
+        new_name = get_random_string(12)
+        new_predicate = get_random_string(12)
+        response = self._put_json_data(reverse("monolith_api:condition", args=(condition.pk,)), data={
+            'name': new_name,
+            'predicate': new_predicate,
+        })
+        self.assertEqual(response.status_code, 200)
+        condition.refresh_from_db()
+        self.assertEqual(response.json(), {
+            'id': condition.pk,
+            'name': new_name,
+            'predicate': new_predicate,
+            'created_at': condition.created_at.isoformat(),
+            'updated_at': condition.updated_at.isoformat(),
+        })
+        self.assertEqual(condition.name, new_name)
+        self.assertEqual(condition.predicate, new_predicate)
+
+    # delete condition
+
+    def test_delete_condition_unauthorized(self):
+        response = self.delete(reverse("monolith_api:condition", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_condition_permission_denied(self):
+        response = self.delete(reverse("monolith_api:condition", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_condition_not_found(self):
+        self._set_permissions("monolith.delete_condition")
+        response = self.delete(reverse("monolith_api:condition", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_condition_not_ok(self):
+        condition = self.force_condition()
+        self.force_sub_manifest_attachment(condition=condition)
+        self._set_permissions("monolith.delete_condition")
+        response = self.delete(reverse("monolith_api:condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), ['This condition cannot be deleted'])
+
+    def test_delete_condition(self):
+        condition = self.force_condition()
+        self._set_permissions("monolith.delete_condition")
+        response = self.delete(reverse("monolith_api:condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 204)
+
     # list manifest catalogs
 
     def test_get_manifest_catalogs_unauthorized(self):
@@ -985,7 +1191,7 @@ class MonolithAPIViewsTestCase(TestCase):
             'updated_at': sub_manifest.updated_at.isoformat(),
         }])
 
-    # get sub_manifest
+    # get sub manifest
 
     def test_get_sub_manifest_unauthorized(self):
         response = self.get(reverse("monolith_api:sub_manifest", args=(9999,)), include_token=False)
@@ -1014,7 +1220,7 @@ class MonolithAPIViewsTestCase(TestCase):
             'updated_at': sub_manifest.updated_at.isoformat(),
         })
 
-    # create sub_manifest
+    # create sub manifest
 
     def test_create_sub_manifest_unauthorized(self):
         response = self._post_json_data(reverse("monolith_api:sub_manifests"), include_token=False, data={})
@@ -1051,7 +1257,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(sub_manifest.description, "")
         self.assertIsNone(sub_manifest.meta_business_unit)
 
-    # update sub_manifest
+    # update sub manifest
 
     def test_update_sub_manifest_unauthorized(self):
         response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(9999,)),
@@ -1091,7 +1297,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(test_sub_manifest.description, new_description)
         self.assertEqual(test_sub_manifest.meta_business_unit, self.mbu)
 
-    # delete sub_manifest
+    # delete sub manifest
 
     def test_delete_sub_manifest_unauthorized(self):
         response = self.delete(reverse("monolith_api:sub_manifest", args=(9999,)), include_token=False)

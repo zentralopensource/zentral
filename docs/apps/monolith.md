@@ -170,8 +170,8 @@ Response:
 * Content-Type: application/json
 * Required permission: `monolith.view_manifest`
 * Optional filter parameters:
-  * `name`: name of the manifest
-  * `meta_business_unit_id`: ID of the meta business unit
+    * `name`: name of the manifest
+    * `meta_business_unit_id`: ID of the meta business unit
 
 Examples:
 
@@ -343,7 +343,7 @@ Response (204 No Content)
 * Content-Type: application/json
 * Required permission: `monolith.view_catalog`
 * Optional filter parameter:
-  * `name`: name of the catalog
+    * `name`: name of the catalog
 
 Examples:
 
@@ -500,6 +500,167 @@ $ curl -X DELETE \
 
 Response (204 No Content)
 
+### /api/monolith/conditions/
+
+#### List all conditions
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_condition`
+* Optional filter parameter:
+    * `name`: name of the condition
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/conditions/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/conditions/?name=desktop" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[{
+  "id": 1,
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\""
+  "created_at": "2023-01-30T09:39:35.965003",
+  "updated_at": "2023-01-30T09:39:35.965004",
+}]
+```
+
+#### Add a condition
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `monolith.add_condition`
+
+Examples:
+
+condition.json
+
+```json
+{
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\"",
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/conditions/" \
+  -d @condition.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\"",
+  "created_at": "2023-01-30T09:39:35.965003",
+  "updated_at": "2023-01-30T09:39:35.965004",
+}
+```
+
+### /api/monolith/conditions/`<int:pk>`/
+
+#### Get a condition
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_condition`
+* `<int:pk>`: the primary key of the condition
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/conditions/1/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\"",
+  "created_at": "2023-01-30T09:39:35.965003",
+  "updated_at": "2023-01-30T09:39:35.965004",
+}
+```
+
+#### Update a condition
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `monolith.change_condition`
+* `<int:pk>`: the primary key of the condition
+
+Example:
+
+condition.json
+
+```json
+{
+  "name": "desktop",
+  "predicate": "machine_type == \"desktop\""
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/conditions/1/" \
+  -d @condition.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```
+{
+  "id": 1,
+  "name": "desktop",
+  "predicate": "machine_type == \"desktop\"",
+  "created_at": "2023-01-30T09:49:35.965003",
+  "updated_at": "2023-01-30T09:49:35.965004",
+}
+```
+
+#### Delete a condition
+
+* method: DELETE
+* Required permission: `monolith.delete_condition`
+* `<int:pk>`: the primary key of the condition.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/monolith/conditions/1/"
+```
+
+Response (204 No Content)
+
 ### /api/monolith/manifest_catalogs/
 
 #### List all manifest catalogs
@@ -508,8 +669,8 @@ Response (204 No Content)
 * Content-Type: application/json
 * Required permission: `monolith.view_manifestcatalog`
 * Optional filter parameters:
-  * `manifest_id` ID of the manifest
-  * `catalog_id` ID of the catalog
+    * `manifest_id` ID of the manifest
+    * `catalog_id` ID of the catalog
 
 Examples:
 
@@ -675,8 +836,8 @@ Response (204 No Content)
 * Content-Type: application/json
 * Required permission: `monolith.view_manifestsubmanifest`
 * Optional filter parameters:
-  * `manifest_id` ID of the manifest
-  * `sub_manifest_id` ID of the sub manifest
+    * `manifest_id` ID of the manifest
+    * `sub_manifest_id` ID of the sub manifest
 
 Examples:
 
@@ -842,7 +1003,7 @@ Response (204 No Content)
 * Content-Type: application/json
 * Required permission: `monolith.view_submanifest`
 * Optional filter parameter:
-  * `name` mame of the manifest
+    * `name` mame of the manifest
 
 Examples:
 

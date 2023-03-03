@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Catalog, Manifest, ManifestCatalog, ManifestSubManifest, SubManifest
+from .models import Catalog, Condition, Manifest, ManifestCatalog, ManifestSubManifest, SubManifest
 
 
 class CatalogSerializer(serializers.ModelSerializer):
@@ -7,6 +7,12 @@ class CatalogSerializer(serializers.ModelSerializer):
         model = Catalog
         fields = '__all__'
         read_only_fields = ['archived_at']
+
+
+class ConditionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Condition
+        fields = '__all__'
 
 
 class ManifestSerializer(serializers.ModelSerializer):

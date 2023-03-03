@@ -11,8 +11,8 @@ from zentral.utils.drf import DjangoPermissionRequired, DefaultDjangoModelPermis
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
-from .models import CacheServer, Catalog, Manifest, ManifestCatalog, ManifestSubManifest, SubManifest
-from .serializers import (CatalogSerializer, ManifestSerializer, ManifestCatalogSerializer,
+from .models import CacheServer, Catalog, Condition, Manifest, ManifestCatalog, ManifestSubManifest, SubManifest
+from .serializers import (CatalogSerializer, ConditionSerializer, ManifestSerializer, ManifestCatalogSerializer,
                           ManifestSubManifestSerializer, SubManifestSerializer)
 
 
@@ -82,6 +82,28 @@ class CatalogDetail(generics.RetrieveUpdateDestroyAPIView):
     def perform_destroy(self, instance):
         if not instance.can_be_deleted():
             raise ValidationError('This catalog cannot be deleted')
+        return super().perform_destroy(instance)
+
+
+# conditions
+
+
+class ConditionList(generics.ListCreateAPIView):
+    queryset = Condition.objects.all()
+    serializer_class = ConditionSerializer
+    permission_classes = (DefaultDjangoModelPermissions,)
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ('name',)
+
+
+class ConditionDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Condition.objects.all()
+    serializer_class = ConditionSerializer
+    permission_classes = (DefaultDjangoModelPermissions,)
+
+    def perform_destroy(self, instance):
+        if not instance.can_be_deleted():
+            raise ValidationError('This condition cannot be deleted')
         return super().perform_destroy(instance)
 
 
