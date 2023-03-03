@@ -6,6 +6,10 @@ New `zentral.core.stores.backends.snowflake` store backend.
 
 ### Backward incompatibilities
 
+#### 🧨 munki/monolith manifest names are unique now
+
+The monolith manifest names can be used as identifiers now. If you have multiple manifests with the same name in Zentral, the database migration cannot be applied. Please make sure the names are unique before upgrading.
+
 #### 🧨 new URLs for Osquery
 
 The Osquery URLs used by the Osquery agent are now prefixed with `public/` by default. Enrollment packages (use the enrollment bump version button to force new ones) are including those new URLs, but agents currently deployed will keep using the legacy URLs until they are reconfigured. To mount the legacy endpoints required by those agents, set the optional configuration key `mount_legacy_public_endpoints` to `true` in the `zentral.contrib.osquery` app section of the `base.json` configuration in your deployments.
