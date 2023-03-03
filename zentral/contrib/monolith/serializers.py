@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Catalog, Manifest, ManifestCatalog
+from .models import Catalog, Manifest, ManifestCatalog, SubManifest
 
 
 class CatalogSerializer(serializers.ModelSerializer):
@@ -18,4 +18,10 @@ class ManifestSerializer(serializers.ModelSerializer):
 class ManifestCatalogSerializer(serializers.ModelSerializer):
     class Meta:
         model = ManifestCatalog
+        fields = '__all__'
+
+
+class SubManifestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubManifest
         fields = '__all__'

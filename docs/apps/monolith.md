@@ -503,7 +503,7 @@ Response (204 No Content)
 * method: GET
 * Content-Type: application/json
 * Required permission: `monolith.view_manifestcatalog`
-* Optional filter parameter:
+* Optional filter parameters:
   * `manifest_id` ID of the manifest
   * `catalog_id` ID of the catalog
 
@@ -639,10 +639,12 @@ $ curl -X PUT \
 Response:
 
 ```
+{
   "id": 1,
   "manifest": 2,
   "catalog": 3,
   "tags": []
+}
 ```
 
 #### Delete a manifest catalog
@@ -657,6 +659,172 @@ Example
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   "https://zentral.example.com/api/monolith/manifest_catalogs/1/"
+```
+
+Response (204 No Content)
+
+### /api/monolith/sub_manifests/
+
+#### List all sub manifests
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_submanifest`
+* Optional filter parameter:
+  * `name` mame of the manifest
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/sub_manifests/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/sub_manifests/?name=Browsers" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[{
+  "id": 1,
+  "name": "Browsers",
+  "description": "The supported browsers",
+  "meta_business_unit": null,
+  "created_at": "2023-01-30T09:49:35.965003",
+  "updated_at": "2023-01-30T09:49:35.965004"
+}]
+```
+
+#### Add a sub manifest
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `monolith.add_submanifest`
+
+Examples:
+
+sub\_manifest.json
+
+```json
+{
+  "name": "Browsers",
+  "meta_business_unit": 2
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/sub_manifests/" \
+  -d @sub_manifest.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "name": "Browsers",
+  "description": "",
+  "meta_business_unit": 2,
+  "created_at": "2023-01-30T09:49:35.965003",
+  "updated_at": "2023-01-30T09:49:35.965004"
+}
+```
+
+### /api/monolith/sub_manifests/`<int:pk>`/
+
+#### Get a sub manifest
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_submanifest`
+* `<int:pk>`: the primary key of the sub manifest
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/sub_manifests/1/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "name": "Browsers",
+  "description": "The supported browsers",
+  "meta_business_unit": null,
+  "created_at": "2023-01-30T09:49:35.965003",
+  "updated_at": "2023-01-30T09:49:35.965004"
+}
+```
+
+#### Update a sub manifest
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `monolith.change_submanifest`
+* `<int:pk>`: the primary key of the sub manifest
+
+Example:
+
+sub\_manifest.json
+
+```json
+{
+  "name": "Browsers & other tools",
+  "description": "The supported browsers and other tools",
+  "meta_business_unit": 3
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/sub_manifests/1/" \
+  -d @sub_manifest.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```
+{
+  "id": 1,
+  "name": "Browsers & other tools",
+  "description": "The supported browsers and other tools",
+  "meta_business_unit": 3,
+  "created_at": "2023-01-30T09:59:35.965003",
+  "updated_at": "2023-01-30T09:59:35.965004"
+}
+```
+
+#### Delete a sub manifest
+
+* method: DELETE
+* Required permission: `monolith.delete_submanifest`
+* `<int:pk>`: the primary key of the sub manifest.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/monolith/sub_manifests/1/"
 ```
 
 Response (204 No Content)

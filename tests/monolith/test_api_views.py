@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
-from zentral.contrib.monolith.models import CacheServer, Catalog, Manifest, ManifestCatalog
+from zentral.contrib.monolith.models import CacheServer, Catalog, Manifest, ManifestCatalog, SubManifest
 
 
 class MonolithAPIViewsTestCase(TestCase):
@@ -106,6 +106,13 @@ class MonolithAPIViewsTestCase(TestCase):
         if tag:
             mc.tags.add(tag)
         return mc
+
+    def force_sub_manifest(self, meta_business_unit=None):
+        return SubManifest.objects.create(
+            name=get_random_string(12),
+            description=get_random_string(12),
+            meta_business_unit=meta_business_unit
+        )
 
     # sync repository
 
@@ -564,7 +571,7 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self.get(reverse("monolith_api:manifest_catalogs"))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_manifest_catalogs_filter_by_name_not_found(self):
+    def test_get_manifest_catalogs_filter_by_manifest_id_not_found(self):
         self._set_permissions("monolith.view_manifestcatalog")
         response = self.get(reverse("monolith_api:manifest_catalogs"), {"manifest_id": self.manifest.pk})
         self.assertEqual(response.status_code, 200)
@@ -718,21 +725,194 @@ class MonolithAPIViewsTestCase(TestCase):
 
     # delete manifest_catalog
 
-    def test_delete_manifestcatalog_unauthorized(self):
+    def test_delete_manifest_catalog_unauthorized(self):
         response = self.delete(reverse("monolith_api:manifest_catalog", args=(9999,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_delete_manifestcatalog_permission_denied(self):
+    def test_delete_manifest_catalog_permission_denied(self):
         response = self.delete(reverse("monolith_api:manifest_catalog", args=(9999,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_manifestcatalog_not_found(self):
+    def test_delete_manifest_catalog_not_found(self):
         self._set_permissions("monolith.delete_manifestcatalog")
         response = self.delete(reverse("monolith_api:manifest_catalog", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_manifestcatalog(self):
+    def test_delete_manifest_catalog(self):
         manifest_catalog = self.force_manifest_catalog()
         self._set_permissions("monolith.delete_manifestcatalog")
         response = self.delete(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)))
+        self.assertEqual(response.status_code, 204)
+
+    # list sub manifests
+
+    def test_get_sub_manifests_unauthorized(self):
+        response = self.get(reverse("monolith_api:sub_manifests"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_sub_manifests_permission_denied(self):
+        response = self.get(reverse("monolith_api:sub_manifests"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_sub_manifests_filter_by_name_not_found(self):
+        self._set_permissions("monolith.view_submanifest")
+        response = self.get(reverse("monolith_api:sub_manifests"), {"name": get_random_string(12)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_sub_manifests_filter_by_name(self):
+        self.force_sub_manifest()
+        sub_manifest = self.force_sub_manifest()
+        self._set_permissions("monolith.view_submanifest")
+        response = self.get(reverse("monolith_api:sub_manifests"),
+                            {"name": sub_manifest.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': sub_manifest.pk,
+            'name': sub_manifest.name,
+            'description': sub_manifest.description,
+            'meta_business_unit': None,
+            'created_at': sub_manifest.created_at.isoformat(),
+            'updated_at': sub_manifest.updated_at.isoformat(),
+        }])
+
+    def test_get_sub_manifests(self):
+        sub_manifest = self.force_sub_manifest(meta_business_unit=self.mbu)
+        self._set_permissions("monolith.view_submanifest")
+        response = self.get(reverse("monolith_api:sub_manifests"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': sub_manifest.pk,
+            'name': sub_manifest.name,
+            'description': sub_manifest.description,
+            'meta_business_unit': self.mbu.pk,
+            'created_at': sub_manifest.created_at.isoformat(),
+            'updated_at': sub_manifest.updated_at.isoformat(),
+        }])
+
+    # get sub_manifest
+
+    def test_get_sub_manifest_unauthorized(self):
+        response = self.get(reverse("monolith_api:sub_manifest", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_sub_manifest_permission_denied(self):
+        response = self.get(reverse("monolith_api:sub_manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_sub_manifest_not_found(self):
+        self._set_permissions("monolith.view_submanifest")
+        response = self.get(reverse("monolith_api:sub_manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_sub_manifest(self):
+        sub_manifest = self.force_sub_manifest()
+        self._set_permissions("monolith.view_submanifest")
+        response = self.get(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'id': sub_manifest.pk,
+            'name': sub_manifest.name,
+            'description': sub_manifest.description,
+            'meta_business_unit': None,
+            'created_at': sub_manifest.created_at.isoformat(),
+            'updated_at': sub_manifest.updated_at.isoformat(),
+        })
+
+    # create sub_manifest
+
+    def test_create_sub_manifest_unauthorized(self):
+        response = self._post_json_data(reverse("monolith_api:sub_manifests"), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_sub_manifest_permission_denied(self):
+        response = self._post_json_data(reverse("monolith_api:sub_manifests"), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_sub_manifest_fields_empty(self):
+        self._set_permissions("monolith.add_submanifest")
+        response = self._post_json_data(reverse("monolith_api:sub_manifests"), data={})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'name': ['This field is required.'],
+        })
+
+    def test_create_sub_manifest(self):
+        self._set_permissions("monolith.add_submanifest")
+        name = get_random_string(12)
+        response = self._post_json_data(reverse("monolith_api:sub_manifests"), data={
+            'name': name,
+        })
+        self.assertEqual(response.status_code, 201)
+        sub_manifest = SubManifest.objects.get(name=name)
+        self.assertEqual(response.json(), {
+            'id': sub_manifest.pk,
+            'name': name,
+            'description': "",
+            'meta_business_unit': None,
+            'created_at': sub_manifest.created_at.isoformat(),
+            'updated_at': sub_manifest.updated_at.isoformat(),
+        })
+        self.assertEqual(sub_manifest.description, "")
+        self.assertIsNone(sub_manifest.meta_business_unit)
+
+    # update sub_manifest
+
+    def test_update_sub_manifest_unauthorized(self):
+        response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(9999,)),
+                                       include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_sub_manifest_permission_denied(self):
+        response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_sub_manifest_not_found(self):
+        self._set_permissions("monolith.change_submanifest")
+        response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_sub_manifest(self):
+        sub_manifest = self.force_sub_manifest()
+        self._set_permissions("monolith.change_submanifest")
+        new_name = get_random_string(12)
+        new_description = get_random_string(12)
+        response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)), data={
+            'name': new_name,
+            'description': new_description,
+            'meta_business_unit': self.mbu.pk,
+        })
+        self.assertEqual(response.status_code, 200)
+        test_sub_manifest = SubManifest.objects.get(name=new_name)
+        self.assertEqual(sub_manifest, test_sub_manifest)
+        self.assertEqual(response.json(), {
+            'id': test_sub_manifest.pk,
+            'name': new_name,
+            'description': new_description,
+            'meta_business_unit': self.mbu.pk,
+            'created_at': test_sub_manifest.created_at.isoformat(),
+            'updated_at': test_sub_manifest.updated_at.isoformat(),
+        })
+        self.assertEqual(test_sub_manifest.description, new_description)
+        self.assertEqual(test_sub_manifest.meta_business_unit, self.mbu)
+
+    # delete sub_manifest
+
+    def test_delete_sub_manifest_unauthorized(self):
+        response = self.delete(reverse("monolith_api:sub_manifest", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_sub_manifest_permission_denied(self):
+        response = self.delete(reverse("monolith_api:sub_manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_sub_manifest_not_found(self):
+        self._set_permissions("monolith.delete_submanifest")
+        response = self.delete(reverse("monolith_api:sub_manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_sub_manifest(self):
+        sub_manifest = self.force_sub_manifest()
+        self._set_permissions("monolith.delete_submanifest")
+        response = self.delete(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 204)
