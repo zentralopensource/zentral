@@ -37,28 +37,31 @@ The Munki repository is in a S3 bucket. Only santa is proposed for enrollment. T
 
 ```json
 {
-"zentral.contrib.monolith": {
-  "enrollment_package_builders": {
-    "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
-      "requires": ["munkitools_core"],
-      "optional": false
+  "zentral.contrib.monolith": {
+    "enrollment_package_builders": {
+      "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
+        "requires": ["munkitools_core"],
+        "optional": false
+      },
+      "zentral.contrib.santa.osx_package.builder.SantaZentralEnrollPkgBuilder": {
+        "requires": ["santa"],
+        "optional": true
+      }
     },
-    "zentral.contrib.santa.osx_package.builder.SantaZentralEnrollPkgBuilder": {
-      "requires": ["santa"],
-      "optional": true
+    "munki_repository": {
+      "backend": "zentral.contrib.monolith.repository_backends.s3",
+      "aws_access_key_id": "AAAAAAAAAAAAAAAAAAAA",
+      "aws_secret_access_key": "SECRET",
+      "bucket": "monolith-acme",
+      "signature_version": "s3v4",
+      "region_name": "eu-central-1",
+      "prefix": "path_to_repo_root_in_bucket"
     }
-  },
-  "munki_repository": {
-    "backend": "zentral.contrib.monolith.repository_backends.s3",
-    "aws_access_key_id": "AAAAAAAAAAAAAAAAAAAA",
-    "aws_secret_access_key": "SECRET",
-    "bucket": "monolith-acme",
-    "signature_version": "s3v4",
-    "region_name": "eu-central-1",
-    "prefix": "path_to_repo_root_in_bucket"
   }
 }
 ```
+
+**IMPORTANT** When running in AWS, it is recommended to use [AWS instance profiles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html), [task IAM roles](https://docs.aws.amazon.com/AmazonECS/latest/userguide/task-iam-roles.html), or any other integrated authentication mechanism to authenticate with the bucket. If this is not possible, the AWS credentials can be passed as environment variables, using the `{{ env:NAME_OF_THE_VARIABLE }}` substitution in the Zentral configuration.
 
 ### Catalogs
 
