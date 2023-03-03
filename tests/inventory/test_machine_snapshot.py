@@ -490,9 +490,13 @@ class MachineSnapshotTestCase(TestCase):
     # update ms tree
 
     def test_update_ms_tree_type_hardware_model(self):
-        tree = {"system_info": {"hardware_model": "IMac"}}
-        update_ms_tree_type(tree)
-        self.assertEqual(tree.get("type"), DESKTOP)
+        for hardware_model, machine_type in (("IMac", DESKTOP),
+                                             ("Mac14,10", LAPTOP),
+                                             ("Mac14,12", DESKTOP),
+                                             ("MacBookPro18,3", LAPTOP),):
+            tree = {"system_info": {"hardware_model": hardware_model}}
+            update_ms_tree_type(tree)
+            self.assertEqual(tree.get("type"), machine_type)
         tree = {"system_info": {"hardware_model1111": "kjwelkjdwlkej"}}
         self.assertEqual(tree.get("type"), None)
 

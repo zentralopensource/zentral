@@ -51,7 +51,16 @@ HARDWARE_MODEL_SERIAL_MACHINE_TYPES = [
     ('imac', DESKTOP),
     ('ipad', TABLET),
     ('iphone', MOBILE),
-    ('mac13', DESKTOP),
+    ('mac13,1', DESKTOP),  # Mac Studio (2022)
+    ('mac13,2', DESKTOP),  # Mac Studio (2022)
+    ('mac14,10', LAPTOP),  # MacBook Pro (16-inch, 2023)
+    ('mac14,12', DESKTOP),  # Mac mini (M2 Pro, 2023)
+    ('mac14,2', LAPTOP),  # MacBook Air (M2, 2022)
+    ('mac14,3', DESKTOP),  # Mac mini (M2, 2023)
+    ('mac14,5', LAPTOP),  # MacBook Pro (14-inch, 2023)
+    ('mac14,6', LAPTOP),  # MacBook Pro (16-inch, 2023)
+    ('mac14,7', LAPTOP),  # MacBook Pro (13-inch, M2, 2022)
+    ('mac14,9', LAPTOP),  # MacBook Pro (14-inch, 2023)
     ('macbook', LAPTOP),
     ('macmini', DESKTOP),
     ('macpro', DESKTOP),
