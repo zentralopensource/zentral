@@ -12,20 +12,21 @@ The Munki repository is on the same server as Zentral. Only osquery is proposed 
 
 ```json
 {
-"zentral.contrib.monolith": {
-  "enrollment_package_builders": {
-    "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
-      "requires": ["munkitools_core"],
-      "optional": false
+  "zentral.contrib.monolith": {
+    "enrollment_package_builders": {
+      "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
+        "requires": ["munkitools_core"],
+        "optional": false
+      },
+      "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
+        "requires": ["osquery"],
+        "optional": true
+      }
     },
-    "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
-      "requires": ["osquery"],
-      "optional": true
+    "munki_repository": {
+      "backend": "zentral.contrib.monolith.repository_backends.local",
+      "root": "/var/lib/munki/repo"
     }
-  },
-  "munki_repository": {
-    "backend": "zentral.contrib.monolith.repository_backends.local",
-    "root": "/var/lib/munki/repo"
   }
 }
 ```
@@ -36,28 +37,31 @@ The Munki repository is in a S3 bucket. Only santa is proposed for enrollment. T
 
 ```json
 {
-"zentral.contrib.monolith": {
-  "enrollment_package_builders": {
-    "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
-      "requires": ["munkitools_core"],
-      "optional": false
+  "zentral.contrib.monolith": {
+    "enrollment_package_builders": {
+      "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
+        "requires": ["munkitools_core"],
+        "optional": false
+      },
+      "zentral.contrib.santa.osx_package.builder.SantaZentralEnrollPkgBuilder": {
+        "requires": ["santa"],
+        "optional": true
+      }
     },
-    "zentral.contrib.santa.osx_package.builder.SantaZentralEnrollPkgBuilder": {
-      "requires": ["santa"],
-      "optional": true
+    "munki_repository": {
+      "backend": "zentral.contrib.monolith.repository_backends.s3",
+      "aws_access_key_id": "AAAAAAAAAAAAAAAAAAAA",
+      "aws_secret_access_key": "SECRET",
+      "bucket": "monolith-acme",
+      "signature_version": "s3v4",
+      "region_name": "eu-central-1",
+      "prefix": "path_to_repo_root_in_bucket"
     }
-  },
-  "munki_repository": {
-    "backend": "zentral.contrib.monolith.repository_backends.s3",
-    "aws_access_key_id": "AAAAAAAAAAAAAAAAAAAA",
-    "aws_secret_access_key": "SECRET",
-    "bucket": "monolith-acme",
-    "signature_version": "s3v4",
-    "region_name": "eu-central-1",
-    "prefix": "path_to_repo_root_in_bucket"
   }
 }
 ```
+
+**IMPORTANT** When running in AWS, it is recommended to use [AWS instance profiles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html), [task IAM roles](https://docs.aws.amazon.com/AmazonECS/latest/userguide/task-iam-roles.html), or any other integrated authentication mechanism to authenticate with the bucket. If this is not possible, the AWS credentials can be passed as environment variables, using the `{{ env:NAME_OF_THE_VARIABLE }}` substitution in the Zentral configuration.
 
 ### Catalogs
 
@@ -659,6 +663,173 @@ Example
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   "https://zentral.example.com/api/monolith/manifest_catalogs/1/"
+```
+
+Response (204 No Content)
+
+### /api/monolith/manifest_sub_manifests/
+
+#### List all manifest sub manifests
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_manifestsubmanifest`
+* Optional filter parameters:
+  * `manifest_id` ID of the manifest
+  * `sub_manifest_id` ID of the sub manifest
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/?manifest_id=1" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/?sub_manifest_id=2" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[{
+  "id": 1,
+  "manifest": 1,
+  "sub_manifest": 2,
+  "tags": []
+}]
+```
+
+#### Add a manifest sub manifest
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `monolith.add_manifestsubmanifest`
+
+Examples:
+
+manifest\_sub_manifest.json
+
+```json
+{
+  "manifest": 1,
+  "sub_manifest": 2,
+  "tags": [17]
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/" \
+  -d @manifest_sub_manifest.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "manifest": 1,
+  "sub_manifest": 2,
+  "tags": [17]
+}
+```
+
+### /api/monolith/manifest_sub_manifests/`<int:pk>`/
+
+#### Get a manifest sub manifest
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_manifestsubmanifest`
+* `<int:pk>`: the primary key of the manifest sub manifest
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/1/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "manifest": 1,
+  "sub_manifest": 2,
+  "tags": [17]
+}
+```
+
+#### Update a manifest sub manifest
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `monolith.change_manifestsubmanifest`
+* `<int:pk>`: the primary key of the manifest sub manifest
+
+Example:
+
+manifest\_sub_manifest.json
+
+```json
+{
+  "manifest": 2,
+  "sub_manifest": 3,
+  "tags": []
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/1/" \
+  -d @manifest_sub_manifest.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```
+{
+  "id": 1,
+  "manifest": 2,
+  "sub_manifest": 3,
+  "tags": []
+}
+```
+
+#### Delete a manifest sub manifest
+
+* method: DELETE
+* Required permission: `monolith.delete_manifestsubmanifest`
+* `<int:pk>`: the primary key of the manifest sub manifest.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/monolith/manifest_sub_manifests/1/"
 ```
 
 Response (204 No Content)

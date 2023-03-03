@@ -11,8 +11,9 @@ from zentral.utils.drf import DjangoPermissionRequired, DefaultDjangoModelPermis
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
-from .models import CacheServer, Catalog, Manifest, ManifestCatalog, SubManifest
-from .serializers import CatalogSerializer, ManifestSerializer, ManifestCatalogSerializer, SubManifestSerializer
+from .models import CacheServer, Catalog, Manifest, ManifestCatalog, ManifestSubManifest, SubManifest
+from .serializers import (CatalogSerializer, ManifestSerializer, ManifestCatalogSerializer,
+                          ManifestSubManifestSerializer, SubManifestSerializer)
 
 
 class SyncRepository(APIView):
@@ -62,6 +63,9 @@ class UpdateCacheServer(APIView):
         return Response({"status": 0})
 
 
+# catalogs
+
+
 class CatalogList(generics.ListCreateAPIView):
     queryset = Catalog.objects.all()
     serializer_class = CatalogSerializer
@@ -79,6 +83,9 @@ class CatalogDetail(generics.RetrieveUpdateDestroyAPIView):
         if not instance.can_be_deleted():
             raise ValidationError('This catalog cannot be deleted')
         return super().perform_destroy(instance)
+
+
+# manifests
 
 
 class ManifestFilter(filters.FilterSet):
@@ -100,6 +107,9 @@ class ManifestDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
 
 
+# manifest catalogs
+
+
 class ManifestCatalogFilter(filters.FilterSet):
     manifest_id = filters.ModelChoiceFilter(queryset=Manifest.objects.all())
     catalog_id = filters.ModelChoiceFilter(queryset=Catalog.objects.all())
@@ -117,6 +127,31 @@ class ManifestCatalogDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = ManifestCatalog.objects.all()
     serializer_class = ManifestCatalogSerializer
     permission_classes = [DefaultDjangoModelPermissions]
+
+
+# manifest sub manifests
+
+
+class ManifestSubManifestFilter(filters.FilterSet):
+    manifest_id = filters.ModelChoiceFilter(queryset=Manifest.objects.all())
+    sub_manifest_id = filters.ModelChoiceFilter(queryset=SubManifest.objects.all())
+
+
+class ManifestSubManifestList(generics.ListCreateAPIView):
+    queryset = ManifestSubManifest.objects.all()
+    serializer_class = ManifestSubManifestSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = ManifestSubManifestFilter
+
+
+class ManifestSubManifestDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = ManifestSubManifest.objects.all()
+    serializer_class = ManifestSubManifestSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+
+
+# sub manifests
 
 
 class SubManifestList(generics.ListCreateAPIView):

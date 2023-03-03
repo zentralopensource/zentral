@@ -10,7 +10,8 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
-from zentral.contrib.monolith.models import CacheServer, Catalog, Manifest, ManifestCatalog, SubManifest
+from zentral.contrib.monolith.models import (CacheServer, Catalog, Manifest, ManifestCatalog, ManifestSubManifest,
+                                             SubManifest)
 
 
 class MonolithAPIViewsTestCase(TestCase):
@@ -106,6 +107,14 @@ class MonolithAPIViewsTestCase(TestCase):
         if tag:
             mc.tags.add(tag)
         return mc
+
+    def force_manifest_sub_manifest(self, tag=None):
+        manifest = self.force_manifest()
+        sub_manifest = self.force_sub_manifest()
+        msm = ManifestSubManifest.objects.create(manifest=manifest, sub_manifest=sub_manifest)
+        if tag:
+            msm.tags.add(tag)
+        return msm
 
     def force_sub_manifest(self, meta_business_unit=None):
         return SubManifest.objects.create(
@@ -617,7 +626,7 @@ class MonolithAPIViewsTestCase(TestCase):
             'tags': []
         }])
 
-    # get manifest_catalog
+    # get manifest catalog
 
     def test_get_manifest_catalog_unauthorized(self):
         response = self.get(reverse("monolith_api:manifest_catalog", args=(9999,)), include_token=False)
@@ -645,7 +654,7 @@ class MonolithAPIViewsTestCase(TestCase):
             'tags': [tag.pk]
         })
 
-    # create manifest_catalog
+    # create manifest catalog
 
     def test_create_manifest_catalog_unauthorized(self):
         response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), include_token=False, data={})
@@ -685,7 +694,7 @@ class MonolithAPIViewsTestCase(TestCase):
         })
         self.assertEqual(list(t.pk for t in manifest_catalog.tags.all()), [tag.pk])
 
-    # update manifest_catalog
+    # update manifest catalog
 
     def test_update_manifest_catalog_unauthorized(self):
         response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(9999,)),
@@ -723,7 +732,7 @@ class MonolithAPIViewsTestCase(TestCase):
         })
         self.assertEqual(list(t.pk for t in test_manifest_catalog.tags.all()), [tag.pk])
 
-    # delete manifest_catalog
+    # delete manifest catalog
 
     def test_delete_manifest_catalog_unauthorized(self):
         response = self.delete(reverse("monolith_api:manifest_catalog", args=(9999,)), include_token=False)
@@ -742,6 +751,192 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest_catalog = self.force_manifest_catalog()
         self._set_permissions("monolith.delete_manifestcatalog")
         response = self.delete(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)))
+        self.assertEqual(response.status_code, 204)
+
+    # list manifest sub manifests
+
+    def test_get_manifest_sub_manifests_unauthorized(self):
+        response = self.get(reverse("monolith_api:manifest_sub_manifests"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_manifest_sub_manifests_permission_denied(self):
+        response = self.get(reverse("monolith_api:manifest_sub_manifests"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_manifest_sub_manifests_filter_by_manifest_id_not_found(self):
+        self._set_permissions("monolith.view_manifestsubmanifest")
+        response = self.get(reverse("monolith_api:manifest_sub_manifests"), {"manifest_id": self.manifest.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_manifest_sub_manifests_filter_by_manifest_id(self):
+        self.force_manifest_sub_manifest()
+        manifest_sub_manifest = self.force_manifest_sub_manifest()
+        self._set_permissions("monolith.view_manifestsubmanifest")
+        response = self.get(reverse("monolith_api:manifest_sub_manifests"),
+                            {"manifest_id": manifest_sub_manifest.manifest.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': manifest_sub_manifest.pk,
+            'manifest': manifest_sub_manifest.manifest.id,
+            'sub_manifest': manifest_sub_manifest.sub_manifest.id,
+            'tags': []
+        }])
+
+    def test_get_manifest_sub_manifests_filter_by_sub_manifest_id(self):
+        self.force_manifest_sub_manifest()
+        manifest_sub_manifest = self.force_manifest_sub_manifest()
+        self._set_permissions("monolith.view_manifestsubmanifest")
+        response = self.get(reverse("monolith_api:manifest_sub_manifests"),
+                            {"sub_manifest_id": manifest_sub_manifest.sub_manifest.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': manifest_sub_manifest.pk,
+            'manifest': manifest_sub_manifest.manifest.id,
+            'sub_manifest': manifest_sub_manifest.sub_manifest.id,
+            'tags': []
+        }])
+
+    def test_get_manifest_sub_manifests(self):
+        manifest_sub_manifest = self.force_manifest_sub_manifest()
+        self._set_permissions("monolith.view_manifestsubmanifest")
+        response = self.get(reverse("monolith_api:manifest_sub_manifests"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': manifest_sub_manifest.pk,
+            'manifest': manifest_sub_manifest.manifest.id,
+            'sub_manifest': manifest_sub_manifest.sub_manifest.id,
+            'tags': []
+        }])
+
+    # get manifest sub manifest
+
+    def test_get_manifest_sub_manifest_unauthorized(self):
+        response = self.get(reverse("monolith_api:manifest_sub_manifest", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_manifest_sub_manifest_permission_denied(self):
+        response = self.get(reverse("monolith_api:manifest_sub_manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_manifest_sub_manifest_not_found(self):
+        self._set_permissions("monolith.view_manifestsubmanifest")
+        response = self.get(reverse("monolith_api:manifest_sub_manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_manifest_sub_manifest(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        manifest_sub_manifest = self.force_manifest_sub_manifest(tag=tag)
+        self._set_permissions("monolith.view_manifestsubmanifest")
+        response = self.get(reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'id': manifest_sub_manifest.pk,
+            'manifest': manifest_sub_manifest.manifest.id,
+            'sub_manifest': manifest_sub_manifest.sub_manifest.id,
+            'tags': [tag.pk]
+        })
+
+    # create manifest sub manifest
+
+    def test_create_manifest_sub_manifest_unauthorized(self):
+        response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_manifest_sub_manifest_permission_denied(self):
+        response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_manifest_sub_manifest_fields_empty(self):
+        self._set_permissions("monolith.add_manifestsubmanifest")
+        response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), data={})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'manifest': ['This field is required.'],
+            'sub_manifest': ['This field is required.'],
+            'tags': ['This field is required.'],
+        })
+
+    def test_create_manifest_sub_manifest(self):
+        self._set_permissions("monolith.add_manifestsubmanifest")
+        manifest = self.force_manifest()
+        sub_manifest = self.force_sub_manifest()
+        tag = Tag.objects.create(name=get_random_string(12))
+        response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), data={
+            'manifest': manifest.pk,
+            'sub_manifest': sub_manifest.pk,
+            'tags': [tag.pk],
+        })
+        self.assertEqual(response.status_code, 201)
+        manifest_sub_manifest = ManifestSubManifest.objects.get(manifest=manifest, sub_manifest=sub_manifest)
+        self.assertEqual(response.json(), {
+            'id': manifest_sub_manifest.pk,
+            'manifest': manifest.pk,
+            'sub_manifest': sub_manifest.pk,
+            'tags': [tag.pk]
+        })
+        self.assertEqual(list(t.pk for t in manifest_sub_manifest.tags.all()), [tag.pk])
+
+    # update manifest sub manifest
+
+    def test_update_manifest_sub_manifest_unauthorized(self):
+        response = self._put_json_data(reverse("monolith_api:manifest_sub_manifest", args=(9999,)),
+                                       include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_manifest_sub_manifest_permission_denied(self):
+        response = self._put_json_data(reverse("monolith_api:manifest_sub_manifest", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_manifest_sub_manifest_not_found(self):
+        self._set_permissions("monolith.change_manifestsubmanifest")
+        response = self._put_json_data(reverse("monolith_api:manifest_sub_manifest", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_manifest_sub_manifest(self):
+        manifest_sub_manifest = self.force_manifest_sub_manifest()
+        manifest = self.force_manifest()
+        sub_manifest = self.force_sub_manifest()
+        tag = Tag.objects.create(name=get_random_string(12))
+        self._set_permissions("monolith.change_manifestsubmanifest")
+        response = self._put_json_data(
+            reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)),
+            data={
+                'manifest': manifest.pk,
+                'sub_manifest': sub_manifest.pk,
+                'tags': [tag.pk],
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        test_manifest_sub_manifest = ManifestSubManifest.objects.get(manifest=manifest, sub_manifest=sub_manifest)
+        self.assertEqual(manifest_sub_manifest, test_manifest_sub_manifest)
+        self.assertEqual(response.json(), {
+            'id': test_manifest_sub_manifest.pk,
+            'manifest': manifest.pk,
+            'sub_manifest': sub_manifest.pk,
+            'tags': [tag.pk]
+        })
+        self.assertEqual(list(t.pk for t in test_manifest_sub_manifest.tags.all()), [tag.pk])
+
+    # delete manifest sub manifest
+
+    def test_delete_manifest_sub_manifest_unauthorized(self):
+        response = self.delete(reverse("monolith_api:manifest_sub_manifest", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_manifest_sub_manifest_permission_denied(self):
+        response = self.delete(reverse("monolith_api:manifest_sub_manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_manifest_sub_manifest_not_found(self):
+        self._set_permissions("monolith.delete_manifestsubmanifest")
+        response = self.delete(reverse("monolith_api:manifest_sub_manifest", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_manifest_sub_manifest(self):
+        manifest_sub_manifest = self.force_manifest_sub_manifest()
+        self._set_permissions("monolith.delete_manifestsubmanifest")
+        response = self.delete(reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)))
         self.assertEqual(response.status_code, 204)
 
     # list sub manifests
