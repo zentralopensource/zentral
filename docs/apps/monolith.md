@@ -12,20 +12,21 @@ The Munki repository is on the same server as Zentral. Only osquery is proposed 
 
 ```json
 {
-"zentral.contrib.monolith": {
-  "enrollment_package_builders": {
-    "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
-      "requires": ["munkitools_core"],
-      "optional": false
+  "zentral.contrib.monolith": {
+    "enrollment_package_builders": {
+      "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
+        "requires": ["munkitools_core"],
+        "optional": false
+      },
+      "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
+        "requires": ["osquery"],
+        "optional": true
+      }
     },
-    "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
-      "requires": ["osquery"],
-      "optional": true
+    "munki_repository": {
+      "backend": "zentral.contrib.monolith.repository_backends.local",
+      "root": "/var/lib/munki/repo"
     }
-  },
-  "munki_repository": {
-    "backend": "zentral.contrib.monolith.repository_backends.local",
-    "root": "/var/lib/munki/repo"
   }
 }
 ```
