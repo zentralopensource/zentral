@@ -42,13 +42,12 @@ from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManif
                     UploadPPDForm)
 from .models import (MunkiNameError, parse_munki_name,
                      Catalog, CacheServer,
-                     EnrolledMachine, Enrollment,
+                     EnrolledMachine,
                      Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      Printer, PrinterPPD,
                      Condition,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
-from .utils import (build_configuration_plist, build_configuration_profile,
-                    filter_catalog_data, filter_sub_manifest_data,
+from .utils import (filter_catalog_data, filter_sub_manifest_data,
                     test_monolith_object_inclusion, test_pkginfo_catalog_inclusion)
 
 
@@ -913,23 +912,6 @@ class AddManifestEnrollmentView(PermissionRequiredMixin, TemplateView):
             return self.forms_valid(secret_form, enrollment_form)
         else:
             return self.forms_invalid(secret_form, enrollment_form)
-
-
-class ManifestEnrollmentConfigurationProfileView(PermissionRequiredMixin, View):
-    permission_required = "monolith.view_enrollment"
-    format = None
-
-    def get(self, request, *args, **kwargs):
-        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"], manifest__pk=kwargs["manifest_pk"])
-        if self.format == "plist":
-            filename, content = build_configuration_plist(enrollment)
-        elif self.format == "configuration_profile":
-            filename, content = build_configuration_profile(enrollment)
-        else:
-            raise ValueError("Unknown configuration format: {}".format(self.format))
-        response = HttpResponse(content, "application/x-plist")
-        response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
-        return response
 
 
 # manifest machine info

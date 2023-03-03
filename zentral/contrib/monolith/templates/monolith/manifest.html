@@ -81,11 +81,11 @@
       <td>
         {% if not distributor and not secret.is_used_up %}
         <a class="btn btn-default download-tool"
-           href="{% url 'monolith:manifest_enrollment_configuration_plist' enrollment.manifest.id enrollment.id %}">
+           href="{% url 'monolith_api:enrollment_plist' enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span> .plist
         </a>
         <a class="btn btn-default download-tool"
-           href="{% url 'monolith:manifest_enrollment_configuration_profile' enrollment.manifest.id enrollment.id %}">
+           href="{% url 'monolith_api:enrollment_configuration_profile' enrollment.id %}">
           <span class="glyphicon glyphicon-download" aria-hidden="true"></span> .mobileconfig
         </a>
         {% elif secret.is_used_up %}

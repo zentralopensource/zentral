@@ -601,6 +601,21 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest.html")
         self.assertEqual(response.context["object"], self.manifest)
+        self.assertNotContains(
+            response, reverse("monolith_api:enrollment_plist", args=(self.enrollment.pk,)))
+        self.assertNotContains(
+            response, reverse("monolith_api:enrollment_configuration_profile", args=(self.enrollment.pk,)))
+
+    def test_manifest_with_enrollments(self):
+        self._login("monolith.view_manifest", "monolith.view_enrollment")
+        response = self.client.get(reverse("monolith:manifest", args=(self.manifest.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/manifest.html")
+        self.assertEqual(response.context["object"], self.manifest)
+        self.assertContains(
+            response, reverse("monolith_api:enrollment_plist", args=(self.enrollment.pk,)))
+        self.assertContains(
+            response, reverse("monolith_api:enrollment_configuration_profile", args=(self.enrollment.pk,)))
 
     # manifest machine info
 

@@ -9,8 +9,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
-from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
-from zentral.contrib.monolith.models import (CacheServer, Catalog, Condition,
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
+from zentral.contrib.monolith.models import (CacheServer, Catalog, Condition, Enrollment,
                                              Manifest, ManifestCatalog, ManifestSubManifest,
                                              SubManifest, SubManifestAttachment)
 
@@ -24,8 +24,14 @@ class MonolithAPIViewsTestCase(TestCase):
             email="{}@zentral.io".format(get_random_string(12)),
             is_service_account=True
         )
+        cls.user = User.objects.create_user(
+            username=get_random_string(12),
+            email="{}@zentral.io".format(get_random_string(12)),
+            password=get_random_string(12)
+        )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
+        cls.user.groups.set([cls.group])
         cls.api_key = APIToken.objects.update_or_create_for_user(user=cls.service_account)
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
@@ -98,6 +104,12 @@ class MonolithAPIViewsTestCase(TestCase):
         return Condition.objects.create(
             name=get_random_string(),
             predicate=get_random_string()
+        )
+
+    def force_enrollment(self):
+        return Enrollment.objects.create(
+            secret=EnrollmentSecret.objects.create(meta_business_unit=self.mbu),
+            manifest=self.force_manifest()
         )
 
     def force_manifest(self, mbu=None, name=None):
@@ -775,6 +787,90 @@ class MonolithAPIViewsTestCase(TestCase):
         self._set_permissions("monolith.delete_condition")
         response = self.delete(reverse("monolith_api:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 204)
+
+    # download enrollment plist
+
+    def test_get_enrollment_plist_unauthorized(self):
+        enrollment = self.force_enrollment()
+        response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollment_plist_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollment_plist_permission_denied_user(self):
+        enrollment = self.force_enrollment()
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollment_plist(self):
+        enrollment = self.force_enrollment()
+        self._set_permissions("monolith.view_enrollment")
+        response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/x-plist')
+        self.assertEqual(response['Content-Disposition'],
+                         f'attachment; filename="zentral_monolith_configuration.enrollment_{enrollment.pk}.plist"')
+        self.assertEqual(int(response['Content-Length']), len(response.content))
+
+    def test_get_enrollment_plist_user(self):
+        enrollment = self.force_enrollment()
+        self._set_permissions("monolith.view_enrollment")
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/x-plist')
+        self.assertEqual(response['Content-Disposition'],
+                         f'attachment; filename="zentral_monolith_configuration.enrollment_{enrollment.pk}.plist"')
+        self.assertEqual(int(response['Content-Length']), len(response.content))
+
+    # enrollment configuration profile
+
+    def test_get_enrollment_configuration_profile_unauthorized(self):
+        enrollment = self.force_enrollment()
+        response = self.get(
+            reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollment_configuration_profile_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollment_configuration_profile_permission_denied_user(self):
+        enrollment = self.force_enrollment()
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollment_configuration_profile(self):
+        enrollment = self.force_enrollment()
+        self._set_permissions("monolith.view_enrollment")
+        response = self.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/octet-stream')
+        self.assertEqual(
+            response['Content-Disposition'],
+            f'attachment; filename="zentral_monolith_configuration.enrollment_{enrollment.pk}.mobileconfig"'
+        )
+        self.assertEqual(int(response['Content-Length']), len(response.content))
+
+    def test_get_enrollment_configuration_profile_user(self):
+        enrollment = self.force_enrollment()
+        self._set_permissions("monolith.view_enrollment")
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/octet-stream')
+        self.assertEqual(
+            response['Content-Disposition'],
+            f'attachment; filename="zentral_monolith_configuration.enrollment_{enrollment.pk}.mobileconfig"'
+        )
+        self.assertEqual(int(response['Content-Length']), len(response.content))
 
     # list manifest catalogs
 

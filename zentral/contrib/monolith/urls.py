@@ -74,12 +74,6 @@ urlpatterns = [
     path('manifests/<int:pk>/add_enrollment/',
          views.AddManifestEnrollmentView.as_view(),
          name="add_manifest_enrollment"),
-    path('manifests/<int:manifest_pk>/enrollment/<int:pk>/configuration_plist/',
-         views.ManifestEnrollmentConfigurationProfileView.as_view(format="plist"),
-         name="manifest_enrollment_configuration_plist"),
-    path('manifests/<int:manifest_pk>/enrollment/<int:pk>/configuration_profile/',
-         views.ManifestEnrollmentConfigurationProfileView.as_view(format="configuration_profile"),
-         name="manifest_enrollment_configuration_profile"),
 
     # manifest machine info
     path('manifests/<int:pk>/machine_info/', views.ManifestMachineInfoView.as_view(), name='manifest_machine_info'),

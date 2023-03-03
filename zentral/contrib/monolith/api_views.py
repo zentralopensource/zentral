@@ -1,3 +1,4 @@
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import generics
@@ -11,9 +12,11 @@ from zentral.utils.drf import DjangoPermissionRequired, DefaultDjangoModelPermis
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
-from .models import CacheServer, Catalog, Condition, Manifest, ManifestCatalog, ManifestSubManifest, SubManifest
+from .models import (CacheServer, Catalog, Condition, Enrollment,
+                     Manifest, ManifestCatalog, ManifestSubManifest, SubManifest)
 from .serializers import (CatalogSerializer, ConditionSerializer, ManifestSerializer, ManifestCatalogSerializer,
                           ManifestSubManifestSerializer, SubManifestSerializer)
+from .utils import build_configuration_plist, build_configuration_profile
 
 
 class SyncRepository(APIView):
@@ -105,6 +108,48 @@ class ConditionDetail(generics.RetrieveUpdateDestroyAPIView):
         if not instance.can_be_deleted():
             raise ValidationError('This condition cannot be deleted')
         return super().perform_destroy(instance)
+
+
+# enrollments
+
+
+class EnrollmentConfiguration(APIView):
+    """
+    base enrollment configuration class. To be subclassed.
+    """
+    permission_required = "monolith.view_enrollment"
+    permission_classes = [DjangoPermissionRequired]
+
+    def get_content(self, enrollment):
+        raise NotImplementedError
+
+    def get(self, request, *args, **kwargs):
+        enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"])
+        filename, content_type, content = self.get_content(enrollment)
+        response = HttpResponse(content, content_type=content_type)
+        response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)
+        response["Content-Length"] = len(content)
+        return response
+
+
+class EnrollmentPlist(EnrollmentConfiguration):
+    """
+    Download enrollment plist file
+    """
+
+    def get_content(self, enrollment):
+        filename, content = build_configuration_plist(enrollment)
+        return filename, "application/x-plist", content
+
+
+class EnrollmentConfigurationProfile(EnrollmentConfiguration):
+    """
+    Download enrollment configuration_profile
+    """
+
+    def get_content(self, enrollment):
+        filename, content = build_configuration_profile(enrollment)
+        return filename, "application/octet-stream", content
 
 
 # manifests

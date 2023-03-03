@@ -109,7 +109,7 @@ def build_configuration(enrollment):
 
 def build_configuration_plist(enrollment):
     content = plistlib.dumps(build_configuration(enrollment))
-    return get_payload_identifier("monolith.settings.plist"), content
+    return f"zentral_monolith_configuration.enrollment_{enrollment.pk}.plist", content
 
 
 def build_configuration_profile(enrollment):
@@ -132,7 +132,7 @@ def build_configuration_profile(enrollment):
                                   "PayloadUUID": generate_payload_uuid(),
                                   "PayloadVersion": 1}
     content = plistlib.dumps(configuration_profile_data)
-    return get_payload_identifier("monolith.settings.mobileconfig"), content
+    return f"zentral_monolith_configuration.enrollment_{enrollment.pk}.mobileconfig", content
 
 
 def test_monolith_object_inclusion(key, options, serial_number, tag_names):
