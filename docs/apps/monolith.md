@@ -661,6 +661,228 @@ $ curl -X DELETE \
 
 Response (204 No Content)
 
+### /api/monolith/enrollments/
+
+#### List all enrollments
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_enrollment`
+* Optional filter parameter:
+    * `manifest_id`: primary key of the manifest
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/enrollments/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/enrollments/?manifest_id=2" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+  {
+    "id": 1,
+    "manifest": 2,
+    "enrolled_machines_count": 0,
+    "secret": {
+      "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
+      "request_count": 0,
+      "id": 3,
+      "serial_numbers": [],
+      "meta_business_unit": 1,
+      "quota": null,
+      "tags": [],
+      "udids": []
+    },
+    "version": 1,
+    "configuration_profile_download_url": "https://zentral.example.com/api/monolith/enrollments/1/configuration_profile/",
+    "plist_download_url": "https://zentral.example.com/api/monolith/enrollments/1/plist/",
+    "created_at": "2023-01-10T11:02:51.831544",
+    "updated_at": "2023-01-10T11:02:51.831553"
+  }
+]
+```
+
+#### Add an enrollment
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `monolith.add_enrollment`
+
+Examples:
+
+enrollment.json
+
+```json
+{
+  "manifest": 2,
+  "secret": {
+    "meta_business_unit": 1,
+    "tags": [17, 42]
+  }
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/enrollments/" \
+  -d @enrollment.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "manifest": 2,
+  "enrolled_machines_count": 0,
+  "secret": {
+    "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
+    "request_count": 0,
+    "id": 3,
+    "serial_numbers": [],
+    "meta_business_unit": 1,
+    "quota": null,
+    "tags": [17, 42],
+    "udids": []
+  },
+  "version": 1,
+  "configuration_profile_download_url": "https://zentral.example.com/api/monolith/enrollments/1/configuration_profile/",
+  "plist_download_url": "https://zentral.example.com/api/monolith/enrollments/1/plist/",
+  "created_at": "2023-01-10T11:02:51.831544",
+  "updated_at": "2023-01-10T11:02:51.831553"
+}
+```
+
+### /api/monolith/enrollments/`<int:pk>`/
+
+#### Get an enrollment
+
+* method: GET
+* Content-Type: application/json
+* Required permission: `monolith.view_enrollment`
+* `<int:pk>`: the primary key of the enrollment
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/enrollments/1/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "manifest": 2,
+  "enrolled_machines_count": 0,
+  "secret": {
+    "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
+    "request_count": 0,
+    "id": 3,
+    "serial_numbers": [],
+    "meta_business_unit": 1,
+    "quota": null,
+    "tags": [17, 42],
+    "udids": []
+  },
+  "version": 1,
+  "configuration_profile_download_url": "https://zentral.example.com/api/monolith/enrollments/1/configuration_profile/",
+  "plist_download_url": "https://zentral.example.com/api/monolith/enrollments/1/plist/",
+  "created_at": "2023-01-10T11:02:51.831544",
+  "updated_at": "2023-01-10T11:02:51.831553"
+}
+```
+
+#### Update an enrollment
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `monolith.change_enrollment`
+* `<int:pk>`: the primary key of the enrollment
+
+Example:
+
+enrollment.json
+
+```json
+{
+  "manifest": 2,
+  "secret": {
+    "meta_business_unit": 1,
+    "serial_numbers": ["0123456789"],
+    "tags": []
+  }
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/enrollments/1/" \
+  -d @enrollment.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```
+{
+  "id": 1,
+  "manifest": 2,
+  "enrolled_machines_count": 0,
+  "secret": {
+    "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
+    "request_count": 0,
+    "id": 3,
+    "serial_numbers": ["0123456789"],
+    "meta_business_unit": 1,
+    "quota": null,
+    "tags": [],
+    "udids": []
+  },
+  "version": 1,
+  "configuration_profile_download_url": "https://zentral.example.com/api/monolith/enrollments/1/configuration_profile/",
+  "plist_download_url": "https://zentral.example.com/api/monolith/enrollments/1/plist/",
+  "created_at": "2023-01-10T11:02:51.831544",
+  "updated_at": "2023-01-10T11:02:51.831553"
+}
+```
+
+#### Delete an enrollment
+
+* method: DELETE
+* Required permission: `monolith.delete_enrollment`
+* `<int:pk>`: the primary key of the enrollment.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/monolith/enrollments/1/"
+```
+
+Response (204 No Content)
+
 ### /api/monolith/manifest_catalogs/
 
 #### List all manifest catalogs

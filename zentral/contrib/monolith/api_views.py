@@ -7,14 +7,15 @@ from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer
 from rest_framework.views import APIView
-from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.utils.drf import DjangoPermissionRequired, DefaultDjangoModelPermissions
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
 from .models import (CacheServer, Catalog, Condition, Enrollment,
                      Manifest, ManifestCatalog, ManifestSubManifest, SubManifest)
-from .serializers import (CatalogSerializer, ConditionSerializer, ManifestSerializer, ManifestCatalogSerializer,
+from .serializers import (CatalogSerializer, ConditionSerializer,
+                          EnrollmentSerializer,
+                          ManifestSerializer, ManifestCatalogSerializer,
                           ManifestSubManifestSerializer, SubManifestSerializer)
 from .utils import build_configuration_plist, build_configuration_profile
 
@@ -113,6 +114,32 @@ class ConditionDetail(generics.RetrieveUpdateDestroyAPIView):
 # enrollments
 
 
+class EnrollmentList(generics.ListCreateAPIView):
+    """
+    List all Enrollments or create a new Enrollment
+    """
+    queryset = Enrollment.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = EnrollmentSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ('manifest_id',)
+
+
+class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Retrieve, update or delete an Enrollment
+    """
+    queryset = Enrollment.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = EnrollmentSerializer
+
+    def perform_destroy(self, instance):
+        if not instance.can_be_deleted():
+            raise ValidationError('This enrollment cannot be deleted')
+        else:
+            return super().perform_destroy(instance)
+
+
 class EnrollmentConfiguration(APIView):
     """
     base enrollment configuration class. To be subclassed.
@@ -155,17 +182,12 @@ class EnrollmentConfigurationProfile(EnrollmentConfiguration):
 # manifests
 
 
-class ManifestFilter(filters.FilterSet):
-    meta_business_unit_id = filters.ModelChoiceFilter(queryset=MetaBusinessUnit.objects.all())
-    name = filters.CharFilter()
-
-
 class ManifestList(generics.ListCreateAPIView):
     queryset = Manifest.objects.all()
     serializer_class = ManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_class = ManifestFilter
+    filterset_fields = ("meta_business_unit_id", "name")
 
 
 class ManifestDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -177,17 +199,12 @@ class ManifestDetail(generics.RetrieveUpdateDestroyAPIView):
 # manifest catalogs
 
 
-class ManifestCatalogFilter(filters.FilterSet):
-    manifest_id = filters.ModelChoiceFilter(queryset=Manifest.objects.all())
-    catalog_id = filters.ModelChoiceFilter(queryset=Catalog.objects.all())
-
-
 class ManifestCatalogList(generics.ListCreateAPIView):
     queryset = ManifestCatalog.objects.all()
     serializer_class = ManifestCatalogSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_class = ManifestCatalogFilter
+    filterset_fields = ("manifest_id", "catalog_id")
 
 
 class ManifestCatalogDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -199,17 +216,12 @@ class ManifestCatalogDetail(generics.RetrieveUpdateDestroyAPIView):
 # manifest sub manifests
 
 
-class ManifestSubManifestFilter(filters.FilterSet):
-    manifest_id = filters.ModelChoiceFilter(queryset=Manifest.objects.all())
-    sub_manifest_id = filters.ModelChoiceFilter(queryset=SubManifest.objects.all())
-
-
 class ManifestSubManifestList(generics.ListCreateAPIView):
     queryset = ManifestSubManifest.objects.all()
     serializer_class = ManifestSubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_class = ManifestSubManifestFilter
+    filterset_fields = ("manifest_id", "sub_manifest_id")
 
 
 class ManifestSubManifestDetail(generics.RetrieveUpdateDestroyAPIView):

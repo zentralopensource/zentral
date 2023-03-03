@@ -9,7 +9,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
+from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.monolith.models import (CacheServer, Catalog, Condition, Enrollment,
                                              Manifest, ManifestCatalog, ManifestSubManifest,
                                              SubManifest, SubManifestAttachment)
@@ -106,10 +108,14 @@ class MonolithAPIViewsTestCase(TestCase):
             predicate=get_random_string()
         )
 
-    def force_enrollment(self):
-        return Enrollment.objects.create(
-            secret=EnrollmentSecret.objects.create(meta_business_unit=self.mbu),
-            manifest=self.force_manifest()
+    def force_enrollment(self, tag_count=0):
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(tag_count)]
+        if tags:
+            enrollment_secret.tags.set(tags)
+        return (
+            Enrollment.objects.create(manifest=self.force_manifest(), secret=enrollment_secret),
+            tags
         )
 
     def force_manifest(self, mbu=None, name=None):
@@ -788,26 +794,288 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self.delete(reverse("monolith_api:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 204)
 
-    # download enrollment plist
+    # list enrollments
+
+    def test_get_enrollments_unauthorized(self):
+        response = self.get(reverse("monolith_api:enrollments"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollments_permission_denied(self):
+        response = self.get(reverse("monolith_api:enrollments"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollments_filter_by_manifest_id_invalid_choice(self):
+        self._set_permissions("monolith.view_enrollment")
+        response = self.get(reverse("monolith_api:enrollments"), {"manifest_id": 9999})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'manifest_id': ['Select a valid choice. That choice is not one of the available choices.']}
+        )
+
+    def test_get_enrollments_filter_by_manifest_id_no_results(self):
+        self._set_permissions("monolith.view_enrollment")
+        manifest = self.force_manifest()
+        response = self.get(reverse("monolith_api:enrollments"), {"manifest_id": manifest.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_enrollments_filter_by_manifest_id(self):
+        enrollment, tags = self.force_enrollment(tag_count=1)
+        self._set_permissions("monolith.view_enrollment")
+        response = self.get(reverse("monolith_api:enrollments"), {"manifest_id": enrollment.manifest.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': enrollment.pk,
+            'manifest': enrollment.manifest.pk,
+            'enrolled_machines_count': 0,
+            'secret': {
+                'id': enrollment.secret.pk,
+                'secret': enrollment.secret.secret,
+                'meta_business_unit': self.mbu.pk,
+                'tags': [t.pk for t in tags],
+                'serial_numbers': None,
+                'udids': None,
+                'quota': None,
+                'request_count': 0
+            },
+            'version': 1,
+            'configuration_profile_download_url': (
+                 f'https://{settings["api"]["fqdn"]}'
+                 f'{reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,))}'
+            ),
+            'plist_download_url': (
+                 f'https://{settings["api"]["fqdn"]}'
+                 f'{reverse("monolith_api:enrollment_plist", args=(enrollment.pk,))}'
+            ),
+            'created_at': enrollment.created_at.isoformat(),
+            'updated_at': enrollment.updated_at.isoformat(),
+        }])
+
+    def test_get_enrollments(self):
+        enrollment, _ = self.force_enrollment()
+        self._set_permissions("monolith.view_enrollment")
+        response = self.get(reverse("monolith_api:enrollments"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': enrollment.pk,
+            'manifest': enrollment.manifest.pk,
+            'enrolled_machines_count': 0,
+            'secret': {
+                'id': enrollment.secret.pk,
+                'secret': enrollment.secret.secret,
+                'meta_business_unit': self.mbu.pk,
+                'tags': [],
+                'serial_numbers': None,
+                'udids': None,
+                'quota': None,
+                'request_count': 0
+            },
+            'version': 1,
+            'configuration_profile_download_url': (
+                 f'https://{settings["api"]["fqdn"]}'
+                 f'{reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,))}'
+            ),
+            'plist_download_url': (
+                 f'https://{settings["api"]["fqdn"]}'
+                 f'{reverse("monolith_api:enrollment_plist", args=(enrollment.pk,))}'
+            ),
+            'created_at': enrollment.created_at.isoformat(),
+            'updated_at': enrollment.updated_at.isoformat(),
+        }])
+
+    # get enrollment
+
+    def test_get_enrollment_unauthorized(self):
+        response = self.get(reverse("monolith_api:enrollment", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_enrollment_permission_denied(self):
+        response = self.get(reverse("monolith_api:enrollment", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_enrollment_not_found(self):
+        self._set_permissions("monolith.view_enrollment")
+        response = self.get(reverse("monolith_api:enrollment", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_enrollment(self):
+        enrollment, _ = self.force_enrollment()
+        self._set_permissions("monolith.view_enrollment")
+        response = self.get(reverse("monolith_api:enrollment", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'id': enrollment.pk,
+            'manifest': enrollment.manifest.pk,
+            'enrolled_machines_count': 0,
+            'secret': {
+                'id': enrollment.secret.pk,
+                'secret': enrollment.secret.secret,
+                'meta_business_unit': self.mbu.pk,
+                'tags': [],
+                'serial_numbers': None,
+                'udids': None,
+                'quota': None,
+                'request_count': 0
+            },
+            'version': 1,
+            'configuration_profile_download_url': (
+                 f'https://{settings["api"]["fqdn"]}'
+                 f'{reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,))}'
+            ),
+            'plist_download_url': (
+                 f'https://{settings["api"]["fqdn"]}'
+                 f'{reverse("monolith_api:enrollment_plist", args=(enrollment.pk,))}'
+            ),
+            'created_at': enrollment.created_at.isoformat(),
+            'updated_at': enrollment.updated_at.isoformat(),
+        })
+
+    # create enrollment
+
+    def test_create_enrollment_unauthorized(self):
+        response = self._post_json_data(reverse("monolith_api:enrollments"), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_enrollment_permission_denied(self):
+        response = self._post_json_data(reverse("monolith_api:enrollments"), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enrollment_fields_empty(self):
+        self._set_permissions("monolith.add_enrollment")
+        response = self._post_json_data(reverse("monolith_api:enrollments"), data={})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'manifest': ['This field is required.'],
+            'secret': ['This field is required.'],
+        })
+
+    def test_create_enrollment(self):
+        self._set_permissions("monolith.add_enrollment")
+        manifest = self.force_manifest()
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
+        response = self._post_json_data(reverse("monolith_api:enrollments"), data={
+            'manifest': manifest.pk,
+            'secret': {
+                'meta_business_unit': self.mbu.pk,
+                'tags': [t.id for t in tags]
+            }
+        })
+        self.assertEqual(response.status_code, 201)
+        enrollment = Enrollment.objects.get(manifest=manifest)
+        self.assertEqual(response.json(), {
+            'id': enrollment.pk,
+            'manifest': enrollment.manifest.pk,
+            'enrolled_machines_count': 0,
+            'secret': {
+                'id': enrollment.secret.pk,
+                'secret': enrollment.secret.secret,
+                'meta_business_unit': self.mbu.pk,
+                'tags': [t.id for t in tags],
+                'serial_numbers': None,
+                'udids': None,
+                'quota': None,
+                'request_count': 0
+            },
+            'version': 1,
+            'configuration_profile_download_url': (
+                 f'https://{settings["api"]["fqdn"]}'
+                 f'{reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,))}'
+            ),
+            'plist_download_url': (
+                 f'https://{settings["api"]["fqdn"]}'
+                 f'{reverse("monolith_api:enrollment_plist", args=(enrollment.pk,))}'
+            ),
+            'created_at': enrollment.created_at.isoformat(),
+            'updated_at': enrollment.updated_at.isoformat(),
+        })
+
+    # update enrollment
+
+    def test_update_enrollment_unauthorized(self):
+        response = self._put_json_data(reverse("monolith_api:enrollment", args=(9999,)), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_enrollment_permission_denied(self):
+        response = self._put_json_data(reverse("monolith_api:enrollment", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_enrollment_not_found(self):
+        self._set_permissions("monolith.change_enrollment")
+        response = self._put_json_data(reverse("monolith_api:enrollment", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_enrollment(self):
+        enrollment, _ = self.force_enrollment(tag_count=2)
+        enrollment_secret = enrollment.secret
+        self.assertEqual(enrollment.secret.quota, None)
+        self.assertEqual(enrollment.secret.serial_numbers, None)
+        self.assertEqual(enrollment.secret.tags.count(), 2)
+        secret_data = EnrollmentSecretSerializer(enrollment_secret).data
+        secret_data["id"] = 233333  # to check that there is no enrollment secret creation
+        secret_data["quota"] = 23
+        secret_data["request_count"] = 2331983  # to check that it cannot be updated
+        serial_numbers = [get_random_string(12) for i in range(13)]
+        secret_data["serial_numbers"] = serial_numbers
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
+        secret_data["tags"] = [t.id for t in tags]
+        self._set_permissions("monolith.change_enrollment")
+        response = self._put_json_data(reverse("monolith_api:enrollment", args=(enrollment.pk,)), data={
+            'manifest': enrollment.manifest.pk,
+            'secret': secret_data
+        })
+        self.assertEqual(response.status_code, 200)
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.secret, enrollment_secret)
+        self.assertEqual(enrollment.secret.quota, 23)
+        self.assertEqual(enrollment.secret.request_count, 0)
+        self.assertEqual(enrollment.secret.serial_numbers, serial_numbers)
+        self.assertEqual(
+            set(enrollment.secret.tags.all()),
+            set(tags)
+        )
+
+    # delete enrollment
+
+    def test_delete_enrollment_unauthorized(self):
+        response = self.delete(reverse("monolith_api:enrollment", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_enrollment_permission_denied(self):
+        response = self.delete(reverse("monolith_api:enrollment", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_enrollment_not_found(self):
+        self._set_permissions("monolith.delete_enrollment")
+        response = self.delete(reverse("monolith_api:enrollment", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_enrollment(self):
+        enrollment, _ = self.force_enrollment()
+        self._set_permissions("monolith.delete_enrollment")
+        response = self.delete(reverse("monolith_api:enrollment", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 204)
+
+    # enrollment plist
 
     def test_get_enrollment_plist_unauthorized(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_enrollment_plist_permission_denied(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_enrollment_plist_permission_denied_user(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.client.force_login(self.user)
         response = self.client.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_enrollment_plist(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self._set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -817,7 +1085,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(int(response['Content-Length']), len(response.content))
 
     def test_get_enrollment_plist_user(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self._set_permissions("monolith.view_enrollment")
         self.client.force_login(self.user)
         response = self.client.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
@@ -831,24 +1099,24 @@ class MonolithAPIViewsTestCase(TestCase):
     # enrollment configuration profile
 
     def test_get_enrollment_configuration_profile_unauthorized(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         response = self.get(
             reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_enrollment_configuration_profile_permission_denied(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         response = self.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_enrollment_configuration_profile_permission_denied_user(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self.client.force_login(self.user)
         response = self.client.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_enrollment_configuration_profile(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self._set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -860,7 +1128,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(int(response['Content-Length']), len(response.content))
 
     def test_get_enrollment_configuration_profile_user(self):
-        enrollment = self.force_enrollment()
+        enrollment, _ = self.force_enrollment()
         self._set_permissions("monolith.view_enrollment")
         self.client.force_login(self.user)
         response = self.client.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
