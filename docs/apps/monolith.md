@@ -289,7 +289,7 @@ manifest.json
 ```json
 {
   "name": "default2",
-  "meta_business_unit_id: 2
+  "meta_business_unit_id": 2
 }
 ```
 
@@ -454,7 +454,7 @@ catalog.json
 ```json
 {
   "name": "production2",
-  "meta_business_unit_id: 2
+  "meta_business_unit_id": 2
 }
 ```
 
