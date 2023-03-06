@@ -74,6 +74,10 @@ class ManifestCatalogSerializer(serializers.ModelSerializer):
     class Meta:
         model = ManifestCatalog
         fields = '__all__'
+        extra_kwargs = {
+            # the tags field is required, but allowed to be empty
+            "tags": {"allow_empty": True}
+        }
 
 
 class ManifestSubManifestSerializer(serializers.ModelSerializer):

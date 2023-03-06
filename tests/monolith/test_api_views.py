@@ -1297,15 +1297,17 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_update_manifest_catalog(self):
-        manifest_catalog = self.force_manifest_catalog()
+        manifest_catalog = self.force_manifest_catalog(
+            tag=Tag.objects.create(name=get_random_string(12))
+        )
+        self.assertEqual(manifest_catalog.tags.count(), 1)
         manifest = self.force_manifest()
         catalog = self.force_catalog()
-        tag = Tag.objects.create(name=get_random_string(12))
         self._set_permissions("monolith.change_manifestcatalog")
         response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)), data={
             'manifest': manifest.pk,
             'catalog': catalog.pk,
-            'tags': [tag.pk],
+            'tags': [],
         })
         self.assertEqual(response.status_code, 200)
         test_manifest_catalog = ManifestCatalog.objects.get(manifest=manifest, catalog=catalog)
@@ -1314,9 +1316,9 @@ class MonolithAPIViewsTestCase(TestCase):
             'id': test_manifest_catalog.pk,
             'manifest': manifest.pk,
             'catalog': catalog.pk,
-            'tags': [tag.pk]
+            'tags': []
         })
-        self.assertEqual(list(t.pk for t in test_manifest_catalog.tags.all()), [tag.pk])
+        self.assertEqual(test_manifest_catalog.tags.count(), 0)
 
     # delete manifest catalog
 
