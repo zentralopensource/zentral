@@ -135,7 +135,7 @@ class SubManifestPkgInfoForm(SubManifestItemFormMixin, forms.ModelForm):
         self.tag_shards = []
         existing_tag_shard_dict = {}
         if self.instance.pk:
-            existing_tag_shard_dict = dict(self.instance.tag_shards)
+            existing_tag_shard_dict = {ts["tag"]: ts["shard"] for ts in self.instance.tag_shards}
         for tag in tag_qs:
             self.tag_shards.append(
                 (tag, tag in existing_tag_shard_dict, existing_tag_shard_dict.get(tag, self.instance.shard_modulo))

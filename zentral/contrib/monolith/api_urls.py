@@ -7,7 +7,8 @@ from .api_views import (SyncRepository, UpdateCacheServer,
                         ManifestList, ManifestDetail,
                         ManifestCatalogList, ManifestCatalogDetail,
                         ManifestSubManifestList, ManifestSubManifestDetail,
-                        SubManifestList, SubManifestDetail)
+                        SubManifestList, SubManifestDetail,
+                        SubManifestPkgInfoList, SubManifestPkgInfoDetail)
 
 app_name = "monolith_api"
 urlpatterns = [
@@ -30,4 +31,6 @@ urlpatterns = [
     path('manifest_sub_manifests/<int:pk>/', ManifestSubManifestDetail.as_view(), name="manifest_sub_manifest"),
     path('sub_manifests/', SubManifestList.as_view(), name="sub_manifests"),
     path('sub_manifests/<int:pk>/', SubManifestDetail.as_view(), name="sub_manifest"),
+    path('sub_manifest_pkg_infos/', SubManifestPkgInfoList.as_view(), name="sub_manifest_pkg_infos"),
+    path('sub_manifest_pkg_infos/<int:pk>/', SubManifestPkgInfoDetail.as_view(), name="sub_manifest_pkg_info"),
 ]

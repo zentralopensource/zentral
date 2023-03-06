@@ -14,10 +14,13 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit,
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.monolith.models import (CacheServer, Catalog, Condition, Enrollment,
                                              Manifest, ManifestCatalog, ManifestSubManifest,
-                                             SubManifest, SubManifestAttachment)
+                                             PkgInfoName,
+                                             SubManifest, SubManifestAttachment, SubManifestPkgInfo)
 
 
 class MonolithAPIViewsTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         # service account
@@ -141,6 +144,9 @@ class MonolithAPIViewsTestCase(TestCase):
             msm.tags.add(tag)
         return msm
 
+    def force_pkg_info_name(self):
+        return PkgInfoName.objects.create(name=get_random_string(12))
+
     def force_sub_manifest(self, meta_business_unit=None):
         return SubManifest.objects.create(
             name=get_random_string(12),
@@ -158,6 +164,18 @@ class MonolithAPIViewsTestCase(TestCase):
             name=get_random_string(12),
             condition=condition,
             pkg_info={}
+        )
+
+    def force_sub_manifest_pkg_info(self, sub_manifest=None, options=None):
+        if sub_manifest is None:
+            sub_manifest = self.force_sub_manifest()
+        if options is None:
+            options = {}
+        return SubManifestPkgInfo.objects.create(
+            sub_manifest=sub_manifest,
+            key="managed_installs",
+            pkg_info_name=self.force_pkg_info_name(),
+            options=options
         )
 
     # sync repository
@@ -1680,4 +1698,283 @@ class MonolithAPIViewsTestCase(TestCase):
         sub_manifest = self.force_sub_manifest()
         self._set_permissions("monolith.delete_submanifest")
         response = self.delete(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)))
+        self.assertEqual(response.status_code, 204)
+
+    # list sub manifest pkg infos
+
+    def test_get_sub_manifest_pkg_infos_unauthorized(self):
+        response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_sub_manifest_pkg_infos_permission_denied(self):
+        response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_sub_manifest_pkg_infos_filter_by_sub_manifest_id_not_found(self):
+        self._set_permissions("monolith.view_submanifestpkginfo")
+        sub_manifest = self.force_sub_manifest()
+        response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"), {"sub_manifest_id": sub_manifest.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_get_sub_manifest_pkg_infos_filter_by_sub_manifest_id(self):
+        self.force_sub_manifest_pkg_info()
+        sub_manifest_pkg_info = self.force_sub_manifest_pkg_info()
+        self._set_permissions("monolith.view_submanifestpkginfo")
+        response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"),
+                            {"sub_manifest_id": sub_manifest_pkg_info.sub_manifest.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': sub_manifest_pkg_info.pk,
+            'sub_manifest': sub_manifest_pkg_info.sub_manifest.pk,
+            'key': 'managed_installs',
+            'pkg_info_name': sub_manifest_pkg_info.pkg_info_name.name,
+            'featured_item': False,
+            'condition': None,
+            'shard_modulo': 100,
+            'default_shard': 100,
+            'excluded_tags': [],
+            'tag_shards': [],
+            'created_at': sub_manifest_pkg_info.created_at.isoformat(),
+            'updated_at': sub_manifest_pkg_info.updated_at.isoformat(),
+        }])
+
+    def test_get_sub_manifest_pkg_infos(self):
+        sub_manifest_pkg_info = self.force_sub_manifest_pkg_info()
+        self._set_permissions("monolith.view_submanifestpkginfo")
+        response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{
+            'id': sub_manifest_pkg_info.pk,
+            'sub_manifest': sub_manifest_pkg_info.sub_manifest.pk,
+            'key': 'managed_installs',
+            'pkg_info_name': sub_manifest_pkg_info.pkg_info_name.name,
+            'featured_item': False,
+            'condition': None,
+            'shard_modulo': 100,
+            'default_shard': 100,
+            'excluded_tags': [],
+            'tag_shards': [],
+            'created_at': sub_manifest_pkg_info.created_at.isoformat(),
+            'updated_at': sub_manifest_pkg_info.updated_at.isoformat(),
+        }])
+
+    # get sub manifest pkg info
+
+    def test_get_sub_manifest_pkg_info_unauthorized(self):
+        response = self.get(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_sub_manifest_pkg_info_permission_denied(self):
+        response = self.get(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_sub_manifest_pkg_info_not_found(self):
+        self._set_permissions("monolith.view_submanifestpkginfo")
+        response = self.get(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_sub_manifest_pkg_info(self):
+        sub_manifest_pkg_info = self.force_sub_manifest_pkg_info()
+        self._set_permissions("monolith.view_submanifestpkginfo")
+        response = self.get(reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'id': sub_manifest_pkg_info.pk,
+            'sub_manifest': sub_manifest_pkg_info.sub_manifest.pk,
+            'key': 'managed_installs',
+            'pkg_info_name': sub_manifest_pkg_info.pkg_info_name.name,
+            'featured_item': False,
+            'condition': None,
+            'shard_modulo': 100,
+            'default_shard': 100,
+            'excluded_tags': [],
+            'tag_shards': [],
+            'created_at': sub_manifest_pkg_info.created_at.isoformat(),
+            'updated_at': sub_manifest_pkg_info.updated_at.isoformat(),
+        })
+
+    # create sub manifest pkg info
+
+    def test_create_sub_manifest_pkg_info_unauthorized(self):
+        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_sub_manifest_pkg_info_permission_denied(self):
+        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_sub_manifest_pkg_info_fields_empty(self):
+        self._set_permissions("monolith.add_submanifestpkginfo")
+        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'sub_manifest': ['This field is required.'],
+            'key': ['This field is required.'],
+            'pkg_info_name': ['This field is required.'],
+            'excluded_tags': ['This field is required.'],
+            'tag_shards': ['This field is required.'],
+        })
+
+    def test_create_sub_manifest_pkg_info_unknown_pkg_info_name(self):
+        self._set_permissions("monolith.add_submanifestpkginfo")
+        sub_manifest = self.force_sub_manifest()
+        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+            'sub_manifest': sub_manifest.pk,
+            'pkg_info_name': get_random_string(12),
+            'featured_item': True,
+            'key': 'managed_installs',
+            'excluded_tags': [],
+            'tag_shards': []
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'pkg_info_name': ['Unknown PkgInfo name']})
+
+    def test_create_sub_manifest_pkg_info_scoping_errors(self):
+        self._set_permissions("monolith.add_submanifestpkginfo")
+        sub_manifest = self.force_sub_manifest()
+        pkg_info_name = self.force_pkg_info_name()
+        tag1 = Tag.objects.create(name=get_random_string(12))
+        tag2 = Tag.objects.create(name=get_random_string(12))
+        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+            'sub_manifest': sub_manifest.pk,
+            'pkg_info_name': pkg_info_name.name,
+            'key': 'managed_installs',
+            'default_shard': 6,  # > shard_modulo
+            'shard_modulo': 5,
+            'excluded_tags': [tag2.pk],
+            'tag_shards': [
+                {'tag': tag1.pk, 'shard': 6},  # shard > shard_modulo
+                {'tag': tag1.pk, 'shard': 1},  # duplicated
+                {'tag': tag2.pk, 'shard': 2},  # also in excluded_tags
+            ]
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+                response.json(),
+                {'default_shard': ['cannot be greater than shard_modulo'],
+                 'tag_shards': [f'{tag1.pk}: shard > shard_modulo',
+                                f'{tag1.pk}: duplicated',
+                                f'{tag2.pk}: cannot be excluded']}
+        )
+
+    def test_create_sub_manifest_pkg_info(self):
+        self._set_permissions("monolith.add_submanifestpkginfo")
+        sub_manifest = self.force_sub_manifest()
+        pkg_info_name = self.force_pkg_info_name()
+        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+            'sub_manifest': sub_manifest.pk,
+            'pkg_info_name': pkg_info_name.name,
+            'featured_item': True,
+            'key': 'managed_installs',
+            'excluded_tags': [],
+            'tag_shards': []
+        })
+        self.assertEqual(response.status_code, 201)
+        sub_manifest_pkg_info = SubManifestPkgInfo.objects.get(sub_manifest=sub_manifest,
+                                                               pkg_info_name=pkg_info_name)
+        self.assertEqual(response.json(), {
+            'id': sub_manifest_pkg_info.pk,
+            'sub_manifest': sub_manifest_pkg_info.sub_manifest.pk,
+            'key': 'managed_installs',
+            'pkg_info_name': sub_manifest_pkg_info.pkg_info_name.name,
+            'featured_item': True,
+            'condition': None,
+            'shard_modulo': 100,
+            'default_shard': 100,
+            'excluded_tags': [],
+            'tag_shards': [],
+            'created_at': sub_manifest_pkg_info.created_at.isoformat(),
+            'updated_at': sub_manifest_pkg_info.updated_at.isoformat(),
+        })
+        self.assertEqual(sub_manifest_pkg_info.key, "managed_installs")
+        self.assertTrue(sub_manifest_pkg_info.featured_item)
+        self.assertEqual(sub_manifest_pkg_info.options,
+                         {"shards": {"modulo": 100, "default": 100}})
+
+    # update sub manifest pkg info
+
+    def test_update_sub_manifest_pkg_info_unauthorized(self):
+        response = self._put_json_data(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)),
+                                       include_token=False, data={})
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_sub_manifest_pkg_info_permission_denied(self):
+        response = self._put_json_data(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_sub_manifest_pkg_info_not_found(self):
+        self._set_permissions("monolith.change_submanifestpkginfo")
+        response = self._put_json_data(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)), data={})
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_sub_manifest_pkg_info(self):
+        sub_manifest_pkg_info = self.force_sub_manifest_pkg_info()
+        self._set_permissions("monolith.change_submanifestpkginfo")
+        new_sub_manifest = self.force_sub_manifest()
+        new_pkg_info_name = self.force_pkg_info_name()
+        new_condition = self.force_condition()
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+        shard_tag = Tag.objects.create(name=get_random_string(12))
+        response = self._put_json_data(
+            reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)),
+            data={
+                'sub_manifest': new_sub_manifest.pk,
+                'pkg_info_name': new_pkg_info_name.name,
+                'key': 'managed_installs',
+                'condition': new_condition.pk,
+                'excluded_tags': [excluded_tag.pk],
+                'shard_modulo': 42,
+                'default_shard': 0,
+                'tag_shards': [
+                    {"tag": shard_tag.pk, "shard": 17},
+                ]
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        test_sub_manifest_pkg_info = SubManifestPkgInfo.objects.get(sub_manifest=new_sub_manifest,
+                                                                    pkg_info_name=new_pkg_info_name)
+        self.assertEqual(sub_manifest_pkg_info, test_sub_manifest_pkg_info)
+        self.assertEqual(response.json(), {
+            'id': sub_manifest_pkg_info.pk,
+            'sub_manifest': new_sub_manifest.pk,
+            'key': 'managed_installs',
+            'pkg_info_name': new_pkg_info_name.name,
+            'featured_item': False,
+            'condition': new_condition.pk,
+            'shard_modulo': 42,
+            'default_shard': 0,
+            'excluded_tags': [excluded_tag.pk],
+            'tag_shards': [
+                {"tag": shard_tag.pk, "shard": 17},
+            ],
+            'created_at': test_sub_manifest_pkg_info.created_at.isoformat(),
+            'updated_at': test_sub_manifest_pkg_info.updated_at.isoformat(),
+        })
+        self.assertEqual(test_sub_manifest_pkg_info.condition, new_condition)
+        self.assertEqual(
+            test_sub_manifest_pkg_info.options,
+            {"shards": {"modulo": 42, "default": 0, "tags": {shard_tag.name: 17}},
+             "excluded_tags": [excluded_tag.name]}
+        )
+
+    # delete sub manifest pkg info
+
+    def test_delete_sub_manifest_pkg_info_unauthorized(self):
+        response = self.delete(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_sub_manifest_pkg_info_permission_denied(self):
+        response = self.delete(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_sub_manifest_pkg_info_not_found(self):
+        self._set_permissions("monolith.delete_submanifestpkginfo")
+        response = self.delete(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_sub_manifest_pkg_info(self):
+        sub_manifest_pkg_info = self.force_sub_manifest_pkg_info()
+        self._set_permissions("monolith.delete_submanifestpkginfo")
+        response = self.delete(reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)))
         self.assertEqual(response.status_code, 204)

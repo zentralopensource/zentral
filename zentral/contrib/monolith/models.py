@@ -461,7 +461,7 @@ class SubManifestPkgInfo(models.Model):
                        .filter(name__in=tag_shards.keys())
                        .order_by("name")
         )
-        return [(tag, tag_shards[tag.name]) for tag in tags]
+        return [{"tag": tag, "shard": tag_shards[tag.name]} for tag in tags]
 
     @property
     def default_shard(self):

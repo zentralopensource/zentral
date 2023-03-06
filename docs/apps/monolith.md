@@ -167,7 +167,6 @@ Response:
 #### List all manifests
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_manifest`
 * Optional filter parameters:
     * `name`: name of the manifest
@@ -177,21 +176,18 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifests/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifests/?name=default" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifests/?meta_business_unit_id=1" \
   |python3 -m json.tool
 ```
@@ -253,7 +249,6 @@ Response:
 #### Get a manifest
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_manifest`
 * `<int:pk>`: the primary key of the manifest
 
@@ -261,7 +256,6 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifests/1/" \
   |python3 -m json.tool
 ```
@@ -340,7 +334,6 @@ Response (204 No Content)
 #### List all catalogs
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_catalog`
 * Optional filter parameter:
     * `name`: name of the catalog
@@ -349,14 +342,12 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/catalogs/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/catalogs/?name=production" \
   |python3 -m json.tool
 ```
@@ -418,7 +409,6 @@ Response:
 #### Get a catalog
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_catalog`
 * `<int:pk>`: the primary key of the catalog
 
@@ -426,7 +416,6 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/catalogs/1/" \
   |python3 -m json.tool
 ```
@@ -505,7 +494,6 @@ Response (204 No Content)
 #### List all conditions
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_condition`
 * Optional filter parameter:
     * `name`: name of the condition
@@ -514,14 +502,12 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/conditions/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/conditions/?name=desktop" \
   |python3 -m json.tool
 ```
@@ -581,7 +567,6 @@ Response:
 #### Get a condition
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_condition`
 * `<int:pk>`: the primary key of the condition
 
@@ -589,7 +574,6 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/conditions/1/" \
   |python3 -m json.tool
 ```
@@ -666,7 +650,6 @@ Response (204 No Content)
 #### List all enrollments
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_enrollment`
 * Optional filter parameter:
     * `manifest_id`: primary key of the manifest
@@ -675,14 +658,12 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/enrollments/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/enrollments/?manifest_id=2" \
   |python3 -m json.tool
 ```
@@ -773,7 +754,6 @@ Response:
 #### Get an enrollment
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_enrollment`
 * `<int:pk>`: the primary key of the enrollment
 
@@ -781,7 +761,6 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/enrollments/1/" \
   |python3 -m json.tool
 ```
@@ -888,7 +867,6 @@ Response (204 No Content)
 #### List all manifest catalogs
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_manifestcatalog`
 * Optional filter parameters:
     * `manifest_id` ID of the manifest
@@ -898,21 +876,18 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifest_catalogs/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifest_catalogs/?manifest_id=1" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifest_catalogs/?catalog_id=2" \
   |python3 -m json.tool
 ```
@@ -971,7 +946,6 @@ Response:
 #### Get a manifest catalog
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_manifestcatalog`
 * `<int:pk>`: the primary key of the manifest catalog
 
@@ -979,7 +953,6 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifest_catalogs/1/" \
   |python3 -m json.tool
 ```
@@ -1055,7 +1028,6 @@ Response (204 No Content)
 #### List all manifest sub manifests
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_manifestsubmanifest`
 * Optional filter parameters:
     * `manifest_id` ID of the manifest
@@ -1065,21 +1037,18 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifest_sub_manifests/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifest_sub_manifests/?manifest_id=1" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifest_sub_manifests/?sub_manifest_id=2" \
   |python3 -m json.tool
 ```
@@ -1138,7 +1107,6 @@ Response:
 #### Get a manifest sub manifest
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_manifestsubmanifest`
 * `<int:pk>`: the primary key of the manifest sub manifest
 
@@ -1146,7 +1114,6 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/manifest_sub_manifests/1/" \
   |python3 -m json.tool
 ```
@@ -1222,7 +1189,6 @@ Response (204 No Content)
 #### List all sub manifests
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_submanifest`
 * Optional filter parameter:
     * `name` mame of the manifest
@@ -1231,14 +1197,12 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/sub_manifests/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/sub_manifests/?name=Browsers" \
   |python3 -m json.tool
 ```
@@ -1300,7 +1264,6 @@ Response:
 #### Get a sub manifest
 
 * method: GET
-* Content-Type: application/json
 * Required permission: `monolith.view_submanifest`
 * `<int:pk>`: the primary key of the sub manifest
 
@@ -1308,7 +1271,6 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H "Content-Type: application/json" \
   "https://zentral.example.com/api/monolith/sub_manifests/1/" \
   |python3 -m json.tool
 ```
@@ -1379,6 +1341,221 @@ Example
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   "https://zentral.example.com/api/monolith/sub_manifests/1/"
+```
+
+Response (204 No Content)
+
+### /api/monolith/sub_manifest_pkg_infos/
+
+#### List all sub manifest pkg infos
+
+* method: GET
+* Required permission: `monolith.view_submanifestpkginfo`
+* Optional filter parameter:
+    * `sub_manifest_id` primary key of the mame of the sub manifest
+
+Examples:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/" \
+  |python3 -m json.tool
+```
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/?sub_manifest_id=1" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[{
+    "id": 1,
+    "sub_manifest": 1,
+    "key": "managed_installs",
+    "featured_item": false,
+    "condition": null,
+    "pkg_info_name": "Nudge",
+    "shard_modulo": 100,
+    "default_shard": 0,
+    "excluded_tags": [],
+    "tag_shards": [
+        {
+            "tag": 2,
+            "shard": 10
+        },
+        {
+            "tag": 1,
+            "shard": 20
+        }
+    ],
+    "created_at": "2023-03-06T09:19:21.342194",
+    "updated_at": "2023-03-06T09:19:21.342209"
+}]
+```
+
+#### Add a sub manifest pkg info
+
+* method: POST
+* Content-Type: application/json
+* Required permission: `monolith.add_submanifestpkginfo`
+
+Examples:
+
+sub\_manifest_pkg_info.json
+
+```json
+{
+  "sub_manifest": 1,
+  "pkg_info_name": "Firefox",
+  "featured_item": true,
+  "key": "optional_installs",
+  "excluded_tags": [2],
+  "tag_shards": []
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/" \
+  -d @sub_manifest_pkg_info.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "sub_manifest": 1,
+    "key": "optional_installs",
+    "featured_item": true,
+    "condition": null,
+    "pkg_info_name": "Firefox",
+    "shard_modulo": 100,
+    "default_shard": 100,
+    "excluded_tags": [
+        2
+    ],
+    "tag_shards": [],
+    "created_at": "2023-03-06T10:12:09.479512",
+    "updated_at": "2023-03-06T10:12:09.479528"
+}
+```
+
+### /api/monolith/sub_manifest_pkg_infos/`<int:pk>`/
+
+#### Get a sub manifest pkg info
+
+* method: GET
+* Required permission: `monolith.view_submanifestpkginfo`
+* `<int:pk>`: the primary key of the sub manifest pkg info
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/2/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 2,
+    "sub_manifest": 1,
+    "key": "optional_installs",
+    "featured_item": true,
+    "condition": null,
+    "pkg_info_name": "Firefox",
+    "shard_modulo": 100,
+    "default_shard": 100,
+    "excluded_tags": [
+        2
+    ],
+    "tag_shards": [],
+    "created_at": "2023-03-06T10:12:09.479512",
+    "updated_at": "2023-03-06T10:12:09.479528"
+}
+```
+
+#### Update a sub manifest pkg info
+
+* method: PUT
+* Content-Type: application/json
+* Required permission: `monolith.change_submanifestpkginfo`
+* `<int:pk>`: the primary key of the sub manifest pkg info
+
+Example:
+
+sub\_manifest.json
+
+```json
+{
+  "sub_manifest": 1,
+  "pkg_info_name": "Firefox",
+  "featured_item": false,
+  "key": "optional_installs",
+  "excluded_tags": [],
+  "tag_shards": [
+    {
+      "tag": 2,
+      "shard": 50
+    }
+  ]
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/2/" \
+  -d @sub_manifest_pkg_info.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```
+{
+    "id": 2,
+    "sub_manifest": 1,
+    "key": "optional_installs",
+    "featured_item": false,
+    "condition": null,
+    "pkg_info_name": "Firefox",
+    "shard_modulo": 100,
+    "default_shard": 100,
+    "excluded_tags": [],
+    "tag_shards": [
+        {
+            "tag": 2,
+            "shard": 50
+        }
+    ],
+    "created_at": "2023-03-06T10:12:09.479512",
+    "updated_at": "2023-03-06T10:21:28.001665"
+}
+```
+
+#### Delete a sub manifest pkg info
+
+* method: DELETE
+* Required permission: `monolith.delete_submanifest`
+* `<int:pk>`: the primary key of the sub manifest pkg info.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/2/"
 ```
 
 Response (204 No Content)

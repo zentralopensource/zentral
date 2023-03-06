@@ -12,11 +12,10 @@ from zentral.utils.http import user_agent_and_ip_address_from_request
 from .conf import monolith_conf
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
 from .models import (CacheServer, Catalog, Condition, Enrollment,
-                     Manifest, ManifestCatalog, ManifestSubManifest, SubManifest)
-from .serializers import (CatalogSerializer, ConditionSerializer,
-                          EnrollmentSerializer,
-                          ManifestSerializer, ManifestCatalogSerializer,
-                          ManifestSubManifestSerializer, SubManifestSerializer)
+                     Manifest, ManifestCatalog, ManifestSubManifest, SubManifest, SubManifestPkgInfo)
+from .serializers import (CatalogSerializer, ConditionSerializer, EnrollmentSerializer,
+                          ManifestSerializer, ManifestCatalogSerializer, ManifestSubManifestSerializer,
+                          SubManifestSerializer, SubManifestPkgInfoSerializer)
 from .utils import build_configuration_plist, build_configuration_profile
 
 
@@ -244,4 +243,21 @@ class SubManifestList(generics.ListCreateAPIView):
 class SubManifestDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = SubManifest.objects.all()
     serializer_class = SubManifestSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+
+
+# sub manifest pkg infos
+
+
+class SubManifestPkgInfoList(generics.ListCreateAPIView):
+    queryset = SubManifestPkgInfo.objects.all()
+    serializer_class = SubManifestPkgInfoSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ('sub_manifest_id',)
+
+
+class SubManifestPkgInfoDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = SubManifestPkgInfo.objects.all()
+    serializer_class = SubManifestPkgInfoSerializer
     permission_classes = [DefaultDjangoModelPermissions]
