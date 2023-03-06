@@ -83,7 +83,7 @@ class CatalogDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (DefaultDjangoModelPermissions,)
 
     def perform_destroy(self, instance):
-        if not instance.can_be_deleted():
+        if not instance.can_be_deleted(override_manual_management=True):
             raise ValidationError('This catalog cannot be deleted')
         return super().perform_destroy(instance)
 

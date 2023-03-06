@@ -93,8 +93,8 @@ class Catalog(models.Model):
         return "{}?{}".format(reverse("monolith:pkg_infos"),
                               urllib.parse.urlencode({"catalog": self.pk}))
 
-    def can_be_deleted(self):
-        return (monolith_conf.repository.manual_catalog_management
+    def can_be_deleted(self, override_manual_management=False):
+        return ((override_manual_management or monolith_conf.repository.manual_catalog_management)
                 and self.pkginfo_set.filter(archived_at__isnull=True).count() == 0
                 and self.manifestcatalog_set.count() == 0)
 

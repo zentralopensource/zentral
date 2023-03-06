@@ -611,15 +611,13 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_delete_catalog_not_ok(self):
-        catalog = self.force_catalog()
+        manifest_catalog = self.force_manifest_catalog()
         self._set_permissions("monolith.delete_catalog")
-        response = self.delete(reverse("monolith_api:catalog", args=(catalog.pk,)))
+        response = self.delete(reverse("monolith_api:catalog", args=(manifest_catalog.catalog.pk,)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ['This catalog cannot be deleted'])
 
-    @patch("zentral.contrib.monolith.models.monolith_conf.repository")
-    def test_delete_catalog(self, repository):
-        repository.manual_catalog_management = True
+    def test_delete_catalog(self):
         catalog = self.force_catalog()
         self._set_permissions("monolith.delete_catalog")
         response = self.delete(reverse("monolith_api:catalog", args=(catalog.pk,)))
