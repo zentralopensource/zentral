@@ -1482,17 +1482,19 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_update_manifest_sub_manifest(self):
-        manifest_sub_manifest = self.force_manifest_sub_manifest()
+        manifest_sub_manifest = self.force_manifest_sub_manifest(
+            tag=Tag.objects.create(name=get_random_string(12))
+        )
+        self.assertEqual(manifest_sub_manifest.tags.count(), 1)
         manifest = self.force_manifest()
         sub_manifest = self.force_sub_manifest()
-        tag = Tag.objects.create(name=get_random_string(12))
         self._set_permissions("monolith.change_manifestsubmanifest")
         response = self._put_json_data(
             reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)),
             data={
                 'manifest': manifest.pk,
                 'sub_manifest': sub_manifest.pk,
-                'tags': [tag.pk],
+                'tags': [],
             }
         )
         self.assertEqual(response.status_code, 200)
@@ -1502,9 +1504,9 @@ class MonolithAPIViewsTestCase(TestCase):
             'id': test_manifest_sub_manifest.pk,
             'manifest': manifest.pk,
             'sub_manifest': sub_manifest.pk,
-            'tags': [tag.pk]
+            'tags': []
         })
-        self.assertEqual(list(t.pk for t in test_manifest_sub_manifest.tags.all()), [tag.pk])
+        self.assertEqual(test_manifest_sub_manifest.tags.count(), 0)
 
     # delete manifest sub manifest
 
