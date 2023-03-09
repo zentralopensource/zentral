@@ -8,14 +8,12 @@ from .models import Configuration, Enrollment
 class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
-        fields = ("id", "name", "description",
-                  "inventory_apps_full_info_shard",
-                  "principal_user_detection_sources", "principal_user_detection_domains",
-                  "collected_condition_keys",
-                  "managed_installs_sync_interval_days",
-                  "auto_reinstall_incidents",
-                  "auto_failed_install_incidents",
-                  "version", "created_at", "updated_at")
+        fields = "__all__"
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        instance.refresh_from_db()
+        return instance
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):

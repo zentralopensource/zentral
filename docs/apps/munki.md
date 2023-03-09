@@ -21,20 +21,29 @@ Number of failed installs for each package.
 
 ## HTTP API
 
-### `/api/munki/configurations/`
+### /api/munki/configurations/
+
+
+#### List all configurations
 
 * method: GET
-* Content-Type: application/json
-* required permissions:
-    * `munki.view_configuration`
+* required permissions: `munki.view_configuration`
+* Optional filter parameter:
+    * `name`: name of the configuration
 
-Use this endpoint to list all available Zentral munki configurations.
+Examples:
 
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
   https://zentral.example.com/api/munki/configurations/ \
+  |python3 -m json.tool
+```
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/munki/configurations/?name=Default \
   |python3 -m json.tool
 ```
 
@@ -67,20 +76,44 @@ Response:
 ]
 ```
 
-### `/api/munki/configurations/{id}/`
+#### Add a configuration
 
-* method: GET
+* method: POST
 * Content-Type: application/json
-* required permissions:
-    * `munki.view_configuration`
+* Required permission: `munki.add_configuration`
 
-Use this endpoint to get a specific Zentral munki configuration.
+Example:
+
+configuration.json
+
+```json
+{
+  "name": "Default",
+  "description": "Description",
+  "inventory_apps_full_info_shard": 50,
+  "principal_user_detection_sources": [
+    "google_chrome",
+    "company_portal"
+  ],
+  "principal_user_detection_domains": [
+    "zentral.io"
+  ],
+  "collected_condition_keys": [
+    "arch",
+    "machine_type"
+  ],
+  "managed_installs_sync_interval_days": 1,
+  "auto_reinstall_incidents": true,
+  "auto_failed_install_incidents": true,
+}
+```
 
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
-  https://zentral.example.com/api/munki/configurations/1/ \
+  -H "Content-Type: application/json" \
+  -X POST -d @configuration.json \
+  https://zentral.example.com/api/munki/configurations/ \
   |python3 -m json.tool
 ```
 
@@ -88,33 +121,160 @@ Response:
 
 ```json
 {
-    "auto_failed_install_incidents": false,
-    "auto_reinstall_incidents": true,
-    "collected_condition_keys": [
-        "arch",
-        "machine_type"
-    ],
-    "created_at": "2021-03-17T10:14:00.493868",
-    "description": "",
-    "id": 1,
-    "inventory_apps_full_info_shard": 100,
-    "managed_installs_sync_interval_days": 7,
-    "name": "Default",
-    "principal_user_detection_domains": [
-        "example.com"
-    ],
-    "principal_user_detection_sources": [
-        "logged_in_user"
-    ],
-    "updated_at": "2022-01-05T09:04:39.201411",
-    "version": 5
+  "id": 6,
+  "name": "Default",
+  "description": "Description",
+  "inventory_apps_full_info_shard": 50,
+  "principal_user_detection_sources": [
+    "google_chrome",
+    "company_portal"
+  ],
+  "principal_user_detection_domains": [
+    "zentral.io"
+  ],
+  "collected_condition_keys": [
+    "arch",
+    "machine_type"
+  ],
+  "managed_installs_sync_interval_days": 1,
+  "auto_reinstall_incidents": true,
+  "auto_failed_install_incidents": true,
+  "created_at": "2022-01-05T09:04:39.201311",
+  "updated_at": "2022-01-05T09:04:39.201411"
 }
 ```
 
-### `/api/munki/enrollments/`
+### /api/munki/configurations/`<int:pk>`/
+
+#### Get a configuration
 
 * method: GET
+* required permission: `munki.view_configuration`
+* `<int:pk>`: the primary key of the configuration
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/munki/configurations/6/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 6,
+  "name": "Default",
+  "description": "Description",
+  "inventory_apps_full_info_shard": 50,
+  "principal_user_detection_sources": [
+    "google_chrome",
+    "company_portal"
+  ],
+  "principal_user_detection_domains": [
+    "zentral.io"
+  ],
+  "collected_condition_keys": [
+    "arch",
+    "machine_type"
+  ],
+  "managed_installs_sync_interval_days": 1,
+  "auto_reinstall_incidents": true,
+  "auto_failed_install_incidents": true,
+  "created_at": "2022-01-05T09:04:39.201311",
+  "updated_at": "2022-01-05T09:04:39.201411"
+}
+```
+
+#### Update a configuration
+
+* method: PUT
 * Content-Type: application/json
+* Required permission: `munki.change_configuration`
+* `<int:pk>`: the primary key of the configuration
+
+Example:
+
+configuration.json
+
+```json
+{
+  "name": "Default",
+  "description": "Description",
+  "inventory_apps_full_info_shard": 50,
+  "principal_user_detection_sources": [
+    "google_chrome",
+    "company_portal"
+  ],
+  "principal_user_detection_domains": [
+    "zentral.io"
+  ],
+  "collected_condition_keys": [
+    "arch",
+    "machine_type"
+  ],
+  "managed_installs_sync_interval_days": 1,
+  "auto_reinstall_incidents": true,
+  "auto_failed_install_incidents": true,
+}
+```
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -X PUT -d @configuration.json \
+  https://zentral.example.com/api/munki/configurations/6/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 6,
+  "name": "Default",
+  "description": "Description",
+  "inventory_apps_full_info_shard": 50,
+  "principal_user_detection_sources": [
+    "google_chrome",
+    "company_portal"
+  ],
+  "principal_user_detection_domains": [
+    "zentral.io"
+  ],
+  "collected_condition_keys": [
+    "arch",
+    "machine_type"
+  ],
+  "managed_installs_sync_interval_days": 1,
+  "auto_reinstall_incidents": true,
+  "auto_failed_install_incidents": true,
+  "created_at": "2022-01-05T09:04:39.201311",
+  "updated_at": "2022-01-05T09:04:39.201411"
+}
+```
+
+#### Delete a configuration
+
+* method: DELETE
+* Required permission: `munki.delete_configuration`
+* `<int:pk>`: the primary key of the configuration
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -X DELETE \
+  https://zentral.example.com/api/munki/configurations/6/
+```
+
+Response (204 No Content)
+
+### /api/munki/enrollments/
+
+* method: GET
 * required permissions:
     * `munki.view_enrollment`
 
@@ -123,7 +283,6 @@ Use this endpoint to list all available Zentral munki enrollments.
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
   https://zentral.example.com/api/munki/enrollments/ \
   |python3 -m json.tool
 ```
@@ -154,10 +313,9 @@ Response:
 ]
 ```
 
-### `/api/munki/enrollments/{id}/`
+### /api/munki/enrollments/`<int:pk>`/
 
 * method: GET
-* Content-Type: application/json
 * required permissions:
     * `munki.view_enrollment`
 
@@ -166,7 +324,6 @@ Use this endpoint to get a specific Zentral munki enrollment.
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  -H 'Content-Type: application/json' \
   https://zentral.example.com/api/munki/enrollments/1/ \
   |python3 -m json.tool
 ```
@@ -195,10 +352,9 @@ Response:
 }
 ```
 
-### `/api/munki/enrollments/{id}/package/`
+### /api/munki/enrollments/`<int:pk>`/package/
 
 * method: GET
-* Content-Type: application/json
 * required permissions:
     * `munki.view_enrollment`
 

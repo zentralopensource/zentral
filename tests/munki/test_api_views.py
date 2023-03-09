@@ -54,13 +54,25 @@ class APIViewsTestCase(TestCase):
         self.set_permissions(*permissions)
         self.client.force_login(self.user)
 
-    def get(self, url, data=None, include_token=True):
-        kwargs = {}
+    def _make_request(self, method, url, data, include_token):
+        kwargs = {"content_type": "application/json"}
         if data is not None:
             kwargs["data"] = data
         if include_token:
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.get(url, **kwargs)
+        return method(url, **kwargs)
+
+    def get(self, url, data=None, include_token=True):
+        return self._make_request(self.client.get, url, data, include_token)
+
+    def post(self, url, data=None, include_token=True):
+        return self._make_request(self.client.post, url, data, include_token)
+
+    def put(self, url, data=None, include_token=True):
+        return self._make_request(self.client.put, url, data, include_token)
+
+    def delete(self, url, include_token=True):
+        return self._make_request(self.client.delete, url, None, include_token)
 
     # list configurations
 
@@ -94,6 +106,122 @@ class APIViewsTestCase(TestCase):
             response.json()
         )
 
+    def test_get_configurations_by_name(self):
+        self.force_configuration()
+        configuration = self.force_configuration()
+        self.set_permissions("munki.view_configuration")
+        response = self.get(reverse("munki_api:configurations"), {"name": configuration.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [{'auto_failed_install_incidents': False,
+              'auto_reinstall_incidents': False,
+              'collected_condition_keys': [],
+              'created_at': configuration.created_at.isoformat(),
+              'description': '',
+              'id': configuration.pk,
+              'inventory_apps_full_info_shard': 100,
+              'managed_installs_sync_interval_days': 7,
+              'name': configuration.name,
+              'principal_user_detection_domains': [],
+              'principal_user_detection_sources': [],
+              'updated_at': configuration.updated_at.isoformat(),
+              'version': 0}]
+        )
+
+    # create configuration
+
+    def test_create_configuration_unauthorized(self):
+        response = self.post(reverse("munki_api:configurations"), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_configuration_permission_denied(self):
+        response = self.post(reverse("munki_api:configurations"), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_configuration_required_field(self):
+        self.set_permissions("munki.add_configuration")
+        response = self.post(reverse("munki_api:configurations"), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'name': ['This field is required.']})
+
+    def test_create_configuration_default_values(self):
+        self.set_permissions("munki.add_configuration")
+        name = get_random_string(12)
+        response = self.post(reverse("munki_api:configurations"), {"name": name})
+        self.assertEqual(response.status_code, 201)
+        configuration = Configuration.objects.get(name=name)
+        self.assertEqual(
+            response.json(),
+            {'id': configuration.pk,
+             'name': name,
+             'description': '',
+             'inventory_apps_full_info_shard': 100,
+             'principal_user_detection_sources': [],
+             'principal_user_detection_domains': [],
+             'collected_condition_keys': [],
+             'managed_installs_sync_interval_days': 7,
+             'auto_reinstall_incidents': False,
+             'auto_failed_install_incidents': False,
+             'version': 0,
+             'created_at': configuration.created_at.isoformat(),
+             'updated_at': configuration.updated_at.isoformat()}
+        )
+        self.assertEqual(configuration.name, name)
+        self.assertEqual(configuration.description, "")
+        self.assertEqual(configuration.inventory_apps_full_info_shard, 100)
+        self.assertEqual(configuration.principal_user_detection_sources, [])
+        self.assertEqual(configuration.principal_user_detection_domains, [])
+        self.assertEqual(configuration.collected_condition_keys, [])
+        self.assertEqual(configuration.managed_installs_sync_interval_days, 7)
+        self.assertFalse(configuration.auto_reinstall_incidents)
+        self.assertFalse(configuration.auto_failed_install_incidents)
+        self.assertEqual(configuration.version, 0)
+
+    def test_create_configuration(self):
+        self.set_permissions("munki.add_configuration")
+        name = get_random_string(12)
+        response = self.post(
+            reverse("munki_api:configurations"),
+            {"name": name,
+             "description": "Description",
+             "inventory_apps_full_info_shard": 50,
+             "principal_user_detection_sources": ["google_chrome", "company_portal"],
+             "principal_user_detection_domains": ["zentral.io"],
+             "collected_condition_keys": ["yolo"],
+             "managed_installs_sync_interval_days": 1,
+             "auto_reinstall_incidents": True,
+             "auto_failed_install_incidents": True}
+        )
+        self.assertEqual(response.status_code, 201)
+        configuration = Configuration.objects.get(name=name)
+        self.assertEqual(
+            response.json(),
+            {'id': configuration.pk,
+             'name': name,
+             'description': 'Description',
+             'inventory_apps_full_info_shard': 50,
+             'principal_user_detection_sources': ["google_chrome", "company_portal"],
+             'principal_user_detection_domains': ["zentral.io"],
+             'collected_condition_keys': ["yolo"],
+             'managed_installs_sync_interval_days': 1,
+             'auto_reinstall_incidents': True,
+             'auto_failed_install_incidents': True,
+             'version': 0,
+             'created_at': configuration.created_at.isoformat(),
+             'updated_at': configuration.updated_at.isoformat()}
+        )
+        self.assertEqual(configuration.name, name)
+        self.assertEqual(configuration.description, "Description")
+        self.assertEqual(configuration.inventory_apps_full_info_shard, 50)
+        self.assertEqual(configuration.principal_user_detection_sources, ["google_chrome", "company_portal"])
+        self.assertEqual(configuration.principal_user_detection_domains, ["zentral.io"])
+        self.assertEqual(configuration.collected_condition_keys, ["yolo"])
+        self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
+        self.assertTrue(configuration.auto_reinstall_incidents)
+        self.assertTrue(configuration.auto_failed_install_incidents)
+        self.assertEqual(configuration.version, 0)
+
     # get configuration
 
     def test_get_configuration_unauthorized(self):
@@ -126,6 +254,82 @@ class APIViewsTestCase(TestCase):
              'version': 0},
             response.json()
         )
+
+    # update configuration
+
+    def test_update_configuration_unauthorized(self):
+        configuration = self.force_configuration()
+        response = self.put(reverse("munki_api:configuration", args=(configuration.pk,)), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_configuration_permission_denied(self):
+        configuration = self.force_configuration()
+        response = self.put(reverse("munki_api:configuration", args=(configuration.pk,)), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_configuration(self):
+        configuration = self.force_configuration()
+        self.set_permissions("munki.change_configuration")
+        name = get_random_string(12)
+        response = self.put(
+            reverse("munki_api:configuration", args=(configuration.pk,)),
+            {"name": name,
+             "description": "Description",
+             "inventory_apps_full_info_shard": 50,
+             "principal_user_detection_sources": ["google_chrome", "company_portal"],
+             "principal_user_detection_domains": ["zentral.io"],
+             "collected_condition_keys": ["yolo"],
+             "managed_installs_sync_interval_days": 1,
+             "auto_reinstall_incidents": True,
+             "auto_failed_install_incidents": True}
+        )
+        self.assertEqual(response.status_code, 200)
+        configuration.refresh_from_db()
+        self.assertEqual(
+            response.json(),
+            {'id': configuration.pk,
+             'name': name,
+             'description': 'Description',
+             'inventory_apps_full_info_shard': 50,
+             'principal_user_detection_sources': ["google_chrome", "company_portal"],
+             'principal_user_detection_domains': ["zentral.io"],
+             'collected_condition_keys': ["yolo"],
+             'managed_installs_sync_interval_days': 1,
+             'auto_reinstall_incidents': True,
+             'auto_failed_install_incidents': True,
+             'version': 1,
+             'created_at': configuration.created_at.isoformat(),
+             'updated_at': configuration.updated_at.isoformat()}
+        )
+        self.assertEqual(configuration.name, name)
+        self.assertEqual(configuration.description, "Description")
+        self.assertEqual(configuration.inventory_apps_full_info_shard, 50)
+        self.assertEqual(configuration.principal_user_detection_sources, ["google_chrome", "company_portal"])
+        self.assertEqual(configuration.principal_user_detection_domains, ["zentral.io"])
+        self.assertEqual(configuration.collected_condition_keys, ["yolo"])
+        self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
+        self.assertTrue(configuration.auto_reinstall_incidents)
+        self.assertTrue(configuration.auto_failed_install_incidents)
+        self.assertEqual(configuration.version, 1)
+
+    # delete configuration
+
+    def test_delete_configuration_unauthorized(self):
+        configuration = self.force_configuration()
+        response = self.delete(reverse("munki_api:configuration", args=(configuration.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_configuration_permission_denied(self):
+        configuration = self.force_configuration()
+        response = self.delete(reverse("munki_api:configuration", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_configuration(self):
+        configuration = self.force_configuration()
+        self.set_permissions("munki.delete_configuration")
+        response = self.delete(reverse("munki_api:configuration", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(Configuration.objects.filter(pk=configuration.pk).count(), 0)
 
     # list enrollments
 

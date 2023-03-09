@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from django_filters import rest_framework as filters
 from rest_framework import generics
 from rest_framework.views import APIView
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
@@ -7,22 +8,24 @@ from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 from .serializers import ConfigurationSerializer, EnrollmentSerializer
 
 
-class ConfigurationList(generics.ListAPIView):
-    """
-    List all Configurations
-    """
-    queryset = Configuration.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
-    serializer_class = ConfigurationSerializer
+# configurations
 
 
-class ConfigurationDetail(generics.RetrieveAPIView):
-    """
-    Retrieve a Configuration instance.
-    """
+class ConfigurationList(generics.ListCreateAPIView):
     queryset = Configuration.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ("name",)
+
+
+class ConfigurationDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Configuration.objects.all()
+    serializer_class = ConfigurationSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+
+
+# enrollments
 
 
 class EnrollmentList(generics.ListAPIView):
