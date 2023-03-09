@@ -48,6 +48,15 @@ class EnrollmentSerializer(serializers.ModelSerializer):
     def get_plist_download_url(self, obj):
         return self.get_download_url("plist", obj)
 
+    def validate(self, data):
+        manifest_mbu = data["manifest"].meta_business_unit
+        secret_mbu = data["secret"]["meta_business_unit"]
+        if manifest_mbu != secret_mbu:
+            raise serializers.ValidationError({
+                "secret.meta_business_unit": "Must be the same as the manifest meta business unit."
+            })
+        return data
+
     def create(self, validated_data):
         secret_data = validated_data.pop('secret')
         secret_tags = secret_data.pop("tags", [])

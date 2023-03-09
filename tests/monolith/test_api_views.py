@@ -1027,6 +1027,20 @@ class MonolithAPIViewsTestCase(TestCase):
             'updated_at': enrollment.updated_at.isoformat(),
         })
 
+    def test_create_enrollment_mbu_conflict(self):
+        self._set_permissions("monolith.add_enrollment")
+        manifest = self.force_manifest()
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        response = self._post_json_data(reverse("monolith_api:enrollments"), data={
+            'manifest': manifest.pk,
+            'secret': {'meta_business_unit': mbu.pk}
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'secret.meta_business_unit': ['Must be the same as the manifest meta business unit.']}
+        )
+
     # update enrollment
 
     def test_update_enrollment_unauthorized(self):
