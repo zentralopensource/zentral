@@ -732,6 +732,16 @@ class MonolithAPIViewsTestCase(TestCase):
         })
         self.assertEqual(condition.predicate, predicate)
 
+    def test_create_condition_name_conflict(self):
+        condition = self.force_condition()
+        self._set_permissions("monolith.add_condition")
+        response = self._post_json_data(reverse("monolith_api:conditions"), data={
+            'name': condition.name,
+            'predicate': get_random_string(12)
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'name': ['condition with this name already exists.']})
+
     # update condition
 
     def test_update_condition_unauthorized(self):
@@ -780,6 +790,17 @@ class MonolithAPIViewsTestCase(TestCase):
         })
         self.assertEqual(condition.name, new_name)
         self.assertEqual(condition.predicate, new_predicate)
+
+    def test_update_condition_name_conflict(self):
+        condition1 = self.force_condition()
+        condition2 = self.force_condition()
+        self._set_permissions("monolith.change_condition")
+        response = self._put_json_data(reverse("monolith_api:condition", args=(condition2.pk,)), data={
+            'name': condition1.name,
+            'predicate': condition2.predicate,
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'name': ['condition with this name already exists.']})
 
     # delete condition
 
