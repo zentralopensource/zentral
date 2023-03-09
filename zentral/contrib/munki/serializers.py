@@ -1,6 +1,7 @@
 from django.urls import reverse
 from rest_framework import serializers
 from zentral.conf import settings
+from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .models import Configuration, Enrollment
 
@@ -23,11 +24,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Enrollment
-        fields = ("id", "configuration",
-                  "secret", "version",
-                  "enrolled_machines_count",
-                  "package_download_url",
-                  "created_at", "updated_at")
+        exclude = ("distributor_content_type", "distributor_pk")
 
     def get_enrolled_machines_count(self, obj):
         return obj.enrolledmachine_set.count()
@@ -35,3 +32,18 @@ class EnrollmentSerializer(serializers.ModelSerializer):
     def get_package_download_url(self, obj):
         path = reverse("munki_api:enrollment_package", args=(obj.pk,))
         return f'https://{settings["api"]["fqdn"]}{path}'
+
+    def create(self, validated_data):
+        secret_data = validated_data.pop('secret')
+        secret_tags = secret_data.pop("tags", [])
+        secret = EnrollmentSecret.objects.create(**secret_data)
+        if secret_tags:
+            secret.tags.set(secret_tags)
+        enrollment = Enrollment.objects.create(secret=secret, **validated_data)
+        return enrollment
+
+    def update(self, instance, validated_data):
+        secret_serializer = self.fields["secret"]
+        secret_data = validated_data.pop('secret')
+        secret_serializer.update(instance.secret, secret_data)
+        return super().update(instance, validated_data)

@@ -274,16 +274,26 @@ Response (204 No Content)
 
 ### /api/munki/enrollments/
 
-* method: GET
-* required permissions:
-    * `munki.view_enrollment`
+#### List all enrollments
 
-Use this endpoint to list all available Zentral munki enrollments.
+* method: GET
+* required permission: `munki.view_enrollment`
+* Optional filter parameter:
+    * `configuration_id`: primary key of the configuration
+
+Examples:
 
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   https://zentral.example.com/api/munki/enrollments/ \
+  |python3 -m json.tool
+```
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://zentral.example.com/api/munki/enrollments/?configuration_id=1 \
   |python3 -m json.tool
 ```
 
@@ -313,13 +323,66 @@ Response:
 ]
 ```
 
+#### Add an enrollment
+
+* method: POST
+* Content-Type: application/json
+* required permission: `munki.add_enrollment`
+
+Example:
+
+enrollment.json
+
+```json
+{
+  "configuration": 2,
+  "secret": {
+    "meta_business_unit": 1,
+    "tags": [17, 42]
+  }
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/munki/enrollments/" \
+  -d @enrollment.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "configuration": 2,
+  "enrolled_machines_count": 0,
+  "secret": {
+    "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
+    "request_count": 0,
+    "id": 3,
+    "serial_numbers": [],
+    "meta_business_unit": 1,
+    "quota": null,
+    "tags": [17, 42],
+    "udids": []
+  },
+  "version": 1,
+  "package_download_url": "https://zentral.example.com/api/munki/enrollments/1/package/",
+  "created_at": "2023-01-10T11:02:51.831544",
+  "updated_at": "2023-01-10T11:02:51.831553"
+}
+```
+
 ### /api/munki/enrollments/`<int:pk>`/
 
-* method: GET
-* required permissions:
-    * `munki.view_enrollment`
+#### Get an enrollment
 
-Use this endpoint to get a specific Zentral munki enrollment.
+* method: GET
+* required permission: `munki.view_enrollment`
+* `<int:pk>`: the primary key of the enrollment
 
 ```bash
 curl \
@@ -352,13 +415,84 @@ Response:
 }
 ```
 
+#### Update an enrollment
+
+* method: PUT
+* Content-Type: application/json
+* required permission: `munki.change_enrollment`
+* `<int:pk>`: the primary key of the enrollment
+
+Example:
+
+enrollment.json
+
+```json
+{
+  "configuration": 2,
+  "secret": {
+    "meta_business_unit": 1,
+    "tags": [17, 42]
+  }
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://zentral.example.com/api/munki/enrollments/1/" \
+  -d @enrollment.json \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "id": 1,
+  "configuration": 2,
+  "enrolled_machines_count": 0,
+  "secret": {
+    "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
+    "request_count": 0,
+    "id": 3,
+    "serial_numbers": [],
+    "meta_business_unit": 1,
+    "quota": null,
+    "tags": [17, 42],
+    "udids": []
+  },
+  "version": 2,
+  "package_download_url": "https://zentral.example.com/api/munki/enrollments/1/package/",
+  "created_at": "2023-01-10T11:02:51.831544",
+  "updated_at": "2023-01-10T11:02:51.831553"
+}
+```
+
+#### Delete an enrollment
+
+* method: DELETE
+* required permission: `munki.delete_enrollment`
+* `<int:pk>`: the primary key of the enrollment
+
+Example:
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://zentral.example.com/api/munki/enrollments/1/"
+```
+
+Response (204 No Content)
+
 ### /api/munki/enrollments/`<int:pk>`/package/
 
-* method: GET
-* required permissions:
-    * `munki.view_enrollment`
+#### Download a Zentral enrollment package
 
-Use this endpoint to download a Zentral enrollment package.
+* method: GET
+* required permission: `munki.view_enrollment`
+
+Example:
 
 ```bash
 curl \

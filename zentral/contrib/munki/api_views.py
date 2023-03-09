@@ -28,28 +28,24 @@ class ConfigurationDetail(generics.RetrieveUpdateDestroyAPIView):
 # enrollments
 
 
-class EnrollmentList(generics.ListAPIView):
-    """
-    List all Enrollments
-    """
+class EnrollmentList(generics.ListCreateAPIView):
+    queryset = Enrollment.objects.all()
+    permission_classes = [DefaultDjangoModelPermissions]
+    serializer_class = EnrollmentSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ("configuration_id",)
+
+
+class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Enrollment.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
 
 
-class EnrollmentDetail(generics.RetrieveAPIView):
-    """
-    Retrieve an Enrollment instance.
-    """
-    queryset = Enrollment.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
-    serializer_class = EnrollmentSerializer
+# enrollment packages
 
 
 class EnrollmentPackage(APIView):
-    """
-    Download enrollment package
-    """
     permission_required = "munki.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
 

@@ -1,6 +1,7 @@
 from datetime import datetime
 from functools import reduce
 import operator
+import uuid
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
@@ -9,11 +10,13 @@ from django.utils.http import http_date
 from django.test import TestCase
 from accounts.models import APIToken, User
 from zentral.conf import settings
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.munki.models import Configuration, Enrollment
 
 
 class APIViewsTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         cls.service_account = User.objects.create(
@@ -341,6 +344,35 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("munki_api:enrollments"))
         self.assertEqual(response.status_code, 403)
 
+    def test_get_enrollment_by_configuration_id(self):
+        self.force_enrollment()
+        enrollment = self.force_enrollment()
+        self.set_permissions("munki.view_enrollment")
+        response = self.get(reverse('munki_api:enrollments'), {"configuration_id": enrollment.configuration.id})
+        self.assertEqual(response.status_code, 200)
+        fqdn = settings["api"]["fqdn"]
+        self.assertEqual(
+            response.json(),
+            [{'id': enrollment.pk,
+              'configuration': enrollment.configuration.pk,
+              'enrolled_machines_count': 0,
+              'secret': {
+                  'id': enrollment.secret.pk,
+                  'secret': enrollment.secret.secret,
+                  'meta_business_unit': self.mbu.pk,
+                  'tags': [],
+                  'serial_numbers': None,
+                  'udids': None,
+                  'quota': None,
+                  'request_count': 0
+              },
+              'version': 1,
+              'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/',
+              'created_at': enrollment.created_at.isoformat(),
+              'updated_at': enrollment.updated_at.isoformat()}],
+            response.json()
+        )
+
     def test_get_enrollments(self):
         enrollment = self.force_enrollment()
         self.set_permissions("munki.view_enrollment")
@@ -366,6 +398,65 @@ class APIViewsTestCase(TestCase):
              'created_at': enrollment.created_at.isoformat(),
              'updated_at': enrollment.updated_at.isoformat()},
             response.json()
+        )
+
+    # create enrollment
+
+    def test_create_enrollment_unauthorized(self):
+        response = self.post(reverse("munki_api:enrollments"), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_enrollment_permission_denied(self):
+        response = self.post(reverse("munki_api:enrollments"), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enrollment_required_fields(self):
+        self.set_permissions("munki.add_enrollment")
+        response = self.post(reverse("munki_api:enrollments"), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'configuration': ['This field is required.'], 'secret': ['This field is required.']}
+        )
+
+    def test_create_enrollment(self):
+        configuration = self.force_configuration()
+        self.set_permissions("munki.add_enrollment")
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
+        serial_numbers = [get_random_string(12) for _ in range(1)]
+        uuids = [str(uuid.uuid4()) for _ in range(1)]
+        response = self.post(
+            reverse("munki_api:enrollments"),
+            {'configuration': configuration.pk,
+             'secret': {'meta_business_unit': self.mbu.pk,
+                        'serial_numbers': serial_numbers,
+                        'tags': [t.id for t in tags],
+                        'udids': uuids,
+                        'quota': 19}}
+        )
+        self.assertEqual(response.status_code, 201)
+        enrollment = configuration.enrollment_set.first()
+        fqdn = settings["api"]["fqdn"]
+        self.assertEqual(
+            response.json(),
+            {'id': enrollment.pk,
+             'configuration': configuration.pk,
+             'enrolled_machines_count': 0,
+             'secret': {
+                 'id': enrollment.secret.pk,
+                 'secret': enrollment.secret.secret,
+                 'meta_business_unit': self.mbu.pk,
+                 'tags': [t.id for t in tags],
+                 'serial_numbers': serial_numbers,
+                 'udids': uuids,
+                 'quota': 19,
+                 'request_count': 0
+             },
+             'version': 1,
+             'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/',
+             'created_at': enrollment.created_at.isoformat(),
+             'updated_at': enrollment.updated_at.isoformat()},
+            {}
         )
 
     # get enrollment
@@ -411,6 +502,77 @@ class APIViewsTestCase(TestCase):
              'created_at': enrollment.created_at.isoformat(),
              'updated_at': enrollment.updated_at.isoformat()},
         )
+
+    # update enrollment
+
+    def test_update_enrollment_unauthorized(self):
+        enrollment = self.force_enrollment()
+        response = self.put(reverse("munki_api:enrollment", args=(enrollment.pk,)), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_enrollment_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.put(reverse("munki_api:enrollment", args=(enrollment.pk,)), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_enrollment(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("munki.change_enrollment")
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
+        serial_numbers = [get_random_string(12) for _ in range(1)]
+        uuids = [str(uuid.uuid4()) for _ in range(1)]
+        response = self.put(
+            reverse("munki_api:enrollment", args=(enrollment.pk,)),
+            {'configuration': enrollment.configuration.pk,
+             'secret': {'meta_business_unit': self.mbu.pk,
+                        'serial_numbers': serial_numbers,
+                        'tags': [t.id for t in tags],
+                        'udids': uuids,
+                        'quota': 19}}
+        )
+        self.assertEqual(response.status_code, 200)
+        enrollment.refresh_from_db()
+        fqdn = settings["api"]["fqdn"]
+        self.assertEqual(
+            response.json(),
+            {'id': enrollment.pk,
+             'configuration': enrollment.configuration.pk,
+             'enrolled_machines_count': 0,
+             'secret': {
+                 'id': enrollment.secret.pk,
+                 'secret': enrollment.secret.secret,
+                 'meta_business_unit': self.mbu.pk,
+                 'tags': [t.id for t in tags],
+                 'serial_numbers': serial_numbers,
+                 'udids': uuids,
+                 'quota': 19,
+                 'request_count': 0
+             },
+             'version': 2,
+             'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/',
+             'created_at': enrollment.created_at.isoformat(),
+             'updated_at': enrollment.updated_at.isoformat()},
+            {}
+        )
+
+    # delete enrollment
+
+    def test_delete_enrollment_unauthorized(self):
+        enrollment = self.force_enrollment()
+        response = self.delete(reverse("munki_api:enrollment", args=(enrollment.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_enrollment_permission_denied(self):
+        enrollment = self.force_enrollment()
+        response = self.delete(reverse("munki_api:enrollment", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_enrollment(self):
+        enrollment = self.force_enrollment()
+        self.set_permissions("munki.delete_enrollment")
+        response = self.delete(reverse("munki_api:enrollment", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(Enrollment.objects.filter(pk=enrollment.pk).count(), 0)
 
     # get enrollment package
 
