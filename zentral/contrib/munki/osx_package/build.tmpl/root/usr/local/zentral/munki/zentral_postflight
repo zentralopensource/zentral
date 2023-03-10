@@ -292,6 +292,32 @@ def build_managed_installs_payload():
 # Machine infos
 
 
+def build_os_version_dict(os_version_str):
+    return dict(zip(['major', 'minor', 'patch'],
+                    (int(s) for s in os_version_str.split('.'))))
+
+
+def get_sw_ver_os_version():
+    os_version = {}
+    try:
+        result = subprocess.check_output(["/usr/bin/sw_vers"], encoding="utf-8")
+    except Exception:
+        # should never happen
+        print("Could not run sw_vers")
+        return os_version
+    for line in result.splitlines():
+        key, val = (s.strip() for s in line.strip().split(":"))
+        if key == "ProductName":
+            os_version["name"] = val
+        elif key == "ProductVersion":
+            os_version.update(build_os_version_dict(val))
+        elif key == "BuildVersion":
+            os_version["build"] = val
+        elif key == "ProductVersionExtra":
+            os_version["version"] = val
+    return os_version
+
+
 class SystemProfilerReport(object):
     def __init__(self):
         p = subprocess.Popen([SYSTEM_PROFILER, '-xml',
@@ -349,13 +375,14 @@ class SystemProfilerReport(object):
         uptime = int(timedelta(**td_kwargs).total_seconds())
 
         # OS version
-        os_version = item_d['os_version']
-        os_name, os_version_str, os_build = os_version.rsplit(' ', 2)
-        os_build = os_build.strip('()')
-        os_version = {'name': os_name,
-                      'build': os_build}
-        os_version.update(dict(zip(['major', 'minor', 'patch'],
-                                   (int(s) for s in os_version_str.split('.')))))
+        os_version = get_sw_ver_os_version()
+        if not os_version:
+            os_version = item_d['os_version']
+            os_name, os_version_str, os_build = os_version.rsplit(' ', 2)
+            os_build = os_build.strip('()')
+            os_version = {'name': os_name,
+                          'build': os_build}
+            os_version.update(build_os_version_dict(os_version_str))
         return {'serial_number': serial_number,
                 'system_info': system_info,
                 'os_version': os_version,
