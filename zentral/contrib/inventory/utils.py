@@ -2087,11 +2087,7 @@ def osx_app_count(source_names, bundle_ids=None, bundle_names=None):
     cursor.execute(query, query_args)
     columns = [col.name for col in cursor.description]
     for row in cursor.fetchall():
-        d = dict(zip(columns, row))
-        for k, v in d.items():
-            if v is None:
-                d[k] = '_'
-        yield d
+        yield dict(zip(columns, row))
 
 
 def program_count(source_names, program_names):
@@ -2122,11 +2118,7 @@ def program_count(source_names, program_names):
                            tuple(n for n in program_names)])
     columns = [col.name for col in cursor.description]
     for row in cursor.fetchall():
-        d = dict(zip(columns, row))
-        for k, v in d.items():
-            if v is None:
-                d[k] = '_'
-        yield d
+        yield dict(zip(columns, row))
 
 
 def android_app_count(source_names, names):
@@ -2156,11 +2148,7 @@ def android_app_count(source_names, names):
                            tuple(n for n in names)])
     columns = [col.name for col in cursor.description]
     for row in cursor.fetchall():
-        d = dict(zip(columns, row))
-        for k, v in d.items():
-            if v is None:
-                d[k] = '_'
-        yield d
+        yield dict(zip(columns, row))
 
 
 def deb_package_count(source_names, package_names):
@@ -2191,11 +2179,7 @@ def deb_package_count(source_names, package_names):
                            tuple(n for n in package_names)])
     columns = [col.name for col in cursor.description]
     for row in cursor.fetchall():
-        d = dict(zip(columns, row))
-        for k, v in d.items():
-            if v is None:
-                d[k] = '_'
-        yield d
+        yield dict(zip(columns, row))
 
 
 def ios_app_count(source_names, names):
@@ -2225,11 +2209,7 @@ def ios_app_count(source_names, names):
                            tuple(n for n in names)])
     columns = [col.name for col in cursor.description]
     for row in cursor.fetchall():
-        d = dict(zip(columns, row))
-        for k, v in d.items():
-            if v is None:
-                d[k] = '_'
-        yield d
+        yield dict(zip(columns, row))
 
 
 def os_version_count(source_names):
@@ -2259,11 +2239,7 @@ def os_version_count(source_names):
     cursor.execute(query, [tuple(n.lower() for n in source_names)])
     columns = [col.name for col in cursor.description]
     for row in cursor.fetchall():
-        d = dict(zip(columns, row))
-        for k, v in d.items():
-            if v is None:
-                d[k] = '_'
-        yield d
+        yield dict(zip(columns, row))
 
 
 def active_machines_count(source_names):
@@ -2290,11 +2266,7 @@ def active_machines_count(source_names):
     cursor.execute(query, [tuple(n.lower() for n in source_names)])
     columns = [col.name for col in cursor.description]
     for row in cursor.fetchall():
-        d = dict(zip(columns, row))
-        for k, v in d.items():
-            if v is None:
-                d[k] = '_'
-        yield d
+        yield dict(zip(columns, row))
 
 
 def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):

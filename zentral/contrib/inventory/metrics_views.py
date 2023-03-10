@@ -17,7 +17,7 @@ class MetricsView(BasePrometheusMetricsView):
                   ['name', 'version', 'source_name', 'source_id', 'le'],
                   registry=self.registry)
         for r in android_app_count(sources, names):
-            labels = {k: r[k] for k in ("name", "version", "source_name", "source_id")}
+            labels = {k: r[k] or "" for k in ("name", "version", "source_name", "source_id")}
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 
@@ -32,7 +32,7 @@ class MetricsView(BasePrometheusMetricsView):
                   ['name', 'version', 'source_name', 'source_id', 'machine_type', 'le'],
                   registry=self.registry)
         for r in deb_package_count(sources, names):
-            labels = {k: r[k] for k in ("name", "version", "source_name", "source_id", "machine_type")}
+            labels = {k: r[k] or "" for k in ("name", "version", "source_name", "source_id", "machine_type")}
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 
@@ -47,7 +47,7 @@ class MetricsView(BasePrometheusMetricsView):
                   ['name', 'version', 'source_name', 'source_id', 'le'],
                   registry=self.registry)
         for r in ios_app_count(sources, names):
-            labels = {k: r[k] for k in ("name", "version", "source_name", "source_id")}
+            labels = {k: r[k] or "" for k in ("name", "version", "source_name", "source_id")}
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 
@@ -67,7 +67,7 @@ class MetricsView(BasePrometheusMetricsView):
                   registry=self.registry)
         for r in os_version_count(sources):
             labels = {
-                k: r[k]
+                k: r[k] or ""
                 for k in ('name',
                           'major', 'minor', 'patch',
                           'build', 'version',
@@ -89,7 +89,7 @@ class MetricsView(BasePrometheusMetricsView):
                   ['name', 'version', 'source_name', 'source_id', 'le'],
                   registry=self.registry)
         for r in osx_app_count(sources, bundle_ids, bundle_names):
-            labels = {k: r[k] for k in ('name', 'version', 'source_name', 'source_id')}
+            labels = {k: r[k] or "" for k in ('name', 'version', 'source_name', 'source_id')}
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 
@@ -104,7 +104,7 @@ class MetricsView(BasePrometheusMetricsView):
                   ['name', 'version', 'source_name', 'source_id', 'le'],
                   registry=self.registry)
         for r in program_count(sources, names):
-            labels = {k: r[k] for k in ('name', 'version', 'source_name', 'source_id')}
+            labels = {k: r[k] or "" for k in ('name', 'version', 'source_name', 'source_id')}
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 
@@ -115,7 +115,7 @@ class MetricsView(BasePrometheusMetricsView):
                   ['platform', 'machine_type', 'source_id', 'source_name', 'le'],
                   registry=self.registry)
         for r in active_machines_count(self.all_source_names):
-            labels = {k: r[k] for k in ('platform', 'machine_type', 'source_name', 'source_id')}
+            labels = {k: r[k] or "" for k in ('platform', 'machine_type', 'source_name', 'source_id')}
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 

@@ -359,11 +359,11 @@ class PrometheusViewsTestCase(TestCase):
                 self.assertEqual(sample.name, "zentral_inventory_os_versions_bucket")
                 le = sample.labels["le"]
                 self.assertEqual(sample.labels,
-                                 {'build': '_',
+                                 {'build': '',
                                   'major': '12',
                                   'minor': '2',
                                   'name': 'OS X',
-                                  'patch': '_',
+                                  'patch': '',
                                   'version': '(a)',
                                   'source_name': self.ms2.source.name,
                                   'source_id': str(self.ms2.source.pk),

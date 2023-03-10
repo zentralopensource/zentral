@@ -38,10 +38,10 @@ class MetricsView(BasePrometheusMetricsView):
             try:
                 d["severity"] = Severity(d.pop("severity")).name.lower()
             except ValueError:
-                d["severity"] = "-"
+                d["severity"] = ""
             try:
                 d["status"] = Status(d.pop("status")).name.lower()
             except ValueError:
-                d["status"] = "-"
+                d["status"] = ""
             ig.labels(**d).set(incident_count)
             mig.labels(**d).set(machine_count)
