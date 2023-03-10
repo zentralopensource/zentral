@@ -12,7 +12,7 @@ import subprocess
 import urllib.request
 import zlib
 
-USER_AGENT = "Zentral/munkipreflight 0.13"
+USER_AGENT = "Zentral/munkipreflight 0.14"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package

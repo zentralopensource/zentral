@@ -17,7 +17,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.13"
+USER_AGENT = "Zentral/munkipostflight 0.14"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
