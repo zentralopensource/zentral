@@ -61,7 +61,7 @@ class PrometheusViewsTestCase(TestCase):
             "source": {"module": "tests2.zentral.io", "name": "Zentral Tests2"},
             "serial_number": "0123456789",
             "system_info": {"hardware_model": "MacBookPro14,2"},
-            "os_version": {'name': 'OS X', 'major': 12, 'minor': 2},
+            "os_version": {'name': 'OS X', 'major': 12, 'minor': 2, 'version': "(a)"},
             "android_apps": [
                 {"display_name": "AndroidApp1",
                  "version_name": "2.1"},
@@ -364,6 +364,7 @@ class PrometheusViewsTestCase(TestCase):
                                   'minor': '2',
                                   'name': 'OS X',
                                   'patch': '_',
+                                  'version': '(a)',
                                   'source_name': self.ms2.source.name,
                                   'source_id': str(self.ms2.source.pk),
                                   'platform': 'MACOS',

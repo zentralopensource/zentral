@@ -58,12 +58,19 @@ class MetricsView(BasePrometheusMetricsView):
             return
         self.all_source_names.update(sources)
         g = Gauge('zentral_inventory_os_versions_bucket', 'Zentral inventory OS Versions',
-                  ['name', 'major', 'minor', 'patch', 'build', 'source_id',  'source_name', 'platform', 'le'],
+                  ['name',
+                   'major', 'minor', 'patch',
+                   'build', 'version',
+                   'source_id',  'source_name',
+                   'platform',
+                   'le'],
                   registry=self.registry)
         for r in os_version_count(sources):
             labels = {
                 k: r[k]
-                for k in ('name', 'major', 'minor', 'patch', 'build',
+                for k in ('name',
+                          'major', 'minor', 'patch',
+                          'build', 'version',
                           'source_id',  'source_name',
                           'platform')
             }
