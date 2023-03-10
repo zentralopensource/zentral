@@ -36,14 +36,14 @@ Examples:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/munki/configurations/ \
+  https://$ZTL_HOST/api/munki/configurations/ \
   |python3 -m json.tool
 ```
 
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/munki/configurations/?name=Default \
+  "https://$ZTL_HOST/api/munki/configurations/?name=Default" \
   |python3 -m json.tool
 ```
 
@@ -52,26 +52,26 @@ Response:
 ```json
 [
     {
-        "auto_failed_install_incidents": false,
-        "auto_reinstall_incidents": true,
+        "id": 1,
+        "name": "Default",
+        "description": "",
+        "inventory_apps_full_info_shard": 100,
+        "principal_user_detection_sources": [
+            "logged_in_user"
+        ],
+        "principal_user_detection_domains": [
+            "zentral.io"
+        ],
         "collected_condition_keys": [
             "arch",
             "machine_type"
         ],
-        "created_at": "2021-03-17T10:14:00.493868",
-        "description": "",
-        "id": 1,
-        "inventory_apps_full_info_shard": 100,
         "managed_installs_sync_interval_days": 7,
-        "name": "Default",
-        "principal_user_detection_domains": [
-            "example.com"
-        ],
-        "principal_user_detection_sources": [
-            "logged_in_user"
-        ],
-        "updated_at": "2022-01-05T09:04:39.201411",
-        "version": 5
+        "auto_reinstall_incidents": true,
+        "auto_failed_install_incidents": false,
+        "version": 6,
+        "created_at": "2021-03-17T10:14:00.493868",
+        "updated_at": "2023-02-08T06:57:49.358674"
     }
 ]
 ```
@@ -88,7 +88,7 @@ configuration.json
 
 ```json
 {
-  "name": "Default",
+  "name": "Not all apps",
   "description": "Description",
   "inventory_apps_full_info_shard": 50,
   "principal_user_detection_sources": [
@@ -104,7 +104,7 @@ configuration.json
   ],
   "managed_installs_sync_interval_days": 1,
   "auto_reinstall_incidents": true,
-  "auto_failed_install_incidents": true,
+  "auto_failed_install_incidents": true
 }
 ```
 
@@ -113,7 +113,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X POST -d @configuration.json \
-  https://zentral.example.com/api/munki/configurations/ \
+  https://$ZTL_HOST/api/munki/configurations/ \
   |python3 -m json.tool
 ```
 
@@ -121,26 +121,27 @@ Response:
 
 ```json
 {
-  "id": 6,
-  "name": "Default",
-  "description": "Description",
-  "inventory_apps_full_info_shard": 50,
-  "principal_user_detection_sources": [
-    "google_chrome",
-    "company_portal"
-  ],
-  "principal_user_detection_domains": [
-    "zentral.io"
-  ],
-  "collected_condition_keys": [
-    "arch",
-    "machine_type"
-  ],
-  "managed_installs_sync_interval_days": 1,
-  "auto_reinstall_incidents": true,
-  "auto_failed_install_incidents": true,
-  "created_at": "2022-01-05T09:04:39.201311",
-  "updated_at": "2022-01-05T09:04:39.201411"
+    "id": 2,
+    "name": "Not all apps",
+    "description": "Description",
+    "inventory_apps_full_info_shard": 50,
+    "principal_user_detection_sources": [
+        "google_chrome",
+        "company_portal"
+    ],
+    "principal_user_detection_domains": [
+        "zentral.io"
+    ],
+    "collected_condition_keys": [
+        "arch",
+        "machine_type"
+    ],
+    "managed_installs_sync_interval_days": 1,
+    "auto_reinstall_incidents": true,
+    "auto_failed_install_incidents": true,
+    "version": 0,
+    "created_at": "2023-03-10T07:22:07.939979",
+    "updated_at": "2023-03-10T07:22:07.939994"
 }
 ```
 
@@ -157,7 +158,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/munki/configurations/6/ \
+  https://$ZTL_HOST/api/munki/configurations/2/ \
   |python3 -m json.tool
 ```
 
@@ -165,26 +166,27 @@ Response:
 
 ```json
 {
-  "id": 6,
-  "name": "Default",
-  "description": "Description",
-  "inventory_apps_full_info_shard": 50,
-  "principal_user_detection_sources": [
-    "google_chrome",
-    "company_portal"
-  ],
-  "principal_user_detection_domains": [
-    "zentral.io"
-  ],
-  "collected_condition_keys": [
-    "arch",
-    "machine_type"
-  ],
-  "managed_installs_sync_interval_days": 1,
-  "auto_reinstall_incidents": true,
-  "auto_failed_install_incidents": true,
-  "created_at": "2022-01-05T09:04:39.201311",
-  "updated_at": "2022-01-05T09:04:39.201411"
+    "id": 2,
+    "name": "Not all apps",
+    "description": "Description",
+    "inventory_apps_full_info_shard": 50,
+    "principal_user_detection_sources": [
+        "google_chrome",
+        "company_portal"
+    ],
+    "principal_user_detection_domains": [
+        "zentral.io"
+    ],
+    "collected_condition_keys": [
+        "arch",
+        "machine_type"
+    ],
+    "managed_installs_sync_interval_days": 1,
+    "auto_reinstall_incidents": true,
+    "auto_failed_install_incidents": true,
+    "version": 0,
+    "created_at": "2023-03-10T07:22:07.939979",
+    "updated_at": "2023-03-10T07:22:07.939994"
 }
 ```
 
@@ -201,7 +203,7 @@ configuration.json
 
 ```json
 {
-  "name": "Default",
+  "name": "Not all apps",
   "description": "Description",
   "inventory_apps_full_info_shard": 50,
   "principal_user_detection_sources": [
@@ -217,7 +219,7 @@ configuration.json
   ],
   "managed_installs_sync_interval_days": 1,
   "auto_reinstall_incidents": true,
-  "auto_failed_install_incidents": true,
+  "auto_failed_install_incidents": true
 }
 ```
 
@@ -226,7 +228,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X PUT -d @configuration.json \
-  https://zentral.example.com/api/munki/configurations/6/ \
+  https://$ZTL_HOST/api/munki/configurations/2/ \
   |python3 -m json.tool
 ```
 
@@ -234,26 +236,27 @@ Response:
 
 ```json
 {
-  "id": 6,
-  "name": "Default",
-  "description": "Description",
-  "inventory_apps_full_info_shard": 50,
-  "principal_user_detection_sources": [
-    "google_chrome",
-    "company_portal"
-  ],
-  "principal_user_detection_domains": [
-    "zentral.io"
-  ],
-  "collected_condition_keys": [
-    "arch",
-    "machine_type"
-  ],
-  "managed_installs_sync_interval_days": 1,
-  "auto_reinstall_incidents": true,
-  "auto_failed_install_incidents": true,
-  "created_at": "2022-01-05T09:04:39.201311",
-  "updated_at": "2022-01-05T09:04:39.201411"
+    "id": 2,
+    "name": "Not all apps",
+    "description": "Description",
+    "inventory_apps_full_info_shard": 50,
+    "principal_user_detection_sources": [
+        "google_chrome",
+        "company_portal"
+    ],
+    "principal_user_detection_domains": [
+        "zentral.io"
+    ],
+    "collected_condition_keys": [
+        "arch",
+        "machine_type"
+    ],
+    "managed_installs_sync_interval_days": 1,
+    "auto_reinstall_incidents": true,
+    "auto_failed_install_incidents": true,
+    "version": 1,
+    "created_at": "2023-03-10T07:22:07.939979",
+    "updated_at": "2023-03-10T07:24:17.877120"
 }
 ```
 
@@ -267,7 +270,7 @@ Response:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -X DELETE \
-  https://zentral.example.com/api/munki/configurations/6/
+  https://$ZTL_HOST/api/munki/configurations/6/
 ```
 
 Response (204 No Content)
@@ -286,14 +289,14 @@ Examples:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/munki/enrollments/ \
+  https://$ZTL_HOST/api/munki/enrollments/ \
   |python3 -m json.tool
 ```
 
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/munki/enrollments/?configuration_id=1 \
+  https://$ZTL_HOST/api/munki/enrollments/?configuration_id=1 \
   |python3 -m json.tool
 ```
 
@@ -306,7 +309,7 @@ Response:
         "created_at": "2020-06-16T14:10:32.322536",
         "enrolled_machines_count": 5,
         "id": 1,
-        "package_download_url": "https://zentral.example.com/api/munki/enrollments/1/package/",
+        "package_download_url": "https://$ZTL_HOST/api/munki/enrollments/1/package/",
         "secret": {
             "id": 11,
             "meta_business_unit": 1,
@@ -347,7 +350,7 @@ enrollment.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/munki/enrollments/" \
+  "https://$ZTL_HOST/api/munki/enrollments/" \
   -d @enrollment.json \
   |python3 -m json.tool
 ```
@@ -370,7 +373,7 @@ Response:
     "udids": []
   },
   "version": 1,
-  "package_download_url": "https://zentral.example.com/api/munki/enrollments/1/package/",
+  "package_download_url": "https://$ZTL_HOST/api/munki/enrollments/1/package/",
   "created_at": "2023-01-10T11:02:51.831544",
   "updated_at": "2023-01-10T11:02:51.831553"
 }
@@ -387,7 +390,7 @@ Response:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/munki/enrollments/1/ \
+  https://$ZTL_HOST/api/munki/enrollments/1/ \
   |python3 -m json.tool
 ```
 
@@ -399,7 +402,7 @@ Response:
     "created_at": "2020-06-16T14:10:32.322536",
     "enrolled_machines_count": 5,
     "id": 1,
-    "package_download_url": "https://zentral.example.com/api/munki/enrollments/1/package/",
+    "package_download_url": "https://$ZTL_HOST/api/munki/enrollments/1/package/",
     "secret": {
         "id": 11,
         "meta_business_unit": 1,
@@ -440,7 +443,7 @@ enrollment.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/munki/enrollments/1/" \
+  "https://$ZTL_HOST/api/munki/enrollments/1/" \
   -d @enrollment.json \
   |python3 -m json.tool
 ```
@@ -463,7 +466,7 @@ Response:
     "udids": []
   },
   "version": 2,
-  "package_download_url": "https://zentral.example.com/api/munki/enrollments/1/package/",
+  "package_download_url": "https://$ZTL_HOST/api/munki/enrollments/1/package/",
   "created_at": "2023-01-10T11:02:51.831544",
   "updated_at": "2023-01-10T11:02:51.831553"
 }
@@ -480,7 +483,7 @@ Example:
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/munki/enrollments/1/"
+  "https://$ZTL_HOST/api/munki/enrollments/1/"
 ```
 
 Response (204 No Content)
@@ -498,5 +501,5 @@ Example:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -o zentral_munki_enrollment_package.pkg \
-  https://zentral.example.com/api/munki/enrollments/1/package/
+  https://$ZTL_HOST/api/munki/enrollments/1/package/
 ```
