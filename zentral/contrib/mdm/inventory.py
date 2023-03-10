@@ -38,13 +38,16 @@ def ms_tree_from_payload(payload):
     # OS Version
     os_version = payload.get("OSVersion")
     build_version = payload.get("BuildVersion")
+    version_extra = payload.get("SupplementalOSVersionExtra")
     if os_version:
         d = dict(zip(('major', 'minor', 'patch'),
                      (int(s) for s in os_version.split('.'))))
-        if build_version:
-            d["build"] = build_version
         if "patch" not in d:
             d["patch"] = 0
+        if build_version:
+            d["build"] = build_version
+        if version_extra:
+            d["version"] = version_extra
         hardware_model = system_info_d.get("hardware_model")
         if hardware_model:
             hardware_model = hardware_model.upper()

@@ -31,12 +31,15 @@ class MDMInventoryTestCase(TestCase):
         cls.enrolled_device.blueprint = cls.blueprint
         cls.enrolled_device.save()
 
-    def test_ms_tree_from_payload(self):
-        device_information = plistlib.load(
+    def read_plist(self, filename):
+        return plistlib.load(
             open(os.path.join(os.path.dirname(__file__),
-                              "testdata/device_information.plist"),
+                              "testdata", filename),
                  "rb")
         )
+
+    def test_ms_tree_from_payload(self):
+        device_information = self.read_plist("device_information.plist")
         ms_tree = ms_tree_from_payload(device_information["QueryResponses"])
         self.assertEqual(ms_tree["system_info"]["computer_name"], "Yolo")
         self.assertEqual(ms_tree["system_info"]["hardware_model"], "VirtualMac2,1")
@@ -44,6 +47,13 @@ class MDMInventoryTestCase(TestCase):
         self.assertEqual(ms_tree["os_version"]["major"], 13)
         self.assertEqual(ms_tree["os_version"]["minor"], 0)
         self.assertEqual(ms_tree["os_version"]["patch"], 0)
+        self.assertNotIn("version", ms_tree["os_version"])
+
+    def test_ms_tree_from_payload_extra_version(self):
+        device_information = self.read_plist("device_information.plist")
+        device_information["QueryResponses"]["SupplementalOSVersionExtra"] = "(a)"
+        ms_tree = ms_tree_from_payload(device_information["QueryResponses"])
+        self.assertEqual(ms_tree["os_version"]["version"], "(a)")
 
     def test_full_inventory_tree(self):
         step1 = datetime.utcnow()
@@ -53,14 +63,7 @@ class MDMInventoryTestCase(TestCase):
             kwargs={"update_inventory": True},
         )
         cmd.process_response(
-            plistlib.load(
-                open(
-                    os.path.join(
-                        os.path.dirname(__file__), "testdata/certificate_list.plist"
-                    ),
-                    "rb",
-                )
-            ),
+            self.read_plist("certificate_list.plist"),
             self.dep_enrollment_session, self.mbu
         )
         self.enrolled_device.refresh_from_db()
@@ -75,14 +78,7 @@ class MDMInventoryTestCase(TestCase):
             kwargs={"update_inventory": True},
         )
         cmd.process_response(
-            plistlib.load(
-                open(
-                    os.path.join(
-                        os.path.dirname(__file__), "testdata/profile_list.plist"
-                    ),
-                    "rb",
-                )
-            ),
+            self.read_plist("profile_list.plist"),
             self.dep_enrollment_session, self.mbu
         )
         self.enrolled_device.refresh_from_db()
@@ -97,14 +93,7 @@ class MDMInventoryTestCase(TestCase):
             kwargs={"update_inventory": True},
         )
         cmd.process_response(
-            plistlib.load(
-                open(
-                    os.path.join(
-                        os.path.dirname(__file__), "testdata/installed_application_list.plist"
-                    ),
-                    "rb",
-                )
-            ),
+            self.read_plist("installed_application_list.plist"),
             self.dep_enrollment_session, self.mbu
         )
         self.enrolled_device.refresh_from_db()
@@ -116,14 +105,7 @@ class MDMInventoryTestCase(TestCase):
         step4 = datetime.utcnow()
         cmd = DeviceInformation.create_for_device(self.enrolled_device)
         cmd.process_response(
-            plistlib.load(
-                open(
-                    os.path.join(
-                        os.path.dirname(__file__), "testdata/device_information.plist"
-                    ),
-                    "rb",
-                )
-            ),
+            self.read_plist("device_information.plist"),
             self.dep_enrollment_session, self.mbu
         )
         self.enrolled_device.refresh_from_db()
