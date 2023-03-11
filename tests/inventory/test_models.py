@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import BusinessUnit
+from zentral.contrib.inventory.models import BusinessUnit, MetaBusinessUnit, Tag, Taxonomy
 
 
 class InventoryModelsTestCase(TestCase):
@@ -102,3 +102,64 @@ class InventoryModelsTestCase(TestCase):
         })
         self.assertEqual(business_unit1.meta_business_unit, business_unit2.meta_business_unit)
         self.assertEqual(business_unit1.meta_business_unit.name, business_unit1.name)
+
+    def test_meta_business_unit_serialize_for_event_keys_only(self):
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        mbu.create_enrollment_business_unit()
+        self.assertEqual(
+            mbu.serialize_for_event(keys_only=True),
+            {"pk": mbu.pk, "name": mbu.name}
+        )
+
+    def test_meta_business_unit_serialize_for_event(self):
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        mbu.create_enrollment_business_unit()
+        self.assertEqual(
+            mbu.serialize_for_event(),
+            {"pk": mbu.pk, "name": mbu.name,
+             "api_enrollment_enabled": True,
+             "created_at": mbu.created_at,
+             "updated_at": mbu.updated_at}
+        )
+
+    def test_taxonomy_serialize_for_event_keys_only(self):
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        name = get_random_string(12)
+        taxonomy = Taxonomy.objects.create(name=name, meta_business_unit=mbu)
+        self.assertEqual(
+            taxonomy.serialize_for_event(keys_only=True),
+            {"pk": taxonomy.pk, "name": taxonomy.name}
+        )
+
+    def test_taxonomy_serialize_for_event(self):
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        name = get_random_string(12)
+        taxonomy = Taxonomy.objects.create(name=name, meta_business_unit=mbu)
+        self.assertEqual(
+            taxonomy.serialize_for_event(),
+            {"pk": taxonomy.pk, "name": taxonomy.name,
+             "meta_business_unit": {"pk": mbu.pk, "name": mbu.name},
+             "created_at": taxonomy.created_at,
+             "updated_at": taxonomy.updated_at}
+        )
+
+    def test_tag_serialize_for_event_keys_only(self):
+        name = get_random_string(12)
+        tag = Tag.objects.create(name=name)
+        self.assertEqual(
+            tag.serialize_for_event(keys_only=True),
+            {"pk": tag.pk, "name": name}
+        )
+
+    def test_tag_serialize_for_event(self):
+        name = get_random_string(12)
+        taxonomy_name = get_random_string(12)
+        taxonomy = Taxonomy.objects.create(name=taxonomy_name)
+        tag = Tag.objects.create(taxonomy=taxonomy, name=name)
+        self.assertEqual(
+            tag.serialize_for_event(),
+            {"pk": tag.pk, "name": name,
+             "taxonomy": {"pk": taxonomy.pk, "name": taxonomy.name},
+             "color": "0079bf",
+             "slug": name.lower()}
+        )

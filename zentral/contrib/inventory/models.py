@@ -93,9 +93,14 @@ class MetaBusinessUnit(models.Model):
         tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
         return tags
 
-    def serialize(self):
-        return {"name": self.name,
-                "pk": self.pk}
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({"api_enrollment_enabled": self.api_enrollment_enabled(),
+                  "created_at": self.created_at,
+                  "updated_at": self.updated_at})
+        return d
 
     def can_be_deleted(self):
         for related_objects in find_all_related_objects(self):
@@ -792,6 +797,18 @@ class Taxonomy(models.Model):
                                       None))
         return link_list
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
+        })
+        if self.meta_business_unit:
+            d["meta_business_unit"] = self.meta_business_unit.serialize_for_event(keys_only=True)
+        return d
+
 
 class TagManager(models.Manager):
     def available_for_meta_business_unit(self, meta_business_unit):
@@ -877,6 +894,20 @@ class Tag(models.Model):
                                                      related_objects.name),
                                       None))
         return link_list
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "color": self.color,
+            "slug": self.slug
+        })
+        if self.meta_business_unit:
+            d["meta_business_unit"] = self.meta_business_unit.serialize_for_event(keys_only=True)
+        if self.taxonomy:
+            d["taxonomy"] = self.taxonomy.serialize_for_event(keys_only=True)
+        return d
 
 
 class MachineTag(models.Model):
@@ -1476,7 +1507,7 @@ class EnrollmentSecret(models.Model):
         if tags:
             d["tags"] = tags
         if self.meta_business_unit:
-            d["meta_business_unit"] = self.meta_business_unit.serialize()
+            d["meta_business_unit"] = self.meta_business_unit.serialize_for_event(keys_only=True)
         if self.serial_numbers:
             d["serial_numbers"] = self.serial_numbers
         if self.udids:
