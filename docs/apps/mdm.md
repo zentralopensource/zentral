@@ -2,6 +2,18 @@
 
 Zentral can be used as MDM server for Apple devices.
 
+## Zentral configuration
+
+To activate the MDM module, you need to add a `zentral.contrib.mdm` section to the `apps` section in `base.json`.
+
+### SCEP CA issuer chain
+
+To authenticate the OTA enrollments, Zentral needs the SCEP CA issuer certificate chain in PEM form in the `scep_ca_fullchain` key of the `zentral.contrib.mdm` section. It is possible to use the `{{ file:PATH_TO_PEM_CHAIN }}` substitution to load the chain from a file on disk.
+
+### mTLS proxy
+
+Zentral is expecting the client certificate in PEM form in the `X-SSL-Client-Cert` header, and the client certificate subject DN in the `X-SSL-Client-S-DN` header. If this is not possible, you can set `mtls_proxy` to `false` in the `zentral.contrib.mdm` section. In that case, the Apple devices will be configured to add a header containing the payload signature in each HTTP request. See the [Apple documentation](https://developer.apple.com/documentation/devicemanagement/implementing_device_management/managing_certificates_for_mdm_servers_and_devices#3677960). This adds approximately 2KB of data to each message.
+
 ## Push certificates
 
 To be able to send notifications to the devices, Zentral needs a push certificate (aka. APNS certificate). To get one, you first need to generate an MDM vendor certificate. An Apple [Developer Enterprise Account](https://developer.apple.com/programs/enterprise/) with the ability to generate MDM CSRs is required. You can then use this vendor certificate to sign an APNS certificate request. The `mdmcerts` Zentral management command can be used to help with this process.

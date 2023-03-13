@@ -123,12 +123,16 @@ def verify_certificate_signature(certificate, signer, payload):
         return True
 
 
-def verify_signed_payload(data):
-    content_info = cms.ContentInfo.load(data)
+def verify_signed_payload(payload, detached_signature=None):
+    if detached_signature:
+        content_info = cms.ContentInfo.load(detached_signature)
+    else:
+        content_info = cms.ContentInfo.load(payload)
     if content_info["content_type"].native != "signed_data":
         raise ValueError("Not signed data")
     content = content_info["content"]
-    payload = content['encap_content_info']['content'].native
+    if not detached_signature:
+        payload = content['encap_content_info']['content'].native
     certificates = []
     for signer in content["signer_infos"]:
         certificate_i, certificate_bytes, certificate = get_signer_certificate(content, signer)

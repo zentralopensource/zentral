@@ -1,12 +1,15 @@
+import base64
 from datetime import datetime, timedelta
 import json
 import plistlib
 from unittest.mock import patch
 from urllib.parse import quote
 import uuid
+import asn1crypto.cms
+import asn1crypto.util
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.x509.oid import NameOID
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -35,7 +38,7 @@ class MDMViewsTestCase(TestCase):
 
     # utility methods
 
-    def _put(self, url, payload, session=None, certificate=True, serial_number=None):
+    def _put(self, url, payload, session=None, serial_number=None, sign_message=False, bad_signature=False):
         kwargs = {}
         if payload:
             kwargs["data"] = plistlib.dumps(payload)
@@ -52,30 +55,59 @@ class MDMViewsTestCase(TestCase):
             else:
                 enrollment_type = "USER"
             cn = f"MDM${enrollment_type}${secret}"
-            kwargs["HTTP_X_SSL_CLIENT_S_DN"] = f"serialNumber={serial_number},CN={cn},O=MBU${self.mbu.pk}"
-            if certificate:
-                privkey = rsa.generate_private_key(
-                    public_exponent=65537,
-                    key_size=512,  # faster
-                )
-                builder = x509.CertificateBuilder()
-                builder = builder.subject_name(x509.Name([
-                    x509.NameAttribute(NameOID.COMMON_NAME, cn),
-                ]))
-                builder = builder.issuer_name(x509.Name([
-                    x509.NameAttribute(NameOID.COMMON_NAME, cn),
-                ]))
-                builder = builder.not_valid_before(datetime.today() - timedelta(days=1))
-                builder = builder.not_valid_after(datetime(2034, 5, 6))
-                builder = builder.serial_number(x509.random_serial_number())
-                builder = builder.public_key(privkey.public_key())
-                cert = builder.sign(
-                    private_key=privkey, algorithm=hashes.SHA256(),
-                )
-                cert_pem = cert.public_bytes(
-                    encoding=serialization.Encoding.PEM
-                )
-                kwargs["HTTP_X_SSL_CLIENT_CERT"] = quote(cert_pem)
+            o = f"MBU${self.mbu.pk}"
+            privkey = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=512,  # faster
+            )
+            builder = x509.CertificateBuilder()
+            builder = builder.subject_name(x509.Name([
+                x509.NameAttribute(NameOID.COMMON_NAME, cn),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, o),
+                x509.NameAttribute(NameOID.SERIAL_NUMBER, serial_number),
+            ]))
+            builder = builder.issuer_name(x509.Name([
+                x509.NameAttribute(NameOID.COMMON_NAME, cn),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, o),
+                x509.NameAttribute(NameOID.SERIAL_NUMBER, serial_number),
+            ]))
+            builder = builder.not_valid_before(datetime.today() - timedelta(days=1))
+            builder = builder.not_valid_after(datetime(2034, 5, 6))
+            builder = builder.serial_number(x509.random_serial_number())
+            builder = builder.public_key(privkey.public_key())
+            cert = builder.sign(
+                private_key=privkey, algorithm=hashes.SHA256(),
+            )
+            if not sign_message:
+                # include the headers, like a mTLS proxy would be configured to do
+                kwargs["HTTP_X_SSL_CLIENT_S_DN"] = f"serialNumber={serial_number},CN={cn},O={o}"
+                kwargs["HTTP_X_SSL_CLIENT_CERT"] = quote(cert.public_bytes(encoding=serialization.Encoding.PEM))
+            else:
+                # include the signature of the payload as MDM-Signature header
+                sd = asn1crypto.cms.SignedData()
+                sd['version'] = 'v1'
+                sd['encap_content_info'] = asn1crypto.util.OrderedDict([('content_type', 'data'), ('content', None)])
+                sd['digest_algorithms'] = [asn1crypto.util.OrderedDict([('algorithm', 'sha1'), ('parameters', None)])]
+                cert = asn1crypto.x509.Certificate.load(cert.public_bytes(encoding=serialization.Encoding.DER))
+                sd['certificates'] = [cert]
+                si = asn1crypto.cms.SignerInfo()
+                si['version'] = sd['version']
+                si['digest_algorithm'] = asn1crypto.util.OrderedDict([("algorithm", "sha1"), ("parameters", None)])
+                si['signature_algorithm'] = asn1crypto.util.OrderedDict([
+                    ("algorithm", "sha1_rsa"), ("parameters", None)])
+                si['signature'] = privkey.sign(kwargs["data"] if not bad_signature else b"yolo",
+                                               padding.PKCS1v15(), hashes.SHA1())
+                si['sid'] = asn1crypto.cms.SignerIdentifier({
+                    "issuer_and_serial_number": asn1crypto.cms.IssuerAndSerialNumber({
+                        "issuer": cert.issuer,
+                        "serial_number": cert.serial_number,
+                    }),
+                })
+                sd['signer_infos'] = [si]
+                sig = asn1crypto.cms.ContentInfo()
+                sig['content_type'] = "signed_data"
+                sig['content'] = sd
+                kwargs["HTTP_MDM_SIGNATURE"] = base64.b64encode(sig.dump())
         return self.client.put(url, **kwargs)
 
     def _assertAbort(self, post_event, reason, **kwargs):
@@ -160,6 +192,56 @@ class MDMViewsTestCase(TestCase):
         self.assertTrue(session.enrolled_device.user_enrollment is False)
         self.assertTrue(session.enrolled_device.user_approved_enrollment)
         self.assertTrue(session.enrolled_device.supervised)
+
+    def test_authenticate_dep_enrollment_session_macos_mdm_signature_header(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
+        self.assertIsNone(session.enrolled_device)
+        payload = {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            # No UserID or EnrollmentUserID → Device Channel
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+        response = self._put(reverse("mdm:checkin"), payload, session, sign_message=True)
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
+        self.assertEqual(session.enrolled_device.udid, udid)
+        self.assertEqual(session.enrolled_device.serial_number, serial_number)
+        self.assertEqual(session.enrolled_device.cert_not_valid_after, datetime(2034, 5, 6))
+        self.assertEqual(session.enrolled_device.platform, "macOS")
+        self.assertTrue(session.enrolled_device.dep_enrollment)
+        self.assertTrue(session.enrolled_device.user_enrollment is False)
+        self.assertTrue(session.enrolled_device.user_approved_enrollment)
+        self.assertTrue(session.enrolled_device.supervised)
+
+    def test_authenticate_dep_enrollment_session_macos_bad_mdm_signature_header(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
+        self.assertIsNone(session.enrolled_device)
+        payload = {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            # No UserID or EnrollmentUserID → Device Channel
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+        response = self._put(reverse("mdm:checkin"), payload, session, sign_message=True, bad_signature=True)
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(post_event, "Invalid header signature")
 
     def test_authenticate_dep_enrollment_session_ios(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu)

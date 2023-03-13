@@ -114,16 +114,17 @@ def build_mdm_configuration_profile(enrollment_session):
     mdm_config = {
         "IdentityCertificateUUID": scep_payload["PayloadUUID"],
         "Topic": enrollment_session.get_enrollment().push_certificate.topic,
-        "ServerURL": "{}{}".format(
-            settings["api"]["tls_hostname_for_client_cert_auth"],
-            reverse("mdm:connect")),
         "ServerCapabilities": ["com.apple.mdm.bootstraptoken",
                                "com.apple.mdm.per-user-connections"],
-        "CheckInURL": "{}{}".format(
-            settings["api"]["tls_hostname_for_client_cert_auth"],
-            reverse("mdm:checkin")),
         "CheckOutWhenRemoved": True,
     }
+    if settings["apps"]["zentral.contrib.mdm"].get("mtls_proxy", True):
+        fqdn_key = "fqdn_mtls"
+    else:
+        mdm_config["SignMessage"] = True
+        fqdn_key = "fqdn"
+    mdm_config["ServerURL"] = "https://{}{}".format(settings["api"][fqdn_key], reverse("mdm:connect"))
+    mdm_config["CheckInURL"] = "https://{}{}".format(settings["api"][fqdn_key], reverse("mdm:checkin"))
     managed_apple_id = getattr(enrollment_session, "managed_apple_id", None)
     if managed_apple_id:
         if enrollment_session.access_token:

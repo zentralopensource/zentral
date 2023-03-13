@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime
 import json
 import logging
@@ -5,6 +6,7 @@ import plistlib
 from urllib.parse import unquote
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from cryptography.x509.oid import NameOID
 from django.core.files.storage import default_storage
 from django.http import FileResponse, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -14,6 +16,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.base import get_command
 from zentral.contrib.mdm.commands.scheduling import get_next_command_response
+from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.declarations import (build_legacy_profile,
                                               build_management_status_subscriptions,
                                               get_blueprint_tokens_response,
@@ -52,16 +55,33 @@ class MDMView(PostEventMixin, View):
         # PostEventMixin
         self.setup_with_request(request)
 
-        # DN => serial_number + meta_business_unit
-        dn = request.META.get("HTTP_X_SSL_CLIENT_S_DN")
-        if not dn:
-            self.abort("missing DN in request headers")
+        header_signature = request.META.get("HTTP_MDM_SIGNATURE")
+        if header_signature:
+            try:
+                certs, raw_payload = verify_signed_payload(request.body, base64.b64decode(header_signature))
+            except Exception:
+                self.abort("Invalid header signature")
+            self.payload = plistlib.loads(raw_payload)
+            _, _, self.certificate = certs[0]
+            subject = self.certificate.subject
+            cert_cn = subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+            cert_o = subject.get_attributes_for_oid(NameOID.ORGANIZATION_NAME)[0].value
+            self.serial_number = subject.get_attributes_for_oid(NameOID.SERIAL_NUMBER)[0].value
+        else:
+            # mTLS with certificate subject in header
+            # DN => serial_number + meta_business_unit
+            dn = request.META.get("HTTP_X_SSL_CLIENT_S_DN")
+            if not dn:
+                self.abort("missing DN in request headers")
+            self.payload = plistlib.loads(request.body)
+            dn_d = parse_dn(dn)
+            cert_cn = dn_d.get("CN")
+            cert_o = dn_d.get("O")
+            self.serial_number = dn_d.get("serialNumber")
 
-        dn_d = parse_dn(dn)
-
-        cn = dn_d.get("CN")
+        # CN info
         try:
-            cn_prefix, enrollment_type, enrollment_secret_secret = cn.split("$")
+            cn_prefix, enrollment_type, enrollment_secret_secret = cert_cn.split("$")
         except (AttributeError, ValueError):
             self.abort("missing or bad CN in client certificate DN")
 
@@ -113,26 +133,21 @@ class MDMView(PostEventMixin, View):
             self.abort("unknown MDM enrollment type {}".format(enrollment_type))
 
         # verify serial number
-        self.serial_number = dn_d.get("serialNumber")
         if not self.serial_number and enrollment_type != "USER":
             self.abort("empty serial number in client certificate CN")
 
         # verify meta business unit
-        o = dn_d.get("O")
-        if not o or not o.startswith("MBU$"):
+        if not cert_o or not cert_o.startswith("MBU$"):
             self.abort("missing or bad O in client certificate DN")
         else:
             try:
-                mbu_pk = int(o[4:])
+                mbu_pk = int(cert_o[4:])
                 self.meta_business_unit = MetaBusinessUnit.objects.get(pk=mbu_pk)
             except (MetaBusinessUnit.DoesNotExist, ValueError):
                 self.abort("unknown meta business unit in client certificate DN")
         return super().dispatch(request, *args, **kwargs)
 
     def put(self, request, *args, **kwargs):
-        # read payload
-        self.payload = plistlib.loads(self.request.read())
-
         # IDs
         self.enrollment_id = self.payload.get("EnrollmentID")
         self.enrollment_user_id = self.payload.get("EnrollmentUserID")
@@ -150,12 +165,13 @@ class MDMView(PostEventMixin, View):
         return self.do_put()
 
     def get_certificate(self):
-        urlencoded_cert_pem = self.request.META.get("HTTP_X_SSL_CLIENT_CERT")
-        if urlencoded_cert_pem:
-            cert_pem = unquote(urlencoded_cert_pem)
-            self.certificate = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
-        else:
-            logger.warning("Empty X-SSL-Client-Cert header")
+        if self.certificate is None:
+            urlencoded_cert_pem = self.request.META.get("HTTP_X_SSL_CLIENT_CERT")
+            if urlencoded_cert_pem:
+                cert_pem = unquote(urlencoded_cert_pem)
+                self.certificate = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+            else:
+                logger.warning("Empty X-SSL-Client-Cert header")
 
     def get_push_certificate(self):
         topic = self.payload.get("Topic")
