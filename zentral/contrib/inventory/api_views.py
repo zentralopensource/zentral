@@ -383,23 +383,20 @@ class MetaBusinessUnitDetail(RetrieveUpdateDestroyAPIViewWithAudit):
             return super().perform_destroy(instance)
 
 
-class TagList(generics.ListCreateAPIView):
+class TagList(ListCreateAPIViewWithAudit):
     """
     List all tags, search tag by name, or create a new tag.
     """
     queryset = Tag.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = TagSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
 
 
-class TagDetail(generics.RetrieveUpdateDestroyAPIView):
+class TagDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete a tag.
     """
     queryset = Tag.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = TagSerializer
 
 
