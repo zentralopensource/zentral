@@ -13,7 +13,7 @@ from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
+from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
 from zentral.conf import settings
 from zentral.core.compliance_checks import compliance_check_class_from_model
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
@@ -1185,10 +1185,11 @@ class TagsView(PermissionRequiredMixin, TemplateView):
         return ctx
 
 
-class CreateTagView(PermissionRequiredMixin, CreateView):
+class CreateTagView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "inventory.add_tag"
     model = Tag
     form_class = CreateTagForm
+    success_url = reverse_lazy("inventory:tags")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -1196,14 +1197,12 @@ class CreateTagView(PermissionRequiredMixin, CreateView):
         ctx['color_presets'] = TAG_COLOR_PRESETS
         return ctx
 
-    def get_success_url(self):
-        return reverse('inventory:tags')
 
-
-class UpdateTagView(PermissionRequiredMixin, UpdateView):
+class UpdateTagView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "inventory.change_tag"
     model = Tag
     form_class = UpdateTagForm
+    success_url = reverse_lazy("inventory:tags")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -1211,11 +1210,8 @@ class UpdateTagView(PermissionRequiredMixin, UpdateView):
         ctx['color_presets'] = TAG_COLOR_PRESETS
         return ctx
 
-    def get_success_url(self):
-        return reverse('inventory:tags')
 
-
-class DeleteTagView(PermissionRequiredMixin, DeleteView):
+class DeleteTagView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "inventory.delete_tag"
     model = Tag
     success_url = reverse_lazy("inventory:tags")
@@ -1226,35 +1222,31 @@ class DeleteTagView(PermissionRequiredMixin, DeleteView):
         return ctx
 
 
-class CreateTaxonomyView(PermissionRequiredMixin, CreateView):
+class CreateTaxonomyView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "inventory.add_taxonomy"
     model = Taxonomy
     fields = ('meta_business_unit', 'name')
+    success_url = reverse_lazy("inventory:tags")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx['inventory'] = True
         return ctx
 
-    def get_success_url(self):
-        return reverse('inventory:tags')
 
-
-class UpdateTaxonomyView(PermissionRequiredMixin, UpdateView):
+class UpdateTaxonomyView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "inventory.change_taxonomy"
     model = Taxonomy
     fields = ('name',)
+    success_url = reverse_lazy("inventory:tags")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx['inventory'] = True
         return ctx
 
-    def get_success_url(self):
-        return reverse('inventory:tags')
 
-
-class DeleteTaxonomyView(PermissionRequiredMixin, DeleteView):
+class DeleteTaxonomyView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "inventory.delete_taxonomy"
     model = Taxonomy
     success_url = reverse_lazy("inventory:tags")
