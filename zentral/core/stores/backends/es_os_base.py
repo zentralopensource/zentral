@@ -55,9 +55,11 @@ class ESOSEventStore(BaseEventStore):
                 "type": "date"
             },
             "request": {
+                "type": "object",
                 "properties": {
                     "ip": {"type": "ip"},
                     "geo": {
+                        "type": "object",
                         "properties": {
                             "location": {"type": "geo_point"}
                         }
@@ -65,8 +67,10 @@ class ESOSEventStore(BaseEventStore):
                 }
             },
             "munki_event": {
+                "type": "object",
                 "properties": {
                     "conditions": {
+                        "type": "object",
                         "properties": {
                             "os_build_last_component": {
                                 "type": "keyword"
@@ -74,7 +78,25 @@ class ESOSEventStore(BaseEventStore):
                         }
                     }
                 }
-             }
+            },
+            "zentral_audit": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "object",
+                        "properties": {
+                            "new_value": {
+                                "type": "object",
+                                "enabled": False,
+                            },
+                            "prev_value": {
+                                "type": "object",
+                                "enabled": False,
+                            },
+                        },
+                    },
+                },
+            },
         }
     }
     INTERVAL_UNIT = {
