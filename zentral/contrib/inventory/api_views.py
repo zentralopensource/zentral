@@ -400,21 +400,18 @@ class TagDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     serializer_class = TagSerializer
 
 
-class TaxonomyList(generics.ListCreateAPIView):
+class TaxonomyList(ListCreateAPIViewWithAudit):
     """
     List all taxonomies, search by taxonomy name, or create a new taxonomy.
     """
     queryset = Taxonomy.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = TaxonomySerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
 
 
-class TaxonomyDetail(generics.RetrieveUpdateDestroyAPIView):
+class TaxonomyDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete a taxonomy.
     """
     queryset = Taxonomy.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = TaxonomySerializer
