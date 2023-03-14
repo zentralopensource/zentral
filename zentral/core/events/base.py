@@ -179,22 +179,28 @@ class EventRequestGeo(object):
 class EventRequest(object):
     user_agent_str_length = 50
 
-    def __init__(self, user_agent, ip, user=None, geo=None):
+    def __init__(self, user_agent, ip, user=None, geo=None, method=None, path=None):
         self.user_agent = user_agent
         self.ip = ip
         self.geo = geo
         self.user = user
+        self.method = method
+        self.path = path
 
     @classmethod
     def build_from_request(cls, request):
         user_agent, ip = user_agent_and_ip_address_from_request(request)
         user = EventRequestUser.build_from_request(request)
-        if user_agent or ip or user:
-            return EventRequest(user_agent, ip, user=user)
+        method = request.method
+        path = request.get_full_path()
+        return EventRequest(
+            user_agent, ip,
+            user=user, method=method, path=path
+        )
 
     @classmethod
     def deserialize(cls, request_d):
-        kwargs = {k: request_d.get(k) for k in ("user_agent", "ip")}
+        kwargs = {k: request_d.get(k) for k in ("user_agent", "ip", "method", "path")}
         geo_d = request_d.get("geo")
         if geo_d:
             kwargs["geo"] = EventRequestGeo(**geo_d)
@@ -205,7 +211,9 @@ class EventRequest(object):
 
     def serialize(self):
         d = {k: v for k, v in (("user_agent", self.user_agent),
-                               ("ip", self.ip)) if v}
+                               ("ip", self.ip),
+                               ("method", self.method),
+                               ("path", self.path)) if v}
         if self.geo:
             d["geo"] = self.geo.serialize()
         if self.user:
