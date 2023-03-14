@@ -21,6 +21,7 @@ from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from .compliance_checks import InventoryJMESPathCheck
 from .events import JMESPathCheckCreated, JMESPathCheckUpdated, JMESPathCheckDeleted
 from .forms import (MetaBusinessUnitForm,
@@ -360,31 +361,24 @@ class MergeMBUView(PermissionRequiredMixin, FormView):
         return reverse('inventory:mbu_machines', args=(self.dest_mbu.id,))
 
 
-class CreateMBUView(PermissionRequiredMixin, CreateView):
+class CreateMBUView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "inventory.add_metabusinessunit"
     template_name = "inventory/edit_mbu.html"
     model = MetaBusinessUnit
     form_class = MetaBusinessUnitForm
 
 
-class UpdateMBUView(PermissionRequiredMixin, UpdateView):
+class UpdateMBUView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "inventory.change_metabusinessunit"
     template_name = "inventory/edit_mbu.html"
     model = MetaBusinessUnit
     form_class = MetaBusinessUnitForm
 
 
-class DeleteMBUView(PermissionRequiredMixin, DeleteView):
+class DeleteMBUView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "inventory.delete_metabusinessunit"
     model = MetaBusinessUnit
-
-    def delete(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        try:
-            self.object.delete()
-        except ValueError:
-            logger.exception("Could not delete MBU %s", self.object.pk)
-        return HttpResponseRedirect(reverse('inventory:mbu'))
+    success_url = reverse_lazy("inventory:mbu")
 
 
 class MBUTagsView(PermissionRequiredMixin, FormView):

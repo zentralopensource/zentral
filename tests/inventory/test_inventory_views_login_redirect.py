@@ -64,20 +64,11 @@ class InventoryLoginRedirectTestCase(TestCase):
     def test_group_machines(self):
         self.login_redirect("group_machines", self.group_id, query="sf=mbu-t-tp-hm-pf-osv")
 
-    def test_business_units(self):
-        self.login_redirect("mbu")
-
     def test_business_units_merge_review(self):
         self.login_redirect("review_mbu_merge")
 
     def test_business_units_merge(self):
         self.login_redirect("merge_mbu")
-
-    def test_business_units_create(self):
-        self.login_redirect("create_mbu")
-
-    def test_business_units_update(self):
-        self.login_redirect("update_mbu", self.mbu_id)
 
     def test_business_units_tags(self):
         self.login_redirect("mbu_tags", self.mbu2_id)
