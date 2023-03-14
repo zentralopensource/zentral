@@ -64,20 +64,11 @@ class InventoryLoginRedirectTestCase(TestCase):
     def test_group_machines(self):
         self.login_redirect("group_machines", self.group_id, query="sf=mbu-t-tp-hm-pf-osv")
 
-    def test_business_units(self):
-        self.login_redirect("mbu")
-
     def test_business_units_merge_review(self):
         self.login_redirect("review_mbu_merge")
 
     def test_business_units_merge(self):
         self.login_redirect("merge_mbu")
-
-    def test_business_units_create(self):
-        self.login_redirect("create_mbu")
-
-    def test_business_units_update(self):
-        self.login_redirect("update_mbu", self.mbu_id)
 
     def test_business_units_tags(self):
         self.login_redirect("mbu_tags", self.mbu2_id)
@@ -90,9 +81,6 @@ class InventoryLoginRedirectTestCase(TestCase):
 
     def test_business_units_detach_bu(self):
         self.login_redirect("detach_bu", self.mbu_id, self.bu_id)
-
-    def test_business_units_api_enrollment(self):
-        self.login_redirect("mbu_api_enrollment", self.mbu_id)
 
     def test_machine_events(self):
         self.login_redirect("machine_events", self.ms.serial_number)

@@ -74,7 +74,7 @@ class MBUAPIEnrollmentForm(forms.ModelForm):
         model = MetaBusinessUnit
         fields = []
 
-    def enable_api_enrollment(self):
+    def save(self):
         if not self.instance.api_enrollment_business_units().count():
             self.instance.create_enrollment_business_unit()
         return self.instance
