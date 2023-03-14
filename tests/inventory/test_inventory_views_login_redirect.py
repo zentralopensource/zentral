@@ -96,12 +96,3 @@ class InventoryLoginRedirectTestCase(TestCase):
 
     def test_machine(self):
         self.login_redirect("machine", self.ms.serial_number)
-
-    def test_tags(self):
-        self.login_redirect("tags")
-
-    def test_tag_update(self):
-        self.login_redirect("update_tag", self.tag1.id)
-
-    def test_tag_delete(self):
-        self.login_redirect("delete_tag", self.tag1.id)
