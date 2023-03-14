@@ -486,6 +486,36 @@ class BaseEvent(object):
 register_event_type(BaseEvent)
 
 
+# Zentral audit event
+
+
+class AuditEvent(BaseEvent):
+    event_type = "zentral_audit"
+    tags = ["zentral"]
+
+    @classmethod
+    def build_from_request_and_instance(cls, request, instance, action, prev_value=None, new_value=None):
+        event_request = EventRequest.build_from_request(request)
+        payload = {
+            "action": action,
+            "object": {
+                "model": instance._meta.label_lower,
+                "pk": str(instance.pk),
+            }
+        }
+        if prev_value:
+            payload["object"]["prev_value"] = prev_value
+        if new_value:
+            payload["object"]["new_value"] = new_value
+        return cls(EventMetadata(request=event_request, tags=[instance._meta.app_label]), payload)
+
+    def get_linked_objects_keys(self):
+        return {self.payload["object"]["model"]: [(self.payload["object"]["pk"],)]}
+
+
+register_event_type(AuditEvent)
+
+
 # Zentral Commands
 
 

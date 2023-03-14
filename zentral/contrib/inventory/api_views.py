@@ -8,7 +8,8 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from zentral.core.events.base import EventRequest
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
+from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
+                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import JMESPathCheckCreated, JMESPathCheckDeleted, JMESPathCheckUpdated
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
 from .models import (CurrentMachineSnapshot,
@@ -359,23 +360,20 @@ class JMESPathCheckDetail(generics.RetrieveUpdateDestroyAPIView):
         transaction.on_commit(lambda: event.post())
 
 
-class MetaBusinessUnitList(generics.ListCreateAPIView):
+class MetaBusinessUnitList(ListCreateAPIViewWithAudit):
     """
     List all MBUs, search MBU by name, or create a new MBU.
     """
     queryset = MetaBusinessUnit.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = MetaBusinessUnitSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
 
 
-class MetaBusinessUnitDetail(generics.RetrieveUpdateDestroyAPIView):
+class MetaBusinessUnitDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete a MBU.
     """
     queryset = MetaBusinessUnit.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = MetaBusinessUnitSerializer
 
     def perform_destroy(self, instance):

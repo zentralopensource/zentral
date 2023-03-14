@@ -1,5 +1,12 @@
 from django.core.exceptions import ImproperlyConfigured
+from django.db import transaction
+from django_filters import rest_framework as filters
+from rest_framework import generics
 from rest_framework.permissions import BasePermission, DjangoModelPermissions
+from zentral.core.events.base import AuditEvent
+
+
+# permissions
 
 
 class DjangoPermissionRequired(BasePermission):
@@ -27,3 +34,47 @@ class DefaultDjangoModelPermissions(DjangoModelPermissions):
         'PATCH': ['%(app_label)s.change_%(model_name)s'],
         'DELETE': ['%(app_label)s.delete_%(model_name)s'],
     }
+
+
+# views with audit events
+
+
+class ListCreateAPIViewWithAudit(generics.ListCreateAPIView):
+    permission_classes = [DefaultDjangoModelPermissions]
+    filter_backends = (filters.DjangoFilterBackend,)
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        event = AuditEvent.build_from_request_and_instance(
+            self.request, serializer.instance,
+            action="created",
+            new_value=serializer.instance.serialize_for_event(),
+        )
+        transaction.on_commit(lambda: event.post())
+
+
+class RetrieveUpdateDestroyAPIViewWithAudit(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [DefaultDjangoModelPermissions]
+
+    def perform_update(self, serializer):
+        prev_value = serializer.instance.serialize_for_event()
+        super().perform_update(serializer)
+        event = AuditEvent.build_from_request_and_instance(
+            self.request, serializer.instance,
+            action="updated",
+            prev_value=prev_value,
+            new_value=serializer.instance.serialize_for_event(),
+        )
+        transaction.on_commit(lambda: event.post())
+
+    def perform_destroy(self, instance):
+        prev_pk = instance.pk
+        prev_value = instance.serialize_for_event()
+        super().perform_destroy(instance)
+        instance.pk = prev_pk  # re-hydrate the primary key
+        event = AuditEvent.build_from_request_and_instance(
+            self.request, instance,
+            action="deleted",
+            prev_value=prev_value,
+        )
+        transaction.on_commit(lambda: event.post())
