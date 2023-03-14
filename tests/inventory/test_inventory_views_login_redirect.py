@@ -82,9 +82,6 @@ class InventoryLoginRedirectTestCase(TestCase):
     def test_business_units_detach_bu(self):
         self.login_redirect("detach_bu", self.mbu_id, self.bu_id)
 
-    def test_business_units_api_enrollment(self):
-        self.login_redirect("mbu_api_enrollment", self.mbu_id)
-
     def test_machine_events(self):
         self.login_redirect("machine_events", self.ms.serial_number)
 

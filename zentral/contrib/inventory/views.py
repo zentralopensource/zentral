@@ -448,18 +448,11 @@ class DetachBUView(PermissionRequiredMixin, TemplateView):
         return HttpResponseRedirect(mbu.get_absolute_url())
 
 
-class MBUAPIEnrollmentView(PermissionRequiredMixin, UpdateView):
+class MBUAPIEnrollmentView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "inventory.change_metabusinessunit"
     template_name = "inventory/mbu_api_enrollment.html"
+    model = MetaBusinessUnit
     form_class = MBUAPIEnrollmentForm
-    queryset = MetaBusinessUnit.objects.all()
-
-    def form_valid(self, form):
-        self.mbu = form.enable_api_enrollment()
-        return HttpResponseRedirect(self.get_success_url())
-
-    def get_success_url(self):
-        return reverse('inventory:mbu_machines', args=(self.mbu.id,))
 
 
 class MBUMachinesView(MachineListView):
