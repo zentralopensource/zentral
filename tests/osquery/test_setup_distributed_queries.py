@@ -318,6 +318,10 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
                 serial_number=serial_numbers[i],
                 status=3,
                 error_message=err_msgs[i],
+                memory=111111111111,
+                system_time=222222222222,
+                user_time=333333333333,
+                wall_time_ms=444444444444,
             ) for i in range(dqm_count)
         )
         DistributedQueryMachine.objects.bulk_create(dqm_gen)
@@ -329,6 +333,10 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self.assertContains(response, serial_numbers[-1])
         self.assertContains(response, "Error")
         self.assertContains(response, err_msgs[-1])
+        self.assertContains(response, "111111111111")
+        self.assertContains(response, "222222222222")
+        self.assertContains(response, "333333333333")
+        self.assertContains(response, "444444444444")
 
     # distributed query machines search
 

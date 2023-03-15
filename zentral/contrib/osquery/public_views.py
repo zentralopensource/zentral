@@ -29,7 +29,7 @@ from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
 from .views.utils import (prepare_file_carving_session_if_necessary,
-                    update_tree_with_enrollment_host_details, update_tree_with_inventory_query_snapshot)
+                          update_tree_with_enrollment_host_details, update_tree_with_inventory_query_snapshot)
 
 
 logger = logging.getLogger('zentral.contrib.osquery.views.api')
@@ -310,7 +310,8 @@ class DistributedWriteView(BaseNodeView):
         results = self.data.get("queries", {})
         statuses = self.data.get("statuses", {})
         messages = self.data.get("messages", {})
-        dqm_pk_set = set(chain(results.keys(), statuses.keys(), messages.keys()))
+        stats = self.data.get("stats", {})
+        dqm_pk_set = set(chain(results.keys(), statuses.keys(), messages.keys(), stats.keys()))
         if not dqm_pk_set:
             return {}
         dqm_cache = {str(dqm.pk): dqm
@@ -320,12 +321,26 @@ class DistributedWriteView(BaseNodeView):
 
         # update distributed query machines
         for dqm_pk, dqm in dqm_cache.items():
-            status = statuses.get(dqm_pk)
-            if status is None:
+            # status
+            dqm_status = statuses.get(dqm_pk)
+            if dqm_status is None:
                 logger.warning("Missing status for DistributedQueryMachine %s", dqm_pk)
-                status = 999  # TODO: better?
-            dqm.status = status
+                dqm_status = 999  # TODO: better?
+            dqm.status = dqm_status
+            # error message
             dqm.error_message = messages.get(dqm_pk)
+            # stats
+            dqm_stats = stats.get(dqm_pk)
+            if dqm_stats:
+                for stat_attr in ("memory", "system_time", "user_time", "wall_time_ms"):
+                    val = dqm_stats.get(stat_attr)
+                    if val is not None:
+                        try:
+                            val = int(val)
+                        except (TypeError, ValueError):
+                            pass
+                        else:
+                            setattr(dqm, stat_attr, val)
             dqm.save()
 
         # save_results

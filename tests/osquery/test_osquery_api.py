@@ -708,9 +708,27 @@ class OsqueryAPIViewsTestCase(TestCase):
                                       "queries": {str(dqm1.pk): [{"ztl_status": Status.OK.name}],
                                                   str(dqm2.pk): [{"username": "godzilla"}]},
                                       "statuses": {str(dqm1.pk): 0,
-                                                   str(dqm2.pk): 0}})
+                                                   str(dqm2.pk): 0},
+                                      "stats": {str(dqm1.pk): {'memory': 0,
+                                                               'system_time': 1,
+                                                               'user_time': 2,
+                                                               'wall_time_ms': 3},
+                                                str(dqm2.pk): {'memory': "haha",  # cannot be converted to an int
+                                                               'system_time': 2.3,  # a float
+                                                               # 'user_time': missing
+                                                               'wall_time_ms': 4}}})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {})
+        dqm1.refresh_from_db()
+        self.assertEqual(dqm1.memory, 0)
+        self.assertEqual(dqm1.system_time, 1)
+        self.assertEqual(dqm1.user_time, 2)
+        self.assertEqual(dqm1.wall_time_ms, 3)
+        dqm2.refresh_from_db()
+        self.assertIsNone(dqm2.memory)
+        self.assertEqual(dqm2.system_time, 2)
+        self.assertIsNone(dqm2.user_time)
+        self.assertEqual(dqm2.wall_time_ms, 4)
         ms_qs = MachineStatus.objects.filter(serial_number=em.serial_number, compliance_check=query1.compliance_check)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()

@@ -620,6 +620,11 @@ class DistributedQueryMachine(models.Model):
     status = models.IntegerField(null=True)
     error_message = models.TextField(null=True)
 
+    memory = models.BigIntegerField(null=True)
+    system_time = models.BigIntegerField(null=True)
+    user_time = models.BigIntegerField(null=True)
+    wall_time_ms = models.BigIntegerField(null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
