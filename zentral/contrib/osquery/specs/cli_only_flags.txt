@@ -4,13 +4,13 @@
 # This list is also used to filter out the options sent to osquery via the
 # remote configuration protocole.
 #
-# osquery 4.6.0
-# 2021-02-12
+# osquery 5.8.1
+# 2023-03-15
 
 --flagfile PATH                                  Line-delimited file of additional flags
 --D                                              Run as a daemon process
 --S                                              Run as a shell process
---alarm_timeout VALUE                            Seconds to wait for a graceful shutdown
+--alarm_timeout VALUE                            Seconds to allow for shutdown. Minimum is 10
 --carver_block_size VALUE                        Size of blocks used for POSTing data back to remote endpoints
 --carver_compression                             Compress archives using zstd prior to upload (default false)
 --carver_continue_endpoint VALUE                 TLS/HTTPS endpoint that receives carved content after session creation
@@ -23,8 +23,7 @@
 --config_enable_backup                           Backup config and use it when refresh fails
 --config_path VALUE                              Path to JSON config file
 --config_plugin VALUE                            Config plugin name
-# config refresh can be updated remotely
-# --config_refresh VALUE                           Optional interval in seconds to re-read configuration
+--config_refresh VALUE                           Optional interval in seconds to re-read configuration
 --config_tls_endpoint VALUE                      TLS/HTTPS endpoint for config retrieval
 --config_tls_max_attempts VALUE                  Number of attempts to retry a TLS config request
 --daemonize                                      Attempt to daemonize (POSIX only)
@@ -34,8 +33,10 @@
 --disable_enrollment                             Disable enrollment functions on related config/logger plugins
 --disable_extensions                             Disable extension API
 --disable_reenrollment                           Disable re-enrollment attempts if related plugins return invalid
+--disable_tables VALUE                           Comma-delimited list of table names to be disabled
 --disable_watchdog                               Disable userland watchdog process
 --enable_extensions_watchdog                     Enable userland watchdog for extensions processes
+--enable_tables VALUE                            Comma-delimited list of table names to be enabled
 --enroll_always                                  On startup, send a new enrollment request
 --enroll_secret_env VALUE                        Name of environment variable holding enrollment-auth secret
 --enroll_secret_path VALUE                       Path to an optional client enrollment-auth secret
@@ -47,7 +48,8 @@
 --extensions_timeout VALUE                       Seconds to wait for autoloaded extensions
 --force                                          Force osqueryd to kill previously-running daemons
 --install                                        Install osqueryd as a service
---keep_container_worker_open                     Keep the container worker running to be reused instead of closing it after each query
+--logger_mode VALUE                              Octal mode for log files (default '0640')
+--logger_plugin VALUE                            Logger plugin name
 --logger_stderr                                  Write status logs to stderr
 --logtostderr                                    Log messages to stderr in addition to the logger plugin(s)
 --pidfile VALUE                                  Path to the daemon pidfile mutex
@@ -55,13 +57,16 @@
 --stderrthreshold VALUE                          Stderr log level threshold
 --tls_client_cert VALUE                          Optional path to a TLS client-auth PEM certificate
 --tls_client_key VALUE                           Optional path to a TLS client-auth PEM private key
---tls_enroll_max_attempts VALUE                  Number of attempts to retry a TLS enroll request, it used to be the same as [config_tls_max_attempts]
+--tls_enroll_max_attempts VALUE                  The total number of attempts that will be made to the enroll endpoint if a request fails, 0 for infinite
+--tls_enroll_max_interval VALUE                  Maximum wait time in seconds between enroll retry attempts
 --tls_hostname VALUE                             TLS/HTTPS hostname for Config, Logger, and Enroll plugins
 --tls_server_certs VALUE                         Optional path to a TLS server PEM certificate(s) bundle
 --tls_session_reuse                              Reuse TLS session sockets
 --tls_session_timeout VALUE                      TLS session keep alive timeout in seconds
 --uninstall                                      Uninstall osqueryd as a service
 --watchdog_delay VALUE                           Initial delay in seconds before watchdog starts
+--watchdog_forced_shutdown_delay VALUE           Seconds that the watchdog will wait to do a forced shutdown after a graceful shutdown request, when a resource limit is hit
+--watchdog_latency_limit VALUE                   Override watchdog profile CPU utilization latency limit
 --watchdog_level VALUE                           Performance limit level (0=normal, 1=restrictive, -1=off)
 --watchdog_memory_limit VALUE                    Override watchdog profile memory limit (e.g., 300, for 300MB)
 --watchdog_utilization_limit VALUE               Override watchdog profile CPU utilization limit
