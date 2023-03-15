@@ -214,10 +214,27 @@ class Configuration(models.Model):
             # and notify their distributors
             enrollment.save()
 
-    def serialize_for_event(self, basic=False):
+    def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "name": self.name}
-        if basic:
+        if keys_only:
             return d
+        d.update({
+            "client_mode": self.get_client_mode_display(),
+            "client_certificate_auth": self.client_certificate_auth,
+            "batch_size": self.batch_size,
+            "full_sync_interval": self.full_sync_interval,
+            "enable_bundles": self.enable_bundles,
+            "enable_transitive_rules": self.enable_transitive_rules,
+            "allowed_path_regex": self.allowed_path_regex,
+            "blocked_path_regex": self.blocked_path_regex,
+            "block_usb_mount": self.block_usb_mount,
+            "remount_usb_mode": self.remount_usb_mode,
+            "allow_unknown_shard": self.allow_unknown_shard,
+            "enable_all_event_upload_shard": self.enable_all_event_upload_shard,
+            "sync_incident_severity": self.sync_incident_severity,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
+        })
         return d
 
     def can_be_deleted(self):
@@ -232,8 +249,7 @@ class Enrollment(BaseEnrollment):
 
     def serialize_for_event(self):
         enrollment_dict = super().serialize_for_event()
-        enrollment_dict["configuration"] = {"pk": self.configuration.pk,
-                                            "name": self.configuration.name}
+        enrollment_dict["configuration"] = self.configuration.serialize_for_event(keys_only=True)
         return enrollment_dict
 
     def get_absolute_url(self):
@@ -670,7 +686,7 @@ class Rule(models.Model):
 
     def serialize_for_event(self):
         d = {
-            "configuration": self.configuration.serialize_for_event(basic=True),
+            "configuration": self.configuration.serialize_for_event(keys_only=True),
             "target": self.target.serialize_for_event(),
             "policy": translate_rule_policy(self.policy),
         }
@@ -686,14 +702,12 @@ class Rule(models.Model):
             d["primary_users"] = sorted(self.primary_users)
         if self.excluded_primary_users:
             d["excluded_primary_users"] = sorted(self.excluded_primary_users)
-        tags = list(self.tags.all())
+        tags = list(self.tags.all().order_by("pk"))
         if tags:
-            d["tags"] = [{"pk": t.pk, "name": t.name} for t in tags]
-            d["tags"].sort(key=lambda t: t["pk"])
-        excluded_tags = list(self.excluded_tags.all())
+            d["tags"] = [t.serialize_for_event(keys_only=True) for t in tags]
+        excluded_tags = list(self.excluded_tags.all().order_by("pk"))
         if excluded_tags:
-            d["excluded_tags"] = [{"pk": t.pk, "name": t.name} for t in excluded_tags]
-            d["excluded_tags"].sort(key=lambda t: t["pk"])
+            d["excluded_tags"] = [t.serialize_for_event(keys_only=True) for t in excluded_tags]
         return d
 
 

@@ -186,8 +186,11 @@ class RuleSerializer(serializers.ModelSerializer):
                     added_items = sorted(added)
                     removed_items = sorted(removed)
                 elif attr in ("target", "configuration"):
-                    added_items = added.serialize_for_event()
-                    removed_items = removed.serialize_for_event()
+                    kwargs = {}
+                    if attr == "configuration":
+                        kwargs["keys_only"] = True
+                    added_items = added.serialize_for_event(**kwargs)
+                    removed_items = removed.serialize_for_event(**kwargs)
                 elif attr == "policy":
                     added_items = translate_rule_policy(added)
                     removed_items = translate_rule_policy(removed)

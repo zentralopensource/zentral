@@ -1,5 +1,3 @@
-import base64
-
 from django.db import transaction
 from django.db.models import F
 from django.http import HttpResponse
@@ -15,7 +13,8 @@ from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from zentral.contrib.inventory.models import File, Tag
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
+from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
+                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
 from .models import Configuration, Rule, RuleSet, Target, Enrollment, translate_rule_policy
 from .serializers import (RuleSerializer, RuleSetUpdateSerializer, ConfigurationSerializer,
@@ -23,23 +22,20 @@ from .serializers import (RuleSerializer, RuleSetUpdateSerializer, Configuration
 from .tasks import export_targets
 
 
-class ConfigurationList(generics.ListCreateAPIView):
+class ConfigurationList(ListCreateAPIViewWithAudit):
     """
     List all Configurations, search Configuration by name, or create a new Configuration.
     """
     queryset = Configuration.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
 
 
-class ConfigurationDetail(generics.RetrieveUpdateDestroyAPIView):
+class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete a Configuration instance.
     """
     queryset = Configuration.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationSerializer
 
     def perform_destroy(self, instance):
